@@ -1,0 +1,3 @@
+include README.md
+include LICENSE
+recursive-include scanpath_visualization_app/sample_data *.csv

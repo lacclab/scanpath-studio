@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scanpath-visualization-app"
+version = "0.1.0"
+description = "Streamlit workbench for visualizing scanpaths over text."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Scanpath Visualization Contributors" }]
+license = { file = "LICENSE" }
+keywords = ["eye-tracking", "scanpath", "visualization", "streamlit", "reading", "psycholinguistics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Framework :: Streamlit",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = [
+    "streamlit>=1.52.2",
+    "pandas>=2.3.3",
+    "plotly>=6.5.0",
+    "numpy>=2.3.5",
+    "pyarrow>=22.0.0",
+]
+
+[project.scripts]
+scanpath-visualization = "scanpath_visualization_app.__main__:main"
+
+[tool.setuptools]
+include-package-data = true
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scanpath_visualization_app"]
+
+[tool.setuptools.package-data]
+"scanpath_visualization_app" = ["sample_data/*.csv"]
+
+[tool.uv]
+# Keep installs scoped to this directory; use `uv sync` to create a local .venv.

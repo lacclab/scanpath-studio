@@ -1,3 +1,5 @@
+scanpath-visualization/app/scanpath_visualization_app/OneStop
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

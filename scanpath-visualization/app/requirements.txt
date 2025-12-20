@@ -1,0 +1,6 @@
+## Prefer `uv sync` (see README); this file is a fallback for pip/`uv pip install -r`.
+streamlit>=1.52.2
+pandas>=2.3.3
+plotly>=6.5.0
+numpy>=2.3.5
+pyarrow>=22.0.0

@@ -7,7 +7,7 @@ name = "scanpath-visualization-app"
 version = "0.1.0"
 description = "Streamlit workbench for visualizing scanpaths over text."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [{ name = "Scanpath Visualization Contributors" }]
 license = { file = "LICENSE" }
 keywords = ["eye-tracking", "scanpath", "visualization", "streamlit", "reading", "psycholinguistics"]
@@ -17,8 +17,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -32,6 +30,8 @@ dependencies = [
     "plotly>=6.5.0",
     "numpy>=2.3.5",
     "pyarrow>=22.0.0",
+    "kaleido>=0.2.1",
+    "watchdog>=4.0.0",
 ]
 
 [project.scripts]

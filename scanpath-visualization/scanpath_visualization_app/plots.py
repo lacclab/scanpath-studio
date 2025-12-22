@@ -58,6 +58,32 @@ def make_scanpath_figure(
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    x_range = [0, canvas_width]
+    y_range = [canvas_height, 0]
+    x_min_data = x_max_data = y_min_data = y_max_data = None
+
+    if spatial_axes:
+        x_candidates = []
+        y_candidates = []
+        if not words.empty:
+            x_candidates.extend([words["x"].min(), (words["x"] + words["width"]).max()])
+            y_candidates.extend([words["y"].min(), (words["y"] + words["height"]).max()])
+        if not fixations.empty:
+            x_candidates.extend([fixations[x_field].min(), fixations[x_field].max()])
+            y_candidates.extend([fixations[y_field].min(), fixations[y_field].max()])
+
+        if x_candidates and y_candidates:
+            x_min_data = float(np.nanmin(x_candidates))
+            x_max_data = float(np.nanmax(x_candidates))
+            y_min_data = float(np.nanmin(y_candidates))
+            y_max_data = float(np.nanmax(y_candidates))
+
+            x_span = max(x_max_data - x_min_data, 1.0)
+            y_span = max(y_max_data - y_min_data, 1.0)
+            pad_x = max(20.0, 0.05 * x_span)
+            pad_y = max(20.0, 0.05 * y_span)
+            x_range = [x_min_data - pad_x, x_max_data + pad_x]
+            y_range = [y_max_data + pad_y, y_min_data - pad_y]
 
     if spatial_axes and not words.empty:
         if show_words:
@@ -84,10 +110,10 @@ def make_scanpath_figure(
         if heatmap_metric == "duration_ms":
             weights = fixations["duration_ms"]
         histfunc = "sum" if weights is not None else "count"
-        x_min = float((words["x"]).min()) if not words.empty else float(fixations[x_field].min())
-        x_max = float((words["x"] + words["width"]).max()) if not words.empty else float(fixations[x_field].max())
-        y_min = float((words["y"]).min()) if not words.empty else float(fixations[y_field].min())
-        y_max = float((words["y"] + words["height"]).max()) if not words.empty else float(fixations[y_field].max())
+        x_min = x_min_data if x_min_data is not None else float(fixations[x_field].min())
+        x_max = x_max_data if x_max_data is not None else float(fixations[x_field].max())
+        y_min = y_min_data if y_min_data is not None else float(fixations[y_field].min())
+        y_max = y_max_data if y_max_data is not None else float(fixations[y_field].max())
         x_span = max(x_max - x_min, 1.0)
         y_span = max(y_max - y_min, 1.0)
         if not words.empty:
@@ -232,18 +258,18 @@ def make_scanpath_figure(
     xaxis_cfg = dict(showticklabels=False, showgrid=False, zeroline=False, title=None)
     yaxis_cfg = dict(showticklabels=False, showgrid=False, zeroline=False, title=None)
     if spatial_axes:
-        xaxis_cfg.update(range=[0, canvas_width], constrain="domain")
-        yaxis_cfg.update(range=[canvas_height, 0], constrain="domain", scaleanchor="x", scaleratio=1)
+        xaxis_cfg.update(range=x_range, constrain="domain")
+        yaxis_cfg.update(range=y_range, constrain="domain", scaleanchor="x", scaleratio=1)
 
     shapes = list(fig.layout.shapes) if fig.layout.shapes else []
     if spatial_axes:
         shapes.append(
             dict(
                 type="rect",
-                x0=0,
-                y0=0,
-                x1=canvas_width,
-                y1=canvas_height,
+                x0=x_range[0],
+                y0=y_range[1],
+                x1=x_range[1],
+                y1=y_range[0],
                 line=dict(color="#000000", width=1),
                 fillcolor="rgba(0,0,0,0)",
             )
@@ -278,6 +304,8 @@ def make_comparison_figure(
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     palette = ["#1f77b4", "#e45756"]
+    x_candidates = []
+    y_candidates = []
     for idx, trial in enumerate([trial_a, trial_b]):
         participant, trial_id = trial
         trial_words = words[
@@ -286,6 +314,12 @@ def make_comparison_figure(
         trial_fix = fixations[
             (fixations["participant_id"] == participant) & (fixations["trial_id"] == trial_id)
         ].sort_values("timestamp_ms")
+        if not trial_words.empty:
+            x_candidates.extend([trial_words["x"].min(), (trial_words["x"] + trial_words["width"]).max()])
+            y_candidates.extend([trial_words["y"].min(), (trial_words["y"] + trial_words["height"]).max()])
+        if not trial_fix.empty:
+            x_candidates.extend([trial_fix["x"].min(), trial_fix["x"].max()])
+            y_candidates.extend([trial_fix["y"].min(), trial_fix["y"].max()])
         fig.add_trace(
             go.Scatter(
                 x=trial_fix["x"],
@@ -313,14 +347,29 @@ def make_comparison_figure(
             shapes=existing_shapes + build_word_boxes(trial_words, color=palette[idx])
         )
 
+    x_range = [0, canvas_width]
+    y_range = [canvas_height, 0]
+    if x_candidates and y_candidates:
+        x_min = float(np.nanmin(x_candidates))
+        x_max = float(np.nanmax(x_candidates))
+        y_min = float(np.nanmin(y_candidates))
+        y_max = float(np.nanmax(y_candidates))
+
+        x_span = max(x_max - x_min, 1.0)
+        y_span = max(y_max - y_min, 1.0)
+        pad_x = max(20.0, 0.05 * x_span)
+        pad_y = max(20.0, 0.05 * y_span)
+        x_range = [x_min - pad_x, x_max + pad_x]
+        y_range = [y_max + pad_y, y_min - pad_y]
+
     shapes = list(fig.layout.shapes) if fig.layout.shapes else []
     shapes.append(
         dict(
             type="rect",
-            x0=0,
-            y0=0,
-            x1=canvas_width,
-            y1=canvas_height,
+            x0=x_range[0],
+            y0=y_range[1],
+            x1=x_range[1],
+            y1=y_range[0],
             line=dict(color="#000000", width=1),
             fillcolor="rgba(0,0,0,0)",
         )
@@ -331,8 +380,8 @@ def make_comparison_figure(
         width=canvas_width,
         autosize=False,
         margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=None, range=[0, canvas_width], constrain="domain"),
-        yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=None, range=[canvas_height, 0], constrain="domain", scaleanchor="x", scaleratio=1),
+        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=None, range=x_range, constrain="domain"),
+        yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=None, range=y_range, constrain="domain", scaleanchor="x", scaleratio=1),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         template="plotly_white",
         title="Overlay comparison",

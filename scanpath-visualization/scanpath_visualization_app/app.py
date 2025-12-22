@@ -51,6 +51,15 @@ st.set_page_config(
     page_icon="👀",
     layout="wide",
 )
+st.markdown(
+    """
+    <style>
+    section.main > div.block-container {padding-top: 0.5rem; padding-bottom: 0.5rem;}
+    div[data-testid="stPlotlyChart"] {margin-top: 0 !important; margin-bottom: 0 !important;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 def load_words_and_fixations(data_choice: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -284,9 +293,12 @@ def export_filtered_trials(
         st.warning("No trials to export.")
         return
 
+    total_trials = len(combos)
+    progress = st.progress(0, text="Preparing exports...")
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        for combo in combos.itertuples(index=False):
+        for idx, combo in enumerate(combos.itertuples(index=False), start=1):
             combo_words = words[
                 (words["participant_id"] == combo.participant_id)
                 & (words["trial_id"] == combo.trial_id)
@@ -326,6 +338,12 @@ def export_filtered_trials(
             )
             filename = f"{combo.participant_id}_{combo.trial_id}.png"
             zf.writestr(filename, img_bytes)
+            progress.progress(
+                int(idx / total_trials * 100),
+                text=f"Exporting trial {idx} of {total_trials}...",
+            )
+
+    progress.progress(100, text="Export ready! Click below to download.")
     buf.seek(0)
     st.download_button(
         "Download zip",

@@ -117,41 +117,80 @@ def make_scanpath_figure(
         x_span = max(x_max - x_min, 1.0)
         y_span = max(y_max - y_min, 1.0)
         if not words.empty:
-            x_edges = np.unique(np.sort(np.concatenate([words["x"].values, (words["x"] + words["width"]).values])))
-            y_edges = np.unique(np.sort(np.concatenate([words["y"].values, (words["y"] + words["height"]).values])))
-            if len(x_edges) > 1 and len(y_edges) > 1:
-                hist, _, _ = np.histogram2d(
-                    fixations[x_field],
-                    fixations[y_field],
-                    bins=[x_edges, y_edges],
-                    weights=weights,
+            # Word-level heatmap: aggregate fixations per word
+            word_values = []
+            for _, word_row in words.iterrows():
+                wx0, wy0 = word_row["x"], word_row["y"]
+                wx1, wy1 = wx0 + word_row["width"], wy0 + word_row["height"]
+                # Find fixations within this word's bounding box
+                in_word = (
+                    (fixations[x_field] >= wx0) & (fixations[x_field] <= wx1) &
+                    (fixations[y_field] >= wy0) & (fixations[y_field] <= wy1)
                 )
-                z_vals = hist.T
-                x_centers = (x_edges[:-1] + x_edges[1:]) / 2.0
-                y_centers = (y_edges[:-1] + y_edges[1:]) / 2.0
-                fig.add_trace(
-                    go.Heatmap(
-                        x=x_centers,
-                        y=y_centers,
-                        z=z_vals,
-                        colorscale="Blues",
-                        opacity=0.35,
-                        showscale=show_colorbars,
-                        colorbar=dict(
-                            title="Fixation density" if weights is None else "Duration (ms)",
-                            x=1.02,
-                            lenmode="fraction",
-                            len=COLORBAR_LEN_FRACTION,
-                            y=0.5,
-                            yanchor="middle",
-                        ),
-                        zmin=heatmap_range[0] if heatmap_range else None,
-                        zmax=heatmap_range[1] if heatmap_range else None,
-                        xgap=0,
-                        ygap=0,
-                        zsmooth=False,
+                if weights is not None:
+                    val = float(weights[in_word].sum())
+                else:
+                    val = float(in_word.sum())
+                word_values.append(val)
+
+            words_with_vals = words.copy()
+            words_with_vals["heatmap_val"] = word_values
+
+            # Only show words with non-zero values
+            words_nonzero = words_with_vals[words_with_vals["heatmap_val"] > 0]
+            if not words_nonzero.empty:
+                z_min = heatmap_range[0] if heatmap_range else float(words_nonzero["heatmap_val"].min())
+                z_max = heatmap_range[1] if heatmap_range else float(words_nonzero["heatmap_val"].max())
+                z_range = max(z_max - z_min, 1e-9)
+
+                # Use shapes for word-level heatmap cells
+                from plotly.colors import sample_colorscale
+                heatmap_shapes = []
+                for _, wr in words_nonzero.iterrows():
+                    norm_val = (wr["heatmap_val"] - z_min) / z_range
+                    norm_val = max(0.0, min(1.0, norm_val))
+                    color = sample_colorscale("Blues", [norm_val])[0]
+                    heatmap_shapes.append(
+                        dict(
+                            type="rect",
+                            x0=wr["x"],
+                            y0=wr["y"],
+                            x1=wr["x"] + wr["width"],
+                            y1=wr["y"] + wr["height"],
+                            line=dict(width=0),
+                            fillcolor=color,
+                            opacity=0.5,
+                            layer="below",
+                        )
                     )
-                )
+                existing_shapes = list(fig.layout.shapes) if fig.layout.shapes else []
+                fig.update_layout(shapes=existing_shapes + heatmap_shapes)
+
+                # Add invisible scatter for colorbar
+                if show_colorbars:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[None],
+                            y=[None],
+                            mode="markers",
+                            marker=dict(
+                                colorscale="Blues",
+                                showscale=True,
+                                cmin=z_min,
+                                cmax=z_max,
+                                colorbar=dict(
+                                    title="Fixation count" if weights is None else "Duration (ms)",
+                                    x=1.02,
+                                    lenmode="fraction",
+                                    len=COLORBAR_LEN_FRACTION,
+                                    y=0.5,
+                                    yanchor="middle",
+                                ),
+                            ),
+                            showlegend=False,
+                            hoverinfo="skip",
+                        )
+                    )
         else:
             x_bin_size = x_span / 40.0
             y_bin_size = y_span / 40.0

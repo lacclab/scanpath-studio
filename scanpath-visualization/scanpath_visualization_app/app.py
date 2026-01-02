@@ -55,7 +55,28 @@ st.markdown(
     """
     <style>
     section.main > div.block-container {padding-top: 0.5rem; padding-bottom: 0.5rem;}
-    div[data-testid="stPlotlyChart"] {margin-top: 0 !important; margin-bottom: 0 !important;}
+    /* Remove all whitespace around plotly charts */
+    div[data-testid="stPlotlyChart"] {margin: 0 !important; padding: 0 !important; line-height: 0 !important;}
+    div[data-testid="stPlotlyChart"] > div {margin: 0 !important; padding: 0 !important;}
+    div[data-testid="stPlotlyChart"] iframe {display: block !important; margin: 0 !important; padding: 0 !important;}
+    .stPlotlyChart {margin: 0 !important; padding: 0 !important;}
+    /* Target parent containers */
+    div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stPlotlyChart"]) {padding: 0 !important; margin: 0 !important; gap: 0 !important;}
+    div[data-testid="element-container"]:has(> div[data-testid="stPlotlyChart"]) {margin: 0 !important; padding: 0 !important;}
+    /* Reduce gap in vertical blocks globally */
+    div[data-testid="stVerticalBlock"] {gap: 0rem !important;}
+    div[data-testid="stVerticalBlock"] > div {margin-bottom: 0.25rem !important;}
+    /* Target the js-plotly-plot container */
+    .js-plotly-plot, .plot-container, .plotly {margin: 0 !important; padding: 0 !important;}
+    .main-svg {display: block !important;}
+    /* Remove extra spacing from streamlit elements near charts */
+    div[data-testid="stMarkdown"] + div[data-testid="element-container"]:has(div[data-testid="stPlotlyChart"]) {margin-top: 0 !important;}
+    div[data-testid="element-container"]:has(div[data-testid="stPlotlyChart"]) + div[data-testid="stExpander"] {margin-top: 0.5rem !important;}
+    /* Reduce spacing around dataframes */
+    div[data-testid="stDataFrame"] {margin-bottom: 0 !important;}
+    div[data-testid="element-container"]:has(div[data-testid="stDataFrame"]) {margin-bottom: 0.25rem !important;}
+    /* Reduce multiselect spacing */
+    div[data-testid="stMultiSelect"] {margin-bottom: 0.25rem !important;}
     </style>
     """,
     unsafe_allow_html=True,

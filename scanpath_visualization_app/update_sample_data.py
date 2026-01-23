@@ -5,7 +5,6 @@ from typing import Iterable
 
 import pandas as pd
 
-
 DATA_DIR = Path(__file__).parent
 SOURCE_DIR = DATA_DIR / "OneStop"
 OUTPUT_DIR = DATA_DIR / "sample_data"
@@ -80,7 +79,11 @@ def load_subset(source_csv: Path, preferred_columns: Iterable[str]) -> pd.DataFr
     """Read only the columns we need (plus MAX_ROWS cap) to keep memory down."""
     available_cols = pd.read_csv(source_csv, nrows=0, low_memory=False).columns
     use_cols = [col for col in preferred_columns if col in available_cols]
-    missing_core = [col for col in ["participant_id", "TRIAL_INDEX", "repeated_reading_trial"] if col not in use_cols]
+    missing_core = [
+        col
+        for col in ["participant_id", "TRIAL_INDEX", "repeated_reading_trial"]
+        if col not in use_cols
+    ]
     if missing_core:
         raise RuntimeError(f"Missing required columns {missing_core} in {source_csv}")
     return pd.read_csv(source_csv, usecols=use_cols, nrows=MAX_ROWS, low_memory=False)
@@ -88,12 +91,21 @@ def load_subset(source_csv: Path, preferred_columns: Iterable[str]) -> pd.DataFr
 
 def normalize_flags(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["repeated_reading_trial"] = df["repeated_reading_trial"].fillna(False).astype(bool)
+    df["repeated_reading_trial"] = (
+        df["repeated_reading_trial"].fillna(False).astype(bool)
+    )
     return df
 
 
 def add_unique_ids(df: pd.DataFrame) -> pd.DataFrame:
-    required = ["article_batch", "article_id", "paragraph_id", "difficulty_level", "participant_id", "repeated_reading_trial"]
+    required = [
+        "article_batch",
+        "article_id",
+        "paragraph_id",
+        "difficulty_level",
+        "participant_id",
+        "repeated_reading_trial",
+    ]
     missing = [col for col in required if col not in df.columns]
     if missing:
         raise RuntimeError(f"Missing required columns for id creation: {missing}")
@@ -120,14 +132,20 @@ def add_unique_ids(df: pd.DataFrame) -> pd.DataFrame:
 def choose_participants(df: pd.DataFrame, count: int = 3) -> list[str]:
     unique = df["participant_id"].dropna().astype(str).unique().tolist()
     if len(unique) < count:
-        raise RuntimeError(f"Found only {len(unique)} participants in provided slice: {unique}")
+        raise RuntimeError(
+            f"Found only {len(unique)} participants in provided slice: {unique}"
+        )
     return unique[:count]
 
 
-def choose_trials(df: pd.DataFrame, participants: list[str], trials_per_participant: int = 3) -> list[str]:
+def choose_trials(
+    df: pd.DataFrame, participants: list[str], trials_per_participant: int = 3
+) -> list[str]:
     trials: list[str] = []
     for pid in participants:
-        subset = df[(df["participant_id"] == pid) & (df["repeated_reading_trial"] == False)]  # noqa: E712
+        subset = df[
+            (df["participant_id"] == pid) & (df["repeated_reading_trial"] == False)
+        ]  # noqa: E712
         if subset.empty:
             raise RuntimeError(f"No trials found for participant {pid}")
         ordered = (
@@ -144,11 +162,19 @@ def choose_trials(df: pd.DataFrame, participants: list[str], trials_per_particip
 
 def trim_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFrame:
     keep_cols = [col for col in keep if col in df.columns]
-    keep_cols.extend([col for col in ["unique_paragraph_id", "unique_trial_id"] if col in df.columns and col not in keep_cols])
+    keep_cols.extend(
+        [
+            col
+            for col in ["unique_paragraph_id", "unique_trial_id"]
+            if col in df.columns and col not in keep_cols
+        ]
+    )
     return df[keep_cols].copy()
 
 
-def filter_and_save(df: pd.DataFrame, participants: list[str], trials: list[str], output_csv: Path) -> int:
+def filter_and_save(
+    df: pd.DataFrame, participants: list[str], trials: list[str], output_csv: Path
+) -> int:
     if "unique_trial_id" not in df.columns:
         raise RuntimeError("Expected unique_trial_id column in data.")
 
@@ -159,7 +185,9 @@ def filter_and_save(df: pd.DataFrame, participants: list[str], trials: list[str]
     ]
 
     if filtered.empty:
-        raise RuntimeError(f"No rows matched participants {participants} and trials {trials}.")
+        raise RuntimeError(
+            f"No rows matched participants {participants} and trials {trials}."
+        )
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     filtered.to_csv(output_csv, index=False)
@@ -167,8 +195,12 @@ def filter_and_save(df: pd.DataFrame, participants: list[str], trials: list[str]
 
 
 def main() -> None:
-    ia_df = add_unique_ids(load_subset(SOURCE_DIR / "ia_Paragraph.csv", IA_KEEP_COLUMNS))
-    fix_df = add_unique_ids(load_subset(SOURCE_DIR / "fixations_Paragraph.csv", FIXATION_KEEP_COLUMNS))
+    ia_df = add_unique_ids(
+        load_subset(SOURCE_DIR / "ia_Paragraph.csv", IA_KEEP_COLUMNS)
+    )
+    fix_df = add_unique_ids(
+        load_subset(SOURCE_DIR / "fixations_Paragraph.csv", FIXATION_KEEP_COLUMNS)
+    )
 
     ia_trimmed = trim_columns(ia_df, IA_KEEP_COLUMNS)
     fix_trimmed = trim_columns(fix_df, FIXATION_KEEP_COLUMNS)
@@ -189,7 +221,9 @@ def main() -> None:
         f"to {OUTPUT_DIR / 'ia.csv'}"
     )
 
-    fix_rows = filter_and_save(fix_trimmed, participants, trials, OUTPUT_DIR / "fixations.csv")
+    fix_rows = filter_and_save(
+        fix_trimmed, participants, trials, OUTPUT_DIR / "fixations.csv"
+    )
     print(
         f"Wrote {fix_rows} fixation rows for participants {participants} and trials {trials} "
         f"to {OUTPUT_DIR / 'fixations.csv'}"

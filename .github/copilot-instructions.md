@@ -1,82 +1,37 @@
-# Copilot Instructions for Scanpath Visualization
+# Copilot Instructions — Scanpath Visualization
 
-## Project Overview
-This repository contains tools for visualizing eye-tracking scanpaths over text. The main component is a **Streamlit-based interactive workbench** (`scanpath-visualization/`) that renders fixations, saccades, word boxes, and density heatmaps. Legacy/experimental visualizations live in `other_vis/`.
+## Big Picture
+This repo’s primary product is a Streamlit workbench packaged as `scanpath_visualization_app/`. It visualizes eye-tracking scanpaths over text (word boxes + fixations + saccades + heatmaps + comparisons). Legacy/experiments live under `other_vis/`.
 
-## Architecture
+## Architecture & Data Flow (core path)
+- Entry/UI: `scanpath_visualization_app/app.py` (tabs, uploads, trial selection, filtering, calls plotting)
+- Data handling: `scanpath_visualization_app/data.py` (schema inference + normalization + filtering + metrics)
+- Plotting: `scanpath_visualization_app/plots.py` (Plotly figure builders)
+- Controls/defaults: `scanpath_visualization_app/controls.py`, `scanpath_visualization_app/constants.py`
 
-### Main App (`scanpath-visualization/scanpath_visualization_app/`)
-| Module | Purpose |
-|--------|---------|
-| `app.py` | Streamlit entry point; orchestrates tabs, filtering, trial selection |
-| `data.py` | Schema inference (`infer_word_schema`, `infer_fix_schema`) and DataFrame normalization |
-| `plots.py` | Plotly figure builders (`make_scanpath_figure`, `make_comparison_figure`) |
-| `controls.py` | Sidebar UI components for visualization settings |
-| `constants.py` | Shared defaults (`FONT_FAMILY`, `DEFAULT_FIGURE_SIZE`) |
+Pipeline: uploaded CSVs → `infer_*_schema()` → `normalize_*()` to canonical columns → filters/metrics → `make_*_figure()` → Streamlit render.
 
-**Data flow**: CSV upload → schema inference → normalization → filtering → figure generation → Streamlit render
+## Input Formats & Normalization
+- The Streamlit app currently accepts **CSV** uploads (“Words/IA csv” + “Fixations csv”) and ships demo CSVs in `scanpath_visualization_app/sample_data/`.
+- Canonical columns used by plotting:
+	- Words: `participant_id`, `trial_id`, `paragraph_id`, `word_id`, `text`, `line_idx`, `x`, `y`, `width`, `height`
+	- Fixations: `participant_id`, `trial_id`, `paragraph_id`, `x`, `y`, `duration_ms`, `timestamp_ms` (+ optional `word_id`, `pass_index`, `saccade_type`, `eye`, `noise_flag`)
+	- Raw gaze (optional overlay): normalized by `infer_raw_gaze_schema()` / `normalize_raw_gaze()`.
 
-### Column Auto-Detection Pattern
-The app uses `pick_column()` with candidate lists to detect user data columns. When adding new column support:
-```python
-# In data.py - add candidates in priority order
-word_id = pick_column(words, ["word_id", "IA_ID", "ia_id", "ia_index"])
-```
+## Column Auto-Detection Convention
+Schema inference uses `pick_column(df, candidates)` with **priority-ordered candidate lists**. When adding support for new upstream names, update the relevant `infer_*_schema` candidate lists in `scanpath_visualization_app/data.py`.
 
-## Development Commands
+## Plot/Coordinate Conventions
+- Screen coordinates: Plotly y-axis is inverted (`y_range = [max, min]`) in `make_scanpath_figure()`.
+- Word boxes and word-level heatmap overlays are implemented with Plotly `layout.shapes` (see `build_word_boxes()` and heatmap shape generation).
 
-```bash
-# Setup & run (recommended: conda/mamba)
-conda env create -f environment.yml
-conda activate scanpath-visualization
-# or with mamba (faster)
-mamba env create -f environment.yml
-mamba activate scanpath-visualization
+## Running & Dev Workflows
+- Use the existing conda env `scanpath-visualization` (prefer `mamba activate scanpath-visualization` if available).
+- Run app (dev): `streamlit run scanpath_visualization_app/app.py`
+- Run app (packaged): `python -m scanpath_visualization_app` (see `scanpath_visualization_app/__main__.py`) or the console script `scanpath-visualization`.
+- Fast dev setup (if you have uv): `uv sync` then `uv run streamlit run scanpath_visualization_app/app.py`.
+- Tests: `conda run -n scanpath-visualization pytest` (see `tests/README.md`). Streamlit calls are mocked in tests, so test utilities rather than full UI runtime.
+- Lint/format: use the same conda env and keep legacy `other_vis/` excluded: `conda run -n scanpath-visualization ruff check --fix --exclude other_vis .`, then `conda run -n scanpath-visualization ruff check --select I --fix --exclude other_vis .`, then `conda run -n scanpath-visualization ruff format --exclude other_vis .`.
 
-streamlit run scanpath_visualization_app/app.py
-# or
-scanpath-visualization  # or: python -m scanpath_visualization_app
-
-# Alternative: using pip
-pip install -e .
-streamlit run scanpath_visualization_app/app.py
-
-# Build for PyPI
-python -m build
-twine upload dist/*
-```
-
-## Key Conventions
-
-### Imports
-The app supports two import modes for flexibility:
-- **Package mode**: `from .constants import ...` (when installed)
-- **Direct run mode**: Falls back to `sys.path` manipulation for `streamlit run app.py`
-
-### DataFrame Normalization
-All user data is normalized to canonical column names before plotting:
-- Words: `participant_id`, `trial_id`, `word_id`, `text`, `x`, `y`, `width`, `height`
-- Fixations: `participant_id`, `trial_id`, `x`, `y`, `duration_ms`, `timestamp_ms`, `pass_index`
-
-### Streamlit Caching
-Use `@st.cache_data` for expensive data operations (see `load_sample_data()` in data.py).
-
-### Plotly Figures
-- Canvas size computed from data bounds with padding
-- Shapes array used for word boxes and heatmap overlays
-- Y-axis is inverted (`y_range = [max, min]`) for screen coordinates
-
-## File Structure Patterns
-
-- Sample data lives in `scanpath_visualization_app/sample_data/*.csv`
-- Package metadata in `pyproject.toml` (setuptools backend)
-- Include sample data via `MANIFEST.in` and `[tool.setuptools.package-data]`
-
-## Testing New Features
-
-1. Test with bundled demo data first (`sample_data/`)
-2. Verify column auto-detection handles missing optional fields gracefully
-3. Check both spatial (`x`/`y`) and temporal (`timestamp_ms`) axis modes
-
-## Legacy Code (`other_vis/`)
-Contains experimental matplotlib/R-based visualizations. Not actively maintained but may provide reference implementations for new features.
+## Import Mode Gotcha
+`app.py` supports both package imports (`from .data import ...`) and a fallback “direct run” path tweak for `streamlit run .../app.py`. Keep this pattern intact when refactoring imports.

@@ -26,7 +26,10 @@ def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     fixations_resource = data_root / "fixations.csv"
 
     try:
-        with resources.as_file(words_resource) as words_path, resources.as_file(fixations_resource) as fixations_path:
+        with (
+            resources.as_file(words_resource) as words_path,
+            resources.as_file(fixations_resource) as fixations_path,
+        ):
             words = pd.read_csv(words_path)
             fixations = pd.read_csv(fixations_path)
     except FileNotFoundError:
@@ -56,25 +59,57 @@ def load_sample_raw_gaze() -> pd.DataFrame:
 
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Optional[Dict[str, str]]:
     """Infer schema for raw millisecond-level gaze data."""
-    participant = pick_column(raw_gaze, ["participant_id", "subject_id", "participant", "recording_session_label"])
+    participant = pick_column(
+        raw_gaze,
+        ["participant_id", "subject_id", "participant", "recording_session_label"],
+    )
     trial = pick_column(
         raw_gaze,
-        ["unique_trial_id", "trial_id", "unique_paragraph_id", "paragraph_id", "trial", "trial_index", "TRIAL_INDEX"],
+        [
+            "unique_trial_id",
+            "trial_id",
+            "unique_paragraph_id",
+            "paragraph_id",
+            "trial",
+            "trial_index",
+            "TRIAL_INDEX",
+        ],
     )
     text = pick_column(
         raw_gaze,
-        ["text", "IA_LABEL", "ia_label", "label", "word", "WORD", "content", "CONTENT", "token", "TOKEN"],
+        [
+            "text",
+            "IA_LABEL",
+            "ia_label",
+            "label",
+            "word",
+            "WORD",
+            "content",
+            "CONTENT",
+            "token",
+            "TOKEN",
+        ],
     )
     x = pick_column(raw_gaze, ["x", "X", "FPOGX", "gaze_x", "GAZE_X"])
     y = pick_column(raw_gaze, ["y", "Y", "FPOGY", "gaze_y", "GAZE_Y"])
-    timestamp = pick_column(raw_gaze, ["timestamp", "time", "ms", "timestamp_ms", "time_ms"])
+    timestamp = pick_column(
+        raw_gaze, ["timestamp", "time", "ms", "timestamp_ms", "time_ms"]
+    )
 
     missing_core = [
-        name for name, val in [("participant", participant), ("trial", trial), ("x", x), ("y", y)]
+        name
+        for name, val in [
+            ("participant", participant),
+            ("trial", trial),
+            ("x", x),
+            ("y", y),
+        ]
         if val is None
     ]
     if missing_core:
-        st.error(f"Missing required raw gaze fields in uploaded data: {', '.join(missing_core)}")
+        st.error(
+            f"Missing required raw gaze fields in uploaded data: {', '.join(missing_core)}"
+        )
         return None
 
     return dict(
@@ -91,7 +126,9 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.Dat
     """Normalize raw gaze data to canonical column names."""
     df = pd.DataFrame()
     df["participant_id"] = raw_gaze[schema["participant"]].astype(str)
-    trial_col = "unique_trial_id" if "unique_trial_id" in raw_gaze.columns else schema["trial"]
+    trial_col = (
+        "unique_trial_id" if "unique_trial_id" in raw_gaze.columns else schema["trial"]
+    )
     df["trial_id"] = raw_gaze[trial_col].astype(str)
     if "unique_trial_id" in raw_gaze.columns:
         df["unique_trial_id"] = raw_gaze["unique_trial_id"].astype(str)
@@ -102,7 +139,9 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.Dat
     df["x"] = pd.to_numeric(raw_gaze[schema["x"]], errors="coerce")
     df["y"] = pd.to_numeric(raw_gaze[schema["y"]], errors="coerce")
     if schema.get("timestamp"):
-        df["timestamp_ms"] = pd.to_numeric(raw_gaze[schema["timestamp"]], errors="coerce")
+        df["timestamp_ms"] = pd.to_numeric(
+            raw_gaze[schema["timestamp"]], errors="coerce"
+        )
     else:
         # Each row represents one millisecond, so use row index within trial as timestamp
         df["timestamp_ms"] = df.groupby(["participant_id", "trial_id"]).cumcount()
@@ -110,12 +149,25 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.Dat
 
 
 def infer_word_schema(words: pd.DataFrame) -> Optional[Dict[str, str]]:
-    participant = pick_column(words, ["participant_id", "subject_id", "participant", "recording_session_label"])
+    participant = pick_column(
+        words,
+        ["participant_id", "subject_id", "participant", "recording_session_label"],
+    )
     trial = pick_column(
         words,
-        ["unique_trial_id", "trial_id", "unique_paragraph_id", "paragraph_id", "trial", "trial_index", "TRIAL_INDEX"],
+        [
+            "unique_trial_id",
+            "trial_id",
+            "unique_paragraph_id",
+            "paragraph_id",
+            "trial",
+            "trial_index",
+            "TRIAL_INDEX",
+        ],
     )
-    paragraph = pick_column(words, ["unique_paragraph_id", "paragraph_id", "PARAGRAPH_ID"])
+    paragraph = pick_column(
+        words, ["unique_paragraph_id", "paragraph_id", "PARAGRAPH_ID"]
+    )
     word_id = pick_column(words, ["word_id", "IA_ID", "ia_id", "ia_index"])
     text = pick_column(
         words,
@@ -143,15 +195,27 @@ def infer_word_schema(words: pd.DataFrame) -> Optional[Dict[str, str]]:
     top = pick_column(words, ["IA_TOP", "ia_top", "top"])
     bottom = pick_column(words, ["IA_BOTTOM", "ia_bottom", "bottom"])
 
-    missing_core = [name for name, val in [("participant", participant), ("trial", trial), ("word_id", word_id)] if val is None]
+    missing_core = [
+        name
+        for name, val in [
+            ("participant", participant),
+            ("trial", trial),
+            ("word_id", word_id),
+        ]
+        if val is None
+    ]
     if missing_core:
-        st.error(f"Missing required word fields in uploaded data: {', '.join(missing_core)}")
+        st.error(
+            f"Missing required word fields in uploaded data: {', '.join(missing_core)}"
+        )
         return None
 
     has_xywh = all([x, y, width, height])
     has_box = all([left, right, top, bottom])
     if not has_xywh and not has_box:
-        st.error("Words/IA data needs either (x, y, width, height) or (IA_LEFT, IA_RIGHT, IA_TOP, IA_BOTTOM).")
+        st.error(
+            "Words/IA data needs either (x, y, width, height) or (IA_LEFT, IA_RIGHT, IA_TOP, IA_BOTTOM)."
+        )
         return None
 
     return dict(
@@ -173,32 +237,77 @@ def infer_word_schema(words: pd.DataFrame) -> Optional[Dict[str, str]]:
 
 
 def infer_fix_schema(fixations: pd.DataFrame) -> Optional[Dict[str, str]]:
-    participant = pick_column(fixations, ["participant_id", "subject_id", "participant", "recording_session_label"])
+    participant = pick_column(
+        fixations,
+        ["participant_id", "subject_id", "participant", "recording_session_label"],
+    )
     trial = pick_column(
         fixations,
-        ["unique_trial_id", "trial_id", "unique_paragraph_id", "paragraph_id", "trial", "trial_index", "TRIAL_INDEX"],
+        [
+            "unique_trial_id",
+            "trial_id",
+            "unique_paragraph_id",
+            "paragraph_id",
+            "trial",
+            "trial_index",
+            "TRIAL_INDEX",
+        ],
     )
-    paragraph = pick_column(fixations, ["unique_paragraph_id", "paragraph_id", "PARAGRAPH_ID"])
-    fixation_id = pick_column(fixations, ["fixation_id", "CURRENT_FIX_INDEX", "CURRENT_FIX_NUM"])
+    paragraph = pick_column(
+        fixations, ["unique_paragraph_id", "paragraph_id", "PARAGRAPH_ID"]
+    )
+    fixation_id = pick_column(
+        fixations, ["fixation_id", "CURRENT_FIX_INDEX", "CURRENT_FIX_NUM"]
+    )
     timestamp = pick_column(
         fixations,
-        ["timestamp_ms", "CURRENT_FIX_START", "CURRENT_FIX_START_TIME", "CURRENT_FIX_TIME", "CURRENT_FIX_ONSET"],
+        [
+            "timestamp_ms",
+            "CURRENT_FIX_START",
+            "CURRENT_FIX_START_TIME",
+            "CURRENT_FIX_TIME",
+            "CURRENT_FIX_ONSET",
+        ],
     )
-    duration = pick_column(fixations, ["duration_ms", "CURRENT_FIX_DURATION", "CURRENT_FIX_LEN"])
+    duration = pick_column(
+        fixations, ["duration_ms", "CURRENT_FIX_DURATION", "CURRENT_FIX_LEN"]
+    )
     x = pick_column(fixations, ["x", "X", "CURRENT_FIX_X", "FPOGX"])
     y = pick_column(fixations, ["y", "Y", "CURRENT_FIX_Y", "FPOGY"])
     word_id = pick_column(
         fixations,
-        ["word_id", "IA_ID", "ia_id", "CURRENT_FIX_INTEREST_AREA_ID", "CURRENT_FIX_INTEREST_AREA_INDEX"],
+        [
+            "word_id",
+            "IA_ID",
+            "ia_id",
+            "CURRENT_FIX_INTEREST_AREA_ID",
+            "CURRENT_FIX_INTEREST_AREA_INDEX",
+        ],
     )
     pass_index = pick_column(fixations, ["pass_index", "reread", "PASS_INDEX"])
-    saccade_type = pick_column(fixations, ["saccade_type", "SACCADE_TYPE", "NEXT_SAC_DIRECTION"])
+    saccade_type = pick_column(
+        fixations, ["saccade_type", "SACCADE_TYPE", "NEXT_SAC_DIRECTION"]
+    )
     eye = pick_column(fixations, ["eye", "EYE_USED", "eye_used", "EYE_TRACKED"])
-    noise_flag = pick_column(fixations, ["noise_flag", "CURRENT_FIX_VALIDITY", "CURRENT_FIX_VALID"])
+    noise_flag = pick_column(
+        fixations, ["noise_flag", "CURRENT_FIX_VALIDITY", "CURRENT_FIX_VALID"]
+    )
 
-    missing_core = [name for name, val in [("participant", participant), ("trial", trial), ("duration", duration), ("x", x), ("y", y)] if val is None]
+    missing_core = [
+        name
+        for name, val in [
+            ("participant", participant),
+            ("trial", trial),
+            ("duration", duration),
+            ("x", x),
+            ("y", y),
+        ]
+        if val is None
+    ]
     if missing_core:
-        st.error(f"Missing required fixation fields in uploaded data: {', '.join(missing_core)}")
+        st.error(
+            f"Missing required fixation fields in uploaded data: {', '.join(missing_core)}"
+        )
         return None
 
     return dict(
@@ -221,7 +330,9 @@ def infer_fix_schema(fixations: pd.DataFrame) -> Optional[Dict[str, str]]:
 def normalize_words(words: pd.DataFrame, schema: Dict[str, str]) -> pd.DataFrame:
     df = pd.DataFrame()
     df["participant_id"] = words[schema["participant"]].astype(str)
-    trial_col = "unique_trial_id" if "unique_trial_id" in words.columns else schema["trial"]
+    trial_col = (
+        "unique_trial_id" if "unique_trial_id" in words.columns else schema["trial"]
+    )
     df["trial_id"] = words[trial_col].astype(str)
     if "unique_trial_id" in words.columns:
         df["unique_trial_id"] = words["unique_trial_id"].astype(str)
@@ -306,14 +417,22 @@ def normalize_words(words: pd.DataFrame, schema: Dict[str, str]) -> pd.DataFrame
     return df
 
 
-def normalize_fixations(fixations: pd.DataFrame, schema: Dict[str, str]) -> pd.DataFrame:
+def normalize_fixations(
+    fixations: pd.DataFrame, schema: Dict[str, str]
+) -> pd.DataFrame:
     df = pd.DataFrame()
     df["participant_id"] = fixations[schema["participant"]].astype(str)
-    trial_col = "unique_trial_id" if "unique_trial_id" in fixations.columns else schema["trial"]
+    trial_col = (
+        "unique_trial_id" if "unique_trial_id" in fixations.columns else schema["trial"]
+    )
     df["trial_id"] = fixations[trial_col].astype(str)
     if "unique_trial_id" in fixations.columns:
         df["unique_trial_id"] = fixations["unique_trial_id"].astype(str)
-    paragraph_col = "unique_paragraph_id" if "unique_paragraph_id" in fixations.columns else schema.get("paragraph")
+    paragraph_col = (
+        "unique_paragraph_id"
+        if "unique_paragraph_id" in fixations.columns
+        else schema.get("paragraph")
+    )
     if paragraph_col:
         df["paragraph_id"] = fixations[paragraph_col].astype(str)
     else:
@@ -322,28 +441,30 @@ def normalize_fixations(fixations: pd.DataFrame, schema: Dict[str, str]) -> pd.D
         df["unique_paragraph_id"] = fixations["unique_paragraph_id"].astype(str)
     df["x"] = pd.to_numeric(fixations[schema["x"]], errors="coerce")
     df["y"] = pd.to_numeric(fixations[schema["y"]], errors="coerce")
-    df["duration_ms"] = pd.to_numeric(fixations[schema["duration"]], errors="coerce").fillna(0)
+    df["duration_ms"] = pd.to_numeric(
+        fixations[schema["duration"]], errors="coerce"
+    ).fillna(0)
 
     if schema.get("timestamp"):
-        df["timestamp_ms"] = pd.to_numeric(fixations[schema["timestamp"]], errors="coerce").fillna(0)
+        df["timestamp_ms"] = pd.to_numeric(
+            fixations[schema["timestamp"]], errors="coerce"
+        ).fillna(0)
     else:
         df["timestamp_ms"] = df.groupby(["participant_id", "trial_id"]).cumcount()
 
     if schema.get("fixation_id"):
         df["fixation_id"] = fixations[schema["fixation_id"]]
     else:
-        df["fixation_id"] = (
-            df.groupby(["participant_id", "trial_id"])
-            .cumcount()
-            .add(1)
-        )
+        df["fixation_id"] = df.groupby(["participant_id", "trial_id"]).cumcount().add(1)
 
     if schema.get("word_id"):
         df["word_id"] = pd.to_numeric(fixations[schema["word_id"]], errors="coerce")
     else:
         df["word_id"] = np.nan
     if schema.get("pass_index"):
-        df["pass_index"] = pd.to_numeric(fixations[schema["pass_index"]], errors="coerce")
+        df["pass_index"] = pd.to_numeric(
+            fixations[schema["pass_index"]], errors="coerce"
+        )
     else:
         df["pass_index"] = 1
     if schema.get("saccade_type"):
@@ -374,7 +495,9 @@ def normalize_fixations(fixations: pd.DataFrame, schema: Dict[str, str]) -> pd.D
         if col in fixations.columns:
             df[col] = fixations[col]
     if "repeated_reading_trial" in fixations.columns:
-        df["repeated_reading_trial"] = fixations["repeated_reading_trial"].fillna(False).astype(bool)
+        df["repeated_reading_trial"] = (
+            fixations["repeated_reading_trial"].fillna(False).astype(bool)
+        )
 
     df["order_in_trial"] = (
         df.sort_values(["timestamp_ms", "duration_ms"])
@@ -392,10 +515,14 @@ def filter_data(
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     participants = filters.get("participants") or list(words["participant_id"].unique())
     trials = filters.get("trials") or list(words["trial_id"].unique())
-    word_mask = words["participant_id"].isin(participants) & words["trial_id"].isin(trials)
+    word_mask = words["participant_id"].isin(participants) & words["trial_id"].isin(
+        trials
+    )
     words_filtered = words[word_mask]
 
-    fix_mask = fixations["participant_id"].isin(participants) & fixations["trial_id"].isin(trials)
+    fix_mask = fixations["participant_id"].isin(participants) & fixations[
+        "trial_id"
+    ].isin(trials)
     if "pass_index" in fixations.columns:
         pass_indices = filters.get("pass_indices")
         if pass_indices:
@@ -423,11 +550,15 @@ def filter_raw_gaze(
     """Filter raw gaze data by participants and trials."""
     if raw_gaze.empty:
         return raw_gaze
-    mask = raw_gaze["participant_id"].isin(participants) & raw_gaze["trial_id"].isin(trials)
+    mask = raw_gaze["participant_id"].isin(participants) & raw_gaze["trial_id"].isin(
+        trials
+    )
     return raw_gaze[mask]
 
 
-def compute_canvas_size(words: pd.DataFrame, fixations: pd.DataFrame) -> Tuple[int, int]:
+def compute_canvas_size(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> Tuple[int, int]:
     """Return the default canvas size; users can override in the UI."""
     default_w, default_h = DEFAULT_FIGURE_SIZE
     return max(int(default_w), 100), max(int(default_h), 100)
@@ -453,8 +584,17 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
         "word_length",
         "word_length_no_punctuation",
     ]
-    base_fields = ["participant_id", "trial_id", "paragraph_id", "word_id", "text", "line_idx"]
-    present_fields = [col for col in base_fields + metric_fields if col in words.columns]
+    base_fields = [
+        "participant_id",
+        "trial_id",
+        "paragraph_id",
+        "word_id",
+        "text",
+        "line_idx",
+    ]
+    present_fields = [
+        col for col in base_fields + metric_fields if col in words.columns
+    ]
     metrics = words[present_fields].copy()
 
     numeric_fields = [
@@ -475,15 +615,26 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
         if col in metrics.columns:
             metrics[col] = pd.to_numeric(metrics[col], errors="coerce")
     if "n_fixations" in metrics.columns:
-        metrics["n_fixations"] = pd.to_numeric(metrics["n_fixations"], errors="coerce").fillna(0).astype("Int64")
+        metrics["n_fixations"] = (
+            pd.to_numeric(metrics["n_fixations"], errors="coerce")
+            .fillna(0)
+            .astype("Int64")
+        )
     if "skip_flag" in metrics.columns:
         metrics["skip_flag"] = metrics["skip_flag"].fillna(False).astype(bool)
     if "regression_in_flag" in metrics.columns:
-        metrics["regression_in_flag"] = metrics["regression_in_flag"].fillna(False).astype(bool)
+        metrics["regression_in_flag"] = (
+            metrics["regression_in_flag"].fillna(False).astype(bool)
+        )
     if "regression_out_flag" in metrics.columns:
-        metrics["regression_out_flag"] = metrics["regression_out_flag"].fillna(False).astype(bool)
+        metrics["regression_out_flag"] = (
+            metrics["regression_out_flag"].fillna(False).astype(bool)
+        )
 
-    if "first_pass_gaze_duration_ms" in metrics.columns and "gaze_duration_ms" not in metrics.columns:
+    if (
+        "first_pass_gaze_duration_ms" in metrics.columns
+        and "gaze_duration_ms" not in metrics.columns
+    ):
         metrics["gaze_duration_ms"] = metrics["first_pass_gaze_duration_ms"]
     return metrics
 
@@ -496,7 +647,9 @@ def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict:
     if "pass_index" in fixations.columns:
         filters["pass_indices"] = sorted(fixations["pass_index"].dropna().unique())
     if "saccade_type" in fixations.columns:
-        filters["saccade_types"] = sorted(fixations["saccade_type"].dropna().astype(str).unique())
+        filters["saccade_types"] = sorted(
+            fixations["saccade_type"].dropna().astype(str).unique()
+        )
     if "eye" in fixations.columns:
         filters["eyes"] = sorted(fixations["eye"].dropna().astype(str).unique())
     filters["include_noise"] = False if "noise_flag" in fixations.columns else True

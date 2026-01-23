@@ -1,14 +1,13 @@
 """Tests for plots.py module."""
 
 import pandas as pd
-import pytest
 import plotly.graph_objects as go
 
 from scanpath_visualization_app.plots import (
     build_word_boxes,
-    make_scanpath_figure,
-    make_scanpath_animation,
     make_comparison_figure,
+    make_scanpath_animation,
+    make_scanpath_figure,
 )
 
 
@@ -31,7 +30,9 @@ class TestBuildWordBoxes:
 class TestMakeScanpathFigure:
     """Tests for make_scanpath_figure function."""
 
-    def test_make_scanpath_figure_basic(self, normalized_words_df, normalized_fixations_df):
+    def test_make_scanpath_figure_basic(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         fig = make_scanpath_figure(
             normalized_words_df,
             normalized_fixations_df,
@@ -60,7 +61,9 @@ class TestMakeScanpathFigure:
         assert fig.layout.width == 800
         assert fig.layout.height == 600
 
-    def test_make_scanpath_figure_with_heatmap(self, normalized_words_df, normalized_fixations_df):
+    def test_make_scanpath_figure_with_heatmap(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         fig = make_scanpath_figure(
             normalized_words_df,
             normalized_fixations_df,
@@ -115,14 +118,18 @@ class TestMakeScanpathFigure:
         )
         assert isinstance(fig, go.Figure)
 
-    def test_make_scanpath_figure_with_raw_gaze(self, normalized_words_df, normalized_fixations_df):
-        raw_gaze = pd.DataFrame({
-            "participant_id": ["p1", "p1"],
-            "trial_id": ["t1", "t1"],
-            "x": [120, 125],
-            "y": [70, 75],
-            "timestamp_ms": [0, 1],
-        })
+    def test_make_scanpath_figure_with_raw_gaze(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        raw_gaze = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "x": [120, 125],
+                "y": [70, 75],
+                "timestamp_ms": [0, 1],
+            }
+        )
         fig = make_scanpath_figure(
             normalized_words_df,
             normalized_fixations_df,
@@ -184,7 +191,9 @@ class TestMakeScanpathFigure:
 class TestMakeScanpathAnimation:
     """Tests for make_scanpath_animation function."""
 
-    def test_make_scanpath_animation_basic(self, normalized_words_df, normalized_fixations_df):
+    def test_make_scanpath_animation_basic(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         fig = make_scanpath_animation(
             normalized_words_df,
             normalized_fixations_df,
@@ -217,7 +226,9 @@ class TestMakeScanpathAnimation:
         )
         assert isinstance(fig, go.Figure)
 
-    def test_make_scanpath_animation_playback_speed(self, normalized_words_df, normalized_fixations_df):
+    def test_make_scanpath_animation_playback_speed(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         fig = make_scanpath_animation(
             normalized_words_df,
             normalized_fixations_df,
@@ -235,15 +246,19 @@ class TestMakeComparisonFigure:
 
     def test_make_comparison_figure(self, normalized_words_df, normalized_fixations_df):
         # Create data for two trials
-        words_multi = pd.concat([
-            normalized_words_df.assign(participant_id="p1", trial_id="t1"),
-            normalized_words_df.assign(participant_id="p2", trial_id="t1"),
-        ])
-        fixations_multi = pd.concat([
-            normalized_fixations_df.assign(participant_id="p1", trial_id="t1"),
-            normalized_fixations_df.assign(participant_id="p2", trial_id="t1"),
-        ])
-        
+        words_multi = pd.concat(
+            [
+                normalized_words_df.assign(participant_id="p1", trial_id="t1"),
+                normalized_words_df.assign(participant_id="p2", trial_id="t1"),
+            ]
+        )
+        fixations_multi = pd.concat(
+            [
+                normalized_fixations_df.assign(participant_id="p1", trial_id="t1"),
+                normalized_fixations_df.assign(participant_id="p2", trial_id="t1"),
+            ]
+        )
+
         fig = make_comparison_figure(
             words_multi,
             fixations_multi,

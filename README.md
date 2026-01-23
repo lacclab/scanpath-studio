@@ -16,17 +16,31 @@ scanpath-visualization
 python -m scanpath_visualization_app
 ```
 
-## Running from source
+## Development Setup
 
-### Using conda/mamba (recommended)
+Choose your preferred tool:
+
+### Using uv (fastest, recommended)
 
 ```bash
-# Create and activate environment
-conda env create -f environment.yml
-conda activate scanpath-visualization
-# or with mamba (faster)
+# Install dependencies with uv
+uv sync
+
+# Run the app
+uv run streamlit run scanpath_visualization_app/app.py
+# or
+uv run python -m scanpath_visualization_app
+```
+
+### Using mamba/conda
+
+```bash
+# Create and activate environment (mamba is faster)
 mamba env create -f environment.yml
 mamba activate scanpath-visualization
+# or with conda
+conda env create -f environment.yml
+conda activate scanpath-visualization
 
 # Run the app
 streamlit run scanpath_visualization_app/app.py
@@ -34,16 +48,19 @@ streamlit run scanpath_visualization_app/app.py
 python -m scanpath_visualization_app
 ```
 
-### Using pip (alternative)
+### Using pip
 
 ```bash
-python -m pip install -e .
+# Install in editable mode with test dependencies
+pip install -e ".[test]"
+
+# Run the app
 streamlit run scanpath_visualization_app/app.py
 # or
 python -m scanpath_visualization_app
 ```
 
-Tested on Python 3.9 through 3.13 with the latest Streamlit/Plotly/Pandas/Numpy/PyArrow releases.
+Tested on Python 3.11 through 3.13.
 
 ## Data expectations
 

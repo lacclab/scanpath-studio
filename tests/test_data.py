@@ -1,22 +1,22 @@
 """Tests for data.py module."""
 
+from unittest.mock import patch
+
 import pandas as pd
-import pytest
-from unittest.mock import patch, MagicMock
 
 from scanpath_visualization_app.data import (
-    pick_column,
-    infer_word_schema,
-    infer_fix_schema,
-    infer_raw_gaze_schema,
-    normalize_words,
-    normalize_fixations,
-    normalize_raw_gaze,
-    filter_data,
-    filter_raw_gaze,
     compute_canvas_size,
     compute_word_metrics,
     default_filters,
+    filter_data,
+    filter_raw_gaze,
+    infer_fix_schema,
+    infer_raw_gaze_schema,
+    infer_word_schema,
+    normalize_fixations,
+    normalize_raw_gaze,
+    normalize_words,
+    pick_column,
 )
 
 
@@ -42,16 +42,18 @@ class TestInferWordSchema:
 
     @patch("scanpath_visualization_app.data.st")
     def test_infer_word_schema_success(self, mock_st):
-        df = pd.DataFrame({
-            "participant_id": ["p1"],
-            "trial_id": ["t1"],
-            "IA_ID": [1],
-            "IA_LEFT": [100],
-            "IA_RIGHT": [150],
-            "IA_TOP": [50],
-            "IA_BOTTOM": [100],
-            "IA_LABEL": ["word"],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "IA_ID": [1],
+                "IA_LEFT": [100],
+                "IA_RIGHT": [150],
+                "IA_TOP": [50],
+                "IA_BOTTOM": [100],
+                "IA_LABEL": ["word"],
+            }
+        )
         schema = infer_word_schema(df)
         assert schema is not None
         assert schema["participant"] == "participant_id"
@@ -67,11 +69,13 @@ class TestInferWordSchema:
 
     @patch("scanpath_visualization_app.data.st")
     def test_infer_word_schema_missing_coordinates(self, mock_st):
-        df = pd.DataFrame({
-            "participant_id": ["p1"],
-            "trial_id": ["t1"],
-            "IA_ID": [1],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "IA_ID": [1],
+            }
+        )
         schema = infer_word_schema(df)
         assert schema is None
 
@@ -81,13 +85,15 @@ class TestInferFixSchema:
 
     @patch("scanpath_visualization_app.data.st")
     def test_infer_fix_schema_success(self, mock_st):
-        df = pd.DataFrame({
-            "participant_id": ["p1"],
-            "trial_id": ["t1"],
-            "CURRENT_FIX_X": [100],
-            "CURRENT_FIX_Y": [200],
-            "CURRENT_FIX_DURATION": [250],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "CURRENT_FIX_X": [100],
+                "CURRENT_FIX_Y": [200],
+                "CURRENT_FIX_DURATION": [250],
+            }
+        )
         schema = infer_fix_schema(df)
         assert schema is not None
         assert schema["participant"] == "participant_id"
@@ -107,13 +113,15 @@ class TestInferRawGazeSchema:
 
     @patch("scanpath_visualization_app.data.st")
     def test_infer_raw_gaze_schema_success(self, mock_st):
-        df = pd.DataFrame({
-            "participant_id": ["p1"],
-            "trial_id": ["t1"],
-            "x": [100],
-            "y": [200],
-            "timestamp": [0],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "x": [100],
+                "y": [200],
+                "timestamp": [0],
+            }
+        )
         schema = infer_raw_gaze_schema(df)
         assert schema is not None
         assert schema["participant"] == "participant_id"
@@ -132,16 +140,18 @@ class TestNormalizeWords:
     """Tests for normalize_words function."""
 
     def test_normalize_words_with_box_coordinates(self):
-        df = pd.DataFrame({
-            "participant_id": ["p1", "p1"],
-            "trial_id": ["t1", "t1"],
-            "IA_ID": [1, 2],
-            "IA_LEFT": [100, 200],
-            "IA_RIGHT": [150, 250],
-            "IA_TOP": [50, 50],
-            "IA_BOTTOM": [100, 100],
-            "IA_LABEL": ["word1", "word2"],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "IA_ID": [1, 2],
+                "IA_LEFT": [100, 200],
+                "IA_RIGHT": [150, 250],
+                "IA_TOP": [50, 50],
+                "IA_BOTTOM": [100, 100],
+                "IA_LABEL": ["word1", "word2"],
+            }
+        )
         schema = {
             "participant": "participant_id",
             "trial": "trial_id",
@@ -164,15 +174,17 @@ class TestNormalizeWords:
         assert result["width"].iloc[0] == 50
 
     def test_normalize_words_with_xywh_coordinates(self):
-        df = pd.DataFrame({
-            "participant_id": ["p1"],
-            "trial_id": ["t1"],
-            "word_id": [1],
-            "x": [100],
-            "y": [50],
-            "width": [50],
-            "height": [50],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "word_id": [1],
+                "x": [100],
+                "y": [50],
+                "width": [50],
+                "height": [50],
+            }
+        )
         schema = {
             "participant": "participant_id",
             "trial": "trial_id",
@@ -191,14 +203,16 @@ class TestNormalizeFixations:
     """Tests for normalize_fixations function."""
 
     def test_normalize_fixations_basic(self):
-        df = pd.DataFrame({
-            "participant_id": ["p1", "p1"],
-            "trial_id": ["t1", "t1"],
-            "CURRENT_FIX_X": [100, 200],
-            "CURRENT_FIX_Y": [150, 250],
-            "CURRENT_FIX_DURATION": [250, 300],
-            "CURRENT_FIX_START": [0, 250],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "CURRENT_FIX_X": [100, 200],
+                "CURRENT_FIX_Y": [150, 250],
+                "CURRENT_FIX_DURATION": [250, 300],
+                "CURRENT_FIX_START": [0, 250],
+            }
+        )
         schema = {
             "participant": "participant_id",
             "trial": "trial_id",
@@ -219,13 +233,15 @@ class TestNormalizeFixations:
         assert result["duration_ms"].iloc[0] == 250
 
     def test_normalize_fixations_without_timestamp(self):
-        df = pd.DataFrame({
-            "participant_id": ["p1", "p1"],
-            "trial_id": ["t1", "t1"],
-            "CURRENT_FIX_X": [100, 200],
-            "CURRENT_FIX_Y": [150, 250],
-            "CURRENT_FIX_DURATION": [250, 300],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "CURRENT_FIX_X": [100, 200],
+                "CURRENT_FIX_Y": [150, 250],
+                "CURRENT_FIX_DURATION": [250, 300],
+            }
+        )
         schema = {
             "participant": "participant_id",
             "trial": "trial_id",
@@ -244,13 +260,15 @@ class TestNormalizeRawGaze:
     """Tests for normalize_raw_gaze function."""
 
     def test_normalize_raw_gaze_basic(self):
-        df = pd.DataFrame({
-            "participant_id": ["p1", "p1"],
-            "trial_id": ["t1", "t1"],
-            "x": [100, 200],
-            "y": [150, 250],
-            "timestamp": [0, 1],
-        })
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "x": [100, 200],
+                "y": [150, 250],
+                "timestamp": [0, 1],
+            }
+        )
         schema = {
             "participant": "participant_id",
             "trial": "trial_id",
@@ -269,7 +287,9 @@ class TestNormalizeRawGaze:
 class TestFilterData:
     """Tests for filter_data function."""
 
-    def test_filter_data_by_participants(self, normalized_words_df, normalized_fixations_df):
+    def test_filter_data_by_participants(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         filters = {"participants": ["p1"], "trials": ["t1"]}
         words_filtered, fixations_filtered = filter_data(
             normalized_words_df, normalized_fixations_df, filters
@@ -288,10 +308,12 @@ class TestFilterData:
     def test_filter_data_by_pass_index(self, normalized_fixations_df):
         normalized_fixations_df["pass_index"] = [1, 1, 2]
         filters = {"participants": ["p1"], "trials": ["t1"], "pass_indices": [1]}
-        words_df = pd.DataFrame({
-            "participant_id": ["p1"],
-            "trial_id": ["t1"],
-        })
+        words_df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+            }
+        )
         words_filtered, fixations_filtered = filter_data(
             words_df, normalized_fixations_df, filters
         )
@@ -300,10 +322,12 @@ class TestFilterData:
     def test_filter_data_exclude_noise(self, normalized_fixations_df):
         normalized_fixations_df["noise_flag"] = [False, False, True]
         filters = {"participants": ["p1"], "trials": ["t1"], "include_noise": False}
-        words_df = pd.DataFrame({
-            "participant_id": ["p1"],
-            "trial_id": ["t1"],
-        })
+        words_df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+            }
+        )
         words_filtered, fixations_filtered = filter_data(
             words_df, normalized_fixations_df, filters
         )
@@ -332,7 +356,9 @@ class TestComputeCanvasSize:
     """Tests for compute_canvas_size function."""
 
     def test_compute_canvas_size(self, normalized_words_df, normalized_fixations_df):
-        width, height = compute_canvas_size(normalized_words_df, normalized_fixations_df)
+        width, height = compute_canvas_size(
+            normalized_words_df, normalized_fixations_df
+        )
         assert isinstance(width, int)
         assert isinstance(height, int)
         assert width >= 100
@@ -342,7 +368,9 @@ class TestComputeCanvasSize:
 class TestComputeWordMetrics:
     """Tests for compute_word_metrics function."""
 
-    def test_compute_word_metrics_basic(self, normalized_words_df, normalized_fixations_df):
+    def test_compute_word_metrics_basic(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         normalized_words_df["first_fixation_ms"] = [200, 250, 180]
         normalized_words_df["n_fixations"] = [1, 2, 1]
         result = compute_word_metrics(normalized_words_df, normalized_fixations_df)
@@ -362,12 +390,16 @@ class TestDefaultFilters:
         assert isinstance(filters["participants"], list)
         assert isinstance(filters["trials"], list)
 
-    def test_default_filters_with_pass_index(self, normalized_words_df, normalized_fixations_df):
+    def test_default_filters_with_pass_index(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         normalized_fixations_df["pass_index"] = [1, 1, 2]
         filters = default_filters(normalized_words_df, normalized_fixations_df)
         assert "pass_indices" in filters
 
-    def test_default_filters_with_saccade_type(self, normalized_words_df, normalized_fixations_df):
+    def test_default_filters_with_saccade_type(
+        self, normalized_words_df, normalized_fixations_df
+    ):
         normalized_fixations_df["saccade_type"] = ["RIGHT", "LEFT", "RIGHT"]
         filters = default_filters(normalized_words_df, normalized_fixations_df)
         assert "saccade_types" in filters

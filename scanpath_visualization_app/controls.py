@@ -27,7 +27,9 @@ def render_dictionary() -> None:
         st.markdown(data_dictionary_help_text())
 
 
-def sidebar_controls(trial_fixations: pd.DataFrame, base_font_size: int, has_raw_gaze: bool = False) -> Dict:
+def sidebar_controls(
+    trial_fixations: pd.DataFrame, base_font_size: int, has_raw_gaze: bool = False
+) -> Dict:
     st.sidebar.header("Visualization controls")
     show_words = st.sidebar.checkbox("Show word boxes", value=True)
     show_labels = st.sidebar.checkbox("Show word labels", value=True)
@@ -35,16 +37,27 @@ def sidebar_controls(trial_fixations: pd.DataFrame, base_font_size: int, has_raw
     show_order = st.sidebar.checkbox("Number fixation order", value=True)
     show_saccades = st.sidebar.checkbox("Show saccades", value=True)
     show_heatmap = st.sidebar.checkbox("Add density heatmap", value=True)
-    show_raw_gaze = st.sidebar.checkbox(
-        "Show raw gaze data",
-        value=False,
-        help="Display millisecond-level gaze positions as small dots.",
-        disabled=not has_raw_gaze,
-    ) if has_raw_gaze else False
+    show_raw_gaze = (
+        st.sidebar.checkbox(
+            "Show raw gaze data",
+            value=False,
+            help="Display millisecond-level gaze positions as small dots.",
+            disabled=not has_raw_gaze,
+        )
+        if has_raw_gaze
+        else False
+    )
 
     color_fields = [
         field
-        for field in ["duration_ms", "pass_index", "eye", "saccade_type", "word_id", "timestamp_ms"]
+        for field in [
+            "duration_ms",
+            "pass_index",
+            "eye",
+            "saccade_type",
+            "word_id",
+            "timestamp_ms",
+        ]
         if field in trial_fixations.columns
     ]
     if not color_fields:
@@ -61,14 +74,26 @@ def sidebar_controls(trial_fixations: pd.DataFrame, base_font_size: int, has_raw
         index=0,
     )
 
-    numeric_fields = [col for col in trial_fixations.columns if pd.api.types.is_numeric_dtype(trial_fixations[col])]
+    numeric_fields = [
+        col
+        for col in trial_fixations.columns
+        if pd.api.types.is_numeric_dtype(trial_fixations[col])
+    ]
     if not numeric_fields:
         st.error("No numeric fields found in fixations to map axes.")
         st.stop()
     x_default = "x" if "x" in numeric_fields else numeric_fields[0]
-    y_default = "y" if "y" in numeric_fields else numeric_fields[min(1, len(numeric_fields) - 1)]
-    x_field = st.sidebar.selectbox("X axis field", options=numeric_fields, index=numeric_fields.index(x_default))
-    y_field = st.sidebar.selectbox("Y axis field", options=numeric_fields, index=numeric_fields.index(y_default))
+    y_default = (
+        "y"
+        if "y" in numeric_fields
+        else numeric_fields[min(1, len(numeric_fields) - 1)]
+    )
+    x_field = st.sidebar.selectbox(
+        "X axis field", options=numeric_fields, index=numeric_fields.index(x_default)
+    )
+    y_field = st.sidebar.selectbox(
+        "Y axis field", options=numeric_fields, index=numeric_fields.index(y_default)
+    )
 
     st.sidebar.subheader("Advanced styling")
     advanced = st.sidebar.checkbox("Advanced styling", value=False)
@@ -81,10 +106,19 @@ def sidebar_controls(trial_fixations: pd.DataFrame, base_font_size: int, has_raw
     fixation_colorscale = "Blues"
     heatmap_colorscale = "Oranges"
     if advanced:
-        from .constants import COLORSCALES, DEFAULT_FIXATION_COLORSCALE, DEFAULT_HEATMAP_COLORSCALE
+        from .constants import (
+            COLORSCALES,
+            DEFAULT_FIXATION_COLORSCALE,
+            DEFAULT_HEATMAP_COLORSCALE,
+        )
+
         order_font_color = st.sidebar.color_picker("Order label color", value="#111111")
-        order_font_size = st.sidebar.slider("Order label size", 6, 72, int(base_font_size))
-        size_min, size_max = st.sidebar.slider("Fixation marker size (px)", 4, 40, (8, 24))
+        order_font_size = st.sidebar.slider(
+            "Order label size", 6, 72, int(base_font_size)
+        )
+        size_min, size_max = st.sidebar.slider(
+            "Fixation marker size (px)", 4, 40, (8, 24)
+        )
         fixation_colorscale = st.sidebar.selectbox(
             "Fixation colorscale",
             options=COLORSCALES,
@@ -109,7 +143,11 @@ def sidebar_controls(trial_fixations: pd.DataFrame, base_font_size: int, has_raw
                 step=(cmax - cmin) / 100 if cmax > cmin else 1.0,
             )
         if show_colorbars and show_heatmap:
-            heat_data = trial_fixations["duration_ms"] if heatmap_metric == "duration_ms" else None
+            heat_data = (
+                trial_fixations["duration_ms"]
+                if heatmap_metric == "duration_ms"
+                else None
+            )
             if heat_data is not None and len(heat_data) > 0:
                 hmin = float(heat_data.min())
                 hmax = float(heat_data.max())

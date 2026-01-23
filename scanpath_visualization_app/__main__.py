@@ -1,5 +1,5 @@
-import sys
 import importlib.resources as resources
+import sys
 from typing import Optional
 
 from streamlit.web import cli as stcli

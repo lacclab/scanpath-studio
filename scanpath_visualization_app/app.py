@@ -25,7 +25,11 @@ try:
         normalize_raw_gaze,
         normalize_words,
     )
-    from .plots import make_comparison_figure, make_scanpath_figure, make_scanpath_animation
+    from .plots import (
+        make_comparison_figure,
+        make_scanpath_animation,
+        make_scanpath_figure,
+    )
 except ImportError:
     # Allow running via `streamlit run scanpath_visualization_app/app.py`
     import sys
@@ -35,7 +39,10 @@ except ImportError:
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     from scanpath_visualization_app.constants import FONT_FAMILY
-    from scanpath_visualization_app.controls import data_dictionary_help_text, sidebar_controls
+    from scanpath_visualization_app.controls import (
+        data_dictionary_help_text,
+        sidebar_controls,
+    )
     from scanpath_visualization_app.data import (
         compute_canvas_size,
         compute_word_metrics,
@@ -51,7 +58,11 @@ except ImportError:
         normalize_raw_gaze,
         normalize_words,
     )
-    from scanpath_visualization_app.plots import make_comparison_figure, make_scanpath_figure, make_scanpath_animation
+    from scanpath_visualization_app.plots import (
+        make_comparison_figure,
+        make_scanpath_animation,
+        make_scanpath_figure,
+    )
 
 
 st.set_page_config(
@@ -116,18 +127,30 @@ def load_words_and_fixations(data_choice: str) -> Tuple[pd.DataFrame, pd.DataFra
     return load_sample_data()
 
 
-def prepare_data(words_df: pd.DataFrame, fixations_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def prepare_data(
+    words_df: pd.DataFrame, fixations_df: pd.DataFrame
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Infer schemas and normalize incoming dataframes."""
     word_schema = infer_word_schema(words_df)
     fix_schema = infer_fix_schema(fixations_df)
     if not word_schema or not fix_schema:
         st.stop()
-    return normalize_words(words_df, word_schema), normalize_fixations(fixations_df, fix_schema)
+    return normalize_words(words_df, word_schema), normalize_fixations(
+        fixations_df, fix_schema
+    )
 
 
-def build_combo_options(fixations: pd.DataFrame) -> Tuple[pd.DataFrame, list[str], Dict[str, Tuple[str, str]]]:
-    paragraph_col = "unique_paragraph_id" if "unique_paragraph_id" in fixations.columns else "paragraph_id"
-    trial_col = "unique_trial_id" if "unique_trial_id" in fixations.columns else "trial_id"
+def build_combo_options(
+    fixations: pd.DataFrame,
+) -> Tuple[pd.DataFrame, list[str], Dict[str, Tuple[str, str]]]:
+    paragraph_col = (
+        "unique_paragraph_id"
+        if "unique_paragraph_id" in fixations.columns
+        else "paragraph_id"
+    )
+    trial_col = (
+        "unique_trial_id" if "unique_trial_id" in fixations.columns else "trial_id"
+    )
     combo_cols = ["participant_id", trial_col, paragraph_col]
     for col in ["unique_trial_id", "unique_paragraph_id", "TRIAL_INDEX", "trial_index"]:
         if col in fixations.columns and col not in combo_cols:
@@ -140,7 +163,10 @@ def build_combo_options(fixations: pd.DataFrame) -> Tuple[pd.DataFrame, list[str
     )
     if trial_col == "unique_trial_id" and "unique_trial_id" not in combos.columns:
         combos["unique_trial_id"] = combos["trial_id"]
-    if paragraph_col == "unique_paragraph_id" and "unique_paragraph_id" not in combos.columns:
+    if (
+        paragraph_col == "unique_paragraph_id"
+        and "unique_paragraph_id" not in combos.columns
+    ):
         combos["unique_paragraph_id"] = combos["paragraph_id"]
     sort_cols = ["participant_id"]
     if "TRIAL_INDEX" in combos.columns:
@@ -150,7 +176,10 @@ def build_combo_options(fixations: pd.DataFrame) -> Tuple[pd.DataFrame, list[str
     sort_cols.append("trial_id")
     combos = combos.sort_values(sort_cols)
 
-    combo_labels = [f"{row.participant_id} / {row.trial_id} · {row.paragraph_id}" for row in combos.itertuples()]
+    combo_labels = [
+        f"{row.participant_id} / {row.trial_id} · {row.paragraph_id}"
+        for row in combos.itertuples()
+    ]
     label_to_combo = dict(
         zip(
             combo_labels,
@@ -168,9 +197,11 @@ def clamp_canvas_size(words: pd.DataFrame, fixations: pd.DataFrame) -> Tuple[int
     )
 
 
-def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[str], Optional[str], str, Optional[str]]:
+def select_trial(
+    combos: pd.DataFrame, key_prefix: str = ""
+) -> Tuple[Optional[str], Optional[str], str, Optional[str]]:
     """Select a trial from the available combinations.
-    
+
     Returns:
         Tuple of (participant_id, trial_id, selection_mode, selected_text)
         - selection_mode: "None", "Text", or "Participant"
@@ -190,8 +221,14 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
     selected_trial = None
     selected_text = None
 
-    trial_field = "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
-    paragraph_field = "unique_paragraph_id" if "unique_paragraph_id" in combos.columns else "paragraph_id"
+    trial_field = (
+        "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
+    )
+    paragraph_field = (
+        "unique_paragraph_id"
+        if "unique_paragraph_id" in combos.columns
+        else "paragraph_id"
+    )
     trial_index_field = None
     for candidate in ["TRIAL_INDEX", "trial_index"]:
         if candidate in combos.columns:
@@ -200,16 +237,18 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
 
     if selection_mode == "None":
         available_trials = combos.drop_duplicates(subset=[trial_field])
-        trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
+        trial_options = sorted(
+            available_trials[trial_field].dropna().astype(str).unique()
+        )
         if not trial_options:
             st.warning("No trials available after filtering.")
             st.stop()
-        
+
         # Initialize session state for trial index if needed
         state_key = f"{key_prefix}_trial_index" if key_prefix else "trial_index"
         if state_key not in st.session_state:
             st.session_state[state_key] = 0
-        
+
         # Ensure index is within bounds
         current_idx = st.session_state[state_key]
         if current_idx >= len(trial_options):
@@ -218,22 +257,30 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
         if current_idx < 0:
             current_idx = 0
             st.session_state[state_key] = current_idx
-        
+
         # Navigation buttons and selectbox
         nav_col1, nav_col2, select_col = st.columns([1, 1, 4])
         with nav_col1:
-            if st.button("← Prev", key=f"{key_prefix}_prev_btn" if key_prefix else "prev_btn", 
-                        disabled=current_idx <= 0, use_container_width=True):
+            if st.button(
+                "← Prev",
+                key=f"{key_prefix}_prev_btn" if key_prefix else "prev_btn",
+                disabled=current_idx <= 0,
+                use_container_width=True,
+            ):
                 st.session_state[state_key] = current_idx - 1
                 st.rerun()
         with nav_col2:
-            if st.button("Next →", key=f"{key_prefix}_next_btn" if key_prefix else "next_btn",
-                        disabled=current_idx >= len(trial_options) - 1, use_container_width=True):
+            if st.button(
+                "Next →",
+                key=f"{key_prefix}_next_btn" if key_prefix else "next_btn",
+                disabled=current_idx >= len(trial_options) - 1,
+                use_container_width=True,
+            ):
                 st.session_state[state_key] = current_idx + 1
                 st.rerun()
         with select_col:
             selected_trial_label = st.selectbox(
-                "Unique trial id", 
+                "Unique trial id",
                 options=trial_options,
                 index=current_idx,
                 key=f"{key_prefix}_trial_id" if key_prefix else None,
@@ -243,19 +290,27 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
                 new_idx = trial_options.index(selected_trial_label)
                 if new_idx != current_idx:
                     st.session_state[state_key] = new_idx
-        
+
         if selected_trial_label:
-            chosen = available_trials[available_trials[trial_field].astype(str) == selected_trial_label].iloc[0]
+            chosen = available_trials[
+                available_trials[trial_field].astype(str) == selected_trial_label
+            ].iloc[0]
             selected_participant = chosen["participant_id"]
             selected_trial = chosen["trial_id"]
-            selected_text = str(chosen[paragraph_field]) if paragraph_field in chosen.index else None
+            selected_text = (
+                str(chosen[paragraph_field])
+                if paragraph_field in chosen.index
+                else None
+            )
     elif selection_mode == "Text":
-        paragraph_options = sorted(combos[paragraph_field].dropna().astype(str).unique())
+        paragraph_options = sorted(
+            combos[paragraph_field].dropna().astype(str).unique()
+        )
         if not paragraph_options:
             st.warning("No text ids available after filtering.")
             st.stop()
         selected_paragraph = st.selectbox(
-            "Text id", 
+            "Text id",
             options=paragraph_options,
             key=f"{key_prefix}_text_id" if key_prefix else None,
         )
@@ -263,13 +318,17 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
             st.warning("No text selected after filtering.")
             st.stop()
         selected_text = selected_paragraph
-        paragraph_combos = combos[combos[paragraph_field].astype(str) == str(selected_paragraph)]
-        participant_options = sorted(paragraph_combos["participant_id"].dropna().unique())
+        paragraph_combos = combos[
+            combos[paragraph_field].astype(str) == str(selected_paragraph)
+        ]
+        participant_options = sorted(
+            paragraph_combos["participant_id"].dropna().unique()
+        )
         if not participant_options:
             st.warning("No participants available for this text.")
             st.stop()
         selected_participant = st.selectbox(
-            "Participant", 
+            "Participant",
             options=participant_options,
             key=f"{key_prefix}_participant_text" if key_prefix else None,
         )
@@ -299,7 +358,7 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
             st.warning("No participants available after filtering.")
             st.stop()
         selected_participant = st.selectbox(
-            "Participant", 
+            "Participant",
             options=participants,
             key=f"{key_prefix}_participant" if key_prefix else None,
         )
@@ -308,13 +367,23 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
             st.warning("No trials available for this participant.")
             return None, None, selection_mode, None
 
-        use_trial_index = trial_index_field and participant_trials[trial_index_field].notna().any()
+        use_trial_index = (
+            trial_index_field and participant_trials[trial_index_field].notna().any()
+        )
         if use_trial_index:
-            slider_options = sorted(participant_trials[trial_index_field].dropna().unique().tolist())
+            slider_options = sorted(
+                participant_trials[trial_index_field].dropna().unique().tolist()
+            )
             slider_label = "Trial index"
             slider_field = trial_index_field
         else:
-            slider_options = sorted(participant_trials[paragraph_field].dropna().astype(str).unique().tolist())
+            slider_options = sorted(
+                participant_trials[paragraph_field]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
             slider_label = "Text id"
             slider_field = paragraph_field
 
@@ -323,7 +392,7 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
             return None, None, selection_mode, None
 
         slider_value = st.select_slider(
-            slider_label, 
+            slider_label,
             options=slider_options,
             key=f"{key_prefix}_slider" if key_prefix else None,
         )
@@ -331,15 +400,24 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
             return None, None, selection_mode, None
 
         if slider_field == paragraph_field:
-            trial_candidates = participant_trials[participant_trials[slider_field].astype(str) == str(slider_value)]
+            trial_candidates = participant_trials[
+                participant_trials[slider_field].astype(str) == str(slider_value)
+            ]
             selected_text = str(slider_value)
         else:
-            trial_candidates = participant_trials[participant_trials[slider_field] == slider_value]
+            trial_candidates = participant_trials[
+                participant_trials[slider_field] == slider_value
+            ]
             # Get the text from the trial candidate
-            if not trial_candidates.empty and paragraph_field in trial_candidates.columns:
+            if (
+                not trial_candidates.empty
+                and paragraph_field in trial_candidates.columns
+            ):
                 selected_text = str(trial_candidates.iloc[0][paragraph_field])
 
-        trial_candidates = trial_candidates.drop_duplicates(subset=["trial_id"]).sort_values("trial_id")
+        trial_candidates = trial_candidates.drop_duplicates(
+            subset=["trial_id"]
+        ).sort_values("trial_id")
         if trial_candidates.empty:
             st.warning("No trials available for this selection.")
             return None, None, selection_mode, selected_text
@@ -358,14 +436,24 @@ def select_trial(combos: pd.DataFrame, key_prefix: str = "") -> Tuple[Optional[s
     return selected_participant, selected_trial, selection_mode, selected_text
 
 
-def compute_trial_stats(trial_words: pd.DataFrame, trial_fixations: pd.DataFrame) -> Dict[str, float]:
+def compute_trial_stats(
+    trial_words: pd.DataFrame, trial_fixations: pd.DataFrame
+) -> Dict[str, float]:
     total_time = None
     if "trial_dwell_time_ms" in trial_words.columns:
-        dwell_values = pd.to_numeric(trial_words["trial_dwell_time_ms"], errors="coerce").dropna().unique()
+        dwell_values = (
+            pd.to_numeric(trial_words["trial_dwell_time_ms"], errors="coerce")
+            .dropna()
+            .unique()
+        )
         if len(dwell_values):
             total_time = float(dwell_values[0])
     if total_time is None:
-        total_time = float(trial_fixations["duration_ms"].sum()) if not trial_fixations.empty else 0.0
+        total_time = (
+            float(trial_fixations["duration_ms"].sum())
+            if not trial_fixations.empty
+            else 0.0
+        )
     return dict(
         total_reading_time_ms=total_time,
         total_reading_time_s=total_time / 1000.0,
@@ -397,7 +485,10 @@ def gather_trial_metadata(
                 numeric_values = numeric_series.dropna()
                 is_numeric = (
                     not pd.api.types.is_bool_dtype(cleaned)
-                    and (pd.api.types.is_numeric_dtype(cleaned) or len(numeric_values) == len(cleaned))
+                    and (
+                        pd.api.types.is_numeric_dtype(cleaned)
+                        or len(numeric_values) == len(cleaned)
+                    )
                     and not numeric_values.empty
                 )
                 if is_numeric:
@@ -500,61 +591,69 @@ def _build_comparison_options(
     primary_text: Optional[str],
 ) -> list[Tuple[str, str, str]]:
     """Build prioritized list of comparison trial options.
-    
+
     Returns list of (participant_id, trial_id, label) tuples, prioritized by:
     - If selection_mode is "Text": same participant first (different readings)
     - If selection_mode is "Participant": same text first (other readers)
     - Otherwise: all other trials
     """
-    paragraph_field = "unique_paragraph_id" if "unique_paragraph_id" in combos.columns else "paragraph_id"
-    
+    paragraph_field = (
+        "unique_paragraph_id"
+        if "unique_paragraph_id" in combos.columns
+        else "paragraph_id"
+    )
+
     options: list[Tuple[str, str, str]] = []
     added = set()
-    
+
     # Helper to add options from a filtered dataframe
     def add_options(df: pd.DataFrame, prefix: str = ""):
         for row in df.itertuples():
             key = (row.participant_id, row.trial_id)
             if key not in added and key != (primary_participant, primary_trial):
                 text_id = getattr(row, paragraph_field, "")
-                label = f"{prefix}{row.participant_id} / {row.trial_id} · {text_id}" if prefix else f"{row.participant_id} / {row.trial_id} · {text_id}"
+                label = (
+                    f"{prefix}{row.participant_id} / {row.trial_id} · {text_id}"
+                    if prefix
+                    else f"{row.participant_id} / {row.trial_id} · {text_id}"
+                )
                 options.append((row.participant_id, row.trial_id, label))
                 added.add(key)
-    
+
     if selection_mode == "Text" and primary_text:
         # Prioritize same participant (different readings of same text)
         same_participant_same_text = combos[
-            (combos["participant_id"] == primary_participant) &
-            (combos[paragraph_field].astype(str) == str(primary_text))
+            (combos["participant_id"] == primary_participant)
+            & (combos[paragraph_field].astype(str) == str(primary_text))
         ].drop_duplicates(subset=["trial_id"])
         add_options(same_participant_same_text, "★ ")
-        
+
         # Then other participants reading same text
         other_participants_same_text = combos[
-            (combos["participant_id"] != primary_participant) &
-            (combos[paragraph_field].astype(str) == str(primary_text))
+            (combos["participant_id"] != primary_participant)
+            & (combos[paragraph_field].astype(str) == str(primary_text))
         ].drop_duplicates(subset=["participant_id", "trial_id"])
         add_options(other_participants_same_text)
-        
+
         # Then all other trials
         all_others = combos.drop_duplicates(subset=["participant_id", "trial_id"])
         add_options(all_others)
-        
+
     elif selection_mode == "Participant" and primary_text:
         # Prioritize same text (other readers)
         other_participants_same_text = combos[
-            (combos["participant_id"] != primary_participant) &
-            (combos[paragraph_field].astype(str) == str(primary_text))
+            (combos["participant_id"] != primary_participant)
+            & (combos[paragraph_field].astype(str) == str(primary_text))
         ].drop_duplicates(subset=["participant_id", "trial_id"])
         add_options(other_participants_same_text, "★ ")
-        
+
         # Then same participant different texts
         same_participant_other_texts = combos[
-            (combos["participant_id"] == primary_participant) &
-            (combos[paragraph_field].astype(str) != str(primary_text))
+            (combos["participant_id"] == primary_participant)
+            & (combos[paragraph_field].astype(str) != str(primary_text))
         ].drop_duplicates(subset=["trial_id"])
         add_options(same_participant_other_texts)
-        
+
         # Then all other trials
         all_others = combos.drop_duplicates(subset=["participant_id", "trial_id"])
         add_options(all_others)
@@ -562,7 +661,7 @@ def _build_comparison_options(
         # No special prioritization
         all_others = combos.drop_duplicates(subset=["participant_id", "trial_id"])
         add_options(all_others)
-    
+
     return options
 
 
@@ -578,7 +677,9 @@ def render_single_trial_tab(
     viz_settings: dict,
     raw_gaze: Optional[pd.DataFrame] = None,
 ) -> None:
-    selected_participant, selected_trial, selection_mode, selected_text = select_trial(combos, key_prefix="single")
+    selected_participant, selected_trial, selection_mode, selected_text = select_trial(
+        combos, key_prefix="single"
+    )
     if not (selected_participant and selected_trial):
         return
 
@@ -590,7 +691,7 @@ def render_single_trial_tab(
         (fixations_filtered["participant_id"] == selected_participant)
         & (fixations_filtered["trial_id"] == selected_trial)
     ]
-    
+
     # Filter raw gaze data for this trial
     trial_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
@@ -599,9 +700,7 @@ def render_single_trial_tab(
             & (raw_gaze["trial_id"] == selected_trial)
         ]
 
-    st.markdown(
-        f"Showing **{selected_trial}** "
-    )
+    st.markdown(f"Showing **{selected_trial}** ")
 
     figure_settings = dict(
         show_words=viz_settings["show_words"],
@@ -612,7 +711,9 @@ def render_single_trial_tab(
         show_heatmap=viz_settings["show_heatmap"],
         show_raw_gaze=viz_settings["show_raw_gaze"],
         color_by=viz_settings["color_by"],
-        heatmap_metric=viz_settings["heatmap_metric"] if viz_settings["heatmap_metric"] != "counts" else None,
+        heatmap_metric=viz_settings["heatmap_metric"]
+        if viz_settings["heatmap_metric"] != "counts"
+        else None,
         marker_size_range=viz_settings["marker_size_range"],
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
@@ -631,23 +732,23 @@ def render_single_trial_tab(
         "Compare with another trial",
         value=False,
         key="single_compare_toggle",
-        help="Overlay another trial's scanpath for comparison."
+        help="Overlay another trial's scanpath for comparison.",
     )
-    
+
     compare_participant = None
     compare_trial = None
     if compare_enabled:
         comparison_options = _build_comparison_options(
             combos, selection_mode, selected_participant, selected_trial, selected_text
         )
-        
+
         if not comparison_options:
             st.info("No other trials available for comparison.")
         else:
             # Build selectbox options
             option_labels = [opt[2] for opt in comparison_options]
             label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in comparison_options}
-            
+
             # Show hint about prioritization
             if selection_mode == "Text":
                 hint = "★ indicates same participant (multiple readings)"
@@ -655,22 +756,28 @@ def render_single_trial_tab(
                 hint = "★ indicates same text (other readers)"
             else:
                 hint = None
-            
+
             selected_compare_label = st.selectbox(
                 "Compare with trial",
                 options=option_labels,
                 key="single_compare_trial",
                 help=hint,
             )
-            
+
             if selected_compare_label:
-                compare_participant, compare_trial = label_to_trial[selected_compare_label]
+                compare_participant, compare_trial = label_to_trial[
+                    selected_compare_label
+                ]
 
     # Show comparison figure if enabled and a trial is selected, otherwise show single trial figure
-    if compare_enabled and compare_participant is not None and compare_trial is not None:
+    if (
+        compare_enabled
+        and compare_participant is not None
+        and compare_trial is not None
+    ):
         trial_a = (selected_participant, selected_trial)
         trial_b = (compare_participant, compare_trial)
-        
+
         fig_compare = make_comparison_figure(
             words_filtered,
             fixations_filtered,
@@ -681,7 +788,7 @@ def render_single_trial_tab(
             font_family=font_family,
             base_font_size=int(base_font_size),
         )
-        st.plotly_chart(fig_compare, width='content', config={"responsive": False})
+        st.plotly_chart(fig_compare, width="content", config={"responsive": False})
     else:
         fig = make_scanpath_figure(
             trial_words,
@@ -694,11 +801,13 @@ def render_single_trial_tab(
             y_field=y_field,
             **figure_settings,
         )
-        st.plotly_chart(fig, width='content', config={"responsive": False})
+        st.plotly_chart(fig, width="content", config={"responsive": False})
 
     stats = compute_trial_stats(trial_words, trial_fixations)
     stat_cols = st.columns(3)
-    stat_cols[0].metric("Total reading time (s)", f"{stats['total_reading_time_s']:.1f}")
+    stat_cols[0].metric(
+        "Total reading time (s)", f"{stats['total_reading_time_s']:.1f}"
+    )
     stat_cols[1].metric("Number of words", f"{stats['word_count']:,}")
     stat_cols[2].metric("Number of fixations", f"{stats['fixation_count']:,}")
 
@@ -723,13 +832,18 @@ def render_single_trial_tab(
         default=default_metadata or available_metadata,
     )
     if selected_metadata:
-        metadata_df = gather_trial_metadata(trial_words, trial_fixations, selected_metadata)
+        metadata_df = gather_trial_metadata(
+            trial_words, trial_fixations, selected_metadata
+        )
         if not metadata_df.empty:
-            st.dataframe(metadata_df, hide_index=True, width='stretch')
+            st.dataframe(metadata_df, hide_index=True, width="stretch")
 
     with st.expander("Plot configuration"):
         plot_config = {
-            "selection": {"participant_id": selected_participant, "trial_id": selected_trial},
+            "selection": {
+                "participant_id": selected_participant,
+                "trial_id": selected_trial,
+            },
             "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
             "axes": {"x_field": x_field, "y_field": y_field},
             "layers": {
@@ -745,13 +859,19 @@ def render_single_trial_tab(
                 "color_by": figure_settings["color_by"],
                 "heatmap_metric": viz_settings["heatmap_metric"],
                 "show_colorbars": figure_settings["show_colorbars"],
-                "fixation_range": list(figure_settings["fixation_color_range"]) if figure_settings["fixation_color_range"] else None,
-                "heatmap_range": list(figure_settings["heatmap_range"]) if figure_settings["heatmap_range"] else None,
+                "fixation_range": list(figure_settings["fixation_color_range"])
+                if figure_settings["fixation_color_range"]
+                else None,
+                "heatmap_range": list(figure_settings["heatmap_range"])
+                if figure_settings["heatmap_range"]
+                else None,
                 "fixation_colorscale": figure_settings["fixation_colorscale"],
                 "heatmap_colorscale": figure_settings["heatmap_colorscale"],
             },
             "sizing": {
-                "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
+                "marker_size_range": [
+                    int(s) for s in figure_settings["marker_size_range"]
+                ],
                 "order_font_size": int(figure_settings["order_font_size"]),
                 "order_font_color": figure_settings["order_font_color"],
                 "base_font_size": int(base_font_size),
@@ -778,19 +898,20 @@ def render_single_trial_tab(
         )
 
 
-
-
-
-def render_metrics_tab(words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame) -> None:
+def render_metrics_tab(
+    words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame
+) -> None:
     st.subheader("Word-level data")
     metrics = compute_word_metrics(words_filtered, fixations_filtered)
-    
+
     PAGE_SIZE = 1000
     total_rows = len(metrics)
     total_pages = max(1, (total_rows + PAGE_SIZE - 1) // PAGE_SIZE)
-    
+
     if total_rows > PAGE_SIZE:
-        st.info(f"Showing {total_rows:,} rows with pagination ({PAGE_SIZE:,} per page).")
+        st.info(
+            f"Showing {total_rows:,} rows with pagination ({PAGE_SIZE:,} per page)."
+        )
         page = st.number_input(
             "Page",
             min_value=1,
@@ -805,26 +926,26 @@ def render_metrics_tab(words_filtered: pd.DataFrame, fixations_filtered: pd.Data
         st.caption(f"Showing rows {start_idx + 1:,} – {end_idx:,} of {total_rows:,}")
     else:
         display_df = metrics
-    
+
     st.dataframe(
         display_df,
         hide_index=True,
         use_container_width=True,
     )
-    st.caption(
-        "Word-level data with computed reading metrics where available."
-    )
+    st.caption("Word-level data with computed reading metrics where available.")
 
 
 def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
     st.subheader("Fixation-level data")
-    
+
     PAGE_SIZE = 1000
     total_rows = len(fixations_filtered)
     total_pages = max(1, (total_rows + PAGE_SIZE - 1) // PAGE_SIZE)
-    
+
     if total_rows > PAGE_SIZE:
-        st.info(f"Showing {total_rows:,} rows with pagination ({PAGE_SIZE:,} per page).")
+        st.info(
+            f"Showing {total_rows:,} rows with pagination ({PAGE_SIZE:,} per page)."
+        )
         page = st.number_input(
             "Page",
             min_value=1,
@@ -839,16 +960,20 @@ def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
         st.caption(f"Showing rows {start_idx + 1:,} – {end_idx:,} of {total_rows:,}")
     else:
         display_df = fixations_filtered
-    
+
     st.dataframe(
         display_df,
         hide_index=True,
         use_container_width=True,
     )
-    st.caption("All fixation records after applying filters; includes ids, timing, and optional flags.")
+    st.caption(
+        "All fixation records after applying filters; includes ids, timing, and optional flags."
+    )
 
 
-def render_raw_data_tab(words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame) -> None:
+def render_raw_data_tab(
+    words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame
+) -> None:
     word_tab, fixation_tab = st.tabs(["Word-level", "Fixation-level"])
     with word_tab:
         render_metrics_tab(words_filtered, fixations_filtered)
@@ -868,7 +993,9 @@ def render_animation_tab(
     viz_settings: dict,
 ) -> None:
     """Render the animated scanpath tab showing fixations progressing over time."""
-    selected_participant, selected_trial, _mode, _text = select_trial(combos, key_prefix="anim")
+    selected_participant, selected_trial, _mode, _text = select_trial(
+        combos, key_prefix="anim"
+    )
     if not (selected_participant and selected_trial):
         return
 
@@ -881,9 +1008,7 @@ def render_animation_tab(
         & (fixations_filtered["trial_id"] == selected_trial)
     ]
 
-    st.markdown(
-        f"Showing animated scanpath for **{selected_trial}**"
-    )
+    st.markdown(f"Showing animated scanpath for **{selected_trial}**")
 
     # Playback speed control
     speed_options = [0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0]
@@ -904,7 +1029,9 @@ def render_animation_tab(
     n_fixations = len(trial_fixations)
     total_duration_ms = trial_fixations["duration_ms"].sum()
     playback_duration_s = total_duration_ms / playback_speed / 1000
-    st.info(f"**{n_fixations} fixations** · Total duration: {total_duration_ms/1000:.1f}s · Playback time at ×{playback_speed}: {playback_duration_s:.1f}s")
+    st.info(
+        f"**{n_fixations} fixations** · Total duration: {total_duration_ms / 1000:.1f}s · Playback time at ×{playback_speed}: {playback_duration_s:.1f}s"
+    )
 
     fig = make_scanpath_animation(
         trial_words,
@@ -922,7 +1049,7 @@ def render_animation_tab(
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
     )
-    st.plotly_chart(fig, width='content', config={"responsive": False})
+    st.plotly_chart(fig, width="content", config={"responsive": False})
 
     st.caption(
         "**Controls:** Use ▶ Play to auto-advance through fixations, ⏸ Pause to stop, "
@@ -933,9 +1060,7 @@ def render_animation_tab(
 
 def main() -> None:
     st.title("Scanpath Visualization")
-    st.caption(
-        "Visualize eye-tracking-while-reading scanpaths!"
-    )
+    st.caption("Visualize eye-tracking-while-reading scanpaths!")
 
     st.sidebar.header("Experimental Setup")
     data_choice = st.sidebar.radio(
@@ -959,7 +1084,7 @@ def main() -> None:
         uploaded_raw_gaze = st.sidebar.file_uploader(
             "Raw gaze csv (optional)",
             type=["csv"],
-            help="Optional: millisecond-level gaze data with participant_id, trial_id, x, y columns."
+            help="Optional: millisecond-level gaze data with participant_id, trial_id, x, y columns.",
         )
         if uploaded_raw_gaze:
             raw_gaze_df = pd.read_csv(uploaded_raw_gaze)
@@ -987,7 +1112,9 @@ def main() -> None:
         raw_gaze_filtered = pd.DataFrame()
 
     if words_filtered.empty or fixations_filtered.empty:
-        st.warning("No data after filtering. Try selecting more participants or trials.")
+        st.warning(
+            "No data after filtering. Try selecting more participants or trials."
+        )
         return
 
     combos, combo_labels, label_to_combo = build_combo_options(fixations_filtered)
@@ -1022,7 +1149,9 @@ def main() -> None:
     # Create visualization controls once, shared by all tabs
     # Use filtered fixations to determine available fields
     has_raw_gaze = not raw_gaze_filtered.empty
-    viz_settings = sidebar_controls(fixations_filtered, base_font_size, has_raw_gaze=has_raw_gaze)
+    viz_settings = sidebar_controls(
+        fixations_filtered, base_font_size, has_raw_gaze=has_raw_gaze
+    )
 
     tab_single, tab_animation, tab_raw = st.tabs(
         ["Interactive Plot", "Animated Scanpath", "Raw Data"]

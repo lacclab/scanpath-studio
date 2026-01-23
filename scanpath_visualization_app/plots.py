@@ -6,7 +6,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from .constants import FONT_FAMILY, DEFAULT_FIXATION_COLORSCALE, DEFAULT_HEATMAP_COLORSCALE
+from .constants import (
+    DEFAULT_FIXATION_COLORSCALE,
+    DEFAULT_HEATMAP_COLORSCALE,
+    FONT_FAMILY,
+)
 
 COLORBAR_LEN_FRACTION = 0.33
 
@@ -71,7 +75,9 @@ def make_scanpath_figure(
         y_candidates = []
         if not words.empty:
             x_candidates.extend([words["x"].min(), (words["x"] + words["width"]).max()])
-            y_candidates.extend([words["y"].min(), (words["y"] + words["height"]).max()])
+            y_candidates.extend(
+                [words["y"].min(), (words["y"] + words["height"]).max()]
+            )
         if not fixations.empty:
             x_candidates.extend([fixations[x_field].min(), fixations[x_field].max()])
             y_candidates.extend([fixations[y_field].min(), fixations[y_field].max()])
@@ -103,7 +109,11 @@ def make_scanpath_figure(
                     text=words["text"],
                     mode="text",
                     showlegend=False,
-                    textfont=dict(color="#343a40", size=base_font_size, family=font_settings["family"]),
+                    textfont=dict(
+                        color="#343a40",
+                        size=base_font_size,
+                        family=font_settings["family"],
+                    ),
                     hovertemplate=(
                         "Word %{text}<br>Word ID %{customdata[0]}<br>Line %{customdata[1]}"
                         "<extra></extra>"
@@ -121,7 +131,7 @@ def make_scanpath_figure(
         else:
             color_vals = "#888888"
             colorscale = None
-        
+
         fig.add_trace(
             go.Scatter(
                 x=raw_gaze["x"],
@@ -140,7 +150,9 @@ def make_scanpath_figure(
                     "y: %{y:.1f}<br>"
                     "t: %{customdata} ms<extra></extra>"
                 ),
-                customdata=raw_gaze["timestamp_ms"] if "timestamp_ms" in raw_gaze.columns else None,
+                customdata=raw_gaze["timestamp_ms"]
+                if "timestamp_ms" in raw_gaze.columns
+                else None,
                 name="Raw gaze",
                 showlegend=True,
             )
@@ -151,10 +163,18 @@ def make_scanpath_figure(
         if heatmap_metric == "duration_ms":
             weights = fixations["duration_ms"]
         histfunc = "sum" if weights is not None else "count"
-        x_min = x_min_data if x_min_data is not None else float(fixations[x_field].min())
-        x_max = x_max_data if x_max_data is not None else float(fixations[x_field].max())
-        y_min = y_min_data if y_min_data is not None else float(fixations[y_field].min())
-        y_max = y_max_data if y_max_data is not None else float(fixations[y_field].max())
+        x_min = (
+            x_min_data if x_min_data is not None else float(fixations[x_field].min())
+        )
+        x_max = (
+            x_max_data if x_max_data is not None else float(fixations[x_field].max())
+        )
+        y_min = (
+            y_min_data if y_min_data is not None else float(fixations[y_field].min())
+        )
+        y_max = (
+            y_max_data if y_max_data is not None else float(fixations[y_field].max())
+        )
         x_span = max(x_max - x_min, 1.0)
         y_span = max(y_max - y_min, 1.0)
         if not words.empty:
@@ -165,8 +185,10 @@ def make_scanpath_figure(
                 wx1, wy1 = wx0 + word_row.width, wy0 + word_row.height
                 # Find fixations within this word's bounding box
                 in_word = (
-                    (fixations[x_field] >= wx0) & (fixations[x_field] <= wx1) &
-                    (fixations[y_field] >= wy0) & (fixations[y_field] <= wy1)
+                    (fixations[x_field] >= wx0)
+                    & (fixations[x_field] <= wx1)
+                    & (fixations[y_field] >= wy0)
+                    & (fixations[y_field] <= wy1)
                 )
                 if weights is not None:
                     val = float(weights[in_word].sum())
@@ -180,12 +202,21 @@ def make_scanpath_figure(
             # Only show words with non-zero values
             words_nonzero = words_with_vals[words_with_vals["heatmap_val"] > 0]
             if not words_nonzero.empty:
-                z_min = heatmap_range[0] if heatmap_range else float(words_nonzero["heatmap_val"].min())
-                z_max = heatmap_range[1] if heatmap_range else float(words_nonzero["heatmap_val"].max())
+                z_min = (
+                    heatmap_range[0]
+                    if heatmap_range
+                    else float(words_nonzero["heatmap_val"].min())
+                )
+                z_max = (
+                    heatmap_range[1]
+                    if heatmap_range
+                    else float(words_nonzero["heatmap_val"].max())
+                )
                 z_range = max(z_max - z_min, 1e-9)
 
                 # Use shapes for word-level heatmap cells
                 from plotly.colors import sample_colorscale
+
                 heatmap_shapes = []
                 for wr in words_nonzero.itertuples():
                     norm_val = (wr.heatmap_val - z_min) / z_range
@@ -220,7 +251,9 @@ def make_scanpath_figure(
                                 cmin=z_min,
                                 cmax=z_max,
                                 colorbar=dict(
-                                    title="Fixation count" if weights is None else "Duration (ms)",
+                                    title="Fixation count"
+                                    if weights is None
+                                    else "Duration (ms)",
                                     x=1.02,
                                     lenmode="fraction",
                                     len=COLORBAR_LEN_FRACTION,
@@ -245,7 +278,9 @@ def make_scanpath_figure(
                     opacity=0.35,
                     showscale=show_colorbars,
                     colorbar=dict(
-                        title="Fixation density" if weights is None else "Duration (ms)",
+                        title="Fixation density"
+                        if weights is None
+                        else "Duration (ms)",
                         x=1.02,
                         lenmode="fraction",
                         len=COLORBAR_LEN_FRACTION,
@@ -283,8 +318,8 @@ def make_scanpath_figure(
     if show_fixations and not fixations.empty:
         ordered = fixations.sort_values("timestamp_ms")
         color_data = ordered[color_by] if color_by in ordered.columns else None
-        is_numeric_color = (
-            color_data is not None and pd.api.types.is_numeric_dtype(color_data)
+        is_numeric_color = color_data is not None and pd.api.types.is_numeric_dtype(
+            color_data
         )
 
         durations = ordered["duration_ms"].fillna(0)
@@ -320,7 +355,11 @@ def make_scanpath_figure(
                     line=dict(color="#111", width=0.5),
                 ),
                 text=ordered["order_in_trial"] if show_order else None,
-                textfont=dict(color=order_font_color, size=order_font_size, family=font_settings["family"]),
+                textfont=dict(
+                    color=order_font_color,
+                    size=order_font_size,
+                    family=font_settings["family"],
+                ),
                 textposition="top center",
                 hovertemplate=(
                     "Fixation #%{customdata[0]}<br>"
@@ -346,12 +385,18 @@ def make_scanpath_figure(
     yaxis_cfg = dict(showticklabels=False, showgrid=False, zeroline=False, title=None)
     if spatial_axes:
         xaxis_cfg.update(range=x_range, constrain="domain")
-        yaxis_cfg.update(range=y_range, constrain="domain", scaleanchor="x", scaleratio=1)
+        yaxis_cfg.update(
+            range=y_range, constrain="domain", scaleanchor="x", scaleratio=1
+        )
     else:
         # Non-spatial axes: add trendline and show axis labels/grid
-        xaxis_cfg.update(showticklabels=True, showgrid=True, title=x_field.replace("_", " ").title())
-        yaxis_cfg.update(showticklabels=True, showgrid=True, title=y_field.replace("_", " ").title())
-        
+        xaxis_cfg.update(
+            showticklabels=True, showgrid=True, title=x_field.replace("_", " ").title()
+        )
+        yaxis_cfg.update(
+            showticklabels=True, showgrid=True, title=y_field.replace("_", " ").title()
+        )
+
         if not fixations.empty and len(fixations) > 1:
             # Fit linear trendline using least squares
             x_vals = fixations[x_field].dropna()
@@ -424,13 +469,13 @@ def make_scanpath_animation(
     order_font_color: str = "#000000",
 ) -> go.Figure:
     """Create an animated scanpath figure that shows fixations progressing over time.
-    
+
     Each fixation is displayed for its actual duration divided by the playback_speed.
     For example, playback_speed=2.0 means 2x speed (fixations shown for half their duration).
     """
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    
+
     # Calculate ranges
     x_candidates = []
     y_candidates = []
@@ -470,7 +515,9 @@ def make_scanpath_animation(
                 text=words["text"],
                 mode="text",
                 showlegend=False,
-                textfont=dict(color="#343a40", size=base_font_size, family=font_settings["family"]),
+                textfont=dict(
+                    color="#343a40", size=base_font_size, family=font_settings["family"]
+                ),
                 hoverinfo="skip",
                 name="words",
             )
@@ -479,10 +526,10 @@ def make_scanpath_animation(
     # Order fixations by timestamp
     if fixations.empty:
         return fig
-    
+
     ordered = fixations.sort_values("timestamp_ms").reset_index(drop=True)
     n_fixations = len(ordered)
-    
+
     # Compute marker sizes based on duration
     durations = ordered["duration_ms"].fillna(0)
     d_min, d_max = float(durations.min()), float(durations.max())
@@ -491,17 +538,19 @@ def make_scanpath_animation(
         sizes = np.interp(durations, (d_min, d_max), (min_size, max_size))
     else:
         sizes = np.full(len(durations), (min_size + max_size) / 2)
-    
+
     # Calculate frame durations based on actual fixation durations and playback speed
     # Each frame shows for the fixation's duration divided by playback speed
-    frame_durations_ms = (durations / playback_speed).clip(lower=50).astype(int).tolist()
-    
+    frame_durations_ms = (
+        (durations / playback_speed).clip(lower=50).astype(int).tolist()
+    )
+
     # For slider and play button, use average duration as default
     avg_frame_duration = int(np.mean(frame_durations_ms))
-    
+
     # Determine display mode based on show_order
     marker_mode = "markers+text" if show_order else "markers"
-    
+
     # Create initial empty traces for fixations and saccades
     # Fixation markers trace
     fig.add_trace(
@@ -515,19 +564,21 @@ def make_scanpath_animation(
                 line=dict(color="#111", width=0.5),
             ),
             text=["1"] if show_order else None,
-            textfont=dict(color=order_font_color, size=order_font_size, family=font_settings["family"]),
+            textfont=dict(
+                color=order_font_color,
+                size=order_font_size,
+                family=font_settings["family"],
+            ),
             textposition="top center",
             showlegend=False,
             name="fixations",
             hovertemplate=(
-                "Fixation #%{text}<br>"
-                "Duration %{customdata} ms<br>"
-                "<extra></extra>"
+                "Fixation #%{text}<br>Duration %{customdata} ms<br><extra></extra>"
             ),
             customdata=[ordered.iloc[0]["duration_ms"]],
         )
     )
-    
+
     # Saccade lines trace
     if show_saccades:
         fig.add_trace(
@@ -541,7 +592,7 @@ def make_scanpath_animation(
                 hoverinfo="skip",
             )
         )
-    
+
     # Current fixation highlight trace (larger, different color)
     fig.add_trace(
         go.Scatter(
@@ -558,30 +609,30 @@ def make_scanpath_animation(
             hoverinfo="skip",
         )
     )
-    
+
     # Create frames for animation
     frames = []
     for i in range(n_fixations):
         # Accumulated fixations up to this point
-        fix_x = ordered.iloc[:i+1]["x"].tolist()
-        fix_y = ordered.iloc[:i+1]["y"].tolist()
-        fix_sizes = sizes[:i+1].tolist()
-        fix_texts = [str(j+1) for j in range(i+1)] if show_order else None
-        fix_durations = ordered.iloc[:i+1]["duration_ms"].tolist()
-        
+        fix_x = ordered.iloc[: i + 1]["x"].tolist()
+        fix_y = ordered.iloc[: i + 1]["y"].tolist()
+        fix_sizes = sizes[: i + 1].tolist()
+        fix_texts = [str(j + 1) for j in range(i + 1)] if show_order else None
+        fix_durations = ordered.iloc[: i + 1]["duration_ms"].tolist()
+
         # Saccade lines: connect consecutive fixations
         sac_x = []
         sac_y = []
         if show_saccades:
             for j in range(i):
-                sac_x.extend([ordered.iloc[j]["x"], ordered.iloc[j+1]["x"], None])
-                sac_y.extend([ordered.iloc[j]["y"], ordered.iloc[j+1]["y"], None])
-        
+                sac_x.extend([ordered.iloc[j]["x"], ordered.iloc[j + 1]["x"], None])
+                sac_y.extend([ordered.iloc[j]["y"], ordered.iloc[j + 1]["y"], None])
+
         # Current fixation position
         curr_x = [ordered.iloc[i]["x"]]
         curr_y = [ordered.iloc[i]["y"]]
         curr_size = [sizes[i] + 8]
-        
+
         frame_data = [
             go.Scatter(
                 x=fix_x,
@@ -593,12 +644,16 @@ def make_scanpath_animation(
                     line=dict(color="#111", width=0.5),
                 ),
                 text=fix_texts,
-                textfont=dict(color=order_font_color, size=order_font_size, family=font_settings["family"]),
+                textfont=dict(
+                    color=order_font_color,
+                    size=order_font_size,
+                    family=font_settings["family"],
+                ),
                 textposition="top center",
                 customdata=fix_durations,
             ),
         ]
-        
+
         if show_saccades:
             frame_data.append(
                 go.Scatter(
@@ -608,7 +663,7 @@ def make_scanpath_animation(
                     line=dict(color="#6f42c1", width=2),
                 )
             )
-        
+
         frame_data.append(
             go.Scatter(
                 x=curr_x,
@@ -621,25 +676,34 @@ def make_scanpath_animation(
                 ),
             )
         )
-        
+
         # If word labels exist, keep them in each frame
         if show_word_labels and not words.empty and "text" in words.columns:
-            frame_data.insert(0, go.Scatter(
-                x=words["x"] + words["width"] / 2,
-                y=words["y"] + words["height"] / 2,
-                text=words["text"],
-                mode="text",
-                textfont=dict(color="#343a40", size=base_font_size, family=font_settings["family"]),
-            ))
-        
-        frames.append(go.Frame(
-            data=frame_data,
-            name=str(i),
-            traces=list(range(len(frame_data))),
-        ))
-    
+            frame_data.insert(
+                0,
+                go.Scatter(
+                    x=words["x"] + words["width"] / 2,
+                    y=words["y"] + words["height"] / 2,
+                    text=words["text"],
+                    mode="text",
+                    textfont=dict(
+                        color="#343a40",
+                        size=base_font_size,
+                        family=font_settings["family"],
+                    ),
+                ),
+            )
+
+        frames.append(
+            go.Frame(
+                data=frame_data,
+                name=str(i),
+                traces=list(range(len(frame_data))),
+            )
+        )
+
     fig.frames = frames
-    
+
     # Add border shape
     shapes.append(
         dict(
@@ -652,97 +716,109 @@ def make_scanpath_animation(
             fillcolor="rgba(0,0,0,0)",
         )
     )
-    
+
     # Create slider steps - each step uses its own frame duration
-    sliders = [dict(
-        active=0,
-        yanchor="top",
-        xanchor="left",
-        currentvalue=dict(
-            font=dict(size=14),
-            prefix="Fixation: ",
-            visible=True,
-            xanchor="right",
-        ),
-        transition=dict(duration=avg_frame_duration // 2, easing="cubic-in-out"),
-        pad=dict(b=10, t=50),
-        len=0.9,
-        x=0.1,
-        y=0,
-        steps=[
-            dict(
-                args=[[str(i)], dict(
-                    frame=dict(duration=frame_durations_ms[i], redraw=True),
-                    mode="immediate",
-                    transition=dict(duration=min(frame_durations_ms[i] // 2, 100)),
-                )],
-                label=str(i + 1),
-                method="animate",
-            )
-            for i in range(n_fixations)
-        ],
-    )]
-    
+    sliders = [
+        dict(
+            active=0,
+            yanchor="top",
+            xanchor="left",
+            currentvalue=dict(
+                font=dict(size=14),
+                prefix="Fixation: ",
+                visible=True,
+                xanchor="right",
+            ),
+            transition=dict(duration=avg_frame_duration // 2, easing="cubic-in-out"),
+            pad=dict(b=10, t=50),
+            len=0.9,
+            x=0.1,
+            y=0,
+            steps=[
+                dict(
+                    args=[
+                        [str(i)],
+                        dict(
+                            frame=dict(duration=frame_durations_ms[i], redraw=True),
+                            mode="immediate",
+                            transition=dict(
+                                duration=min(frame_durations_ms[i] // 2, 100)
+                            ),
+                        ),
+                    ],
+                    label=str(i + 1),
+                    method="animate",
+                )
+                for i in range(n_fixations)
+            ],
+        )
+    ]
+
     # Update buttons for play/pause
     # For play, we use average frame duration since Plotly animation doesn't support per-frame durations in auto-play
-    updatemenus = [dict(
-        type="buttons",
-        showactive=False,
-        y=0,
-        x=0.05,
-        xanchor="right",
-        yanchor="top",
-        pad=dict(t=50, r=10),
-        buttons=[
-            dict(
-                label="▶ Play",
-                method="animate",
-                args=[
-                    None,
-                    dict(
-                        frame=dict(duration=avg_frame_duration, redraw=True),
-                        fromcurrent=True,
-                        transition=dict(duration=min(avg_frame_duration // 2, 100), easing="cubic-in-out"),
-                    ),
-                ],
-            ),
-            dict(
-                label="⏸ Pause",
-                method="animate",
-                args=[
-                    [None],
-                    dict(
-                        frame=dict(duration=0, redraw=False),
-                        mode="immediate",
-                        transition=dict(duration=0),
-                    ),
-                ],
-            ),
-        ],
-    )]
-    
+    updatemenus = [
+        dict(
+            type="buttons",
+            showactive=False,
+            y=0,
+            x=0.05,
+            xanchor="right",
+            yanchor="top",
+            pad=dict(t=50, r=10),
+            buttons=[
+                dict(
+                    label="▶ Play",
+                    method="animate",
+                    args=[
+                        None,
+                        dict(
+                            frame=dict(duration=avg_frame_duration, redraw=True),
+                            fromcurrent=True,
+                            transition=dict(
+                                duration=min(avg_frame_duration // 2, 100),
+                                easing="cubic-in-out",
+                            ),
+                        ),
+                    ],
+                ),
+                dict(
+                    label="⏸ Pause",
+                    method="animate",
+                    args=[
+                        [None],
+                        dict(
+                            frame=dict(duration=0, redraw=False),
+                            mode="immediate",
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                ),
+            ],
+        )
+    ]
+
     fig.update_layout(
         height=canvas_height + 80,  # Extra space for slider
         width=canvas_width,
         autosize=False,
         margin=dict(l=0, r=0, t=0, b=80),
         xaxis=dict(
-            showticklabels=False, 
-            showgrid=False, 
-            zeroline=False, 
-            title=None, 
-            range=x_range, 
-            constrain="domain"
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+            title=None,
+            range=x_range,
+            constrain="domain",
         ),
         yaxis=dict(
-            showticklabels=False, 
-            showgrid=False, 
-            zeroline=False, 
-            title=None, 
-            range=y_range, 
-            constrain="domain", 
-            scaleanchor="x", 
-            scaleratio=1
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+            title=None,
+            range=y_range,
+            constrain="domain",
+            scaleanchor="x",
+            scaleratio=1,
         ),
         template="plotly_white",
         font=font_settings,
@@ -750,7 +826,7 @@ def make_scanpath_animation(
         sliders=sliders,
         updatemenus=updatemenus,
     )
-    
+
     return fig
 
 
@@ -776,11 +852,22 @@ def make_comparison_figure(
             (words["participant_id"] == participant) & (words["trial_id"] == trial_id)
         ]
         trial_fix = fixations[
-            (fixations["participant_id"] == participant) & (fixations["trial_id"] == trial_id)
+            (fixations["participant_id"] == participant)
+            & (fixations["trial_id"] == trial_id)
         ].sort_values("timestamp_ms")
         if not trial_words.empty:
-            x_candidates.extend([trial_words["x"].min(), (trial_words["x"] + trial_words["width"]).max()])
-            y_candidates.extend([trial_words["y"].min(), (trial_words["y"] + trial_words["height"]).max()])
+            x_candidates.extend(
+                [
+                    trial_words["x"].min(),
+                    (trial_words["x"] + trial_words["width"]).max(),
+                ]
+            )
+            y_candidates.extend(
+                [
+                    trial_words["y"].min(),
+                    (trial_words["y"] + trial_words["height"]).max(),
+                ]
+            )
         if not trial_fix.empty:
             x_candidates.extend([trial_fix["x"].min(), trial_fix["x"].max()])
             y_candidates.extend([trial_fix["y"].min(), trial_fix["y"].max()])
@@ -844,8 +931,24 @@ def make_comparison_figure(
         width=canvas_width,
         autosize=False,
         margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=None, range=x_range, constrain="domain"),
-        yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, title=None, range=y_range, constrain="domain", scaleanchor="x", scaleratio=1),
+        xaxis=dict(
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+            title=None,
+            range=x_range,
+            constrain="domain",
+        ),
+        yaxis=dict(
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+            title=None,
+            range=y_range,
+            constrain="domain",
+            scaleanchor="x",
+            scaleratio=1,
+        ),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         template="plotly_white",
         title="Overlay comparison",

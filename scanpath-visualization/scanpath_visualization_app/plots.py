@@ -13,9 +13,9 @@ COLORBAR_LEN_FRACTION = 0.33
 
 def build_word_boxes(words: pd.DataFrame, color: str = "#6c757d") -> list:
     shapes = []
-    for _, row in words.iterrows():
-        x0, y0 = row["x"], row["y"]
-        x1, y1 = row["x"] + row["width"], row["y"] + row["height"]
+    for row in words.itertuples():
+        x0, y0 = row.x, row.y
+        x1, y1 = row.x + row.width, row.y + row.height
         shapes.append(
             dict(
                 type="rect",
@@ -160,9 +160,9 @@ def make_scanpath_figure(
         if not words.empty:
             # Word-level heatmap: aggregate fixations per word
             word_values = []
-            for _, word_row in words.iterrows():
-                wx0, wy0 = word_row["x"], word_row["y"]
-                wx1, wy1 = wx0 + word_row["width"], wy0 + word_row["height"]
+            for word_row in words.itertuples():
+                wx0, wy0 = word_row.x, word_row.y
+                wx1, wy1 = wx0 + word_row.width, wy0 + word_row.height
                 # Find fixations within this word's bounding box
                 in_word = (
                     (fixations[x_field] >= wx0) & (fixations[x_field] <= wx1) &
@@ -187,17 +187,17 @@ def make_scanpath_figure(
                 # Use shapes for word-level heatmap cells
                 from plotly.colors import sample_colorscale
                 heatmap_shapes = []
-                for _, wr in words_nonzero.iterrows():
-                    norm_val = (wr["heatmap_val"] - z_min) / z_range
+                for wr in words_nonzero.itertuples():
+                    norm_val = (wr.heatmap_val - z_min) / z_range
                     norm_val = max(0.0, min(1.0, norm_val))
                     color = sample_colorscale(heatmap_colorscale, [norm_val])[0]
                     heatmap_shapes.append(
                         dict(
                             type="rect",
-                            x0=wr["x"],
-                            y0=wr["y"],
-                            x1=wr["x"] + wr["width"],
-                            y1=wr["y"] + wr["height"],
+                            x0=wr.x,
+                            y0=wr.y,
+                            x1=wr.x + wr.width,
+                            y1=wr.y + wr.height,
                             line=dict(width=0),
                             fillcolor=color,
                             opacity=0.5,
@@ -261,11 +261,18 @@ def make_scanpath_figure(
 
     if spatial_axes and show_saccades and len(fixations) > 1:
         ordered = fixations.sort_values("timestamp_ms")
-        for (_, row_a), (_, row_b) in zip(ordered.iloc[:-1].iterrows(), ordered.iloc[1:].iterrows()):
+        ordered_tuples = list(ordered.itertuples())
+        for i in range(len(ordered_tuples) - 1):
+            row_a = ordered_tuples[i]
+            row_b = ordered_tuples[i + 1]
+            x_field_val = getattr(row_a, x_field)
+            y_field_val = getattr(row_a, y_field)
+            x_field_val_b = getattr(row_b, x_field)
+            y_field_val_b = getattr(row_b, y_field)
             fig.add_trace(
                 go.Scatter(
-                    x=[row_a[x_field], row_b[x_field]],
-                    y=[row_a[y_field], row_b[y_field]],
+                    x=[x_field_val, x_field_val_b],
+                    y=[y_field_val, y_field_val_b],
                     mode="lines",
                     line=dict(color="#6f42c1", width=2),
                     hoverinfo="skip",

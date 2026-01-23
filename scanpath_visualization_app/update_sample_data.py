@@ -143,9 +143,7 @@ def choose_trials(
 ) -> list[str]:
     trials: list[str] = []
     for pid in participants:
-        subset = df[
-            (df["participant_id"] == pid) & (df["repeated_reading_trial"] == False)
-        ]  # noqa: E712
+        subset = df[(df["participant_id"] == pid) & (not df["repeated_reading_trial"])]  # noqa: E712
         if subset.empty:
             raise RuntimeError(f"No trials found for participant {pid}")
         ordered = (

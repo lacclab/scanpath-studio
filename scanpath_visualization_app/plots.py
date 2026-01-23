@@ -887,11 +887,11 @@ def make_comparison_figure(
             trial_str = str(trial_id)
             contains_text = text_str and text_str.lower() in trial_str.lower()
             if text_str:
-                display_name = f"{participant} · {text_str}"
+                display_name = f"{text_str} · {participant}"
                 if not contains_text:
                     display_name = f"{display_name} (trial {trial_str})"
             else:
-                display_name = f"{participant} · {trial_str}"
+                display_name = f"{trial_str} · {participant}"
 
         fig.add_trace(
             go.Scatter(

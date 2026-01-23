@@ -265,7 +265,7 @@ def select_trial(
                 "← Prev",
                 key=f"{key_prefix}_prev_btn" if key_prefix else "prev_btn",
                 disabled=current_idx <= 0,
-                width='stretch',
+                width="stretch",
             ):
                 st.session_state[state_key] = current_idx - 1
                 st.rerun()
@@ -274,7 +274,7 @@ def select_trial(
                 "Next →",
                 key=f"{key_prefix}_next_btn" if key_prefix else "next_btn",
                 disabled=current_idx >= len(trial_options) - 1,
-                width='stretch',
+                width="stretch",
             ):
                 st.session_state[state_key] = current_idx + 1
                 st.rerun()
@@ -597,12 +597,12 @@ def _friendly_trial_label(
     trial_contains_text = text_str and text_str.lower() in trial_str.lower()
 
     if text_str:
-        base = f"{participant_id} · {text_str}"
+        base = f"{text_str} · {participant_id}"
         # Only append trial id when it isn't already encoded in the text label
         if not trial_contains_text:
             base = f"{base} (trial {trial_str})" if trial_str else base
     else:
-        base = f"{participant_id} · {trial_str}" if trial_str else participant_id
+        base = f"{trial_str} · {participant_id}" if trial_str else participant_id
 
     label = f"{prefix}{base}"
     if label in existing_labels:
@@ -651,45 +651,21 @@ def _build_comparison_options(
                 options.append((row.participant_id, row.trial_id, label))
                 added.add(key)
 
-    if selection_mode == "Text" and primary_text:
-        # Prioritize same participant (different readings of same text)
-        same_participant_same_text = combos[
-            (combos["participant_id"] == primary_participant)
-            & (combos[paragraph_field].astype(str) == str(primary_text))
-        ].drop_duplicates(subset=["trial_id"])
-        add_options(same_participant_same_text, "★ ")
-
-        # Then other participants reading same text
-        other_participants_same_text = combos[
-            (combos["participant_id"] != primary_participant)
-            & (combos[paragraph_field].astype(str) == str(primary_text))
+    # Always prioritize trials with matching text ID first
+    if primary_text:
+        # First: same text, different participants
+        same_text_all = combos[
+            (combos[paragraph_field].astype(str) == str(primary_text))
         ].drop_duplicates(subset=["participant_id", "trial_id"])
-        add_options(other_participants_same_text)
+        add_options(same_text_all, "★ ")
 
-        # Then all other trials
-        all_others = combos.drop_duplicates(subset=["participant_id", "trial_id"])
-        add_options(all_others)
-
-    elif selection_mode == "Participant" and primary_text:
-        # Prioritize same text (other readers)
-        other_participants_same_text = combos[
-            (combos["participant_id"] != primary_participant)
-            & (combos[paragraph_field].astype(str) == str(primary_text))
+        # Then: all other trials (different texts)
+        other_texts = combos[
+            (combos[paragraph_field].astype(str) != str(primary_text))
         ].drop_duplicates(subset=["participant_id", "trial_id"])
-        add_options(other_participants_same_text, "★ ")
-
-        # Then same participant different texts
-        same_participant_other_texts = combos[
-            (combos["participant_id"] == primary_participant)
-            & (combos[paragraph_field].astype(str) != str(primary_text))
-        ].drop_duplicates(subset=["trial_id"])
-        add_options(same_participant_other_texts)
-
-        # Then all other trials
-        all_others = combos.drop_duplicates(subset=["participant_id", "trial_id"])
-        add_options(all_others)
+        add_options(other_texts)
     else:
-        # No special prioritization
+        # No text available - show all trials
         all_others = combos.drop_duplicates(subset=["participant_id", "trial_id"])
         add_options(all_others)
 
@@ -781,12 +757,7 @@ def render_single_trial_tab(
             label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in comparison_options}
 
             # Show hint about prioritization
-            if selection_mode == "Text":
-                hint = "★ indicates same participant (multiple readings)"
-            elif selection_mode == "Participant":
-                hint = "★ indicates same text (other readers)"
-            else:
-                hint = None
+            hint = "★ indicates same text as primary trial"
 
             selected_compare_label = st.selectbox(
                 "Compare with trial",
@@ -996,7 +967,7 @@ def render_metrics_tab(
     st.dataframe(
         display_df,
         hide_index=True,
-        width='stretch',
+        width="stretch",
     )
     st.caption("Word-level data with computed reading metrics where available.")
 
@@ -1030,7 +1001,7 @@ def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
     st.dataframe(
         display_df,
         hide_index=True,
-        width='stretch',
+        width="stretch",
     )
     st.caption(
         "All fixation records after applying filters; includes ids, timing, and optional flags."
@@ -1119,7 +1090,9 @@ def render_data_statistics_tab(
         else "paragraph_id"
     )
     text_ids = (
-        set(words_filtered[paragraph_col].unique()) if paragraph_col in words_filtered.columns else set()
+        set(words_filtered[paragraph_col].unique())
+        if paragraph_col in words_filtered.columns
+        else set()
     )
 
     num_participants = len(participant_ids)
@@ -1136,13 +1109,17 @@ def render_data_statistics_tab(
     top_cols[3].metric("Fixations", f"{num_fixations:,}")
     top_cols[4].metric("Words", f"{num_words:,}")
     top_cols[5].metric(
-        "Gaze points", f"{num_gaze_points:,}", help="Counts raw gaze samples if provided."
+        "Gaze points",
+        f"{num_gaze_points:,}",
+        help="Counts raw gaze samples if provided.",
     )
 
     st.divider()
 
     # Trials per participant
-    trial_source = fixations_filtered if not fixations_filtered.empty else words_filtered
+    trial_source = (
+        fixations_filtered if not fixations_filtered.empty else words_filtered
+    )
     trials_per_participant = (
         trial_source.groupby("participant_id")["trial_id"].nunique()
         if not trial_source.empty
@@ -1199,7 +1176,10 @@ def render_data_statistics_tab(
         stats_df,
         hide_index=True,
         width="stretch",
-        column_config={col: st.column_config.NumberColumn(format="%.2f") for col in ["Mean", "Std", "Min", "Median", "Max"]},
+        column_config={
+            col: st.column_config.NumberColumn(format="%.2f")
+            for col in ["Mean", "Std", "Min", "Median", "Max"]
+        },
     )
 
     st.caption(

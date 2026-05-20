@@ -18,6 +18,181 @@ def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> Optional[str]:
     return None
 
 
+# Candidate column names checked during auto-inference. Centralised so the
+# proposal step and the override UI share the same defaults.
+PARTICIPANT_CANDIDATES = [
+    "participant_id",
+    "subject_id",
+    "participant",
+    "recording_session_label",
+]
+TRIAL_CANDIDATES = [
+    "unique_trial_id",
+    "trial_id",
+    "unique_paragraph_id",
+    "paragraph_id",
+    "trial",
+    "trial_index",
+    "TRIAL_INDEX",
+]
+PARAGRAPH_CANDIDATES = ["unique_paragraph_id", "paragraph_id", "PARAGRAPH_ID"]
+TEXT_CANDIDATES = [
+    "text",
+    "IA_LABEL",
+    "ia_label",
+    "label",
+    "word",
+    "WORD",
+    "content",
+    "CONTENT",
+    "token",
+    "TOKEN",
+]
+WORD_ID_CANDIDATES = ["word_id", "IA_ID", "ia_id", "ia_index"]
+LINE_CANDIDATES = ["line_idx", "line", "line_index", "IA_LINE_ID"]
+
+WORD_X_CANDIDATES = ["x", "X", "left"]
+WORD_Y_CANDIDATES = ["y", "Y", "top"]
+WORD_WIDTH_CANDIDATES = ["width", "WIDTH"]
+WORD_HEIGHT_CANDIDATES = ["height", "HEIGHT"]
+WORD_LEFT_CANDIDATES = ["IA_LEFT", "ia_left", "left"]
+WORD_RIGHT_CANDIDATES = ["IA_RIGHT", "ia_right", "right"]
+WORD_TOP_CANDIDATES = ["IA_TOP", "ia_top", "top"]
+WORD_BOTTOM_CANDIDATES = ["IA_BOTTOM", "ia_bottom", "bottom"]
+
+FIX_X_CANDIDATES = ["x", "X", "CURRENT_FIX_X", "FPOGX"]
+FIX_Y_CANDIDATES = ["y", "Y", "CURRENT_FIX_Y", "FPOGY"]
+FIX_DURATION_CANDIDATES = ["duration_ms", "CURRENT_FIX_DURATION", "CURRENT_FIX_LEN"]
+FIX_TIMESTAMP_CANDIDATES = [
+    "timestamp_ms",
+    "CURRENT_FIX_START",
+    "CURRENT_FIX_START_TIME",
+    "CURRENT_FIX_TIME",
+    "CURRENT_FIX_ONSET",
+]
+FIX_FIXATION_ID_CANDIDATES = ["fixation_id", "CURRENT_FIX_INDEX", "CURRENT_FIX_NUM"]
+FIX_WORD_ID_CANDIDATES = [
+    "word_id",
+    "IA_ID",
+    "ia_id",
+    "CURRENT_FIX_INTEREST_AREA_ID",
+    "CURRENT_FIX_INTEREST_AREA_INDEX",
+]
+FIX_PASS_INDEX_CANDIDATES = ["pass_index", "reread", "PASS_INDEX"]
+FIX_SACCADE_TYPE_CANDIDATES = ["saccade_type", "SACCADE_TYPE", "NEXT_SAC_DIRECTION"]
+FIX_EYE_CANDIDATES = ["eye", "EYE_USED", "eye_used", "EYE_TRACKED"]
+FIX_NOISE_CANDIDATES = ["noise_flag", "CURRENT_FIX_VALIDITY", "CURRENT_FIX_VALID"]
+
+RAW_GAZE_X_CANDIDATES = ["x", "X", "FPOGX", "gaze_x", "GAZE_X"]
+RAW_GAZE_Y_CANDIDATES = ["y", "Y", "FPOGY", "gaze_y", "GAZE_Y"]
+RAW_GAZE_TIMESTAMP_CANDIDATES = [
+    "timestamp",
+    "time",
+    "ms",
+    "timestamp_ms",
+    "time_ms",
+]
+
+
+def propose_word_schema(words: pd.DataFrame) -> Dict[str, Optional[str]]:
+    """Return a candidate column mapping for words/IA data without erroring."""
+    return dict(
+        participant=pick_column(words, PARTICIPANT_CANDIDATES),
+        trial=pick_column(words, TRIAL_CANDIDATES),
+        paragraph=pick_column(words, PARAGRAPH_CANDIDATES),
+        word_id=pick_column(words, WORD_ID_CANDIDATES),
+        text=pick_column(words, TEXT_CANDIDATES),
+        line=pick_column(words, LINE_CANDIDATES),
+        x=pick_column(words, WORD_X_CANDIDATES),
+        y=pick_column(words, WORD_Y_CANDIDATES),
+        width=pick_column(words, WORD_WIDTH_CANDIDATES),
+        height=pick_column(words, WORD_HEIGHT_CANDIDATES),
+        left=pick_column(words, WORD_LEFT_CANDIDATES),
+        right=pick_column(words, WORD_RIGHT_CANDIDATES),
+        top=pick_column(words, WORD_TOP_CANDIDATES),
+        bottom=pick_column(words, WORD_BOTTOM_CANDIDATES),
+    )
+
+
+def propose_fix_schema(fixations: pd.DataFrame) -> Dict[str, Optional[str]]:
+    """Return a candidate column mapping for fixations data without erroring."""
+    return dict(
+        participant=pick_column(fixations, PARTICIPANT_CANDIDATES),
+        trial=pick_column(fixations, TRIAL_CANDIDATES),
+        paragraph=pick_column(fixations, PARAGRAPH_CANDIDATES),
+        fixation_id=pick_column(fixations, FIX_FIXATION_ID_CANDIDATES),
+        timestamp=pick_column(fixations, FIX_TIMESTAMP_CANDIDATES),
+        duration=pick_column(fixations, FIX_DURATION_CANDIDATES),
+        x=pick_column(fixations, FIX_X_CANDIDATES),
+        y=pick_column(fixations, FIX_Y_CANDIDATES),
+        word_id=pick_column(fixations, FIX_WORD_ID_CANDIDATES),
+        pass_index=pick_column(fixations, FIX_PASS_INDEX_CANDIDATES),
+        saccade_type=pick_column(fixations, FIX_SACCADE_TYPE_CANDIDATES),
+        eye=pick_column(fixations, FIX_EYE_CANDIDATES),
+        noise_flag=pick_column(fixations, FIX_NOISE_CANDIDATES),
+    )
+
+
+def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Dict[str, Optional[str]]:
+    """Return a candidate column mapping for raw gaze data without erroring."""
+    return dict(
+        participant=pick_column(raw_gaze, PARTICIPANT_CANDIDATES),
+        trial=pick_column(raw_gaze, TRIAL_CANDIDATES),
+        text=pick_column(raw_gaze, TEXT_CANDIDATES),
+        x=pick_column(raw_gaze, RAW_GAZE_X_CANDIDATES),
+        y=pick_column(raw_gaze, RAW_GAZE_Y_CANDIDATES),
+        timestamp=pick_column(raw_gaze, RAW_GAZE_TIMESTAMP_CANDIDATES),
+    )
+
+
+def validate_word_schema(schema: Dict[str, Optional[str]]) -> list:
+    """Return a list of human-readable problems with a words/IA schema."""
+    problems = []
+    for key, label in [
+        ("participant", "Participant ID"),
+        ("trial", "Trial ID"),
+        ("word_id", "Word/IA ID"),
+    ]:
+        if not schema.get(key):
+            problems.append(f"missing {label}")
+    has_xywh = all(schema.get(k) for k in ["x", "y", "width", "height"])
+    has_box = all(schema.get(k) for k in ["left", "right", "top", "bottom"])
+    if not has_xywh and not has_box:
+        problems.append(
+            "need either (x, y, width, height) or (left, right, top, bottom)"
+        )
+    return problems
+
+
+def validate_fix_schema(schema: Dict[str, Optional[str]]) -> list:
+    """Return a list of human-readable problems with a fixations schema."""
+    problems = []
+    for key, label in [
+        ("participant", "Participant ID"),
+        ("trial", "Trial ID"),
+        ("duration", "Duration"),
+        ("x", "X"),
+        ("y", "Y"),
+    ]:
+        if not schema.get(key):
+            problems.append(f"missing {label}")
+    return problems
+
+
+def validate_raw_gaze_schema(schema: Dict[str, Optional[str]]) -> list:
+    """Return a list of human-readable problems with a raw gaze schema."""
+    problems = []
+    for key, label in [
+        ("participant", "Participant ID"),
+        ("trial", "Trial ID"),
+        ("x", "X"),
+        ("y", "Y"),
+    ]:
+        if not schema.get(key):
+            problems.append(f"missing {label}")
+    return problems
+
+
 @st.cache_data
 def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Load the bundled demo data (csv only) so users can try the app instantly."""
@@ -59,67 +234,12 @@ def load_sample_raw_gaze() -> pd.DataFrame:
 
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Optional[Dict[str, str]]:
     """Infer schema for raw millisecond-level gaze data."""
-    participant = pick_column(
-        raw_gaze,
-        ["participant_id", "subject_id", "participant", "recording_session_label"],
-    )
-    trial = pick_column(
-        raw_gaze,
-        [
-            "unique_trial_id",
-            "trial_id",
-            "unique_paragraph_id",
-            "paragraph_id",
-            "trial",
-            "trial_index",
-            "TRIAL_INDEX",
-        ],
-    )
-    text = pick_column(
-        raw_gaze,
-        [
-            "text",
-            "IA_LABEL",
-            "ia_label",
-            "label",
-            "word",
-            "WORD",
-            "content",
-            "CONTENT",
-            "token",
-            "TOKEN",
-        ],
-    )
-    x = pick_column(raw_gaze, ["x", "X", "FPOGX", "gaze_x", "GAZE_X"])
-    y = pick_column(raw_gaze, ["y", "Y", "FPOGY", "gaze_y", "GAZE_Y"])
-    timestamp = pick_column(
-        raw_gaze, ["timestamp", "time", "ms", "timestamp_ms", "time_ms"]
-    )
-
-    missing_core = [
-        name
-        for name, val in [
-            ("participant", participant),
-            ("trial", trial),
-            ("x", x),
-            ("y", y),
-        ]
-        if val is None
-    ]
-    if missing_core:
-        st.error(
-            f"Missing required raw gaze fields in uploaded data: {', '.join(missing_core)}"
-        )
+    schema = propose_raw_gaze_schema(raw_gaze)
+    problems = validate_raw_gaze_schema(schema)
+    if problems:
+        st.error(f"Missing required raw gaze fields: {', '.join(problems)}")
         return None
-
-    return dict(
-        participant=participant,
-        trial=trial,
-        text=text,
-        x=x,
-        y=y,
-        timestamp=timestamp,
-    )
+    return schema
 
 
 def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.DataFrame:
@@ -149,182 +269,21 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.Dat
 
 
 def infer_word_schema(words: pd.DataFrame) -> Optional[Dict[str, str]]:
-    participant = pick_column(
-        words,
-        ["participant_id", "subject_id", "participant", "recording_session_label"],
-    )
-    trial = pick_column(
-        words,
-        [
-            "unique_trial_id",
-            "trial_id",
-            "unique_paragraph_id",
-            "paragraph_id",
-            "trial",
-            "trial_index",
-            "TRIAL_INDEX",
-        ],
-    )
-    paragraph = pick_column(
-        words, ["unique_paragraph_id", "paragraph_id", "PARAGRAPH_ID"]
-    )
-    word_id = pick_column(words, ["word_id", "IA_ID", "ia_id", "ia_index"])
-    text = pick_column(
-        words,
-        [
-            "text",
-            "IA_LABEL",
-            "ia_label",
-            "label",
-            "word",
-            "WORD",
-            "content",
-            "CONTENT",
-            "token",
-            "TOKEN",
-        ],
-    )
-    line = pick_column(words, ["line_idx", "line", "line_index", "IA_LINE_ID"])
-
-    x = pick_column(words, ["x", "X", "left"])
-    y = pick_column(words, ["y", "Y", "top"])
-    width = pick_column(words, ["width", "WIDTH"])
-    height = pick_column(words, ["height", "HEIGHT"])
-    left = pick_column(words, ["IA_LEFT", "ia_left", "left"])
-    right = pick_column(words, ["IA_RIGHT", "ia_right", "right"])
-    top = pick_column(words, ["IA_TOP", "ia_top", "top"])
-    bottom = pick_column(words, ["IA_BOTTOM", "ia_bottom", "bottom"])
-
-    missing_core = [
-        name
-        for name, val in [
-            ("participant", participant),
-            ("trial", trial),
-            ("word_id", word_id),
-        ]
-        if val is None
-    ]
-    if missing_core:
-        st.error(
-            f"Missing required word fields in uploaded data: {', '.join(missing_core)}"
-        )
+    schema = propose_word_schema(words)
+    problems = validate_word_schema(schema)
+    if problems:
+        st.error(f"Words/IA schema problems: {'; '.join(problems)}")
         return None
-
-    has_xywh = all([x, y, width, height])
-    has_box = all([left, right, top, bottom])
-    if not has_xywh and not has_box:
-        st.error(
-            "Words/IA data needs either (x, y, width, height) or (IA_LEFT, IA_RIGHT, IA_TOP, IA_BOTTOM)."
-        )
-        return None
-
-    return dict(
-        participant=participant,
-        trial=trial,
-        paragraph=paragraph,
-        word_id=word_id,
-        text=text,
-        line=line,
-        x=x,
-        y=y,
-        width=width,
-        height=height,
-        left=left,
-        right=right,
-        top=top,
-        bottom=bottom,
-    )
+    return schema
 
 
 def infer_fix_schema(fixations: pd.DataFrame) -> Optional[Dict[str, str]]:
-    participant = pick_column(
-        fixations,
-        ["participant_id", "subject_id", "participant", "recording_session_label"],
-    )
-    trial = pick_column(
-        fixations,
-        [
-            "unique_trial_id",
-            "trial_id",
-            "unique_paragraph_id",
-            "paragraph_id",
-            "trial",
-            "trial_index",
-            "TRIAL_INDEX",
-        ],
-    )
-    paragraph = pick_column(
-        fixations, ["unique_paragraph_id", "paragraph_id", "PARAGRAPH_ID"]
-    )
-    fixation_id = pick_column(
-        fixations, ["fixation_id", "CURRENT_FIX_INDEX", "CURRENT_FIX_NUM"]
-    )
-    timestamp = pick_column(
-        fixations,
-        [
-            "timestamp_ms",
-            "CURRENT_FIX_START",
-            "CURRENT_FIX_START_TIME",
-            "CURRENT_FIX_TIME",
-            "CURRENT_FIX_ONSET",
-        ],
-    )
-    duration = pick_column(
-        fixations, ["duration_ms", "CURRENT_FIX_DURATION", "CURRENT_FIX_LEN"]
-    )
-    x = pick_column(fixations, ["x", "X", "CURRENT_FIX_X", "FPOGX"])
-    y = pick_column(fixations, ["y", "Y", "CURRENT_FIX_Y", "FPOGY"])
-    word_id = pick_column(
-        fixations,
-        [
-            "word_id",
-            "IA_ID",
-            "ia_id",
-            "CURRENT_FIX_INTEREST_AREA_ID",
-            "CURRENT_FIX_INTEREST_AREA_INDEX",
-        ],
-    )
-    pass_index = pick_column(fixations, ["pass_index", "reread", "PASS_INDEX"])
-    saccade_type = pick_column(
-        fixations, ["saccade_type", "SACCADE_TYPE", "NEXT_SAC_DIRECTION"]
-    )
-    eye = pick_column(fixations, ["eye", "EYE_USED", "eye_used", "EYE_TRACKED"])
-    noise_flag = pick_column(
-        fixations, ["noise_flag", "CURRENT_FIX_VALIDITY", "CURRENT_FIX_VALID"]
-    )
-
-    missing_core = [
-        name
-        for name, val in [
-            ("participant", participant),
-            ("trial", trial),
-            ("duration", duration),
-            ("x", x),
-            ("y", y),
-        ]
-        if val is None
-    ]
-    if missing_core:
-        st.error(
-            f"Missing required fixation fields in uploaded data: {', '.join(missing_core)}"
-        )
+    schema = propose_fix_schema(fixations)
+    problems = validate_fix_schema(schema)
+    if problems:
+        st.error(f"Fixations schema problems: {'; '.join(problems)}")
         return None
-
-    return dict(
-        participant=participant,
-        trial=trial,
-        paragraph=paragraph,
-        fixation_id=fixation_id,
-        timestamp=timestamp,
-        duration=duration,
-        x=x,
-        y=y,
-        word_id=word_id,
-        pass_index=pass_index,
-        saccade_type=saccade_type,
-        eye=eye,
-        noise_flag=noise_flag,
-    )
+    return schema
 
 
 def normalize_words(words: pd.DataFrame, schema: Dict[str, str]) -> pd.DataFrame:

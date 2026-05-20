@@ -44,7 +44,14 @@ if __package__ is None or __package__ == "":
         sys.path.insert(0, str(root))
 
 from scanpath_visualization_app.constants import FONT_FAMILY
-from scanpath_visualization_app.controls import data_dictionary_help_text, sidebar_controls
+from scanpath_visualization_app.controls import (
+    FIX_FIELD_SPECS,
+    RAW_GAZE_FIELD_SPECS,
+    WORD_FIELD_SPECS,
+    column_mapping_ui,
+    data_dictionary_help_text,
+    sidebar_controls,
+)
 from scanpath_visualization_app.data import (
     compute_canvas_size,
     default_filters,
@@ -58,6 +65,12 @@ from scanpath_visualization_app.data import (
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
+    propose_fix_schema,
+    propose_raw_gaze_schema,
+    propose_word_schema,
+    validate_fix_schema,
+    validate_raw_gaze_schema,
+    validate_word_schema,
 )
 from scanpath_visualization_app.styles import get_app_css
 from scanpath_visualization_app.tabs import (
@@ -158,30 +171,52 @@ def load_words_and_fixations(data_choice: str) -> Tuple[pd.DataFrame, pd.DataFra
 
 
 def prepare_data(
-    words_df: pd.DataFrame, fixations_df: pd.DataFrame
+    words_df: pd.DataFrame,
+    fixations_df: pd.DataFrame,
+    allow_override: bool,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
-    
-    Args:
-        words_df: Raw words dataframe with experiment-specific column names
-        fixations_df: Raw fixations dataframe with experiment-specific column names
-        
-    Returns:
-        Tuple of (normalized_words, normalized_fixations) with canonical columns
-        
-    Canonical Columns:
-        Words: participant_id, trial_id, paragraph_id, word_id, text, line_idx,
-               x, y, width, height
-        Fixations: participant_id, trial_id, paragraph_id, x, y, duration_ms,
-                   timestamp_ms (+ optional word_id, pass_index, saccade_type, etc.)
-                   
-    Raises:
-        Streamlit stop signal if schema inference fails (missing required columns)
+
+    When ``allow_override`` is True, render sidebar expanders that let the user
+    pick the exact column names for each field (pre-filled with auto-detection).
+    Otherwise fall back to the original infer-then-stop flow used for demo data.
     """
-    word_schema = infer_word_schema(words_df)
-    fix_schema = infer_fix_schema(fixations_df)
-    if not word_schema or not fix_schema:
-        st.stop()
+    if allow_override:
+        word_proposed = propose_word_schema(words_df)
+        word_problems = validate_word_schema(word_proposed)
+        word_schema = column_mapping_ui(
+            words_df,
+            table_label="Words/IA",
+            state_key_prefix="col_map_words",
+            field_specs=WORD_FIELD_SPECS,
+            proposed=word_proposed,
+            problems=word_problems,
+        )
+        word_problems = validate_word_schema(word_schema)
+        if word_problems:
+            st.sidebar.error("Words/IA: " + "; ".join(word_problems))
+            st.stop()
+
+        fix_proposed = propose_fix_schema(fixations_df)
+        fix_problems = validate_fix_schema(fix_proposed)
+        fix_schema = column_mapping_ui(
+            fixations_df,
+            table_label="Fixations",
+            state_key_prefix="col_map_fix",
+            field_specs=FIX_FIELD_SPECS,
+            proposed=fix_proposed,
+            problems=fix_problems,
+        )
+        fix_problems = validate_fix_schema(fix_schema)
+        if fix_problems:
+            st.sidebar.error("Fixations: " + "; ".join(fix_problems))
+            st.stop()
+    else:
+        word_schema = infer_word_schema(words_df)
+        fix_schema = infer_fix_schema(fixations_df)
+        if not word_schema or not fix_schema:
+            st.stop()
+
     return normalize_words(words_df, word_schema), normalize_fixations(
         fixations_df, fix_schema
     )
@@ -229,11 +264,24 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
         )
         if uploaded_raw_gaze:
             raw_gaze_df = pd.read_csv(uploaded_raw_gaze)
-            raw_gaze_schema = infer_raw_gaze_schema(raw_gaze_df)
-            if raw_gaze_schema:
-                raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
-            else:
+            proposed = propose_raw_gaze_schema(raw_gaze_df)
+            initial_problems = validate_raw_gaze_schema(proposed)
+            raw_gaze_schema = column_mapping_ui(
+                raw_gaze_df,
+                table_label="Raw gaze",
+                state_key_prefix="col_map_raw_gaze",
+                field_specs=RAW_GAZE_FIELD_SPECS,
+                proposed=proposed,
+                problems=initial_problems,
+            )
+            problems = validate_raw_gaze_schema(raw_gaze_schema)
+            if problems:
+                st.sidebar.warning(
+                    "Raw gaze ignored — " + "; ".join(problems)
+                )
                 raw_gaze_df = pd.DataFrame()
+            else:
+                raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
 
     return raw_gaze_df
 
@@ -370,7 +418,9 @@ def main() -> None:
 
     # Load and prepare core data (words + fixations)
     words_df, fixations_df = load_words_and_fixations(data_choice)
-    words_df, fixations_df = prepare_data(words_df, fixations_df)
+    words_df, fixations_df = prepare_data(
+        words_df, fixations_df, allow_override=(data_choice == "Upload csv tables")
+    )
     
     # Load optional raw gaze data
     raw_gaze_df = load_raw_gaze_data(data_choice)

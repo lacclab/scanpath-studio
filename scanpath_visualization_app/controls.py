@@ -1,9 +1,100 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
+
+NONE_OPTION = "(none)"
+
+
+WORD_FIELD_SPECS: List[Dict] = [
+    {"key": "participant", "label": "Participant ID", "required": True},
+    {"key": "trial", "label": "Trial ID", "required": True},
+    {"key": "word_id", "label": "Word/IA ID", "required": True},
+    {"key": "text", "label": "Word text/label", "required": False},
+    {"key": "paragraph", "label": "Paragraph ID", "required": False},
+    {"key": "line", "label": "Line index", "required": False},
+    {
+        "key": "x",
+        "label": "Box x (top-left)",
+        "required": False,
+        "help": "Provide x, y, width, height — or use the four IA_LEFT/RIGHT/TOP/BOTTOM fields below.",
+    },
+    {"key": "y", "label": "Box y (top-left)", "required": False},
+    {"key": "width", "label": "Box width", "required": False},
+    {"key": "height", "label": "Box height", "required": False},
+    {"key": "left", "label": "Box left (IA_LEFT)", "required": False},
+    {"key": "right", "label": "Box right (IA_RIGHT)", "required": False},
+    {"key": "top", "label": "Box top (IA_TOP)", "required": False},
+    {"key": "bottom", "label": "Box bottom (IA_BOTTOM)", "required": False},
+]
+
+FIX_FIELD_SPECS: List[Dict] = [
+    {"key": "participant", "label": "Participant ID", "required": True},
+    {"key": "trial", "label": "Trial ID", "required": True},
+    {"key": "x", "label": "X coordinate", "required": True},
+    {"key": "y", "label": "Y coordinate", "required": True},
+    {"key": "duration", "label": "Duration (ms)", "required": True},
+    {"key": "timestamp", "label": "Timestamp (ms)", "required": False},
+    {"key": "fixation_id", "label": "Fixation ID", "required": False},
+    {"key": "paragraph", "label": "Paragraph ID", "required": False},
+    {"key": "word_id", "label": "Word/IA ID", "required": False},
+    {"key": "pass_index", "label": "Pass index", "required": False},
+    {"key": "saccade_type", "label": "Saccade type", "required": False},
+    {"key": "eye", "label": "Eye", "required": False},
+    {"key": "noise_flag", "label": "Noise flag", "required": False},
+]
+
+RAW_GAZE_FIELD_SPECS: List[Dict] = [
+    {"key": "participant", "label": "Participant ID", "required": True},
+    {"key": "trial", "label": "Trial ID", "required": True},
+    {"key": "x", "label": "X coordinate", "required": True},
+    {"key": "y", "label": "Y coordinate", "required": True},
+    {"key": "timestamp", "label": "Timestamp (ms)", "required": False},
+    {"key": "text", "label": "Word text/label", "required": False},
+]
+
+
+def column_mapping_ui(
+    df: pd.DataFrame,
+    table_label: str,
+    state_key_prefix: str,
+    field_specs: List[Dict],
+    proposed: Dict[str, Optional[str]],
+    expand_on_problem: bool = True,
+    problems: Optional[List[str]] = None,
+) -> Dict[str, Optional[str]]:
+    """Render a sidebar expander letting users override the inferred column mapping.
+
+    Returns a mapping {field_key: column_name_or_None} based on user selections.
+    """
+    options = [NONE_OPTION] + list(df.columns)
+    expanded = bool(expand_on_problem and problems)
+
+    with st.sidebar.expander(f"Column mapping — {table_label}", expanded=expanded):
+        st.caption(
+            "Auto-detected from your CSV. Override any row if your column names differ."
+        )
+        if problems:
+            st.warning(
+                "Fix these before the app can use this table: " + "; ".join(problems)
+            )
+        mapping: Dict[str, Optional[str]] = {}
+        for spec in field_specs:
+            key = spec["key"]
+            default = proposed.get(key)
+            label = spec["label"] + (" *" if spec.get("required") else "")
+            index = options.index(default) if default in options else 0
+            chosen = st.selectbox(
+                label,
+                options=options,
+                index=index,
+                key=f"{state_key_prefix}_{key}",
+                help=spec.get("help"),
+            )
+            mapping[key] = None if chosen == NONE_OPTION else chosen
+    return mapping
 
 
 def data_dictionary_help_text() -> str:
@@ -18,6 +109,8 @@ def data_dictionary_help_text() -> str:
         "`IA_ID`, `pass_index`/`reread`, `saccade_type`, `eye`, `noise_flag`.\n"
         "- Raw gaze (optional): millisecond-level data with `participant_id`, `trial_id`, `x`, `y`. "
         "Each row represents one timepoint.\n"
+        "If your columns are named differently, after uploading expand the "
+        "*Column mapping* sections in the sidebar to map each field to your column.\n"
         "Only fields present in your data are used for filters, coloring, and tooltips."
     )
 

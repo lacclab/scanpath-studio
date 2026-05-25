@@ -18,7 +18,6 @@ from scanpath_visualization_app.plots import (
     make_fixation_duration_histogram,
     make_scanpath_animation,
     make_scanpath_figure,
-    make_scarf_plot,
     make_word_measure_bar_figure,
 )
 
@@ -160,19 +159,6 @@ class TestPipelineFigures:
         # Expect (in any order): saccades trace (1) + fixations trace (1) + optional word labels.
         # Never one-per-saccade.
         assert len(fig.data) <= 5, f"Too many traces: {len(fig.data)}"
-
-    def test_scarf_plot(self, normalized_demo):
-        words, fixations = normalized_demo
-        pid = words["participant_id"].iloc[0]
-        tid = words["trial_id"].iloc[0]
-        tf = fixations[
-            (fixations["participant_id"] == pid) & (fixations["trial_id"] == tid)
-        ]
-        tw = words[(words["participant_id"] == pid) & (words["trial_id"] == tid)]
-        fig = make_scarf_plot(
-            tf, tw, canvas_width=1024, base_font_size=14, font_family="monospace"
-        )
-        assert isinstance(fig, go.Figure)
 
     def test_word_measure_bar(self, normalized_demo):
         words, fixations = normalized_demo

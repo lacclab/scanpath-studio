@@ -77,6 +77,46 @@ def _compute_axis_ranges(
     return x_range, y_range, x_min, x_max, y_min, y_max
 
 
+_QUALITATIVE_PALETTE = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+]
+
+
+def _resolve_marker_colors(
+    color_data: Optional[pd.Series], is_numeric_color: bool
+) -> Tuple[object, list]:
+    """Return (marker_color, category_legend) for the fixation scatter trace.
+
+    - Numeric color_data is passed straight through (Plotly maps it via colorscale).
+    - Categorical color_data is mapped to a discrete palette so the picker has
+      visible effect; the returned legend is a list of (category, hex) pairs the
+      caller can render as legend-only scatter traces.
+    - Missing / unmappable color_data falls back to the first palette color.
+    """
+    if color_data is None:
+        return _QUALITATIVE_PALETTE[0], []
+    if is_numeric_color:
+        return color_data, []
+    series = color_data.fillna("(missing)").astype(str)
+    unique_vals = list(pd.unique(series))
+    cat_to_color = {
+        val: _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
+        for i, val in enumerate(unique_vals)
+    }
+    marker_color = [cat_to_color[val] for val in series]
+    legend = [(val, cat_to_color[val]) for val in unique_vals]
+    return marker_color, legend
+
+
 def _compute_marker_sizes(
     durations: pd.Series, size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
 ) -> np.ndarray:
@@ -309,6 +349,9 @@ def make_scanpath_figure(
         is_numeric_color = color_data is not None and pd.api.types.is_numeric_dtype(
             color_data
         )
+        marker_color, category_legend = _resolve_marker_colors(
+            color_data, is_numeric_color
+        )
         sizes = _compute_marker_sizes(ordered["duration_ms"], marker_size_range)
         fig.add_trace(
             go.Scatter(
@@ -317,7 +360,7 @@ def make_scanpath_figure(
                 mode="markers+text" if show_order else "markers",
                 marker=dict(
                     size=sizes,
-                    color=color_data,
+                    color=marker_color,
                     colorscale=fixation_colorscale if is_numeric_color else None,
                     showscale=show_colorbars and is_numeric_color,
                     colorbar=dict(
@@ -360,6 +403,36 @@ def make_scanpath_figure(
                 showlegend=False,
             )
         )
+        legend_limit = len(_QUALITATIVE_PALETTE)
+        truncated_legend = category_legend[:legend_limit]
+        for category, color in truncated_legend:
+            fig.add_trace(
+                go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode="markers",
+                    marker=dict(
+                        size=10,
+                        color=color,
+                        line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+                    ),
+                    name=f"{color_by}: {category}",
+                    showlegend=True,
+                    hoverinfo="skip",
+                )
+            )
+        if len(category_legend) > legend_limit:
+            fig.add_trace(
+                go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode="markers",
+                    marker=dict(size=10, color="#cccccc"),
+                    name=f"… +{len(category_legend) - legend_limit} more",
+                    showlegend=True,
+                    hoverinfo="skip",
+                )
+            )
 
     xaxis_cfg = dict(showticklabels=False, showgrid=False, zeroline=False, title=None)
     yaxis_cfg = dict(showticklabels=False, showgrid=False, zeroline=False, title=None)
@@ -911,7 +984,7 @@ def _add_comparison_fixation_trace(
         fig.add_trace(trace)
 
 
-def _make_side_by_side_comparison_figure(
+def _make_split_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     trial_a: Tuple[str, str],
@@ -924,12 +997,15 @@ def _make_side_by_side_comparison_figure(
     show_words: bool,
     show_word_labels: bool,
     trial_labels: Optional[Tuple[str, str]],
+    orientation: str,
     marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
 ) -> go.Figure:
+    """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked)."""
     from plotly.subplots import make_subplots
 
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     palette = COMPARISON_PALETTE
+    is_stacked = orientation == "stacked"
 
     trial_specs = []
     for idx, trial in enumerate([trial_a, trial_b]):
@@ -953,17 +1029,35 @@ def _make_side_by_side_comparison_figure(
             )
         )
 
-    fig = make_subplots(
-        rows=1,
-        cols=2,
-        horizontal_spacing=0.04,
-        subplot_titles=[trial_specs[0]["display_name"], trial_specs[1]["display_name"]],
-    )
+    if is_stacked:
+        fig = make_subplots(
+            rows=2,
+            cols=1,
+            vertical_spacing=0.08,
+            subplot_titles=[
+                trial_specs[0]["display_name"],
+                trial_specs[1]["display_name"],
+            ],
+        )
+    else:
+        fig = make_subplots(
+            rows=1,
+            cols=2,
+            horizontal_spacing=0.04,
+            subplot_titles=[
+                trial_specs[0]["display_name"],
+                trial_specs[1]["display_name"],
+            ],
+        )
 
     all_shapes: list = []
     for idx, spec in enumerate(trial_specs):
-        col = idx + 1
-        axis_suffix = "" if col == 1 else str(col)
+        if is_stacked:
+            row, col = idx + 1, 1
+            axis_suffix = "" if idx == 0 else str(idx + 1)
+        else:
+            row, col = 1, idx + 1
+            axis_suffix = "" if idx == 0 else str(idx + 1)
         xref = f"x{axis_suffix}"
         yref = f"y{axis_suffix}"
         trial_words = spec["trial_words"]
@@ -1004,7 +1098,7 @@ def _make_side_by_side_comparison_figure(
             spec["color"],
             font_settings,
             marker_size_range,
-            row=1,
+            row=row,
             col=col,
         )
 
@@ -1014,12 +1108,12 @@ def _make_side_by_side_comparison_figure(
                 trial_words,
                 base_font_size,
                 font_settings["family"],
-                row=1,
+                row=row,
                 col=col,
             )
 
-        xaxis_key = "xaxis" if col == 1 else f"xaxis{col}"
-        yaxis_key = "yaxis" if col == 1 else f"yaxis{col}"
+        xaxis_key = "xaxis" if idx == 0 else f"xaxis{idx + 1}"
+        yaxis_key = "yaxis" if idx == 0 else f"yaxis{idx + 1}"
         fig.update_layout(
             **{
                 xaxis_key: dict(
@@ -1043,14 +1137,15 @@ def _make_side_by_side_comparison_figure(
             }
         )
 
+    total_height = canvas_height * 2 + 40 if is_stacked else canvas_height
     fig.update_layout(
-        height=canvas_height,
+        height=total_height,
         width=canvas_width,
         autosize=False,
         margin=dict(l=0, r=0, t=40, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
         template="plotly_white",
-        title="Side-by-side comparison",
+        title="Stacked comparison" if is_stacked else "Side-by-side comparison",
         font=font_settings,
         shapes=all_shapes,
     )
@@ -1073,8 +1168,8 @@ def make_comparison_figure(
     layout: str = "overlay",
     marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
 ) -> go.Figure:
-    if layout == "side_by_side":
-        return _make_side_by_side_comparison_figure(
+    if layout in {"side_by_side", "stacked"}:
+        return _make_split_comparison_figure(
             words,
             fixations,
             trial_a,
@@ -1086,6 +1181,7 @@ def make_comparison_figure(
             show_words=show_words,
             show_word_labels=show_word_labels,
             trial_labels=trial_labels,
+            orientation=layout,
             marker_size_range=marker_size_range,
         )
 
@@ -1190,98 +1286,8 @@ def make_comparison_figure(
 
 
 # =============================================================================
-# Reading-research figures: scarf, per-word bar, fixation-duration histogram
+# Reading-research figures: per-word bar, fixation-duration histogram
 # =============================================================================
-
-
-def make_scarf_plot(
-    fixations: pd.DataFrame,
-    words: pd.DataFrame,
-    *,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
-    color_by: str = "word_id",
-    colorscale: str = DEFAULT_FIXATION_COLORSCALE,
-    height: int = 220,
-) -> go.Figure:
-    """Horizontal timeline (scarf plot) of a trial's fixations.
-
-    Each fixation becomes a rectangle whose width is its duration. Bars are
-    stacked along a single horizontal strip ordered by timestamp; their color
-    encodes a chosen field (word_id by default).
-    """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    if fixations.empty:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title="Scarf plot (no fixations)",
-            height=height,
-        )
-        return fig
-
-    ordered = fixations.sort_values("timestamp_ms").reset_index(drop=True)
-    durations = (
-        pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0).to_numpy()
-    )
-    starts = durations.cumsum() - durations
-    color_series = ordered.get(color_by)
-    color_vals = (
-        pd.to_numeric(color_series, errors="coerce").to_numpy()
-        if color_series is not None
-        else None
-    )
-    color_is_numeric = color_vals is not None and not np.isnan(color_vals).all()
-    word_id_series = ordered.get("word_id", pd.Series([np.nan] * len(ordered)))
-    fig.add_trace(
-        go.Bar(
-            x=durations,
-            y=["trial"] * len(durations),
-            base=starts,
-            orientation="h",
-            marker=dict(
-                color=color_vals if color_is_numeric else "#1f77b4",
-                colorscale=colorscale if color_is_numeric else None,
-                showscale=color_is_numeric,
-                colorbar=dict(title=color_by.replace("_", " ").title())
-                if color_is_numeric
-                else None,
-                line=dict(color="#ffffff", width=0.5),
-            ),
-            customdata=np.stack(
-                [
-                    ordered["order_in_trial"]
-                    if "order_in_trial" in ordered.columns
-                    else np.arange(1, len(ordered) + 1),
-                    durations,
-                    word_id_series,
-                ],
-                axis=1,
-            ),
-            hovertemplate=(
-                "Fixation #%{customdata[0]}<br>"
-                "Duration %{customdata[1]} ms<br>"
-                "Word ID %{customdata[2]}<extra></extra>"
-            ),
-            name="fixations",
-            showlegend=False,
-        )
-    )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=30, b=40),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Time (ms)", showgrid=True),
-        yaxis=dict(showticklabels=False, showgrid=False, title=None),
-        barmode="stack",
-        title="Scarf plot — fixations along trial time",
-    )
-    return fig
 
 
 def make_word_measure_bar_figure(
@@ -1323,6 +1329,14 @@ def make_word_measure_bar_figure(
             hovertemplate="%{x}<br>" + measure + ": %{y}<extra></extra>",
         )
     )
+    mean_value = float(values.dropna().mean()) if values.dropna().size else None
+    if mean_value is not None:
+        fig.add_hline(
+            y=mean_value,
+            line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dot"),
+            annotation_text=f"mean {mean_value:.2f}",
+            annotation_position="top right",
+        )
     fig.update_layout(
         height=height,
         width=canvas_width,

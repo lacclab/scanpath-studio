@@ -118,7 +118,7 @@ def _render_about_panel() -> None:
         st.markdown(
             f"""<div class="header-link-row">
               <a class="header-link lab" href="https://lacclab.github.io/" target="_blank" rel="noopener">🧪 LaCC Lab</a>
-              <a class="header-link code" href="{CITATION['url']}" target="_blank" rel="noopener">💻 Code</a>
+              <a class="header-link code" href="{CITATION["url"]}" target="_blank" rel="noopener">💻 Code</a>
             </div>""",
             unsafe_allow_html=True,
         )

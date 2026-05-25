@@ -59,7 +59,9 @@ class ExportOptions:
     scope_text: Optional[str] = None
 
     def any_table(self) -> bool:
-        return self.include_fixations or self.include_measures or self.include_mega_table
+        return (
+            self.include_fixations or self.include_measures or self.include_mega_table
+        )
 
     def table_formats(self) -> List[str]:
         if self.table_format == "both":
@@ -176,9 +178,14 @@ def _render_scope_picker(
         scope_participant = st.selectbox(
             "Participant", options=participants, key=f"{key_prefix}_scope_pid"
         )
-        trials_for_pid = combos.loc[
-            combos["participant_id"].astype(str) == str(scope_participant), "trial_id"
-        ].astype(str).unique()
+        trials_for_pid = (
+            combos.loc[
+                combos["participant_id"].astype(str) == str(scope_participant),
+                "trial_id",
+            ]
+            .astype(str)
+            .unique()
+        )
         scope_trial = st.selectbox(
             "Trial", options=sorted(trials_for_pid), key=f"{key_prefix}_scope_trial"
         )

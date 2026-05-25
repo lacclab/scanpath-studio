@@ -78,7 +78,6 @@ from scanpath_visualization_app.tabs import (
     render_animation_tab,
     render_data_statistics_tab,
     render_raw_data_tab,
-    render_reading_measures_tab,
     render_single_trial_tab,
 )
 from scanpath_visualization_app.utils import (  # noqa: F401
@@ -104,7 +103,7 @@ def configure_page() -> None:
 
 
 def _render_about_panel() -> None:
-    """Compact header with title + citation expander."""
+    """Compact header with title + about expander."""
     from scanpath_visualization_app.constants import CITATION
 
     title_col, about_col = st.columns([6, 1])
@@ -113,17 +112,13 @@ def _render_about_panel() -> None:
         st.caption(
             "Interactive workbench for visualizing eye-tracking-while-reading "
             "scanpaths — word boxes, fixations, saccades, heatmaps, comparisons, "
-            "scarf plots, and per-word reading measures."
+            "and per-word reading measures."
         )
     with about_col:
         with st.expander("About"):
             st.markdown(
                 f"**Authors:** {CITATION['authors']}\n\n"
-                f"**Code:** [{CITATION['url']}]({CITATION['url']})\n\n"
-                f"{CITATION['corpus_note']}\n\n"
-                "Built with Streamlit + Plotly. Reading measures (FFD, FPRT, RPD, "
-                "TFD, regressions) computed from first principles when not "
-                "provided as IA-aggregated columns."
+                f"**Code:** [{CITATION['url']}]({CITATION['url']})"
             )
 
 
@@ -452,10 +447,9 @@ def main() -> None:
     )
 
     # Render tabbed interface
-    tab_single, tab_measures, tab_animation, tab_raw, tab_stats = st.tabs(
+    tab_single, tab_animation, tab_raw, tab_stats = st.tabs(
         [
             "Interactive Plot",
-            "Reading Measures",
             "Animated Scanpath",
             "Raw Data",
             "Data Statistics",
@@ -475,16 +469,6 @@ def main() -> None:
             raw_gaze=raw_gaze_filtered,
         )
 
-    with tab_measures:
-        render_reading_measures_tab(
-            words_filtered,
-            fixations_filtered,
-            combos,
-            canvas_width=canvas_width,
-            base_font_size=base_font_size,
-            font_family=font_family,
-        )
-
     with tab_animation:
         render_animation_tab(
             words_filtered,
@@ -502,7 +486,13 @@ def main() -> None:
 
     with tab_stats:
         render_data_statistics_tab(
-            words_filtered, fixations_filtered, raw_gaze_filtered
+            words_filtered,
+            fixations_filtered,
+            raw_gaze_filtered,
+            combos,
+            canvas_width=canvas_width,
+            base_font_size=base_font_size,
+            font_family=font_family,
         )
 
 

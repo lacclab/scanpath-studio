@@ -1,15 +1,11 @@
-"""Utility functions for trial selection, statistics, and export."""
+"""Utility functions for trial selection, statistics, and labelling."""
 
 from __future__ import annotations
 
-import io
-import zipfile
 from typing import Dict, Iterable, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
-
-from scanpath_visualization_app.plots import make_scanpath_figure
 
 
 # -----------------------------------------------------------------------------
@@ -81,9 +77,7 @@ def _select_trial_none_mode(
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Handle trial selection when mode is 'None' (direct trial selection)."""
     available_trials = combos.drop_duplicates(subset=[trial_field])
-    trial_options = sorted(
-        available_trials[trial_field].dropna().astype(str).unique()
-    )
+    trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
     if not trial_options:
         st.warning("No trials available after filtering.")
         st.stop()
@@ -258,13 +252,14 @@ def _select_trial_participant_mode(
         ]
         selected_text = (
             str(trial_candidates.iloc[0][paragraph_field])
-            if not trial_candidates.empty and paragraph_field in trial_candidates.columns
+            if not trial_candidates.empty
+            and paragraph_field in trial_candidates.columns
             else None
         )
 
-    trial_candidates = trial_candidates.drop_duplicates(subset=["trial_id"]).sort_values(
-        "trial_id"
-    )
+    trial_candidates = trial_candidates.drop_duplicates(
+        subset=["trial_id"]
+    ).sort_values("trial_id")
     if trial_candidates.empty:
         return None, None, selected_text
 
@@ -507,88 +502,3 @@ def build_comparison_options(
         add_options(all_others)
 
     return options
-
-
-# -----------------------------------------------------------------------------
-# Export
-# -----------------------------------------------------------------------------
-
-
-def export_filtered_trials(
-    combos: pd.DataFrame,
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
-    *,
-    canvas_width: int,
-    canvas_height: int,
-    base_font_size: int,
-    font_family: str,
-    x_field: str,
-    y_field: str,
-    settings: Dict,
-) -> None:
-    """Export all filtered trials as PNG images in a zip archive."""
-    if combos.empty:
-        st.warning("No trials to export.")
-        return
-
-    total_trials = len(combos)
-    progress = st.progress(0, text="Preparing exports...")
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        for idx, combo in enumerate(combos.itertuples(index=False), start=1):
-            combo_words = words[
-                (words["participant_id"] == combo.participant_id)
-                & (words["trial_id"] == combo.trial_id)
-            ]
-            combo_fix = fixations[
-                (fixations["participant_id"] == combo.participant_id)
-                & (fixations["trial_id"] == combo.trial_id)
-            ]
-            combo_fig = make_scanpath_figure(
-                combo_words,
-                combo_fix,
-                canvas_width=int(canvas_width),
-                canvas_height=int(canvas_height),
-                base_font_size=int(base_font_size),
-                font_family=font_family,
-                x_field=x_field,
-                y_field=y_field,
-                show_words=settings["show_words"],
-                show_word_labels=settings["show_word_labels"],
-                show_fixations=settings["show_fixations"],
-                show_order=settings["show_order"],
-                show_saccades=settings["show_saccades"],
-                show_heatmap=settings["show_heatmap"],
-                color_by=settings["color_by"],
-                heatmap_metric=settings["heatmap_metric"],
-                marker_size_range=settings["marker_size_range"],
-                order_font_size=settings["order_font_size"],
-                order_font_color=settings["order_font_color"],
-                show_colorbars=settings["show_colorbars"],
-                fixation_color_range=settings["fixation_color_range"],
-                heatmap_range=settings["heatmap_range"],
-                fixation_colorscale=settings.get("fixation_colorscale", "Blues"),
-                heatmap_colorscale=settings.get("heatmap_colorscale", "Oranges"),
-            )
-            img_bytes = combo_fig.to_image(
-                format="png",
-                width=int(canvas_width),
-                height=int(canvas_height),
-            )
-            filename = f"{combo.participant_id}_{combo.trial_id}.png"
-            zf.writestr(filename, img_bytes)
-            progress.progress(
-                int(idx / total_trials * 100),
-                text=f"Exporting trial {idx} of {total_trials}...",
-            )
-
-    progress.progress(100, text="Export ready! Click below to download.")
-    buf.seek(0)
-    st.download_button(
-        "Download zip",
-        data=buf.getvalue(),
-        file_name="scanpaths.zip",
-        mime="application/zip",
-    )

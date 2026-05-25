@@ -1,0 +1,373 @@
+"""Compute reading measures from fixations and word bounding boxes.
+
+Definitions follow standard reading-research conventions (Rayner 1998;
+Inhoff & Radach 1998). All measures are per (participant, trial, word). When a
+column already exists on the words dataframe (e.g. pre-aggregated EyeLink IA
+metrics) it is preserved; we only compute values that are not present.
+
+Canonical output columns added to words:
+- first_fixation_ms       — FFD: duration of the first fixation on this word
+- first_pass_gaze_ms      — FPRT / gaze duration
+- regression_path_ms      — RPD / go-past time
+- total_fixation_ms       — TFD / dwell
+- n_fixations             — fixation count
+- skip_flag               — True if no first-pass fixation
+- regression_in_flag      — True if any later fixation returned here
+- regression_out_flag     — True if a fixation here was followed by a regression
+- first_fix_x, first_fix_y — landing position of the first-pass first fixation
+
+The fixations dataframe is also enriched with:
+- word_id            — assigned via bbox containment + nearest-word fallback
+- saccade_amplitude  — pixel distance from the previous fixation in the trial
+- progression        — 1 if the next fixation moves to a later word, -1 if earlier, 0 otherwise
+- is_regression      — True if this fixation lands on a word earlier than the
+                       running maximum word reached in the trial
+"""
+
+from __future__ import annotations
+
+from typing import Tuple
+
+import numpy as np
+import pandas as pd
+
+
+def _within_box(
+    fix_x: pd.Series, fix_y: pd.Series, word_row: pd.Series, pad: float = 0.0
+) -> pd.Series:
+    return (
+        (fix_x >= word_row["x"] - pad)
+        & (fix_x <= word_row["x"] + word_row["width"] + pad)
+        & (fix_y >= word_row["y"] - pad)
+        & (fix_y <= word_row["y"] + word_row["height"] + pad)
+    )
+
+
+def assign_fixations_to_words(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    *,
+    overwrite: bool = False,
+    nearest_within_px: float = 50.0,
+) -> pd.DataFrame:
+    """Assign each fixation to a word via bounding-box containment.
+
+    If a fixation does not fall inside any word box, assign it to the nearest
+    word center within `nearest_within_px` pixels (a common practice for line
+    misregistration). Beyond that radius, the fixation gets word_id=NaN.
+
+    If `overwrite=False` and the fixations already carry word_id values, those
+    are kept; only NaN rows get re-assigned.
+    """
+    if fixations.empty or words.empty:
+        return fixations
+
+    out = fixations.copy()
+    if "word_id" not in out.columns or overwrite:
+        out["word_id"] = np.nan
+
+    need_idx = out["word_id"].isna()
+    if not need_idx.any():
+        return out
+
+    # Per (participant, trial), do a fast vectorized box-test against that
+    # trial's words.
+    groups = out[need_idx].groupby(["participant_id", "trial_id"], sort=False)
+    word_groups = words.groupby(["participant_id", "trial_id"], sort=False)
+
+    assignments = pd.Series(np.nan, index=out.index[need_idx], dtype=float)
+    for (pid, tid), fix_chunk in groups:
+        try:
+            wchunk = word_groups.get_group((pid, tid))
+        except KeyError:
+            continue
+        if wchunk.empty:
+            continue
+        wx0 = wchunk["x"].to_numpy()
+        wy0 = wchunk["y"].to_numpy()
+        wx1 = wx0 + wchunk["width"].to_numpy()
+        wy1 = wy0 + wchunk["height"].to_numpy()
+        wids = wchunk["word_id"].to_numpy()
+        wcx = (wx0 + wx1) / 2.0
+        wcy = (wy0 + wy1) / 2.0
+
+        fx = fix_chunk["x"].to_numpy()
+        fy = fix_chunk["y"].to_numpy()
+        in_box = (
+            (fx[:, None] >= wx0[None, :])
+            & (fx[:, None] <= wx1[None, :])
+            & (fy[:, None] >= wy0[None, :])
+            & (fy[:, None] <= wy1[None, :])
+        )
+        word_idx = np.where(in_box.any(axis=1), in_box.argmax(axis=1), -1)
+
+        # Fallback: nearest word center within nearest_within_px
+        unassigned = word_idx == -1
+        if unassigned.any() and nearest_within_px > 0:
+            dists = np.sqrt(
+                (fx[unassigned, None] - wcx[None, :]) ** 2
+                + (fy[unassigned, None] - wcy[None, :]) ** 2
+            )
+            nearest = dists.argmin(axis=1)
+            within = dists[np.arange(len(nearest)), nearest] <= nearest_within_px
+            word_idx_unassigned = np.where(within, nearest, -1)
+            word_idx[unassigned] = word_idx_unassigned
+
+        chunk_assignments = np.where(
+            word_idx >= 0, wids[np.clip(word_idx, 0, None)], np.nan
+        )
+        assignments.loc[fix_chunk.index] = chunk_assignments
+
+    out.loc[need_idx, "word_id"] = assignments
+    return out
+
+
+def enrich_fixations(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
+    """Add saccade_amplitude, progression, and is_regression to fixations."""
+    if fixations.empty:
+        return fixations
+    out = fixations.copy()
+    out = out.sort_values(["participant_id", "trial_id", "timestamp_ms"])
+
+    g = out.groupby(["participant_id", "trial_id"], sort=False)
+    dx = g["x"].diff()
+    dy = g["y"].diff()
+    if "saccade_amplitude" not in out.columns:
+        out["saccade_amplitude"] = np.sqrt(dx * dx + dy * dy)
+    else:
+        out["saccade_amplitude"] = out["saccade_amplitude"].where(
+            out["saccade_amplitude"].notna(), np.sqrt(dx * dx + dy * dy)
+        )
+
+    next_word = g["word_id"].shift(-1)
+    out["progression"] = np.sign(next_word - out["word_id"]).fillna(0).astype(int)
+
+    running_max = g["word_id"].cummax()
+    out["is_regression"] = (out["word_id"] < running_max).fillna(False).astype(bool)
+    return out
+
+
+def compute_per_word_measures(
+    fixations: pd.DataFrame, words: pd.DataFrame
+) -> pd.DataFrame:
+    """Compute canonical reading measures per word.
+
+    Returns a copy of `words` with computed columns added. Existing values on
+    `words` (e.g. EyeLink IA metrics) take precedence over computed ones.
+    """
+    if words.empty:
+        return words.copy()
+
+    enriched = (
+        enrich_fixations(assign_fixations_to_words(fixations, words), words)
+        if not fixations.empty
+        else fixations
+    )
+
+    out = words.copy()
+    key_cols = ["participant_id", "trial_id", "word_id"]
+
+    # Initialize defaults
+    computed = (
+        words[key_cols]
+        .drop_duplicates()
+        .assign(
+            _first_fixation_ms=np.nan,
+            _first_pass_gaze_ms=np.nan,
+            _regression_path_ms=np.nan,
+            _total_fixation_ms=0.0,
+            _n_fixations=0,
+            _skip_flag=True,
+            _regression_in_flag=False,
+            _regression_out_flag=False,
+            _first_fix_x=np.nan,
+            _first_fix_y=np.nan,
+        )
+    )
+
+    if not fixations.empty and "word_id" in enriched.columns:
+        per_word_rows = []
+        # Group fixations by trial to walk them in temporal order.
+        for (pid, tid), fix_chunk in enriched.dropna(subset=["word_id"]).groupby(
+            ["participant_id", "trial_id"], sort=False
+        ):
+            fix_chunk = fix_chunk.sort_values("timestamp_ms")
+            # Total / n / first-fixation are per-word aggregations
+            grp = fix_chunk.groupby("word_id")
+            tot = grp["duration_ms"].sum()
+            n = grp.size()
+            ffd = grp["duration_ms"].first()
+            ffx = grp["x"].first()
+            ffy = grp["y"].first()
+
+            # First-pass gaze: walk the trial in order, accumulate runs.
+            first_pass_gaze: dict[float, float] = {}
+            regression_path: dict[float, float] = {}
+            regression_in: set = set()
+            regression_out: set = set()
+
+            running_max = -np.inf
+            current_run_word: float | None = None
+            current_run_duration: float = 0.0
+            # For regression-path: from first entry into a word until first
+            # fixation past it, sum all durations.
+            first_entry_seen: set = set()
+            rp_open_for: dict[float, float] = {}
+
+            prev_word: float | None = None
+            for row in fix_chunk.itertuples():
+                w = float(row.word_id)
+                dur = float(row.duration_ms)
+
+                # First-pass gaze duration: continuous run on this word
+                # starting from first entry, ending the first time we leave.
+                if w not in first_pass_gaze:
+                    if current_run_word == w:
+                        current_run_duration += dur
+                    else:
+                        if current_run_word is not None:
+                            first_pass_gaze.setdefault(
+                                current_run_word, current_run_duration
+                            )
+                        current_run_word = w
+                        current_run_duration = dur
+                else:
+                    # Already past first pass; reset run tracker.
+                    if (
+                        current_run_word is not None
+                        and current_run_word not in first_pass_gaze
+                    ):
+                        first_pass_gaze.setdefault(
+                            current_run_word, current_run_duration
+                        )
+                    current_run_word = None
+                    current_run_duration = 0.0
+
+                # Regression-path: from the first entry into a word, sum
+                # durations until the next fixation lands on a strictly later
+                # word.
+                if w not in first_entry_seen:
+                    first_entry_seen.add(w)
+                    rp_open_for[w] = dur
+                else:
+                    for k in list(rp_open_for.keys()):
+                        if w <= k:
+                            # Still within or back-tracking; keep accumulating.
+                            rp_open_for[k] += dur
+                # Close any open RP windows for words we've now moved past.
+                for k in list(rp_open_for.keys()):
+                    if w > k and k != w:
+                        regression_path.setdefault(k, rp_open_for.pop(k))
+
+                # Regression-in: stepping back to an earlier word counts the
+                # destination as receiving an in-regression.
+                if prev_word is not None and w < prev_word:
+                    regression_in.add(w)
+                    regression_out.add(prev_word)
+
+                running_max = max(running_max, w)
+                prev_word = w
+
+            # Flush remaining first-pass run
+            if current_run_word is not None and current_run_word not in first_pass_gaze:
+                first_pass_gaze[current_run_word] = current_run_duration
+            # Flush remaining regression-path windows (reader never moved past)
+            for k, v in rp_open_for.items():
+                regression_path.setdefault(k, v)
+
+            for w in tot.index:
+                per_word_rows.append(
+                    dict(
+                        participant_id=pid,
+                        trial_id=tid,
+                        word_id=w,
+                        _first_fixation_ms=float(ffd.loc[w]),
+                        _first_pass_gaze_ms=float(first_pass_gaze.get(w, np.nan)),
+                        _regression_path_ms=float(
+                            regression_path.get(w, np.nan)
+                            if w in first_entry_seen
+                            else np.nan
+                        ),
+                        _total_fixation_ms=float(tot.loc[w]),
+                        _n_fixations=int(n.loc[w]),
+                        _skip_flag=bool(np.isnan(first_pass_gaze.get(w, np.nan))),
+                        _regression_in_flag=w in regression_in,
+                        _regression_out_flag=w in regression_out,
+                        _first_fix_x=float(ffx.loc[w]),
+                        _first_fix_y=float(ffy.loc[w]),
+                    )
+                )
+
+        if per_word_rows:
+            new_df = pd.DataFrame(per_word_rows)
+            updated = computed.merge(
+                new_df, on=key_cols, how="left", suffixes=("_default", "")
+            )
+            for col in new_df.columns:
+                if col in key_cols:
+                    continue
+                default_col = f"{col}_default"
+                if default_col in updated.columns:
+                    updated[col] = updated[col].where(
+                        updated[col].notna(), updated[default_col]
+                    )
+                    updated = updated.drop(columns=default_col)
+            computed = updated
+
+    out = out.merge(computed, on=key_cols, how="left")
+
+    # Map computed -> canonical name, keeping any existing value.
+    rename_map = {
+        "_first_fixation_ms": "first_fixation_ms",
+        "_first_pass_gaze_ms": "first_pass_gaze_duration_ms",
+        "_regression_path_ms": "regression_path_duration_ms",
+        "_total_fixation_ms": "total_fixation_duration_ms",
+        "_n_fixations": "n_fixations",
+        "_skip_flag": "skip_flag",
+        "_regression_in_flag": "regression_in_flag",
+        "_regression_out_flag": "regression_out_flag",
+        "_first_fix_x": "first_fix_x",
+        "_first_fix_y": "first_fix_y",
+    }
+    for src, dst in rename_map.items():
+        if src not in out.columns:
+            continue
+        if dst in out.columns:
+            out[dst] = out[dst].where(out[dst].notna(), out[src])
+        else:
+            out[dst] = out[src]
+        out = out.drop(columns=src)
+
+    # Canonical aliases used elsewhere in the app
+    if (
+        "first_pass_gaze_duration_ms" in out.columns
+        and "gaze_duration_ms" not in out.columns
+    ):
+        out["gaze_duration_ms"] = out["first_pass_gaze_duration_ms"]
+
+    # Ensure dtypes
+    for col in ["n_fixations"]:
+        if col in out.columns:
+            out[col] = (
+                pd.to_numeric(out[col], errors="coerce").fillna(0).astype("Int64")
+            )
+    for col in ["skip_flag", "regression_in_flag", "regression_out_flag"]:
+        if col in out.columns:
+            out[col] = (
+                out[col].astype(object).where(out[col].notna(), False).astype(bool)
+            )
+
+    return out
+
+
+def compute_trial_measures(
+    fixations: pd.DataFrame, words: pd.DataFrame
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Convenience wrapper: returns (enriched_fixations, words_with_measures)."""
+    enriched_fix = (
+        enrich_fixations(assign_fixations_to_words(fixations, words), words)
+        if not fixations.empty
+        else fixations
+    )
+    enriched_words = compute_per_word_measures(fixations, words)
+    return enriched_fix, enriched_words

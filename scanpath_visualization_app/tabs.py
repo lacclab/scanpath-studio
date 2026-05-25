@@ -7,15 +7,24 @@ from typing import Optional
 import pandas as pd
 import streamlit as st
 
+from scanpath_visualization_app.data import compute_word_metrics
+
 from scanpath_visualization_app.plots import (
     make_comparison_figure,
+    make_fixation_duration_histogram,
     make_scanpath_animation,
     make_scanpath_figure,
+    make_scarf_plot,
+    make_word_measure_bar_figure,
+)
+from scanpath_visualization_app.export import (
+    ExportProgress,
+    bulk_export,
+    render_export_options,
 )
 from scanpath_visualization_app.utils import (
     build_comparison_options,
     compute_trial_stats,
-    export_filtered_trials,
     friendly_trial_label,
     gather_trial_metadata,
     safe_summary,
@@ -108,18 +117,51 @@ def _render_comparison_controls(
     return None, None, layout
 
 
+def _render_trial_header(
+    participant: str,
+    trial_id: str,
+    trial_words: pd.DataFrame,
+    prefix: str = "Trial:",
+) -> None:
+    """Render a participant + paragraph + (truncated text) header."""
+    parts = [f"**{prefix}** `{trial_id}`", f"participant `{participant}`"]
+    paragraph_id = None
+    for col in ["unique_paragraph_id", "paragraph_id"]:
+        if col in trial_words.columns and not trial_words.empty:
+            paragraph_id = trial_words[col].iloc[0]
+            break
+    if paragraph_id is not None:
+        parts.append(f"paragraph `{paragraph_id}`")
+    difficulty = None
+    if "difficulty_level" in trial_words.columns and not trial_words.empty:
+        difficulty = trial_words["difficulty_level"].iloc[0]
+        if pd.notna(difficulty):
+            parts.append(f"difficulty `{difficulty}`")
+    st.markdown(" · ".join(parts))
+    if "text" in trial_words.columns and not trial_words.empty:
+        text_preview = " ".join(trial_words["text"].astype(str).tolist())
+        if len(text_preview) > 240:
+            text_preview = text_preview[:237] + "…"
+        with st.expander("Paragraph text", expanded=False):
+            st.write(text_preview)
+
+
 def _render_trial_stats(trial_words: pd.DataFrame, trial_fixations: pd.DataFrame):
     """Render trial statistics metrics."""
     stats = compute_trial_stats(trial_words, trial_fixations)
     stat_cols = st.columns(3)
-    stat_cols[0].metric("Total reading time (s)", f"{stats['total_reading_time_s']:.1f}")
+    stat_cols[0].metric(
+        "Total reading time (s)", f"{stats['total_reading_time_s']:.1f}"
+    )
     stat_cols[1].metric("Number of words", f"{stats['word_count']:,}")
     stat_cols[2].metric("Number of fixations", f"{stats['fixation_count']:,}")
 
 
 def _render_metadata_selector(
-    words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame,
-    trial_words: pd.DataFrame, trial_fixations: pd.DataFrame
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
 ):
     """Render metadata field selector and display table."""
     metadata_candidates = []
@@ -143,7 +185,9 @@ def _render_metadata_selector(
         default=default_metadata or metadata_candidates,
     )
     if selected_metadata:
-        metadata_df = gather_trial_metadata(trial_words, trial_fixations, selected_metadata)
+        metadata_df = gather_trial_metadata(
+            trial_words, trial_fixations, selected_metadata
+        )
         if not metadata_df.empty:
             st.dataframe(metadata_df, hide_index=True, width="stretch")
 
@@ -196,7 +240,9 @@ def _render_plot_config_expander(
                 "heatmap_colorscale": figure_settings["heatmap_colorscale"],
             },
             "sizing": {
-                "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
+                "marker_size_range": [
+                    int(s) for s in figure_settings["marker_size_range"]
+                ],
                 "order_font_size": int(figure_settings["order_font_size"]),
                 "order_font_color": figure_settings["order_font_color"],
                 "base_font_size": int(base_font_size),
@@ -246,13 +292,13 @@ def render_single_trial_tab(
             & (raw_gaze["trial_id"] == selected_trial)
         ]
 
-    st.markdown(f"Showing **{selected_trial}** ")
+    _render_trial_header(selected_participant, selected_trial, trial_words)
 
     # Check raw gaze availability
     trial_has_raw_gaze = not trial_raw_gaze.empty
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
     if global_raw_toggle and not trial_has_raw_gaze:
-        st.toast("Raw gaze not available for this trial.", icon="⚠️")
+        st.warning("Raw gaze not available for this trial.", icon="⚠️")
     effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
 
     # Build settings
@@ -269,10 +315,19 @@ def render_single_trial_tab(
     # Render figure
     if compare_participant is not None and compare_trial is not None:
         _render_comparison_figure(
-            combos, words_filtered, fixations_filtered,
-            selected_participant, selected_trial, selected_text,
-            compare_participant, compare_trial,
-            canvas_width, canvas_height, font_family, base_font_size, viz_settings,
+            combos,
+            words_filtered,
+            fixations_filtered,
+            selected_participant,
+            selected_trial,
+            selected_text,
+            compare_participant,
+            compare_trial,
+            canvas_width,
+            canvas_height,
+            font_family,
+            base_font_size,
+            viz_settings,
             layout=compare_layout,
         )
     else:
@@ -291,25 +346,114 @@ def render_single_trial_tab(
 
     # Stats, metadata, config
     _render_trial_stats(trial_words, trial_fixations)
-    _render_metadata_selector(words_filtered, fixations_filtered, trial_words, trial_fixations)
+    _render_metadata_selector(
+        words_filtered, fixations_filtered, trial_words, trial_fixations
+    )
     _render_plot_config_expander(
-        selected_participant, selected_trial, canvas_width, canvas_height,
-        x_field, y_field, figure_settings, viz_settings, base_font_size, trial_raw_gaze
+        selected_participant,
+        selected_trial,
+        canvas_width,
+        canvas_height,
+        x_field,
+        y_field,
+        figure_settings,
+        viz_settings,
+        base_font_size,
+        trial_raw_gaze,
     )
 
-    # Export button
-    if st.button("Export all filtered trials as PNG (zip)"):
-        export_filtered_trials(
+    _render_bulk_export(
+        combos,
+        words_filtered,
+        fixations_filtered,
+        canvas_width=int(canvas_width),
+        canvas_height=int(canvas_height),
+        base_font_size=int(base_font_size),
+        font_family=font_family,
+        x_field=x_field,
+        y_field=y_field,
+        figure_settings=figure_settings,
+    )
+
+
+def _render_bulk_export(
+    combos: pd.DataFrame,
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    x_field: str,
+    y_field: str,
+    figure_settings: dict,
+) -> None:
+    """Render configurable bulk-export UI (artifact picker + run + download)."""
+    st.divider()
+    st.markdown("### Bulk export")
+    st.caption(
+        f"Export artifacts for all **{len(combos)}** currently filtered trials. "
+        "Pick which artifacts to include below."
+    )
+    options = render_export_options(st, key_prefix="single_export")
+    run_col, info_col = st.columns([1, 3])
+    with run_col:
+        run = st.button(
+            "Build export",
+            type="primary",
+            disabled=(
+                combos.empty
+                or not any(
+                    [
+                        options.include_png,
+                        options.include_svg,
+                        options.include_plot_config,
+                        options.include_fixations,
+                        options.include_measures,
+                        options.include_mega_table,
+                    ]
+                )
+            ),
+        )
+    progress_bar = info_col.progress(0.0, text="Idle")
+    if run:
+
+        def on_progress(p: ExportProgress) -> None:
+            frac = p.finished_trials / p.total_trials if p.total_trials else 1.0
+            progress_bar.progress(
+                min(max(frac, 0.0), 1.0),
+                text=(
+                    f"Exporting trial {p.finished_trials}/{p.total_trials} "
+                    f"— {p.bytes_written / 1024:.0f} KB so far"
+                ),
+            )
+
+        zip_bytes, progress = bulk_export(
             combos,
             words_filtered,
             fixations_filtered,
-            canvas_width=int(canvas_width),
-            canvas_height=int(canvas_height),
-            base_font_size=int(base_font_size),
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
             font_family=font_family,
             x_field=x_field,
             y_field=y_field,
             settings=figure_settings,
+            options=options,
+            progress_callback=on_progress,
+        )
+        progress_bar.progress(1.0, text="Ready")
+        if progress.errors:
+            with st.expander("Export warnings"):
+                for err in progress.errors:
+                    st.write(err)
+        st.download_button(
+            "Download zip",
+            data=zip_bytes,
+            file_name=f"scanpath_export_{pd.Timestamp.utcnow():%Y%m%d_%H%M%S}.zip",
+            mime="application/zip",
+            type="primary",
         )
 
 
@@ -346,7 +490,9 @@ def _render_comparison_figure(
         return str(match.iloc[0][paragraph_field])
 
     label_pool: set[str] = set()
-    primary_text_id = selected_text or _lookup_text_id(selected_participant, selected_trial)
+    primary_text_id = selected_text or _lookup_text_id(
+        selected_participant, selected_trial
+    )
     compare_text_id = _lookup_text_id(compare_participant, compare_trial)
     primary_label = friendly_trial_label(
         selected_participant, selected_trial, primary_text_id, label_pool
@@ -404,7 +550,9 @@ def render_animation_tab(
         & (fixations_filtered["trial_id"] == selected_trial)
     ]
 
-    st.markdown(f"Showing animated scanpath for **{selected_trial}**")
+    _render_trial_header(
+        selected_participant, selected_trial, trial_words, prefix="Animated scanpath:"
+    )
 
     # Playback speed
     speed_options = [0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0]
@@ -460,14 +608,20 @@ def render_animation_tab(
 
 
 def _render_paginated_dataframe(
-    df: pd.DataFrame, page_size: int, key: str, caption: str
+    df: pd.DataFrame,
+    page_size: int,
+    key: str,
+    caption: str,
+    download_name: Optional[str] = None,
 ) -> None:
-    """Render a dataframe with pagination if needed."""
+    """Render a dataframe with pagination + download buttons (CSV + Parquet)."""
     total_rows = len(df)
     total_pages = max(1, (total_rows + page_size - 1) // page_size)
 
     if total_rows > page_size:
-        st.info(f"Showing {total_rows:,} rows with pagination ({page_size:,} per page).")
+        st.info(
+            f"Showing {total_rows:,} rows with pagination ({page_size:,} per page)."
+        )
         page = st.number_input(
             "Page",
             min_value=1,
@@ -486,18 +640,45 @@ def _render_paginated_dataframe(
     st.dataframe(display_df, hide_index=True, width="stretch")
     st.caption(caption)
 
+    if download_name and not df.empty:
+        col_csv, col_parquet, _ = st.columns([1, 1, 4])
+        with col_csv:
+            st.download_button(
+                "Download CSV",
+                data=df.to_csv(index=False).encode("utf-8"),
+                file_name=f"{download_name}.csv",
+                mime="text/csv",
+                key=f"{key}_csv_download",
+            )
+        with col_parquet:
+            import io as _io
+
+            buf = _io.BytesIO()
+            try:
+                df.to_parquet(buf, index=False)
+                st.download_button(
+                    "Download Parquet",
+                    data=buf.getvalue(),
+                    file_name=f"{download_name}.parquet",
+                    mime="application/octet-stream",
+                    key=f"{key}_parquet_download",
+                )
+            except Exception:
+                pass
+
 
 def render_metrics_tab(
     words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame
 ) -> None:
     """Render word-level metrics tab."""
-    from scanpath_visualization_app.data import compute_word_metrics
-
     st.subheader("Word-level data")
     metrics = compute_word_metrics(words_filtered, fixations_filtered)
     _render_paginated_dataframe(
-        metrics, 1000, "metrics_page",
-        "Word-level data with computed reading metrics where available."
+        metrics,
+        1000,
+        "metrics_page",
+        "Word-level data with computed reading metrics where available.",
+        download_name="word_measures",
     )
 
 
@@ -505,8 +686,11 @@ def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
     """Render fixation-level data tab."""
     st.subheader("Fixation-level data")
     _render_paginated_dataframe(
-        fixations_filtered, 1000, "fixations_page",
-        "All fixation records after applying filters; includes ids, timing, and optional flags."
+        fixations_filtered,
+        1000,
+        "fixations_page",
+        "All fixation records after applying filters; includes ids, timing, and optional flags.",
+        download_name="fixations",
     )
 
 
@@ -517,8 +701,11 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
         st.info("No raw gaze data available after filtering.")
         return
     _render_paginated_dataframe(
-        raw_gaze_filtered, 1000, "raw_gaze_page",
-        "Millisecond-level gaze samples after applying filters."
+        raw_gaze_filtered,
+        1000,
+        "raw_gaze_page",
+        "Millisecond-level gaze samples after applying filters.",
+        download_name="raw_gaze",
     )
 
 
@@ -549,10 +736,9 @@ def render_data_statistics_tab(
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
 ) -> None:
-    """Render dataset statistics tab."""
+    """Render dataset statistics tab with reading-research summaries."""
     st.subheader("Dataset statistics")
 
-    # Count unique entities
     participant_ids = set(words_filtered["participant_id"].unique()) | set(
         fixations_filtered["participant_id"].unique()
     )
@@ -570,7 +756,6 @@ def render_data_statistics_tab(
         else set()
     )
 
-    # Top-level metrics
     top_cols = st.columns(6)
     top_cols[0].metric("Participants", f"{len(participant_ids):,}")
     top_cols[1].metric("Texts", f"{len(text_ids):,}")
@@ -583,10 +768,52 @@ def render_data_statistics_tab(
         help="Counts raw gaze samples if provided.",
     )
 
+    # Reading-research metrics
+    st.markdown("**Reading-research metrics**")
+    rr_cols = st.columns(4)
+    if not fixations_filtered.empty and "duration_ms" in fixations_filtered.columns:
+        mean_fix_dur = float(fixations_filtered["duration_ms"].mean())
+        rr_cols[0].metric("Mean fixation dur (ms)", f"{mean_fix_dur:.0f}")
+    else:
+        rr_cols[0].metric("Mean fixation dur (ms)", "—")
+    if (
+        not fixations_filtered.empty
+        and "saccade_amplitude" in fixations_filtered.columns
+    ):
+        mean_sac = float(fixations_filtered["saccade_amplitude"].dropna().mean() or 0)
+        rr_cols[1].metric("Mean saccade amp (px)", f"{mean_sac:.0f}")
+    else:
+        rr_cols[1].metric("Mean saccade amp (px)", "—")
+    if "is_regression" in fixations_filtered.columns and not fixations_filtered.empty:
+        reg_rate = float(fixations_filtered["is_regression"].mean()) * 100
+        rr_cols[2].metric("Regression rate", f"{reg_rate:.1f} %")
+    elif "regression_out_flag" in words_filtered.columns and not words_filtered.empty:
+        reg_rate = float(words_filtered["regression_out_flag"].mean()) * 100
+        rr_cols[2].metric("Words w/ regression-out", f"{reg_rate:.1f} %")
+    else:
+        rr_cols[2].metric("Regression rate", "—")
+    if (
+        not fixations_filtered.empty
+        and "duration_ms" in fixations_filtered.columns
+        and not words_filtered.empty
+    ):
+        total_ms = fixations_filtered.groupby(["participant_id", "trial_id"])[
+            "duration_ms"
+        ].sum()
+        n_words = words_filtered.groupby(["participant_id", "trial_id"]).size()
+        per_trial = (
+            n_words.reindex(total_ms.index).fillna(0) * 60_000
+        ) / total_ms.replace(0, pd.NA)
+        wpm = float(per_trial.dropna().mean()) if per_trial.dropna().size else 0.0
+        rr_cols[3].metric("Reading speed (wpm)", f"{wpm:.0f}")
+    else:
+        rr_cols[3].metric("Reading speed (wpm)", "—")
+
     st.divider()
 
-    # Detailed statistics
-    trial_source = fixations_filtered if not fixations_filtered.empty else words_filtered
+    trial_source = (
+        fixations_filtered if not fixations_filtered.empty else words_filtered
+    )
     trials_per_participant = (
         trial_source.groupby("participant_id")["trial_id"].nunique()
         if not trial_source.empty
@@ -603,14 +830,25 @@ def render_data_statistics_tab(
         else pd.Series(dtype=float)
     )
 
-    stats_df = pd.DataFrame([
-        {"Metric": "Trials per participant", **safe_summary(trials_per_participant)},
-        {"Metric": "Fixations per trial", **safe_summary(fixations_per_trial)},
-        {"Metric": "Words per trial", **safe_summary(words_per_trial)},
-    ])
-    stats_df = stats_df.rename(columns={
-        "mean": "Mean", "std": "Std", "min": "Min", "median": "Median", "max": "Max"
-    })
+    stats_df = pd.DataFrame(
+        [
+            {
+                "Metric": "Trials per participant",
+                **safe_summary(trials_per_participant),
+            },
+            {"Metric": "Fixations per trial", **safe_summary(fixations_per_trial)},
+            {"Metric": "Words per trial", **safe_summary(words_per_trial)},
+        ]
+    )
+    stats_df = stats_df.rename(
+        columns={
+            "mean": "Mean",
+            "std": "Std",
+            "min": "Min",
+            "median": "Median",
+            "max": "Max",
+        }
+    )
 
     st.dataframe(
         stats_df,
@@ -623,4 +861,119 @@ def render_data_statistics_tab(
     )
     st.caption(
         "Statistics computed after filtering; missing values indicate empty source data."
+    )
+
+
+# -----------------------------------------------------------------------------
+# Reading Measures Tab
+# -----------------------------------------------------------------------------
+
+
+_MEASURE_OPTIONS = [
+    ("first_fixation_ms", "First-fixation duration (FFD)"),
+    ("first_pass_gaze_duration_ms", "Gaze duration / FPRT"),
+    ("regression_path_duration_ms", "Regression-path duration (go-past)"),
+    ("total_fixation_duration_ms", "Total fixation duration / dwell"),
+    ("n_fixations", "Fixation count"),
+    ("skip_flag", "Skip flag"),
+    ("regression_in_flag", "Regression in"),
+    ("regression_out_flag", "Regression out"),
+    ("gpt2_surprisal", "GPT-2 surprisal"),
+    ("wordfreq_frequency", "Word frequency (wordfreq)"),
+    ("subtlex_frequency", "Word frequency (SUBTLEX)"),
+]
+
+
+def render_reading_measures_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    combos: pd.DataFrame,
+    *,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+) -> None:
+    """Render the Reading Measures tab: scarf plot, per-word bar, histogram."""
+    from scanpath_visualization_app.utils import select_trial
+
+    selected_participant, selected_trial, _mode, _text = select_trial(
+        combos, key_prefix="measures"
+    )
+    if not (selected_participant and selected_trial):
+        return
+
+    trial_words = words_filtered[
+        (words_filtered["participant_id"] == selected_participant)
+        & (words_filtered["trial_id"] == selected_trial)
+    ]
+    trial_fixations = fixations_filtered[
+        (fixations_filtered["participant_id"] == selected_participant)
+        & (fixations_filtered["trial_id"] == selected_trial)
+    ]
+    if trial_words.empty or trial_fixations.empty:
+        st.info("Select a trial with both words and fixations to see measures.")
+        return
+
+    measures_df = compute_word_metrics(trial_words, trial_fixations)
+
+    st.subheader("Scarf plot")
+    color_choices = [
+        c
+        for c in ["word_id", "duration_ms", "is_regression", "saccade_amplitude"]
+        if c in trial_fixations.columns
+    ]
+    scarf_color_by = st.selectbox(
+        "Color bars by",
+        color_choices,
+        index=0,
+        key="scarf_color_by",
+    )
+    scarf = make_scarf_plot(
+        trial_fixations,
+        trial_words,
+        canvas_width=int(canvas_width),
+        base_font_size=int(base_font_size),
+        font_family=font_family,
+        color_by=scarf_color_by,
+    )
+    st.plotly_chart(scarf, width="content", config={"responsive": False})
+
+    st.subheader("Per-word measure")
+    available_measures = [
+        (key, label) for key, label in _MEASURE_OPTIONS if key in measures_df.columns
+    ]
+    if not available_measures:
+        st.info("No per-word measures available for this trial.")
+    else:
+        key_to_label = dict(available_measures)
+        selected_measure = st.selectbox(
+            "Measure",
+            options=list(key_to_label.keys()),
+            format_func=lambda k: key_to_label[k],
+            key="word_measure_choice",
+        )
+        bar_fig = make_word_measure_bar_figure(
+            measures_df,
+            measure=selected_measure,
+            canvas_width=int(canvas_width),
+            base_font_size=int(base_font_size),
+            font_family=font_family,
+        )
+        st.plotly_chart(bar_fig, width="content", config={"responsive": False})
+
+    st.subheader("Fixation duration distribution")
+    hist = make_fixation_duration_histogram(
+        trial_fixations,
+        canvas_width=int(canvas_width),
+        base_font_size=int(base_font_size),
+        font_family=font_family,
+        overlay_words=measures_df,
+    )
+    st.plotly_chart(hist, width="content", config={"responsive": False})
+
+    st.caption(
+        "Measures are computed per (participant, trial, word). When the input "
+        "table carries EyeLink IA exports (e.g. IA_FIRST_FIXATION_DURATION), "
+        "those values are preserved; missing values are computed from "
+        "fixations + word bounding boxes."
     )

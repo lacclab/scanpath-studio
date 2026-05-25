@@ -115,11 +115,6 @@ def data_dictionary_help_text() -> str:
     )
 
 
-def render_dictionary() -> None:
-    with st.expander("Data dictionary / expected columns"):
-        st.markdown(data_dictionary_help_text())
-
-
 def sidebar_controls(
     trial_fixations: pd.DataFrame, base_font_size: int, has_raw_gaze: bool = False
 ) -> Dict:
@@ -139,18 +134,23 @@ def sidebar_controls(
         key="global_show_raw_gaze",
     )
 
-    color_fields = [
-        field
-        for field in [
-            "duration_ms",
-            "pass_index",
-            "eye",
-            "saccade_type",
-            "word_id",
-            "timestamp_ms",
-        ]
-        if field in trial_fixations.columns
+    preferred_color_fields = [
+        "duration_ms",
+        "pass_index",
+        "eye",
+        "saccade_type",
+        "saccade_amplitude",
+        "word_id",
+        "timestamp_ms",
+        "is_regression",
+        "progression",
+        "gpt2_surprisal",
+        "wordfreq_frequency",
+        "subtlex_frequency",
+        "universal_pos",
+        "ptb_pos",
     ]
+    color_fields = [f for f in preferred_color_fields if f in trial_fixations.columns]
     if not color_fields:
         color_fields = ["duration_ms"]
     color_by = st.sidebar.selectbox(

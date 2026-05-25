@@ -5,10 +5,10 @@ import pandas as pd
 from scanpath_visualization_app.app import (
     _build_comparison_options,
     build_combo_options,
-    clamp_canvas_size,
     compute_trial_stats,
     gather_trial_metadata,
 )
+from scanpath_visualization_app.data import compute_canvas_size
 
 
 class TestBuildComboOptions:
@@ -55,36 +55,22 @@ class TestBuildComboOptions:
         assert len(combos) == 2
 
 
-class TestClampCanvasSize:
-    """Tests for clamp_canvas_size function."""
+class TestComputeCanvasSize:
+    """Tests for compute_canvas_size (replaces removed clamp_canvas_size)."""
 
-    def test_clamp_canvas_size_normal(
+    def test_canvas_size_uses_data_extent(
         self, normalized_words_df, normalized_fixations_df
     ):
-        width, height = clamp_canvas_size(normalized_words_df, normalized_fixations_df)
-        assert 100 <= width <= 10000
-        assert 100 <= height <= 10000
+        width, height = compute_canvas_size(
+            normalized_words_df, normalized_fixations_df
+        )
+        # The fixture has words extending to x=350, y=100 — expect width≥350
+        assert width >= 350
+        assert height >= 100
 
-    def test_clamp_canvas_size_small(self):
-        small_words = pd.DataFrame(
-            {
-                "participant_id": ["p1"],
-                "trial_id": ["t1"],
-                "x": [10],
-                "y": [10],
-                "width": [5],
-                "height": [5],
-            }
-        )
-        small_fixations = pd.DataFrame(
-            {
-                "participant_id": ["p1"],
-                "trial_id": ["t1"],
-                "x": [10],
-                "y": [10],
-            }
-        )
-        width, height = clamp_canvas_size(small_words, small_fixations)
+    def test_canvas_size_floor(self):
+        empty = pd.DataFrame()
+        width, height = compute_canvas_size(empty, empty)
         assert width >= 100
         assert height >= 100
 

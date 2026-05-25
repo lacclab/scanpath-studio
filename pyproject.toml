@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scanpath-visualization-app"
-version = "0.1.0"
-description = "Streamlit workbench for visualizing scanpaths over text."
+version = "0.9.0"
+description = "Interactive Streamlit workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Scanpath Visualization Contributors" }]
+authors = [{ name = "Omer Shubi (LACC Lab, Technion)", email = "lacclab.technion@gmail.com" }]
 license = { file = "LICENSE" }
 keywords = ["eye-tracking", "scanpath", "visualization", "streamlit", "reading", "psycholinguistics"]
 classifiers = [
@@ -40,6 +40,10 @@ test = [
     "pytest-cov>=4.0.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/lacclab/scanpath-visualization"
+Issues = "https://github.com/lacclab/scanpath-visualization/issues"
+
 [project.scripts]
 scanpath-visualization = "scanpath_visualization_app.__main__:main"
 
@@ -52,4 +56,8 @@ where = ["."]
 include = ["scanpath_visualization_app"]
 
 [tool.setuptools.package-data]
-"scanpath_visualization_app" = ["sample_data/*.csv"]
+"scanpath_visualization_app" = [
+    "sample_data/*.csv",
+    "sample_data/*.parquet",
+    "sample_data/*.feather",
+]

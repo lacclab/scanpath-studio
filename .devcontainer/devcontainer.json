@@ -6,7 +6,7 @@
     "codespaces": {
       "openFiles": [
         "README.md",
-        "scanpath-visualization/scanpath_visualization_app/app.py"
+        "scanpath_visualization_app/app.py"
       ]
     },
     "vscode": {
@@ -17,9 +17,9 @@
       ]
     }
   },
-  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
+  "updateContentCommand": "pip3 install --user -e .[test]",
   "postAttachCommand": {
-    "server": "streamlit run scanpath-visualization/scanpath_visualization_app/app.py --server.enableCORS false --server.enableXsrfProtection false"
+    "server": "streamlit run scanpath_visualization_app/app.py --server.enableCORS false --server.enableXsrfProtection false"
   },
   "portsAttributes": {
     "8501": {

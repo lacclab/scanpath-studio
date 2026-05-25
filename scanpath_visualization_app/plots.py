@@ -1,21 +1,112 @@
+"""Plotly figure builders for scanpath visualization."""
+
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
 from .constants import (
+    CANVAS_PAD_FRACTION,
+    CANVAS_PAD_MIN_PX,
+    COMPARISON_PALETTE,
+    CURRENT_FIX_COLOR,
+    CURRENT_FIX_OUTLINE,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_MARKER_SIZE_RANGE,
+    FIX_MARKER_OUTLINE,
     FONT_FAMILY,
+    SACCADE_COLOR,
+    WORD_BOX_COLOR,
+    WORD_LABEL_COLOR,
 )
 
 COLORBAR_LEN_FRACTION = 0.33
 
 
-def build_word_boxes(words: pd.DataFrame, color: str = "#6c757d") -> list:
+def _compute_axis_ranges(
+    canvas_width: int,
+    canvas_height: int,
+    *frames_with_xy: Tuple[Optional[pd.DataFrame], str, str],
+    word_frames: Iterable[pd.DataFrame] = (),
+) -> Tuple[
+    list, list, Optional[float], Optional[float], Optional[float], Optional[float]
+]:
+    """Compute padded x/y ranges from any number of (frame, x_col, y_col) tuples.
+
+    word_frames contribute box-extent bounds: x, x+width and y, y+height.
+    Falls back to (0..canvas_width, canvas_height..0) when there's no data.
+    Returns: x_range, y_range (y inverted), and the unpadded mins/maxs.
+    """
+    x_candidates: list = []
+    y_candidates: list = []
+
+    for df, x_col, y_col in frames_with_xy:
+        if df is None or df.empty:
+            continue
+        if x_col in df.columns:
+            x_candidates.extend([df[x_col].min(), df[x_col].max()])
+        if y_col in df.columns:
+            y_candidates.extend([df[y_col].min(), df[y_col].max()])
+
+    for df in word_frames:
+        if df is None or df.empty:
+            continue
+        x_candidates.extend([df["x"].min(), (df["x"] + df["width"]).max()])
+        y_candidates.extend([df["y"].min(), (df["y"] + df["height"]).max()])
+
+    x_range = [0, canvas_width]
+    y_range = [canvas_height, 0]
+    if not x_candidates or not y_candidates:
+        return x_range, y_range, None, None, None, None
+
+    x_min = float(np.nanmin(x_candidates))
+    x_max = float(np.nanmax(x_candidates))
+    y_min = float(np.nanmin(y_candidates))
+    y_max = float(np.nanmax(y_candidates))
+
+    x_span = max(x_max - x_min, 1.0)
+    y_span = max(y_max - y_min, 1.0)
+    pad_x = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * x_span)
+    pad_y = max(CANVAS_PAD_MIN_PX, CANVAS_PAD_FRACTION * y_span)
+    x_range = [x_min - pad_x, x_max + pad_x]
+    y_range = [y_max + pad_y, y_min - pad_y]
+    return x_range, y_range, x_min, x_max, y_min, y_max
+
+
+def _compute_marker_sizes(
+    durations: pd.Series, size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
+) -> np.ndarray:
+    """Map fixation durations to marker sizes by linear interpolation."""
+    durations = pd.to_numeric(durations, errors="coerce").fillna(0)
+    d_min, d_max = float(durations.min()), float(durations.max())
+    min_size, max_size = size_range
+    if d_max - d_min > 0:
+        return np.interp(durations, (d_min, d_max), (min_size, max_size))
+    return np.full(len(durations), (min_size + max_size) / 2)
+
+
+def _saccade_segments(
+    fix_df: pd.DataFrame, x_col: str, y_col: str
+) -> Tuple[list, list]:
+    """Return concatenated x/y arrays separated by None for a single saccade trace."""
+    if len(fix_df) < 2:
+        return [], []
+    ordered = fix_df.sort_values("timestamp_ms")
+    xs: list = []
+    ys: list = []
+    x_vals = ordered[x_col].tolist()
+    y_vals = ordered[y_col].tolist()
+    for i in range(len(ordered) - 1):
+        xs.extend([x_vals[i], x_vals[i + 1], None])
+        ys.extend([y_vals[i], y_vals[i + 1], None])
+    return xs, ys
+
+
+def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
     shapes = []
     for row in words.itertuples():
         x0, y0 = row.x, row.y
@@ -32,6 +123,41 @@ def build_word_boxes(words: pd.DataFrame, color: str = "#6c757d") -> list:
             )
         )
     return shapes
+
+
+def _add_word_label_trace(
+    fig: go.Figure,
+    words: pd.DataFrame,
+    base_font_size: int,
+    font_family: str,
+    row: Optional[int] = None,
+    col: Optional[int] = None,
+) -> None:
+    if words.empty or "text" not in words.columns:
+        return
+    customdata = None
+    hover = "Word %{text}<extra></extra>"
+    if "word_id" in words.columns and "line_idx" in words.columns:
+        customdata = words[["word_id", "line_idx"]]
+        hover = (
+            "Word %{text}<br>Word ID %{customdata[0]}"
+            "<br>Line %{customdata[1]}<extra></extra>"
+        )
+    trace = go.Scatter(
+        x=words["x"] + words["width"] / 2,
+        y=words["y"] + words["height"] / 2,
+        text=words["text"],
+        mode="text",
+        showlegend=False,
+        textfont=dict(color=WORD_LABEL_COLOR, size=base_font_size, family=font_family),
+        hovertemplate=hover,
+        customdata=customdata,
+        name="words",
+    )
+    if row is not None and col is not None:
+        fig.add_trace(trace, row=row, col=col)
+    else:
+        fig.add_trace(trace)
 
 
 def make_scanpath_figure(
@@ -66,73 +192,36 @@ def make_scanpath_figure(
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    x_range = [0, canvas_width]
-    y_range = [canvas_height, 0]
-    x_min_data = x_max_data = y_min_data = y_max_data = None
 
+    raw_for_range = raw_gaze if (show_raw_gaze and raw_gaze is not None) else None
     if spatial_axes:
-        x_candidates = []
-        y_candidates = []
-        if not words.empty:
-            x_candidates.extend([words["x"].min(), (words["x"] + words["width"]).max()])
-            y_candidates.extend(
-                [words["y"].min(), (words["y"] + words["height"]).max()]
+        x_range, y_range, x_min_data, x_max_data, y_min_data, y_max_data = (
+            _compute_axis_ranges(
+                canvas_width,
+                canvas_height,
+                (fixations, x_field, y_field),
+                (raw_for_range, "x", "y"),
+                word_frames=[words] if not words.empty else [],
             )
-        if not fixations.empty:
-            x_candidates.extend([fixations[x_field].min(), fixations[x_field].max()])
-            y_candidates.extend([fixations[y_field].min(), fixations[y_field].max()])
-        if show_raw_gaze and raw_gaze is not None and not raw_gaze.empty:
-            x_candidates.extend([raw_gaze["x"].min(), raw_gaze["x"].max()])
-            y_candidates.extend([raw_gaze["y"].min(), raw_gaze["y"].max()])
-
-        if x_candidates and y_candidates:
-            x_min_data = float(np.nanmin(x_candidates))
-            x_max_data = float(np.nanmax(x_candidates))
-            y_min_data = float(np.nanmin(y_candidates))
-            y_max_data = float(np.nanmax(y_candidates))
-
-            x_span = max(x_max_data - x_min_data, 1.0)
-            y_span = max(y_max_data - y_min_data, 1.0)
-            pad_x = max(20.0, 0.05 * x_span)
-            pad_y = max(20.0, 0.05 * y_span)
-            x_range = [x_min_data - pad_x, x_max_data + pad_x]
-            y_range = [y_max_data + pad_y, y_min_data - pad_y]
+        )
+    else:
+        x_range = [0, canvas_width]
+        y_range = [canvas_height, 0]
+        x_min_data = x_max_data = y_min_data = y_max_data = None
 
     if spatial_axes and not words.empty:
         if show_words:
             fig.update_layout(shapes=build_word_boxes(words))
-        if show_word_labels and "text" in words.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=words["x"] + words["width"] / 2,
-                    y=words["y"] + words["height"] / 2,
-                    text=words["text"],
-                    mode="text",
-                    showlegend=False,
-                    textfont=dict(
-                        color="#343a40",
-                        size=base_font_size,
-                        family=font_settings["family"],
-                    ),
-                    hovertemplate=(
-                        "Word %{text}<br>Word ID %{customdata[0]}<br>Line %{customdata[1]}"
-                        "<extra></extra>"
-                    ),
-                    customdata=words[["word_id", "line_idx"]],
-                )
-            )
+        if show_word_labels:
+            _add_word_label_trace(fig, words, base_font_size, font_settings["family"])
 
-    # Plot raw gaze data as small dots (before heatmap and fixations so it appears in background)
-    # Render regardless of selected axes; raw gaze always uses screen coordinates (x, y)
     if show_raw_gaze and raw_gaze is not None and not raw_gaze.empty:
-        # Color by timestamp if available, otherwise uniform color
         if "timestamp_ms" in raw_gaze.columns:
             color_vals = raw_gaze["timestamp_ms"]
             colorscale = "Viridis"
         else:
             color_vals = "#888888"
             colorscale = None
-
         fig.add_trace(
             go.Scatter(
                 x=raw_gaze["x"],
@@ -146,10 +235,8 @@ def make_scanpath_figure(
                     showscale=False,
                 ),
                 hovertemplate=(
-                    "Raw gaze<br>"
-                    "x: %{x:.1f}<br>"
-                    "y: %{y:.1f}<br>"
-                    "t: %{customdata} ms<extra></extra>"
+                    "Raw gaze<br>x: %{x:.1f}<br>y: %{y:.1f}"
+                    "<br>t: %{customdata} ms<extra></extra>"
                 ),
                 customdata=raw_gaze["timestamp_ms"]
                 if "timestamp_ms" in raw_gaze.columns
@@ -160,10 +247,7 @@ def make_scanpath_figure(
         )
 
     if spatial_axes and show_heatmap and not fixations.empty:
-        weights = None
-        if heatmap_metric == "duration_ms":
-            weights = fixations["duration_ms"]
-        histfunc = "sum" if weights is not None else "count"
+        weights = fixations["duration_ms"] if heatmap_metric == "duration_ms" else None
         x_min = (
             x_min_data if x_min_data is not None else float(fixations[x_field].min())
         )
@@ -176,143 +260,46 @@ def make_scanpath_figure(
         y_max = (
             y_max_data if y_max_data is not None else float(fixations[y_field].max())
         )
-        x_span = max(x_max - x_min, 1.0)
-        y_span = max(y_max - y_min, 1.0)
         if not words.empty:
-            # Word-level heatmap: aggregate fixations per word
-            word_values = []
-            for word_row in words.itertuples():
-                wx0, wy0 = word_row.x, word_row.y
-                wx1, wy1 = wx0 + word_row.width, wy0 + word_row.height
-                # Find fixations within this word's bounding box
-                in_word = (
-                    (fixations[x_field] >= wx0)
-                    & (fixations[x_field] <= wx1)
-                    & (fixations[y_field] >= wy0)
-                    & (fixations[y_field] <= wy1)
-                )
-                if weights is not None:
-                    val = float(weights[in_word].sum())
-                else:
-                    val = float(in_word.sum())
-                word_values.append(val)
-
-            words_with_vals = words.copy()
-            words_with_vals["heatmap_val"] = word_values
-
-            # Only show words with non-zero values
-            words_nonzero = words_with_vals[words_with_vals["heatmap_val"] > 0]
-            if not words_nonzero.empty:
-                z_min = (
-                    heatmap_range[0]
-                    if heatmap_range
-                    else float(words_nonzero["heatmap_val"].min())
-                )
-                z_max = (
-                    heatmap_range[1]
-                    if heatmap_range
-                    else float(words_nonzero["heatmap_val"].max())
-                )
-                z_range = max(z_max - z_min, 1e-9)
-
-                # Use shapes for word-level heatmap cells
-                from plotly.colors import sample_colorscale
-
-                heatmap_shapes = []
-                for wr in words_nonzero.itertuples():
-                    norm_val = (wr.heatmap_val - z_min) / z_range
-                    norm_val = max(0.0, min(1.0, norm_val))
-                    color = sample_colorscale(heatmap_colorscale, [norm_val])[0]
-                    heatmap_shapes.append(
-                        dict(
-                            type="rect",
-                            x0=wr.x,
-                            y0=wr.y,
-                            x1=wr.x + wr.width,
-                            y1=wr.y + wr.height,
-                            line=dict(width=0),
-                            fillcolor=color,
-                            opacity=0.5,
-                            layer="below",
-                        )
-                    )
-                existing_shapes = list(fig.layout.shapes) if fig.layout.shapes else []
-                fig.update_layout(shapes=existing_shapes + heatmap_shapes)
-
-                # Add invisible scatter for colorbar
-                if show_colorbars:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[None],
-                            y=[None],
-                            mode="markers",
-                            marker=dict(
-                                colorscale=heatmap_colorscale,
-                                showscale=True,
-                                cmin=z_min,
-                                cmax=z_max,
-                                colorbar=dict(
-                                    title="Fixation count"
-                                    if weights is None
-                                    else "Duration (ms)",
-                                    x=1.02,
-                                    lenmode="fraction",
-                                    len=COLORBAR_LEN_FRACTION,
-                                    y=0.5,
-                                    yanchor="middle",
-                                ),
-                            ),
-                            showlegend=False,
-                            hoverinfo="skip",
-                        )
-                    )
+            _add_word_level_heatmap(
+                fig,
+                words,
+                fixations,
+                x_field=x_field,
+                y_field=y_field,
+                weights=weights,
+                heatmap_colorscale=heatmap_colorscale,
+                heatmap_range=heatmap_range,
+                show_colorbars=show_colorbars,
+            )
         else:
-            x_bin_size = x_span / 40.0
-            y_bin_size = y_span / 40.0
-            fig.add_trace(
-                go.Histogram2d(
-                    x=fixations[x_field],
-                    y=fixations[y_field],
-                    xbins=dict(start=x_min, end=x_max, size=x_bin_size),
-                    ybins=dict(start=y_min, end=y_max, size=y_bin_size),
-                    colorscale=heatmap_colorscale,
-                    opacity=0.35,
-                    showscale=show_colorbars,
-                    colorbar=dict(
-                        title="Fixation density"
-                        if weights is None
-                        else "Duration (ms)",
-                        x=1.02,
-                        lenmode="fraction",
-                        len=COLORBAR_LEN_FRACTION,
-                        y=0.5,
-                        yanchor="middle",
-                    ),
-                    histfunc=histfunc,
-                    z=weights,
-                    zmin=heatmap_range[0] if heatmap_range else None,
-                    zmax=heatmap_range[1] if heatmap_range else None,
-                )
+            _add_density_heatmap(
+                fig,
+                fixations,
+                x_field=x_field,
+                y_field=y_field,
+                x_min=x_min,
+                x_max=x_max,
+                y_min=y_min,
+                y_max=y_max,
+                weights=weights,
+                heatmap_colorscale=heatmap_colorscale,
+                heatmap_range=heatmap_range,
+                show_colorbars=show_colorbars,
             )
 
     if spatial_axes and show_saccades and len(fixations) > 1:
-        ordered = fixations.sort_values("timestamp_ms")
-        ordered_tuples = list(ordered.itertuples())
-        for i in range(len(ordered_tuples) - 1):
-            row_a = ordered_tuples[i]
-            row_b = ordered_tuples[i + 1]
-            x_field_val = getattr(row_a, x_field)
-            y_field_val = getattr(row_a, y_field)
-            x_field_val_b = getattr(row_b, x_field)
-            y_field_val_b = getattr(row_b, y_field)
+        sx, sy = _saccade_segments(fixations, x_field, y_field)
+        if sx:
             fig.add_trace(
                 go.Scatter(
-                    x=[x_field_val, x_field_val_b],
-                    y=[y_field_val, y_field_val_b],
+                    x=sx,
+                    y=sy,
                     mode="lines",
-                    line=dict(color="#6f42c1", width=2),
+                    line=dict(color=SACCADE_COLOR, width=2),
                     hoverinfo="skip",
                     showlegend=False,
+                    name="saccades",
                 )
             )
 
@@ -322,15 +309,7 @@ def make_scanpath_figure(
         is_numeric_color = color_data is not None and pd.api.types.is_numeric_dtype(
             color_data
         )
-
-        durations = ordered["duration_ms"].fillna(0)
-        d_min, d_max = float(durations.min()), float(durations.max())
-        min_size, max_size = marker_size_range
-        if d_max - d_min > 0:
-            sizes = np.interp(durations, (d_min, d_max), (min_size, max_size))
-        else:
-            sizes = np.full(len(durations), (min_size + max_size) / 2)
-
+        sizes = _compute_marker_sizes(ordered["duration_ms"], marker_size_range)
         fig.add_trace(
             go.Scatter(
                 x=ordered[x_field],
@@ -353,7 +332,7 @@ def make_scanpath_figure(
                     else None,
                     cmin=fixation_color_range[0] if fixation_color_range else None,
                     cmax=fixation_color_range[1] if fixation_color_range else None,
-                    line=dict(color="#111", width=0.5),
+                    line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
                 ),
                 text=ordered["order_in_trial"] if show_order else None,
                 textfont=dict(
@@ -366,7 +345,7 @@ def make_scanpath_figure(
                     "Fixation #%{customdata[0]}<br>"
                     "Duration %{customdata[1]} ms<br>"
                     "Word #%{customdata[2]}<br>"
-                    "Pass #%{customdata[3]}<br>"
+                    "Pass #%{customdata[3]}<extra></extra>"
                 ),
                 customdata=np.stack(
                     [
@@ -390,38 +369,12 @@ def make_scanpath_figure(
             range=y_range, constrain="domain", scaleanchor="x", scaleratio=1
         )
     else:
-        # Non-spatial axes: add trendline and show axis labels/grid
         xaxis_cfg.update(
             showticklabels=True, showgrid=True, title=x_field.replace("_", " ").title()
         )
         yaxis_cfg.update(
             showticklabels=True, showgrid=True, title=y_field.replace("_", " ").title()
         )
-
-        if not fixations.empty and len(fixations) > 1:
-            # Fit linear trendline using least squares
-            x_vals = fixations[x_field].dropna()
-            y_vals = fixations[y_field].dropna()
-            # Align indices for valid pairs
-            valid_idx = x_vals.index.intersection(y_vals.index)
-            if len(valid_idx) > 1:
-                x_clean = x_vals.loc[valid_idx].values
-                y_clean = y_vals.loc[valid_idx].values
-                # Linear regression: y = mx + b
-                coeffs = np.polyfit(x_clean, y_clean, 1)
-                x_trend = np.array([x_clean.min(), x_clean.max()])
-                y_trend = np.polyval(coeffs, x_trend)
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_trend,
-                        y=y_trend,
-                        mode="lines",
-                        line=dict(color="#dc3545", width=2, dash="dash"),
-                        name="Trendline",
-                        showlegend=True,
-                        hovertemplate=f"y = {coeffs[0]:.3f}x + {coeffs[1]:.3f}<extra>Trendline</extra>",
-                    )
-                )
 
     shapes = list(fig.layout.shapes) if fig.layout.shapes else []
     if spatial_axes:
@@ -452,6 +405,132 @@ def make_scanpath_figure(
     return fig
 
 
+def _add_word_level_heatmap(
+    fig: go.Figure,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    x_field: str,
+    y_field: str,
+    weights: Optional[pd.Series],
+    heatmap_colorscale: str,
+    heatmap_range: Optional[Tuple[float, float]],
+    show_colorbars: bool,
+) -> None:
+    from plotly.colors import sample_colorscale
+
+    word_values = []
+    for word_row in words.itertuples():
+        wx0, wy0 = word_row.x, word_row.y
+        wx1, wy1 = wx0 + word_row.width, wy0 + word_row.height
+        in_word = (
+            (fixations[x_field] >= wx0)
+            & (fixations[x_field] <= wx1)
+            & (fixations[y_field] >= wy0)
+            & (fixations[y_field] <= wy1)
+        )
+        val = (
+            float(weights[in_word].sum())
+            if weights is not None
+            else float(in_word.sum())
+        )
+        word_values.append(val)
+
+    nonzero_rows = [(wr, v) for wr, v in zip(words.itertuples(), word_values) if v > 0]
+    if not nonzero_rows:
+        return
+    vals = [v for _, v in nonzero_rows]
+    z_min = heatmap_range[0] if heatmap_range else float(min(vals))
+    z_max = heatmap_range[1] if heatmap_range else float(max(vals))
+    z_span = max(z_max - z_min, 1e-9)
+
+    heatmap_shapes = []
+    for wr, v in nonzero_rows:
+        norm = max(0.0, min(1.0, (v - z_min) / z_span))
+        color = sample_colorscale(heatmap_colorscale, [norm])[0]
+        heatmap_shapes.append(
+            dict(
+                type="rect",
+                x0=wr.x,
+                y0=wr.y,
+                x1=wr.x + wr.width,
+                y1=wr.y + wr.height,
+                line=dict(width=0),
+                fillcolor=color,
+                opacity=0.5,
+                layer="below",
+            )
+        )
+    existing = list(fig.layout.shapes) if fig.layout.shapes else []
+    fig.update_layout(shapes=existing + heatmap_shapes)
+    if show_colorbars:
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                marker=dict(
+                    colorscale=heatmap_colorscale,
+                    showscale=True,
+                    cmin=z_min,
+                    cmax=z_max,
+                    colorbar=dict(
+                        title="Fixation count" if weights is None else "Duration (ms)",
+                        x=1.02,
+                        lenmode="fraction",
+                        len=COLORBAR_LEN_FRACTION,
+                        y=0.5,
+                        yanchor="middle",
+                    ),
+                ),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+
+
+def _add_density_heatmap(
+    fig: go.Figure,
+    fixations: pd.DataFrame,
+    *,
+    x_field: str,
+    y_field: str,
+    x_min: float,
+    x_max: float,
+    y_min: float,
+    y_max: float,
+    weights: Optional[pd.Series],
+    heatmap_colorscale: str,
+    heatmap_range: Optional[Tuple[float, float]],
+    show_colorbars: bool,
+) -> None:
+    x_span = max(x_max - x_min, 1.0)
+    y_span = max(y_max - y_min, 1.0)
+    fig.add_trace(
+        go.Histogram2d(
+            x=fixations[x_field],
+            y=fixations[y_field],
+            xbins=dict(start=x_min, end=x_max, size=x_span / 40.0),
+            ybins=dict(start=y_min, end=y_max, size=y_span / 40.0),
+            colorscale=heatmap_colorscale,
+            opacity=0.35,
+            showscale=show_colorbars,
+            colorbar=dict(
+                title="Fixation density" if weights is None else "Duration (ms)",
+                x=1.02,
+                lenmode="fraction",
+                len=COLORBAR_LEN_FRACTION,
+                y=0.5,
+                yanchor="middle",
+            ),
+            histfunc="sum" if weights is not None else "count",
+            z=weights,
+            zmin=heatmap_range[0] if heatmap_range else None,
+            zmax=heatmap_range[1] if heatmap_range else None,
+        )
+    )
+
+
 def make_scanpath_animation(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -465,95 +544,44 @@ def make_scanpath_animation(
     show_word_labels: bool = True,
     show_saccades: bool = True,
     show_order: bool = True,
-    marker_size_range: Tuple[int, int] = (8, 30),
+    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
     order_font_size: int = 10,
     order_font_color: str = "#000000",
 ) -> go.Figure:
-    """Create an animated scanpath figure that shows fixations progressing over time.
+    """Frame-by-frame animation with per-fixation frame durations.
 
-    Each fixation is displayed for its actual duration divided by the playback_speed.
-    For example, playback_speed=2.0 means 2x speed (fixations shown for half their duration).
+    Each frame stays on screen for that fixation's actual duration divided by
+    playback_speed, clipped at 50 ms so the slowest frames remain perceptible.
     """
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
 
-    # Calculate ranges
-    x_candidates = []
-    y_candidates = []
-    if not words.empty:
-        x_candidates.extend([words["x"].min(), (words["x"] + words["width"]).max()])
-        y_candidates.extend([words["y"].min(), (words["y"] + words["height"]).max()])
-    if not fixations.empty:
-        x_candidates.extend([fixations["x"].min(), fixations["x"].max()])
-        y_candidates.extend([fixations["y"].min(), fixations["y"].max()])
+    x_range, y_range, *_ = _compute_axis_ranges(
+        canvas_width,
+        canvas_height,
+        (fixations, "x", "y"),
+        word_frames=[words] if not words.empty else [],
+    )
 
-    x_range = [0, canvas_width]
-    y_range = [canvas_height, 0]
-    if x_candidates and y_candidates:
-        x_min = float(np.nanmin(x_candidates))
-        x_max = float(np.nanmax(x_candidates))
-        y_min = float(np.nanmin(y_candidates))
-        y_max = float(np.nanmax(y_candidates))
+    shapes = build_word_boxes(words) if show_words and not words.empty else []
 
-        x_span = max(x_max - x_min, 1.0)
-        y_span = max(y_max - y_min, 1.0)
-        pad_x = max(20.0, 0.05 * x_span)
-        pad_y = max(20.0, 0.05 * y_span)
-        x_range = [x_min - pad_x, x_max + pad_x]
-        y_range = [y_max + pad_y, y_min - pad_y]
+    if show_word_labels:
+        _add_word_label_trace(fig, words, base_font_size, font_settings["family"])
+    word_label_trace_idx = 0 if show_word_labels and not words.empty else -1
 
-    # Add word boxes as shapes
-    shapes = []
-    if show_words and not words.empty:
-        shapes = build_word_boxes(words)
-
-    # Add word labels as initial trace
-    if show_word_labels and not words.empty and "text" in words.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=words["x"] + words["width"] / 2,
-                y=words["y"] + words["height"] / 2,
-                text=words["text"],
-                mode="text",
-                showlegend=False,
-                textfont=dict(
-                    color="#343a40", size=base_font_size, family=font_settings["family"]
-                ),
-                hoverinfo="skip",
-                name="words",
-            )
-        )
-
-    # Order fixations by timestamp
     if fixations.empty:
         return fig
 
     ordered = fixations.sort_values("timestamp_ms").reset_index(drop=True)
-    n_fixations = len(ordered)
-
-    # Compute marker sizes based on duration
-    durations = ordered["duration_ms"].fillna(0)
-    d_min, d_max = float(durations.min()), float(durations.max())
-    min_size, max_size = marker_size_range
-    if d_max - d_min > 0:
-        sizes = np.interp(durations, (d_min, d_max), (min_size, max_size))
-    else:
-        sizes = np.full(len(durations), (min_size + max_size) / 2)
-
-    # Calculate frame durations based on actual fixation durations and playback speed
-    # Each frame shows for the fixation's duration divided by playback speed
+    n_fix = len(ordered)
+    durations = pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0)
+    sizes = _compute_marker_sizes(durations, marker_size_range)
     frame_durations_ms = (
-        (durations / playback_speed).clip(lower=50).astype(int).tolist()
+        (durations / max(playback_speed, 1e-6)).clip(lower=50).astype(int).tolist()
     )
-
-    # For slider and play button, use average duration as default
-    avg_frame_duration = int(np.mean(frame_durations_ms))
-
-    # Determine display mode based on show_order
+    avg_frame_duration = max(int(np.mean(frame_durations_ms)), 50)
     marker_mode = "markers+text" if show_order else "markers"
 
-    # Create initial empty traces for fixations and saccades
-    # Fixation markers trace
     fig.add_trace(
         go.Scatter(
             x=[ordered.iloc[0]["x"]],
@@ -561,8 +589,8 @@ def make_scanpath_animation(
             mode=marker_mode,
             marker=dict(
                 size=[sizes[0]],
-                color="#1f77b4",
-                line=dict(color="#111", width=0.5),
+                color=COMPARISON_PALETTE[0],
+                line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             ),
             text=["1"] if show_order else None,
             textfont=dict(
@@ -574,27 +602,29 @@ def make_scanpath_animation(
             showlegend=False,
             name="fixations",
             hovertemplate=(
-                "Fixation #%{text}<br>Duration %{customdata} ms<br><extra></extra>"
+                "Fixation #%{text}<br>Duration %{customdata} ms<extra></extra>"
             ),
             customdata=[ordered.iloc[0]["duration_ms"]],
         )
     )
+    fix_trace_idx = 1 if word_label_trace_idx == 0 else 0
 
-    # Saccade lines trace
     if show_saccades:
         fig.add_trace(
             go.Scatter(
                 x=[],
                 y=[],
                 mode="lines",
-                line=dict(color="#6f42c1", width=2),
+                line=dict(color=SACCADE_COLOR, width=2),
                 showlegend=False,
                 name="saccades",
                 hoverinfo="skip",
             )
         )
+        sac_trace_idx = fix_trace_idx + 1
+    else:
+        sac_trace_idx = None
 
-    # Current fixation highlight trace (larger, different color)
     fig.add_trace(
         go.Scatter(
             x=[ordered.iloc[0]["x"]],
@@ -602,110 +632,88 @@ def make_scanpath_animation(
             mode="markers",
             marker=dict(
                 size=sizes[0] + 8,
-                color="rgba(255, 127, 14, 0.6)",
-                line=dict(color="#ff7f0e", width=2),
+                color=CURRENT_FIX_COLOR,
+                line=dict(color=CURRENT_FIX_OUTLINE, width=2),
             ),
             showlegend=False,
             name="current",
             hoverinfo="skip",
         )
     )
+    curr_trace_idx = (sac_trace_idx if sac_trace_idx is not None else fix_trace_idx) + 1
 
-    # Create frames for animation
     frames = []
-    for i in range(n_fixations):
-        # Accumulated fixations up to this point
-        fix_x = ordered.iloc[: i + 1]["x"].tolist()
-        fix_y = ordered.iloc[: i + 1]["y"].tolist()
+    for i in range(n_fix):
+        fix_x = ordered["x"].iloc[: i + 1].tolist()
+        fix_y = ordered["y"].iloc[: i + 1].tolist()
         fix_sizes = sizes[: i + 1].tolist()
         fix_texts = [str(j + 1) for j in range(i + 1)] if show_order else None
-        fix_durations = ordered.iloc[: i + 1]["duration_ms"].tolist()
+        fix_durations = ordered["duration_ms"].iloc[: i + 1].tolist()
 
-        # Saccade lines: connect consecutive fixations
-        sac_x = []
-        sac_y = []
-        if show_saccades:
-            for j in range(i):
-                sac_x.extend([ordered.iloc[j]["x"], ordered.iloc[j + 1]["x"], None])
-                sac_y.extend([ordered.iloc[j]["y"], ordered.iloc[j + 1]["y"], None])
+        traces_in_frame = []
+        traces_idx_in_frame = []
 
-        # Current fixation position
-        curr_x = [ordered.iloc[i]["x"]]
-        curr_y = [ordered.iloc[i]["y"]]
-        curr_size = [sizes[i] + 8]
-
-        frame_data = [
-            go.Scatter(
-                x=fix_x,
-                y=fix_y,
-                mode=marker_mode,
-                marker=dict(
-                    size=fix_sizes,
-                    color="#1f77b4",
-                    line=dict(color="#111", width=0.5),
-                ),
-                text=fix_texts,
-                textfont=dict(
-                    color=order_font_color,
-                    size=order_font_size,
-                    family=font_settings["family"],
-                ),
-                textposition="top center",
-                customdata=fix_durations,
+        fix_scatter = go.Scatter(
+            x=fix_x,
+            y=fix_y,
+            mode=marker_mode,
+            marker=dict(
+                size=fix_sizes,
+                color=COMPARISON_PALETTE[0],
+                line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             ),
-        ]
+            text=fix_texts,
+            textfont=dict(
+                color=order_font_color,
+                size=order_font_size,
+                family=font_settings["family"],
+            ),
+            textposition="top center",
+            customdata=fix_durations,
+        )
+        traces_in_frame.append(fix_scatter)
+        traces_idx_in_frame.append(fix_trace_idx)
 
         if show_saccades:
-            frame_data.append(
+            sac_x: list = []
+            sac_y: list = []
+            for j in range(i):
+                sac_x.extend([ordered["x"].iloc[j], ordered["x"].iloc[j + 1], None])
+                sac_y.extend([ordered["y"].iloc[j], ordered["y"].iloc[j + 1], None])
+            traces_in_frame.append(
                 go.Scatter(
                     x=sac_x,
                     y=sac_y,
                     mode="lines",
-                    line=dict(color="#6f42c1", width=2),
+                    line=dict(color=SACCADE_COLOR, width=2),
                 )
             )
+            traces_idx_in_frame.append(sac_trace_idx)
 
-        frame_data.append(
+        traces_in_frame.append(
             go.Scatter(
-                x=curr_x,
-                y=curr_y,
+                x=[ordered["x"].iloc[i]],
+                y=[ordered["y"].iloc[i]],
                 mode="markers",
                 marker=dict(
-                    size=curr_size,
-                    color="rgba(255, 127, 14, 0.6)",
-                    line=dict(color="#ff7f0e", width=2),
+                    size=[sizes[i] + 8],
+                    color=CURRENT_FIX_COLOR,
+                    line=dict(color=CURRENT_FIX_OUTLINE, width=2),
                 ),
             )
         )
-
-        # If word labels exist, keep them in each frame
-        if show_word_labels and not words.empty and "text" in words.columns:
-            frame_data.insert(
-                0,
-                go.Scatter(
-                    x=words["x"] + words["width"] / 2,
-                    y=words["y"] + words["height"] / 2,
-                    text=words["text"],
-                    mode="text",
-                    textfont=dict(
-                        color="#343a40",
-                        size=base_font_size,
-                        family=font_settings["family"],
-                    ),
-                ),
-            )
+        traces_idx_in_frame.append(curr_trace_idx)
 
         frames.append(
             go.Frame(
-                data=frame_data,
+                data=traces_in_frame,
                 name=str(i),
-                traces=list(range(len(frame_data))),
+                traces=traces_idx_in_frame,
             )
         )
 
     fig.frames = frames
 
-    # Add border shape
     shapes.append(
         dict(
             type="rect",
@@ -718,7 +726,6 @@ def make_scanpath_animation(
         )
     )
 
-    # Create slider steps - each step uses its own frame duration
     sliders = [
         dict(
             active=0,
@@ -750,13 +757,11 @@ def make_scanpath_animation(
                     label=str(i + 1),
                     method="animate",
                 )
-                for i in range(n_fixations)
+                for i in range(n_fix)
             ],
         )
     ]
 
-    # Update buttons for play/pause
-    # For play, we use average frame duration since Plotly animation doesn't support per-frame durations in auto-play
     updatemenus = [
         dict(
             type="buttons",
@@ -794,12 +799,24 @@ def make_scanpath_animation(
                         ),
                     ],
                 ),
+                dict(
+                    label="⟲ Restart",
+                    method="animate",
+                    args=[
+                        ["0"],
+                        dict(
+                            frame=dict(duration=0, redraw=True),
+                            mode="immediate",
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                ),
             ],
         )
     ]
 
     fig.update_layout(
-        height=canvas_height + 80,  # Extra space for slider
+        height=canvas_height + 80,
         width=canvas_width,
         autosize=False,
         margin=dict(l=0, r=0, t=0, b=80),
@@ -827,7 +844,6 @@ def make_scanpath_animation(
         sliders=sliders,
         updatemenus=updatemenus,
     )
-
     return fig
 
 
@@ -847,11 +863,52 @@ def _resolve_trial_display_name(
     trial_str = str(trial_id)
     contains_text = text_str and text_str.lower() in trial_str.lower()
     if text_str:
-        display_name = f"{text_str} · {participant}"
-        if not contains_text:
-            display_name = f"{display_name} (trial {trial_str})"
-        return display_name
+        return (
+            f"{text_str} · {participant}"
+            if contains_text
+            else f"{text_str} · {participant} (trial {trial_str})"
+        )
     return f"{trial_str} · {participant}"
+
+
+def _add_comparison_fixation_trace(
+    fig: go.Figure,
+    trial_fix: pd.DataFrame,
+    display_name: str,
+    color: str,
+    font_settings: dict,
+    marker_size_range: Tuple[int, int],
+    row: Optional[int] = None,
+    col: Optional[int] = None,
+) -> None:
+    if trial_fix.empty:
+        return
+    sizes = _compute_marker_sizes(trial_fix["duration_ms"], marker_size_range)
+    trace = go.Scatter(
+        x=trial_fix["x"],
+        y=trial_fix["y"],
+        mode="markers+lines",
+        marker=dict(
+            size=sizes,
+            color=color,
+            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+        ),
+        line=dict(color=color, width=2, dash="solid"),
+        name=display_name,
+        text=trial_fix["order_in_trial"],
+        textposition="top center",
+        textfont=font_settings,
+        hovertemplate=(
+            f"{display_name} "
+            "Order %{text}<br>Time %{customdata[0]} ms<br>"
+            "Duration %{customdata[1]} ms<extra></extra>"
+        ),
+        customdata=trial_fix[["timestamp_ms", "duration_ms"]],
+    )
+    if row is not None and col is not None:
+        fig.add_trace(trace, row=row, col=col)
+    else:
+        fig.add_trace(trace)
 
 
 def _make_side_by_side_comparison_figure(
@@ -867,11 +924,12 @@ def _make_side_by_side_comparison_figure(
     show_words: bool,
     show_word_labels: bool,
     trial_labels: Optional[Tuple[str, str]],
+    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
 ) -> go.Figure:
     from plotly.subplots import make_subplots
 
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    palette = ["#1f77b4", "#e45756"]
+    palette = COMPARISON_PALETTE
 
     trial_specs = []
     for idx, trial in enumerate([trial_a, trial_b]):
@@ -911,32 +969,12 @@ def _make_side_by_side_comparison_figure(
         trial_words = spec["trial_words"]
         trial_fix = spec["trial_fix"]
 
-        x_candidates: list = []
-        y_candidates: list = []
-        if not trial_words.empty:
-            x_candidates.extend(
-                [trial_words["x"].min(), (trial_words["x"] + trial_words["width"]).max()]
-            )
-            y_candidates.extend(
-                [trial_words["y"].min(), (trial_words["y"] + trial_words["height"]).max()]
-            )
-        if not trial_fix.empty:
-            x_candidates.extend([trial_fix["x"].min(), trial_fix["x"].max()])
-            y_candidates.extend([trial_fix["y"].min(), trial_fix["y"].max()])
-
-        x_range = [0, canvas_width]
-        y_range = [canvas_height, 0]
-        if x_candidates and y_candidates:
-            x_min = float(np.nanmin(x_candidates))
-            x_max = float(np.nanmax(x_candidates))
-            y_min = float(np.nanmin(y_candidates))
-            y_max = float(np.nanmax(y_candidates))
-            x_span = max(x_max - x_min, 1.0)
-            y_span = max(y_max - y_min, 1.0)
-            pad_x = max(20.0, 0.05 * x_span)
-            pad_y = max(20.0, 0.05 * y_span)
-            x_range = [x_min - pad_x, x_max + pad_x]
-            y_range = [y_max + pad_y, y_min - pad_y]
+        x_range, y_range, *_ = _compute_axis_ranges(
+            canvas_width,
+            canvas_height,
+            (trial_fix, "x", "y"),
+            word_frames=[trial_words] if not trial_words.empty else [],
+        )
 
         if show_words and not trial_words.empty:
             for box in build_word_boxes(trial_words, color=spec["color"]):
@@ -959,54 +997,23 @@ def _make_side_by_side_comparison_figure(
             )
         )
 
-        fig.add_trace(
-            go.Scatter(
-                x=trial_fix["x"],
-                y=trial_fix["y"],
-                mode="markers+lines",
-                marker=dict(
-                    size=9 + trial_fix["duration_ms"] * 0.04,
-                    color=spec["color"],
-                    line=dict(color="#111", width=0.5),
-                ),
-                line=dict(color=spec["color"], width=2, dash="solid"),
-                name=spec["display_name"],
-                text=trial_fix["order_in_trial"],
-                textposition="top center",
-                textfont=font_settings,
-                hovertemplate=(
-                    f"{spec['display_name']} "
-                    "Order %{text}<br>Time %{customdata[0]} ms<br>Duration %{customdata[1]} ms<extra></extra>"
-                ),
-                customdata=trial_fix[["timestamp_ms", "duration_ms"]],
-            ),
+        _add_comparison_fixation_trace(
+            fig,
+            trial_fix,
+            spec["display_name"],
+            spec["color"],
+            font_settings,
+            marker_size_range,
             row=1,
             col=col,
         )
 
-        if show_word_labels and not trial_words.empty and "text" in trial_words.columns:
-            word_customdata = None
-            hover_tmpl = "Word %{text}<extra></extra>"
-            if "word_id" in trial_words.columns and "line_idx" in trial_words.columns:
-                word_customdata = trial_words[["word_id", "line_idx"]]
-                hover_tmpl = (
-                    "Word %{text}<br>Word ID %{customdata[0]}<br>Line %{customdata[1]}<extra></extra>"
-                )
-            fig.add_trace(
-                go.Scatter(
-                    x=trial_words["x"] + trial_words["width"] / 2,
-                    y=trial_words["y"] + trial_words["height"] / 2,
-                    text=trial_words["text"],
-                    mode="text",
-                    showlegend=False,
-                    textfont=dict(
-                        color="#343a40",
-                        size=base_font_size,
-                        family=font_settings["family"],
-                    ),
-                    hovertemplate=hover_tmpl,
-                    customdata=word_customdata,
-                ),
+        if show_word_labels:
+            _add_word_label_trace(
+                fig,
+                trial_words,
+                base_font_size,
+                font_settings["family"],
                 row=1,
                 col=col,
             )
@@ -1064,6 +1071,7 @@ def make_comparison_figure(
     show_word_labels: bool = False,
     trial_labels: Optional[Tuple[str, str]] = None,
     layout: str = "overlay",
+    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
 ) -> go.Figure:
     if layout == "side_by_side":
         return _make_side_by_side_comparison_figure(
@@ -1078,12 +1086,14 @@ def make_comparison_figure(
             show_words=show_words,
             show_word_labels=show_word_labels,
             trial_labels=trial_labels,
+            marker_size_range=marker_size_range,
         )
+
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    palette = ["#1f77b4", "#e45756"]
-    x_candidates = []
-    y_candidates = []
+    palette = COMPARISON_PALETTE
+
+    trial_specs = []
     for idx, trial in enumerate([trial_a, trial_b]):
         participant, trial_id = trial
         trial_words = words[
@@ -1093,108 +1103,46 @@ def make_comparison_figure(
             (fixations["participant_id"] == participant)
             & (fixations["trial_id"] == trial_id)
         ].sort_values("timestamp_ms")
-        if not trial_words.empty:
-            x_candidates.extend(
-                [
-                    trial_words["x"].min(),
-                    (trial_words["x"] + trial_words["width"]).max(),
-                ]
-            )
-            y_candidates.extend(
-                [
-                    trial_words["y"].min(),
-                    (trial_words["y"] + trial_words["height"]).max(),
-                ]
-            )
-        if not trial_fix.empty:
-            x_candidates.extend([trial_fix["x"].min(), trial_fix["x"].max()])
-            y_candidates.extend([trial_fix["y"].min(), trial_fix["y"].max()])
-
-        # Build a concise display name (optionally provided by caller)
-        text_id = None
-        if "paragraph_id" in trial_words.columns and not trial_words.empty:
-            text_id = trial_words["paragraph_id"].iloc[0]
-        display_name = None
-        if trial_labels is not None and len(trial_labels) > idx:
-            display_name = trial_labels[idx]
-        else:
-            text_str = str(text_id) if text_id is not None else ""
-            trial_str = str(trial_id)
-            contains_text = text_str and text_str.lower() in trial_str.lower()
-            if text_str:
-                display_name = f"{text_str} · {participant}"
-                if not contains_text:
-                    display_name = f"{display_name} (trial {trial_str})"
-            else:
-                display_name = f"{trial_str} · {participant}"
-
-        fig.add_trace(
-            go.Scatter(
-                x=trial_fix["x"],
-                y=trial_fix["y"],
-                mode="markers+lines",
-                marker=dict(
-                    size=9 + trial_fix["duration_ms"] * 0.04,
-                    color=palette[idx],
-                    line=dict(color="#111", width=0.5),
-                ),
-                line=dict(color=palette[idx], width=2, dash="solid"),
-                name=display_name,
-                text=trial_fix["order_in_trial"],
-                textposition="top center",
-                textfont=font_settings,
-                hovertemplate=(
-                    f"{display_name} "
-                    "Order %{text}<br>Time %{customdata[0]} ms<br>Duration %{customdata[1]} ms<extra></extra>"
-                ),
-                customdata=trial_fix[["timestamp_ms", "duration_ms"]],
+        display_name = _resolve_trial_display_name(
+            participant, trial_id, trial_words, trial_labels, idx
+        )
+        trial_specs.append(
+            dict(
+                trial_words=trial_words,
+                trial_fix=trial_fix,
+                display_name=display_name,
+                color=palette[idx],
             )
         )
+
+    x_range, y_range, *_ = _compute_axis_ranges(
+        canvas_width,
+        canvas_height,
+        *((spec["trial_fix"], "x", "y") for spec in trial_specs),
+        word_frames=[
+            spec["trial_words"] for spec in trial_specs if not spec["trial_words"].empty
+        ],
+    )
+
+    for spec in trial_specs:
+        _add_comparison_fixation_trace(
+            fig,
+            spec["trial_fix"],
+            spec["display_name"],
+            spec["color"],
+            font_settings,
+            marker_size_range,
+        )
         if show_words:
-            existing_shapes = list(fig.layout.shapes) if fig.layout.shapes else []
+            existing = list(fig.layout.shapes) if fig.layout.shapes else []
             fig.update_layout(
-                shapes=existing_shapes
-                + build_word_boxes(trial_words, color=palette[idx])
+                shapes=existing
+                + build_word_boxes(spec["trial_words"], color=spec["color"])
             )
-        if show_word_labels and not trial_words.empty and "text" in trial_words.columns:
-            word_customdata = None
-            hover_tmpl = "Word %{text}<extra></extra>"
-            if "word_id" in trial_words.columns and "line_idx" in trial_words.columns:
-                word_customdata = trial_words[["word_id", "line_idx"]]
-                hover_tmpl = (
-                    "Word %{text}<br>Word ID %{customdata[0]}<br>Line %{customdata[1]}<extra></extra>"
-                )
-            fig.add_trace(
-                go.Scatter(
-                    x=trial_words["x"] + trial_words["width"] / 2,
-                    y=trial_words["y"] + trial_words["height"] / 2,
-                    text=trial_words["text"],
-                    mode="text",
-                    showlegend=False,
-                    textfont=dict(
-                        color="#343a40",
-                        size=base_font_size,
-                        family=font_settings["family"],
-                    ),
-                    hovertemplate=hover_tmpl,
-                    customdata=word_customdata,
-                )
+        if show_word_labels:
+            _add_word_label_trace(
+                fig, spec["trial_words"], base_font_size, font_settings["family"]
             )
-
-    x_range = [0, canvas_width]
-    y_range = [canvas_height, 0]
-    if x_candidates and y_candidates:
-        x_min = float(np.nanmin(x_candidates))
-        x_max = float(np.nanmax(x_candidates))
-        y_min = float(np.nanmin(y_candidates))
-        y_max = float(np.nanmax(y_candidates))
-
-        x_span = max(x_max - x_min, 1.0)
-        y_span = max(y_max - y_min, 1.0)
-        pad_x = max(20.0, 0.05 * x_span)
-        pad_y = max(20.0, 0.05 * y_span)
-        x_range = [x_min - pad_x, x_max + pad_x]
-        y_range = [y_max + pad_y, y_min - pad_y]
 
     shapes = list(fig.layout.shapes) if fig.layout.shapes else []
     shapes.append(
@@ -1237,5 +1185,235 @@ def make_comparison_figure(
         title="Overlay comparison",
         font=font_settings,
         shapes=shapes,
+    )
+    return fig
+
+
+# =============================================================================
+# Reading-research figures: scarf, per-word bar, fixation-duration histogram
+# =============================================================================
+
+
+def make_scarf_plot(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    *,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    color_by: str = "word_id",
+    colorscale: str = DEFAULT_FIXATION_COLORSCALE,
+    height: int = 220,
+) -> go.Figure:
+    """Horizontal timeline (scarf plot) of a trial's fixations.
+
+    Each fixation becomes a rectangle whose width is its duration. Bars are
+    stacked along a single horizontal strip ordered by timestamp; their color
+    encodes a chosen field (word_id by default).
+    """
+    fig = go.Figure()
+    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    if fixations.empty:
+        fig.update_layout(
+            template="plotly_white",
+            font=font_settings,
+            title="Scarf plot (no fixations)",
+            height=height,
+        )
+        return fig
+
+    ordered = fixations.sort_values("timestamp_ms").reset_index(drop=True)
+    durations = (
+        pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0).to_numpy()
+    )
+    starts = durations.cumsum() - durations
+    color_series = ordered.get(color_by)
+    color_vals = (
+        pd.to_numeric(color_series, errors="coerce").to_numpy()
+        if color_series is not None
+        else None
+    )
+    color_is_numeric = color_vals is not None and not np.isnan(color_vals).all()
+    word_id_series = ordered.get("word_id", pd.Series([np.nan] * len(ordered)))
+    fig.add_trace(
+        go.Bar(
+            x=durations,
+            y=["trial"] * len(durations),
+            base=starts,
+            orientation="h",
+            marker=dict(
+                color=color_vals if color_is_numeric else "#1f77b4",
+                colorscale=colorscale if color_is_numeric else None,
+                showscale=color_is_numeric,
+                colorbar=dict(title=color_by.replace("_", " ").title())
+                if color_is_numeric
+                else None,
+                line=dict(color="#ffffff", width=0.5),
+            ),
+            customdata=np.stack(
+                [
+                    ordered["order_in_trial"]
+                    if "order_in_trial" in ordered.columns
+                    else np.arange(1, len(ordered) + 1),
+                    durations,
+                    word_id_series,
+                ],
+                axis=1,
+            ),
+            hovertemplate=(
+                "Fixation #%{customdata[0]}<br>"
+                "Duration %{customdata[1]} ms<br>"
+                "Word ID %{customdata[2]}<extra></extra>"
+            ),
+            name="fixations",
+            showlegend=False,
+        )
+    )
+    fig.update_layout(
+        height=height,
+        width=canvas_width,
+        autosize=False,
+        margin=dict(l=40, r=10, t=30, b=40),
+        template="plotly_white",
+        font=font_settings,
+        xaxis=dict(title="Time (ms)", showgrid=True),
+        yaxis=dict(showticklabels=False, showgrid=False, title=None),
+        barmode="stack",
+        title="Scarf plot — fixations along trial time",
+    )
+    return fig
+
+
+def make_word_measure_bar_figure(
+    words: pd.DataFrame,
+    *,
+    measure: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 360,
+) -> go.Figure:
+    """Vertical bar plot of a per-word measure, with word text on the x-axis."""
+    fig = go.Figure()
+    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    if words.empty or measure not in words.columns:
+        fig.update_layout(
+            template="plotly_white",
+            font=font_settings,
+            title=f"No data for '{measure}'",
+            height=height,
+        )
+        return fig
+    ordered = words.sort_values(["line_idx", "word_id"]).reset_index(drop=True)
+    labels = [
+        f"{int(wid)}: {txt}" if pd.notna(wid) else str(txt)
+        for wid, txt in zip(ordered["word_id"], ordered.get("text", ordered["word_id"]))
+    ]
+    values = pd.to_numeric(ordered[measure], errors="coerce")
+    fig.add_trace(
+        go.Bar(
+            x=labels,
+            y=values,
+            marker=dict(
+                color=values,
+                colorscale=DEFAULT_HEATMAP_COLORSCALE,
+                showscale=True,
+                colorbar=dict(title=measure.replace("_", " ").title()),
+            ),
+            hovertemplate="%{x}<br>" + measure + ": %{y}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=height,
+        width=canvas_width,
+        autosize=False,
+        margin=dict(l=40, r=10, t=40, b=80),
+        template="plotly_white",
+        font=font_settings,
+        xaxis=dict(title="Word", tickangle=-45, automargin=True),
+        yaxis=dict(title=measure.replace("_", " ").title()),
+        title=f"Per-word {measure.replace('_', ' ')}",
+    )
+    return fig
+
+
+def make_fixation_duration_histogram(
+    fixations: pd.DataFrame,
+    *,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    bins: int = 30,
+    overlay_words: Optional[pd.DataFrame] = None,
+    height: int = 320,
+) -> go.Figure:
+    """Histogram of fixation durations, optionally with overlaid summary stats."""
+    fig = go.Figure()
+    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    if fixations.empty:
+        fig.update_layout(
+            template="plotly_white",
+            font=font_settings,
+            title="Fixation duration distribution (no data)",
+            height=height,
+        )
+        return fig
+    durations = pd.to_numeric(fixations["duration_ms"], errors="coerce").dropna()
+    fig.add_trace(
+        go.Histogram(
+            x=durations,
+            nbinsx=bins,
+            marker=dict(
+                color=COMPARISON_PALETTE[0], line=dict(color="white", width=0.5)
+            ),
+            name="All fixations",
+        )
+    )
+    mean_ms = float(durations.mean()) if len(durations) else 0.0
+    median_ms = float(durations.median()) if len(durations) else 0.0
+    fig.add_vline(
+        x=mean_ms,
+        line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dash"),
+        annotation_text=f"mean {mean_ms:.0f} ms",
+        annotation_position="top right",
+    )
+    fig.add_vline(
+        x=median_ms,
+        line=dict(color=SACCADE_COLOR, width=2, dash="dot"),
+        annotation_text=f"median {median_ms:.0f} ms",
+        annotation_position="top left",
+    )
+    overlay = []
+    if overlay_words is not None and not overlay_words.empty:
+        if "first_fixation_ms" in overlay_words.columns:
+            overlay.append(("FFD", overlay_words["first_fixation_ms"]))
+        if "first_pass_gaze_duration_ms" in overlay_words.columns:
+            overlay.append(("FPRT", overlay_words["first_pass_gaze_duration_ms"]))
+        if "total_fixation_duration_ms" in overlay_words.columns:
+            overlay.append(("TFD", overlay_words["total_fixation_duration_ms"]))
+    for name, series in overlay:
+        vals = pd.to_numeric(series, errors="coerce").dropna()
+        if vals.empty:
+            continue
+        fig.add_trace(
+            go.Histogram(
+                x=vals,
+                nbinsx=bins,
+                opacity=0.4,
+                name=name,
+            )
+        )
+    fig.update_layout(
+        height=height,
+        width=canvas_width,
+        autosize=False,
+        margin=dict(l=40, r=10, t=40, b=40),
+        template="plotly_white",
+        font=font_settings,
+        xaxis=dict(title="Duration (ms)"),
+        yaxis=dict(title="Count"),
+        barmode="overlay",
+        title="Fixation duration distribution",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     return fig

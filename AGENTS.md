@@ -1,161 +1,157 @@
-# AGENTS.md - Scanpath Visualization App
+# AGENTS.md — Scanpath Visualization App
 
-## Overview
+Architectural map for AI agents (Claude, Copilot) modifying this code.
 
-This is a Streamlit workbench for visualizing eye-tracking scanpaths over text (word boxes + fixations + saccades + heatmaps + comparisons). The primary product lives in `scanpath_visualization_app/`. Legacy experiments are in `other_vis/`.
+## Project
+
+Interactive Streamlit workbench for **eye-tracking-while-reading** scanpath
+visualization. Targeted at reading-research / NLP audiences. Distributed as the
+PyPI package `scanpath-visualization-app`; deployable to Streamlit Community
+Cloud via `streamlit_app.py` at the repo root.
+
+Demo corpus: 3 participants × 2 articles × {Adv, Ele} from **OneStop Eye
+Movements** (Berzak, Malmaud, Shubi, Meiri, Lion, Levy, *Scientific Data* 2025;
+[doi:10.1038/s41597-025-06272-2](https://doi.org/10.1038/s41597-025-06272-2);
+docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
+`sample_data/` as both CSV and Parquet. Linguistic features
+(`gpt2_surprisal`, `wordfreq_frequency`, `subtlex_frequency`, `universal_pos`,
+`ptb_pos`, `dependency_relation`, etc.) are preserved.
 
 ## Architecture
 
-- **Entry/UI**: `scanpath_visualization_app/app.py` (tabs, uploads, trial selection, filtering, calls plotting)
-- **Data handling**: `scanpath_visualization_app/data.py` (schema inference + normalization + filtering + metrics)
-- **Plotting**: `scanpath_visualization_app/plots.py` (Plotly figure builders)
-- **Controls/defaults**: `scanpath_visualization_app/controls.py`, `scanpath_visualization_app/constants.py`
-
-Pipeline: uploaded CSVs → `infer_*_schema()` → `normalize_*()` to canonical columns → filters/metrics → `make_*_figure()` → Streamlit render.
-
----
-
-## Build/Lint/Test Commands
-
-### Running the App
-
-```bash
-# Development (from project root)
-streamlit run scanpath_visualization_app/app.py
-
-# Fast dev setup with uv
-uv sync
-uv run streamlit run scanpath_visualization_app/app.py
-
-# Packaged installation
-pip install -e .
-scanpath-visualization
-# or
-python -m scanpath_visualization_app
+```text
+scanpath_visualization_app/
+├─ app.py            entry point: page config, data load, filter, dispatch to tabs
+├─ tabs.py           tab implementations (Interactive, Reading Measures, Animation, Raw Data, Statistics)
+├─ controls.py       sidebar control widgets + column-mapping override UI
+├─ data.py           schema inference, normalization, filtering, sample loaders
+├─ measures.py       canonical reading measures from first principles (FFD, FPRT, RPD, TFD, regressions)
+├─ plots.py          Plotly figure builders (scanpath, animation, comparison, scarf, bar, histogram)
+├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table)
+├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
+├─ constants.py      palette, defaults, citation metadata
+├─ styles.py         injected CSS
+├─ __main__.py       CLI entry: rewrites argv and invokes streamlit
+├─ __init__.py       exposes __version__ and main()
+└─ sample_data/      bundled demo corpus (CSV + Parquet)
 ```
 
-### Running Tests
+### Pipeline
 
-```bash
-# All tests
-pytest
-
-# Single test file
-pytest tests/test_data.py
-
-# Single test
-pytest tests/test_data.py::TestPickColumn::test_pick_column_found
-
-# Run with coverage
-pytest --cov=scanpath_visualization_app --cov-report=html
-
-# Run only fast tests (exclude slow)
-pytest -m "not slow"
+```text
+uploaded/sample table(s) → infer_*_schema → normalize_* → canonical columns
+                       → filter_data → build_combo_options → tab renderers
+                       → make_*_figure / compute_word_metrics / bulk_export
 ```
 
-### Linting & Formatting
+### Canonical columns
+
+After `normalize_words` / `normalize_fixations`:
+
+- **Words**: `participant_id`, `trial_id`, `paragraph_id` (and `unique_*` when
+  present), `word_id`, `text`, `line_idx`, `x`, `y`, `width`, `height`. Plus
+  EyeLink IA columns (`IA_*` renamed to `first_fixation_ms`, etc.) and
+  linguistic features when shipped.
+- **Fixations**: `participant_id`, `trial_id`, `paragraph_id`, `x`, `y`,
+  `duration_ms`, `timestamp_ms`, `word_id`, `pass_index`, `saccade_type`,
+  `saccade_amplitude`, `eye`, `noise_flag`, `order_in_trial`.
+
+### Reading measures
+
+`measures.py` computes per (participant, trial, word):
+`first_fixation_ms` (FFD), `first_pass_gaze_duration_ms` (FPRT),
+`regression_path_duration_ms` (RPD / go-past), `total_fixation_duration_ms`
+(TFD), `n_fixations`, `skip_flag`, `regression_in_flag`,
+`regression_out_flag`, `first_fix_x/y`. Fixations are enriched with
+`saccade_amplitude`, `progression`, `is_regression`. Pre-computed IA values on
+the words table take precedence over computed ones.
+
+## Build / Lint / Test
 
 ```bash
-# Check and fix linting issues (exclude other_vis/)
-ruff check --fix --exclude other_vis .
+# Install in editable mode
+pip install -e ".[test]"
 
-# Fix import order only
+# Run app
+streamlit run streamlit_app.py
+uv run streamlit run streamlit_app.py
+
+# Tests
+pytest                              # all 86 tests
+pytest tests/test_measures.py       # one file
+pytest --cov=scanpath_visualization_app --cov-report=term
+
+# Lint
+ruff check --exclude other_vis .
 ruff check --select I --fix --exclude other_vis .
-
-# Format code
 ruff format --exclude other_vis .
 
-# Full lint + format pipeline
-ruff check --fix --exclude other_vis .
-ruff check --select I --fix --exclude other_vis .
-ruff format --exclude other_vis .
+# Regenerate bundled sample data (needs the full OneStop CSVs under sample_data/OneStop/)
+python -m scanpath_visualization_app.update_sample_data
 ```
 
----
+CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13 plus ruff lint+format
+checks on every push/PR.
 
-## Code Style Guidelines
+## Code style
 
-### General
+- `from __future__ import annotations` at the top of every Python file.
+- snake_case functions/variables, PascalCase classes, UPPER_SNAKE_CASE
+  constants. Files: snake_case.py.
+- Sorted imports via ruff (`--select I`). stdlib → third-party → local.
+- Use `pd.DataFrame` and `np.ndarray` as type hints directly.
+- Add return type hints to public functions.
+- Streamlit: `@st.cache_data` for expensive loaders. Use `st.warning` (not
+  `st.toast`) for per-rerender warnings.
+- Plotting: y-axis inverted (`y_range = [max, min]`) for screen coordinates.
+  Word boxes + word-level heatmap use `layout.shapes`. Sacccades are a SINGLE
+  trace with `None` separators (never one-trace-per-saccade).
+- Centralized palette / sizing in `constants.py`. Marker sizes come from
+  `plots._compute_marker_sizes` so single-trial and comparison figures render
+  identically.
 
-- **No comments** unless absolutely necessary for understanding
-- Use `from __future__ import annotations` at the top of all Python files
-- Keep legacy `other_vis/` excluded from all tooling
+## Testing patterns
 
-### Imports
+- `tests/conftest.py` exposes `sample_words_df`, `sample_fixations_df`,
+  `normalized_words_df`, `normalized_fixations_df`, `sample_raw_gaze_df`.
+- `tests/test_measures.py` covers FFD, FPRT, RPD, TFD, skip, regressions on a
+  synthetic 4-word layout.
+- `tests/test_smoke.py` exercises the full pipeline (load → infer → normalize
+  → plot) against the bundled sample, including a perf regression that asserts
+  saccades collapse to a single trace.
+- `tests/test_apptest.py` uses `streamlit.testing.v1.AppTest` to boot the
+  whole app and verify title rendering + no `st.error` calls.
+- `tests/test_export.py` checks zip structure, CSV/Parquet selection, and
+  progress callback behavior.
 
-- Use ruff for import sorting (`ruff check --select I --fix`)
-- Order: stdlib → third-party → local (relative imports)
-- Use `importlib.resources` for package data access
+## Adding a new column convention
 
-### Naming Conventions
+Update the candidate lists in `data.py` (e.g. `WORD_X_CANDIDATES`,
+`FIX_SACCADE_AMPLITUDE_CANDIDATES`). `pick_column` walks the list and picks the
+first existing column.
 
-- **Functions/variables**: `snake_case` (e.g., `infer_word_schema`, `normalized_words_df`)
-- **Classes**: `PascalCase` (e.g., `TestPickColumn`)
-- **Constants**: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_FIGURE_SIZE`)
-- **Files**: `snake_case.py`
+## Adding a new reading measure
 
-### Type Hints
+1. Compute it in `measures.compute_per_word_measures` per trial.
+2. Add it to `metric_map` in `data.normalize_words` if it can come pre-computed
+   from EyeLink IA columns.
+3. Surface it in `controls.preferred_color_fields` (if useful for coloring) and
+   in `tabs._MEASURE_OPTIONS` (so the bar plot picker shows it).
+4. Add a test under `tests/test_measures.py`.
 
-- Use `typing` module for type hints: `Optional[str]`, `Dict[str, Any]`, `Tuple[int, int]`
-- Add return type hints to all functions
-- Use `pd.DataFrame` and `np.ndarray` as type hints directly (no quotes)
+## Adding a new figure type
 
-### Error Handling
+1. Add a `make_*_figure` function in `plots.py` using the helpers
+   `_compute_axis_ranges`, `_compute_marker_sizes`, `_saccade_segments`,
+   `_add_word_label_trace`.
+2. Wire it into a tab via `tabs.py` with a Plotly chart call.
+3. Add a smoke test in `tests/test_smoke.py` that builds the figure against
+   the bundled sample.
 
-- Use friendly error messages via `st.error()` for Streamlit validation
-- Return `None` or empty DataFrames on failure rather than raising
-- Use `try/except` for file loading with graceful fallbacks
+## Releasing
 
-### Streamlit Patterns
-
-- Use `@st.cache_data` decorator for expensive data loading functions
-- Keep the import mode pattern intact: support both package imports (`from .data import ...`) and fallback "direct run" path
-- Schema inference functions use `pick_column(df, candidates)` with priority-ordered candidate lists
-
-### Data Processing
-
-- Use pandas for tabular data manipulation
-- Use numpy for numerical operations
-- Normalize all input data to canonical column names:
-  - Words: `participant_id`, `trial_id`, `paragraph_id`, `word_id`, `text`, `line_idx`, `x`, `y`, `width`, `height`
-  - Fixations: `participant_id`, `trial_id`, `paragraph_id`, `x`, `y`, `duration_ms`, `timestamp_ms`, `word_id`, `pass_index`, `saccade_type`, `eye`, `noise_flag`
-
-### Plotting
-
-- Use Plotly for all visualizations
-- Screen coordinates use inverted y-axis (`y_range = [max, min]`)
-- Word boxes and heatmaps use `layout.shapes`
-- Use `go.Figure` for all figures
-
-### Testing
-
-- Use pytest with fixtures defined in `tests/conftest.py`
-- Mock Streamlit (`@patch("scanpath_visualization_app.data.st")`) in tests that call schema inference
-- Use descriptive test class names: `TestPickColumn`, `TestInferWordSchema`, etc.
-- Test both success and failure paths
-
----
-
-## Column Auto-Detection
-
-Schema inference uses `pick_column(df, candidates)` with priority-ordered candidate lists. When adding support for new upstream column names, update the relevant `infer_*_schema` candidate lists in `scanpath_visualization_app/data.py`.
-
----
-
-## Package Data
-
-Sample data files (CSV) are included in the package under `scanpath_visualization_app/sample_data/`. Access via:
-
-```python
-import importlib.resources as resources
-data_root = resources.files(PACKAGE_NAME).joinpath("sample_data")
-```
-
----
-
-## Dependencies
-
-- **Runtime**: streamlit, pandas, plotly, numpy, pyarrow, kaleido, watchdog
-- **Dev/Test**: pytest, pytest-cov
-
-Python 3.11+ required.
+1. Bump `version` in `pyproject.toml` and `scanpath_visualization_app/__init__.py`.
+2. Commit; tag with `v<version>`; push the tag.
+3. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
+   publishes via PyPI Trusted Publishing (requires `pypi` environment set up
+   on GitHub with the project name `scanpath-visualization-app`).

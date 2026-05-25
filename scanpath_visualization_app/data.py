@@ -80,6 +80,11 @@ FIX_WORD_ID_CANDIDATES = [
 ]
 FIX_PASS_INDEX_CANDIDATES = ["pass_index", "reread", "PASS_INDEX"]
 FIX_SACCADE_TYPE_CANDIDATES = ["saccade_type", "SACCADE_TYPE", "NEXT_SAC_DIRECTION"]
+FIX_SACCADE_AMPLITUDE_CANDIDATES = [
+    "saccade_amplitude",
+    "NEXT_SAC_AMPLITUDE",
+    "PREVIOUS_SAC_AMPLITUDE",
+]
 FIX_EYE_CANDIDATES = ["eye", "EYE_USED", "eye_used", "EYE_TRACKED"]
 FIX_NOISE_CANDIDATES = ["noise_flag", "CURRENT_FIX_VALIDITY", "CURRENT_FIX_VALID"]
 
@@ -128,6 +133,7 @@ def propose_fix_schema(fixations: pd.DataFrame) -> Dict[str, Optional[str]]:
         word_id=pick_column(fixations, FIX_WORD_ID_CANDIDATES),
         pass_index=pick_column(fixations, FIX_PASS_INDEX_CANDIDATES),
         saccade_type=pick_column(fixations, FIX_SACCADE_TYPE_CANDIDATES),
+        saccade_amplitude=pick_column(fixations, FIX_SACCADE_AMPLITUDE_CANDIDATES),
         eye=pick_column(fixations, FIX_EYE_CANDIDATES),
         noise_flag=pick_column(fixations, FIX_NOISE_CANDIDATES),
     )
@@ -193,43 +199,50 @@ def validate_raw_gaze_schema(schema: Dict[str, Optional[str]]) -> list:
     return problems
 
 
+def read_table(file_like_or_path) -> pd.DataFrame:
+    """Read a tabular file by extension: csv, parquet, or feather."""
+    name = getattr(file_like_or_path, "name", str(file_like_or_path)).lower()
+    if name.endswith(".parquet"):
+        return pd.read_parquet(file_like_or_path)
+    if name.endswith(".feather"):
+        return pd.read_feather(file_like_or_path)
+    return pd.read_csv(file_like_or_path)
+
+
+def _load_bundled(name: str) -> pd.DataFrame:
+    """Load a single bundled sample, preferring Parquet over CSV."""
+    data_root = resources.files(PACKAGE_NAME).joinpath("sample_data")
+    for ext in (".parquet", ".csv"):
+        resource = data_root / f"{name}{ext}"
+        try:
+            with resources.as_file(resource) as path:
+                if not path.is_file():
+                    continue
+                return read_table(path)
+        except FileNotFoundError:
+            continue
+    return pd.DataFrame()
+
+
 @st.cache_data
 def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Load the bundled demo data (csv only) so users can try the app instantly."""
-    data_root = resources.files(PACKAGE_NAME).joinpath("sample_data")
-    words_resource = data_root / "ia.csv"
-    fixations_resource = data_root / "fixations.csv"
-
-    try:
-        with (
-            resources.as_file(words_resource) as words_path,
-            resources.as_file(fixations_resource) as fixations_path,
-        ):
-            words = pd.read_csv(words_path)
-            fixations = pd.read_csv(fixations_path)
-    except FileNotFoundError:
+    """Load bundled demo IA and fixation tables (prefer Parquet)."""
+    words = _load_bundled("ia")
+    fixations = _load_bundled("fixations")
+    if words.empty or fixations.empty:
         st.error(
-            "Bundled sample data not found. Expected ia.csv and fixations.csv "
-            "under the installed package's sample_data directory."
+            "Bundled sample data not found. Expected ia.{parquet,csv} and "
+            "fixations.{parquet,csv} under the installed package's sample_data "
+            "directory."
         )
         return pd.DataFrame(), pd.DataFrame()
-
     return words, fixations
 
 
 @st.cache_data
 def load_sample_raw_gaze() -> pd.DataFrame:
-    """Load the bundled raw gaze sample data (millisecond-level x,y coordinates)."""
-    data_root = resources.files(PACKAGE_NAME).joinpath("sample_data")
-    raw_gaze_resource = data_root / "raw_gaze.csv"
-
-    try:
-        with resources.as_file(raw_gaze_resource) as raw_gaze_path:
-            raw_gaze = pd.read_csv(raw_gaze_path)
-    except FileNotFoundError:
-        return pd.DataFrame()
-
-    return raw_gaze
+    """Load bundled raw gaze sample (millisecond-level x,y)."""
+    return _load_bundled("raw_gaze")
 
 
 def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Optional[Dict[str, str]]:
@@ -359,17 +372,33 @@ def normalize_words(words: pd.DataFrame, schema: Dict[str, str]) -> pd.DataFrame
         "IA_REGRESSION_OUT_COUNT": ("regression_out_count", "numeric"),
         "IA_REGRESSION_IN": ("regression_in_flag", "boolean"),
         "IA_REGRESSION_OUT": ("regression_out_flag", "boolean"),
+        "IA_REGRESSION_PATH_DURATION": ("regression_path_duration_ms", "numeric"),
         "TRIAL_DWELL_TIME": ("trial_dwell_time_ms", "numeric"),
         "TRIAL_FIXATION_COUNT": ("trial_fixation_count", "numeric"),
         "TRIAL_IA_COUNT": ("trial_ia_count", "numeric"),
         "word_length": ("word_length", "numeric"),
         "word_length_no_punctuation": ("word_length_no_punctuation", "numeric"),
+        "gpt2_surprisal": ("gpt2_surprisal", "numeric"),
+        "wordfreq_frequency": ("wordfreq_frequency", "numeric"),
+        "subtlex_frequency": ("subtlex_frequency", "numeric"),
+        "universal_pos": ("universal_pos", "string"),
+        "ptb_pos": ("ptb_pos", "string"),
+        "Reduced_POS": ("reduced_pos", "string"),
+        "dependency_relation": ("dependency_relation", "string"),
+        "morphological_features": ("morphological_features", "string"),
+        "entity_type": ("entity_type", "string"),
+        "head_word_index": ("head_word_index", "numeric"),
+        "distance_to_head": ("distance_to_head", "numeric"),
+        "left_dependents_count": ("left_dependents_count", "numeric"),
+        "right_dependents_count": ("right_dependents_count", "numeric"),
     }
     for source, (dest, kind) in metric_map.items():
         if source not in words.columns:
             continue
         if kind == "numeric":
             df[dest] = pd.to_numeric(words[source], errors="coerce")
+        elif kind == "string":
+            df[dest] = words[source].astype(str)
         else:
             df[dest] = words[source].fillna(False).astype(bool)
 
@@ -430,12 +459,25 @@ def normalize_fixations(
         df["saccade_type"] = fixations[schema["saccade_type"]].astype(str)
     else:
         df["saccade_type"] = "unknown"
+    if schema.get("saccade_amplitude"):
+        df["saccade_amplitude"] = pd.to_numeric(
+            fixations[schema["saccade_amplitude"]], errors="coerce"
+        )
     if schema.get("eye"):
         df["eye"] = fixations[schema["eye"]].astype(str)
     else:
         df["eye"] = "Both"
     if schema.get("noise_flag"):
-        df["noise_flag"] = fixations[schema["noise_flag"]]
+        raw_flag = fixations[schema["noise_flag"]]
+        if pd.api.types.is_bool_dtype(raw_flag):
+            df["noise_flag"] = raw_flag.fillna(False)
+        elif pd.api.types.is_numeric_dtype(raw_flag):
+            df["noise_flag"] = raw_flag.fillna(0).astype(bool)
+        else:
+            ok_tokens = {"ok", "good", "valid", "true", "1"}
+            df["noise_flag"] = ~raw_flag.astype(str).str.strip().str.lower().isin(
+                ok_tokens
+            )
     else:
         df["noise_flag"] = False
 
@@ -518,17 +560,47 @@ def filter_raw_gaze(
 def compute_canvas_size(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> Tuple[int, int]:
-    """Return the default canvas size; users can override in the UI."""
+    """Estimate canvas size from word boxes and fixation extents.
+
+    Returns the smallest power-of-100 dimensions that comfortably enclose the
+    rightmost/bottommost data point. Falls back to DEFAULT_FIGURE_SIZE when
+    nothing is available.
+    """
     default_w, default_h = DEFAULT_FIGURE_SIZE
-    return max(int(default_w), 100), max(int(default_h), 100)
+    x_candidates: list[float] = []
+    y_candidates: list[float] = []
+    if words is not None and not words.empty and "x" in words.columns:
+        x_candidates.append(float((words["x"] + words.get("width", 0)).max()))
+        y_candidates.append(float((words["y"] + words.get("height", 0)).max()))
+    if fixations is not None and not fixations.empty and "x" in fixations.columns:
+        x_candidates.append(float(fixations["x"].max()))
+        y_candidates.append(float(fixations["y"].max()))
+    if not x_candidates or not y_candidates:
+        return max(int(default_w), 100), max(int(default_h), 100)
+    width = int(np.ceil(max(x_candidates) / 100.0) * 100)
+    height = int(np.ceil(max(y_candidates) / 100.0) * 100)
+    return max(width, 100), max(height, 100)
 
 
 def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    _ = fixations  # metrics come directly from IA/words data; keep signature stable
+    """Return per-word reading measures.
+
+    If the words table already carries pre-aggregated measures (EyeLink IA
+    export), those values are preserved. Anything missing is computed from
+    fixations + bounding boxes via `measures.compute_per_word_measures`.
+    """
+    from .measures import compute_per_word_measures
+
+    if words.empty:
+        return words.copy()
+
+    enriched = compute_per_word_measures(fixations, words)
+
     metric_fields = [
         "first_fixation_ms",
-        "total_fixation_duration_ms",
         "first_pass_gaze_duration_ms",
+        "regression_path_duration_ms",
+        "total_fixation_duration_ms",
         "higher_pass_fixation_duration_ms",
         "last_run_dwell_time_ms",
         "n_fixations",
@@ -542,6 +614,22 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
         "trial_ia_count",
         "word_length",
         "word_length_no_punctuation",
+        "gaze_duration_ms",
+        "first_fix_x",
+        "first_fix_y",
+        "gpt2_surprisal",
+        "wordfreq_frequency",
+        "subtlex_frequency",
+        "universal_pos",
+        "ptb_pos",
+        "reduced_pos",
+        "dependency_relation",
+        "morphological_features",
+        "entity_type",
+        "head_word_index",
+        "distance_to_head",
+        "left_dependents_count",
+        "right_dependents_count",
     ]
     base_fields = [
         "participant_id",
@@ -552,14 +640,15 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
         "line_idx",
     ]
     present_fields = [
-        col for col in base_fields + metric_fields if col in words.columns
+        col for col in base_fields + metric_fields if col in enriched.columns
     ]
-    metrics = words[present_fields].copy()
+    metrics = enriched[present_fields].copy()
 
     numeric_fields = [
         "first_fixation_ms",
-        "total_fixation_duration_ms",
         "first_pass_gaze_duration_ms",
+        "regression_path_duration_ms",
+        "total_fixation_duration_ms",
         "higher_pass_fixation_duration_ms",
         "last_run_dwell_time_ms",
         "trial_dwell_time_ms",
@@ -569,6 +658,16 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
         "regression_out_count",
         "word_length",
         "word_length_no_punctuation",
+        "gaze_duration_ms",
+        "first_fix_x",
+        "first_fix_y",
+        "gpt2_surprisal",
+        "wordfreq_frequency",
+        "subtlex_frequency",
+        "head_word_index",
+        "distance_to_head",
+        "left_dependents_count",
+        "right_dependents_count",
     ]
     for col in numeric_fields:
         if col in metrics.columns:
@@ -579,22 +678,9 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
             .fillna(0)
             .astype("Int64")
         )
-    if "skip_flag" in metrics.columns:
-        metrics["skip_flag"] = metrics["skip_flag"].fillna(False).astype(bool)
-    if "regression_in_flag" in metrics.columns:
-        metrics["regression_in_flag"] = (
-            metrics["regression_in_flag"].fillna(False).astype(bool)
-        )
-    if "regression_out_flag" in metrics.columns:
-        metrics["regression_out_flag"] = (
-            metrics["regression_out_flag"].fillna(False).astype(bool)
-        )
-
-    if (
-        "first_pass_gaze_duration_ms" in metrics.columns
-        and "gaze_duration_ms" not in metrics.columns
-    ):
-        metrics["gaze_duration_ms"] = metrics["first_pass_gaze_duration_ms"]
+    for col in ["skip_flag", "regression_in_flag", "regression_out_flag"]:
+        if col in metrics.columns:
+            metrics[col] = metrics[col].fillna(False).astype(bool)
     return metrics
 
 

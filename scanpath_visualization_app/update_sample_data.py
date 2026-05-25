@@ -1,17 +1,26 @@
-"""Build trimmed sample CSV tables from the OneStop exports."""
+"""Build a small, representative demo subset from the OneStop eye-tracking exports.
 
+The bundled sample data ships with the wheel and powers the "Use bundled demo"
+mode. We aim for a corpus that lets users actually exercise every feature
+without uploading their own data: a handful of participants reading the same
+paragraphs at both Adv and Ele difficulty levels.
+"""
+
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
 
 DATA_DIR = Path(__file__).parent
-SOURCE_DIR = DATA_DIR / "OneStop"
-OUTPUT_DIR = DATA_DIR / "sample_data"
+DEFAULT_SOURCE_DIR = DATA_DIR / "OneStop"
+DEFAULT_OUTPUT_DIR = DATA_DIR / "sample_data"
 
-# Limit how much of the giant source csvs we touch; keep this large enough to span
-# multiple participants and trials while staying memory-friendly.
-MAX_ROWS = 200_000
+# Read at most this many rows from each giant source CSV; large enough to span
+# many participants and trials while staying memory-friendly.
+DEFAULT_MAX_ROWS = 300_000
 
 IA_KEEP_COLUMNS = [
     "participant_id",
@@ -43,11 +52,23 @@ IA_KEEP_COLUMNS = [
     "IA_REGRESSION_IN_COUNT",
     "IA_REGRESSION_OUT",
     "IA_REGRESSION_OUT_COUNT",
+    "IA_REGRESSION_PATH_DURATION",
     "TRIAL_DWELL_TIME",
     "TRIAL_FIXATION_COUNT",
     "TRIAL_IA_COUNT",
     "word_length",
     "word_length_no_punctuation",
+    "wordfreq_frequency",
+    "subtlex_frequency",
+    "gpt2_surprisal",
+    "universal_pos",
+    "ptb_pos",
+    "Reduced_POS",
+    "dependency_relation",
+    "head_word_index",
+    "distance_to_head",
+    "morphological_features",
+    "entity_type",
 ]
 
 FIXATION_KEEP_COLUMNS = [
@@ -65,18 +86,22 @@ FIXATION_KEEP_COLUMNS = [
     "is_correct",
     "CURRENT_FIX_INDEX",
     "CURRENT_FIX_START",
+    "CURRENT_FIX_END",
     "CURRENT_FIX_DURATION",
     "CURRENT_FIX_X",
     "CURRENT_FIX_Y",
     "CURRENT_FIX_INTEREST_AREA_ID",
+    "CURRENT_FIX_INTEREST_AREA_LABEL",
     "CURRENT_FIX_VALIDITY",
     "NEXT_SAC_DIRECTION",
+    "NEXT_SAC_AMPLITUDE",
     "EYE_TRACKED",
 ]
 
 
-def load_subset(source_csv: Path, preferred_columns: Iterable[str]) -> pd.DataFrame:
-    """Read only the columns we need (plus MAX_ROWS cap) to keep memory down."""
+def load_subset(
+    source_csv: Path, preferred_columns: Iterable[str], max_rows: int
+) -> pd.DataFrame:
     available_cols = pd.read_csv(source_csv, nrows=0, low_memory=False).columns
     use_cols = [col for col in preferred_columns if col in available_cols]
     missing_core = [
@@ -86,7 +111,7 @@ def load_subset(source_csv: Path, preferred_columns: Iterable[str]) -> pd.DataFr
     ]
     if missing_core:
         raise RuntimeError(f"Missing required columns {missing_core} in {source_csv}")
-    return pd.read_csv(source_csv, usecols=use_cols, nrows=MAX_ROWS, low_memory=False)
+    return pd.read_csv(source_csv, usecols=use_cols, nrows=max_rows, low_memory=False)
 
 
 def normalize_flags(df: pd.DataFrame) -> pd.DataFrame:
@@ -129,102 +154,158 @@ def add_unique_ids(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def choose_participants(df: pd.DataFrame, count: int = 3) -> list[str]:
-    unique = df["participant_id"].dropna().astype(str).unique().tolist()
-    if len(unique) < count:
-        raise RuntimeError(
-            f"Found only {len(unique)} participants in provided slice: {unique}"
-        )
-    return unique[:count]
+def pick_demo_slice(
+    ia_df: pd.DataFrame,
+    n_participants: int,
+    n_articles: int,
+    seed: int,
+) -> tuple[list[str], list[tuple[int, int]]]:
+    """Pick participants + articles so each participant reads every article,
+    and across participants both Adv and Ele appear for each article.
 
-
-def choose_trials(
-    df: pd.DataFrame, participants: list[str], trials_per_participant: int = 3
-) -> list[str]:
-    trials: list[str] = []
-    for pid in participants:
-        subset = df[(df["participant_id"] == pid) & (not df["repeated_reading_trial"])]  # noqa: E712
-        if subset.empty:
-            raise RuntimeError(f"No trials found for participant {pid}")
-        ordered = (
-            subset[["unique_trial_id", "TRIAL_INDEX"]]
-            .drop_duplicates()
-            .sort_values(by=["TRIAL_INDEX", "unique_trial_id"])
-        )
-        chosen = ordered["unique_trial_id"].head(trials_per_participant).tolist()
-        if len(chosen) < trials_per_participant:
-            raise RuntimeError(f"Only found {len(chosen)} trials for participant {pid}")
-        trials.extend(chosen)
-    return trials
-
-
-def trim_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFrame:
-    keep_cols = [col for col in keep if col in df.columns]
-    keep_cols.extend(
-        [
-            col
-            for col in ["unique_paragraph_id", "unique_trial_id"]
-            if col in df.columns and col not in keep_cols
-        ]
+    Reading-research observation: in OneStop each participant reads a given
+    article at exactly one difficulty. To still demo Adv/Ele contrasts, we
+    need different participants reading the same article at different levels.
+    """
+    rng_seed = seed
+    first_reading = ia_df[~ia_df["repeated_reading_trial"].astype(bool)].copy()
+    first_reading["article"] = list(
+        zip(first_reading["article_batch"], first_reading["article_id"])
     )
-    return df[keep_cols].copy()
 
+    # Participant → set of (article, difficulty) tuples
+    pa_diffs = (
+        first_reading.groupby(["participant_id", "article", "difficulty_level"])
+        .size()
+        .reset_index(name="n_paragraphs")
+    )
 
-def filter_and_save(
-    df: pd.DataFrame, participants: list[str], trials: list[str], output_csv: Path
-) -> int:
-    if "unique_trial_id" not in df.columns:
-        raise RuntimeError("Expected unique_trial_id column in data.")
-
-    filtered = df[
-        df["participant_id"].isin(participants)
-        & df["unique_trial_id"].isin(trials)
-        & (df["repeated_reading_trial"] == False)  # noqa: E712
-    ]
-
-    if filtered.empty:
+    # Greedy search: try random participant samples, pick the one whose joint
+    # article coverage spans both difficulties on the most articles.
+    candidates = sorted(first_reading["participant_id"].astype(str).unique())
+    if len(candidates) < n_participants:
         raise RuntimeError(
-            f"No rows matched participants {participants} and trials {trials}."
+            f"Only {len(candidates)} participants in slice; need {n_participants}."
         )
 
-    output_csv.parent.mkdir(parents=True, exist_ok=True)
-    filtered.to_csv(output_csv, index=False)
-    return len(filtered)
+    rng = pd.Series(candidates)
+    best_score = -1
+    best_participants: list[str] = []
+    best_articles: list = []
+    for trial in range(200):
+        sample = rng.sample(n=n_participants, random_state=rng_seed + trial).tolist()
+        sample_diffs = pa_diffs[pa_diffs["participant_id"].isin(sample)]
+        # For each article, how many distinct difficulties appear in this sample?
+        per_article = sample_diffs.groupby("article")["difficulty_level"].nunique()
+        spanning = per_article[per_article >= 2]
+        # Articles all sample participants read (joint coverage)
+        per_p_articles = sample_diffs.groupby("participant_id")["article"].apply(set)
+        if len(per_p_articles) < n_participants:
+            continue
+        joint = set.intersection(*per_p_articles.values)
+        useful = [a for a in joint if a in spanning.index]
+        score = len(useful)
+        if score > best_score:
+            best_score = score
+            best_participants = sorted(sample)
+            best_articles = sorted(useful)
+        if best_score >= n_articles:
+            break
+
+    if best_score < n_articles:
+        raise RuntimeError(
+            f"Could not find {n_participants} participants jointly reading "
+            f"{n_articles} articles that span Adv+Ele. Best found: {best_score}. "
+            "Try increasing --max-rows or relaxing constraints."
+        )
+
+    return best_participants, list(best_articles[:n_articles])
+
+
+def filter_demo(
+    df: pd.DataFrame,
+    participants: list[str],
+    articles: list[tuple[int, int]],
+) -> pd.DataFrame:
+    article_tuples = set(articles)
+    mask = df["participant_id"].isin(participants) & (
+        ~df["repeated_reading_trial"].astype(bool)
+    )
+    df = df[mask].copy()
+    df["_article"] = list(zip(df["article_batch"], df["article_id"]))
+    df = df[df["_article"].isin(article_tuples)].drop(columns=["_article"])
+    return df
+
+
+def write_outputs(df: pd.DataFrame, base: Path) -> None:
+    base.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(base.with_suffix(".csv"), index=False)
+    try:
+        df.to_parquet(base.with_suffix(".parquet"), index=False)
+    except Exception as exc:
+        print(f"Parquet write failed for {base}: {exc}")
 
 
 def main() -> None:
-    ia_df = add_unique_ids(
-        load_subset(SOURCE_DIR / "ia_Paragraph.csv", IA_KEEP_COLUMNS)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--participants", type=int, default=3, help="Number of participants to bundle."
     )
-    fix_df = add_unique_ids(
-        load_subset(SOURCE_DIR / "fixations_Paragraph.csv", FIXATION_KEEP_COLUMNS)
+    parser.add_argument(
+        "--articles",
+        type=int,
+        default=2,
+        help="Number of articles (each spanning Adv + Ele) to bundle.",
+    )
+    parser.add_argument("--seed", type=int, default=20260520)
+    parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=DEFAULT_MAX_ROWS,
+        help="Cap on rows read from each source CSV.",
+    )
+    parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    args = parser.parse_args()
+
+    ia_full = add_unique_ids(
+        load_subset(
+            args.source_dir / "ia_Paragraph.csv", IA_KEEP_COLUMNS, args.max_rows
+        )
+    )
+    fix_full = add_unique_ids(
+        load_subset(
+            args.source_dir / "fixations_Paragraph.csv",
+            FIXATION_KEEP_COLUMNS,
+            args.max_rows,
+        )
     )
 
-    ia_trimmed = trim_columns(ia_df, IA_KEEP_COLUMNS)
-    fix_trimmed = trim_columns(fix_df, FIXATION_KEEP_COLUMNS)
+    participants, articles = pick_demo_slice(
+        ia_full, args.participants, args.articles, args.seed
+    )
 
-    # Save the full (trimmed) slices alongside the smaller samples.
-    ia_full_path = OUTPUT_DIR / "ia_full.csv"
-    fix_full_path = OUTPUT_DIR / "fixations_full.csv"
-    ia_full_path.parent.mkdir(parents=True, exist_ok=True)
-    ia_trimmed.to_csv(ia_full_path, index=False)
-    fix_trimmed.to_csv(fix_full_path, index=False)
+    ia_sample = filter_demo(ia_full, participants, articles)
+    fix_sample = filter_demo(fix_full, participants, articles)
 
-    participants = choose_participants(ia_trimmed)
-    trials = choose_trials(ia_trimmed, participants)
+    write_outputs(ia_sample, args.output_dir / "ia")
+    write_outputs(fix_sample, args.output_dir / "fixations")
 
-    ia_rows = filter_and_save(ia_trimmed, participants, trials, OUTPUT_DIR / "ia.csv")
+    # Drop the legacy *_full CSVs so they don't bloat the wheel.
+    for legacy in [
+        args.output_dir / "ia_full.csv",
+        args.output_dir / "fixations_full.csv",
+    ]:
+        if legacy.exists():
+            legacy.unlink()
+
     print(
-        f"Wrote {ia_rows} IA rows for participants {participants} and trials {trials} "
-        f"to {OUTPUT_DIR / 'ia.csv'}"
-    )
-
-    fix_rows = filter_and_save(
-        fix_trimmed, participants, trials, OUTPUT_DIR / "fixations.csv"
-    )
-    print(
-        f"Wrote {fix_rows} fixation rows for participants {participants} and trials {trials} "
-        f"to {OUTPUT_DIR / 'fixations.csv'}"
+        "Demo slice written:\n"
+        f"  participants: {participants}\n"
+        f"  articles: {articles}\n"
+        f"  ia rows: {len(ia_sample):,}\n"
+        f"  fixation rows: {len(fix_sample):,}\n"
+        f"  output: {args.output_dir}"
     )
 
 

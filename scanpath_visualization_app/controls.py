@@ -139,6 +139,17 @@ def sidebar_controls(
         disabled=not has_raw_gaze,
         key="global_show_raw_gaze",
     )
+    critical_span_style = st.sidebar.radio(
+        "Critical-span mark (Hunting trials)",
+        options=["Mark text", "Mark border"],
+        index=0,
+        horizontal=True,
+        key="global_critical_span_style",
+        help=(
+            "Mark text: color the critical-span words in dark pink. "
+            "Mark border: draw a thin black outline around the span."
+        ),
+    )
 
     preferred_color_fields = [
         "duration_ms",
@@ -281,4 +292,5 @@ def sidebar_controls(
         heatmap_range=heatmap_range,
         fixation_colorscale=fixation_colorscale,
         heatmap_colorscale=heatmap_colorscale,
+        critical_span_style=critical_span_style,
     )

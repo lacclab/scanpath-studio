@@ -217,8 +217,11 @@ def pick_demo_slice(
     # the full candidate pool if `question_preview` isn't in the data.
     if "question_preview" in first_reading.columns:
         hunters = set(
-            first_reading[first_reading["question_preview"].fillna(False).astype(bool)]
-            ["participant_id"].astype(str).unique()
+            first_reading[first_reading["question_preview"].fillna(False).astype(bool)][
+                "participant_id"
+            ]
+            .astype(str)
+            .unique()
         )
         candidates = [c for c in candidates if c in hunters] or candidates
     if len(candidates) < n_participants:

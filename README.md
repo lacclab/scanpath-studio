@@ -1,7 +1,7 @@
 # Scanpath Visualization
 
 [![PyPI](https://img.shields.io/pypi/v/scanpath-visualization-app.svg)](https://pypi.org/project/scanpath-visualization-app/)
-[![Live demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://scanpath-visualization.streamlit.app)
+[![Live demo](https://img.shields.io/badge/Live_demo-Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://scanpath-visualization.streamlit.app)
 [![CI](https://github.com/lacclab/scanpath-visualization/actions/workflows/ci.yml/badge.svg)](https://github.com/lacclab/scanpath-visualization/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -15,7 +15,7 @@ It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / snake-case
 columns) and ships with a small [OneStop][onestop-paper] demo so you can try it
 with zero setup.
 
-> **Authors:** Omer Shubi & Keren Gruteke Klein — LACC Lab, Technion.
+> **Authors:** Omer Shubi, Keren Gruteke Klein, and others (TBD) — LACC Lab, Technion.
 
 ![The Scanpath Visualization app](https://raw.githubusercontent.com/lacclab/scanpath-visualization/main/assets/app_screenshot.png)
 

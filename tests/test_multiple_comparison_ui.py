@@ -66,8 +66,10 @@ def test_style_table_headers_carry_direction_arrows():
     assert "↑" in html
 
 
-def test_metric_help_text_flags_placeholders_and_cites_eyettention():
+def test_metric_help_text_flags_placeholders_and_cites_sources():
     text = _metric_help_text()
     assert text.count("*(placeholder)*") == len(_PLACEHOLDER_LABELS) == 3
     assert "NLD" in text
+    # NLD's source is Levenshtein (1966); Eyettention is credited as a user.
+    assert "Levenshtein" in text
     assert "Eyettention" in text

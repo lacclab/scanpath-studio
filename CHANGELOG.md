@@ -5,9 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.1] - 2026-06-06
 
 ### Changed
+- **Multiple Comparison tab layout.** The model-generated scanpath grid now
+  renders directly beneath the real scanpath, with the similarity-score table
+  below it (previously the table came first). The grid is the visual payload
+  compared against the real scanpath, so it now sits adjacent to it.
+- **Cite Levenshtein (1966) as the source of NLD.** The NLD metric description
+  now credits the underlying edit distance to Levenshtein (1966) and notes
+  Eyettention (Deng et al. 2023) as a user of the same normalization.
 - **Internal: de-duplicated shared geometry/timing helpers** (no behaviour
   change). Fixation→word-id bounding-box assignment now lives in a single
   `measures._assign_word_ids_single` (used by both
@@ -21,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`LINE_MISREGISTRATION_PX`, `REAL_TIMESTAMP_DWELL_FRAC`). The animation clock's
   threshold was reconciled to compare against the full summed durations (matching
   the documented intent and the similarity time-curve).
+
+### Removed
+- The two explanatory captions under the similarity table (the header-arrow
+  legend and the per-metric description block). The table keeps its direction
+  arrows and best-model highlight.
 
 ## [0.15.0] - 2026-06-06
 

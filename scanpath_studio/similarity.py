@@ -203,10 +203,6 @@ class ScanpathMetric:
     lower_is_better: bool
     fn: Optional[Callable[[dict, dict], float]]
 
-    @property
-    def is_placeholder(self) -> bool:
-        return self.fn is None
-
 
 def _nld_metric(reference: dict, generated: dict) -> float:
     return normalized_levenshtein(reference["aoi"], generated["aoi"])
@@ -370,8 +366,8 @@ def _rebased_onsets(fixations: pd.DataFrame) -> np.ndarray:
         ts = pd.to_numeric(ordered["timestamp_ms"], errors="coerce").to_numpy(
             dtype=float
         )
-        total = float(contiguous[-1]) if len(contiguous) else 0.0
-        if len(ts) and not np.isnan(ts).any() and (ts[-1] - ts[0]) >= 0.5 * total:
+        total_dwell = float(dur.sum()) if len(dur) else 0.0
+        if len(ts) and not np.isnan(ts).any() and (ts[-1] - ts[0]) >= 0.5 * total_dwell:
             return ts - ts[0]
     return contiguous
 
@@ -391,12 +387,12 @@ def nld_by_time(
     (subsampled to ``max_points`` for long readings). Returns ``(t_seconds,
     nlds)``.
     """
-    ref = _ordered_fixations(reference_fixations)
-    mod = _ordered_fixations(model_fixations)
-    ref_w = ordered_word_ids(ref, words)
-    mod_w = ordered_word_ids(mod, words)
-    ref_on = _rebased_onsets(ref)
-    mod_on = _rebased_onsets(mod)
+    # ordered_word_ids and _rebased_onsets each order by timestamp_ms internally
+    # (stable sort), so their outputs stay row-aligned without a pre-sort here.
+    ref_w = ordered_word_ids(reference_fixations, words)
+    mod_w = ordered_word_ids(model_fixations, words)
+    ref_on = _rebased_onsets(reference_fixations)
+    mod_on = _rebased_onsets(model_fixations)
     times = sorted({float(t) for t in (*ref_on, *mod_on)})
     if not times:
         return [], []

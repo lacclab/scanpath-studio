@@ -1712,19 +1712,21 @@ def render_multiple_comparison_tab(
         max_fix = max([len(trial_fixations)] + [len(m) for m in models.values()])
         if max_fix >= 2:
             # The slider value persists across trial / model-count changes, which
-            # shift max_fix. Clamp the stored value into the current [1, max_fix]
-            # range first, or Streamlit raises when the saved value is now out of
-            # bounds (e.g. dropping the longest model, or a shorter trial).
+            # shift max_fix. Seed/clamp it via session_state *only* (no value=
+            # arg), so the stored value is always inside [1, max_fix] — passing
+            # both a value= and a session-state value raises a Streamlit warning,
+            # and an out-of-range stored value would otherwise raise outright.
             stored = st.session_state.get("multi_fix_range")
             if isinstance(stored, (tuple, list)) and len(stored) == 2:
                 lo = max(1, min(int(stored[0]), int(max_fix)))
                 hi = max(lo, min(int(stored[1]), int(max_fix)))
                 st.session_state["multi_fix_range"] = (lo, hi)
+            else:
+                st.session_state["multi_fix_range"] = (1, int(max_fix))
             fix_start, fix_end = st.slider(
                 "Fixation index range",
                 min_value=1,
                 max_value=int(max_fix),
-                value=(1, int(max_fix)),
                 key="multi_fix_range",
                 help="Plot (and score, in the table) only fixations whose index "
                 "falls in this range — applied to the real scanpath and every "
@@ -1756,13 +1758,19 @@ def render_multiple_comparison_tab(
     # heatmap / raw gaze). The small model panels additionally drop word labels
     # and order numbers, which are illegible at grid scale.
     #
-    # Pin the axes to x/y and colour by duration_ms regardless of the sidebar
-    # axis/colour choice: the grid is an inherently spatial scanpath view, and
-    # the synthetic model frames only carry the canonical fixation columns — a
-    # sidebar pick of a real-only column (e.g. saccade_amplitude, gpt2_surprisal)
-    # would otherwise KeyError on the x/y axes or render the panels in a flat
-    # fallback colour while the real scanpath is coloured, making them
-    # non-comparable.
+    # Normalize to a clean, comparable spatial view regardless of the sidebar
+    # choices. The grid is an inherently spatial scanpath view, and the synthetic
+    # model frames only carry the canonical fixation columns with *synthetic*
+    # participant ids — so any option that (a) reads a real-only column or (b)
+    # routes through a (participant_id, trial_id) groupby against the real
+    # trial_words would either KeyError or silently mis-render the model panels:
+    #   - x/y axes + color_by: a real-only column (saccade_amplitude, surprisal…)
+    #     KeyErrors / falls back to a flat colour → pin axes to x/y, colour by
+    #     duration_ms (present in every frame);
+    #   - color_by_line / highlight_out_of_text: call measures helpers that group
+    #     by (participant_id, trial_id); the model frames' "Model N" id never
+    #     matches trial_words, so every model fixation would land off-line /
+    #     out-of-text → pin both off.
     base_settings = _build_figure_settings(viz_settings, False)
     base_settings["raw_gaze"] = None
     base_settings["line_spacing"] = line_spacing
@@ -1772,10 +1780,10 @@ def render_multiple_comparison_tab(
         "show_heatmap": False,
         "show_raw_gaze": False,
         "color_by": "duration_ms",
+        "color_by_line": False,
+        "highlight_out_of_text": False,
     }
     panel_settings = {**real_settings, "show_word_labels": False, "show_order": False}
-    x_field = "x"
-    y_field = "y"
 
     def _make_fig(fix: pd.DataFrame, settings: dict):
         return make_scanpath_figure(
@@ -1785,8 +1793,8 @@ def render_multiple_comparison_tab(
             canvas_height=int(canvas_height),
             base_font_size=int(base_font_size),
             font_family=font_family,
-            x_field=x_field,
-            y_field=y_field,
+            x_field="x",
+            y_field="y",
             **settings,
         )
 
@@ -1845,9 +1853,13 @@ def render_multiple_comparison_tab(
                         max_height=cell_h,
                     )
 
-        # Cumulative metric convergence over the full scanpaths. Memoized by
-        # (trial, nonce, n_models) so dragging the fixation slider — which does
-        # NOT change these curves — doesn't recompute the per-prefix NLDs.
+        # Cumulative metric convergence over the full scanpaths. Memoized so
+        # dragging the fixation slider — which does NOT change these curves —
+        # doesn't recompute the per-prefix NLDs. The key includes a fingerprint
+        # of the real fixation content (not just the participant/trial id
+        # strings), so a different dataset that happens to reuse the same ids
+        # (e.g. two uploads both labelled participant "1") can't serve stale
+        # curves.
         st.markdown("#### Metric convergence")
         st.caption(
             "NLD between the real scanpath and each model, computed cumulatively "
@@ -1855,11 +1867,22 @@ def render_multiple_comparison_tab(
             "reading (right). Lower = more similar; computed on the full reading "
             "regardless of the fixation-range slider."
         )
+        if trial_fixations.empty:
+            fix_fingerprint: tuple = (0,)
+        else:
+            fix_fingerprint = (
+                len(trial_fixations),
+                len(trial_words),
+                round(float(pd.to_numeric(trial_fixations["x"]).sum()), 3),
+                round(float(pd.to_numeric(trial_fixations["y"]).sum()), 3),
+                round(float(pd.to_numeric(trial_fixations["duration_ms"]).sum()), 3),
+            )
         conv_key = (
             str(selected_participant),
             str(selected_trial),
             int(nonce),
             int(n_models),
+            fix_fingerprint,
         )
         if st.session_state.get("_multi_conv_key") != conv_key:
             st.session_state["_multi_conv_key"] = conv_key

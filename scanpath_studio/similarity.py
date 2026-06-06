@@ -6,16 +6,17 @@ model-generated scanpath is to the real reading of the same paragraph.
 Currently one metric is implemented for real:
 
 - **NLD** — Normalized Levenshtein Distance on the area-of-interest (word-ID)
-  sequence. A standard scanpath-similarity measure (edit distance over AOI/word-
-  index sequences predates and is used well beyond any one model), and the
-  primary evaluation metric reported by Eyettention (Deng, Reich, Prasse, Haller,
-  Scheffer & Jäger, 2023, *Eyettention: An Attention-based Dual-Sequence Model for
-  Predicting Human Scanpaths during Reading*). Each scanpath is reduced to the
-  ordered list of word indices its fixations land on — each fixation's own
-  recorded word/AOI label when present, otherwise a bounding-box assignment with a
-  small line-misregistration tolerance. NLD is the edit distance between two such
-  lists divided by the longer list's length, so it sits in ``[0, 1]`` (0 =
-  identical sequence, 1 = maximally different). Lower is better.
+  sequence. The underlying edit distance is Levenshtein's (Levenshtein, 1966,
+  *Binary codes capable of correcting deletions, insertions, and reversals*,
+  Soviet Physics Doklady 10:707–710): the minimal number of insertions, deletions
+  and substitutions to turn one word-index sequence into the other. Each scanpath
+  is reduced to the ordered list of word indices its fixations land on (each
+  fixation's own recorded word/AOI label when present, otherwise a bounding-box
+  assignment with a small line-misregistration tolerance); NLD divides that edit
+  distance by the longer sequence's length, so it sits in ``[0, 1]`` (0 =
+  identical, 1 = maximally different). Lower is better. Eyettention (Deng et al.,
+  2023) uses this same ``NLD = LD / max(|S|, |T|)`` as its scanpath-similarity
+  metric and likewise cites Levenshtein (1966) for the edit distance.
 
 Three further metrics are registered as **labeled placeholders** (``fn=None``)
 so the comparison table is laid out and ready for ScanMatch / MultiMatch /
@@ -194,9 +195,10 @@ METRICS: List[ScanpathMetric] = [
         label="NLD",
         description=(
             "Normalized Levenshtein Distance on the word-index (AOI) sequence — "
-            "a standard scanpath-similarity measure and the primary metric "
-            "reported by Eyettention (Deng et al. 2023). 0 = identical sequence, "
-            "1 = maximally different. Lower is better."
+            "the Levenshtein (1966) edit distance between the two fixated-word "
+            "sequences, normalized by the longer one's length. Used as the "
+            "scanpath-similarity metric by Eyettention (Deng et al. 2023). "
+            "0 = identical sequence, 1 = maximally different. Lower is better."
         ),
         lower_is_better=True,
         fn=_nld_metric,

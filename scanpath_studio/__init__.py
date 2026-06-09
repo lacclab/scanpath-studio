@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 __all__ = ["__version__", "main"]
-__version__ = "0.16.0"
+__version__ = "0.16.1"
 
 
 def main() -> None:

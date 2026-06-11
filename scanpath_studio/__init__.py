@@ -1,9 +1,35 @@
-"""Streamlit workbench for scanpath visualization."""
+"""Streamlit workbench + headless API for scanpath visualization."""
 
 from __future__ import annotations
 
-__all__ = ["__version__", "main"]
-__version__ = "0.16.3"
+__all__ = [
+    "__version__",
+    "main",
+    "load_scanpath_data",
+    "load_sample_data",
+    "list_trials",
+    "compute_word_metrics",
+    "plot_scanpath",
+    "animate_scanpath",
+    "save_figure",
+]
+__version__ = "0.17.0"
+
+# Public headless API (see api.py). Resolved lazily so `import scanpath_studio`
+# stays cheap and doesn't pull in pandas/plotly/streamlit until first use.
+_API_EXPORTS = frozenset(__all__) - {"__version__", "main"}
+
+
+def __getattr__(name: str):
+    if name in _API_EXPORTS:
+        from . import api
+
+        return getattr(api, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list:
+    return sorted(set(globals()) | set(__all__))
 
 
 def main() -> None:

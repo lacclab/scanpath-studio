@@ -125,6 +125,45 @@ for paper figures or building an image dataset of scanpaths for vision models.
 
 ---
 
+## Command line & Python API
+
+Everything the app draws is also available headless — same pipeline, same
+canonical figure.
+
+**CLI** — render a trial straight to a file:
+
+```bash
+scanpath-studio render --sample --list-trials         # what's available
+scanpath-studio render --sample -o scanpath.html      # interactive HTML
+scanpath-studio render --words ia.csv --fixations fixations.csv \
+    -p participant_1 -t trial_3 --no-heatmap -o figure.png
+scanpath-studio render --sample --animate -o replay.html
+```
+
+HTML output is browser-free; PNG/SVG/PDF go through Kaleido (install Chrome
+once with `plotly_get_chrome -y`). See `scanpath-studio render --help` for the
+full set of layer toggles. `scanpath-studio` on its own still launches the app,
+forwarding any extra args to `streamlit run` (e.g. `--server.port 8502`).
+
+**Python API** — the same canonical figures programmatically:
+
+```python
+import scanpath_studio as sps
+
+words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
+sps.list_trials(words, fixations)                # (participant, trial) combos
+fig = sps.plot_scanpath(words, fixations, "participant_1", "trial_3")
+sps.save_figure(fig, "scanpath.html")            # or .png/.svg/.pdf
+anim = sps.animate_scanpath(words, fixations, "participant_1", "trial_3")
+measures = sps.compute_word_metrics(words, fixations)  # FFD/FPRT/RPD/TFD…
+```
+
+`sps.load_sample_data()` returns the bundled demo, and `plot_scanpath` /
+`animate_scanpath` accept every layer toggle and style option the app exposes
+(`show_heatmap=False`, `color_by="pass_index"`, …).
+
+---
+
 ## Run from source
 
 ```bash

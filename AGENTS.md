@@ -33,8 +33,10 @@ scanpath_studio/
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
 ├─ styles.py         injected CSS
-├─ __main__.py       CLI entry: rewrites argv and invokes streamlit
-├─ __init__.py       exposes __version__ and main()
+├─ api.py            headless public API (load/normalize, plot_scanpath, animate_scanpath, save_figure)
+├─ cli.py            console entry: `run` launches the app, `render` builds figures headless via api.py
+├─ __main__.py       `python -m scanpath_studio` → cli.main
+├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface
 └─ sample_data/      bundled demo corpus (CSV + Parquet)
 ```
 

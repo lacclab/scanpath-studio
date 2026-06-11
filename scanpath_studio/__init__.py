@@ -17,17 +17,7 @@ __version__ = "0.17.0"
 
 # Public headless API (see api.py). Resolved lazily so `import scanpath_studio`
 # stays cheap and doesn't pull in pandas/plotly/streamlit until first use.
-_API_EXPORTS = frozenset(
-    {
-        "load_scanpath_data",
-        "load_sample_data",
-        "list_trials",
-        "compute_word_metrics",
-        "plot_scanpath",
-        "animate_scanpath",
-        "save_figure",
-    }
-)
+_API_EXPORTS = frozenset(__all__) - {"__version__", "main"}
 
 
 def __getattr__(name: str):
@@ -36,6 +26,10 @@ def __getattr__(name: str):
 
         return getattr(api, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list:
+    return sorted(set(globals()) | set(__all__))
 
 
 def main() -> None:

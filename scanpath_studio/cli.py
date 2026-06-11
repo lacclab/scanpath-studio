@@ -163,29 +163,39 @@ def _parse_canvas(value: Optional[str]) -> Optional[tuple]:
     if not value:
         return None
     try:
-        w, h = value.lower().split("x")
-        return (int(w), int(h))
+        w, h = (int(part) for part in value.lower().split("x"))
     except ValueError:
         raise SystemExit(f"--canvas expects WxH (e.g. 2560x1440), got {value!r}")
+    if w <= 0 or h <= 0:
+        raise SystemExit(f"--canvas dimensions must be positive, got {value!r}")
+    return (w, h)
 
 
 def render(argv: List[str]) -> None:
     args = _render_parser().parse_args(argv)
+    # Validate everything derivable from argv before the (possibly minutes-long
+    # on full corpora) data load.
     if args.sample == bool(args.words or args.fixations):
         raise SystemExit("Provide either --sample or both --words and --fixations.")
     if not args.sample and not (args.words and args.fixations):
         raise SystemExit("Both --words and --fixations are required.")
     if not args.list_trials and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials).")
+    canvas = _parse_canvas(args.canvas)
+    if args.animate and args.output and not args.output.lower().endswith(".html"):
+        raise SystemExit(
+            "--animate writes interactive HTML — use a .html output "
+            "(GIF/MP4 are available via the Python API: "
+            "animation_export.export_animation)."
+        )
 
     from . import api
 
     if args.sample:
         words, fixations = api.load_sample_data()
-        canvas = _parse_canvas(args.canvas) or (2560, 1440)  # OneStop monitor
+        canvas = canvas or (2560, 1440)  # OneStop monitor
     else:
         words, fixations = api.load_scanpath_data(args.words, args.fixations)
-        canvas = _parse_canvas(args.canvas)
 
     if args.list_trials:
         combos = api.list_trials(words, fixations)
@@ -193,19 +203,14 @@ def render(argv: List[str]) -> None:
         return
 
     try:
+        # A given -p/-t must match exactly (mistyped ids are errors, never
+        # silently swapped for another trial); only genuinely unspecified
+        # parts default to the first available combo, like the app.
         participant, trial = api._resolve_trial(
-            words, fixations, args.participant, args.trial
+            words, fixations, args.participant, args.trial, default_first=True
         )
     except ValueError as exc:
-        if args.participant is not None and args.trial is not None:
-            raise SystemExit(str(exc))
-        # Underspecified selection: fall back to the first combo, like the app.
-        first = api.list_trials(words, fixations)
-        if args.participant is not None:
-            first = first[first["participant_id"] == str(args.participant)]
-        if first.empty:
-            raise SystemExit(str(exc))
-        participant, trial = str(first.iloc[0, 0]), str(first.iloc[0, 1])
+        raise SystemExit(str(exc))
     print(f"Rendering participant={participant} trial={trial}", file=sys.stderr)
 
     overrides = {
@@ -232,18 +237,30 @@ def render(argv: List[str]) -> None:
     )
     try:
         if args.animate:
-            if not args.output.lower().endswith(".html"):
-                raise SystemExit(
-                    "--animate writes interactive HTML — use a .html output "
-                    "(GIF/MP4 are available via the Python API: "
-                    "animation_export.export_animation)."
-                )
+            # The animation builder supports a subset of the static layers;
+            # warn (rather than silently ignore) flags it can't honor.
             anim_keys = (
                 "show_words",
                 "show_word_labels",
                 "show_saccades",
                 "show_order",
             )
+            static_defaults = {
+                "show_fixations": True,
+                "show_heatmap": True,
+                "show_saccade_arrows": False,
+            }
+            ignored = [
+                key
+                for key, default in static_defaults.items()
+                if overrides[key] != default
+            ] + [key for key in ("color_by", "heatmap_metric") if key in overrides]
+            if ignored:
+                print(
+                    f"Warning: not supported with --animate, ignoring: "
+                    f"{', '.join(sorted(ignored))}",
+                    file=sys.stderr,
+                )
             fig = api.animate_scanpath(
                 words,
                 fixations,
@@ -258,7 +275,7 @@ def render(argv: List[str]) -> None:
                 words, fixations, participant, trial, **overrides, **common
             )
         out = api.save_figure(fig, args.output)
-    except (ValueError, RuntimeError) as exc:
+    except (ValueError, RuntimeError, OSError) as exc:
         raise SystemExit(str(exc))
     print(f"Wrote {out}", file=sys.stderr)
 

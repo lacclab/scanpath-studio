@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import pytest
 
 import scanpath_studio as sps
+from scanpath_studio import api
 from scanpath_studio import data as data_module
 
 
@@ -94,6 +95,58 @@ def test_plot_scanpath_overrides(sample):
     # Word boxes gone: only the canvas border rect remains, vs one shape per
     # word (plus border) in the canonical default.
     assert len(fig.layout.shapes or ()) < len(default_fig.layout.shapes)
+
+
+def test_plot_scanpath_axis_field_override(sample):
+    # Regression: x_field/y_field used to collide with the explicitly passed
+    # kwargs and raise "got multiple values for keyword argument".
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    fig = sps.plot_scanpath(words, fixations, pid, tid, x_field="order_in_trial")
+    assert isinstance(fig, go.Figure)
+
+
+def test_plot_scanpath_filters_raw_gaze(sample):
+    # Regression: raw_gaze used to be forwarded unfiltered, overlaying gaze
+    # points from every other trial on the single-trial figure.
+    words, fixations = sample
+    combos = sps.list_trials(words, fixations)
+    pid, tid = combos.iloc[0]
+    other_pid, other_tid = combos.iloc[1]
+    raw_gaze = pd.DataFrame(
+        {
+            "participant_id": [pid, pid, other_pid],
+            "trial_id": [tid, tid, other_tid],
+            "x": [100.0, 110.0, 5000.0],
+            "y": [100.0, 105.0, 5000.0],
+            "timestamp_ms": [0, 1, 0],
+        }
+    )
+    fig = sps.plot_scanpath(words, fixations, pid, tid, raw_gaze=raw_gaze)
+    raw_traces = [t for t in fig.data if t.name == "Raw gaze"]
+    assert raw_traces and len(raw_traces[0].x) == 2
+
+
+def test_animate_scanpath_rejects_static_only_options(sample):
+    # Regression: static-only keys used to surface as an opaque TypeError.
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    with pytest.raises(ValueError, match="not supported by the animation"):
+        sps.animate_scanpath(words, fixations, pid, tid, color_by="pass_index")
+
+
+def test_resolve_trial_default_first(sample):
+    words, fixations = sample
+    combos = sps.list_trials(words, fixations)
+    pid, tid = api._resolve_trial(words, fixations, None, None, default_first=True)
+    assert (pid, tid) == tuple(combos.iloc[0])
+    # default_first never excuses a nonexistent id.
+    with pytest.raises(ValueError, match="No trial matches"):
+        api._resolve_trial(words, fixations, None, "no_such_trial", default_first=True)
+
+
+def test_dir_lists_lazy_exports():
+    assert "plot_scanpath" in dir(sps)
 
 
 def test_plot_scanpath_ambiguous_raises(sample):

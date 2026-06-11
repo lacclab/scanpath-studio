@@ -96,12 +96,55 @@ def test_render_unknown_trial_exits():
         )
 
 
+def test_render_unknown_trial_without_participant_exits(tmp_path):
+    # Regression: a mistyped -t without -p must error, not silently render
+    # the dataset's first trial.
+    out_file = tmp_path / "x.html"
+    with pytest.raises(SystemExit, match="No trial matches"):
+        cli.main(["render", "--sample", "-t", "no_such_trial", "-o", str(out_file)])
+    assert not out_file.exists()
+
+
+def test_render_trial_only_resolves_matching_participant(tmp_path, capsys):
+    # A valid -t without -p picks a participant that actually has that trial.
+    import scanpath_studio as sps
+
+    combos = sps.list_trials(*sps.load_sample_data())
+    pid, tid = combos.iloc[-1]
+    out_file = tmp_path / "x.html"
+    cli.main(["render", "--sample", "-t", tid, "-o", str(out_file)])
+    assert out_file.is_file()
+    assert f"trial={tid}" in capsys.readouterr().err
+
+
 def test_render_bad_canvas_exits():
     with pytest.raises(SystemExit, match="--canvas"):
         cli.main(["render", "--sample", "--canvas", "huge", "-o", "x.html"])
+    with pytest.raises(SystemExit, match="positive"):
+        cli.main(["render", "--sample", "--canvas", "0x1440", "-o", "x.html"])
 
 
-def test_render_from_files(tmp_path, capsys):
+def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
+    out_file = tmp_path / "anim.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--animate",
+            "--no-heatmap",
+            "--color-by",
+            "pass_index",
+            "-o",
+            str(out_file),
+        ]
+    )
+    assert out_file.is_file()
+    err = capsys.readouterr().err
+    assert "ignoring" in err
+    assert "color_by" in err and "show_heatmap" in err
+
+
+def test_render_from_files(tmp_path):
     from scanpath_studio import data as data_module
 
     words_raw, fix_raw = data_module.load_sample_data()

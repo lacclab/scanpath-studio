@@ -18,6 +18,7 @@ Every keyword accepted by :func:`plots.make_scanpath_figure` /
 
 from __future__ import annotations
 
+import inspect
 import logging
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -157,7 +158,15 @@ def _resolve_trial(
     fixations: pd.DataFrame,
     participant: Optional[str],
     trial: Optional[str],
+    *,
+    default_first: bool = False,
 ) -> Tuple[str, str]:
+    """Resolve to one (participant_id, trial_id), validating what was given.
+
+    A nonexistent participant/trial always raises. An underspecified selection
+    matching several trials raises too, unless ``default_first`` picks the
+    first match (the CLI's behavior, mirroring the app's default selection).
+    """
     combos = list_trials(words, fixations)
     if combos.empty:
         raise ValueError("No (participant, trial) combo exists in both frames.")
@@ -170,7 +179,7 @@ def _resolve_trial(
             f"No trial matches participant={participant!r}, trial={trial!r}. "
             "Use list_trials(words, fixations) to see what's available."
         )
-    if len(combos) > 1 and (participant is None or trial is None):
+    if len(combos) > 1 and not default_first:
         preview = combos.head(5).to_records(index=False).tolist()
         raise ValueError(
             f"Ambiguous selection: {len(combos)} trials match "
@@ -185,9 +194,12 @@ def _select_trial(
     fixations: pd.DataFrame,
     participant: Optional[str],
     trial: Optional[str],
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, str, str]:
     pid, tid = _resolve_trial(words, fixations, participant, trial)
-    return _data.filter_data(words, fixations, {"participants": [pid], "trials": [tid]})
+    trial_words, trial_fixations = _data.filter_data(
+        words, fixations, {"participants": [pid], "trials": [tid]}
+    )
+    return trial_words, trial_fixations, pid, tid
 
 
 def _figure_kwargs(overrides: dict) -> dict:
@@ -216,15 +228,24 @@ def plot_scanpath(
     the frames contain exactly one combo. ``canvas_size`` is the monitor size
     in px; by default it is estimated from the data extents — pass the real
     monitor resolution (e.g. ``(2560, 1440)`` for OneStop) to keep coordinates
-    true to scale. Remaining keywords override the app's defaults and are
-    forwarded to :func:`plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
-    ``color_by="pass_index"``).
+    true to scale. ``raw_gaze`` is a normalized frame (see
+    :func:`data.normalize_raw_gaze`) and is filtered to the selected trial.
+    Remaining keywords override the app's defaults and are forwarded to
+    :func:`plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
+    ``color_by="pass_index"``, ``x_field="order_in_trial"``).
     """
-    trial_words, trial_fixations = _select_trial(words, fixations, participant, trial)
+    trial_words, trial_fixations, pid, tid = _select_trial(
+        words, fixations, participant, trial
+    )
     if canvas_size is None:
         canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
     settings = _figure_kwargs(figure_overrides)
+    # Spatial fields are explicit kwargs of make_scanpath_figure, so they can't
+    # ride along in **settings without a "multiple values" TypeError.
+    x_field = settings.pop("x_field", "x")
+    y_field = settings.pop("y_field", "y")
     if raw_gaze is not None:
+        raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
         settings.setdefault("show_raw_gaze", True)
     return make_scanpath_figure(
         trial_words,
@@ -233,8 +254,8 @@ def plot_scanpath(
         canvas_height=int(canvas_size[1]),
         base_font_size=int(base_font_size),
         font_family=font_family,
-        x_field="x",
-        y_field="y",
+        x_field=x_field,
+        y_field=y_field,
         raw_gaze=raw_gaze,
         **settings,
     )
@@ -258,8 +279,30 @@ def animate_scanpath(
     returned Plotly figure plays in real reading time scaled by
     ``playback_speed``; save it as interactive HTML with :func:`save_figure`,
     or rasterize to GIF/MP4 with :func:`animation_export.export_animation`.
+
+    The animation builder accepts a subset of the static figure's options
+    (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``,
+    styling, and second-scanpath overlays) — an unsupported key raises a
+    ``ValueError`` naming the valid ones rather than an opaque ``TypeError``.
     """
-    trial_words, trial_fixations = _select_trial(words, fixations, participant, trial)
+    valid = set(inspect.signature(make_scanpath_animation).parameters) - {
+        "words",
+        "fixations",
+        "canvas_width",
+        "canvas_height",
+        "base_font_size",
+        "font_family",
+        "playback_speed",
+    }
+    unknown = set(animation_overrides) - valid
+    if unknown:
+        raise ValueError(
+            f"Options not supported by the animation: {sorted(unknown)}. "
+            f"Valid overrides: {sorted(valid)}."
+        )
+    trial_words, trial_fixations, _, _ = _select_trial(
+        words, fixations, participant, trial
+    )
     if canvas_size is None:
         canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
     return make_scanpath_animation(
@@ -286,11 +329,13 @@ def save_figure(fig: go.Figure, path: Union[str, Path], *, scale: int = 2) -> Pa
     if suffix in (".png", ".svg", ".pdf"):
         try:
             fig.write_image(str(path), scale=scale)
-        except Exception as exc:  # Kaleido raises various types when Chrome is absent
+        except OSError:
+            raise  # filesystem problem — the original error says it best
+        except Exception as exc:  # Kaleido raises various types
             raise RuntimeError(
-                f"Static {suffix} export failed — it requires a Chrome/Chromium "
-                "binary for Kaleido (run `plotly_get_chrome -y` once), or save "
-                f"as .html instead. Original error: {exc}"
+                f"Static {suffix} export failed: {exc} — if Kaleido can't find "
+                "a Chrome/Chromium binary, run `plotly_get_chrome -y` once, or "
+                "save as .html instead."
             ) from exc
         return path
     raise ValueError(

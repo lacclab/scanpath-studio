@@ -48,7 +48,7 @@ Repository = "https://github.com/lacclab/scanpath-studio"
 Issues = "https://github.com/lacclab/scanpath-studio/issues"
 
 [project.scripts]
-scanpath-studio = "scanpath_studio.__main__:main"
+scanpath-studio = "scanpath_studio.cli:main"
 
 [tool.setuptools.dynamic]
 # Single source of truth for the version: scanpath_studio/__version__

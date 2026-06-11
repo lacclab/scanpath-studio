@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-06-11
+
+### Added
+- **Headless CLI:** `scanpath-studio render` builds one trial's figure straight
+  to `.html`/`.png`/`.svg`/`.pdf` (or `--animate` for the HTML replay) without
+  launching the app — `--sample` or `--words`/`--fixations`, `--list-trials`,
+  per-layer `--no-*` toggles. Bare `scanpath-studio` still launches the app.
+- **Public Python API:** `import scanpath_studio as sps` →
+  `load_scanpath_data`, `load_sample_data`, `list_trials`,
+  `compute_word_metrics`, `plot_scanpath`, `animate_scanpath`, `save_figure` —
+  the app's canonical figures, programmatically.
+
 ## [0.16.3] - 2026-06-11
 
 ### Added

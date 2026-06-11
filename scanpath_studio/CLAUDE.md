@@ -8,13 +8,19 @@ Streamlit workbench for exploring eye-tracking-while-reading scanpaths: word box
 streamlit run scanpath_studio/app.py        # dev
 python -m scanpath_studio                    # packaged
 scanpath-studio                                  # console entry point
+scanpath-studio render --sample -o out.html      # headless single-trial render
 ```
 
-`__main__.py` wraps `streamlit.web.cli` and forwards `sys.argv`. Default port 8501.
+The console script is `cli.main` (dispatch in `cli.py`): `run`/no-args/unknown
+args launch the app via `streamlit run` (default port 8501, backward compatible
+with bare streamlit flags); `render` builds one trial's figure headless through
+`api.py`. `__main__.py` delegates to the CLI.
 
 ## Modules
 
 - [app.py](app.py) — orchestrator: page config, URL-preset parsing (`?source=onestop&participant=pid&trial=N&show_saccades=1`), sidebar render, data load, filter, tab dispatch.
+- [api.py](api.py) — headless public API (re-exported lazily from the package root): `load_scanpath_data` (paths/frames → schema-infer → normalize, raises `ValueError` instead of `st.error`), `load_sample_data`, `list_trials`, `compute_word_metrics`, `plot_scanpath`/`animate_scanpath` (single-trial wrappers around the `plots` builders with the app's sidebar defaults baked into `CANONICAL_FIGURE_DEFAULTS`), `save_figure` (extension-dispatched HTML/PNG/SVG/PDF). Quiets streamlit's bare-mode cache warnings — import order in this file is load-bearing, see its header comment.
+- [cli.py](cli.py) — console entry point: subcommand dispatch (`run`, `render`, `--version`, `--help`); unknown args forward to `streamlit run` for backward compatibility. `render` exposes the api.py pipeline with per-layer `--no-*` flags, `--animate` (HTML only), `--list-trials`.
 - [data.py](data.py) — schema inference for EyeLink/Gazepoint/snake_case columns (`propose_*_schema`), normalization, `load_onestop_server_bundle` (fast-path per-pid Parquet, falls back to full CSV.zip), `compute_word_metrics`.
 - [plots.py](plots.py) — Plotly figure builders: `make_scanpath_figure` (core layered: words + fixations + saccades + heatmap), `make_comparison_figure`, `make_scanpath_animation`, bar/histogram figs. **True-to-scale text:** word labels are sized in *data* space (`_word_label_font_px`: `box_height / line_spacing`, capped by box width via `_width_fit_font`) then converted to screen px with `_display_scale`, so the reading text always fills the real line slot instead of being a fixed font size. `line_spacing` (default 3 = OneStop's one-blank-line-above-and-below) and `scale_text_to_boxes` thread through every spatial builder.
 - [measures.py](measures.py) — `assign_fixations_to_words` (bbox containment + nearest-word within 50 px), then per-word FFD/FPRT/RPD/TFD/skip/regression. Used only when pre-aggregated columns (e.g. `IA_FIRST_FIXATION_DURATION`) are absent. Also geometry helpers `cluster_word_lines`, `fixation_in_text_mask`, `assign_fixation_lines` powering the out-of-text + color-by-line plot options.

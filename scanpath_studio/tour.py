@@ -21,6 +21,7 @@ Mechanics worth knowing before editing:
 from __future__ import annotations
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 # (title, markdown body) per step — keep bodies to a few lines each; the tour
 # should take well under a minute.
@@ -108,6 +109,27 @@ That's it — happy scanpath gazing! 👀
 ]
 
 
+def _close_dialog_clientside() -> None:
+    """Hide the open dialog instantly by clicking its own ✕ from a tiny script.
+
+    The documented way to close a dialog programmatically is a full-app
+    ``st.rerun()`` — but on this app a full rerun re-renders the heavy plot
+    embeds, so the modal lingered ~10 s after Skip/Done. Instead, run inside
+    the (fast) dialog-fragment rerun and click the dialog's close button:
+    the modal hides client-side immediately and Streamlit's normal dismiss
+    handling syncs state in the background. ``components.html`` iframes are
+    same-origin, so the script can reach the parent document.
+    """
+    components.html(
+        """<script>
+        window.parent.document
+            .querySelector('div[role="dialog"] button[aria-label="Close"]')
+            ?.click();
+        </script>""",
+        height=0,
+    )
+
+
 def _step_back() -> None:
     st.session_state["tour_step"] = max(0, st.session_state.get("tour_step", 0) - 1)
 
@@ -122,7 +144,7 @@ def _tour_dialog() -> None:
 
     Back/Next mutate ``tour_step`` via ``on_click`` callbacks — the callback
     runs before the fragment rerun, so the body re-renders at the new step.
-    Skip/Done close the dialog via a full-app ``st.rerun()``.
+    Skip/Done close the dialog client-side (see ``_close_dialog_clientside``).
     """
     step = min(st.session_state.get("tour_step", 0), len(_STEPS) - 1)
     title, body = _STEPS[step]
@@ -140,7 +162,7 @@ def _tour_dialog() -> None:
     )
     if step < len(_STEPS) - 1:
         if skip_col.button("Skip tour", key="tour_skip", width="stretch"):
-            st.rerun()
+            _close_dialog_clientside()
         next_col.button(
             "Next →",
             key="tour_next",
@@ -150,7 +172,7 @@ def _tour_dialog() -> None:
         )
     else:
         if next_col.button("✓ Done", key="tour_done", width="stretch", type="primary"):
-            st.rerun()
+            _close_dialog_clientside()
 
 
 def tour_suppressed(query_params) -> bool:

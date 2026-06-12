@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`SCANPATH_PUBLIC_DATASETS=1` to preview); it will be enabled in a future
   release.
 
+### Fixed
+- The tutorial's Skip/Done buttons now close the dialog instantly instead of
+  leaving it on screen for the ~10 s full-app rerun.
+
 ## [0.18.0] - 2026-06-11
 
 ### Added

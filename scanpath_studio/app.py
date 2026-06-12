@@ -28,7 +28,9 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from typing import Optional, Tuple
 
 import pandas as pd
@@ -48,13 +50,15 @@ from scanpath_studio.annotations import (
     filter_keys,
     render_annotations_sidebar,
 )
-from scanpath_studio.constants import DEFAULT_LINE_SPACING, FONT_FAMILY
+from scanpath_studio.constants import COLORSCALES, DEFAULT_LINE_SPACING, FONT_FAMILY
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    color_field_options,
     column_mapping_ui,
     data_dictionary_help_text,
+    numeric_field_options,
     sidebar_controls,
     sidebar_trial_filters,
 )
@@ -228,6 +232,219 @@ def _apply_url_preset() -> Optional[str]:
 
     source = qp.get("source")
     return source.lower() if source else None
+
+
+# plot-config layer key → viz-control session_state key. The inverse of the
+# `layers` block written by `tabs._render_plot_config_expander`.
+_PLOT_CONFIG_LAYER_KEYS = {
+    "words": "global_show_words",
+    "word_labels": "global_show_labels",
+    "fixations": "global_show_fix",
+    "order_labels": "global_show_order",
+    "saccades": "global_show_saccades",
+    "saccade_arrows": "global_show_saccade_arrows",
+    "heatmap": "global_show_heatmap",
+    "raw_gaze": "global_show_raw_gaze",
+}
+# Static widget bounds, mirrored from controls.sidebar_controls /
+# render_sidebar_canvas_controls, so a restored value is clamped to a range the
+# widget will accept.
+_CANVAS_BOUNDS = (100, 10000)
+_FONT_BOUNDS = (6, 72)
+_MARKER_BOUNDS = (4, 40)
+
+
+def _restore_selection(selection: dict, combos: pd.DataFrame) -> bool:
+    """Best-effort: point the Interactive Plot tab's trial picker at the saved
+    ``(participant, trial)``. Returns True when a matching trial is found in the
+    current (filtered) data. Mirrors the key scheme of
+    ``utils.select_trial(key_prefix="single")`` — including its composite vs.
+    single-dropdown branch — so the seeded keys land on the right selectors."""
+    pid = selection.get("participant_id")
+    tid = selection.get("trial_id")
+    if pid in (None, "") or tid in (None, "") or combos.empty:
+        return False
+    pid, tid = str(pid), str(tid)
+    match = combos[
+        (combos["participant_id"].astype(str) == pid)
+        & (combos["trial_id"].astype(str) == tid)
+    ]
+    if match.empty:  # participant may have been filtered out — try trial id alone
+        match = combos[combos["trial_id"].astype(str) == tid]
+    if match.empty:
+        return False
+    row = match.iloc[0]
+    st.session_state["single_select_trial_mode"] = "Trial"
+    composite_cols = [
+        c
+        for c in (st.session_state.get("_composite_trial_columns") or [])
+        if c in combos.columns
+    ]
+    if len(composite_cols) >= 2:
+        for col in composite_cols:
+            st.session_state[f"single_composite_{col}"] = str(row[col])
+        st.session_state["single_composite_reading"] = str(row["trial_id"])
+    else:
+        # None/Trial mode renders a single dropdown keyed `single_trial_id`
+        # whose *options* are the trial_field values (`unique_trial_id` when
+        # present), so seed that one key with this row's option value — not a
+        # `single_<trial_field>` key, which no widget reads.
+        trial_field = (
+            "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
+        )
+        st.session_state["single_trial_id"] = str(row[trial_field])
+    return True
+
+
+def _restore_plot_config(
+    config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
+) -> Tuple[int, list]:
+    """Seed session_state from an uploaded plot-config dict so the sidebar
+    widgets render with the saved settings. Returns ``(applied, skipped)`` where
+    ``skipped`` lists human-readable labels that didn't fit the current data.
+
+    Inverse of the config built in ``tabs._render_plot_config_expander``. Runs
+    before any widget renders (see ``_apply_uploaded_plot_config``); data-
+    dependent fields are validated against the loaded data and skipped when they
+    don't apply, so a config shared with a different dataset degrades gracefully."""
+    applied = 0
+    skipped: list = []
+
+    def put(key, value):
+        nonlocal applied
+        st.session_state[key] = value
+        applied += 1
+
+    def put_valid(valid, key, value, skip_label):
+        """Apply ``value`` when ``valid``, else record ``skip_label``."""
+        if valid:
+            put(key, value)
+        else:
+            skipped.append(skip_label)
+
+    def clamp_int(value, lo, hi):
+        return max(lo, min(int(value), hi))
+
+    layers = config.get("layers") or {}
+    for cfg_key, state_key in _PLOT_CONFIG_LAYER_KEYS.items():
+        if cfg_key in layers:
+            put(state_key, bool(layers[cfg_key]))
+
+    coloring = config.get("coloring") or {}
+    if "heatmap_style" in coloring:
+        style = coloring["heatmap_style"]
+        put_valid(
+            style in ("Word boxes", "Interpolated"),
+            "global_heatmap_style",
+            style,
+            "heatmap style",
+        )
+    if "color_by" in coloring:
+        put_valid(
+            coloring["color_by"] in color_field_options(fixations),
+            "global_color_by",
+            coloring["color_by"],
+            "color-by field",
+        )
+    if "heatmap_metric" in coloring:
+        put_valid(
+            coloring["heatmap_metric"] in ("duration_ms", "counts"),
+            "global_heatmap_metric",
+            coloring["heatmap_metric"],
+            "heatmap metric",
+        )
+    if "show_colorbars" in coloring:
+        put("global_show_colorbars", bool(coloring["show_colorbars"]))
+    for cfg_key, state_key in (
+        ("fixation_colorscale", "global_fixation_colorscale"),
+        ("heatmap_colorscale", "global_heatmap_colorscale"),
+    ):
+        val = coloring.get(cfg_key)
+        if val is not None:
+            put_valid(val in COLORSCALES, state_key, val, cfg_key.replace("_", " "))
+    # Range sliders only render when colour bars are on; store them anyway —
+    # the widgets clamp to the current data via `controls._clamp_range`.
+    for cfg_key, state_key in (
+        ("fixation_range", "global_fixation_color_range"),
+        ("heatmap_range", "global_heatmap_color_range"),
+    ):
+        rng = coloring.get(cfg_key)
+        if isinstance(rng, (list, tuple)) and len(rng) == 2:
+            put(state_key, (float(rng[0]), float(rng[1])))
+
+    sizing = config.get("sizing") or {}
+    marker = sizing.get("marker_size_range")
+    if isinstance(marker, (list, tuple)) and len(marker) == 2:
+        lo, hi = (clamp_int(m, *_MARKER_BOUNDS) for m in marker)
+        put("global_marker_size_range", (min(lo, hi), max(lo, hi)))
+    if "order_font_size" in sizing:
+        put(
+            "global_order_font_size",
+            clamp_int(sizing["order_font_size"], *_FONT_BOUNDS),
+        )
+    color = sizing.get("order_font_color")
+    if isinstance(color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
+        put("global_order_font_color", color)
+    if "base_font_size" in sizing:
+        put("global_base_font_size", clamp_int(sizing["base_font_size"], *_FONT_BOUNDS))
+
+    canvas = config.get("canvas_px") or {}
+    if "width" in canvas:
+        put("global_canvas_width", clamp_int(canvas["width"], *_CANVAS_BOUNDS))
+    if "height" in canvas:
+        put("global_canvas_height", clamp_int(canvas["height"], *_CANVAS_BOUNDS))
+
+    axes = config.get("axes") or {}
+    numeric = numeric_field_options(fixations)
+    for cfg_key, state_key, label in (
+        ("x_field", "global_x_field", "X axis field"),
+        ("y_field", "global_y_field", "Y axis field"),
+    ):
+        val = axes.get(cfg_key)
+        if val is not None:
+            put_valid(val in numeric, state_key, val, label)
+
+    selection = config.get("selection") or {}
+    if selection:
+        if _restore_selection(selection, combos):
+            applied += 1
+        else:
+            skipped.append("trial selection")
+
+    return applied, skipped
+
+
+def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:
+    """Restore settings from a freshly uploaded plot-config JSON, once per file.
+
+    Reads the file captured by the sidebar ``plot_config_upload`` uploader
+    (persisted in session_state across reruns) and writes the saved settings
+    into session_state *before* the sidebar widgets render — the same mechanism
+    as ``_apply_url_preset``. Deduped by ``(name, size)`` so manual tweaks made
+    after a restore aren't clobbered on every rerun. Call right after the trial
+    combos are built, before the canvas/visualization controls."""
+    uploaded = st.session_state.get("plot_config_upload")
+    if uploaded is None:
+        return
+    signature = (uploaded.name, uploaded.size)
+    if st.session_state.get("_plot_config_last_import") == signature:
+        return
+    # Stamp the signature up front so a malformed file isn't retried every rerun.
+    st.session_state["_plot_config_last_import"] = signature
+    st.session_state.pop("_plot_config_skipped", None)
+    try:
+        config = json.loads(uploaded.getvalue().decode("utf-8"))
+        if not isinstance(config, dict):
+            raise ValueError("expected a JSON object")
+    except (ValueError, UnicodeDecodeError) as exc:
+        st.toast(f"Couldn't read plot config: {exc}", icon="⚠️")
+        return
+    applied, skipped = _restore_plot_config(config, combos, fixations)
+    st.session_state["_plot_config_skipped"] = skipped
+    if applied:
+        st.toast(f"Restored {applied} setting(s) from plot config.", icon="✅")
+    elif not skipped:
+        st.toast("Plot config had no recognized settings.", icon="⚠️")
 
 
 def configure_page() -> None:
@@ -784,23 +1001,29 @@ def render_sidebar_canvas_controls(
         )
     canvas_width = min(max(default_canvas_w, 100), 10000)
     canvas_height = min(max(default_canvas_h, 100), 10000)
+    # Seed the data-derived defaults so the inputs render without a `value=`
+    # argument — that keeps the keys assignable by the plot-config restore
+    # (app._restore_plot_config) without Streamlit's "default value but also set
+    # via Session State API" warning.
+    st.session_state.setdefault("global_canvas_width", canvas_width)
+    st.session_state.setdefault("global_canvas_height", canvas_height)
 
     display = st.sidebar.expander("Display settings", expanded=False)
     canvas_width = display.number_input(
         "Monitor width (px)",
         min_value=100,
         max_value=10000,
-        value=canvas_width,
         step=10,
         help="Use the real monitor width in pixels to keep coordinates true to scale.",
+        key="global_canvas_width",
     )
     canvas_height = display.number_input(
         "Monitor height (px)",
         min_value=100,
         max_value=10000,
-        value=canvas_height,
         step=10,
         help="Use the real monitor height in pixels to keep coordinates true to scale.",
+        key="global_canvas_height",
     )
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
@@ -822,15 +1045,16 @@ def render_sidebar_canvas_controls(
         help="Line slots per line of text. OneStop rendered one blank line above "
         "and one below each text line, so the box spans 3 line heights → 3.",
     )
+    st.session_state.setdefault("global_base_font_size", 16)
     base_font_size = display.number_input(
         "Figure font size (px)",
         min_value=6,
         max_value=72,
-        value=16,
         step=1,
         help="Real (monitor-pixel) font size, scaled true-to-scale with the "
         "figure. Used for the reading text when 'Scale text to boxes' is off or "
         "the data has no word boxes, and always for axis/legend chrome.",
+        key="global_base_font_size",
     )
     font_family = display.text_input(
         "Text font",
@@ -995,6 +1219,12 @@ def main() -> None:
         fixations_filtered if not fixations_filtered.empty else words_filtered
     )
 
+    # Restore settings from an uploaded plot-config JSON BEFORE the sidebar
+    # widgets render, so they pick up the saved values (see _apply_url_preset
+    # for the same preset-then-render mechanism). The uploader lives in the
+    # "Plot configuration" panel below; its file persists across reruns.
+    _apply_uploaded_plot_config(combos, fixations_filtered)
+
     # Canvas and visualization controls (sidebar)
     _sidebar_group("🎨 Visualization")
     (
@@ -1010,6 +1240,12 @@ def main() -> None:
     viz_settings = sidebar_controls(
         fixations_filtered, base_font_size, has_raw_gaze=has_raw_gaze
     )
+
+    # Reserve the "Plot configuration" slot here so it renders under the
+    # 🎨 Visualization group; the Interactive Plot tab fills it later (it needs
+    # the live selection + figure settings for the download). See
+    # tabs._render_plot_config_expander.
+    plot_config_slot = st.sidebar.container()
 
     # Sidebar Annotations panel (download/restore JSON + count). The per-trial
     # star/tags/notes editor lives in the Interactive Plot tab.
@@ -1046,6 +1282,7 @@ def main() -> None:
             raw_gaze=raw_gaze_filtered,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
+            plot_config_slot=plot_config_slot,
         )
 
     with tab_animation:

@@ -367,7 +367,8 @@ class TestMakeScanpathAnimation:
             color_by="duration_ms",
             fixation_colorscale="Viridis",
         )
-        trail = fig.data[1]  # 0 = word labels, 1 = trail, 2 = saccades, 3 = current
+        # 0 = word labels, 1 = trail, 2 = order numbers, 3 = saccades, 4 = current
+        trail = fig.data[1]
         assert trail.marker.colorscale is not None
         assert trail.marker.cmin == 180.0 and trail.marker.cmax == 250.0
         assert list(trail.marker.color) == [200]  # first fixation only
@@ -424,6 +425,49 @@ class TestMakeScanpathAnimation:
             font_family="Arial",
         )
         assert fig.data[1].marker.color == COMPARISON_PALETTE[0]
+
+    def test_order_numbers_never_glide_in_from_corner(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        # Regression: order numbers used to ride the growing markers+text trail,
+        # so each new <text> node flashed at the (0,0) corner before snapping to
+        # its fixation. They now live in their own text trace whose coordinates
+        # are CONSTANT across every frame (full reading laid out up front) — only
+        # the trailing numbers blank out — so a label never moves, it just turns
+        # on in place. Assert exactly that invariant.
+        n = len(normalized_fixations_df)
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+            show_order=True,
+        )
+        # 0 = word labels, 1 = trail (markers, hover only), 2 = order numbers.
+        order = fig.data[2]
+        assert order.mode == "text"
+        assert "text" not in (fig.data[1].mode or "")  # trail draws no numbers
+        full_x = tuple(order.x)
+        full_y = tuple(order.y)
+        assert len(full_x) == n  # every fixation present from the first frame
+
+        prev_shown = 0
+        for frame in fig.frames:
+            # The order trace is the second per-spec entry in each frame.
+            order_f = frame.data[1]
+            assert tuple(order_f.x) == full_x  # positions never shift
+            assert tuple(order_f.y) == full_y
+            text = list(order_f.text)
+            shown = sum(1 for t in text if t)
+            # Revealed numbers are a contiguous prefix "1..m", in place, and the
+            # blanked tail is exactly the rest — i.e. labels turn on, never move.
+            assert text[:shown] == [str(j + 1) for j in range(shown)]
+            assert all(t == "" for t in text[shown:])
+            assert shown >= prev_shown  # monotonic reveal, never un-reveals
+            prev_shown = shown
+        assert prev_shown == n  # last frame shows the whole reading
 
     def test_slider_declutters_long_reading_but_keeps_elapsed(
         self, normalized_words_df

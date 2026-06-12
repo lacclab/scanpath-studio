@@ -1467,8 +1467,6 @@ def make_scanpath_animation(
     if show_word_labels and not words.empty:
         _add_word_label_trace(fig, words, label_font_px, font_settings["family"])
 
-    marker_mode = "markers+text" if show_order else "markers"
-
     specs = _scanpath_anim_specs(
         [
             (fixations, COMPARISON_PALETTE[0], label_a),
@@ -1550,9 +1548,16 @@ def make_scanpath_animation(
             **s["marker_extra"],
         )
 
-    # Base traces, with stable indices the frames update by position.
+    # Base traces, with stable indices the frames update by position. The trail
+    # carries the markers (and the fixation number in `text`, for hover only);
+    # the visible order numbers live in a SEPARATE, constant-length text trace
+    # (added just below) so they never glide in from the corner as the trail
+    # grows.
     for s in specs:
         ordered = s["ordered"]
+        n_total = len(ordered)
+        all_x = ordered["x"].tolist()
+        all_y = ordered["y"].tolist()
         first_size = float(s["sizes"][0])
         s["text_color"] = s["color"] if dual else order_font_color
         sac_color = s["color"] if dual else SACCADE_COLOR
@@ -1562,17 +1567,11 @@ def make_scanpath_animation(
         s["idx_trail"] = len(fig.data)
         fig.add_trace(
             go.Scatter(
-                x=[ordered["x"].iloc[0]],
-                y=[ordered["y"].iloc[0]],
-                mode=marker_mode,
+                x=[all_x[0]],
+                y=[all_y[0]],
+                mode="markers",
                 marker=_trail_marker(s, [first_size], 1),
-                text=["1"] if show_order else None,
-                textfont=dict(
-                    color=s["text_color"],
-                    size=order_font_size,
-                    family=font_settings["family"],
-                ),
-                textposition="top center",
+                text=["1"],
                 showlegend=dual,
                 name=s["label"],
                 legendgroup=s["label"],
@@ -1583,6 +1582,34 @@ def make_scanpath_animation(
                 customdata=[ordered["duration_ms"].iloc[0]],
             )
         )
+        # Order numbers: a text-only trace that holds EVERY fixation's final
+        # position in every frame, with not-yet-reached numbers blanked to "".
+        # Because the node set and their coordinates never change frame to frame,
+        # Plotly only rewrites each label's string in place — so a new number
+        # snaps on at its fixation instead of animating in from the (0,0) corner
+        # (the artifact you get when a `markers+text` trail grows a point at a
+        # time and each new <text> node flashes at the origin before placement).
+        if show_order:
+            s["idx_order"] = len(fig.data)
+            fig.add_trace(
+                go.Scatter(
+                    x=all_x,
+                    y=all_y,
+                    mode="text",
+                    text=["1"] + [""] * (n_total - 1),
+                    textfont=dict(
+                        color=s["text_color"],
+                        size=order_font_size,
+                        family=font_settings["family"],
+                    ),
+                    textposition="top center",
+                    showlegend=False,
+                    legendgroup=s["label"],
+                    hoverinfo="skip",
+                )
+            )
+        else:
+            s["idx_order"] = None
         if show_saccades:
             s["idx_sac"] = len(fig.data)
             fig.add_trace(
@@ -1658,6 +1685,7 @@ def make_scanpath_animation(
         traces_idx_in_frame = []
         for s in specs:
             ordered = s["ordered"]
+            n_total = len(ordered)
             # Fixations whose recorded onset has been reached by time t.
             kk = max(int(np.searchsorted(s["onsets"], t, side="right")), 1)
             xs = ordered["x"].iloc[:kk].tolist()
@@ -1671,19 +1699,33 @@ def make_scanpath_animation(
                 go.Scatter(
                     x=xs,
                     y=ys,
-                    mode=marker_mode,
+                    mode="markers",
                     marker=_trail_marker(s, szs, kk),
-                    text=[str(j + 1) for j in range(kk)] if show_order else None,
-                    textfont=dict(
-                        color=s["text_color"],
-                        size=order_font_size,
-                        family=font_settings["family"],
-                    ),
-                    textposition="top center",
+                    text=[str(j + 1) for j in range(kk)],
                     customdata=ordered["duration_ms"].iloc[:kk].tolist(),
                 )
             )
             traces_idx_in_frame.append(s["idx_trail"])
+
+            if show_order:
+                # Same full-length positions as the base order trace; only the
+                # blanked tail shrinks as the trail advances, so numbers appear
+                # in place rather than sliding in from the corner.
+                traces_in_frame.append(
+                    go.Scatter(
+                        x=ordered["x"].tolist(),
+                        y=ordered["y"].tolist(),
+                        mode="text",
+                        text=[str(j + 1) if j < kk else "" for j in range(n_total)],
+                        textfont=dict(
+                            color=s["text_color"],
+                            size=order_font_size,
+                            family=font_settings["family"],
+                        ),
+                        textposition="top center",
+                    )
+                )
+                traces_idx_in_frame.append(s["idx_order"])
 
             if show_saccades:
                 sac_x: list = []

@@ -98,6 +98,7 @@ from scanpath_studio.tour import (
     maybe_show_welcome_tour,
     render_spotlight_tour,
     render_tour_replay_button,
+    spotlight_tour_pending,
 )
 from scanpath_studio.utils import (  # noqa: F401
     build_combo_options,
@@ -234,14 +235,18 @@ def configure_page() -> None:
 
     When loaded from an iframe with `?embed=true`, Streamlit's built-in embed
     mode already hides the header/menu — we additionally collapse the sidebar
-    so the iframe is mostly the plot.
+    so the iframe is mostly the plot. Welcome-tour sessions also start with
+    the sidebar closed: the centered welcome renders over a quiet page, and
+    the tour's first sidebar step opens it (see tour.spotlight_tour_pending).
     """
     is_embed = (st.query_params.get("embed") or "").lower() in {"true", "1"}
     st.set_page_config(
         page_title="Scanpath Studio",
         page_icon="👀",
         layout="wide",
-        initial_sidebar_state="collapsed" if is_embed else "auto",
+        initial_sidebar_state=(
+            "collapsed" if (is_embed or spotlight_tour_pending()) else "auto"
+        ),
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
 

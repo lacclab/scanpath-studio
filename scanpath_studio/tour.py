@@ -376,6 +376,11 @@ def render_spotlight_tour() -> None:
             # Bring the highlighted section into view. Same-origin iframe
             # trick as _close_dialog_clientside; no-op if the selector is
             # gone. Subtleties, all observed live:
+            # - Sidebar steps first click Streamlit's expand control, since
+            #   tour sessions start with the sidebar collapsed
+            #   (spotlight_tour_pending → initial_sidebar_state).
+            # - The find+scroll retries until the target is visible, riding
+            #   out the sidebar-expand animation.
             # - Match the first *visible* element, not the first match:
             #   Streamlit keeps inactive tab panels laid out but
             #   visibility-hidden, so a selector can hit an invisible
@@ -389,38 +394,102 @@ def render_spotlight_tour() -> None:
             # - The iframe stays INSIDE the fixed-position card: when it sat
             #   at the bottom of the main column, its (re)mount could yank
             #   the main scroller to the page bottom to reveal it.
+            in_sidebar = step["selector"].startswith(".st-key-tour_grp_")
             components.html(
                 f"""<script>
                 (function () {{
                     const doc = window.parent.document;
                     const win = doc.defaultView;
-                    const el = [...doc.querySelectorAll({step["selector"]!r})].find((e) => {{
-                        const r = e.getBoundingClientRect();
-                        if (r.width === 0 || r.height === 0) return false;
-                        const cs = win.getComputedStyle(e);
-                        return cs.visibility !== "hidden" && cs.display !== "none";
-                    }});
-                    if (!el) return;
-                    for (let box = el.parentElement; box; box = box.parentElement) {{
-                        const cs = win.getComputedStyle(box);
-                        if (/(auto|scroll|overlay)/.test(cs.overflowY)
-                                && box.scrollHeight > box.clientHeight + 4) {{
-                            const r = el.getBoundingClientRect();
-                            const b = box.getBoundingClientRect();
-                            const slack = 8;
-                            if (r.top >= b.top - slack
-                                    && r.bottom <= b.top + box.clientHeight + slack) {{
-                                return;  // already visible within its scroller
+                    const findVisible = () =>
+                        [...doc.querySelectorAll({step["selector"]!r})].find((e) => {{
+                            const r = e.getBoundingClientRect();
+                            if (r.width === 0 || r.height === 0) return false;
+                            const cs = win.getComputedStyle(e);
+                            return cs.visibility !== "hidden" && cs.display !== "none";
+                        }});
+                    let tries = 0;
+                    (function attempt() {{
+                        if ({str(in_sidebar).lower()}) {{
+                            // The collapsed sidebar keeps its layout (nonzero
+                            // rects), so gate on aria-expanded, not on
+                            // findVisible(). Retries ride out hydration.
+                            const sb = doc.querySelector(
+                                'section[data-testid="stSidebar"]');
+                            if (sb && sb.getAttribute("aria-expanded") !== "true") {{
+                                doc.querySelector(
+                                    'button[data-testid="stExpandSidebarButton"]'
+                                )?.click();
+                                if (++tries < 20) setTimeout(attempt, 150);
+                                return;
                             }}
-                            box.scrollTop += r.top - b.top
-                                - Math.max(0, (box.clientHeight - r.height) / 2);
+                        }}
+                        const el = findVisible();
+                        if (!el) {{
+                            if (++tries < 20) setTimeout(attempt, 150);
                             return;
                         }}
-                    }}
+                        for (let box = el.parentElement; box; box = box.parentElement) {{
+                            const cs = win.getComputedStyle(box);
+                            if (/(auto|scroll|overlay)/.test(cs.overflowY)
+                                    && box.scrollHeight > box.clientHeight + 4) {{
+                                const r = el.getBoundingClientRect();
+                                const b = box.getBoundingClientRect();
+                                const slack = 8;
+                                if (r.top >= b.top - slack
+                                        && r.bottom <= b.top + box.clientHeight + slack) {{
+                                    return;  // already visible within its scroller
+                                }}
+                                box.scrollTop += r.top - b.top
+                                    - Math.max(0, (box.clientHeight - r.height) / 2);
+                                return;
+                            }}
+                        }}
+                    }})();
                 }})();
                 </script>""",
                 height=0,
             )
+        else:
+            # Welcome step: close the sidebar so the centered card sits over
+            # a quiet page. initial_sidebar_state="collapsed" (configure_page)
+            # covers fresh visitors, but the frontend's per-tab stored sidebar
+            # state overrides it for returning tabs — so also click the
+            # collapse control. Retries because a click during initial React
+            # hydration is silently lost. The first sidebar step reopens it.
+            components.html(
+                """<script>
+                (function () {
+                    const doc = window.parent.document;
+                    let tries = 0;
+                    (function attempt() {
+                        const sb = doc.querySelector('section[data-testid="stSidebar"]');
+                        if (!sb || sb.getAttribute("aria-expanded") !== "true") return;
+                        (doc.querySelector(
+                            '[data-testid="stSidebarCollapseButton"] button')
+                            || doc.querySelector('section[data-testid="stSidebar"]'
+                                + ' [data-testid="stBaseButton-headerNoPadding"]'))
+                            ?.click();
+                        if (++tries < 25) setTimeout(attempt, 200);
+                    })();
+                })();
+                </script>""",
+                height=0,
+            )
+
+
+def spotlight_tour_pending() -> bool:
+    """True when this session is about to auto-open the spotlight tour.
+
+    Read by ``app.configure_page`` *before* ``maybe_show_welcome_tour`` sets
+    ``tour_seen``: tour sessions start with the sidebar collapsed so the
+    centered welcome renders over a quiet page; the first sidebar step then
+    opens it (the step script clicks Streamlit's expand control).
+    """
+    return (
+        TOUR_STYLE == "spotlight"
+        and not st.session_state.get("tour_seen")
+        and not tour_suppressed(st.query_params)
+    )
 
 
 def tour_suppressed(query_params) -> bool:

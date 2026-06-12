@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Upload a plot config to restore it.** The sidebar *Plot configuration* panel
+  (now grouped under 🎨 Visualization) gains a JSON uploader that re-applies a
+  previously downloaded config — layers, coloring, sizing, canvas, axes, and the
+  trial selection — silently skipping anything that doesn't fit the loaded data.
 - **PoTeC loader.** `sps.load_potec(root, download=True)` /
   `scanpath-studio render --potec` load the Potsdam Textbook Corpus end-to-end
   — its filename-encoded ids and separate character-AoI coordinates can't go
@@ -45,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CI
 - Test on Python 3.14 (the version Streamlit Cloud runs); CI now runs on pull
   requests only. Added a supported-Python-versions badge to the README.
+- Added a pull request template (`.github/pull_request_template.md`) with a
+  summary/verification prompt and a checklist mirroring the CONTRIBUTING and CI
+  checks (tests, ruff, `[Unreleased]` changelog, dependency manifests).
+- The publish workflow now creates a GitHub release (with the matching CHANGELOG
+  section as the body) on every `v*` tag, alongside the PyPI publish and Slack
+  post; `scripts/changelog_notes.py` gained a `--format markdown` mode for it.
 
 ## [0.18.0] - 2026-06-11
 

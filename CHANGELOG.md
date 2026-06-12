@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are no longer brand-only.
 
 ### Fixed
+- Animated scanpath order numbers no longer glide in from the top-left corner —
+  they now snap on at their fixation. The labels render in a constant-length
+  text trace, so a new number turns on in place instead of a fresh node
+  flashing at the (0,0) origin before placement.
 - The tutorial's Skip/Done buttons now close the dialog instantly instead of
   leaving it on screen for the ~10 s full-app rerun.
 

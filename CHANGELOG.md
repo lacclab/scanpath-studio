@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parallel test runs.** `pytest -n auto` (via `pytest-xdist`) fans the suite
   across the runner's cores, roughly cutting the AppTest-dominated wall-clock to
   a third.
+- **Faster dependency install.** The test job installs with `uv` (cached)
+  instead of `pip`, trimming the install step that now dominates each run.
 - Test on Python 3.14 (the version Streamlit Cloud runs); CI now runs on pull
   requests only. Added a supported-Python-versions badge to the README.
 - Added a pull request template (`.github/pull_request_template.md`) with a

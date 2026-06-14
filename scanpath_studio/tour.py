@@ -249,8 +249,7 @@ _SPOTLIGHT_STEPS = [
         "title": "💾 Save & restore",
         "body": "Star ⭐, tag, and note trials in the Scanpath Visualization "
         "tab. This panel saves the full plot configuration **and** your "
-        "annotations to one JSON file — and reloads them. URL parameters like "
-        "`?participant=…&trial=…` deep-link straight to a trial.\n\n"
+        "annotations to one JSON file — and reloads them.\n\n"
         "That's it — replay anytime via **🎓 Show tutorial** below. 👀",
     },
 ]

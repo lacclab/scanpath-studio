@@ -1235,10 +1235,18 @@ _RESERVED_SOURCE_NAMES = frozenset(
 
 
 def _safe_dataset_name(name: Optional[str]) -> str:
-    """A non-empty dataset name that can't collide with a built-in source label."""
+    """A non-empty dataset name that collides with neither a built-in source label
+    nor an already-stored dataset (suffixed ``(2)``, ``(3)``… rather than silently
+    overwriting an existing entry's frames)."""
     name = (name or "").strip() or _default_dataset_name()
     if name in _RESERVED_SOURCE_NAMES:
         name = f"{name} (uploaded)"
+    existing = st.session_state.get("_datasets", {})
+    if name in existing:
+        base, n = name, 2
+        while f"{base} ({n})" in existing:
+            n += 1
+        name = f"{base} ({n})"
     return name
 
 
@@ -1600,7 +1608,7 @@ def _wizard_trial_step(
     if present:
         values = list(present.values())
         counts_str = ", ".join(f"{k}: **{len(v):,}**" for k, v in present.items())
-        if all(len(v) == len(values[0]) for v in values):
+        if all(v == values[0] for v in values):
             body.success(f"✓ **{len(values[0]):,}** trials loaded")
         elif set.intersection(*values):
             body.info(
@@ -1898,6 +1906,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         problems.append("Words/IA: " + "; ".join(words_problems))
     if fix_problems:
         problems.append("Fixations: " + "; ".join(fix_problems))
+    # For a raw-gaze-ONLY upload, an incomplete raw-gaze mapping is the only thing
+    # blocking a usable dataset — fold it into `problems` so finalize is gated
+    # (otherwise the wizard would happily store an all-empty dataset). When words
+    # or fixations are present, raw gaze stays optional (a warning, handled below).
+    if not has_words and not has_fix and raw_gaze_problems:
+        problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
 
     # Steps 8/9 — functional fields to keep (highlighting, conditions to filter
     # by, extra colour columns); everything else is dropped for speed.

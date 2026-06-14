@@ -27,16 +27,30 @@ def frame_fingerprint(df: Optional[pd.DataFrame]) -> tuple:
 
     Two genuinely different frames could in principle collide, but the head/tail
     hash plus the exact row count makes that astronomically unlikely for real
-    eye-tracking tables. Falls back to ``(n, columns)`` if hashing raises (e.g. a
-    column of unhashable objects).
+    eye-tracking tables.
+
+    ``hash_pandas_object`` raises on columns of unhashable objects (lists/arrays —
+    e.g. parquet-preserved span-index fields). We stringify and retry rather than
+    drop the content signal entirely: zeroing the hash would collapse every frame
+    of the same shape + columns to one fingerprint, serving stale cached results
+    when switching between two such frames. Only a last-resort failure falls back
+    to ``(n, columns, 0, 0)``.
     """
     if df is None or getattr(df, "empty", True):
         return (0, ())
     cols = tuple(map(str, df.columns))
     n = int(len(df))
+
+    def _hash(sample: pd.DataFrame) -> int:
+        try:
+            return int(pd.util.hash_pandas_object(sample, index=True).sum())
+        except TypeError:
+            # Unhashable cell objects — stringify so content still drives the key.
+            return int(pd.util.hash_pandas_object(sample.astype(str), index=True).sum())
+
     try:
-        head = int(pd.util.hash_pandas_object(df.head(64), index=True).sum())
-        tail = int(pd.util.hash_pandas_object(df.tail(64), index=True).sum())
+        head = _hash(df.head(64))
+        tail = _hash(df.tail(64))
     except Exception:
         head = tail = 0
     return (n, cols, head, tail)
@@ -786,15 +800,46 @@ def fill_fixation_xy_from_words(
     return fixations
 
 
+def _reconcile_participant_asymmetry(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> pd.DataFrame:
+    """Re-key word boxes to the synthetic participant when the fixations have no
+    participant but the words do.
+
+    With participant now optional per table, a fixations table can be
+    participant-less (every row stamped ``SYNTHETIC_PARTICIPANT``) while the words
+    table still carries real participant ids. The trial picker keys off the
+    fixations, so it offers ``(all)`` — but the boxes are keyed by the real ids
+    and ``extract_trial`` then finds none, rendering fixations with no text. Stamp
+    the words with the synthetic id (dropping the now-duplicate per-reader boxes)
+    so they line up. No-op unless the fixations are entirely synthetic and the
+    words are not — the stimulus-words broadcast already covers the reverse."""
+    if words.empty or fixations.empty or "participant_id" not in words.columns:
+        return words
+    if set(fixations["participant_id"].unique()) != {SYNTHETIC_PARTICIPANT}:
+        return words
+    word_parts = set(words["participant_id"].unique())
+    if not word_parts or word_parts == {SYNTHETIC_PARTICIPANT}:
+        return words
+    words = words.copy()
+    words["participant_id"] = SYNTHETIC_PARTICIPANT
+    subset = [c for c in ("participant_id", "trial_id", "word_id") if c in words.columns]
+    if subset:
+        words = words.drop_duplicates(subset=subset)
+    return words
+
+
 def harmonize_frames(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Cross-frame fixups applied right after normalization.
 
-    Broadcast stimulus-level words across participants, then fill missing
-    fixation coordinates from word-box centers. Call whenever both frames are
-    available (the API and the app both route through this)."""
+    Broadcast stimulus-level words across participants, reconcile a
+    participant-less fixations table with participant-bearing words, then fill
+    missing fixation coordinates from word-box centers. Call whenever both frames
+    are available (the API and the app both route through this)."""
     words = broadcast_stimulus_words(words, fixations)
+    words = _reconcile_participant_asymmetry(words, fixations)
     fixations = fill_fixation_xy_from_words(fixations, words)
     return words, fixations
 

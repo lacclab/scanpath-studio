@@ -320,6 +320,61 @@ def test_fix_schema_requires_xy_or_word_id():
         sps.load_scanpath_data(fixations=no_position)
 
 
+def test_participant_less_fixations_get_synthetic_participant():
+    """A fixations table with no participant column loads (participant is now
+    optional) and every row is stamped with the synthetic participant."""
+    fixations = pd.DataFrame(
+        {
+            "trial_id": ["t1", "t1", "t2"],
+            "x": [10.0, 20.0, 30.0],
+            "y": [5.0, 5.0, 5.0],
+            "duration_ms": [100, 120, 90],
+        }
+    )
+    _words, fix = sps.load_scanpath_data(fixations=fixations)
+    assert (fix["participant_id"] == data_module.SYNTHETIC_PARTICIPANT).all()
+
+
+def test_asymmetric_participant_reconciles_word_boxes():
+    """Words carry a participant id but fixations don't — the boxes must be
+    re-keyed to the synthetic participant the trial picker uses, or they'd be
+    silently invisible (extract_trial would find none)."""
+    words = pd.DataFrame(
+        {
+            "participant_id": ["sub1", "sub1"],
+            "trial_id": ["t1", "t1"],
+            "word_id": [1, 2],
+            "word": ["Hello", "world"],
+            "left": [100, 200],
+            "right": [180, 280],
+            "top": [50, 50],
+            "bottom": [100, 100],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "trial_id": ["t1", "t1"],
+            "x": [140.0, 240.0],
+            "y": [75.0, 75.0],
+            "duration_ms": [180, 200],
+        }
+    )
+    words_n, fix_n = sps.load_scanpath_data(words=words, fixations=fixations)
+    assert set(fix_n["participant_id"]) == {data_module.SYNTHETIC_PARTICIPANT}
+    assert set(words_n["participant_id"]) == {data_module.SYNTHETIC_PARTICIPANT}
+    # The boxes for the trial the picker offers ('(all)', 't1') are now reachable.
+    fig = sps.plot_scanpath(words_n, fix_n, data_module.SYNTHETIC_PARTICIPANT, "t1")
+    assert len(fig.data) > 0
+
+
+def test_frame_fingerprint_distinguishes_unhashable_columns():
+    """Two frames identical in shape + columns but differing in a list-valued
+    (unhashable) column must not collapse to the same cache key."""
+    a = pd.DataFrame({"x": [1, 2], "spans": [[1, 2], [3, 4]]})
+    b = pd.DataFrame({"x": [1, 2], "spans": [[9, 9], [8, 8]]})
+    assert data_module.frame_fingerprint(a) != data_module.frame_fingerprint(b)
+
+
 # ---------------------------------------------------------------------------
 # PoTeC loader (against a tiny synthesized PoTeC-format tree, no download)
 # ---------------------------------------------------------------------------

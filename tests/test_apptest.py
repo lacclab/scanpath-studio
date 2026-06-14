@@ -710,12 +710,20 @@ class TestSetupWizard:
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
-        at.session_state["setup_complete"] = True
-        # Keep only the difficulty condition; drop the junk column.
-        at.session_state["col_map_words_optional"] = ["difficulty_level"]
-        at.session_state["col_map_words_keepextra"] = []
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Finalize with defaults (keep detected optional fields, drop unclaimed),
+        # then confirm the stored frame is actually thinned.
+        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        words = at.session_state["_datasets"][at.session_state["data_source_choice"]][
+            "words"
+        ]
+        # junk_col is unclaimed and not kept -> pruned; difficulty_level is a
+        # detected condition kept by default -> survives.
+        assert "junk_col" not in words.columns
+        assert "difficulty_level" in words.columns
 
     def test_unified_trial_picker_and_setup_step(self, monkeypatch):
         """Group A + C: one shared Trial ID picker (not per-table) and the
@@ -842,6 +850,79 @@ class TestSetupWizard:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         info_text = " ".join(e.value for e in at.info)
         assert "Trial coverage differs" in info_text, info_text
+
+    def test_disjoint_trial_ids_warn(self, monkeypatch):
+        """Group C.1c: when the tables share no trial ids at all (a likely mapping
+        error), the wizard warns rather than just noting differing coverage."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        raw_words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["w1", "w2"],
+                "word_id": [1, 1],
+                "IA_LEFT": [0, 0],
+                "IA_RIGHT": [10, 10],
+                "IA_TOP": [0, 0],
+                "IA_BOTTOM": [10, 10],
+                "IA_LABEL": ["a", "b"],
+            }
+        )
+        raw_fix = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["f1", "f2"],
+                "CURRENT_FIX_X": [5.0, 5.0],
+                "CURRENT_FIX_Y": [5.0, 5.0],
+                "CURRENT_FIX_DURATION": [100, 120],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                raw_words
+                if kw["state_prefix"] == "col_map_words"
+                else raw_fix
+                if kw["state_prefix"] == "col_map_fix"
+                else pd.DataFrame()
+            ),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        warn_text = " ".join(e.value for e in at.warning)
+        assert "No trial ids are shared" in warn_text, warn_text
+
+    def test_raw_gaze_only_incomplete_mapping_blocks_finalize(self, monkeypatch):
+        """Bug fix: a raw-gaze-only upload with an unmappable trial id must block
+        finalize (raw-gaze problems are folded in) instead of storing an empty
+        dataset."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        # No participant/trial/x/y the schema can auto-detect.
+        raw_gaze = pd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                raw_gaze if kw["state_prefix"] == "col_map_raw_gaze" else pd.DataFrame()
+            ),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Finalize is shown but disabled; the blocking problem mentions raw gaze.
+        finalize = [b for b in at.button if b.key == "wizard_finalize"]
+        assert finalize and finalize[0].disabled
+        warn_text = " ".join(e.value for e in at.warning)
+        assert "Raw gaze" in warn_text, warn_text
 
     def test_composite_trial_dataset_restores_picker_on_switch_back(self, monkeypatch):
         """Regression for the review's HIGH finding: a stored dataset whose trial

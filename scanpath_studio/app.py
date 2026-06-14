@@ -1250,6 +1250,28 @@ def _safe_dataset_name(name: Optional[str]) -> str:
     return name
 
 
+def _finalize_wizard_dataset() -> None:
+    """Store the wizard's normalized frames as a named dataset and switch to it.
+
+    Runs as the "✅ Use this dataset" button's ``on_click`` callback. A callback —
+    not an inline ``if button:`` handler — is required because a real
+    ``st.file_uploader`` in the wizard can swallow an inline button click (the
+    click triggers a rerun in which the uploader re-renders and the handler is
+    never reached), leaving the dataset unstored. The callback fires as part of
+    the click event, before the rerun, so it always runs. The frames were stashed
+    in ``_wizard_finalize_payload`` on the render that drew the button."""
+    payload = st.session_state.pop("_wizard_finalize_payload", None)
+    if payload is None:
+        return
+    ds_name = _safe_dataset_name(st.session_state.get("wizard_dataset_name"))
+    store = st.session_state.setdefault("_datasets", {})
+    store[ds_name] = payload
+    # Apply the source switch through the plain pending key that
+    # render_sidebar_data_source consumes before the radio instantiates.
+    st.session_state["_pending_source_choice"] = ds_name
+    st.session_state["setup_complete"] = True
+
+
 def _enter_add_data_wizard() -> None:
     """Switch the data source to the upload wizard.
 
@@ -2038,34 +2060,35 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
         step("Name & finish")
         st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
-        ds_name_input = body.text_input(
+        body.text_input(
             "Dataset name",
             key="wizard_dataset_name",
             help="Shown in the Data source list so you can switch back to it.",
         )
-        if body.button("✅ Use this dataset", type="primary", key="wizard_finalize"):
-            ds_name = _safe_dataset_name(ds_name_input)
-            store = st.session_state.setdefault("_datasets", {})
-            store[ds_name] = {
-                "words": words_norm,
-                "fixations": fixations_norm,
-                "raw_gaze": raw_gaze_norm,
-                "filter_fields": list(
-                    st.session_state.get("wizard_filter_fields", [])
-                ),
-                # Persist the composite trial-id components (session-only state, not
-                # in the frames) so switching back restores the cascading picker.
-                "composite_trial_columns": list(
-                    st.session_state.get("_composite_trial_columns") or []
-                ),
-            }
-            # Hand the switch to render_sidebar_data_source via a plain key it
-            # applies before the radio renders — assigning the radio's own key
-            # here and rerunning is overwritten by the radio's frontend value in
-            # a real browser (the dataset would store but not become selected).
-            st.session_state["_pending_source_choice"] = ds_name
-            st.session_state["setup_complete"] = True
-            st.rerun()
+        # Stash the assembled, already-normalized dataset so the finalize callback
+        # can store it. The callback (not an inline `if button:` handler) is what
+        # makes "Use this dataset" reliable: a real st.file_uploader in the wizard
+        # can swallow an inline button click (the click reruns, the uploader
+        # re-renders, and the handler is never reached), so the dataset would
+        # never get stored. on_click runs as part of the click event, before the
+        # rerun — exactly like the "➕ Add data" button.
+        st.session_state["_wizard_finalize_payload"] = {
+            "words": words_norm,
+            "fixations": fixations_norm,
+            "raw_gaze": raw_gaze_norm,
+            "filter_fields": list(st.session_state.get("wizard_filter_fields", [])),
+            # Persist the composite trial-id components (session-only state, not in
+            # the frames) so switching back restores the cascading picker.
+            "composite_trial_columns": list(
+                st.session_state.get("_composite_trial_columns") or []
+            ),
+        }
+        body.button(
+            "✅ Use this dataset",
+            type="primary",
+            key="wizard_finalize",
+            on_click=_finalize_wizard_dataset,
+        )
 
     return _UploadResult(
         words_norm, fixations_norm, raw_gaze_norm, raw_words, raw_fix, []

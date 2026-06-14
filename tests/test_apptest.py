@@ -811,8 +811,6 @@ class TestSetupWizard:
         The real flow renders the radio first (on a built-in source), so the
         finalize switch must not be lost to the radio's frontend reconciliation."""
         self._inject(monkeypatch)
-        from scanpath_studio import app
-
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         # Real flow: enter the wizard via the button (radio already rendered).

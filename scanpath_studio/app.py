@@ -35,6 +35,7 @@ from typing import Dict, NamedTuple, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Allow running via `streamlit run scanpath_studio/app.py` by adding the
 # repository root to sys.path when executed as a script instead of a package.
@@ -987,6 +988,100 @@ def prepare_data(
     return words_norm, fixations_norm, problems
 
 
+# Labels of the top-level tab strip, shared by the real tabs, the
+# unmapped-data placeholder view, and the tab-persistence script so they can't
+# drift apart.
+_MAIN_TAB_LABELS = [
+    "Scanpath Visualization",
+    "Generations (WIP)",
+    "Raw Data",
+    "Data Statistics",
+    "Bulk Export",
+]
+
+
+def _render_tab_persistence() -> None:
+    """Keep the focused top-level tab across reruns.
+
+    Native ``st.tabs`` tracks the active tab purely in the browser and usually
+    preserves it across reruns — but it resets to the first tab whenever the
+    tab strip is torn down and rebuilt (which can happen on a rerun triggered
+    by an unrelated widget, e.g. the sidebar trial filters). ``st.tabs`` exposes
+    no key and no way to read/set the active tab from Python, so we can't fix
+    this server-side.
+
+    Instead we inject a tiny script into the *parent* document (the app already
+    uses same-origin ``components.html`` iframes for the tour — see
+    ``tour.py``). It remembers the user's last-clicked top-level tab in
+    ``sessionStorage`` and re-selects it whenever Streamlit resets the strip to
+    the first tab. The script lives in the parent document — not the throwaway
+    iframe — so its click listener + observer survive across reruns; it injects
+    itself once (guarded by element id) and targets only the top-level strip
+    (matched by the known labels), leaving nested sub-tabs alone.
+    """
+    labels_json = json.dumps(_MAIN_TAB_LABELS)
+    components.html(
+        f"""<script>
+        (function () {{
+            const doc = window.parent.document;
+            if (doc.getElementById("spx-tab-persist")) return;  // inject once
+            const s = doc.createElement("script");
+            s.id = "spx-tab-persist";
+            s.textContent = `
+                (function () {{
+                    const KEY = "spx_active_main_tab";
+                    const LABELS = {labels_json};
+                    const d = document;
+                    const ss = window.sessionStorage;
+                    function topList() {{
+                        for (const t of d.querySelectorAll('button[role=\\"tab\\"]')) {{
+                            if (LABELS.includes(t.innerText.trim()))
+                                return t.closest('[role=\\"tablist\\"]');
+                        }}
+                        return null;
+                    }}
+                    // Remember the user's clicks on the top-level tabs.
+                    d.addEventListener("click", function (ev) {{
+                        const tab = ev.target.closest &&
+                            ev.target.closest('button[role=\\"tab\\"]');
+                        if (!tab) return;
+                        const label = tab.innerText.trim();
+                        if (!LABELS.includes(label)) return;          // skip sub-tabs
+                        if (tab.closest('[role=\\"tablist\\"]') !== topList()) return;
+                        try {{ ss.setItem(KEY, label); }} catch (e) {{}}
+                    }}, true);
+                    // Re-select the saved tab if Streamlit reset it.
+                    function restore() {{
+                        let want;
+                        try {{ want = ss.getItem(KEY); }} catch (e) {{ return; }}
+                        if (!want) return;
+                        const list = topList();
+                        if (!list) return;
+                        const tabs = list.querySelectorAll('button[role=\\"tab\\"]');
+                        for (const t of tabs) {{
+                            if (t.innerText.trim() === want) {{
+                                if (t.getAttribute("aria-selected") !== "true")
+                                    t.click();
+                                return;
+                            }}
+                        }}
+                    }}
+                    let pending;
+                    const obs = new MutationObserver(function () {{
+                        clearTimeout(pending);
+                        pending = setTimeout(restore, 40);
+                    }});
+                    obs.observe(d.body, {{ childList: true, subtree: true }});
+                    restore();
+                }})();
+            `;
+            doc.head.appendChild(s);
+        }})();
+        </script>""",
+        height=0,
+    )
+
+
 def _render_raw_preview(label: str, df: pd.DataFrame) -> None:
     """Show one uploaded table's columns + a sample so the user can map it."""
     if df is None or df.empty:
@@ -1014,15 +1109,7 @@ def _render_unmapped_view(
         "sidebar — the raw uploaded data is shown in the **Raw Data** tab below "
         "to help you choose. Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
     )
-    tab_single, tab_multi, tab_raw, tab_stats, tab_bulk = st.tabs(
-        [
-            "Scanpath Visualization",
-            "Generations (WIP)",
-            "Raw Data",
-            "Data Statistics",
-            "Bulk Export",
-        ]
-    )
+    tab_single, tab_multi, tab_raw, tab_stats, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
     for tab in (tab_single, tab_multi, tab_stats, tab_bulk):
         with tab:
             st.info("Complete the column mapping in the sidebar to see this view.")
@@ -2377,15 +2464,9 @@ def main() -> None:
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
     # own tab.
-    tab_single, tab_multi, tab_raw, tab_stats, tab_bulk = st.tabs(
-        [
-            "Scanpath Visualization",
-            "Generations (WIP)",
-            "Raw Data",
-            "Data Statistics",
-            "Bulk Export",
-        ]
-    )
+    tab_single, tab_multi, tab_raw, tab_stats, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
+    # Keep the focused tab across reruns (see _render_tab_persistence).
+    _render_tab_persistence()
 
     with tab_single:
         render_single_trial_tab(

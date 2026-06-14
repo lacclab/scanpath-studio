@@ -798,6 +798,29 @@ class TestSetupWizard:
         assert name != app.UPLOAD_CHOICE
         assert at.session_state["setup_complete"] is True
 
+    def test_finalize_selects_new_dataset_in_sidebar(self, monkeypatch):
+        """Regression: after '➕ Add data' → 'Use this dataset', the new dataset
+        must appear in the sidebar Data-source radio AND be the selected value.
+        The real flow renders the radio first (on a built-in source), so the
+        finalize switch must not be lost to the radio's frontend reconciliation."""
+        self._inject(monkeypatch)
+        from scanpath_studio import app
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        # Real flow: enter the wizard via the button (radio already rendered).
+        [b for b in at.button if b.key == "add_data_btn"][0].click()
+        at.run(timeout=60)
+        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        name = at.session_state["data_source_choice"]
+        assert name in at.session_state["_datasets"]
+        radios = [r for r in at.radio if r.key == "data_source_choice"]
+        assert radios, "data-source radio not rendered after finalize"
+        assert name in list(radios[0].options), (name, list(radios[0].options))
+        assert radios[0].value == name
+
     def test_stored_dataset_loads_full_app_without_wizard(self, monkeypatch):
         """Group B.4: selecting a stored dataset reloads the whole app from the
         persisted frames — no wizard, no re-upload — and renders the trial picker."""

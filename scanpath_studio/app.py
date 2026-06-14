@@ -1281,13 +1281,24 @@ def render_sidebar_data_source() -> str:
         "Data source", expanded=True
     )
 
+    # Apply a programmatic source switch (the wizard's finalize / Cancel) BEFORE
+    # any widget reads data_source_choice. It rides a plain key, not the radio's
+    # widget value, so the browser never reconciles it away — assigning
+    # data_source_choice inline and rerunning is unreliable because the radio's
+    # frontend value can overwrite it on the rerun (works in AppTest, not in a
+    # real browser). Applying it here, before the radio instantiates, is the safe
+    # equivalent of an on_click callback.
+    pending = st.session_state.pop("_pending_source_choice", None)
+    if pending is not None:
+        st.session_state["data_source_choice"] = pending
+
     # While the upload wizard is active/editing, its value (UPLOAD_CHOICE) isn't
     # a selectable source — don't render the radio (Streamlit would reject an
     # out-of-options value); offer a way out instead.
     if st.session_state.get("data_source_choice") == UPLOAD_CHOICE:
         source.caption("➕ Adding a dataset — fill in the setup wizard →")
         if source.button("✕ Cancel", key="cancel_add_data"):
-            st.session_state["data_source_choice"] = st.session_state.get(
+            st.session_state["_pending_source_choice"] = st.session_state.get(
                 "_prev_source", DEMO_CHOICE
             )
             st.session_state["setup_complete"] = True
@@ -1308,11 +1319,14 @@ def render_sidebar_data_source() -> str:
     if cur == SYNTHETIC_CHOICE and SYNTHETIC_CHOICE not in options:
         options.append(SYNTHETIC_CHOICE)
 
-    default = cur if cur in options else options[0]
+    # Heal a stale/invalid selection (e.g. a removed dataset) so the radio never
+    # errors, then let the session value drive it — no `index=`, which would clash
+    # with the Session-State-backed key and can ignore a programmatic switch.
+    if st.session_state.get("data_source_choice") not in options:
+        st.session_state["data_source_choice"] = options[0]
     choice = source.radio(
         "Data source",
         options,
-        index=options.index(default),
         help=data_dictionary_help_text(),
         key="data_source_choice",
         label_visibility="collapsed",
@@ -2045,7 +2059,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     st.session_state.get("_composite_trial_columns") or []
                 ),
             }
-            st.session_state["data_source_choice"] = ds_name
+            # Hand the switch to render_sidebar_data_source via a plain key it
+            # applies before the radio renders — assigning the radio's own key
+            # here and rerunning is overwritten by the radio's frontend value in
+            # a real browser (the dataset would store but not become selected).
+            st.session_state["_pending_source_choice"] = ds_name
             st.session_state["setup_complete"] = True
             st.rerun()
 

@@ -1250,6 +1250,22 @@ def _safe_dataset_name(name: Optional[str]) -> str:
     return name
 
 
+def _enter_add_data_wizard() -> None:
+    """Switch the data source to the upload wizard.
+
+    Runs as the "➕ Add data" button's ``on_click`` callback — i.e. *before* any
+    widget (including the ``data_source_choice`` radio) is instantiated on the
+    rerun — so it may reassign that widget's key. An in-body handler can't:
+    Streamlit forbids modifying ``st.session_state.data_source_choice`` once the
+    radio with that key has rendered."""
+    st.session_state["_prev_source"] = st.session_state.get(
+        "data_source_choice", DEMO_CHOICE
+    )
+    st.session_state["data_source_choice"] = UPLOAD_CHOICE
+    st.session_state["setup_complete"] = False
+    _reset_wizard_widgets()
+
+
 def render_sidebar_data_source() -> str:
     """Render the data-source picker in the sidebar.
 
@@ -1307,14 +1323,16 @@ def render_sidebar_data_source() -> str:
             disabled=True,
             help="Curated public corpora — coming soon.",
         )
-    if source.button(
-        "➕ Add data", key="add_data_btn", help="Upload your own eye-tracking tables."
-    ):
-        st.session_state["_prev_source"] = choice
-        st.session_state["data_source_choice"] = UPLOAD_CHOICE
-        st.session_state["setup_complete"] = False
-        _reset_wizard_widgets()
-        st.rerun()
+    # The state change runs in an on_click callback (before widgets instantiate)
+    # so it can reassign the data_source_choice radio key — see
+    # _enter_add_data_wizard. The callback fires, then Streamlit reruns into the
+    # wizard branch above.
+    source.button(
+        "➕ Add data",
+        key="add_data_btn",
+        on_click=_enter_add_data_wizard,
+        help="Upload your own eye-tracking tables.",
+    )
     return choice
 
 

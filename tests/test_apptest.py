@@ -689,6 +689,24 @@ class TestSetupWizard:
         )
         return app
 
+    def test_add_data_button_enters_wizard(self):
+        """Clicking '➕ Add data' from a built-in source switches into the upload
+        wizard. Regression: the handler reassigned the data_source_choice radio
+        key inline, which Streamlit forbids after the radio is instantiated — it
+        must run in an on_click callback instead."""
+        from scanpath_studio import app
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        add = [b for b in at.button if b.key == "add_data_btn"]
+        assert add, "Add data button not rendered"
+        add[0].click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == app.UPLOAD_CHOICE
+        assert at.session_state["setup_complete"] is False
+
     def test_wizard_active_then_finalize_renders_tabs(self, monkeypatch):
         app = self._inject(monkeypatch)
         at = _make_apptest()

@@ -6,7 +6,8 @@ eye-tracking scanpaths over text.
 Architecture:
     - Entry point: main() function configures Streamlit and orchestrates the UI
     - Data flow: CSV upload → schema inference → normalization → filtering → plotting
-    - UI structure: Sidebar controls + 4 tabbed views (Interactive, Animation, Raw Data, Stats)
+    - UI structure: Sidebar controls + tabbed views (Visualization, Generations,
+      Data Inspection, Bulk Export)
 
 Data Pipeline:
     1. Load raw CSVs (words + fixations + optional raw gaze)
@@ -115,9 +116,8 @@ from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _collect_column_mapping,
     render_bulk_export_tab,
-    render_data_statistics_tab,
+    render_data_inspection_tab,
     render_multiple_comparison_tab,
-    render_raw_data_tab,
     render_single_trial_tab,
 )
 from scanpath_studio.tour import (
@@ -1167,6 +1167,20 @@ def _normalize_pair(
     )
 
 
+def _reset_active_mapping() -> None:
+    """Clear the stashed column mapping at the start of each data load, so a new
+    source doesn't inherit the previous one's mapping in the Data Inspection tab."""
+    st.session_state["_active_column_mapping"] = {}
+
+
+def _stash_active_mapping(table: str, schema: Optional[Dict]) -> None:
+    """Record the schema (field → source column) actually used for ``table`` so
+    ``tabs.render_data_inspection_tab`` can show how columns were mapped. ``table``
+    is one of ``"words" / "fixations" / "raw_gaze"``."""
+    mapping = st.session_state.setdefault("_active_column_mapping", {})
+    mapping[table] = dict(schema) if schema else None
+
+
 def prepare_data(
     words_df: pd.DataFrame,
     fixations_df: pd.DataFrame,
@@ -1238,6 +1252,10 @@ def prepare_data(
         st.session_state["_composite_trial_columns"] = None
         return empty_words_frame(), empty_fixations_frame(), problems
 
+    # Record the mapping actually used so the Data Inspection tab can show it.
+    _stash_active_mapping("words", word_schema if has_words else None)
+    _stash_active_mapping("fixations", fix_schema if has_fixations else None)
+
     words_norm, fixations_norm = _normalize_pair(
         words_df, word_schema, fixations_df, fix_schema
     )
@@ -1250,8 +1268,7 @@ def prepare_data(
 _MAIN_TAB_LABELS = [
     "Scanpath Visualization",
     "Generations (WIP)",
-    "Raw Data",
-    "Data Statistics",
+    "Data Inspection",
     "Bulk Export",
 ]
 
@@ -1354,22 +1371,23 @@ def _render_unmapped_view(
 ) -> None:
     """Show the raw uploaded data while the column mapping is incomplete.
 
-    Renders the usual tab strip so the layout is familiar, but only the **Raw
-    Data** tab has content (the uploaded tables, unmodified) — the plotting
+    Renders the usual tab strip so the layout is familiar, but only the **Data
+    Inspection** tab has content (the uploaded tables, unmodified) — the plotting
     tabs point back to the sidebar. Lets the user inspect column names and
     values to fill in the *Column mapping* panels without the app halting.
     """
     st.warning(
         "**Finish the column mapping to draw scanpaths.** Map the missing "
         "field(s) in the **Column mapping** panel below each upload box in the "
-        "sidebar — the raw uploaded data is shown in the **Raw Data** tab below "
-        "to help you choose. Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
+        "sidebar — the raw uploaded data is shown in the **Data Inspection** tab "
+        "below to help you choose. Still needed:\n\n"
+        + "\n".join(f"- {p}" for p in problems)
     )
-    tab_single, tab_multi, tab_raw, tab_stats, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
-    for tab in (tab_single, tab_multi, tab_stats, tab_bulk):
+    tab_single, tab_multi, tab_inspect, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
+    for tab in (tab_single, tab_multi, tab_bulk):
         with tab:
             st.info("Complete the column mapping in the sidebar to see this view.")
-    with tab_raw:
+    with tab_inspect:
         if raw_words_df is None or raw_words_df.empty:
             if raw_fixations_df is None or raw_fixations_df.empty:
                 st.info("No data loaded yet.")
@@ -1499,6 +1517,7 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
         if not raw_gaze_df.empty:
             raw_gaze_schema = infer_raw_gaze_schema(raw_gaze_df)
             if raw_gaze_schema:
+                _stash_active_mapping("raw_gaze", raw_gaze_schema)
                 raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
             else:
                 st.sidebar.warning("Could not infer raw gaze schema from sample data")
@@ -1526,6 +1545,7 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
                 st.sidebar.warning("Raw gaze ignored — " + "; ".join(problems))
                 raw_gaze_df = pd.DataFrame()
             else:
+                _stash_active_mapping("raw_gaze", raw_gaze_schema)
                 raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
 
     return raw_gaze_df
@@ -2799,6 +2819,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
             problems,
         )
 
+    # Record the mapping so the Data Inspection tab shows it once the wizard is
+    # collapsed (active=False) and the tabs render with this upload.
+    wizard_schemas = {
+        "words": dict(word_schema) if has_words else None,
+        "fixations": dict(fix_schema) if has_fix else None,
+        "raw_gaze": dict(raw_gaze_schema) if not raw_gaze.empty else None,
+    }
+    for table, schema in wizard_schemas.items():
+        _stash_active_mapping(table, schema)
+
     keep_words = (
         compute_keep_columns(
             word_schema, keep_columns=keep_by_prefix.get("col_map_words", set())
@@ -2860,6 +2890,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "composite_trial_columns": list(
                 st.session_state.get("_composite_trial_columns") or []
             ),
+            # Persist the column mapping so reselecting this stored dataset can
+            # repopulate the Data Inspection tab's mapping table.
+            "schemas": wizard_schemas,
         }
         _render_setup_download(body)
         body.button(
@@ -2888,7 +2921,7 @@ def main() -> None:
         3. Load and normalize data (words, fixations, optional raw gaze)
         4. Apply user-selected filters (participants, trials, texts)
         5. Render sidebar controls (canvas, fonts, visualization settings)
-        6. Render tabbed UI (Interactive Plot, Animation, Raw Data, Statistics)
+        6. Render tabbed UI (Visualization, Generations, Data Inspection, Bulk Export)
 
     Data Flow:
         CSV upload → schema inference → normalization → filtering →
@@ -2961,6 +2994,9 @@ def main() -> None:
     else:
         deep_link_pid = None
     raw_gaze_df: Optional[pd.DataFrame] = None
+    # Start each load with a clean column-mapping stash; each branch below
+    # records the schema it used for the Data Inspection tab.
+    _reset_active_mapping()
     if data_choice == UPLOAD_CHOICE:
         # Hybrid setup wizard: a main-area guided flow on first load, then a
         # compact collapsed "Data & mapping" panel. While the wizard is active
@@ -2992,6 +3028,10 @@ def main() -> None:
         # the picker would inherit whatever source was loaded last.
         composite = list(stored.get("composite_trial_columns") or [])
         st.session_state["_composite_trial_columns"] = composite or None
+        # Re-publish the stored column mapping so the Data Inspection tab shows
+        # how this dataset's columns were mapped (the wizard isn't re-run here).
+        for table, schema in (stored.get("schemas") or {}).items():
+            _stash_active_mapping(table, schema)
     else:
         # Built-in sources (demo / synthetic / OneStop / public) auto-detect
         # their mapping, so they skip the wizard entirely. Drop any wizard filter
@@ -3165,8 +3205,8 @@ def main() -> None:
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
-    # own tab.
-    tab_single, tab_multi, tab_raw, tab_stats, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
+    # own tab. Raw Data + Data Statistics are merged into Data Inspection.
+    tab_single, tab_multi, tab_inspect, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
     # Keep the focused tab across reruns (see _render_tab_persistence).
     _render_tab_persistence()
 
@@ -3200,18 +3240,9 @@ def main() -> None:
             scale_text_to_boxes=scale_text_to_boxes,
         )
 
-    with tab_raw:
-        render_raw_data_tab(words_filtered, fixations_filtered, raw_gaze_filtered)
-
-    with tab_stats:
-        render_data_statistics_tab(
-            words_filtered,
-            fixations_filtered,
-            raw_gaze_filtered,
-            combos,
-            canvas_width=canvas_width,
-            base_font_size=base_font_size,
-            font_family=font_family,
+    with tab_inspect:
+        render_data_inspection_tab(
+            words_filtered, fixations_filtered, raw_gaze_filtered
         )
 
     with tab_bulk:

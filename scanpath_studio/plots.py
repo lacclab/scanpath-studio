@@ -456,8 +456,15 @@ def _add_word_label_trace(
         return
     customdata = None
     hover = "Word %{text}<extra></extra>"
-    if "word_id" in words.columns and "line_idx" in words.columns:
-        customdata = words[["word_id", "line_idx"]]
+    if "word_id" in words.columns:
+        from .measures import cluster_word_lines
+
+        # The source ``line_idx`` is often a constant (OneStop IA exports rarely
+        # carry a real per-word line number), so infer the visual line from
+        # word-box geometry — same clustering the by-line coloring uses — and
+        # show it 1-based.
+        line_display = (cluster_word_lines(words) + 1).rename("line")
+        customdata = pd.concat([words["word_id"], line_display], axis=1)
         hover = (
             "Word %{text}<br>Word ID %{customdata[0]}"
             "<br>Line %{customdata[1]}<extra></extra>"
@@ -804,15 +811,13 @@ def make_scanpath_figure(
                 hovertemplate=(
                     "Fixation #%{customdata[0]}<br>"
                     "Duration %{customdata[1]} ms<br>"
-                    "Word #%{customdata[2]}<br>"
-                    "Pass #%{customdata[3]}<extra></extra>"
+                    "Word #%{customdata[2]}<extra></extra>"
                 ),
                 customdata=np.stack(
                     [
                         ordered["order_in_trial"],
                         ordered["duration_ms"],
                         ordered.get("word_id", pd.Series([np.nan] * len(ordered))),
-                        ordered.get("pass_index", pd.Series([np.nan] * len(ordered))),
                     ],
                     axis=1,
                 ),

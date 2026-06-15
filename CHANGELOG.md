@@ -104,6 +104,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-trial "Resorting to unclean kill browser." log noise.
 
 ### Fixed
+- **Animated scanpath replays at its real speed again.** The Play button forced a
+  full figure redraw on every frame, so each frame also paid the ~50 ms cost of
+  re-rendering the static word boxes + labels; on a long trial that dwarfed the
+  per-frame budget and the replay crawled — far slower than its quoted time, and
+  the speed slider stopped helping above ~×4. Every animated trace is now full
+  length with not-yet-reached fixations masked out, so a frame only changes point
+  positions and Play can use `redraw=False` (updating just those traces). The
+  replay now actually runs at `reading time ÷ speed`.
 - **Uploading a large EyeLink report no longer crashes the app.** Reports with
   sentinel values (e.g. `.` in the `CURRENT_FIX_PRECISION_MEASURE_*` columns)
   could read as a column mixing numbers and text, which crashed the cloud worker

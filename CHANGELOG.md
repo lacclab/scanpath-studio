@@ -112,6 +112,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dropped the stale **Reading regime** line from the Text & question panel, and
   fixed the per-trial annotations note that pointed at an *Annotations* sidebar
   panel that no longer exists (it lives in **💾 Save & restore**).
+- **Word hover shows the real line number.** The word tooltip used to always say
+  *Line 1* because it read the source `line_idx` column, which is usually a
+  constant. It now infers the visual line from the word-box layout (the same
+  clustering the by-line colouring uses), so each line reads correctly.
+- **Fixation hover no longer shows *Pass #NaN*.** The fixation tooltip dropped the
+  *Pass* line, which displayed `NaN` whenever the data had no pass/reread column.
 
 ### Removed
 - **Noise-flag auto-filtering.** A mapped noise/validity column used to silently

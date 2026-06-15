@@ -33,6 +33,16 @@ class TestDefaultTrialColumns:
             "repeated_reading_trial",
         ]
 
+    def test_uses_canonical_participant_candidates(self):
+        # A non-standard participant name (reader_id) is in PARTICIPANT_CANDIDATES,
+        # so it still composes the default trial id (not paragraph-only).
+        proposed = {"trial": "unique_paragraph_id"}
+        present = ["reader_id", "unique_paragraph_id"]
+        assert app._default_trial_columns(proposed, present) == [
+            "reader_id",
+            "unique_paragraph_id",
+        ]
+
     def test_falls_back_to_paragraph_and_text_without_participant(self):
         # OneStop-shaped upload with no participant column on the words table.
         proposed = {"trial": "trial_id", "text_id": "text_id"}

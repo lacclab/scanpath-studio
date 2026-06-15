@@ -73,6 +73,7 @@ from scanpath_studio.controls import (
 )
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
+    PARTICIPANT_CANDIDATES,
     WORD_OPTIONAL_FIELDS,
     categorize_columns,
     compute_canvas_size,
@@ -1681,9 +1682,10 @@ def _default_trial_columns(proposed: Dict, present_cols) -> list:
     precomputed unique trial id over a redundant composite (e.g. don't pair
     ``unique_trial_id`` with the paragraph id it already encodes)."""
     cols_frame = pd.DataFrame(columns=list(present_cols))
-    participant = pick_column(
-        cols_frame, ["participant_id", "participant", "subject_id"]
-    )
+    # Use the canonical candidate lists so non-standard names (reader_id,
+    # recording_session_label, …) are matched here too, not just by the schema
+    # auto-detect.
+    participant = pick_column(cols_frame, PARTICIPANT_CANDIDATES)
     paragraph = pick_column(cols_frame, ["unique_paragraph_id", "paragraph_id"])
     text = pick_column(cols_frame, ["unique_text_id", "text_id"])
     # Finest passage grain first: a paragraph is one trial; a text/article may

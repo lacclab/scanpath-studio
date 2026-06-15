@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mapped to the app's canonical fields (per table: Words/IA, Fixations, Raw
   gaze) — so you can confirm at a glance which of your columns became the
   participant, trial id, word box, fixation duration, and so on.
+- **Share button.** A **Share** popover in the header builds a link that reopens
+  the app on the current trial with your visualization settings (which layers are
+  on, the colorscales, animation). The link uses the existing deep-link URL schema
+  and a new `?trial_id=` param that lands on the exact trial regardless of how it
+  was picked; copy it from the popover and send it. Works for the bundled demo,
+  the synthetic trial, and the OneStop server bundle (an uploaded dataset can't be
+  rebuilt from a URL, so the link then shares the view settings only, with a note).
 - **Stimuli view.** A new **Stimuli** subtab (first under *Data Inspection*)
   reconstructs each passage from the word table — one row per Text ID with the
   full text rebuilt by joining its words in reading order, plus a word count.
@@ -66,6 +73,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dataset registry built for more corpora) ships feature-flagged off
   (`SCANPATH_PUBLIC_DATASETS=1` to preview); it will be enabled in a future
   release.
+- **Step-by-step setup guide.** The upload wizard now has a short guided
+  walkthrough — a **❓ Show setup guide** dialog that explains each step (naming,
+  experimental setup, uploading, column mapping, and finishing). It opens
+  automatically the first time you set up a dataset in a session and is
+  replayable anytime.
+- **Export your column mapping.** A **⬇️ Download setup** button next to **Add
+  dataset** saves the current column mapping to a JSON file you can re-apply to
+  similar data later via *Restore a saved setup*.
 
 ### Changed
 - **Much faster on large datasets.** Switching trial, participant, or settings
@@ -110,8 +125,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reuses one persistent Kaleido browser for the whole batch instead of
   cold-starting Chrome per trial — quicker on large exports and no more
   per-trial "Resorting to unclean kill browser." log noise.
+- **Clearer, numbered setup steps.** The wizard's sections are now numbered
+  (1 Dataset name → 5 Filter & keep), the "upload to begin" prompt moved to the
+  top of the upload step, and a tip points large-dataset users to running the
+  app locally (`pip install scanpath-studio`).
+- **See your uploaded tables.** Each table's upload box stays open after
+  uploading and previews its first rows, so you can sanity-check the columns;
+  the participant and text counts now carry the same "make sure this is the
+  number you expect to see" reassurance as the trial and row counts.
 
 ### Fixed
+- **Animated scanpath replays at its real speed again.** The Play button forced a
+  full figure redraw on every frame, so each frame also paid the ~50 ms cost of
+  re-rendering the static word boxes + labels; on a long trial that dwarfed the
+  per-frame budget and the replay crawled — far slower than its quoted time, and
+  the speed slider stopped helping above ~×4. Every animated trace is now full
+  length with not-yet-reached fixations masked out, so a frame only changes point
+  positions and Play can use `redraw=False` (updating just those traces). The
+  replay now actually runs at `reading time ÷ speed`.
 - **Uploading a large EyeLink report no longer crashes the app.** Reports with
   sentinel values (e.g. `.` in the `CURRENT_FIX_PRECISION_MEASURE_*` columns)
   could read as a column mixing numbers and text, which crashed the cloud worker
@@ -126,6 +157,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dropped the stale **Reading regime** line from the Text & question panel, and
   fixed the per-trial annotations note that pointed at an *Annotations* sidebar
   panel that no longer exists (it lives in **💾 Save & restore**).
+- **Word hover shows the real line number.** The word tooltip used to always say
+  *Line 1* because it read the source `line_idx` column, which is usually a
+  constant. It now infers the visual line from the word-box layout (the same
+  clustering the by-line colouring uses), so each line reads correctly.
+- **Fixation hover no longer shows *Pass #NaN*.** The fixation tooltip dropped the
+  *Pass* line, which displayed `NaN` whenever the data had no pass/reread column.
 
 ### Removed
 - **Noise-flag auto-filtering.** A mapped noise/validity column used to silently

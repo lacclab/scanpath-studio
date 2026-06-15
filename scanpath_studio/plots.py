@@ -456,8 +456,15 @@ def _add_word_label_trace(
         return
     customdata = None
     hover = "Word %{text}<extra></extra>"
-    if "word_id" in words.columns and "line_idx" in words.columns:
-        customdata = words[["word_id", "line_idx"]]
+    if "word_id" in words.columns:
+        from .measures import cluster_word_lines
+
+        # The source ``line_idx`` is often a constant (OneStop IA exports rarely
+        # carry a real per-word line number), so infer the visual line from
+        # word-box geometry — same clustering the by-line coloring uses — and
+        # show it 1-based.
+        line_display = (cluster_word_lines(words) + 1).rename("line")
+        customdata = pd.concat([words["word_id"], line_display], axis=1)
         hover = (
             "Word %{text}<br>Word ID %{customdata[0]}"
             "<br>Line %{customdata[1]}<extra></extra>"
@@ -804,15 +811,13 @@ def make_scanpath_figure(
                 hovertemplate=(
                     "Fixation #%{customdata[0]}<br>"
                     "Duration %{customdata[1]} ms<br>"
-                    "Word #%{customdata[2]}<br>"
-                    "Pass #%{customdata[3]}<extra></extra>"
+                    "Word #%{customdata[2]}<extra></extra>"
                 ),
                 customdata=np.stack(
                     [
                         ordered["order_in_trial"],
                         ordered["duration_ms"],
                         ordered.get("word_id", pd.Series([np.nan] * len(ordered))),
-                        ordered.get("pass_index", pd.Series([np.nan] * len(ordered))),
                     ],
                     axis=1,
                 ),
@@ -1345,6 +1350,40 @@ def _anim_timeline(specs, playback_speed):
     return onset_times, frame_durations_ms, avg, reading_span_ms
 
 
+def _revealed_xy(all_x, all_y, kk):
+    """Full-length x/y with only the first ``kk`` fixations revealed.
+
+    Not-yet-reached fixations are masked to ``None`` so Plotly draws nothing
+    there. The array length is the SAME in every frame — the replay reveals a
+    fixation by un-masking its coordinate, never by growing the array — which is
+    what lets the Play button animate with ``redraw=False`` (only positions
+    change, so Plotly skips redrawing the static word boxes/labels each frame).
+    """
+    n = len(all_x)
+    xs = [all_x[i] if i < kk else None for i in range(n)]
+    ys = [all_y[i] if i < kk else None for i in range(n)]
+    return xs, ys
+
+
+def _revealed_saccade_xy(all_x, all_y, kk):
+    """Constant-length saccade polyline for the first ``kk`` fixations.
+
+    Every consecutive fixation pair occupies a fixed ``(x0, x1, None)`` slot;
+    segments past the ``kk``-th fixation are blanked to ``None`` so the trace
+    length never changes frame to frame (same ``redraw=False`` requirement as
+    :func:`_revealed_xy`). Only which segments are drawn changes.
+    """
+    sx, sy = [], []
+    for j in range(len(all_x) - 1):
+        if j < kk - 1:
+            sx.extend([all_x[j], all_x[j + 1], None])
+            sy.extend([all_y[j], all_y[j + 1], None])
+        else:
+            sx.extend([None, None, None])
+            sy.extend([None, None, None])
+    return sx, sy
+
+
 def animation_playback_ms(fixations_list, playback_speed):
     """Reading span and *actual* animation runtime for the given scanpath(s).
 
@@ -1368,9 +1407,16 @@ def animation_playback_ms(fixations_list, playback_speed):
 def _animation_play_buttons(frame_duration):
     """Play / Pause / Restart buttons.
 
-    Transitions are 0 so frames snap into place: no tweening means the replay
-    runs at exactly ``n_frames * frame_duration`` and new markers/order-numbers
-    appear on their fixation instead of gliding in from the corner.
+    Play uses ``redraw=False``: every animated trace is full length with
+    not-yet-reached fixations masked to ``None`` (see :func:`_revealed_xy`), so
+    advancing a frame only changes point positions — Plotly updates just those
+    few traces instead of redrawing the whole figure (the static word boxes +
+    labels) every frame. A full redraw of the scanpath figure costs ~50 ms, which
+    on a long trial dwarfed the per-frame budget and made the replay run far
+    slower than its quoted time; skipping it lets the replay actually hit
+    ``n_frames * frame_duration``. Transitions are 0 so frames snap into place
+    (no tweening), and the constant array length means a new fixation/number
+    appears on its mark instead of gliding in from the corner.
     """
     return [
         dict(
@@ -1392,7 +1438,7 @@ def _animation_play_buttons(frame_duration):
                     args=[
                         None,
                         dict(
-                            frame=dict(duration=frame_duration, redraw=True),
+                            frame=dict(duration=frame_duration, redraw=False),
                             fromcurrent=True,
                             transition=dict(duration=0),
                         ),
@@ -1637,43 +1683,56 @@ def make_scanpath_animation(
                     else None,
                 )
 
-    def _trail_marker(s, sizes, kk):
-        """Marker dict for the first ``kk`` fixations of a trail (base + frames).
+    def _trail_marker(s):
+        """Marker dict for a (full-length) trail trace.
 
-        Frames replace the whole marker object, so every frame restates the
-        colorscale/cmin/cmax/colorbar — not just the sliced colour values."""
+        Every animated trace is full length with not-yet-reached fixations masked
+        to ``None`` positions (see :func:`_revealed_xy`), so the size/colour
+        arrays are stated once at full length and never change frame to frame —
+        only which positions are revealed does. Restating the whole marker keeps
+        the colorscale/cmin/cmax/colorbar attached to the trail."""
         colors = s["marker_colors"]
         return dict(
-            size=sizes,
-            color=colors[:kk] if colors is not None else s["color"],
+            size=list(s["sizes"]),
+            color=colors if colors is not None else s["color"],
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             **s["marker_extra"],
         )
 
-    # Base traces, with stable indices the frames update by position. The trail
-    # carries the markers (and the fixation number in `text`, for hover only);
-    # the visible order numbers live in a SEPARATE, constant-length text trace
-    # (added just below) so they never glide in from the corner as the trail
-    # grows.
+    # Base traces, with stable indices the frames update by position. Each
+    # animated trace is built at FULL length (one slot per fixation); the replay
+    # reveals a fixation by un-masking its x/y, never by growing the array or
+    # rewriting `text`. Constant length + position-only changes are what let the
+    # Play button animate with `redraw=False` (see `_animation_play_buttons`):
+    # Plotly then re-renders only these few traces per frame instead of redrawing
+    # the static word boxes + labels every time — the redraw cost that made a
+    # long replay run far slower than its quoted time. It also keeps the trail's
+    # fixation number in `text` (hover only); the visible order numbers live in a
+    # separate text trace (below).
     for s in specs:
         ordered = s["ordered"]
         n_total = len(ordered)
         all_x = ordered["x"].tolist()
         all_y = ordered["y"].tolist()
-        first_size = float(s["sizes"][0])
+        s["all_x"] = all_x
+        s["all_y"] = all_y
+        s["n_total"] = n_total
+        s["customdata"] = ordered["duration_ms"].tolist()
+        s["order_text"] = [str(j + 1) for j in range(n_total)]
         s["text_color"] = s["color"] if dual else order_font_color
-        sac_color = s["color"] if dual else saccade_color
-        curr_outline = s["color"] if dual else CURRENT_FIX_OUTLINE
-        curr_outline_w = 2.5 if dual else 2
+        s["sac_color"] = s["color"] if dual else saccade_color
+        s["curr_outline"] = s["color"] if dual else CURRENT_FIX_OUTLINE
+        s["curr_outline_w"] = 2.5 if dual else 2
 
+        base_x, base_y = _revealed_xy(all_x, all_y, 1)
         s["idx_trail"] = len(fig.data)
         fig.add_trace(
             go.Scatter(
-                x=[all_x[0]],
-                y=[all_y[0]],
+                x=base_x,
+                y=base_y,
                 mode="markers",
-                marker=_trail_marker(s, [first_size], 1),
-                text=["1"],
+                marker=_trail_marker(s),
+                text=s["order_text"],
                 showlegend=dual,
                 name=s["label"],
                 legendgroup=s["label"],
@@ -1681,24 +1740,23 @@ def make_scanpath_animation(
                     (s["label"] + "<br>" if dual else "")
                     + "Fixation #%{text}<br>Duration %{customdata} ms<extra></extra>"
                 ),
-                customdata=[ordered["duration_ms"].iloc[0]],
+                customdata=s["customdata"],
             )
         )
-        # Order numbers: a text-only trace that holds EVERY fixation's final
-        # position in every frame, with not-yet-reached numbers blanked to "".
-        # Because the node set and their coordinates never change frame to frame,
-        # Plotly only rewrites each label's string in place — so a new number
-        # snaps on at its fixation instead of animating in from the (0,0) corner
-        # (the artifact you get when a `markers+text` trail grows a point at a
-        # time and each new <text> node flashes at the origin before placement).
+        # Order numbers: a text trace holding EVERY fixation's final position,
+        # with not-yet-reached fixations masked to None x/y (so nothing is drawn
+        # there). A number snaps on at its fixation when that position un-masks —
+        # no gliding in from the (0,0) corner — and because the `text` strings
+        # never change frame to frame, `redraw=False` renders the reveal purely
+        # from the position change.
         if show_order:
             s["idx_order"] = len(fig.data)
             fig.add_trace(
                 go.Scatter(
-                    x=all_x,
-                    y=all_y,
+                    x=base_x,
+                    y=base_y,
                     mode="text",
-                    text=["1"] + [""] * (n_total - 1),
+                    text=s["order_text"],
                     textfont=dict(
                         color=s["text_color"],
                         size=order_font_size,
@@ -1713,13 +1771,14 @@ def make_scanpath_animation(
         else:
             s["idx_order"] = None
         if show_saccades:
+            sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, 1)
             s["idx_sac"] = len(fig.data)
             fig.add_trace(
                 go.Scatter(
-                    x=[],
-                    y=[],
+                    x=sac_x,
+                    y=sac_y,
                     mode="lines",
-                    line=dict(color=sac_color, width=2),
+                    line=dict(color=s["sac_color"], width=2),
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -1730,13 +1789,13 @@ def make_scanpath_animation(
         s["idx_curr"] = len(fig.data)
         fig.add_trace(
             go.Scatter(
-                x=[ordered["x"].iloc[0]],
-                y=[ordered["y"].iloc[0]],
+                x=[all_x[0]],
+                y=[all_y[0]],
                 mode="markers",
                 marker=dict(
-                    size=[first_size + 8],
+                    size=[float(s["sizes"][0]) + 8],
                     color=CURRENT_FIX_COLOR,
-                    line=dict(color=curr_outline, width=curr_outline_w),
+                    line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
                 ),
                 showlegend=False,
                 legendgroup=s["label"],
@@ -1786,39 +1845,39 @@ def make_scanpath_animation(
         traces_in_frame = []
         traces_idx_in_frame = []
         for s in specs:
-            ordered = s["ordered"]
-            n_total = len(ordered)
+            all_x = s["all_x"]
+            all_y = s["all_y"]
             # Fixations whose recorded onset has been reached by time t.
             kk = max(int(np.searchsorted(s["onsets"], t, side="right")), 1)
-            xs = ordered["x"].iloc[:kk].tolist()
-            ys = ordered["y"].iloc[:kk].tolist()
-            szs = s["sizes"][:kk].tolist()
-            sac_color = s["color"] if dual else SACCADE_COLOR
-            curr_outline = s["color"] if dual else CURRENT_FIX_OUTLINE
-            curr_outline_w = 2.5 if dual else 2
 
+            # Trail: full-length, fixations past kk masked to None. The marker
+            # (sizes/colours) and `text` are full-length and identical every
+            # frame, so only positions change — `redraw=False` then re-renders
+            # just this trace, not the whole figure.
+            tx, ty = _revealed_xy(all_x, all_y, kk)
             traces_in_frame.append(
                 go.Scatter(
-                    x=xs,
-                    y=ys,
+                    x=tx,
+                    y=ty,
                     mode="markers",
-                    marker=_trail_marker(s, szs, kk),
-                    text=[str(j + 1) for j in range(kk)],
-                    customdata=ordered["duration_ms"].iloc[:kk].tolist(),
+                    marker=_trail_marker(s),
+                    text=s["order_text"],
+                    customdata=s["customdata"],
                 )
             )
             traces_idx_in_frame.append(s["idx_trail"])
 
             if show_order:
-                # Same full-length positions as the base order trace; only the
-                # blanked tail shrinks as the trail advances, so numbers appear
-                # in place rather than sliding in from the corner.
+                # Same full-length positions/text as the base order trace; the
+                # reveal is purely the un-masking of x/y for reached fixations,
+                # so numbers appear in place (and `redraw=False` shows them).
+                ox, oy = _revealed_xy(all_x, all_y, kk)
                 traces_in_frame.append(
                     go.Scatter(
-                        x=ordered["x"].tolist(),
-                        y=ordered["y"].tolist(),
+                        x=ox,
+                        y=oy,
                         mode="text",
-                        text=[str(j + 1) if j < kk else "" for j in range(n_total)],
+                        text=s["order_text"],
                         textfont=dict(
                             color=s["text_color"],
                             size=order_font_size,
@@ -1830,17 +1889,13 @@ def make_scanpath_animation(
                 traces_idx_in_frame.append(s["idx_order"])
 
             if show_saccades:
-                sac_x: list = []
-                sac_y: list = []
-                for j in range(kk - 1):
-                    sac_x.extend([xs[j], xs[j + 1], None])
-                    sac_y.extend([ys[j], ys[j + 1], None])
+                sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, kk)
                 traces_in_frame.append(
                     go.Scatter(
                         x=sac_x,
                         y=sac_y,
                         mode="lines",
-                        line=dict(color=sac_color, width=2),
+                        line=dict(color=s["sac_color"], width=2),
                     )
                 )
                 traces_idx_in_frame.append(s["idx_sac"])
@@ -1848,13 +1903,13 @@ def make_scanpath_animation(
             ci = kk - 1
             traces_in_frame.append(
                 go.Scatter(
-                    x=[xs[ci]],
-                    y=[ys[ci]],
+                    x=[all_x[ci]],
+                    y=[all_y[ci]],
                     mode="markers",
                     marker=dict(
-                        size=[szs[ci] + 8],
+                        size=[float(s["sizes"][ci]) + 8],
                         color=CURRENT_FIX_COLOR,
-                        line=dict(color=curr_outline, width=curr_outline_w),
+                        line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
                     ),
                 )
             )

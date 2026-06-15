@@ -32,11 +32,14 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Dict, NamedTuple, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, NamedTuple, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+
+if TYPE_CHECKING:
+    from streamlit.delta_generator import DeltaGenerator
 
 # Allow running via `streamlit run scanpath_studio/app.py` by adding the
 # repository root to sys.path when executed as a script instead of a package.
@@ -111,6 +114,7 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
+    _collect_column_mapping,
     render_bulk_export_tab,
     render_data_inspection_tab,
     render_multiple_comparison_tab,
@@ -118,8 +122,10 @@ from scanpath_studio.tabs import (
 )
 from scanpath_studio.tour import (
     maybe_show_welcome_tour,
+    maybe_show_wizard_guide,
     render_spotlight_tour,
     render_tour_replay_button,
+    render_wizard_guide_button,
     spotlight_tour_pending,
 )
 
@@ -192,6 +198,31 @@ _URL_PRESETS = {
     "fixation_colorscale": ("global_fixation_colorscale", str),
 }
 
+# Inverse of the boolean / colorscale entries in _URL_PRESETS, used by the Share
+# button (`_build_share_query`) to rebuild a deep link from the *current* session
+# state. Kept beside _URL_PRESETS so the read and write sides can't drift.
+_SHARE_TOGGLE_PARAMS = {
+    "show_words": "global_show_words",
+    "show_labels": "global_show_labels",
+    "show_fixations": "global_show_fix",
+    "show_order": "global_show_order",
+    "show_saccades": "global_show_saccades",
+    "show_heatmap": "global_show_heatmap",
+}
+_SHARE_COLORSCALE_PARAMS = {
+    "fixation_colorscale": "global_fixation_colorscale",
+    "heatmap_colorscale": "global_heatmap_colorscale",
+}
+# data_choice → ?source= value, for the built-in sources a URL can fully rebuild.
+# Sources absent here (uploaded tables, stored datasets, public corpora) can't be
+# reconstructed from a link — the Share panel warns and shares the view settings
+# only. Mirrors the `source` handling in `main()`.
+_SHAREABLE_SOURCES = {
+    DEMO_CHOICE: "demo",
+    ONESTOP_CHOICE: "onestop",
+    SYNTHETIC_CHOICE: "synthetic",
+}
+
 
 def _apply_url_preset() -> Optional[str]:
     """Read `st.query_params` and preset Streamlit session state for deep links.
@@ -202,8 +233,12 @@ def _apply_url_preset() -> Optional[str]:
 
     URL schema (all params optional):
         ?source=onestop          → force "OneStop server bundle" data source
+                                   (also demo / synthetic / upload — see main())
         &participant=p001        → preselect participant (Participant mode)
         &trial=37                → preselect trial_index slider
+        &trial_id=p001_3_Adv     → land on this exact trial id, any picker mode
+                                   (applied after combos build — see
+                                   _apply_url_trial_selection; emitted by Share)
         &tab=animation           → land on Animated Scanpath tab
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
@@ -291,27 +326,33 @@ _FONT_BOUNDS = (6, 72)
 _MARKER_BOUNDS = (4, 40)
 
 
-def _restore_selection(selection: dict, combos: pd.DataFrame) -> bool:
-    """Best-effort: point the Interactive Plot tab's trial picker at the saved
-    ``(participant, trial)``. Returns True when a matching trial is found in the
-    current (filtered) data. Mirrors the key scheme of
-    ``utils.select_trial(key_prefix="single")`` — including its composite vs.
-    single-dropdown branch — so the seeded keys land on the right selectors."""
+def _restore_selection(
+    selection: dict, combos: pd.DataFrame, key_prefix: str = "single"
+) -> bool:
+    """Best-effort: point a tab's trial picker at the saved ``(participant,
+    trial)``. Returns True when a matching trial is found in the current
+    (filtered) data. Mirrors the key scheme of ``utils.select_trial`` for the
+    given ``key_prefix`` — including its composite vs. single-dropdown branch —
+    so the seeded keys land on the right selectors.
+
+    The trial id is sufficient on its own: a missing/blank participant (e.g. a
+    ``?trial_id=`` link with no ``?participant=``) falls through to the trial-id-
+    alone match below, so the picker still lands on the trial."""
     pid = selection.get("participant_id")
     tid = selection.get("trial_id")
-    if pid in (None, "") or tid in (None, "") or combos.empty:
+    if tid in (None, "") or combos.empty:
         return False
     pid, tid = str(pid), str(tid)
     match = combos[
         (combos["participant_id"].astype(str) == pid)
         & (combos["trial_id"].astype(str) == tid)
     ]
-    if match.empty:  # participant may have been filtered out — try trial id alone
+    if match.empty:  # participant absent/blank or filtered out — try trial id alone
         match = combos[combos["trial_id"].astype(str) == tid]
     if match.empty:
         return False
     row = match.iloc[0]
-    st.session_state["single_select_trial_mode"] = "Trial"
+    st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
     composite_cols = [
         c
         for c in (st.session_state.get("_composite_trial_columns") or [])
@@ -319,18 +360,53 @@ def _restore_selection(selection: dict, combos: pd.DataFrame) -> bool:
     ]
     if len(composite_cols) >= 2:
         for col in composite_cols:
-            st.session_state[f"single_composite_{col}"] = str(row[col])
-        st.session_state["single_composite_reading"] = str(row["trial_id"])
+            st.session_state[f"{key_prefix}_composite_{col}"] = str(row[col])
+        st.session_state[f"{key_prefix}_composite_reading"] = str(row["trial_id"])
     else:
-        # None/Trial mode renders a single dropdown keyed `single_trial_id`
+        # None/Trial mode renders a single dropdown keyed `<prefix>_trial_id`
         # whose *options* are the trial_field values (`unique_trial_id` when
         # present), so seed that one key with this row's option value — not a
-        # `single_<trial_field>` key, which no widget reads.
+        # `<prefix>_<trial_field>` key, which no widget reads.
         trial_field = (
             "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
         )
-        st.session_state["single_trial_id"] = str(row[trial_field])
+        st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
     return True
+
+
+def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
+    """Apply a ``?trial_id=`` deep link to the trial picker — exactly once.
+
+    Unlike ``?trial=`` (a slider *index*, seeded before any widget renders in
+    ``_apply_url_preset``), ``?trial_id=`` carries the canonical trial id, so it
+    lands on the exact trial regardless of which picker mode produced the share
+    link — but it needs the built ``combos``, so it runs from ``main()`` after
+    they exist. Reuses ``_restore_selection`` (the same seeding the plot-config
+    restore uses), seeding *every* selection prefix so non-first tabs land on the
+    trial too (mirrors the ``_SELECTION_PREFIXES`` loop in ``_apply_url_preset``).
+    The Share button emits this param; see ``_build_share_query``.
+    """
+    if st.session_state.get("_url_trial_applied"):
+        return
+    trial_id = st.query_params.get("trial_id")
+    if not trial_id:
+        return
+    selection = {
+        "participant_id": st.query_params.get("participant"),
+        "trial_id": trial_id,
+    }
+    # Stamp the once-flag only after the trial is actually found, so a rerun
+    # where `combos` is still empty/partial (e.g. the OneStop shard is mid-load)
+    # retries on the next rerun instead of losing the deep link. `_restore_selection`
+    # only writes when it matches, so retrying never clobbers manual navigation.
+    # Materialize (not a short-circuiting any()) so EVERY prefix is seeded, not
+    # just up to the first match.
+    results = [
+        _restore_selection(selection, combos, key_prefix=prefix)
+        for prefix in _SELECTION_PREFIXES
+    ]
+    if any(results):
+        st.session_state["_url_trial_applied"] = True
 
 
 def _seed_column_mapping(mapping) -> None:
@@ -622,16 +698,28 @@ def configure_page() -> None:
     st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
-def _render_about_panel() -> None:
-    """Compact header with title + an About popover (credits, code, citation)."""
+def _render_about_panel() -> "DeltaGenerator":
+    """Compact header: title + a Share popover + an About popover.
+
+    Returns the header container reserved for the Share popover. Share is filled
+    later by ``main()`` (via ``_render_share_panel``) because the link it builds
+    needs the resolved data source / trial selection, which aren't known this
+    early — but a keyed container holds its position in the header regardless of
+    when it's filled.
+    """
     from scanpath_studio import __version__
     from scanpath_studio.constants import CITATION
 
     header = st.container(key="about_header")
-    title_col, about_col = header.columns([5, 1], vertical_alignment="center")
+    title_col, share_col, about_col = header.columns(
+        [5, 1, 1], vertical_alignment="center"
+    )
     with title_col:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")
+    # The keyed wrapper right-aligns the content-sized trigger to the column edge
+    # (see `.st-key-share_btn` in styles.py), matching the About button beside it.
+    share_slot = share_col.container(key="share_btn")
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Berzak, Yevgeni},\n"
@@ -679,6 +767,154 @@ If you use the bundled demo data, also cite
 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/)
 """
             )
+    return share_slot
+
+
+def _build_share_query(data_choice: str) -> Tuple[str, list]:
+    """Build the deep-link query string that reproduces the current view.
+
+    Reads the resolved trial selection and visualization settings back out of
+    ``st.session_state`` and encodes them with the same URL schema
+    ``_apply_url_preset`` / ``_apply_url_trial_selection`` parse, so opening the
+    link reopens the app on this trial with these settings.
+
+    Returns ``(query_string, caveats)`` — ``caveats`` holds human-readable notes
+    when the link can't fully reproduce the view (e.g. an uploaded data source
+    a URL can't rebuild). The query string is URL-encoded and has no leading
+    ``?``; the copy widget composes it onto the live origin client-side.
+    """
+    from urllib.parse import urlencode
+
+    params: Dict[str, str] = {}
+    caveats: list = []
+
+    source = _SHAREABLE_SOURCES.get(data_choice)
+    if source:
+        params["source"] = source
+    else:
+        caveats.append(
+            "This data source can't be rebuilt from a link — the recipient will "
+            "need to load the same data. The view settings below are still shared."
+        )
+
+    selection = st.session_state.get("_share_selection") or {}
+    participant = selection.get("participant_id")
+    trial_id = selection.get("trial_id")
+    if participant not in (None, ""):
+        params["participant"] = str(participant)
+    if trial_id not in (None, ""):
+        params["trial_id"] = str(trial_id)
+
+    # Visualization toggles — emit an explicit 0/1 so a layer the user turned
+    # *off* is shared as off (the URL coercion reads "0" as False).
+    for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
+        if state_key in st.session_state:
+            params[url_key] = "1" if st.session_state[state_key] else "0"
+    for url_key, state_key in _SHARE_COLORSCALE_PARAMS.items():
+        value = st.session_state.get(state_key)
+        if value:
+            params[url_key] = str(value)
+    if st.session_state.get("single_animate"):
+        params["tab"] = "animation"
+
+    return urlencode(params), caveats
+
+
+def _render_share_link_widget(query: str) -> None:
+    """Render the copyable share link (read-only field + Copy button).
+
+    A same-origin ``components.html`` iframe (same trick as the tour — see
+    ``_render_tab_persistence``) composes the full URL from the *live* address:
+    ``window.parent.location.origin + pathname`` + the query string built
+    server-side. Doing the origin/path join client-side means the link is correct
+    wherever the app is served (localhost, Streamlit Cloud, a reverse proxy)
+    without the server having to know its own public URL. Copy uses the async
+    Clipboard API with a ``document.execCommand`` fallback for insecure contexts.
+    """
+    payload = json.dumps(query)
+    components.html(
+        f"""
+        <div class="sps-share">
+          <div class="sps-share-row">
+            <input id="sps-share-url" type="text" readonly
+                   aria-label="Shareable link" />
+            <button id="sps-share-copy" type="button">Copy link</button>
+          </div>
+          <div id="sps-share-status" class="sps-share-status"></div>
+        </div>
+        <style>
+          .sps-share {{
+            font-family: "Source Sans Pro", system-ui, sans-serif;
+            color-scheme: light dark;
+          }}
+          .sps-share-row {{ display: flex; gap: 0.4rem; align-items: stretch; }}
+          #sps-share-url {{
+            flex: 1 1 auto; min-width: 0; padding: 0.45rem 0.6rem;
+            border: 1px solid rgba(128, 128, 128, 0.5); border-radius: 8px;
+            background: rgba(128, 128, 128, 0.08); color: inherit;
+            font-size: 0.85rem; font-family: ui-monospace, monospace;
+          }}
+          #sps-share-copy {{
+            flex: 0 0 auto; padding: 0.45rem 0.9rem; cursor: pointer;
+            border: 1px solid #1f77b4; border-radius: 8px; white-space: nowrap;
+            background: #1f77b4; color: #fff; font-weight: 600; font-size: 0.85rem;
+          }}
+          #sps-share-copy:hover {{ background: #185fa5; }}
+          .sps-share-status {{
+            min-height: 1.1rem; margin-top: 0.35rem; font-size: 0.8rem;
+            color: #2e7d32; font-weight: 600;
+          }}
+        </style>
+        <script>
+        (function () {{
+          const query = {payload};
+          const loc = window.parent.location;
+          const base = loc.origin + loc.pathname;
+          const url = query ? base + "?" + query : base;
+          const input = document.getElementById("sps-share-url");
+          const status = document.getElementById("sps-share-status");
+          const btn = document.getElementById("sps-share-copy");
+          input.value = url;
+          input.addEventListener("focus", function () {{ input.select(); }});
+          function flash(msg) {{
+            status.textContent = msg;
+            setTimeout(function () {{ status.textContent = ""; }}, 2500);
+          }}
+          async function copy() {{
+            try {{
+              await navigator.clipboard.writeText(url);
+              flash("✓ Link copied to clipboard");
+            }} catch (err) {{
+              input.focus();
+              input.select();
+              try {{
+                document.execCommand("copy");
+                flash("✓ Link copied to clipboard");
+              }} catch (err2) {{
+                flash("Press ⌘/Ctrl-C to copy the selected link");
+              }}
+            }}
+          }}
+          btn.addEventListener("click", copy);
+        }})();
+        </script>
+        """,
+        height=110,
+    )
+
+
+def _render_share_panel(data_choice: str) -> None:
+    """Fill the header's Share slot with a popover that builds a deep link to the
+    current view (data source + trial + visualization settings)."""
+    with st.popover("Share", icon=":material/share:", width="content"):
+        st.markdown(
+            "**Share this view** — a link that reopens Scanpath Studio on the "
+            "current trial with your visualization settings."
+        )
+        query, caveats = _build_share_query(data_choice)
+        for note in caveats:
+            st.caption("⚠️ " + note)
+        _render_share_link_widget(query)
 
 
 # -----------------------------------------------------------------------------
@@ -1528,6 +1764,7 @@ def render_sidebar_canvas_controls(
     data_choice: Optional[str] = None,
     slot=None,
     expanded: bool = False,
+    title: str = "Experimental Setup",
 ) -> Tuple[int, int, int, str, float, bool]:
     """Render canvas dimension and font controls in sidebar.
 
@@ -1572,12 +1809,13 @@ def render_sidebar_canvas_controls(
     st.session_state.setdefault("global_canvas_width", canvas_width)
     st.session_state.setdefault("global_canvas_height", canvas_height)
 
-    # "Experimental Setup" lives under the 📂 Data group (TODO 5), rendered into
-    # a slot reserved there by `main`; falls back to the sidebar when unset. The
-    # setup wizard renders the very same controls inline (``expanded=True``) so
-    # display calibration is part of the loading flow (Group A).
+    # The display-setup panel (``title``, default "Experimental Setup") lives
+    # under the 📂 Data group (TODO 5), rendered into a slot reserved there by
+    # `main`; falls back to the sidebar when unset. The setup wizard renders the
+    # very same controls inline under its own numbered heading (Group A), passing
+    # a more specific title so it doesn't echo that heading.
     display = (slot if slot is not None else st.sidebar).expander(
-        "Experimental Setup", expanded=expanded
+        title, expanded=expanded
     )
     canvas_width = display.number_input(
         "Monitor width (px)",
@@ -1990,7 +2228,10 @@ def _wizard_participant_text_step(
     pp, pp_schema = (raw_fix, fix_schema) if has_fix else (raw_words, word_schema)
     n = _distinct_id_count(pp, pp_schema.get(field_key))
     if n is not None:
-        body.success(f"✓ **{n:,}** {noun}")
+        body.success(
+            f"✓ **{n:,}** {noun} — make sure this is the number of {noun} you "
+            "expect to see."
+        )
 
 
 def _clean_multiselect_state(key: str, valid) -> None:
@@ -2140,6 +2381,41 @@ def _render_restored_config_caption(host) -> None:
     host.caption(f"✓ Restored setup {detail} — review the mapping below.")
 
 
+def _wizard_setup_config() -> dict:
+    """The current wizard setup as a JSON-able dict: the column mapping plus
+    provenance, in the schema the restore step (``_wizard_restore_config``) reads
+    back. Lets a user save their mapping and re-apply it to similar data later."""
+    from datetime import datetime
+
+    from scanpath_studio import __version__
+
+    return {
+        # schema 2 = the shared Save & restore format; the restore step only
+        # needs ``column_mapping`` + provenance, but keep the shape compatible.
+        "schema": 2,
+        "app": {"name": "Scanpath Studio", "version": __version__},
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "data_source": (st.session_state.get("wizard_dataset_name") or "").strip()
+        or None,
+        "column_mapping": _collect_column_mapping(),
+    }
+
+
+def _render_setup_download(host) -> None:
+    """Export the current column mapping as a JSON setup file, so it can be
+    re-applied later via the wizard's *Restore a saved setup* step. Rendered just
+    above the **Add dataset** button."""
+    host.download_button(
+        "⬇️ Download setup (JSON)",
+        data=json.dumps(_wizard_setup_config(), indent=2),
+        file_name="scanpath_studio_setup.json",
+        mime="application/json",
+        key="wizard_setup_download",
+        help="Save this column mapping to re-use on similar data — restore it "
+        "from *Restore a saved setup* at the top of Column mapping.",
+    )
+
+
 def _render_data_setup(active: bool) -> _UploadResult:
     """Hybrid data-setup surface for the Upload source.
 
@@ -2158,6 +2434,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "Name your dataset, upload your tables, then map a few columns — only "
             "the step you still need to fill stays open."
         )
+        # Step-by-step guide: auto-opens once per session, replayable via button.
+        maybe_show_wizard_guide()
+        render_wizard_guide_button(st)
         body = st.container()
     else:
         panel = st.expander("📋 Data & mapping", expanded=False)
@@ -2188,8 +2467,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     flow["claimed"] = True
         return body.expander(title, expanded=expanded)
 
-    def subsection(title: str) -> None:
-        body.markdown(f"#### {title}" if active else f"**{title}**")
+    def subsection(title: str, number: Optional[int] = None) -> None:
+        # Numbered headings (1., 2., …) only in the active wizard, where they make
+        # the order to work through explicit. The collapsed review panel drops the
+        # numbers (its first two steps aren't re-rendered, so 3.,4.,5. would orphan).
+        if not active:
+            body.markdown(f"**{title}**")
+        elif number is not None:
+            body.markdown(f"#### {number}. {title}")
+        else:
+            body.markdown(f"#### {title}")
 
     def mapped(prefix: str, field: str) -> bool:
         """Best-effort 'this field is mapped' from last run's session state."""
@@ -2198,34 +2485,60 @@ def _render_data_setup(active: bool) -> _UploadResult:
             return bool(v)
         return bool(v) and v != NONE_OPTION
 
-    # === Dataset name + display setup, at the top ===
+    # === 1. Dataset name + 2. Experimental setup, at the top ===
     if active:
+        subsection("Dataset name", number=1)
         st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
         body.text_input(
             "Dataset name",
             key="wizard_dataset_name",
+            label_visibility="collapsed",
             help="Shown in the Data source list so you can switch back to it.",
         )
-        # render_sidebar_canvas_controls renders its own "Experimental Setup"
-        # collapsible — that IS the display-setup toggle. Seed it on empty frames
-        # up front (uploads default to a 2560x1440 monitor; tweak it any time).
+
+        subsection("Experimental setup", number=2)
+        body.caption(
+            "Match the screen the data was recorded on so word boxes and "
+            "fixations stay true to scale — open the panel to set monitor size, "
+            "font, and text scaling."
+        )
+        # render_sidebar_canvas_controls renders its own collapsible panel — that
+        # IS the display-setup toggle. Seed it on empty frames up front (uploads
+        # default to a 2560x1440 monitor; tweak it any time).
         render_sidebar_canvas_controls(
             empty_words_frame(),
             empty_fixations_frame(),
             data_choice=None,
             slot=body,
             expanded=False,
+            title="Monitor, font & text scaling",
         )
 
-    # === Upload your data — one toggle per table, with row counts ===
-    subsection("Upload your data")
+    # === 3. Upload your data — one toggle per table, with row counts ===
+    subsection("Upload your data", number=3)
     core_uploaded = bool(
         st.session_state.get("col_map_fix_upload")
         or st.session_state.get("col_map_words_upload")
     )
+    # Getting-started guidance at the top of the step, shown only before anything
+    # is uploaded (and only in the active wizard): the call to action plus a tip
+    # to run locally for large datasets, which is faster and keeps data private.
+    already_uploaded = core_uploaded or bool(
+        st.session_state.get("col_map_raw_gaze_upload")
+    )
+    if active and not already_uploaded:
+        body.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
+        body.markdown(
+            "💡 **Working with a large dataset?** It's faster — and keeps your "
+            "data on your own machine — to run Scanpath Studio locally:\n\n"
+            "```bash\npip install scanpath-studio\nscanpath-studio\n```"
+        )
 
     def upload_box(title, *, label, help_text, prefix, multi, noun, expanded):
-        box = toggle(title, expanded=expanded)
+        # Keep a table's box open once it has an upload, so its row count and
+        # head preview stay visible instead of collapsing out of sight.
+        has_upload = bool(st.session_state.get(f"{prefix}_upload"))
+        box = toggle(title, expanded=expanded or has_upload)
         col = box.columns([0.7, 0.3])[0] if active else box
         frame = _read_uploaded_frame(
             uploader_label=label,
@@ -2239,10 +2552,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 f"✓ **{len(frame):,}** {noun} detected — make sure this is the "
                 "number you expect to see."
             )
+            if active:
+                # Show the first rows so the user can eyeball the columns before
+                # mapping them (a quick is-this-the-right-table sanity check).
+                box.caption("Preview — first rows:")
+                box.dataframe(frame.head(), width="stretch", hide_index=True)
         return frame
 
-    # Order: raw gaze, then fixations, then words. Raw gaze is optional →
-    # collapsed; the core tables stay open until one of them is uploaded.
+    # Order: raw gaze, then fixations, then words. Raw gaze is optional → starts
+    # collapsed (auto-opens once it has a file); the core tables stay open so
+    # their counts + previews remain visible after uploading.
     raw_gaze = upload_box(
         "Raw gaze (optional)",
         label="Raw gaze table",
@@ -2259,7 +2578,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         prefix="col_map_fix",
         multi=True,
         noun="fixations",
-        expanded=not core_uploaded,
+        expanded=True,
     )
     raw_words = upload_box(
         "Words / Interest Areas",
@@ -2268,14 +2587,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         prefix="col_map_words",
         multi=True,
         noun="words",
-        expanded=not core_uploaded,
+        expanded=True,
     )
 
     if raw_words.empty and raw_fix.empty and raw_gaze.empty:
-        body.info(
-            "⬆️ Upload a **Fixations** and/or **Words/IA** table to begin — or pick "
-            "a built-in source from the sidebar."
-        )
+        # The "upload to begin" prompt now lives at the top of this subsection.
         return _UploadResult(
             empty_words_frame(),
             empty_fixations_frame(),
@@ -2292,8 +2608,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     fix_schema: Dict = {}
     has_words, has_fix = not raw_words.empty, not raw_fix.empty
 
-    # === Column mapping ===
-    subsection("Column mapping")
+    # === 4. Column mapping ===
+    subsection("Column mapping", number=4)
 
     # Restore a saved setup (optional, collapsed).
     restore_box = toggle("Restore a saved setup (optional)", done=True)
@@ -2469,8 +2785,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if not has_words and not has_fix and raw_gaze_problems:
         problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
 
-    # === Filter & keep — one cross-table picker each (not per table) ===
-    subsection("Filter & keep (optional)")
+    # === 5. Filter & keep — one cross-table picker each (not per table) ===
+    subsection("Filter & keep (optional)", number=5)
     keep_tables: list = []
     if has_words:
         keep_tables.append(
@@ -2487,6 +2803,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     if problems:
         if active:
+            _render_setup_download(body)
             body.button("✅ Add dataset", disabled=True, key="wizard_finalize")
             body.warning(
                 "Map the required field(s) above (marked \\*) to continue:\n\n"
@@ -2577,6 +2894,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # repopulate the Data Inspection tab's mapping table.
             "schemas": wizard_schemas,
         }
+        _render_setup_download(body)
         body.button(
             "✅ Add dataset",
             type="primary",
@@ -2619,7 +2937,9 @@ def main() -> None:
         - Handles missing raw gaze data gracefully
     """
     configure_page()
-    _render_about_panel()
+    # The header reserves a slot for the Share popover; it's filled at the end of
+    # main(), once the resolved trial + viz settings the link encodes are known.
+    share_slot = _render_about_panel()
 
     # Apply deep-link presets BEFORE any widget renders — see _apply_url_preset
     # for the full URL schema. External tools can deep-link into this app with
@@ -2630,6 +2950,8 @@ def main() -> None:
         st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
     elif url_source == "demo":
         st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
+    elif url_source == "synthetic":
+        st.session_state.setdefault("data_source_choice", SYNTHETIC_CHOICE)
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
 
@@ -2821,6 +3143,11 @@ def main() -> None:
         else raw_gaze_filtered
     )
 
+    # Land a shared/deep link on its exact `?trial_id=` (once) now that combos
+    # exist — see _apply_url_trial_selection. Runs before the sidebar/tab widgets
+    # render so the seeded selection is picked up as their initial value.
+    _apply_url_trial_selection(combos)
+
     # Restore settings + annotations from an uploaded config JSON BEFORE the
     # sidebar widgets render, so they pick up the saved values (see
     # _apply_url_preset for the same preset-then-render mechanism). The uploader
@@ -2934,6 +3261,12 @@ def main() -> None:
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
         )
+
+    # Fill the header's Share popover now — after the tabs, so the resolved trial
+    # (_share_selection, written by render_single_trial_tab, which runs every
+    # rerun) and the live viz settings the link encodes are all current.
+    with share_slot:
+        _render_share_panel(data_choice)
 
     # Sidebar Help group (bottom): replay the welcome tour (the tour itself
     # renders early in this function — see the maybe_show_welcome_tour call).

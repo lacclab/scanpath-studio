@@ -1473,6 +1473,14 @@ def render_single_trial_tab(
     if not (selected_participant and selected_trial):
         return
 
+    # Remember the resolved selection so the header Share button can build a deep
+    # link back to exactly this trial (app._build_share_query reads it; this tab
+    # renders every rerun regardless of the active tab, so it stays current).
+    st.session_state["_share_selection"] = {
+        "participant_id": selected_participant,
+        "trial_id": selected_trial,
+    }
+
     trial_words = extract_trial(words_filtered, selected_participant, selected_trial)
     trial_fixations = extract_trial(
         fixations_filtered, selected_participant, selected_trial

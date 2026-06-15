@@ -289,9 +289,7 @@ class TestStimuliTable:
             subset=["text_id", "word_id"]
         )
         src = src.sort_values(["line_idx", "word_id"])
-        expected = " ".join(
-            w for w in src["text"].astype(str) if w and w != "nan"
-        )
+        expected = " ".join(w for w in src["text"].astype(str) if w and w != "nan")
         row = table[table["Text ID"] == first_id].iloc[0]
         assert row["Text"] == expected
         assert row["Text"].strip() != ""

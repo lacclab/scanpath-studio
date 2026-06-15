@@ -192,6 +192,31 @@ _URL_PRESETS = {
     "fixation_colorscale": ("global_fixation_colorscale", str),
 }
 
+# Inverse of the boolean / colorscale entries in _URL_PRESETS, used by the Share
+# button (`_build_share_query`) to rebuild a deep link from the *current* session
+# state. Kept beside _URL_PRESETS so the read and write sides can't drift.
+_SHARE_TOGGLE_PARAMS = {
+    "show_words": "global_show_words",
+    "show_labels": "global_show_labels",
+    "show_fixations": "global_show_fix",
+    "show_order": "global_show_order",
+    "show_saccades": "global_show_saccades",
+    "show_heatmap": "global_show_heatmap",
+}
+_SHARE_COLORSCALE_PARAMS = {
+    "fixation_colorscale": "global_fixation_colorscale",
+    "heatmap_colorscale": "global_heatmap_colorscale",
+}
+# data_choice → ?source= value, for the built-in sources a URL can fully rebuild.
+# Sources absent here (uploaded tables, stored datasets, public corpora) can't be
+# reconstructed from a link — the Share panel warns and shares the view settings
+# only. Mirrors the `source` handling in `main()`.
+_SHAREABLE_SOURCES = {
+    DEMO_CHOICE: "demo",
+    ONESTOP_CHOICE: "onestop",
+    SYNTHETIC_CHOICE: "synthetic",
+}
+
 
 def _apply_url_preset() -> Optional[str]:
     """Read `st.query_params` and preset Streamlit session state for deep links.
@@ -202,8 +227,12 @@ def _apply_url_preset() -> Optional[str]:
 
     URL schema (all params optional):
         ?source=onestop          → force "OneStop server bundle" data source
+                                   (also demo / synthetic / upload — see main())
         &participant=p001        → preselect participant (Participant mode)
         &trial=37                → preselect trial_index slider
+        &trial_id=p001_3_Adv     → land on this exact trial id, any picker mode
+                                   (applied after combos build — see
+                                   _apply_url_trial_selection; emitted by Share)
         &tab=animation           → land on Animated Scanpath tab
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
@@ -331,6 +360,35 @@ def _restore_selection(selection: dict, combos: pd.DataFrame) -> bool:
         )
         st.session_state["single_trial_id"] = str(row[trial_field])
     return True
+
+
+def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
+    """Apply a ``?trial_id=`` deep link to the trial picker — exactly once.
+
+    Unlike ``?trial=`` (a slider *index*, seeded before any widget renders in
+    ``_apply_url_preset``), ``?trial_id=`` carries the canonical trial id, so it
+    lands on the exact trial regardless of which picker mode produced the share
+    link — but it needs the built ``combos``, so it runs from ``main()`` after
+    they exist. Reuses ``_restore_selection`` (the same seeding the plot-config
+    restore uses) and is guarded by a once-flag so following the link doesn't
+    fight the user's later in-app navigation. The Share button emits this param;
+    see ``_build_share_query``.
+    """
+    if st.session_state.get("_url_trial_applied"):
+        return
+    trial_id = st.query_params.get("trial_id")
+    if not trial_id:
+        return
+    # Stamp the flag up front so a trial id that isn't in the current (filtered)
+    # data doesn't retry every rerun and keep clobbering manual selection.
+    st.session_state["_url_trial_applied"] = True
+    _restore_selection(
+        {
+            "participant_id": st.query_params.get("participant"),
+            "trial_id": trial_id,
+        },
+        combos,
+    )
 
 
 def _seed_column_mapping(mapping) -> None:
@@ -622,16 +680,28 @@ def configure_page() -> None:
     st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
-def _render_about_panel() -> None:
-    """Compact header with title + an About popover (credits, code, citation)."""
+def _render_about_panel():
+    """Compact header: title + a Share popover + an About popover.
+
+    Returns the header container reserved for the Share popover. Share is filled
+    later by ``main()`` (via ``_render_share_panel``) because the link it builds
+    needs the resolved data source / trial selection, which aren't known this
+    early — but a keyed container holds its position in the header regardless of
+    when it's filled.
+    """
     from scanpath_studio import __version__
     from scanpath_studio.constants import CITATION
 
     header = st.container(key="about_header")
-    title_col, about_col = header.columns([5, 1], vertical_alignment="center")
+    title_col, share_col, about_col = header.columns(
+        [5, 1, 1], vertical_alignment="center"
+    )
     with title_col:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")
+    # The keyed wrapper right-aligns the content-sized trigger to the column edge
+    # (see `.st-key-share_btn` in styles.py), matching the About button beside it.
+    share_slot = share_col.container(key="share_btn")
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Berzak, Yevgeni},\n"
@@ -679,6 +749,154 @@ If you use the bundled demo data, also cite
 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/)
 """
             )
+    return share_slot
+
+
+def _build_share_query(data_choice: str) -> Tuple[str, list]:
+    """Build the deep-link query string that reproduces the current view.
+
+    Reads the resolved trial selection and visualization settings back out of
+    ``st.session_state`` and encodes them with the same URL schema
+    ``_apply_url_preset`` / ``_apply_url_trial_selection`` parse, so opening the
+    link reopens the app on this trial with these settings.
+
+    Returns ``(query_string, caveats)`` — ``caveats`` holds human-readable notes
+    when the link can't fully reproduce the view (e.g. an uploaded data source
+    a URL can't rebuild). The query string is URL-encoded and has no leading
+    ``?``; the copy widget composes it onto the live origin client-side.
+    """
+    from urllib.parse import urlencode
+
+    params: Dict[str, str] = {}
+    caveats: list = []
+
+    source = _SHAREABLE_SOURCES.get(data_choice)
+    if source:
+        params["source"] = source
+    else:
+        caveats.append(
+            "This data source can't be rebuilt from a link — the recipient will "
+            "need to load the same data. The view settings below are still shared."
+        )
+
+    selection = st.session_state.get("_share_selection") or {}
+    participant = selection.get("participant_id")
+    trial_id = selection.get("trial_id")
+    if participant not in (None, ""):
+        params["participant"] = str(participant)
+    if trial_id not in (None, ""):
+        params["trial_id"] = str(trial_id)
+
+    # Visualization toggles — emit an explicit 0/1 so a layer the user turned
+    # *off* is shared as off (the URL coercion reads "0" as False).
+    for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
+        if state_key in st.session_state:
+            params[url_key] = "1" if st.session_state[state_key] else "0"
+    for url_key, state_key in _SHARE_COLORSCALE_PARAMS.items():
+        value = st.session_state.get(state_key)
+        if value:
+            params[url_key] = str(value)
+    if st.session_state.get("single_animate"):
+        params["tab"] = "animation"
+
+    return urlencode(params), caveats
+
+
+def _render_share_link_widget(query: str) -> None:
+    """Render the copyable share link (read-only field + Copy button).
+
+    A same-origin ``components.html`` iframe (same trick as the tour — see
+    ``_render_tab_persistence``) composes the full URL from the *live* address:
+    ``window.parent.location.origin + pathname`` + the query string built
+    server-side. Doing the origin/path join client-side means the link is correct
+    wherever the app is served (localhost, Streamlit Cloud, a reverse proxy)
+    without the server having to know its own public URL. Copy uses the async
+    Clipboard API with a ``document.execCommand`` fallback for insecure contexts.
+    """
+    payload = json.dumps(query)
+    components.html(
+        f"""
+        <div class="sps-share">
+          <div class="sps-share-row">
+            <input id="sps-share-url" type="text" readonly
+                   aria-label="Shareable link" />
+            <button id="sps-share-copy" type="button">Copy link</button>
+          </div>
+          <div id="sps-share-status" class="sps-share-status"></div>
+        </div>
+        <style>
+          .sps-share {{
+            font-family: "Source Sans Pro", system-ui, sans-serif;
+            color-scheme: light dark;
+          }}
+          .sps-share-row {{ display: flex; gap: 0.4rem; align-items: stretch; }}
+          #sps-share-url {{
+            flex: 1 1 auto; min-width: 0; padding: 0.45rem 0.6rem;
+            border: 1px solid rgba(128, 128, 128, 0.5); border-radius: 8px;
+            background: rgba(128, 128, 128, 0.08); color: inherit;
+            font-size: 0.85rem; font-family: ui-monospace, monospace;
+          }}
+          #sps-share-copy {{
+            flex: 0 0 auto; padding: 0.45rem 0.9rem; cursor: pointer;
+            border: 1px solid #1f77b4; border-radius: 8px; white-space: nowrap;
+            background: #1f77b4; color: #fff; font-weight: 600; font-size: 0.85rem;
+          }}
+          #sps-share-copy:hover {{ background: #185fa5; }}
+          .sps-share-status {{
+            min-height: 1.1rem; margin-top: 0.35rem; font-size: 0.8rem;
+            color: #2e7d32; font-weight: 600;
+          }}
+        </style>
+        <script>
+        (function () {{
+          const query = {payload};
+          const loc = window.parent.location;
+          const base = loc.origin + loc.pathname;
+          const url = query ? base + "?" + query : base;
+          const input = document.getElementById("sps-share-url");
+          const status = document.getElementById("sps-share-status");
+          const btn = document.getElementById("sps-share-copy");
+          input.value = url;
+          input.addEventListener("focus", function () {{ input.select(); }});
+          function flash(msg) {{
+            status.textContent = msg;
+            setTimeout(function () {{ status.textContent = ""; }}, 2500);
+          }}
+          async function copy() {{
+            try {{
+              await navigator.clipboard.writeText(url);
+              flash("✓ Link copied to clipboard");
+            }} catch (err) {{
+              input.focus();
+              input.select();
+              try {{
+                document.execCommand("copy");
+                flash("✓ Link copied to clipboard");
+              }} catch (err2) {{
+                flash("Press ⌘/Ctrl-C to copy the selected link");
+              }}
+            }}
+          }}
+          btn.addEventListener("click", copy);
+        }})();
+        </script>
+        """,
+        height=110,
+    )
+
+
+def _render_share_panel(data_choice: str) -> None:
+    """Fill the header's Share slot with a popover that builds a deep link to the
+    current view (data source + trial + visualization settings)."""
+    with st.popover("Share", icon=":material/share:", width="content"):
+        st.markdown(
+            "**Share this view** — a link that reopens Scanpath Studio on the "
+            "current trial with your visualization settings."
+        )
+        query, caveats = _build_share_query(data_choice)
+        for note in caveats:
+            st.caption("⚠️ " + note)
+        _render_share_link_widget(query)
 
 
 # -----------------------------------------------------------------------------
@@ -2586,7 +2804,9 @@ def main() -> None:
         - Handles missing raw gaze data gracefully
     """
     configure_page()
-    _render_about_panel()
+    # The header reserves a slot for the Share popover; it's filled at the end of
+    # main(), once the resolved trial + viz settings the link encodes are known.
+    share_slot = _render_about_panel()
 
     # Apply deep-link presets BEFORE any widget renders — see _apply_url_preset
     # for the full URL schema. External tools can deep-link into this app with
@@ -2597,6 +2817,8 @@ def main() -> None:
         st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
     elif url_source == "demo":
         st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
+    elif url_source == "synthetic":
+        st.session_state.setdefault("data_source_choice", SYNTHETIC_CHOICE)
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
 
@@ -2781,6 +3003,11 @@ def main() -> None:
         else raw_gaze_filtered
     )
 
+    # Land a shared/deep link on its exact `?trial_id=` (once) now that combos
+    # exist — see _apply_url_trial_selection. Runs before the sidebar/tab widgets
+    # render so the seeded selection is picked up as their initial value.
+    _apply_url_trial_selection(combos)
+
     # Restore settings + annotations from an uploaded config JSON BEFORE the
     # sidebar widgets render, so they pick up the saved values (see
     # _apply_url_preset for the same preset-then-render mechanism). The uploader
@@ -2903,6 +3130,12 @@ def main() -> None:
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
         )
+
+    # Fill the header's Share popover now — after the tabs, so the resolved trial
+    # (_share_selection, written by render_single_trial_tab, which runs every
+    # rerun) and the live viz settings the link encodes are all current.
+    with share_slot:
+        _render_share_panel(data_choice)
 
     # Sidebar Help group (bottom): replay the welcome tour (the tour itself
     # renders early in this function — see the maybe_show_welcome_tour call).

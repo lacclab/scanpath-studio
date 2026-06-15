@@ -1,9 +1,17 @@
 """Tests for app.py utility functions."""
 
-import pandas as pd
+from urllib.parse import parse_qs
 
+import pandas as pd
+import pytest
+
+from scanpath_studio import app as app_module
 from scanpath_studio.app import (
+    DEMO_CHOICE,
+    UPLOAD_CHOICE,
+    _apply_url_trial_selection,
     _build_comparison_options,
+    _build_share_query,
     build_combo_options,
     compute_trial_stats,
     gather_trial_metadata,
@@ -211,3 +219,100 @@ class TestBuildComparisonOptions:
         )
         options = _build_comparison_options(combos, "Text", "p1", "t1", "up1")
         assert len(options) > 0
+
+
+class _FakeSt:
+    """Minimal stand-in for the ``streamlit`` module used by the Share helpers.
+
+    ``_build_share_query`` / ``_apply_url_trial_selection`` only touch
+    ``st.session_state`` and ``st.query_params`` (both dict-like), so swapping the
+    module-level ``st`` for this lets us unit-test the link logic without a
+    running Streamlit script.
+    """
+
+    def __init__(self):
+        self.session_state = {}
+        self.query_params = {}
+
+
+@pytest.fixture
+def fake_st(monkeypatch):
+    fake = _FakeSt()
+    monkeypatch.setattr(app_module, "st", fake)
+    return fake
+
+
+class TestBuildShareQuery:
+    """The Share button's deep-link builder (inverse of the URL preset parser)."""
+
+    def test_demo_source_selection_and_toggles(self, fake_st):
+        fake_st.session_state = {
+            "_share_selection": {"participant_id": "p1", "trial_id": "t3"},
+            "global_show_saccades": True,
+            "global_show_heatmap": False,
+            "global_fixation_colorscale": "Viridis",
+            "single_animate": True,
+        }
+        query, caveats = _build_share_query(DEMO_CHOICE)
+        parsed = parse_qs(query)
+        assert parsed["source"] == ["demo"]
+        assert parsed["participant"] == ["p1"]
+        assert parsed["trial_id"] == ["t3"]
+        # A layer left ON is shared as 1, a layer turned OFF as 0 (not dropped).
+        assert parsed["show_saccades"] == ["1"]
+        assert parsed["show_heatmap"] == ["0"]
+        assert parsed["fixation_colorscale"] == ["Viridis"]
+        assert parsed["tab"] == ["animation"]
+        assert caveats == []
+
+    def test_uploaded_source_warns_and_omits_source(self, fake_st):
+        fake_st.session_state = {
+            "_share_selection": {"participant_id": "p1", "trial_id": "t1"},
+        }
+        query, caveats = _build_share_query(UPLOAD_CHOICE)
+        parsed = parse_qs(query)
+        # An uploaded dataset can't be rebuilt from a URL — no source param, and
+        # the user is warned, but the selection/settings still go in the link.
+        assert "source" not in parsed
+        assert parsed["trial_id"] == ["t1"]
+        assert len(caveats) == 1
+
+    def test_no_selection_yields_settings_only(self, fake_st):
+        fake_st.session_state = {"global_show_words": True}
+        query, _ = _build_share_query(DEMO_CHOICE)
+        parsed = parse_qs(query)
+        assert "participant" not in parsed
+        assert "trial_id" not in parsed
+        assert parsed["show_words"] == ["1"]
+
+
+class TestApplyUrlTrialSelection:
+    """The ``?trial_id=`` deep link → trial-picker seeding (applied once)."""
+
+    def _combos(self):
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2"],
+                "trial_id": ["t1", "t2", "t3"],
+            }
+        )
+
+    def test_lands_on_exact_trial_id(self, fake_st):
+        fake_st.query_params = {"participant": "p1", "trial_id": "t2"}
+        _apply_url_trial_selection(self._combos())
+        assert fake_st.session_state["single_select_trial_mode"] == "Trial"
+        assert fake_st.session_state["single_trial_id"] == "t2"
+        assert fake_st.session_state["_url_trial_applied"] is True
+
+    def test_noop_without_trial_id(self, fake_st):
+        fake_st.query_params = {}
+        _apply_url_trial_selection(self._combos())
+        assert "single_trial_id" not in fake_st.session_state
+
+    def test_applies_only_once(self, fake_st):
+        # Once applied, a later rerun must not re-seed the picker (so the user's
+        # in-app navigation after following the link sticks).
+        fake_st.query_params = {"trial_id": "t2"}
+        fake_st.session_state = {"_url_trial_applied": True, "single_trial_id": "t9"}
+        _apply_url_trial_selection(self._combos())
+        assert fake_st.session_state["single_trial_id"] == "t9"

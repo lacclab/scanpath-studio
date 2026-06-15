@@ -48,7 +48,7 @@ def get_app_css() -> str:
        align it to the column's right edge so it lines up with the right edge of
        the page content. The `about_btn` wrapper is a flex column, so this only
        moves the About button — no other popover (e.g. the plot toolbar). */
-    .st-key-about_btn { align-items: flex-end; }
+    .st-key-about_btn, .st-key-share_btn { align-items: flex-end; }
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
     div[data-testid="stPopoverBody"] {

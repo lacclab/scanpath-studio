@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Share button.** A **Share** popover in the header builds a link that reopens
+  the app on the current trial with your visualization settings (which layers are
+  on, the colorscales, animation). The link uses the existing deep-link URL schema
+  and a new `?trial_id=` param that lands on the exact trial regardless of how it
+  was picked; copy it from the popover and send it. Works for the bundled demo,
+  the synthetic trial, and the OneStop server bundle (an uploaded dataset can't be
+  rebuilt from a URL, so the link then shares the view settings only, with a note).
 - **Stimuli view in Raw Data.** A new **Stimuli** subtab (first under *Raw Data*)
   reconstructs each passage from the word table — one row per Text ID with the
   full text rebuilt by joining its words in reading order, plus a word count.

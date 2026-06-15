@@ -29,11 +29,9 @@ from scanpath_studio.model_scanpaths import (
 from scanpath_studio.plots import (
     animation_playback_ms,
     make_comparison_figure,
-    make_fixation_duration_histogram,
     make_metric_convergence_figure,
     make_scanpath_animation,
     make_scanpath_figure,
-    make_word_measure_bar_figure,
 )
 from scanpath_studio.similarity import (
     METRICS,
@@ -2276,17 +2274,24 @@ def _render_paginated_dataframe(
     df: pd.DataFrame,
     page_size: int,
     key: str,
-    caption: str,
+    caption: Optional[str] = None,
     download_name: Optional[str] = None,
+    show_info: bool = True,
 ) -> None:
-    """Render a dataframe with pagination + download buttons (CSV + Parquet)."""
+    """Render a dataframe with pagination, optional caption + download buttons.
+
+    ``caption`` and ``download_name`` are skipped when falsy, and ``show_info``
+    suppresses the blue "Showing N rows with pagination" banner — the Data
+    Inspection tab uses this to keep the raw tables uncluttered.
+    """
     total_rows = len(df)
     total_pages = max(1, (total_rows + page_size - 1) // page_size)
 
     if total_rows > page_size:
-        st.info(
-            f"Showing {total_rows:,} rows with pagination ({page_size:,} per page)."
-        )
+        if show_info:
+            st.info(
+                f"Showing {total_rows:,} rows with pagination ({page_size:,} per page)."
+            )
         page = st.number_input(
             "Page",
             min_value=1,
@@ -2303,7 +2308,8 @@ def _render_paginated_dataframe(
         display_df = df
 
     st.dataframe(display_df, hide_index=True, width="stretch")
-    st.caption(caption)
+    if caption:
+        st.caption(caption)
 
     if download_name and not df.empty:
         _render_download_buttons(df, key, download_name)
@@ -2377,24 +2383,14 @@ def render_metrics_tab(
     """Render word-level metrics tab."""
     st.subheader("Word-level data")
     metrics = compute_word_metrics(words_filtered, fixations_filtered)
-    _render_paginated_dataframe(
-        metrics,
-        1000,
-        "metrics_page",
-        "Word-level data with computed reading metrics where available.",
-        download_name="word_measures",
-    )
+    _render_paginated_dataframe(metrics, 1000, "metrics_page", show_info=False)
 
 
 def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
     """Render fixation-level data tab."""
     st.subheader("Fixation-level data")
     _render_paginated_dataframe(
-        fixations_filtered,
-        1000,
-        "fixations_page",
-        "All fixation records after applying filters; includes ids, timing, and optional flags.",
-        download_name="fixations",
+        fixations_filtered, 1000, "fixations_page", show_info=False
     )
 
 
@@ -2405,11 +2401,7 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
         st.info("No raw gaze data available after filtering.")
         return
     _render_paginated_dataframe(
-        raw_gaze_filtered,
-        1000,
-        "raw_gaze_page",
-        "Millisecond-level gaze samples after applying filters.",
-        download_name="raw_gaze",
+        raw_gaze_filtered, 1000, "raw_gaze_page", show_info=False
     )
 
 
@@ -2490,15 +2482,7 @@ def render_stimuli_tab(words_filtered: pd.DataFrame) -> None:
             "Text ID column mappings."
         )
         return
-    st.caption(f"{len(stimuli):,} unique text(s) reconstructed from the word table.")
-    _render_paginated_dataframe(
-        stimuli,
-        100,
-        "stimuli_page",
-        "Each stimulus rebuilt by joining its words in reading order, grouped by "
-        "the mapped Text ID.",
-        download_name="stimuli",
-    )
+    _render_paginated_dataframe(stimuli, 100, "stimuli_page", show_info=False)
 
 
 def _render_data_provenance() -> None:
@@ -2570,21 +2554,6 @@ def render_raw_data_tab(
 # -----------------------------------------------------------------------------
 
 
-_MEASURE_OPTIONS = [
-    ("first_fixation_ms", "First-fixation duration (FFD)"),
-    ("first_pass_gaze_duration_ms", "Gaze duration / FPRT"),
-    ("regression_path_duration_ms", "Regression-path duration (go-past)"),
-    ("total_fixation_duration_ms", "Total fixation duration / dwell"),
-    ("n_fixations", "Fixation count"),
-    ("skip_flag", "Skip flag"),
-    ("regression_in_flag", "Regression in"),
-    ("regression_out_flag", "Regression out"),
-    ("gpt2_surprisal", "GPT-2 surprisal"),
-    ("wordfreq_frequency", "Word frequency (wordfreq)"),
-    ("subtlex_frequency", "Word frequency (SUBTLEX)"),
-]
-
-
 @st.cache_data(show_spinner="Computing dataset statistics…")
 def _dataset_statistics(
     _words: pd.DataFrame,
@@ -2592,7 +2561,7 @@ def _dataset_statistics(
     _raw_gaze: pd.DataFrame,
     cache_key,
 ) -> dict:
-    """Compute the Data Statistics tab's summary aggregates.
+    """Compute the Data Inspection tab's summary aggregates.
 
     Pure function of the (filtered) frames, cached on a cheap fingerprint so the
     full-corpus ``groupby``/``unique``/``mean`` scans don't re-run on every rerun
@@ -2606,44 +2575,6 @@ def _dataset_statistics(
         trial_ids |= set(_raw_gaze["trial_id"].unique())
     text_col = "unique_text_id" if "unique_text_id" in _words.columns else "text_id"
     text_ids = set(_words[text_col].unique()) if text_col in _words.columns else set()
-
-    mean_fix_dur = (
-        float(_fixations["duration_ms"].mean())
-        if not _fixations.empty and "duration_ms" in _fixations.columns
-        else None
-    )
-    mean_sac = (
-        float(_fixations["saccade_amplitude"].dropna().mean() or 0)
-        if not _fixations.empty and "saccade_amplitude" in _fixations.columns
-        else None
-    )
-    if "is_regression" in _fixations.columns and not _fixations.empty:
-        reg_label, reg_rate = (
-            "Regression rate",
-            float(_fixations["is_regression"].mean()) * 100,
-        )
-    elif "regression_out_flag" in _words.columns and not _words.empty:
-        reg_label, reg_rate = (
-            "Words w/ regression-out",
-            float(_words["regression_out_flag"].mean()) * 100,
-        )
-    else:
-        reg_label, reg_rate = "Regression rate", None
-    if (
-        not _fixations.empty
-        and "duration_ms" in _fixations.columns
-        and not _words.empty
-    ):
-        total_ms = _fixations.groupby(["participant_id", "trial_id"])[
-            "duration_ms"
-        ].sum()
-        n_words = _words.groupby(["participant_id", "trial_id"]).size()
-        per_trial = (
-            n_words.reindex(total_ms.index).fillna(0) * 60_000
-        ) / total_ms.replace(0, pd.NA)
-        wpm = float(per_trial.dropna().mean()) if per_trial.dropna().size else 0.0
-    else:
-        wpm = None
 
     trial_source = _fixations if not _fixations.empty else _words
     trials_per_participant = (
@@ -2687,28 +2618,104 @@ def _dataset_statistics(
         "n_fixations": len(_fixations),
         "n_words": len(_words),
         "n_gaze": len(_raw_gaze),
-        "mean_fix_dur": mean_fix_dur,
-        "mean_sac": mean_sac,
-        "reg_label": reg_label,
-        "reg_rate": reg_rate,
-        "wpm": wpm,
         "stats_df": stats_df,
     }
 
 
-def render_data_statistics_tab(
+# Friendly field labels for the column-mapping summary, per source table. Box
+# fields are spelled out so the words table reads clearly (e.g. "Box left").
+_WORD_MAPPING_LABELS = {
+    "participant": "Participant ID",
+    "trial": "Trial ID",
+    "word_id": "Word/IA ID",
+    "text": "Word text/label",
+    "text_id": "Text ID",
+    "line": "Line index",
+    "left": "Box left",
+    "right": "Box right",
+    "top": "Box top",
+    "bottom": "Box bottom",
+    "x": "Box x",
+    "y": "Box y",
+    "width": "Box width",
+    "height": "Box height",
+}
+_FIX_MAPPING_LABELS = {
+    "participant": "Participant ID",
+    "trial": "Trial ID",
+    "x": "X coordinate",
+    "y": "Y coordinate",
+    "duration": "Duration (ms)",
+    "timestamp": "Timestamp (ms)",
+    "fixation_id": "Fixation ID",
+    "text_id": "Text ID",
+    "word_id": "Word/IA ID",
+}
+_RAW_GAZE_MAPPING_LABELS = {
+    "participant": "Participant ID",
+    "trial": "Trial ID",
+    "x": "X coordinate",
+    "y": "Y coordinate",
+    "timestamp": "Timestamp (ms)",
+    "text": "Word text/label",
+}
+_MAPPING_TABLES = [
+    ("Words/IA", "words", _WORD_MAPPING_LABELS),
+    ("Fixations", "fixations", _FIX_MAPPING_LABELS),
+    ("Raw gaze", "raw_gaze", _RAW_GAZE_MAPPING_LABELS),
+]
+
+
+def _column_mapping_rows(mapping: dict) -> list[dict]:
+    """Flatten the stashed per-table schemas into one ``Table / Field / Mapped
+    column`` row list, dropping unmapped fields and joining composite trial ids."""
+    rows: list[dict] = []
+    for table_label, schema_key, labels in _MAPPING_TABLES:
+        schema = mapping.get(schema_key)
+        if not schema:
+            continue
+        for field_key, label in labels.items():
+            col = schema.get(field_key)
+            if col is None:
+                continue
+            if isinstance(col, (list, tuple)):
+                col = " + ".join(str(c) for c in col)
+            rows.append(
+                {"Table": table_label, "Field": label, "Mapped column": str(col)}
+            )
+    return rows
+
+
+def _render_column_mapping_section() -> None:
+    """Show how each source column was mapped to the app's canonical fields.
+
+    Reads the schemas stashed by the data-loading paths in ``app`` under
+    ``st.session_state['_active_column_mapping']``."""
+    st.subheader("Column mapping")
+    mapping = st.session_state.get("_active_column_mapping") or {}
+    rows = _column_mapping_rows(mapping)
+    if not rows:
+        st.info("No column mapping available for the current data source.")
+        return
+    st.dataframe(
+        pd.DataFrame(rows, columns=["Table", "Field", "Mapped column"]),
+        hide_index=True,
+        width="stretch",
+    )
+    st.caption("How each source column maps to the app's canonical fields.")
+
+
+def render_data_inspection_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
-    combos: pd.DataFrame,
-    *,
-    canvas_width: int,
-    base_font_size: int,
-    font_family: str,
 ) -> None:
-    """Render dataset statistics tab with reading-research summaries."""
-    st.subheader("Dataset statistics")
+    """Render the merged Data Inspection tab.
 
+    Combines the former **Raw Data** and **Data Statistics** tabs: the headline
+    dataset counts, every raw-data table, the per-metric summary statistics, and
+    the active column mapping — in that order.
+    """
     stats = _dataset_statistics(
         words_filtered,
         fixations_filtered,
@@ -2720,6 +2727,8 @@ def render_data_statistics_tab(
         ),
     )
 
+    # 1. Headline dataset counts.
+    st.subheader("Dataset statistics")
     top_cols = st.columns(6)
     top_cols[0].metric("Participants", f"{stats['n_participants']:,}")
     top_cols[1].metric("Texts", f"{stats['n_texts']:,}")
@@ -2732,30 +2741,18 @@ def render_data_statistics_tab(
         help="Counts raw gaze samples if provided.",
     )
 
-    rr_cols = st.columns(4)
-    rr_cols[0].metric(
-        "Mean fixation dur (ms)",
-        f"{stats['mean_fix_dur']:.0f}" if stats["mean_fix_dur"] is not None else "—",
-    )
-    rr_cols[1].metric(
-        "Mean saccade amp (px)",
-        f"{stats['mean_sac']:.0f}" if stats["mean_sac"] is not None else "—",
-    )
-    rr_cols[2].metric(
-        stats["reg_label"],
-        f"{stats['reg_rate']:.1f} %" if stats["reg_rate"] is not None else "—",
-    )
-    rr_cols[3].metric(
-        "Reading speed (wpm)",
-        f"{stats['wpm']:.0f}" if stats["wpm"] is not None else "—",
-    )
+    st.divider()
+
+    # 2. Every raw-data table (Stimuli / Word-level / Fixation-level / Raw gaze).
+    st.subheader("Raw data")
+    render_raw_data_tab(words_filtered, fixations_filtered, raw_gaze_filtered)
 
     st.divider()
 
-    stats_df = stats["stats_df"]
-
+    # 3. Per-metric summary statistics.
+    st.subheader("Summary statistics")
     st.dataframe(
-        stats_df,
+        stats["stats_df"],
         hide_index=True,
         width="stretch",
         column_config={
@@ -2768,80 +2765,6 @@ def render_data_statistics_tab(
     )
 
     st.divider()
-    st.subheader("Fixation duration distribution")
-    if fixations_filtered.empty:
-        st.info("No fixations available for distribution plot.")
-    else:
-        # The overlay only reads pre-aggregated per-word measure columns
-        # (FFD/FPRT/TFD). Use them straight off the words frame when present
-        # rather than recomputing measures over the *whole* filtered corpus just
-        # for this histogram (which runs on every rerun). Datasets without those
-        # columns simply skip the overlay.
-        _overlay_cols = (
-            "first_fixation_ms",
-            "first_pass_gaze_duration_ms",
-            "total_fixation_duration_ms",
-        )
-        overlay_measures = (
-            words_filtered
-            if not words_filtered.empty
-            and any(c in words_filtered.columns for c in _overlay_cols)
-            else None
-        )
-        hist = make_fixation_duration_histogram(
-            fixations_filtered,
-            canvas_width=int(canvas_width),
-            base_font_size=int(base_font_size),
-            font_family=font_family,
-            overlay_words=overlay_measures,
-        )
-        st.plotly_chart(hist, width="content", config={"responsive": False})
 
-    st.divider()
-    st.subheader("Per-word measure")
-    if combos.empty:
-        st.info("No trials available — adjust the filters to pick a trial here.")
-        return
-    selected_participant, selected_trial, _mode, _text = select_trial(
-        combos, key_prefix="stats_measures"
-    )
-    if not (selected_participant and selected_trial):
-        return
-
-    trial_words = extract_trial(words_filtered, selected_participant, selected_trial)
-    trial_fixations = extract_trial(
-        fixations_filtered, selected_participant, selected_trial
-    )
-    if trial_words.empty or trial_fixations.empty:
-        st.info("Select a trial with both words and fixations to see measures.")
-        return
-
-    measures_df = compute_word_metrics(trial_words, trial_fixations)
-    available_measures = [
-        (key, label) for key, label in _MEASURE_OPTIONS if key in measures_df.columns
-    ]
-    if not available_measures:
-        st.info("No per-word measures available for this trial.")
-        return
-
-    key_to_label = dict(available_measures)
-    selected_measure = st.selectbox(
-        "Measure",
-        options=list(key_to_label.keys()),
-        format_func=lambda k: key_to_label[k],
-        key="word_measure_choice",
-    )
-    bar_fig = make_word_measure_bar_figure(
-        measures_df,
-        measure=selected_measure,
-        canvas_width=int(canvas_width),
-        base_font_size=int(base_font_size),
-        font_family=font_family,
-    )
-    st.plotly_chart(bar_fig, width="content", config={"responsive": False})
-    st.caption(
-        "Per-word measures computed per (participant, trial, word). When the input "
-        "table carries EyeLink IA exports (e.g. IA_FIRST_FIXATION_DURATION), "
-        "those values are preserved; missing values are computed from "
-        "fixations + word bounding boxes."
-    )
+    # 4. The active column mapping (data source → canonical fields).
+    _render_column_mapping_section()

@@ -248,6 +248,69 @@ class TestSingleReportDatasets:
 
 
 @pytest.mark.timeout(90)
+class TestDataInspectionTab:
+    """The merged Data Inspection tab folds the former Raw Data + Data Statistics
+    tabs into one: headline counts, raw tables, the summary-stats table, and the
+    new column-mapping table — while dropping the second stats row, the fixation
+    histogram, and the per-word measure section."""
+
+    def test_merged_sections_present_and_old_removed(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        subheaders = [s.value for s in at.subheader]
+        for section in (
+            "Dataset statistics",
+            "Raw data",
+            "Summary statistics",
+            "Column mapping",
+        ):
+            assert section in subheaders, f"missing section {section}: {subheaders}"
+
+        metric_labels = [m.label for m in at.metric]
+        for headline in ("Participants", "Texts", "Trials", "Fixations", "Words"):
+            assert headline in metric_labels, f"missing headline metric {headline}"
+        # The second statistics row is gone.
+        for dropped in ("Mean fixation dur (ms)", "Reading speed (wpm)"):
+            assert dropped not in metric_labels, f"{dropped} should be removed"
+
+        # The histogram + per-word measure sections are gone.
+        text = " ".join(subheaders)
+        assert "Fixation duration distribution" not in text
+        assert "Per-word measure" not in text
+
+        # The filtering note stays under the summary-stats table.
+        assert any("computed after filtering" in c.value for c in at.caption)
+
+    def test_column_mapping_table_renders(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        mapping_tables = [
+            df.value
+            for df in at.dataframe
+            if list(getattr(df.value, "columns", []))
+            == ["Table", "Field", "Mapped column"]
+        ]
+        assert mapping_tables, "column-mapping table not rendered"
+        table = mapping_tables[0]
+        assert not table.empty
+        # Every mapped row names a real source field.
+        assert (table["Mapped column"].astype(str).str.len() > 0).all()
+
+    def test_top_level_tabs_merged(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        labels = [t.label for t in at.get("tab")]
+        assert "Data Inspection" in labels
+        assert "Raw Data" not in labels
+        assert "Data Statistics" not in labels
+
+
+@pytest.mark.timeout(90)
 class TestUnmappedRawDataView:
     """When a required column is unmapped, the app must show the raw uploaded
     data (so the user can pick the mapping) instead of halting."""

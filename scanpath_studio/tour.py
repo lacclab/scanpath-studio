@@ -106,13 +106,13 @@ presented.
 """,
     ),
     (
-        "🗂 Five views of the data",
+        "🗂 Four views of the data",
         """
 - **Scanpath Visualization** — the main scanpath; tick **Animate** to replay it
   fixation by fixation. Hover a word for its reading measures; export.
 - **Generations (WIP)** — a grid of model-generated scanpaths over the text.
-- **Raw Data** — the normalized tables, downloadable.
-- **Data Statistics** — summary stats and distributions.
+- **Data Inspection** — the normalized tables, dataset statistics, and the
+  active column mapping in one place.
 - **Bulk Export** — bundle figures + tables across many trials into one zip.
 """,
     ),
@@ -237,10 +237,10 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": '[data-testid="stTabs"] [data-baseweb="tab-list"]',
-        "title": "🗂 Five views of the data",
+        "title": "🗂 Four views of the data",
         "body": "**Scanpath Visualization** — the main scanpath; tick "
         "**Animate** to replay it. **Generations (WIP)** — a grid of "
-        "model scanpaths. Plus **Raw Data**, **Data Statistics**, and "
+        "model scanpaths. Plus **Data Inspection** and "
         "**Bulk Export** for many trials at once.",
     },
     {

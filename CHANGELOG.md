@@ -8,12 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Stimuli view in Raw Data.** A new **Stimuli** subtab (first under *Raw Data*)
+- **One Data Inspection tab.** The former **Raw Data** and **Data Statistics**
+  tabs are merged into a single **Data Inspection** tab that, top to bottom,
+  shows the headline dataset counts, every raw table (Stimuli, Word-level,
+  Fixation-level, Raw gaze), the per-metric summary statistics, and a new
+  **Column mapping** table.
+- **Column mapping table.** Data Inspection now lists how each source column was
+  mapped to the app's canonical fields (per table: Words/IA, Fixations, Raw
+  gaze) — so you can confirm at a glance which of your columns became the
+  participant, trial id, word box, fixation duration, and so on.
+- **Stimuli view.** A new **Stimuli** subtab (first under *Data Inspection*)
   reconstructs each passage from the word table — one row per Text ID with the
   full text rebuilt by joining its words in reading order, plus a word count.
   It honours the column mapping (groups by the mapped Text ID, uses the mapped
-  word text), dedupes shared stimulus words across readers, and downloads as
-  CSV/Parquet.
+  word text) and dedupes shared stimulus words across readers.
 - **Guided setup wizard for uploads.** Uploading now walks you through an
   incremental flow where only the step you still need to fill stays open
   (finished and auto-detected steps tuck away). You name the dataset and set the
@@ -124,6 +132,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drop "noisy" fixations from every view with no way to turn it off. It's gone —
   every uploaded fixation is shown. If your data has such a column you can still
   keep it (via *fields to keep*) and filter on it explicitly.
+- **Trimmed the data views.** Folding Raw Data and Data Statistics together
+  dropped the second statistics row (mean fixation duration / saccade amplitude
+  / regression rate / reading speed), the fixation-duration distribution plot,
+  and the per-word measure picker, plus the per-table download buttons,
+  pagination banner, and descriptive captions — keeping the merged tab focused
+  on inspecting the tables and their mapping.
 
 ## [0.19.1] - 2026-06-14
 

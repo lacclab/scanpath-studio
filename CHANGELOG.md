@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Stimuli view in Raw Data.** A new **Stimuli** subtab (first under *Raw Data*)
+  reconstructs each passage from the word table — one row per Text ID with the
+  full text rebuilt by joining its words in reading order, plus a word count.
+  It honours the column mapping (groups by the mapped Text ID, uses the mapped
+  word text), dedupes shared stimulus words across readers, and downloads as
+  CSV/Parquet.
 - **Guided setup wizard for uploads.** Uploading now walks you through an
   incremental flow where only the step you still need to fill stays open
   (finished and auto-detected steps tuck away). You name the dataset and set the

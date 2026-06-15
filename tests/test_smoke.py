@@ -260,6 +260,51 @@ class TestPipelineFigures:
         assert sizes.max() <= 24
 
 
+class TestStimuliTable:
+    """The Raw Data → Stimuli subtab reconstructs one passage per Text ID from
+    the word table (`tabs._build_stimuli_table_cached`)."""
+
+    def _build(self, words):
+        from scanpath_studio.data import frame_fingerprint
+        from scanpath_studio.tabs import _build_stimuli_table_cached
+
+        # frame_fingerprint keys the cache; pass it explicitly like the app does.
+        return _build_stimuli_table_cached(words, cache_key=frame_fingerprint(words))
+
+    def test_one_row_per_text_with_curated_columns(self, normalized_demo):
+        words, _ = normalized_demo
+        table = self._build(words)
+        assert list(table.columns)[:1] == ["Text ID"]
+        assert "Text" in table.columns and "# Words" in table.columns
+        # One row per unique mapped text id, deduped across participants.
+        assert len(table) == words["text_id"].nunique()
+        assert table["Text ID"].is_unique
+
+    def test_text_reconstructed_in_reading_order(self, normalized_demo):
+        words, _ = normalized_demo
+        table = self._build(words)
+        first_id = table.iloc[0]["Text ID"]
+        # The reconstruction is just the text column joined in word order.
+        src = words[words["text_id"] == first_id].drop_duplicates(
+            subset=["text_id", "word_id"]
+        )
+        src = src.sort_values(["line_idx", "word_id"])
+        expected = " ".join(
+            w for w in src["text"].astype(str) if w and w != "nan"
+        )
+        row = table[table["Text ID"] == first_id].iloc[0]
+        assert row["Text"] == expected
+        assert row["Text"].strip() != ""
+        assert row["# Words"] > 0
+
+    def test_empty_words_returns_empty_table(self):
+        import pandas as pd
+
+        out = self._build(pd.DataFrame())
+        assert out.empty
+        assert "Text ID" in out.columns
+
+
 class TestPerWordMetricsOnSample:
     def test_metrics_computed_on_real_data(self, normalized_demo):
         words, fixations = normalized_demo

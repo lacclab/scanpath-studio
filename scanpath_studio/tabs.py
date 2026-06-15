@@ -2413,6 +2413,94 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
     )
 
 
+@st.cache_data(show_spinner="Building stimuli list…")
+def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame:
+    """One row per Text ID, with the stimulus text reconstructed from its words.
+
+    The word table carries one row per word per text (and, for per-participant
+    tables, repeated once per reader). We collapse identical word rows across
+    participants, then join each text's words in reading order (line, then word
+    id) into a single passage string. Cached on a cheap content fingerprint of
+    the words frame (the frame itself is passed un-hashed via the underscore
+    arg) so a rerun that doesn't change the data reuses the result.
+    """
+    empty = pd.DataFrame(columns=["Text ID", "# Words", "Text"])
+    if _words.empty or "text_id" not in _words.columns or "text" not in _words.columns:
+        return empty
+
+    cols = [
+        c
+        for c in ("text_id", "unique_text_id", "word_id", "line_idx", "text")
+        if c in _words.columns
+    ]
+    sub = _words[cols].copy()
+    sub = sub.dropna(subset=["text_id"])
+    if sub.empty:
+        return empty
+
+    # Collapse identical word rows coming from multiple participants (stimulus
+    # AoIs are shared by every reader; per-participant tables repeat them).
+    if "word_id" in sub.columns:
+        sub = sub.drop_duplicates(subset=["text_id", "word_id"])
+    else:
+        sub = sub.drop_duplicates()
+
+    sort_cols = ["text_id"] + [c for c in ("line_idx", "word_id") if c in sub.columns]
+    sub = sub.sort_values(sort_cols, kind="stable")
+
+    # Only surface unique_text_id as its own column when it actually differs
+    # from text_id (after the unique_paragraph_id fallback they're identical).
+    has_unique = "unique_text_id" in sub.columns and not (
+        sub["unique_text_id"].astype(str).eq(sub["text_id"].astype(str)).all()
+    )
+
+    rows = []
+    for text_id, grp in sub.groupby("text_id", sort=False):
+        words_list = [w for w in grp["text"].astype(str).tolist() if w and w != "nan"]
+        row = {
+            "Text ID": text_id,
+            "# Words": len(words_list),
+            "Text": " ".join(words_list),
+        }
+        if has_unique:
+            uniques = grp["unique_text_id"].dropna().astype(str).unique().tolist()
+            row["Unique Text ID"] = ", ".join(uniques)
+        rows.append(row)
+
+    result = pd.DataFrame(rows)
+    ordered = ["Text ID"]
+    if has_unique:
+        ordered.append("Unique Text ID")
+    ordered += ["# Words", "Text"]
+    return result[[c for c in ordered if c in result.columns]]
+
+
+def render_stimuli_tab(words_filtered: pd.DataFrame) -> None:
+    """Render the stimuli subtab — one reconstructed passage per Text ID."""
+    st.subheader("Stimuli")
+    if words_filtered.empty:
+        st.info("No word data available after filtering.")
+        return
+    stimuli = _build_stimuli_table_cached(
+        words_filtered, cache_key=frame_fingerprint(words_filtered)
+    )
+    if stimuli.empty:
+        st.info(
+            "No stimulus text could be reconstructed — check the Word text and "
+            "Text ID column mappings."
+        )
+        return
+    st.caption(f"{len(stimuli):,} unique text(s) reconstructed from the word table.")
+    _render_paginated_dataframe(
+        stimuli,
+        100,
+        "stimuli_page",
+        "Each stimulus rebuilt by joining its words in reading order, grouped by "
+        "the mapped Text ID.",
+        download_name="stimuli",
+    )
+
+
 def _render_data_provenance() -> None:
     """Show a 'source / cohort / date / file mtime' banner above the Raw Data
     sub-tabs so reviewers can verify which OneStop export they're looking at.
@@ -2464,9 +2552,11 @@ def render_raw_data_tab(
 ) -> None:
     """Render the raw data tab with sub-tabs."""
     _render_data_provenance()
-    word_tab, fixation_tab, raw_gaze_tab = st.tabs(
-        ["Word-level", "Fixation-level", "Raw gaze"]
+    stimuli_tab, word_tab, fixation_tab, raw_gaze_tab = st.tabs(
+        ["Stimuli", "Word-level", "Fixation-level", "Raw gaze"]
     )
+    with stimuli_tab:
+        render_stimuli_tab(words_filtered)
     with word_tab:
         render_metrics_tab(words_filtered, fixations_filtered)
     with fixation_tab:

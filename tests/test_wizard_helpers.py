@@ -12,13 +12,35 @@ from scanpath_studio import app
 
 
 class TestDefaultTrialColumns:
-    def test_composes_participant_and_text_when_both_present(self):
-        # A trial is one reading of one text → default to participant + text ids.
+    def test_composes_participant_and_paragraph_preferring_paragraph(self):
+        # A trial is one reading of one passage → participant + the finest passage
+        # grain (paragraph beats a coarser text id).
         proposed = {"trial": "trial_id", "text_id": "text_id"}
         present = ["paragraph_id", "text_id", "participant_id"]
         assert app._default_trial_columns(proposed, present) == [
             "participant_id",
-            "text_id",
+            "paragraph_id",
+        ]
+
+    def test_adds_repeated_reading_column_when_present(self):
+        # OneStop: participant + paragraph alone would collapse the two readings;
+        # the repeated-reading column keeps them distinct.
+        proposed = {"trial": "unique_paragraph_id"}
+        present = ["participant_id", "unique_paragraph_id", "repeated_reading_trial"]
+        assert app._default_trial_columns(proposed, present) == [
+            "participant_id",
+            "unique_paragraph_id",
+            "repeated_reading_trial",
+        ]
+
+    def test_uses_canonical_participant_candidates(self):
+        # A non-standard participant name (reader_id) is in PARTICIPANT_CANDIDATES,
+        # so it still composes the default trial id (not paragraph-only).
+        proposed = {"trial": "unique_paragraph_id"}
+        present = ["reader_id", "unique_paragraph_id"]
+        assert app._default_trial_columns(proposed, present) == [
+            "reader_id",
+            "unique_paragraph_id",
         ]
 
     def test_falls_back_to_paragraph_and_text_without_participant(self):

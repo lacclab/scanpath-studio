@@ -304,10 +304,34 @@ class TestApplyUrlTrialSelection:
         assert fake_st.session_state["single_trial_id"] == "t2"
         assert fake_st.session_state["_url_trial_applied"] is True
 
+    def test_seeds_every_selection_prefix(self, fake_st):
+        # Both the Scanpath ("single") and Generations ("multi") pickers must be
+        # seeded, or switching tabs after following a link lands on a different
+        # trial (mirrors the _SELECTION_PREFIXES loop in _apply_url_preset).
+        fake_st.query_params = {"trial_id": "t2"}
+        _apply_url_trial_selection(self._combos())
+        assert fake_st.session_state["single_trial_id"] == "t2"
+        assert fake_st.session_state["multi_trial_id"] == "t2"
+
+    def test_trial_id_alone_without_participant(self, fake_st):
+        # A ?trial_id= link with no ?participant= must still land on the trial.
+        fake_st.query_params = {"trial_id": "t3"}
+        _apply_url_trial_selection(self._combos())
+        assert fake_st.session_state["single_trial_id"] == "t3"
+        assert fake_st.session_state["_url_trial_applied"] is True
+
     def test_noop_without_trial_id(self, fake_st):
         fake_st.query_params = {}
         _apply_url_trial_selection(self._combos())
         assert "single_trial_id" not in fake_st.session_state
+
+    def test_unknown_trial_id_does_not_burn_guard(self, fake_st):
+        # A trial id absent from combos must NOT stamp the once-flag, so a later
+        # rerun (e.g. once an async shard finishes loading) can still land it.
+        fake_st.query_params = {"trial_id": "nope"}
+        _apply_url_trial_selection(self._combos())
+        assert "single_trial_id" not in fake_st.session_state
+        assert "_url_trial_applied" not in fake_st.session_state
 
     def test_applies_only_once(self, fake_st):
         # Once applied, a later rerun must not re-seed the picker (so the user's

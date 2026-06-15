@@ -31,11 +31,14 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Dict, NamedTuple, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, NamedTuple, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+
+if TYPE_CHECKING:
+    from streamlit.delta_generator import DeltaGenerator
 
 # Allow running via `streamlit run scanpath_studio/app.py` by adding the
 # repository root to sys.path when executed as a script instead of a package.
@@ -320,27 +323,33 @@ _FONT_BOUNDS = (6, 72)
 _MARKER_BOUNDS = (4, 40)
 
 
-def _restore_selection(selection: dict, combos: pd.DataFrame) -> bool:
-    """Best-effort: point the Interactive Plot tab's trial picker at the saved
-    ``(participant, trial)``. Returns True when a matching trial is found in the
-    current (filtered) data. Mirrors the key scheme of
-    ``utils.select_trial(key_prefix="single")`` — including its composite vs.
-    single-dropdown branch — so the seeded keys land on the right selectors."""
+def _restore_selection(
+    selection: dict, combos: pd.DataFrame, key_prefix: str = "single"
+) -> bool:
+    """Best-effort: point a tab's trial picker at the saved ``(participant,
+    trial)``. Returns True when a matching trial is found in the current
+    (filtered) data. Mirrors the key scheme of ``utils.select_trial`` for the
+    given ``key_prefix`` — including its composite vs. single-dropdown branch —
+    so the seeded keys land on the right selectors.
+
+    The trial id is sufficient on its own: a missing/blank participant (e.g. a
+    ``?trial_id=`` link with no ``?participant=``) falls through to the trial-id-
+    alone match below, so the picker still lands on the trial."""
     pid = selection.get("participant_id")
     tid = selection.get("trial_id")
-    if pid in (None, "") or tid in (None, "") or combos.empty:
+    if tid in (None, "") or combos.empty:
         return False
     pid, tid = str(pid), str(tid)
     match = combos[
         (combos["participant_id"].astype(str) == pid)
         & (combos["trial_id"].astype(str) == tid)
     ]
-    if match.empty:  # participant may have been filtered out — try trial id alone
+    if match.empty:  # participant absent/blank or filtered out — try trial id alone
         match = combos[combos["trial_id"].astype(str) == tid]
     if match.empty:
         return False
     row = match.iloc[0]
-    st.session_state["single_select_trial_mode"] = "Trial"
+    st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
     composite_cols = [
         c
         for c in (st.session_state.get("_composite_trial_columns") or [])
@@ -348,17 +357,17 @@ def _restore_selection(selection: dict, combos: pd.DataFrame) -> bool:
     ]
     if len(composite_cols) >= 2:
         for col in composite_cols:
-            st.session_state[f"single_composite_{col}"] = str(row[col])
-        st.session_state["single_composite_reading"] = str(row["trial_id"])
+            st.session_state[f"{key_prefix}_composite_{col}"] = str(row[col])
+        st.session_state[f"{key_prefix}_composite_reading"] = str(row["trial_id"])
     else:
-        # None/Trial mode renders a single dropdown keyed `single_trial_id`
+        # None/Trial mode renders a single dropdown keyed `<prefix>_trial_id`
         # whose *options* are the trial_field values (`unique_trial_id` when
         # present), so seed that one key with this row's option value — not a
-        # `single_<trial_field>` key, which no widget reads.
+        # `<prefix>_<trial_field>` key, which no widget reads.
         trial_field = (
             "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
         )
-        st.session_state["single_trial_id"] = str(row[trial_field])
+        st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
     return True
 
 
@@ -370,25 +379,31 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
     lands on the exact trial regardless of which picker mode produced the share
     link — but it needs the built ``combos``, so it runs from ``main()`` after
     they exist. Reuses ``_restore_selection`` (the same seeding the plot-config
-    restore uses) and is guarded by a once-flag so following the link doesn't
-    fight the user's later in-app navigation. The Share button emits this param;
-    see ``_build_share_query``.
+    restore uses), seeding *every* selection prefix so non-first tabs land on the
+    trial too (mirrors the ``_SELECTION_PREFIXES`` loop in ``_apply_url_preset``).
+    The Share button emits this param; see ``_build_share_query``.
     """
     if st.session_state.get("_url_trial_applied"):
         return
     trial_id = st.query_params.get("trial_id")
     if not trial_id:
         return
-    # Stamp the flag up front so a trial id that isn't in the current (filtered)
-    # data doesn't retry every rerun and keep clobbering manual selection.
-    st.session_state["_url_trial_applied"] = True
-    _restore_selection(
-        {
-            "participant_id": st.query_params.get("participant"),
-            "trial_id": trial_id,
-        },
-        combos,
-    )
+    selection = {
+        "participant_id": st.query_params.get("participant"),
+        "trial_id": trial_id,
+    }
+    # Stamp the once-flag only after the trial is actually found, so a rerun
+    # where `combos` is still empty/partial (e.g. the OneStop shard is mid-load)
+    # retries on the next rerun instead of losing the deep link. `_restore_selection`
+    # only writes when it matches, so retrying never clobbers manual navigation.
+    # Materialize (not a short-circuiting any()) so EVERY prefix is seeded, not
+    # just up to the first match.
+    results = [
+        _restore_selection(selection, combos, key_prefix=prefix)
+        for prefix in _SELECTION_PREFIXES
+    ]
+    if any(results):
+        st.session_state["_url_trial_applied"] = True
 
 
 def _seed_column_mapping(mapping) -> None:
@@ -680,7 +695,7 @@ def configure_page() -> None:
     st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
-def _render_about_panel():
+def _render_about_panel() -> "DeltaGenerator":
     """Compact header: title + a Share popover + an About popover.
 
     Returns the header container reserved for the Share popover. Share is filled

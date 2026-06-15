@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dataset registry built for more corpora) ships feature-flagged off
   (`SCANPATH_PUBLIC_DATASETS=1` to preview); it will be enabled in a future
   release.
+- **Step-by-step setup guide.** The upload wizard now has a short guided
+  walkthrough — a **❓ Show setup guide** dialog that explains each step (naming,
+  experimental setup, uploading, column mapping, and finishing). It opens
+  automatically the first time you set up a dataset in a session and is
+  replayable anytime.
+- **Export your column mapping.** A **⬇️ Download setup** button next to **Add
+  dataset** saves the current column mapping to a JSON file you can re-apply to
+  similar data later via *Restore a saved setup*.
 
 ### Changed
 - **Much faster on large datasets.** Switching trial, participant, or settings
@@ -96,6 +104,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reuses one persistent Kaleido browser for the whole batch instead of
   cold-starting Chrome per trial — quicker on large exports and no more
   per-trial "Resorting to unclean kill browser." log noise.
+- **Clearer, numbered setup steps.** The wizard's sections are now numbered
+  (1 Dataset name → 5 Filter & keep), the "upload to begin" prompt moved to the
+  top of the upload step, and a tip points large-dataset users to running the
+  app locally (`pip install scanpath-studio`).
+- **See your uploaded tables.** Each table's upload box stays open after
+  uploading and previews its first rows, so you can sanity-check the columns;
+  the participant and text counts now carry the same "make sure this is the
+  number you expect to see" reassurance as the trial and row counts.
 
 ### Fixed
 - **Colour bars no longer squash the scanpath.** Turning on *Show color bars* or

@@ -632,3 +632,196 @@ def render_tour_replay_button() -> None:
         help="Replay the quick intro tour.",
         on_click=_arm_tour,
     )
+
+
+# -----------------------------------------------------------------------------
+# Dataset-setup guide (the "📂 Set up your dataset" wizard's own walkthrough).
+#
+# A self-contained multi-step ``st.dialog`` that walks the user through the
+# upload wizard's process. Kept separate from the welcome tour above: it has its
+# own step counter (``wizard_guide_step``) and seen-flag (``wizard_guide_seen``)
+# so the two never interfere, but it reuses ``_close_dialog_clientside`` to close
+# instantly without a full-app rerun. Auto-opens once per session the first time
+# the wizard is shown (unless suppressed for embeds/deep-links, or the welcome
+# spotlight tour is still on screen so the two don't stack), and is replayable
+# from the wizard's "❓ Show setup guide" button.
+# -----------------------------------------------------------------------------
+
+# (title, markdown body) per step — one per part of the wizard, in order.
+_WIZARD_GUIDE_STEPS = [
+    (
+        "📂 Let's set up your dataset",
+        """
+This short guide walks you through turning your own eye-tracking tables into an
+interactive dataset — it takes about a minute.
+
+The wizard **auto-advances**: only the step you still need to fill stays open,
+and finished or auto-detected steps collapse out of the way.
+
+Step through it with **Next**, or **Skip** to dive straight in — you can reopen
+this anytime with **❓ Show setup guide** at the top of the wizard.
+""",
+    ),
+    (
+        "1 · Name your dataset",
+        """
+Give the dataset a name you'll recognise — it shows up in the **Data source**
+list so you can switch back to it later without re-uploading.
+
+A default like *Dataset 1* is filled in for you; rename it if you like.
+""",
+    ),
+    (
+        "2 · Experimental setup",
+        """
+Tell Scanpath Studio about the screen the data was recorded on — **monitor
+resolution**, font, and text scaling.
+
+This keeps word boxes and fixations **true to scale**, so the text appears just
+as the reader saw it. It defaults to a common 1440p monitor; open the panel to
+fine-tune it anytime.
+""",
+    ),
+    (
+        "3 · Upload your data",
+        """
+Upload your **Fixations** and/or **Words / Interest Areas** tables — CSV, TSV,
+Parquet, or Feather. Several files per table is fine (they're concatenated), and
+either table on its own works too.
+
+Each upload shows its **row count** and a **preview of the first rows**, so you
+can sanity-check the columns before mapping. You can also add an optional
+raw-gaze overlay.
+
+> 💡 Working with a **large dataset**? It's faster — and keeps your data on your
+> own machine — to run the app locally: `pip install scanpath-studio`.
+""",
+    ),
+    (
+        "4 · Map your columns",
+        """
+Scanpath Studio auto-detects common column names (EyeLink, Gazepoint,
+snake_case …). Confirm or override the key fields: the **trial id**, optional
+**participant** / **text** ids, and the required fixation and word columns.
+
+The counts under each step — trials, participants, texts — help you confirm the
+mapping lines up with what you expect.
+
+> Already mapped this kind of data before? Use **Restore a saved setup** at the
+> top to re-apply an exported mapping and skip the manual work.
+""",
+    ),
+    (
+        "5 · Filter, keep & finish",
+        """
+Optionally choose which **extra columns to keep** (to colour or filter by) and
+which fields to **filter trials** on — fewer columns means a faster app.
+
+When the required fields are mapped:
+
+- **⬇️ Download setup** saves your column mapping to a JSON file you can restore
+  next time on similar data.
+- **✅ Add dataset** stores the dataset and switches to it — no re-upload needed
+  to switch back to it later.
+
+That's it — happy scanpath gazing! 👀
+""",
+    ),
+]
+
+
+def _wizard_guide_back() -> None:
+    st.session_state["wizard_guide_step"] = max(
+        0, st.session_state.get("wizard_guide_step", 0) - 1
+    )
+
+
+def _wizard_guide_next() -> None:
+    st.session_state["wizard_guide_step"] = (
+        st.session_state.get("wizard_guide_step", 0) + 1
+    )
+
+
+@st.dialog("📂 Dataset setup guide", width="large")
+def _wizard_guide_dialog() -> None:
+    """One guide step + Back / Skip / Next navigation, in the same shape as the
+    welcome dialog tour (callbacks mutate the step before the fragment rerun;
+    Skip/Done close client-side via ``_close_dialog_clientside``)."""
+    n = len(_WIZARD_GUIDE_STEPS)
+    step = min(st.session_state.get("wizard_guide_step", 0), n - 1)
+    title, body = _WIZARD_GUIDE_STEPS[step]
+    st.subheader(title)
+    st.markdown(body)
+    st.progress((step + 1) / n, text=f"Step {step + 1} of {n}")
+
+    back_col, skip_col, next_col = st.columns(3)
+    back_col.button(
+        "← Back",
+        key="wizard_guide_back",
+        width="stretch",
+        disabled=step == 0,
+        on_click=_wizard_guide_back,
+    )
+    if step < n - 1:
+        if skip_col.button("Skip", key="wizard_guide_skip", width="stretch"):
+            _close_dialog_clientside()
+        next_col.button(
+            "Next →",
+            key="wizard_guide_next",
+            width="stretch",
+            type="primary",
+            on_click=_wizard_guide_next,
+        )
+    else:
+        if next_col.button(
+            "✓ Got it", key="wizard_guide_done", width="stretch", type="primary"
+        ):
+            _close_dialog_clientside()
+
+
+def _arm_wizard_guide() -> None:
+    """``on_click`` callback for the wizard's "❓ Show setup guide" button.
+
+    Dialogs can't be opened from a callback, so this just records the request
+    from step 0; ``maybe_show_wizard_guide`` (called as the wizard renders)
+    serves it on the resulting rerun.
+    """
+    st.session_state["wizard_guide_step"] = 0
+    st.session_state["_wizard_guide_requested"] = True
+
+
+def maybe_show_wizard_guide() -> None:
+    """Open the dataset-setup guide: on demand (the replay button armed it) or
+    automatically the first time the wizard is shown in a session.
+
+    Call as the active wizard renders (top-level script run — a dialog can't be
+    opened from inside a fragment/callback). The auto-open is skipped for
+    embeds/deep-links and while the welcome spotlight tour is still on screen, so
+    the two walkthroughs never stack. ``wizard_guide_seen`` is set *before*
+    opening (mirroring ``tour_seen``) so an ✕-dismissal doesn't re-open the modal
+    on the next rerun.
+    """
+    if st.session_state.pop("_wizard_guide_requested", False):
+        st.session_state["wizard_guide_step"] = 0
+        _wizard_guide_dialog()
+        return
+    if st.session_state.get("wizard_guide_seen"):
+        return
+    if (
+        tour_suppressed(st.query_params)
+        or st.session_state.get("tour_mode") == "spotlight"
+    ):
+        return
+    st.session_state["wizard_guide_seen"] = True  # before opening — see docstring
+    st.session_state["wizard_guide_step"] = 0
+    _wizard_guide_dialog()
+
+
+def render_wizard_guide_button(host) -> None:
+    """A button inside the wizard that (re)opens the setup guide from step 1."""
+    host.button(
+        "❓ Show setup guide",
+        key="wizard_guide_replay",
+        help="Walk through the dataset setup, step by step.",
+        on_click=_arm_wizard_guide,
+    )

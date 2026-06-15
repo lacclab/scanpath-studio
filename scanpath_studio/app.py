@@ -110,6 +110,7 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
+    _collect_column_mapping,
     render_bulk_export_tab,
     render_data_statistics_tab,
     render_multiple_comparison_tab,
@@ -118,8 +119,10 @@ from scanpath_studio.tabs import (
 )
 from scanpath_studio.tour import (
     maybe_show_welcome_tour,
+    maybe_show_wizard_guide,
     render_spotlight_tour,
     render_tour_replay_button,
+    render_wizard_guide_button,
     spotlight_tour_pending,
 )
 
@@ -1508,6 +1511,7 @@ def render_sidebar_canvas_controls(
     data_choice: Optional[str] = None,
     slot=None,
     expanded: bool = False,
+    title: str = "Experimental Setup",
 ) -> Tuple[int, int, int, str, float, bool]:
     """Render canvas dimension and font controls in sidebar.
 
@@ -1552,12 +1556,13 @@ def render_sidebar_canvas_controls(
     st.session_state.setdefault("global_canvas_width", canvas_width)
     st.session_state.setdefault("global_canvas_height", canvas_height)
 
-    # "Experimental Setup" lives under the 📂 Data group (TODO 5), rendered into
-    # a slot reserved there by `main`; falls back to the sidebar when unset. The
-    # setup wizard renders the very same controls inline (``expanded=True``) so
-    # display calibration is part of the loading flow (Group A).
+    # The display-setup panel (``title``, default "Experimental Setup") lives
+    # under the 📂 Data group (TODO 5), rendered into a slot reserved there by
+    # `main`; falls back to the sidebar when unset. The setup wizard renders the
+    # very same controls inline under its own numbered heading (Group A), passing
+    # a more specific title so it doesn't echo that heading.
     display = (slot if slot is not None else st.sidebar).expander(
-        "Experimental Setup", expanded=expanded
+        title, expanded=expanded
     )
     canvas_width = display.number_input(
         "Monitor width (px)",
@@ -1970,7 +1975,10 @@ def _wizard_participant_text_step(
     pp, pp_schema = (raw_fix, fix_schema) if has_fix else (raw_words, word_schema)
     n = _distinct_id_count(pp, pp_schema.get(field_key))
     if n is not None:
-        body.success(f"✓ **{n:,}** {noun}")
+        body.success(
+            f"✓ **{n:,}** {noun} — make sure this is the number of {noun} you "
+            "expect to see."
+        )
 
 
 def _clean_multiselect_state(key: str, valid) -> None:
@@ -2120,6 +2128,41 @@ def _render_restored_config_caption(host) -> None:
     host.caption(f"✓ Restored setup {detail} — review the mapping below.")
 
 
+def _wizard_setup_config() -> dict:
+    """The current wizard setup as a JSON-able dict: the column mapping plus
+    provenance, in the schema the restore step (``_wizard_restore_config``) reads
+    back. Lets a user save their mapping and re-apply it to similar data later."""
+    from datetime import datetime
+
+    from scanpath_studio import __version__
+
+    return {
+        # schema 2 = the shared Save & restore format; the restore step only
+        # needs ``column_mapping`` + provenance, but keep the shape compatible.
+        "schema": 2,
+        "app": {"name": "Scanpath Studio", "version": __version__},
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "data_source": (st.session_state.get("wizard_dataset_name") or "").strip()
+        or None,
+        "column_mapping": _collect_column_mapping(),
+    }
+
+
+def _render_setup_download(host) -> None:
+    """Export the current column mapping as a JSON setup file, so it can be
+    re-applied later via the wizard's *Restore a saved setup* step. Rendered just
+    above the **Add dataset** button."""
+    host.download_button(
+        "⬇️ Download setup (JSON)",
+        data=json.dumps(_wizard_setup_config(), indent=2),
+        file_name="scanpath_studio_setup.json",
+        mime="application/json",
+        key="wizard_setup_download",
+        help="Save this column mapping to re-use on similar data — restore it "
+        "from *Restore a saved setup* at the top of Column mapping.",
+    )
+
+
 def _render_data_setup(active: bool) -> _UploadResult:
     """Hybrid data-setup surface for the Upload source.
 
@@ -2138,6 +2181,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "Name your dataset, upload your tables, then map a few columns — only "
             "the step you still need to fill stays open."
         )
+        # Step-by-step guide: auto-opens once per session, replayable via button.
+        maybe_show_wizard_guide()
+        render_wizard_guide_button(st)
         body = st.container()
     else:
         panel = st.expander("📋 Data & mapping", expanded=False)
@@ -2168,8 +2214,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     flow["claimed"] = True
         return body.expander(title, expanded=expanded)
 
-    def subsection(title: str) -> None:
-        body.markdown(f"#### {title}" if active else f"**{title}**")
+    def subsection(title: str, number: Optional[int] = None) -> None:
+        # Numbered headings (1., 2., …) only in the active wizard, where they make
+        # the order to work through explicit. The collapsed review panel drops the
+        # numbers (its first two steps aren't re-rendered, so 3.,4.,5. would orphan).
+        if not active:
+            body.markdown(f"**{title}**")
+        elif number is not None:
+            body.markdown(f"#### {number}. {title}")
+        else:
+            body.markdown(f"#### {title}")
 
     def mapped(prefix: str, field: str) -> bool:
         """Best-effort 'this field is mapped' from last run's session state."""
@@ -2178,34 +2232,60 @@ def _render_data_setup(active: bool) -> _UploadResult:
             return bool(v)
         return bool(v) and v != NONE_OPTION
 
-    # === Dataset name + display setup, at the top ===
+    # === 1. Dataset name + 2. Experimental setup, at the top ===
     if active:
+        subsection("Dataset name", number=1)
         st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
         body.text_input(
             "Dataset name",
             key="wizard_dataset_name",
+            label_visibility="collapsed",
             help="Shown in the Data source list so you can switch back to it.",
         )
-        # render_sidebar_canvas_controls renders its own "Experimental Setup"
-        # collapsible — that IS the display-setup toggle. Seed it on empty frames
-        # up front (uploads default to a 2560x1440 monitor; tweak it any time).
+
+        subsection("Experimental setup", number=2)
+        body.caption(
+            "Match the screen the data was recorded on so word boxes and "
+            "fixations stay true to scale — open the panel to set monitor size, "
+            "font, and text scaling."
+        )
+        # render_sidebar_canvas_controls renders its own collapsible panel — that
+        # IS the display-setup toggle. Seed it on empty frames up front (uploads
+        # default to a 2560x1440 monitor; tweak it any time).
         render_sidebar_canvas_controls(
             empty_words_frame(),
             empty_fixations_frame(),
             data_choice=None,
             slot=body,
             expanded=False,
+            title="Monitor, font & text scaling",
         )
 
-    # === Upload your data — one toggle per table, with row counts ===
-    subsection("Upload your data")
+    # === 3. Upload your data — one toggle per table, with row counts ===
+    subsection("Upload your data", number=3)
     core_uploaded = bool(
         st.session_state.get("col_map_fix_upload")
         or st.session_state.get("col_map_words_upload")
     )
+    # Getting-started guidance at the top of the step, shown only before anything
+    # is uploaded (and only in the active wizard): the call to action plus a tip
+    # to run locally for large datasets, which is faster and keeps data private.
+    already_uploaded = core_uploaded or bool(
+        st.session_state.get("col_map_raw_gaze_upload")
+    )
+    if active and not already_uploaded:
+        body.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
+        body.markdown(
+            "💡 **Working with a large dataset?** It's faster — and keeps your "
+            "data on your own machine — to run Scanpath Studio locally:\n\n"
+            "```bash\npip install scanpath-studio\nscanpath-studio\n```"
+        )
 
     def upload_box(title, *, label, help_text, prefix, multi, noun, expanded):
-        box = toggle(title, expanded=expanded)
+        # Keep a table's box open once it has an upload, so its row count and
+        # head preview stay visible instead of collapsing out of sight.
+        has_upload = bool(st.session_state.get(f"{prefix}_upload"))
+        box = toggle(title, expanded=expanded or has_upload)
         col = box.columns([0.7, 0.3])[0] if active else box
         frame = _read_uploaded_frame(
             uploader_label=label,
@@ -2219,10 +2299,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 f"✓ **{len(frame):,}** {noun} detected — make sure this is the "
                 "number you expect to see."
             )
+            if active:
+                # Show the first rows so the user can eyeball the columns before
+                # mapping them (a quick is-this-the-right-table sanity check).
+                box.caption("Preview — first rows:")
+                box.dataframe(frame.head(), width="stretch", hide_index=True)
         return frame
 
-    # Order: raw gaze, then fixations, then words. Raw gaze is optional →
-    # collapsed; the core tables stay open until one of them is uploaded.
+    # Order: raw gaze, then fixations, then words. Raw gaze is optional → starts
+    # collapsed (auto-opens once it has a file); the core tables stay open so
+    # their counts + previews remain visible after uploading.
     raw_gaze = upload_box(
         "Raw gaze (optional)",
         label="Raw gaze table",
@@ -2239,7 +2325,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         prefix="col_map_fix",
         multi=True,
         noun="fixations",
-        expanded=not core_uploaded,
+        expanded=True,
     )
     raw_words = upload_box(
         "Words / Interest Areas",
@@ -2248,14 +2334,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         prefix="col_map_words",
         multi=True,
         noun="words",
-        expanded=not core_uploaded,
+        expanded=True,
     )
 
     if raw_words.empty and raw_fix.empty and raw_gaze.empty:
-        body.info(
-            "⬆️ Upload a **Fixations** and/or **Words/IA** table to begin — or pick "
-            "a built-in source from the sidebar."
-        )
+        # The "upload to begin" prompt now lives at the top of this subsection.
         return _UploadResult(
             empty_words_frame(),
             empty_fixations_frame(),
@@ -2272,8 +2355,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     fix_schema: Dict = {}
     has_words, has_fix = not raw_words.empty, not raw_fix.empty
 
-    # === Column mapping ===
-    subsection("Column mapping")
+    # === 4. Column mapping ===
+    subsection("Column mapping", number=4)
 
     # Restore a saved setup (optional, collapsed).
     restore_box = toggle("Restore a saved setup (optional)", done=True)
@@ -2449,8 +2532,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if not has_words and not has_fix and raw_gaze_problems:
         problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
 
-    # === Filter & keep — one cross-table picker each (not per table) ===
-    subsection("Filter & keep (optional)")
+    # === 5. Filter & keep — one cross-table picker each (not per table) ===
+    subsection("Filter & keep (optional)", number=5)
     keep_tables: list = []
     if has_words:
         keep_tables.append(
@@ -2467,6 +2550,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     if problems:
         if active:
+            _render_setup_download(body)
             body.button("✅ Add dataset", disabled=True, key="wizard_finalize")
             body.warning(
                 "Map the required field(s) above (marked \\*) to continue:\n\n"
@@ -2544,6 +2628,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 st.session_state.get("_composite_trial_columns") or []
             ),
         }
+        _render_setup_download(body)
         body.button(
             "✅ Add dataset",
             type="primary",

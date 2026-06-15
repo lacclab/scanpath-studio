@@ -98,6 +98,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-trial "Resorting to unclean kill browser." log noise.
 
 ### Fixed
+- **Uploading a large EyeLink report no longer crashes the app.** Reports with
+  sentinel values (e.g. `.` in the `CURRENT_FIX_PRECISION_MEASURE_*` columns)
+  could read as a column mixing numbers and text, which crashed the cloud worker
+  when the table was displayed — a full report would die on the cloud while a
+  small one loaded fine locally. Uploaded CSV/TSV files are now parsed in a
+  single pass so the column type stays consistent.
 - **Colour bars no longer squash the scanpath.** Turning on *Show color bars* or
   colouring fixations by a categorical field used to shrink the plot and throw
   off its aspect ratio (the reading text then overflowed its word boxes). The

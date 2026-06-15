@@ -503,14 +503,25 @@ TablesInput = Union[str, os.PathLike, object, List]
 
 
 def _read_by_extension(buf, name: str) -> pd.DataFrame:
-    """Dispatch a buffer/path to a pandas reader by its (lowercased) name."""
+    """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
+
+    CSV/TSV reads pass ``low_memory=False`` so pandas infers one dtype per
+    column in a single pass. The default chunked parser can otherwise read the
+    same column as numeric in early chunks and as strings in a later chunk that
+    holds a sentinel (e.g. EyeLink's ``.`` in ``CURRENT_FIX_PRECISION_MEASURE_*``
+    columns), leaving a single ``object`` column that mixes Python ``float`` and
+    ``str`` values. Such a column emits a ``DtypeWarning`` and later crashes
+    pyarrow when Streamlit serializes the frame for display — only on large
+    (multi-chunk) files, which is why a small upload reads fine locally but a
+    full report kills the worker on the cloud. Matches the other read paths
+    (``load_onestop_server_bundle``, ``onestop_shard``)."""
     if name.endswith(".parquet"):
         return pd.read_parquet(buf)
     if name.endswith(".feather"):
         return pd.read_feather(buf)
     if name.endswith((".tsv", ".tab")):
-        return pd.read_csv(buf, sep="\t")
-    return pd.read_csv(buf)
+        return pd.read_csv(buf, sep="\t", low_memory=False)
+    return pd.read_csv(buf, low_memory=False)
 
 
 def _tag_and_concat(

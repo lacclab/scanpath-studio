@@ -40,6 +40,30 @@ def test_read_table_tsv(tmp_path):
     assert len(df) == 2
 
 
+@pytest.mark.parametrize("ext, sep", [("csv", ","), ("tsv", "\t")])
+def test_read_table_uses_single_pass_dtype_inference(tmp_path, monkeypatch, ext, sep):
+    """CSV/TSV reads must pass ``low_memory=False`` so a column that is numeric
+    in early parser chunks and a sentinel (e.g. EyeLink's ``.``) in a later one
+    can't become a single ``object`` column mixing Python ``float`` and ``str``.
+    That mix emits a ``DtypeWarning`` and crashes pyarrow when Streamlit displays
+    the frame — only on big (multi-chunk) files, so a small upload reads fine
+    locally while a full report kills the cloud worker. Regression guard."""
+    captured = {}
+    real_read_csv = data_module.pd.read_csv
+
+    def spy(buf, **kwargs):
+        captured.update(kwargs)
+        return real_read_csv(buf, **kwargs)
+
+    monkeypatch.setattr(data_module.pd, "read_csv", spy)
+    path = tmp_path / f"fix.{ext}"
+    pd.DataFrame({"CURRENT_FIX_PRECISION_MEASURE_RMS_S2S": [0.1, 2.0]}).to_csv(
+        path, sep=sep, index=False
+    )
+    data_module.read_table(path)
+    assert captured.get("low_memory") is False
+
+
 class _NamedBytesIO(io.BytesIO):
     """A BytesIO that carries a ``name`` like Streamlit's UploadedFile, so we
     can exercise the upload path (where pandas can't infer compression)."""

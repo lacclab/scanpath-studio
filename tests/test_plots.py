@@ -476,7 +476,12 @@ class TestMakeScanpathAnimation:
         trail = fig.data[1]
         assert trail.marker.colorscale is not None
         assert trail.marker.cmin == 180.0 and trail.marker.cmax == 250.0
-        assert list(trail.marker.color) == [200]  # first fixation only
+        # Colours are stated at FULL length (one per fixation) in every frame; the
+        # base reveals only the first fixation's POSITION (the rest are masked to
+        # None x/y), but the colour array stays whole so cmin/cmax never
+        # renormalise to the partial trail as it grows.
+        assert list(trail.marker.color) == [200, 250, 180]
+        assert list(trail.x) == [125, None, None]
         last = fig.frames[-1].data[0]
         assert list(last.marker.color) == [200, 250, 180]
         assert last.marker.cmin == 180.0 and last.marker.cmax == 250.0
@@ -511,7 +516,10 @@ class TestMakeScanpathAnimation:
             color_by="saccade_type",
         )
         trail = fig.data[1]
-        assert len(trail.marker.color) == 1  # per-fixation colours, sliced
+        # Per-fixation colours stated at full length (masked positions aren't
+        # drawn); the base reveals only the first fixation's position.
+        assert len(trail.marker.color) == 3
+        assert list(trail.x) == [125, None, None]
         assert len(fig.frames[-1].data[0].marker.color) == 3
         legend_names = {t.name for t in fig.data if t.showlegend}
         assert legend_names == {"saccade_type: RIGHT", "saccade_type: LEFT"}
@@ -536,10 +544,13 @@ class TestMakeScanpathAnimation:
     ):
         # Regression: order numbers used to ride the growing markers+text trail,
         # so each new <text> node flashed at the (0,0) corner before snapping to
-        # its fixation. They now live in their own text trace whose coordinates
-        # are CONSTANT across every frame (full reading laid out up front) — only
-        # the trailing numbers blank out — so a label never moves, it just turns
-        # on in place. Assert exactly that invariant.
+        # its fixation. They now live in their own FULL-LENGTH text trace whose
+        # `text` strings are CONSTANT across every frame; a number is revealed by
+        # un-masking its x/y from None straight to its fixation's true coordinate
+        # (never an intermediate / origin position), so a label only ever turns
+        # on in place — it never moves. (Full length + position-only change is
+        # also what lets Play animate with redraw=False; see
+        # _animation_play_buttons.)
         n = len(normalized_fixations_df)
         fig = make_scanpath_animation(
             normalized_words_df,
@@ -554,22 +565,29 @@ class TestMakeScanpathAnimation:
         order = fig.data[2]
         assert order.mode == "text"
         assert "text" not in (fig.data[1].mode or "")  # trail draws no numbers
-        full_x = tuple(order.x)
-        full_y = tuple(order.y)
-        assert len(full_x) == n  # every fixation present from the first frame
+        const_text = tuple(str(j + 1) for j in range(n))
+        # Every number is present in the trace from the first frame on; the text
+        # never changes — only positions un-mask.
+        assert tuple(str(v) for v in order.text) == const_text
+        assert len(order.x) == n
+        # True fixation coordinates: the last frame reveals all of them.
+        true_x = tuple(fig.frames[-1].data[1].x)
+        true_y = tuple(fig.frames[-1].data[1].y)
+        assert None not in true_x  # fully revealed at the end
 
         prev_shown = 0
         for frame in fig.frames:
             # The order trace is the second per-spec entry in each frame.
             order_f = frame.data[1]
-            assert tuple(order_f.x) == full_x  # positions never shift
-            assert tuple(order_f.y) == full_y
-            text = list(order_f.text)
-            shown = sum(1 for t in text if t)
-            # Revealed numbers are a contiguous prefix "1..m", in place, and the
-            # blanked tail is exactly the rest — i.e. labels turn on, never move.
-            assert text[:shown] == [str(j + 1) for j in range(shown)]
-            assert all(t == "" for t in text[shown:])
+            assert tuple(str(v) for v in order_f.text) == const_text  # text fixed
+            xs, ys = list(order_f.x), list(order_f.y)
+            shown = sum(1 for x in xs if x is not None)
+            # Revealed positions are a contiguous prefix sitting at the TRUE
+            # fixation coordinates; the unreached tail is None (not the origin or
+            # any intermediate) — labels turn on in place, they never move.
+            assert tuple(xs[:shown]) == true_x[:shown]
+            assert tuple(ys[:shown]) == true_y[:shown]
+            assert all(x is None for x in xs[shown:])
             assert shown >= prev_shown  # monotonic reveal, never un-reveals
             prev_shown = shown
         assert prev_shown == n  # last frame shows the whole reading

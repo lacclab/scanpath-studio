@@ -53,82 +53,33 @@ TOUR_STYLE = "spotlight"
 _STEPS = [
     (
         "👀 Welcome to Scanpath Studio",
-        """
-Scanpath Studio is an interactive workbench for **eye movements in reading**:
-fixations, saccades, and per-word reading measures drawn **true to scale**
-over the stimulus text.
-
-A demo dataset (a sample of
-[OneStop Eye Movements](https://github.com/lacclab/OneStop-Eye-Movements))
-is already loaded, so everything you'll see works out of the box.
-
-This quick tour takes under a minute — reopen it anytime with
-**🎓 Show tutorial** at the bottom of the sidebar.
-""",
+        "Visualize **eye movements in reading** — scanpaths drawn true-to-scale "
+        "over the text. A demo dataset is loaded; this tour takes under a minute.",
     ),
     (
-        "📂 Load your data",
-        """
-The **Data source** panel at the top of the sidebar switches between:
-
-- **Bundled demo** — the preloaded OneStop sample.
-- **Synthetic test trial** — a tiny ground-truth trial with documented
-  expected measures, handy for sanity checks.
-- **Add data** — your own words/IA and fixations tables
-  (CSV / TSV / Parquet / Feather; several files per table, or either
-  table alone), through a short guided setup wizard.
-
-Column names are auto-detected (EyeLink, Gazepoint, snake_case …), and the
-setup wizard's **Column mapping** steps let you override any field.
-""",
+        "📂 Data",
+        "Use the demo, or **upload your own** fixations / word tables "
+        "(CSV / TSV / Parquet). Columns auto-detect — remap any field in the wizard.",
     ),
     (
-        "🔍 Filter & pick trials",
-        """
-**Filter trials** (sidebar) narrows the dataset by participant or condition
-before anything is drawn.
-
-Each plotting tab then has its own **trial picker** — select a trial
-directly, or pick a participant and step through their trials with a slider.
-""",
+        "🔍 Filter trials",
+        "Narrow trials by participant or condition. Each tab has its own trial picker.",
     ),
     (
-        "🎨 Style the visualization",
-        """
-The sidebar's **Visualization controls** govern what's drawn — fixations
-(sized by duration, coloured by any field), saccades, a density heatmap, word
-boxes, and the text itself — together with their colours, marker sizing, and
-text highlighting, all in one panel.
-
-**Experimental Setup** keeps the rendering true to the experiment: enter your
-monitor's resolution and the text and coordinates appear exactly as
-presented.
-""",
+        "🎨 Visualization controls",
+        "Toggle and style every layer — fixations, saccades, heatmap, word boxes, "
+        "text. **Experimental Setup** sets your monitor so it stays true-to-scale.",
     ),
     (
-        "🗂 Four views of the data",
-        """
-- **Scanpath Visualization** — the main scanpath; tick **Animate** to replay it
-  fixation by fixation. Hover a word for its reading measures; export.
-- **Generations (WIP)** — a grid of model-generated scanpaths over the text.
-- **Data Inspection** — the normalized tables, dataset statistics, and the
-  active column mapping in one place.
-- **Bulk Export** — bundle figures + tables across many trials into one zip.
-""",
+        "🗂 Four views",
+        "**Scanpath** (tick *Animate* to replay) · **Generations (WIP)** · "
+        "**Data Inspection** · **Bulk Export**.",
     ),
     (
-        "📝 Annotate & share",
-        """
-Star ⭐, tag, and write notes on trials in the Scanpath Visualization tab, then
-filter to them. The sidebar **💾 Save & restore** panel saves the full plot
-configuration *and* your annotations to one JSON file — and reloads them.
-
-You can also **deep-link** into the app: URL parameters like
-`?participant=…&trial=…&show_heatmap=1` open a specific trial with preset
-options.
-
-That's it — happy scanpath gazing! 👀
-""",
+        "📝 Annotate & save",
+        "Star, tag, and note trials, then filter to them. **💾 Save & restore** "
+        "saves the whole setup + annotations to JSON. Replay this via "
+        "**🎓 Show tutorial**. 👀",
     ),
 ]
 
@@ -206,50 +157,40 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": None,
         "title": "👀 Welcome to Scanpath Studio",
-        "body": "An interactive workbench for **eye movements in reading** — "
-        "fixations, saccades, and per-word reading measures drawn true to "
-        "scale over the stimulus text. A demo dataset is already loaded.\n\n"
-        "This quick tour points at each part of the app — hit **Next**.",
+        "body": "Visualize **eye movements in reading** — scanpaths drawn "
+        "true-to-scale over the text. A demo dataset is loaded; **Next** for a "
+        "30-second tour.",
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "title": "📂 Data source",
-        "body": "Switch between the bundled demo, a synthetic ground-truth "
-        "test trial, or your own **uploaded** words/IA and fixations tables "
-        "(CSV / TSV / Parquet / Feather). Column names are auto-detected; "
-        "the **Column mapping** panels let you override any field.",
+        "title": "📂 Data",
+        "body": "Use the demo, or **upload your own** fixations / word tables "
+        "(CSV / TSV / Parquet). Columns auto-detect — remap any field in the wizard.",
     },
     {
         "selector": ".st-key-tour_grp_filter_trials",
         "title": "🔍 Filter trials",
-        "body": "Narrow the trial pool by participant or condition before "
-        "anything is drawn. Each plotting tab then has its own **trial "
-        "picker** — by trial, text, or participant.",
+        "body": "Narrow trials by participant or condition. Each tab has its own "
+        "trial picker.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
         "title": "🎨 Visualization controls",
-        "body": "Toggle what's drawn: fixations (sized by duration, coloured "
-        "by any field), saccades, the density heatmap, word boxes, and the "
-        "text itself — with their colours, marker sizing, and text "
-        "highlighting all in this one panel. **Experimental Setup** (above) "
-        "keeps everything true to your experiment's monitor.",
+        "body": "Toggle and style every layer — fixations, saccades, heatmap, "
+        "word boxes, text. **Experimental Setup** (above) sets your monitor so "
+        "it stays true-to-scale.",
     },
     {
         "selector": '[data-testid="stTabs"] [data-baseweb="tab-list"]',
-        "title": "🗂 Four views of the data",
-        "body": "**Scanpath Visualization** — the main scanpath; tick "
-        "**Animate** to replay it. **Generations (WIP)** — a grid of "
-        "model scanpaths. Plus **Data Inspection** and "
-        "**Bulk Export** for many trials at once.",
+        "title": "🗂 Four views",
+        "body": "**Scanpath** (tick *Animate* to replay) · **Generations (WIP)** · "
+        "**Data Inspection** · **Bulk Export**.",
     },
     {
         "selector": ".st-key-tour_grp_save_restore",
         "title": "💾 Save & restore",
-        "body": "Star ⭐, tag, and note trials in the Scanpath Visualization "
-        "tab. This panel saves the full plot configuration **and** your "
-        "annotations to one JSON file — and reloads them.\n\n"
-        "That's it — replay anytime via **🎓 Show tutorial** below. 👀",
+        "body": "Star, tag, and note trials, then filter to them. This saves the "
+        "whole setup + annotations to JSON. Replay via **🎓 Show tutorial**. 👀",
     },
 ]
 
@@ -296,7 +237,10 @@ def _exit_spotlight() -> None:
     st.session_state["tour_mode"] = None
 
 
-def _dismiss_listener_script(selector: str | None) -> str:
+def _dismiss_listener_script(
+    selector: str | None,
+    exit_keys: tuple[str, ...] = ("tour_sp_exit", "tour_sp_done"),
+) -> str:
     """JS that lets Exit/Done close the tour *instantly*, even mid-load.
 
     The card streams to the browser early (before the ~10 s data/plot work),
@@ -321,6 +265,7 @@ def _dismiss_listener_script(selector: str | None) -> str:
         ".st-key-tour_card, .tour-backdrop { display: none !important; } "
         + outline_clear
     )
+    btn_selectors = [f".st-key-{k} button" for k in exit_keys]
     return f"""<script>
     (function () {{
         const doc = window.parent.document;
@@ -334,8 +279,7 @@ def _dismiss_listener_script(selector: str | None) -> str:
         }};
         let tries = 0;
         (function wire() {{
-            const btns = [".st-key-tour_sp_exit button",
-                          ".st-key-tour_sp_done button"]
+            const btns = {btn_selectors!r}
                 .map((sel) => doc.querySelector(sel)).filter(Boolean);
             if (!btns.length) {{
                 if (++tries < 20) setTimeout(wire, 100);
@@ -637,95 +581,50 @@ def render_tour_replay_button() -> None:
 # -----------------------------------------------------------------------------
 # Dataset-setup guide (the "📂 Set up your dataset" wizard's own walkthrough).
 #
-# A self-contained multi-step ``st.dialog`` that walks the user through the
-# upload wizard's process. Kept separate from the welcome tour above: it has its
-# own step counter (``wizard_guide_step``) and seen-flag (``wizard_guide_seen``)
-# so the two never interfere, but it reuses ``_close_dialog_clientside`` to close
-# instantly without a full-app rerun. Auto-opens once per session the first time
-# the wizard is shown (unless suppressed for embeds/deep-links, or the welcome
-# spotlight tour is still on screen so the two don't stack), and is replayable
-# from the wizard's "❓ Show setup guide" button.
+# A bottom-right floating card (``render_spotlight_wizard_guide``) that walks the
+# user through the upload wizard while they fill it in — the same card style and
+# instant-dismiss machinery as the welcome spotlight tour, but keyed on its own
+# step counter (``wizard_guide_step``) and run under ``tour_mode == "wizard"`` so
+# the two never collide. Auto-opens once per session the first time the wizard is
+# shown (unless suppressed for embeds/deep-links, or the welcome spotlight tour
+# is still on screen so the two don't stack), and is replayable from the
+# wizard's "❓ Show setup guide" button.
 # -----------------------------------------------------------------------------
 
 # (title, markdown body) per step — one per part of the wizard, in order.
 _WIZARD_GUIDE_STEPS = [
     (
-        "📂 Let's set up your dataset",
-        """
-This short guide walks you through turning your own eye-tracking tables into an
-interactive dataset — it takes about a minute.
-
-The wizard **auto-advances**: only the step you still need to fill stays open,
-and finished or auto-detected steps collapse out of the way.
-
-Step through it with **Next**, or **Skip** to dive straight in — you can reopen
-this anytime with **❓ Show setup guide** at the top of the wizard.
-""",
+        "📂 Set up your dataset",
+        "Turn your eye-tracking tables into an interactive dataset. The wizard "
+        "**auto-advances** — only the step you still need stays open. Follow along "
+        "with **Next**, or **Skip** to dive in.",
     ),
     (
-        "1 · Name your dataset",
-        """
-Give the dataset a name you'll recognise — it shows up in the **Data source**
-list so you can switch back to it later without re-uploading.
-
-A default like *Dataset 1* is filled in for you; rename it if you like.
-""",
+        "1 · Name it",
+        "Pick a name you'll recognise — it appears in **Data source** so you can "
+        "switch back later without re-uploading.",
     ),
     (
         "2 · Experimental setup",
-        """
-Tell Scanpath Studio about the screen the data was recorded on — **monitor
-resolution**, font, and text scaling.
-
-This keeps word boxes and fixations **true to scale**, so the text appears just
-as the reader saw it. It defaults to a common 1440p monitor; open the panel to
-fine-tune it anytime.
-""",
+        "Set the recording **monitor resolution** (and font) so word boxes and "
+        "fixations stay **true-to-scale**. Defaults to 1440p; tune it anytime.",
     ),
     (
-        "3 · Upload your data",
-        """
-Upload your **Fixations** and/or **Words / Interest Areas** tables — CSV, TSV,
-Parquet, or Feather. Several files per table is fine (they're concatenated), and
-either table on its own works too.
-
-Each upload shows its **row count** and a **preview of the first rows**, so you
-can sanity-check the columns before mapping. You can also add an optional
-raw-gaze overlay.
-
-> 💡 Working with a **large dataset**? It's faster — and keeps your data on your
-> own machine — to run the app locally: `pip install scanpath-studio`.
-""",
+        "3 · Upload",
+        "Add your **Fixations** and/or **Words / IA** tables (CSV / TSV / Parquet; "
+        "several files or either alone). Each upload previews its first rows.\n\n"
+        "> 💡 Large dataset? Run locally: `pip install scanpath-studio`.",
     ),
     (
-        "4 · Map your columns",
-        """
-Scanpath Studio auto-detects common column names (EyeLink, Gazepoint,
-snake_case …). Confirm or override the key fields: the **trial id**, optional
-**participant** / **text** ids, and the required fixation and word columns.
-
-The counts under each step — trials, participants, texts — help you confirm the
-mapping lines up with what you expect.
-
-> Already mapped this kind of data before? Use **Restore a saved setup** at the
-> top to re-apply an exported mapping and skip the manual work.
-""",
+        "4 · Map columns",
+        "Columns auto-detect — confirm or override the **trial id**, optional "
+        "participant / text ids, and the required fixation/word columns. "
+        "**Restore a saved setup** re-applies an earlier mapping.",
     ),
     (
-        "5 · Filter, keep & finish",
-        """
-Optionally choose which **extra columns to keep** (to colour or filter by) and
-which fields to **filter trials** on — fewer columns means a faster app.
-
-When the required fields are mapped:
-
-- **⬇️ Download setup** saves your column mapping to a JSON file you can restore
-  next time on similar data.
-- **✅ Add dataset** stores the dataset and switches to it — no re-upload needed
-  to switch back to it later.
-
-That's it — happy scanpath gazing! 👀
-""",
+        "5 · Keep & finish",
+        "Optionally keep extra columns or filter fields. **⬇️ Download setup** "
+        "saves the mapping; **✅ Add dataset** stores it and switches to it. 👀",
     ),
 ]
 
@@ -742,69 +641,108 @@ def _wizard_guide_next() -> None:
     )
 
 
-@st.dialog("📂 Dataset setup guide", width="large")
-def _wizard_guide_dialog() -> None:
-    """One guide step + Back / Skip / Next navigation, in the same shape as the
-    welcome dialog tour (callbacks mutate the step before the fragment rerun;
-    Skip/Done close client-side via ``_close_dialog_clientside``)."""
-    n = len(_WIZARD_GUIDE_STEPS)
-    step = min(st.session_state.get("wizard_guide_step", 0), n - 1)
-    title, body = _WIZARD_GUIDE_STEPS[step]
-    st.subheader(title)
-    st.markdown(body)
-    st.progress((step + 1) / n, text=f"Step {step + 1} of {n}")
+def _exit_wizard_guide() -> None:
+    st.session_state["tour_mode"] = None
 
-    back_col, skip_col, next_col = st.columns(3)
-    back_col.button(
-        "← Back",
-        key="wizard_guide_back",
-        width="stretch",
-        disabled=step == 0,
-        on_click=_wizard_guide_back,
+
+@st.fragment
+def render_spotlight_wizard_guide() -> None:
+    """Floating bottom-right card walking through the dataset-setup wizard.
+
+    The setup guide as a spotlight card (like the welcome tour) rather than a
+    blocking modal, so it sits in the corner and the user follows along while
+    filling in each wizard step. Shares the welcome tour's card CSS + instant
+    dismiss machinery but uses its own ``wizard_guide_step`` counter and
+    ``tour_mode == "wizard"`` so the two never collide. No backdrop / highlight /
+    scroll — the steps are descriptive, not anchored to specific controls.
+
+    Call early in the wizard's render (``app._render_data_setup``) so the card
+    streams to the browser before the heavy upload/normalize work. Runs as a
+    fragment: Back/Next/Skip rerun only this card.
+    """
+    if st.session_state.get("tour_mode") != "wizard":
+        return
+    n = len(_WIZARD_GUIDE_STEPS)
+    step_idx = min(st.session_state.get("wizard_guide_step", 0), n - 1)
+    title, body = _WIZARD_GUIDE_STEPS[step_idx]
+
+    theme = getattr(getattr(st, "context", None), "theme", None)
+    is_dark = getattr(theme, "type", "light") == "dark"
+    bg, border = ("#262730", "#41434e") if is_dark else ("#ffffff", "#d5d6d9")
+    st.markdown(
+        "<style>"
+        + _CARD_CSS
+        + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
+        + "</style>",
+        unsafe_allow_html=True,
     )
-    if step < n - 1:
-        if skip_col.button("Skip", key="wizard_guide_skip", width="stretch"):
-            _close_dialog_clientside()
-        next_col.button(
-            "Next →",
-            key="wizard_guide_next",
+
+    with st.container(key="tour_card"):
+        st.markdown(f"#### {title}")
+        st.markdown(body)
+        st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
+        back_col, exit_col, next_col = st.columns(3)
+        back_col.button(
+            "← Back",
+            key="wizard_sp_back",
             width="stretch",
-            type="primary",
-            on_click=_wizard_guide_next,
+            disabled=step_idx == 0,
+            on_click=_wizard_guide_back,
         )
-    else:
-        if next_col.button(
-            "✓ Got it", key="wizard_guide_done", width="stretch", type="primary"
-        ):
-            _close_dialog_clientside()
+        if step_idx < n - 1:
+            exit_col.button(
+                "Skip",
+                key="wizard_sp_exit",
+                width="stretch",
+                on_click=_exit_wizard_guide,
+            )
+            next_col.button(
+                "Next →",
+                key="wizard_sp_next",
+                width="stretch",
+                type="primary",
+                on_click=_wizard_guide_next,
+            )
+        else:
+            next_col.button(
+                "✓ Got it",
+                key="wizard_sp_done",
+                width="stretch",
+                type="primary",
+                on_click=_exit_wizard_guide,
+            )
+        # Hide the card instantly on Skip/Done, even while the wizard's first run
+        # is still loading (see _dismiss_listener_script).
+        components.html(
+            _dismiss_listener_script(
+                None, exit_keys=("wizard_sp_exit", "wizard_sp_done")
+            ),
+            height=0,
+        )
 
 
 def _arm_wizard_guide() -> None:
     """``on_click`` callback for the wizard's "❓ Show setup guide" button.
 
-    Dialogs can't be opened from a callback, so this just records the request
-    from step 0; ``maybe_show_wizard_guide`` (called as the wizard renders)
-    serves it on the resulting rerun.
+    Arms the bottom-right guide card from step 0. Callbacks run before the rerun,
+    so ``render_spotlight_wizard_guide`` (called as the wizard renders) picks it
+    up on the same run — mirroring ``_arm_tour`` for the welcome tour.
     """
     st.session_state["wizard_guide_step"] = 0
-    st.session_state["_wizard_guide_requested"] = True
+    st.session_state["tour_mode"] = "wizard"
 
 
 def maybe_show_wizard_guide() -> None:
-    """Open the dataset-setup guide: on demand (the replay button armed it) or
-    automatically the first time the wizard is shown in a session.
+    """Arm the dataset-setup guide automatically the first time the wizard is
+    shown in a session (the replay button arms it on demand via ``_arm_wizard_guide``).
 
-    Call as the active wizard renders (top-level script run — a dialog can't be
-    opened from inside a fragment/callback). The auto-open is skipped for
-    embeds/deep-links and while the welcome spotlight tour is still on screen, so
-    the two walkthroughs never stack. ``wizard_guide_seen`` is set *before*
-    opening (mirroring ``tour_seen``) so an ✕-dismissal doesn't re-open the modal
+    Call as the active wizard renders, immediately followed by
+    ``render_spotlight_wizard_guide()`` which draws the card. The auto-open is
+    skipped for embeds/deep-links and while the welcome spotlight tour is still
+    on screen, so the two walkthroughs never stack. ``wizard_guide_seen`` is set
+    *before* arming (mirroring ``tour_seen``) so a dismissal doesn't re-open it
     on the next rerun.
     """
-    if st.session_state.pop("_wizard_guide_requested", False):
-        st.session_state["wizard_guide_step"] = 0
-        _wizard_guide_dialog()
-        return
     if st.session_state.get("wizard_guide_seen"):
         return
     if (
@@ -812,9 +750,9 @@ def maybe_show_wizard_guide() -> None:
         or st.session_state.get("tour_mode") == "spotlight"
     ):
         return
-    st.session_state["wizard_guide_seen"] = True  # before opening — see docstring
+    st.session_state["wizard_guide_seen"] = True  # before arming — see docstring
     st.session_state["wizard_guide_step"] = 0
-    _wizard_guide_dialog()
+    st.session_state["tour_mode"] = "wizard"
 
 
 def render_wizard_guide_button(host) -> None:

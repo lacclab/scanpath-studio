@@ -124,6 +124,7 @@ from scanpath_studio.tour import (
     maybe_show_welcome_tour,
     maybe_show_wizard_guide,
     render_spotlight_tour,
+    render_spotlight_wizard_guide,
     render_tour_replay_button,
     render_wizard_guide_button,
     spotlight_tour_pending,
@@ -2436,8 +2437,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "Name your dataset, upload your tables, then map a few columns — only "
             "the step you still need to fill stays open."
         )
-        # Step-by-step guide: auto-opens once per session, replayable via button.
+        # Step-by-step guide: a bottom-right card that auto-opens once per session
+        # and is replayable via the button. Arm it (auto/first-visit) then render
+        # the card early so it streams before the heavy upload/normalize work.
         maybe_show_wizard_guide()
+        render_spotlight_wizard_guide()
         render_wizard_guide_button(st)
         body = st.container()
     else:

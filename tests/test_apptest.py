@@ -1164,3 +1164,20 @@ class TestSetupWizard:
         width[0].set_value(1999)
         at.run(timeout=60)
         assert at.session_state["global_canvas_width"] == 1999
+
+
+@pytest.mark.timeout(90)
+class TestCorpusAnalysisTab:
+    """The renamed 'Corpus Analysis' tab wraps Generations + Aggregated Views."""
+
+    def test_aggregated_views_widgets_render(self):
+        # Demo source: several participants / trials / texts, so the trends,
+        # per-text heatmap, and grouped histogram all have data.
+        at = _make_apptest()
+        at.run(timeout=40)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        metric = [s for s in at.selectbox if s.key == "agg_metric"]
+        assert metric, "Aggregated Views metric selectbox not found"
+        group = [s for s in at.selectbox if s.key == "agg_hist_group"]
+        assert group, "Aggregated Views grouping selectbox not found"

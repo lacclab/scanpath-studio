@@ -895,6 +895,56 @@ def _disambiguate_repeated_readings(
     return df
 
 
+def has_explicit_trial_index(frame: pd.DataFrame) -> bool:
+    """True when the data already carries a per-trial index column."""
+    return any(c in frame.columns for c in ("trial_index", "TRIAL_INDEX"))
+
+
+def derive_trial_index(frame: pd.DataFrame) -> pd.Series:
+    """Per-participant 1-based trial order, aligned to ``frame``'s rows.
+
+    Prefers an existing ``trial_index`` / ``TRIAL_INDEX`` column (the order the
+    data already records). Otherwise it ranks each participant's trials by their
+    earliest ``timestamp_ms`` (falling back to first-appearance order when no
+    timestamps) and numbers them 1, 2, 3, …. Used by the Corpus Analysis tab to
+    plot a metric as a function of where the trial fell in the session. Returns a
+    float Series (NaN where the index can't be determined)."""
+    if frame.empty or not {"participant_id", "trial_id"} <= set(frame.columns):
+        return pd.Series([np.nan] * len(frame), index=frame.index, dtype="float64")
+    for col in ("trial_index", "TRIAL_INDEX"):
+        if col in frame.columns:
+            return pd.to_numeric(frame[col], errors="coerce")
+    if "timestamp_ms" in frame.columns:
+        order_key = frame.groupby(["participant_id", "trial_id"])[
+            "timestamp_ms"
+        ].transform("min")
+    else:
+        # First-appearance order: row position of each trial's first row.
+        order_key = pd.Series(range(len(frame)), index=frame.index)
+        order_key = (
+            frame.assign(_k=order_key)
+            .groupby(["participant_id", "trial_id"])["_k"]
+            .transform("min")
+        )
+    per_trial = (
+        frame[["participant_id", "trial_id"]]
+        .assign(_k=pd.to_numeric(order_key, errors="coerce"))
+        .drop_duplicates(["participant_id", "trial_id"])
+        .sort_values(["participant_id", "_k"])
+    )
+    per_trial["_idx"] = per_trial.groupby("participant_id").cumcount() + 1
+    merged = frame[["participant_id", "trial_id"]].merge(
+        per_trial[["participant_id", "trial_id", "_idx"]],
+        on=["participant_id", "trial_id"],
+        how="left",
+    )
+    return pd.Series(
+        pd.to_numeric(merged["_idx"], errors="coerce").to_numpy(),
+        index=frame.index,
+        dtype="float64",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Optional-field registry. Drives (a) which known optional source columns are
 # carried into the normalized frame and (b) the setup wizard's opt-out checklist.

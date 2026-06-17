@@ -1164,3 +1164,32 @@ class TestSetupWizard:
         width[0].set_value(1999)
         at.run(timeout=60)
         assert at.session_state["global_canvas_width"] == 1999
+
+
+@pytest.mark.timeout(90)
+class TestShareLinkLazy:
+    """The Share link builds lazily — frozen until the user presses Refresh."""
+
+    def test_link_frozen_until_refresh(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Built once on first render so there's always something to copy.
+        assert "_share_query_frozen" in at.session_state
+        q1, _ = at.session_state["_share_query_frozen"]
+        # Flip a viz control WITHOUT pressing Refresh — the link must not change.
+        current = (
+            at.session_state["global_show_words"]
+            if "global_show_words" in at.session_state
+            else True
+        )
+        at.session_state["global_show_words"] = not current
+        at.run(timeout=30)
+        q2, _ = at.session_state["_share_query_frozen"]
+        assert q2 == q1, "link must not rebuild without Refresh"
+        # Press Refresh — now the link reflects the new setting.
+        at.button(key="share_refresh").click()
+        at.run(timeout=30)
+        q3, _ = at.session_state["_share_query_frozen"]
+        assert q3 != q1, "Refresh must rebuild the link from current settings"
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"

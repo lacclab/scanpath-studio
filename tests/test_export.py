@@ -122,6 +122,42 @@ class TestBulkExport:
             assert cfg["selection"]["participant_id"] == "p1"
             assert cfg["selection"]["trial_id"] == "t1"
 
+    def test_html_figures_need_no_kaleido(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        # HTML figures go through fig.to_html (no Kaleido/Chrome), so they export
+        # cleanly even where the raster backend is unavailable.
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_pdf=False,
+            include_html=True,
+            include_plot_config=False,
+        )
+        assert opts.figure_formats() == ["html"]
+        assert opts.raster_formats() == []
+        zip_bytes, progress = bulk_export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=opts,
+        )
+        assert progress.finished_trials == 2
+        assert progress.errors == []
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = set(zf.namelist())
+            assert "per_trial/p1__t1/figure.html" in names
+            assert "per_trial/p1__t2/figure.html" in names
+            html = zf.read("per_trial/p1__t1/figure.html").decode("utf-8")
+            assert "plotly" in html.lower()
+
     def test_parquet_format(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):

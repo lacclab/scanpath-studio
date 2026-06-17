@@ -795,7 +795,7 @@ def make_scanpath_figure(
     # Directional arrowheads on each saccade (opt-in). Independent of the line
     # above so it can be toggled separately; rendered before the fixation
     # markers so the dots sit on top.
-    if spatial_axes and show_saccade_arrows and len(fixations) > 1:
+    if spatial_axes and show_saccades and show_saccade_arrows and len(fixations) > 1:
         amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field)
         if amx:
             fig.add_trace(

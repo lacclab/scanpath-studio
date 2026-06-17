@@ -168,12 +168,6 @@ _SPOTLIGHT_STEPS = [
         "(CSV / TSV / Parquet). Columns auto-detect — remap any field in the wizard.",
     },
     {
-        "selector": ".st-key-tour_grp_filter_trials",
-        "title": "🔍 Filter trials",
-        "body": "Narrow trials by participant or condition. Each tab has its own "
-        "trial picker.",
-    },
-    {
         "selector": ".st-key-tour_grp_viz_controls",
         "title": "🎨 Visualization controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, "
@@ -181,10 +175,11 @@ _SPOTLIGHT_STEPS = [
         "it stays true-to-scale.",
     },
     {
-        "selector": '[data-testid="stTabs"] [data-baseweb="tab-list"]',
-        "title": "🗂 Four views",
-        "body": "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
-        "**Data Inspection** · **Bulk Export**.",
+        "selector": ".st-key-tour_grp_nav",
+        "title": "🧭 Views",
+        "body": "Switch between **Scanpath Visualization**, **Corpus Analysis**, "
+        "and **Data Inspection**. The **Trial Selection** panel under the plot "
+        "picks, filters, compares & animates trials — and **Export** is a subtab.",
     },
     {
         "selector": ".st-key-tour_grp_save_restore",

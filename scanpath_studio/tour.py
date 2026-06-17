@@ -72,7 +72,7 @@ _STEPS = [
     ),
     (
         "🗂 Four views",
-        "**Scanpath** (tick *Animate* to replay) · **Generations (WIP)** · "
+        "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
         "**Data Inspection** · **Bulk Export**.",
     ),
     (
@@ -183,7 +183,7 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": '[data-testid="stTabs"] [data-baseweb="tab-list"]',
         "title": "🗂 Four views",
-        "body": "**Scanpath** (tick *Animate* to replay) · **Generations (WIP)** · "
+        "body": "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
         "**Data Inspection** · **Bulk Export**.",
     },
     {

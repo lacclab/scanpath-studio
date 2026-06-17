@@ -10,10 +10,15 @@ from .annotations import known_tags
 from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
+    COMPARISON_PALETTE,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_HEATMAP_COLORSCALE,
+    DEFAULT_MARKER_SIZE_RANGE,
+    HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
+    SACCADE_DASH_OPTIONS,
+    WORD_LABEL_COLOR,
 )
 from .data import frame_fingerprint
 
@@ -33,6 +38,9 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_show_saccades": True,
     "global_show_saccade_arrows": True,
     "global_saccade_color": SACCADE_COLOR,
+    "global_saccade_style": "Solid",
+    "global_hollow_fixations": False,
+    "global_highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
     "global_show_heatmap": True,
     "global_show_raw_gaze": False,
     "global_heatmap_style": "Word boxes",
@@ -506,6 +514,57 @@ def _clamp_range(state_key: str, lo: float, hi: float) -> None:
     st.session_state[state_key] = (min(a, b), max(a, b))
 
 
+def _render_compare_scanpath_styles() -> tuple[dict, dict]:
+    """Per-scanpath styling for the two-trial comparison.
+
+    Rendered only when the "Compare with another trial" toggle is on. Returns
+    ``(style_a, style_b)``, each a dict the comparison figure builders consume:
+    ``fix_color``, ``saccade_color``, ``saccade_style`` (Plotly dash),
+    ``marker_size_range``, ``hollow``. Defaults reproduce the classic two-colour
+    look, so the figure is unchanged until the user tweaks a control.
+    """
+    panel = st.sidebar.container(key="tour_grp_compare_styles").expander(
+        "Per-scanpath styling (comparison)", expanded=False
+    )
+    panel.caption(
+        "Style each scanpath independently — applies to the two-trial comparison."
+    )
+    style_labels = list(SACCADE_DASH_OPTIONS.keys())
+    styles: list[dict] = []
+    for idx, name in ((0, "Scanpath 1"), (1, "Scanpath 2")):
+        default_color = COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
+        st.session_state.setdefault(f"cmp{idx}_fix_color", default_color)
+        st.session_state.setdefault(f"cmp{idx}_saccade_color", default_color)
+        st.session_state.setdefault(f"cmp{idx}_saccade_style", "Solid")
+        st.session_state.setdefault(
+            f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE
+        )
+        st.session_state.setdefault(f"cmp{idx}_hollow", False)
+        panel.markdown(f"**{name}**")
+        col_fix, col_sac = panel.columns(2)
+        fix_color = col_fix.color_picker("Fixations", key=f"cmp{idx}_fix_color")
+        saccade_color = col_sac.color_picker("Saccades", key=f"cmp{idx}_saccade_color")
+        size_lo, size_hi = panel.slider(
+            "Marker size", 4, 40, key=f"cmp{idx}_marker_size_range"
+        )
+        saccade_style_label = panel.selectbox(
+            "Saccade line style", options=style_labels, key=f"cmp{idx}_saccade_style"
+        )
+        hollow = panel.checkbox("Hollow circles", key=f"cmp{idx}_hollow")
+        styles.append(
+            dict(
+                fix_color=fix_color,
+                saccade_color=saccade_color,
+                saccade_style=SACCADE_DASH_OPTIONS.get(saccade_style_label, "solid"),
+                marker_size_range=(size_lo, size_hi),
+                hollow=hollow,
+            )
+        )
+        if idx == 0:
+            panel.divider()
+    return styles[0], styles[1]
+
+
 def sidebar_controls(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
@@ -574,6 +633,12 @@ def sidebar_controls(
         key="global_marker_size_range",
         help="Fixation marker size (px).",
     )
+    hollow_fixations = viz.checkbox(
+        "Hollow circles",
+        key="global_hollow_fixations",
+        disabled=not show_fix,
+        help="Draw fixation markers as outlines only (filled by default).",
+    )
     fixation_colorscale = viz.selectbox(
         "Colorscale",
         options=COLORSCALES,
@@ -632,7 +697,14 @@ def sidebar_controls(
         key="global_saccade_color",
         disabled=not show_saccades,
         help="Colour of the saccade lines and direction arrows (single scanpath; "
-        "two-trial comparisons keep their per-scanpath colours).",
+        "two-trial comparisons use the per-scanpath styling panel below).",
+    )
+    saccade_style_label = viz.selectbox(
+        "Saccade line style",
+        options=list(SACCADE_DASH_OPTIONS.keys()),
+        key="global_saccade_style",
+        disabled=not show_saccades,
+        help="Line style for the saccade traces.",
     )
 
     viz.divider()
@@ -646,10 +718,16 @@ def sidebar_controls(
         key="global_critical_span_style",
         disabled=not show_labels,
         help=(
-            "Mark text: color the highlighted words in dark pink. "
+            "Mark text: color the highlighted words in the highlight colour. "
             "Mark border: draw a thin black outline around the span. "
             "None: don't highlight. Needs Text to be on."
         ),
+    )
+    highlight_text_color = viz.color_picker(
+        "Highlighted text color",
+        key="global_highlight_text_color",
+        disabled=not show_labels or critical_span_style != "Mark text",
+        help="Colour of the highlighted reading text (used with 'Mark text').",
     )
     # Which word column drives the highlight (default the OneStop answer span).
     highlight_options = highlight_column_options(words)
@@ -753,7 +831,8 @@ def sidebar_controls(
         "Y axis field", options=numeric_fields, key="global_y_field"
     )
 
-    # Plot background is chosen in Experimental Setup; read the value here.
+    # Plot background and text colour are chosen in Experimental Setup; read the
+    # values here so they flow into the figure via viz_settings.
     bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
     bg_choice = st.session_state.get("global_bg_choice", bg_options[0])
     if bg_choice == "Custom…":
@@ -764,6 +843,13 @@ def sidebar_controls(
         background_color = BACKGROUND_PRESETS.get(
             bg_choice, BACKGROUND_PRESETS[bg_options[0]]
         )
+    text_color = st.session_state.get("global_text_color", WORD_LABEL_COLOR)
+
+    # Per-scanpath styling for the two-trial comparison, shown only when the
+    # comparison toggle (rendered in the Scanpath tab) is on.
+    compare_style_a, compare_style_b = (None, None)
+    if st.session_state.get("single_compare_toggle"):
+        compare_style_a, compare_style_b = _render_compare_scanpath_styles()
 
     return dict(
         show_words=show_words,
@@ -790,9 +876,15 @@ def sidebar_controls(
         critical_span_style=critical_span_style,
         highlight_column=highlight_column,
         saccade_color=saccade_color,
+        saccade_style=saccade_style_label,
+        hollow_fixations=hollow_fixations,
+        highlight_text_color=highlight_text_color,
+        text_color=text_color,
         color_by_line=color_by_line,
         highlight_out_of_text=highlight_out_of_text,
         background_color=background_color,
+        compare_style_a=compare_style_a,
+        compare_style_b=compare_style_b,
     )
 
 

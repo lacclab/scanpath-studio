@@ -26,7 +26,7 @@ scanpath_studio/
 ├─ controls.py       sidebar viz controls + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions) + geometry helpers (line clustering, in-text test)
-├─ plots.py          Plotly figure builders (scanpath, animation, comparison, bar, histogram); background color, out-of-text + by-line fixation options
+├─ plots.py          Plotly figure builders (scanpath, animation, comparison, bar, histogram); background color, out-of-text + by-line fixation options, hollow fixation markers, dashed/dotted saccades, base + highlighted text colors, and per-scanpath comparison styling (the comparison builders now honor the fixation/saccade viz controls, not just text/boxes)
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
 ├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source)

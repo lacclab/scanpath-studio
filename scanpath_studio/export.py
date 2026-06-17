@@ -32,7 +32,13 @@ from typing import List, Optional
 
 import pandas as pd
 
-from .constants import CITATION, DEFAULT_LINE_SPACING
+from .constants import (
+    CITATION,
+    DEFAULT_LINE_SPACING,
+    HIGHLIGHTED_TEXT_COLOR,
+    SACCADE_COLOR,
+    WORD_LABEL_COLOR,
+)
 from .data import compute_word_metrics
 from .plots import make_scanpath_figure
 
@@ -544,6 +550,19 @@ def bulk_export(
                         color_by_line=settings.get("color_by_line", False),
                         highlight_out_of_text=settings.get(
                             "highlight_out_of_text", False
+                        ),
+                        saccade_color=settings.get("saccade_color", SACCADE_COLOR),
+                        saccade_style=settings.get("saccade_style", "solid"),
+                        hollow_fixations=settings.get("hollow_fixations", False),
+                        critical_span_style=settings.get(
+                            "critical_span_style", "Mark text"
+                        ),
+                        highlight_column=settings.get(
+                            "highlight_column", "is_in_aspan"
+                        ),
+                        text_color=settings.get("text_color", WORD_LABEL_COLOR),
+                        highlight_text_color=settings.get(
+                            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
                         ),
                         line_spacing=settings.get("line_spacing", DEFAULT_LINE_SPACING),
                         scale_text_to_boxes=settings.get("scale_text_to_boxes", True),

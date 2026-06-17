@@ -62,6 +62,8 @@ from scanpath_studio.constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
     FONT_FAMILY,
+    SACCADE_DASH_OPTIONS,
+    WORD_LABEL_COLOR,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -523,6 +525,15 @@ def _restore_plot_config(
     sac = coloring.get("saccade_color")
     if isinstance(sac, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sac):
         put("global_saccade_color", sac)
+    if "saccade_style" in coloring:
+        put_valid(
+            coloring["saccade_style"] in SACCADE_DASH_OPTIONS,
+            "global_saccade_style",
+            coloring["saccade_style"],
+            "saccade line style",
+        )
+    if "hollow_fixations" in coloring:
+        put("global_hollow_fixations", bool(coloring["hollow_fixations"]))
     # Range sliders only render when colour bars are on; store them anyway —
     # the widgets clamp to the current data via `controls._clamp_range`.
     for cfg_key, state_key, label in (
@@ -591,6 +602,9 @@ def _restore_plot_config(
             put("global_line_spacing", max(1.0, min(float(n), 10.0)))
     if isinstance(text.get("font_family"), str) and text["font_family"].strip():
         put("global_font_family", text["font_family"])
+    tc = text.get("text_color")
+    if isinstance(tc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", tc):
+        put("global_text_color", tc)
 
     highlighting = section("highlighting")
     if "critical_span_style" in highlighting:
@@ -610,6 +624,9 @@ def _restore_plot_config(
         put("global_highlight_column", highlighting["highlight_column"])
     if "highlight_out_of_text" in highlighting:
         put("global_highlight_out_of_text", bool(highlighting["highlight_out_of_text"]))
+    htc = highlighting.get("highlight_text_color")
+    if isinstance(htc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", htc):
+        put("global_highlight_text_color", htc)
     bg = highlighting.get("background_color")
     if isinstance(bg, str) and bg:
         # Map a saved colour back to a preset name, else fall to the custom slot.
@@ -1875,6 +1892,14 @@ def render_sidebar_canvas_controls(
         key="global_font_family",
         help="Font for the word labels. Use the exact font from your experiment "
         "(e.g. 'Courier New') or a CSS fallback stack.",
+    )
+    # Base reading-text colour (highlighted-text colour lives in Visualization
+    # controls). Read back into viz_settings by controls.sidebar_controls.
+    st.session_state.setdefault("global_text_color", WORD_LABEL_COLOR)
+    display.color_picker(
+        "Text color",
+        key="global_text_color",
+        help="Colour of the reading text drawn over the stimulus.",
     )
 
     # Plot background lives here (Experimental Setup) rather than under

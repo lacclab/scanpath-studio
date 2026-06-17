@@ -46,12 +46,26 @@ DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
 WORD_LABEL_COLOR = "#343a40"
+# Default colour for highlighted ("Mark text") reading text — dark pink. The
+# visualization controls expose a picker that overrides it per figure.
+HIGHLIGHTED_TEXT_COLOR = "#C8097C"
 SACCADE_COLOR = "#6f42c1"
 TRENDLINE_COLOR = "#dc3545"
 CURRENT_FIX_COLOR = "rgba(255, 127, 14, 0.6)"
 CURRENT_FIX_OUTLINE = "#ff7f0e"
 FIX_MARKER_OUTLINE = "#111"
 COMPARISON_PALETTE = ["#1f77b4", "#e45756"]
+
+# Saccade line styles offered in the sidebar. Maps the friendly UI label to the
+# Plotly ``line.dash`` value used in the figure builders.
+SACCADE_DASH_OPTIONS = {
+    "Solid": "solid",
+    "Dashed": "dash",
+    "Dotted": "dot",
+    "Dash-dot": "dashdot",
+}
+# Outline width (px) for hollow (outline-only) fixation markers.
+HOLLOW_OUTLINE_WIDTH = 2.0
 
 # Distinct mark for fixations that fall outside every word box ("out of text").
 OUT_OF_TEXT_COLOR = "#d62728"  # red

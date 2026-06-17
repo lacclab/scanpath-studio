@@ -168,15 +168,22 @@ class TestPlotConfigRestore:
         # sizing, highlighting, and annotations — all re-applied on restore.
         config = dict(_full_config())
         config["schema"] = 2
-        config["coloring"] = dict(config["coloring"], color_by="line")  # synthetic opt
+        config["coloring"] = dict(
+            config["coloring"],
+            color_by="line",  # synthetic opt
+            saccade_style="Dashed",
+            hollow_fixations=True,
+        )
         config["text"] = {
             "scale_text_to_boxes": False,
             "line_spacing": 2.5,
             "font_family": "Courier New",
+            "text_color": "#010203",
         }
         config["highlighting"] = {
             "critical_span_style": "Mark border",
             "highlight_out_of_text": True,
+            "highlight_text_color": "#fedcba",
             "background_color": "#222222",
         }
         config["annotations"] = [
@@ -195,6 +202,10 @@ class TestPlotConfigRestore:
         assert ss["global_font_family"] == "Courier New"
         assert ss["global_critical_span_style"] == "Mark border"
         assert ss["global_highlight_out_of_text"] is True
+        assert ss["global_saccade_style"] == "Dashed"
+        assert ss["global_hollow_fixations"] is True
+        assert ss["global_text_color"] == "#010203"
+        assert ss["global_highlight_text_color"] == "#fedcba"
         assert ss["global_bg_choice"] == "Custom…"
         assert ss["global_bg_custom"] == "#222222"
         store = ss["trial_annotations"]
@@ -332,7 +343,10 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         "line_spacing": 3.0,
         "critical_span_style": "Mark border",
         "highlight_out_of_text": True,
+        "highlight_text_color": "#fedcba",
         "background_color": "#222222",
+        "text_color": "#010203",
+        "saccade_color": "#6f42c1",
     }
     cfg = _build_studio_config(
         selected_participant="p1",
@@ -342,7 +356,11 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         x_field="x",
         y_field="y",
         figure_settings=figure_settings,
-        viz_settings={"heatmap_metric": "duration_ms"},
+        viz_settings={
+            "heatmap_metric": "duration_ms",
+            "saccade_style": "Dotted",
+            "hollow_fixations": True,
+        },
         base_font_size=16,
         trial_raw_gaze=pd.DataFrame(),
         font_family="Courier New",
@@ -367,7 +385,11 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["column_mapping"] == {"col_map_fix_x": "CURRENT_FIX_X"}
     assert cfg["selection"] == {"participant_id": "p1", "trial_id": "t1"}
     assert cfg["coloring"]["color_by"] == "line"
+    assert cfg["coloring"]["saccade_style"] == "Dotted"
+    assert cfg["coloring"]["hollow_fixations"] is True
     assert cfg["text"]["font_family"] == "Courier New"
+    assert cfg["text"]["text_color"] == "#010203"
+    assert cfg["highlighting"]["highlight_text_color"] == "#fedcba"
     assert cfg["highlighting"]["background_color"] == "#222222"
     assert len(cfg["annotations"]) == 1
     json.dumps(cfg)  # must be JSON-serializable

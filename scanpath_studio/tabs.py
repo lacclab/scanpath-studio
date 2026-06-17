@@ -602,7 +602,11 @@ def _humanize_field(col: str) -> str:
 
 
 def _is_boolish(series: pd.Series) -> bool:
-    """True when a column holds only boolean-like values (per-word span flags)."""
+    """True when a column holds only boolean-like values (per-word span flags).
+
+    Accepts real booleans, numeric 0/1, and the string spellings ``True/False``.
+    Deliberately excludes string ``"0"``/``"1"`` so a string-typed id column that
+    happens to contain only ``"0"``/``"1"`` isn't mistaken for a span flag."""
     if pd.api.types.is_bool_dtype(series):
         return True
     vals = set(series.dropna().unique())
@@ -617,8 +621,6 @@ def _is_boolish(series: pd.Series) -> bool:
         "False",
         "true",
         "false",
-        "0",
-        "1",
     }
 
 
@@ -641,12 +643,24 @@ def _detect_span_columns(trial_words: pd.DataFrame) -> list[str]:
 
 
 def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
-    """Trial-level (string/scalar) columns holding question / answer content."""
+    """Trial-level columns holding question / answer content.
+
+    Matches columns whose name reads as question/answer/correct/… but excludes
+    span-named columns and **per-word-varying boolean** columns: a boolean that
+    differs across the trial's words (e.g. a per-word ``response`` mask) is
+    span-like data, not a trial-level field, and rendering its first value as
+    ``"Response: True"`` would be misleading. A *constant* boolean (e.g.
+    ``is_correct``) is a legitimate trial-level field and is kept.
+    """
     out = []
     for c in trial_words.columns:
         lc = c.lower()
-        if any(h in lc for h in _QA_NAME_HINTS) and not _is_boolish_span(c):
-            out.append(c)
+        if not any(h in lc for h in _QA_NAME_HINTS) or _is_boolish_span(c):
+            continue
+        col = trial_words[c]
+        if _is_boolish(col) and col.dropna().nunique() > 1:
+            continue  # per-word-varying boolean → not a trial-level Q&A field
+        out.append(c)
     return out
 
 

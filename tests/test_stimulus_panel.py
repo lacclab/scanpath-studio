@@ -15,6 +15,7 @@ from scanpath_studio.tabs import (
     _detect_question_columns,
     _detect_span_columns,
     _humanize_field,
+    _is_boolish,
 )
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -63,6 +64,27 @@ class TestDetection:
         w = pd.DataFrame({"word_id": [0, 1], "text": ["a", "b"]})
         assert _detect_span_columns(w) == []
         assert _detect_question_columns(w) == []
+
+    def test_per_word_varying_boolean_not_treated_as_qa(self):
+        # A per-word *varying* boolean named like Q&A (e.g. "response") is
+        # span-like data, not a trial-level field — it must NOT render as
+        # "Response: True". A *constant* boolean (is_correct) stays Q&A.
+        w = pd.DataFrame(
+            {
+                "word_id": [0, 1, 2],
+                "text": ["a", "b", "c"],
+                "response": [True, False, True],  # varies per word
+                "is_correct": [True, True, True],  # constant per trial
+            }
+        )
+        qa = _detect_question_columns(w)
+        assert "response" not in qa
+        assert "is_correct" in qa
+
+    def test_string_id_column_not_boolish(self):
+        # A string id column of "0"/"1" must not be mistaken for a boolean span.
+        assert not _is_boolish(pd.Series(["0", "1", "0"]))
+        assert _is_boolish(pd.Series([True, False, True]))
 
 
 def _onestop_panel_app():

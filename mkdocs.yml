@@ -1,0 +1,65 @@
+site_name: Scanpath Studio
+site_description: >-
+  Interactive workbench for visualizing eye-tracking-while-reading scanpaths,
+  computing reading measures, and exporting figures and tabular data.
+site_url: https://lacclab.github.io/scanpath-studio/
+repo_url: https://github.com/lacclab/scanpath-studio
+repo_name: lacclab/scanpath-studio
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+    - search.suggest
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Python API: api.md
+  - CLI reference: cli.md
+  - Data format: data-format.md
+  - Export & troubleshooting: export-troubleshooting.md
+  - Architecture: architecture.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            show_root_heading: true
+            heading_level: 3
+            separate_signature: true
+            show_signature_annotations: true
+            docstring_style: google
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true

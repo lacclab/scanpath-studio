@@ -48,9 +48,15 @@ test = [
     # required for collection under `--strict-markers`.
     "pytest-timeout>=2.1.0",
 ]
+# Build the documentation site (MkDocs Material + API autodoc from docstrings).
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.26",
+]
 
 [project.urls]
 Repository = "https://github.com/lacclab/scanpath-studio"
+Documentation = "https://lacclab.github.io/scanpath-studio/"
 Issues = "https://github.com/lacclab/scanpath-studio/issues"
 
 [project.scripts]

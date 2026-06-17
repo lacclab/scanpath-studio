@@ -83,6 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   similar data later via *Restore a saved setup*.
 
 ### Changed
+- **Header buttons grouped together.** The **Share** and **About** buttons in
+  the header now sit side by side with a small gap, instead of a wide blank
+  between them.
 - **Much faster on large datasets.** Switching trial, participant, or settings
   on a big dataset (hundreds of columns, many trials) is now near-instant
   instead of taking minutes — heavy work is cached and thinned, with a visible

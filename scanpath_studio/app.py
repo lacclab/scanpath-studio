@@ -711,15 +711,17 @@ def _render_about_panel() -> "DeltaGenerator":
     from scanpath_studio.constants import CITATION
 
     header = st.container(key="about_header")
-    title_col, share_col, about_col = header.columns(
-        [5, 1, 1], vertical_alignment="center"
-    )
+    title_col, buttons_col = header.columns([5, 2], vertical_alignment="center")
     with title_col:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")
-    # The keyed wrapper right-aligns the content-sized trigger to the column edge
-    # (see `.st-key-share_btn` in styles.py), matching the About button beside it.
-    share_slot = share_col.container(key="share_btn")
+    # Share + About share one right-aligned flex row (see `.st-key-header_buttons`
+    # in styles.py) so they sit side by side with just a small gap, instead of in
+    # separate columns that left a wide blank between them.
+    button_row = buttons_col.container(key="header_buttons")
+    # The keyed wrapper right-aligns the content-sized trigger (see
+    # `.st-key-share_btn` in styles.py), matching the About button beside it.
+    share_slot = button_row.container(key="share_btn")
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Berzak, Yevgeni},\n"
@@ -731,7 +733,7 @@ def _render_about_panel() -> "DeltaGenerator":
         "year = {2026}\n"
         "}"
     )
-    with about_col.container(key="about_btn"):
+    with button_row.container(key="about_btn"):
         # `width="content"` keeps the button just as wide as its label instead
         # of stretching across the column (which left whitespace either side).
         # The `about_btn` keyed wrapper lets the stylesheet right-align this

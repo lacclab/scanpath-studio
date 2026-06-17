@@ -49,6 +49,16 @@ def get_app_css() -> str:
        the page content. The `about_btn` wrapper is a flex column, so this only
        moves the About button — no other popover (e.g. the plot toolbar). */
     .st-key-about_btn, .st-key-share_btn { align-items: flex-end; }
+    /* Lay Share + About side by side, right-aligned, with a small gap so the
+       Share trigger sits just beside About instead of a column apart. */
+    .st-key-header_buttons {
+        flex-direction: row;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .st-key-header_buttons .st-key-share_btn,
+    .st-key-header_buttons .st-key-about_btn { width: auto; }
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
     div[data-testid="stPopoverBody"] {

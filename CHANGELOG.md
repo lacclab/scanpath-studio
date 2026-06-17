@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **PoTeC loader.** `sps.load_potec(root, download=True)` /
+  `scanpath-studio render --potec` load the Potsdam Textbook Corpus end-to-end
+  — its filename-encoded ids and separate character-AoI coordinates can't go
+  through the generic upload flow. An in-app **Public datasets** source (with
+  a dataset registry built for more corpora) ships feature-flagged off
+  (`SCANPATH_PUBLIC_DATASETS=1` to preview); it will be enabled in a future
+  release.
+
+## [0.20.0] - 2026-06-17
+
+### Added
 - **One Data Inspection tab.** The former **Raw Data** and **Data Statistics**
   tabs are merged into a single **Data Inspection** tab that, top to bottom,
   shows the headline dataset counts, every raw table (Stimuli, Word-level,
@@ -66,13 +77,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (monitor size, font, line spacing, background) is now part of the wizard, so
   the scanpath is true-to-scale from the first render; it stays adjustable from
   the sidebar afterwards.
-- **PoTeC loader.** `sps.load_potec(root, download=True)` /
-  `scanpath-studio render --potec` load the Potsdam Textbook Corpus end-to-end
-  — its filename-encoded ids and separate character-AoI coordinates can't go
-  through the generic upload flow. An in-app **Public datasets** source (with
-  a dataset registry built for more corpora) ships feature-flagged off
-  (`SCANPATH_PUBLIC_DATASETS=1` to preview); it will be enabled in a future
-  release.
 - **Step-by-step setup guide.** The upload wizard now has a short guided
   walkthrough — a **❓ Show setup guide** dialog that explains each step (naming,
   experimental setup, uploading, column mapping, and finishing). It opens
@@ -520,6 +524,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Test suite grown from 85 to 114 tests.
 
+[0.20.0]: https://github.com/lacclab/scanpath-studio/releases/tag/v0.20.0
 [0.19.0]: https://github.com/lacclab/scanpath-studio/releases/tag/v0.19.0
 [0.14.0]: https://github.com/lacclab/scanpath-studio/releases/tag/v0.14.0
 [0.13.0]: https://github.com/lacclab/scanpath-studio/releases/tag/v0.13.0

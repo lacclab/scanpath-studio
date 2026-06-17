@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/scanpath-studio.svg)](https://pypi.org/project/scanpath-studio/)
 [![Python versions](https://img.shields.io/pypi/pyversions/scanpath-studio.svg)](https://pypi.org/project/scanpath-studio/)
 [![Live demo](https://img.shields.io/badge/Live_demo-Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://scanpath-studio.streamlit.app)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://lacclab.github.io/scanpath-studio/)
 [![CI](https://github.com/lacclab/scanpath-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/lacclab/scanpath-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -123,6 +124,17 @@ streamlit run streamlit_app.py
 
 Tested on Python 3.11–3.14. Run the tests with `pytest`; see
 [AGENTS.md](AGENTS.md) for an architectural overview.
+
+## Documentation
+
+Full docs — getting started, the Python API, the CLI reference, data format, and
+export/troubleshooting — are at **<https://lacclab.github.io/scanpath-studio/>**
+(built from `docs/` with MkDocs Material). Build them locally with:
+
+```bash
+pip install -e ".[docs]"
+mkdocs serve
+```
 
 ## Citation
 

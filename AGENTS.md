@@ -114,7 +114,16 @@ ruff format --exclude other_vis .
 
 # Regenerate bundled sample data (needs the full OneStop CSVs under sample_data/OneStop/)
 python -m scanpath_studio.update_sample_data
+
+# Docs site (MkDocs Material; API autodoc via mkdocstrings from docstrings)
+pip install -e ".[docs]"
+mkdocs serve                 # local preview
+mkdocs build --strict        # CI gate (.github/workflows/docs.yml → GitHub Pages)
 ```
+
+User-facing docs live in `docs/` and publish to
+<https://lacclab.github.io/scanpath-studio/>. The Python API reference is
+generated from the `api.py` docstrings, so keep those current.
 
 CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff
 lint+format checks on every pull request.

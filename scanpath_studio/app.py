@@ -187,34 +187,109 @@ ONESTOP_CHOICE = "OneStop server bundle"
 # the requested trial. Keep this list in sync with the `key_prefix=` values
 # passed to `select_trial` in tabs.py.
 _SELECTION_PREFIXES = ("single", "multi")
-_URL_PRESETS = {
-    # viz prefs (`controls.sidebar_controls`)
-    "show_order": ("global_show_order", lambda v: v not in {"0", "false", "no"}),
-    "hide_fixation_numbers": ("global_show_order", lambda v: v in {"0", "false", "no"}),
-    "show_saccades": ("global_show_saccades", lambda v: v not in {"0", "false", "no"}),
-    "show_heatmap": ("global_show_heatmap", lambda v: v not in {"0", "false", "no"}),
-    "show_words": ("global_show_words", lambda v: v not in {"0", "false", "no"}),
-    "show_labels": ("global_show_labels", lambda v: v not in {"0", "false", "no"}),
-    "show_fixations": ("global_show_fix", lambda v: v not in {"0", "false", "no"}),
-    "heatmap_colorscale": ("global_heatmap_colorscale", str),
-    "fixation_colorscale": ("global_fixation_colorscale", str),
-}
 
-# Inverse of the boolean / colorscale entries in _URL_PRESETS, used by the Share
-# button (`_build_share_query`) to rebuild a deep link from the *current* session
-# state. Kept beside _URL_PRESETS so the read and write sides can't drift.
-_SHARE_TOGGLE_PARAMS = {
+
+def _coerce_bool(v) -> bool:
+    return str(v).lower() not in {"0", "false", "no"}
+
+
+def _parse_int_range(v) -> tuple:
+    a, b = (int(float(x)) for x in str(v).split(",")[:2])
+    return (min(a, b), max(a, b))
+
+
+def _parse_float_range(v) -> tuple:
+    a, b = (float(x) for x in str(v).split(",")[:2])
+    return (min(a, b), max(a, b))
+
+
+# --- Share-link parameter groups -------------------------------------------
+# The Share link round-trips the *entire* Visualization-controls panel (plus the
+# text/background settings from Experimental Setup), not just a handful of
+# toggles. Each group maps a short URL key → the session_state key it reads/writes.
+# `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
+# so the two sides can't drift. Data-dependent fields (color ranges, highlight
+# column, axis/color-by fields) self-heal on load via the sidebar's _drop_stale /
+# _clamp_range, so a link opened on a different trial degrades gracefully.
+_SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_words": "global_show_words",
     "show_labels": "global_show_labels",
     "show_fixations": "global_show_fix",
     "show_order": "global_show_order",
     "show_saccades": "global_show_saccades",
+    "show_saccade_arrows": "global_show_saccade_arrows",
     "show_heatmap": "global_show_heatmap",
+    "show_raw_gaze": "global_show_raw_gaze",
+    "show_colorbars": "global_show_colorbars",
+    "highlight_out_of_text": "global_highlight_out_of_text",
+    "hollow_fixations": "global_hollow_fixations",
+    "scale_text_to_boxes": "global_scale_text_to_boxes",
 }
-_SHARE_COLORSCALE_PARAMS = {
+_SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
+    "color_by": "global_color_by",
+    "heatmap_style": "global_heatmap_style",
+    "heatmap_metric": "global_heatmap_metric",
+    "critical_span_style": "global_critical_span_style",
+    "highlight_column": "global_highlight_column",
+    "x_field": "global_x_field",
+    "y_field": "global_y_field",
+    "saccade_style": "global_saccade_style",
     "fixation_colorscale": "global_fixation_colorscale",
     "heatmap_colorscale": "global_heatmap_colorscale",
+    "saccade_color": "global_saccade_color",
+    "order_font_color": "global_order_font_color",
+    "text_color": "global_text_color",
+    "highlight_text_color": "global_highlight_text_color",
+    "bg_choice": "global_bg_choice",
+    "bg_custom": "global_bg_custom",
+    "font_family": "global_font_family",
 }
+_SHARE_INT_PARAMS = {"order_font_size": "global_order_font_size"}
+_SHARE_FLOAT_PARAMS = {"line_spacing": "global_line_spacing"}
+_SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
+_SHARE_FLOAT_RANGE_PARAMS = {
+    "fixation_color_range": "global_fixation_color_range",
+    "heatmap_color_range": "global_heatmap_color_range",
+}
+
+_URL_PRESETS = {
+    # Booleans (read side of _SHARE_TOGGLE_PARAMS) + the legacy aliases.
+    "hide_fixation_numbers": ("global_show_order", lambda v: not _coerce_bool(v)),
+    **{k: (s, _coerce_bool) for k, s in _SHARE_TOGGLE_PARAMS.items()},
+    # Strings / choices / colors.
+    **{k: (s, str) for k, s in _SHARE_VALUE_PARAMS.items()},
+    # Numbers + ranges.
+    **{k: (s, int) for k, s in _SHARE_INT_PARAMS.items()},
+    **{k: (s, float) for k, s in _SHARE_FLOAT_PARAMS.items()},
+    **{k: (s, _parse_int_range) for k, s in _SHARE_INT_RANGE_PARAMS.items()},
+    **{k: (s, _parse_float_range) for k, s in _SHARE_FLOAT_RANGE_PARAMS.items()},
+}
+
+# Widget bounds for the URL-restorable params that feed a min/max-bounded widget
+# (slider / number_input). A hand-crafted link with an out-of-range value would
+# otherwise crash the widget on render — Streamlit raises when a Session-State
+# value falls outside the widget's range. Clamp on the way in. (Data-dependent
+# colour ranges aren't here — the sidebar's `_clamp_range` handles those against
+# the live data.)
+_URL_BOUNDED = {
+    "global_line_spacing": (1.0, 10.0),
+    "global_order_font_size": (6, 72),
+    "global_marker_size_range": (4, 40),
+}
+
+
+def _clamp_url_value(state_key: str, value):
+    """Clamp a deep-linked value to its widget bounds (scalars and 2-tuples)."""
+    bounds = _URL_BOUNDED.get(state_key)
+    if bounds is None:
+        return value
+    lo, hi = bounds
+    if isinstance(value, (tuple, list)) and len(value) == 2:
+        a, b = max(lo, min(value[0], hi)), max(lo, min(value[1], hi))
+        return (min(a, b), max(a, b))
+    return max(lo, min(value, hi))
+
+
 # data_choice → ?source= value, for the built-in sources a URL can fully rebuild.
 # Sources absent here (uploaded tables, stored datasets, public corpora) can't be
 # reconstructed from a link — the Share panel warns and shares the view settings
@@ -292,6 +367,9 @@ def _apply_url_preset() -> Optional[str]:
         except (ValueError, TypeError):
             st.warning(f"Ignored bad URL param ?{url_key}={raw!r}")
             continue
+        # Clamp bounded widgets so a hand-crafted out-of-range link can't crash
+        # the slider / number_input on render.
+        value = _clamp_url_value(state_key, value)
         st.session_state.setdefault(state_key, value)
 
     # Heatmap / fixation colorscale only render under the Advanced expander —
@@ -829,10 +907,23 @@ def _build_share_query(data_choice: str) -> Tuple[str, list]:
     for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
         if state_key in st.session_state:
             params[url_key] = "1" if st.session_state[state_key] else "0"
-    for url_key, state_key in _SHARE_COLORSCALE_PARAMS.items():
+    # Strings / choices / colours / numbers — emit only when set.
+    for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
         value = st.session_state.get(state_key)
-        if value:
+        if value not in (None, ""):
             params[url_key] = str(value)
+    for url_key, state_key in _SHARE_FLOAT_PARAMS.items():
+        value = st.session_state.get(state_key)
+        if value is not None:
+            params[url_key] = str(value)
+    # Two-element ranges → "lo,hi".
+    for url_key, state_key in {
+        **_SHARE_INT_RANGE_PARAMS,
+        **_SHARE_FLOAT_RANGE_PARAMS,
+    }.items():
+        value = st.session_state.get(state_key)
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            params[url_key] = f"{value[0]},{value[1]}"
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 
@@ -924,16 +1015,31 @@ def _render_share_link_widget(query: str) -> None:
 
 def _render_share_panel(data_choice: str) -> None:
     """Fill the header's Share slot with a popover that builds a deep link to the
-    current view (data source + trial + visualization settings)."""
+    current view (data source + trial + visualization settings).
+
+    The link is built **lazily** — only when the user clicks *Refresh link* (and
+    once on first open so there's always something to copy). It is NOT rebuilt on
+    every rerun, so tweaking an unrelated control doesn't silently rewrite a link
+    the user is about to share; the link reflects the settings as of the last
+    refresh."""
     with st.popover("Share", icon=":material/share:", width="content"):
         st.markdown(
             "**Share this view** — a link that reopens Scanpath Studio on the "
             "current trial with your visualization settings."
         )
-        query, caveats = _build_share_query(data_choice)
+        refresh = st.button(
+            "🔄 Refresh link",
+            key="share_refresh",
+            type="primary",
+            help="Rebuild the link from the current trial + settings.",
+        )
+        if refresh or st.session_state.get("_share_query_frozen") is None:
+            st.session_state["_share_query_frozen"] = _build_share_query(data_choice)
+        query, caveats = st.session_state["_share_query_frozen"]
         for note in caveats:
             st.caption("⚠️ " + note)
         _render_share_link_widget(query)
+        st.caption("Reflects your settings as of the last refresh.")
 
 
 # -----------------------------------------------------------------------------

@@ -9,6 +9,7 @@ from scanpath_studio import app as app_module
 from scanpath_studio.app import (
     DEMO_CHOICE,
     UPLOAD_CHOICE,
+    _apply_url_preset,
     _apply_url_trial_selection,
     _build_comparison_options,
     _build_share_query,
@@ -234,6 +235,9 @@ class _FakeSt:
         self.session_state = {}
         self.query_params = {}
 
+    def warning(self, *args, **kwargs):  # noqa: D102 - no-op stand-in
+        pass
+
 
 @pytest.fixture
 def fake_st(monkeypatch):
@@ -284,6 +288,84 @@ class TestBuildShareQuery:
         assert "participant" not in parsed
         assert "trial_id" not in parsed
         assert parsed["show_words"] == ["1"]
+
+    def test_serializes_full_viz_panel_and_round_trips(self, fake_st):
+        # The whole Visualization-controls panel must travel in the link (not just
+        # a handful of toggles) and survive a build → apply round-trip.
+        fake_st.session_state = {
+            "_share_selection": {"participant_id": "p1", "trial_id": "t3"},
+            "global_show_words": False,
+            "global_hollow_fixations": True,
+            "global_show_saccade_arrows": True,
+            "global_saccade_style": "Dashed",
+            "global_saccade_color": "#123456",
+            "global_text_color": "#0a0b0c",
+            "global_highlight_text_color": "#fedcba",
+            "global_color_by": "duration_ms",
+            "global_heatmap_style": "Interpolated",
+            "global_marker_size_range": (10, 30),
+            "global_order_font_size": 18,
+            "global_line_spacing": 2.5,
+            "global_scale_text_to_boxes": False,
+        }
+        query, _ = _build_share_query(DEMO_CHOICE)
+        parsed = parse_qs(query)
+        assert parsed["hollow_fixations"] == ["1"]
+        assert parsed["show_saccade_arrows"] == ["1"]
+        assert parsed["saccade_style"] == ["Dashed"]
+        assert parsed["saccade_color"] == ["#123456"]
+        assert parsed["text_color"] == ["#0a0b0c"]
+        assert parsed["highlight_text_color"] == ["#fedcba"]
+        assert parsed["color_by"] == ["duration_ms"]
+        assert parsed["heatmap_style"] == ["Interpolated"]
+        assert parsed["marker_size_range"] == ["10,30"]
+        assert parsed["order_font_size"] == ["18"]
+        assert parsed["line_spacing"] == ["2.5"]
+        assert parsed["scale_text_to_boxes"] == ["0"]
+
+        # Apply the same link into a fresh session → settings restored.
+        fake_st.session_state = {}
+        fake_st.query_params = {k: v[0] for k, v in parsed.items()}
+        _apply_url_preset()
+        ss = fake_st.session_state
+        assert ss["global_show_words"] is False
+        assert ss["global_hollow_fixations"] is True
+        assert ss["global_show_saccade_arrows"] is True
+        assert ss["global_saccade_style"] == "Dashed"
+        assert ss["global_saccade_color"] == "#123456"
+        assert ss["global_text_color"] == "#0a0b0c"
+        assert ss["global_highlight_text_color"] == "#fedcba"
+        assert ss["global_color_by"] == "duration_ms"
+        assert ss["global_heatmap_style"] == "Interpolated"
+        assert ss["global_marker_size_range"] == (10, 30)
+        assert ss["global_order_font_size"] == 18
+        assert ss["global_line_spacing"] == 2.5
+        assert ss["global_scale_text_to_boxes"] is False
+
+    def test_out_of_bounds_url_values_are_clamped(self, fake_st):
+        # A hand-crafted link with out-of-range values must NOT reach the widget
+        # unclamped (Streamlit would raise on render). Clamp to widget bounds.
+        fake_st.query_params = {
+            "marker_size_range": "1,99",  # widget bounds [4, 40]
+            "line_spacing": "999",  # bounds [1.0, 10.0]
+            "order_font_size": "1000",  # bounds [6, 72]
+        }
+        _apply_url_preset()
+        ss = fake_st.session_state
+        assert ss["global_marker_size_range"] == (4, 40)
+        assert ss["global_line_spacing"] == 10.0
+        assert ss["global_order_font_size"] == 72
+
+    def test_malformed_range_url_value_is_skipped(self, fake_st):
+        # Malformed range params are caught and skipped (no crash, key not set).
+        fake_st.query_params = {
+            "marker_size_range": "notarange",
+            "fixation_color_range": "10",  # only one value
+        }
+        _apply_url_preset()  # must not raise
+        ss = fake_st.session_state
+        assert "global_marker_size_range" not in ss
+        assert "global_fixation_color_range" not in ss
 
 
 class TestApplyUrlTrialSelection:

@@ -5,7 +5,7 @@ Scanpath Studio reads up to three tables — **words / areas-of-interest**,
 Feather**. Columns are auto-detected from common EyeLink, Gazepoint, and
 snake-case conventions; the app's **Column mapping** panel (and the
 `word_schema` / `fix_schema` arguments of
-[`load_scanpath_data`](api.md#scanpath_studio.api.load_scanpath_data)) override
+[`load_scanpath_data`][scanpath_studio.api.load_scanpath_data]) override
 any guess.
 
 ## Tables

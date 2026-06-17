@@ -36,13 +36,13 @@ On **Streamlit Community Cloud** the repo-root `packages.txt` installs
 ??? question "“Ambiguous selection: N trials match” from `plot_scanpath`"
     The frames contain more than one `(participant, trial)` combo, so you must
     say which one: `plot_scanpath(words, fixations, participant, trial)`. Use
-    [`list_trials`](api.md#scanpath_studio.api.list_trials) to see the options.
+    [`list_trials`][scanpath_studio.api.list_trials] to see the options.
 
 ??? question "A column wasn't detected / mapped to the wrong field"
     Auto-detection matches common conventions case- and separator-insensitively.
     Override it with the app's **Column mapping** panel, or pass
     `word_schema` / `fix_schema` to
-    [`load_scanpath_data`](api.md#scanpath_studio.api.load_scanpath_data).
+    [`load_scanpath_data`][scanpath_studio.api.load_scanpath_data].
 
 ??? question "The reading text looks too big / too small"
     Text is drawn true-to-scale from the word boxes and the **monitor

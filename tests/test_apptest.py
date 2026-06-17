@@ -407,10 +407,10 @@ class TestUnmappedRawDataView:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        # The dataset picker renders the registry entries (PoTeC today).
-        pickers = [s for s in at.selectbox if s.label == "Dataset"]
-        assert pickers, "expected a Dataset selectbox under Public datasets"
-        assert pickers[0].options == list(app.PUBLIC_DATASET_REGISTRY)
+        # The dataset picker renders the registry entries (PoTeC today) as a radio.
+        pickers = [r for r in at.radio if r.label == "Dataset"]
+        assert pickers, "expected a Dataset radio under Public datasets"
+        assert list(pickers[0].options) == list(app.PUBLIC_DATASET_REGISTRY)
 
 
 class TestGroupedUploadMapping:
@@ -1181,3 +1181,32 @@ class TestCorpusAnalysisTab:
         assert metric, "Aggregated Views metric selectbox not found"
         group = [s for s in at.selectbox if s.key == "agg_hist_group"]
         assert group, "Aggregated Views grouping selectbox not found"
+
+
+@pytest.mark.timeout(90)
+class TestShareLinkLazy:
+    """The Share link builds lazily — frozen until the user presses Refresh."""
+
+    def test_link_frozen_until_refresh(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Built once on first render so there's always something to copy.
+        assert "_share_query_frozen" in at.session_state
+        q1, _ = at.session_state["_share_query_frozen"]
+        # Flip a viz control WITHOUT pressing Refresh — the link must not change.
+        current = (
+            at.session_state["global_show_words"]
+            if "global_show_words" in at.session_state
+            else True
+        )
+        at.session_state["global_show_words"] = not current
+        at.run(timeout=30)
+        q2, _ = at.session_state["_share_query_frozen"]
+        assert q2 == q1, "link must not rebuild without Refresh"
+        # Press Refresh — now the link reflects the new setting.
+        at.button(key="share_refresh").click()
+        at.run(timeout=30)
+        q3, _ = at.session_state["_share_query_frozen"]
+        assert q3 != q1, "Refresh must rebuild the link from current settings"
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"

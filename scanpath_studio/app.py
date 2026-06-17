@@ -62,6 +62,8 @@ from scanpath_studio.constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
     FONT_FAMILY,
+    SACCADE_DASH_OPTIONS,
+    WORD_LABEL_COLOR,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -116,14 +118,15 @@ from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _collect_column_mapping,
     render_bulk_export_tab,
-    render_data_inspection_tab,
     render_corpus_analysis_tab,
+    render_data_inspection_tab,
     render_single_trial_tab,
 )
 from scanpath_studio.tour import (
     maybe_show_welcome_tour,
     maybe_show_wizard_guide,
     render_spotlight_tour,
+    render_spotlight_wizard_guide,
     render_tour_replay_button,
     render_wizard_guide_button,
     spotlight_tour_pending,
@@ -185,34 +188,109 @@ ONESTOP_CHOICE = "OneStop server bundle"
 # the requested trial. Keep this list in sync with the `key_prefix=` values
 # passed to `select_trial` in tabs.py.
 _SELECTION_PREFIXES = ("single", "multi")
-_URL_PRESETS = {
-    # viz prefs (`controls.sidebar_controls`)
-    "show_order": ("global_show_order", lambda v: v not in {"0", "false", "no"}),
-    "hide_fixation_numbers": ("global_show_order", lambda v: v in {"0", "false", "no"}),
-    "show_saccades": ("global_show_saccades", lambda v: v not in {"0", "false", "no"}),
-    "show_heatmap": ("global_show_heatmap", lambda v: v not in {"0", "false", "no"}),
-    "show_words": ("global_show_words", lambda v: v not in {"0", "false", "no"}),
-    "show_labels": ("global_show_labels", lambda v: v not in {"0", "false", "no"}),
-    "show_fixations": ("global_show_fix", lambda v: v not in {"0", "false", "no"}),
-    "heatmap_colorscale": ("global_heatmap_colorscale", str),
-    "fixation_colorscale": ("global_fixation_colorscale", str),
-}
 
-# Inverse of the boolean / colorscale entries in _URL_PRESETS, used by the Share
-# button (`_build_share_query`) to rebuild a deep link from the *current* session
-# state. Kept beside _URL_PRESETS so the read and write sides can't drift.
-_SHARE_TOGGLE_PARAMS = {
+
+def _coerce_bool(v) -> bool:
+    return str(v).lower() not in {"0", "false", "no"}
+
+
+def _parse_int_range(v) -> tuple:
+    a, b = (int(float(x)) for x in str(v).split(",")[:2])
+    return (min(a, b), max(a, b))
+
+
+def _parse_float_range(v) -> tuple:
+    a, b = (float(x) for x in str(v).split(",")[:2])
+    return (min(a, b), max(a, b))
+
+
+# --- Share-link parameter groups -------------------------------------------
+# The Share link round-trips the *entire* Visualization-controls panel (plus the
+# text/background settings from Experimental Setup), not just a handful of
+# toggles. Each group maps a short URL key → the session_state key it reads/writes.
+# `_build_share_query` (write) and `_apply_url_preset` (read) both iterate these,
+# so the two sides can't drift. Data-dependent fields (color ranges, highlight
+# column, axis/color-by fields) self-heal on load via the sidebar's _drop_stale /
+# _clamp_range, so a link opened on a different trial degrades gracefully.
+_SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_words": "global_show_words",
     "show_labels": "global_show_labels",
     "show_fixations": "global_show_fix",
     "show_order": "global_show_order",
     "show_saccades": "global_show_saccades",
+    "show_saccade_arrows": "global_show_saccade_arrows",
     "show_heatmap": "global_show_heatmap",
+    "show_raw_gaze": "global_show_raw_gaze",
+    "show_colorbars": "global_show_colorbars",
+    "highlight_out_of_text": "global_highlight_out_of_text",
+    "hollow_fixations": "global_hollow_fixations",
+    "scale_text_to_boxes": "global_scale_text_to_boxes",
 }
-_SHARE_COLORSCALE_PARAMS = {
+_SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
+    "color_by": "global_color_by",
+    "heatmap_style": "global_heatmap_style",
+    "heatmap_metric": "global_heatmap_metric",
+    "critical_span_style": "global_critical_span_style",
+    "highlight_column": "global_highlight_column",
+    "x_field": "global_x_field",
+    "y_field": "global_y_field",
+    "saccade_style": "global_saccade_style",
     "fixation_colorscale": "global_fixation_colorscale",
     "heatmap_colorscale": "global_heatmap_colorscale",
+    "saccade_color": "global_saccade_color",
+    "order_font_color": "global_order_font_color",
+    "text_color": "global_text_color",
+    "highlight_text_color": "global_highlight_text_color",
+    "bg_choice": "global_bg_choice",
+    "bg_custom": "global_bg_custom",
+    "font_family": "global_font_family",
 }
+_SHARE_INT_PARAMS = {"order_font_size": "global_order_font_size"}
+_SHARE_FLOAT_PARAMS = {"line_spacing": "global_line_spacing"}
+_SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
+_SHARE_FLOAT_RANGE_PARAMS = {
+    "fixation_color_range": "global_fixation_color_range",
+    "heatmap_color_range": "global_heatmap_color_range",
+}
+
+_URL_PRESETS = {
+    # Booleans (read side of _SHARE_TOGGLE_PARAMS) + the legacy aliases.
+    "hide_fixation_numbers": ("global_show_order", lambda v: not _coerce_bool(v)),
+    **{k: (s, _coerce_bool) for k, s in _SHARE_TOGGLE_PARAMS.items()},
+    # Strings / choices / colors.
+    **{k: (s, str) for k, s in _SHARE_VALUE_PARAMS.items()},
+    # Numbers + ranges.
+    **{k: (s, int) for k, s in _SHARE_INT_PARAMS.items()},
+    **{k: (s, float) for k, s in _SHARE_FLOAT_PARAMS.items()},
+    **{k: (s, _parse_int_range) for k, s in _SHARE_INT_RANGE_PARAMS.items()},
+    **{k: (s, _parse_float_range) for k, s in _SHARE_FLOAT_RANGE_PARAMS.items()},
+}
+
+# Widget bounds for the URL-restorable params that feed a min/max-bounded widget
+# (slider / number_input). A hand-crafted link with an out-of-range value would
+# otherwise crash the widget on render — Streamlit raises when a Session-State
+# value falls outside the widget's range. Clamp on the way in. (Data-dependent
+# colour ranges aren't here — the sidebar's `_clamp_range` handles those against
+# the live data.)
+_URL_BOUNDED = {
+    "global_line_spacing": (1.0, 10.0),
+    "global_order_font_size": (6, 72),
+    "global_marker_size_range": (4, 40),
+}
+
+
+def _clamp_url_value(state_key: str, value):
+    """Clamp a deep-linked value to its widget bounds (scalars and 2-tuples)."""
+    bounds = _URL_BOUNDED.get(state_key)
+    if bounds is None:
+        return value
+    lo, hi = bounds
+    if isinstance(value, (tuple, list)) and len(value) == 2:
+        a, b = max(lo, min(value[0], hi)), max(lo, min(value[1], hi))
+        return (min(a, b), max(a, b))
+    return max(lo, min(value, hi))
+
+
 # data_choice → ?source= value, for the built-in sources a URL can fully rebuild.
 # Sources absent here (uploaded tables, stored datasets, public corpora) can't be
 # reconstructed from a link — the Share panel warns and shares the view settings
@@ -290,6 +368,9 @@ def _apply_url_preset() -> Optional[str]:
         except (ValueError, TypeError):
             st.warning(f"Ignored bad URL param ?{url_key}={raw!r}")
             continue
+        # Clamp bounded widgets so a hand-crafted out-of-range link can't crash
+        # the slider / number_input on render.
+        value = _clamp_url_value(state_key, value)
         st.session_state.setdefault(state_key, value)
 
     # Heatmap / fixation colorscale only render under the Advanced expander —
@@ -409,14 +490,22 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
         st.session_state["_url_trial_applied"] = True
 
 
-def _seed_column_mapping(mapping) -> None:
+def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
     """Seed the ``col_map_*`` session keys from a saved config's ``column_mapping``
     so a restored config pre-fills the wizard mapping + kept-field choices (and
-    the user skips re-mapping). Uses ``setdefault`` so a manual change after the
-    restore isn't clobbered. Stale values that don't match the current data are
+    the user skips re-mapping). Stale values that don't match the current data are
     tolerated by the mapping widgets (selectbox index fallback / multiselect
     cleanup). Old configs used ``*_paragraph`` keys (now ``*_text_id``) — these
-    are translated for backward compatibility."""
+    are translated for backward compatibility.
+
+    ``overwrite`` controls the write semantics. The plot-config restore runs
+    *before* any widget renders, so ``setdefault`` (overwrite=False) is correct —
+    it never clobbers a value a later widget will set. The wizard's "Restore a
+    saved setup" step, however, runs *after* the mapping widgets were created on a
+    previous render, so those keys already exist; ``setdefault`` would be a no-op
+    and the restore would silently do nothing. There, pass ``overwrite=True`` so
+    an explicit restore wins (the step reruns afterwards, and it runs before the
+    mapping widgets re-instantiate, so writing the keys is safe)."""
     if not isinstance(mapping, dict):
         return
     for raw_key, value in mapping.items():
@@ -429,7 +518,10 @@ def _seed_column_mapping(mapping) -> None:
         key = raw_key
         if key.endswith("_paragraph"):
             key = key[: -len("_paragraph")] + "_text_id"
-        st.session_state.setdefault(key, value)
+        if overwrite:
+            st.session_state[key] = value
+        else:
+            st.session_state.setdefault(key, value)
 
 
 def _restore_plot_config(
@@ -523,6 +615,15 @@ def _restore_plot_config(
     sac = coloring.get("saccade_color")
     if isinstance(sac, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sac):
         put("global_saccade_color", sac)
+    if "saccade_style" in coloring:
+        put_valid(
+            coloring["saccade_style"] in SACCADE_DASH_OPTIONS,
+            "global_saccade_style",
+            coloring["saccade_style"],
+            "saccade line style",
+        )
+    if "hollow_fixations" in coloring:
+        put("global_hollow_fixations", bool(coloring["hollow_fixations"]))
     # Range sliders only render when colour bars are on; store them anyway —
     # the widgets clamp to the current data via `controls._clamp_range`.
     for cfg_key, state_key, label in (
@@ -591,6 +692,9 @@ def _restore_plot_config(
             put("global_line_spacing", max(1.0, min(float(n), 10.0)))
     if isinstance(text.get("font_family"), str) and text["font_family"].strip():
         put("global_font_family", text["font_family"])
+    tc = text.get("text_color")
+    if isinstance(tc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", tc):
+        put("global_text_color", tc)
 
     highlighting = section("highlighting")
     if "critical_span_style" in highlighting:
@@ -610,6 +714,9 @@ def _restore_plot_config(
         put("global_highlight_column", highlighting["highlight_column"])
     if "highlight_out_of_text" in highlighting:
         put("global_highlight_out_of_text", bool(highlighting["highlight_out_of_text"]))
+    htc = highlighting.get("highlight_text_color")
+    if isinstance(htc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", htc):
+        put("global_highlight_text_color", htc)
     bg = highlighting.get("background_color")
     if isinstance(bg, str) and bg:
         # Map a saved colour back to a preset name, else fall to the custom slot.
@@ -812,10 +919,23 @@ def _build_share_query(data_choice: str) -> Tuple[str, list]:
     for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
         if state_key in st.session_state:
             params[url_key] = "1" if st.session_state[state_key] else "0"
-    for url_key, state_key in _SHARE_COLORSCALE_PARAMS.items():
+    # Strings / choices / colours / numbers — emit only when set.
+    for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
         value = st.session_state.get(state_key)
-        if value:
+        if value not in (None, ""):
             params[url_key] = str(value)
+    for url_key, state_key in _SHARE_FLOAT_PARAMS.items():
+        value = st.session_state.get(state_key)
+        if value is not None:
+            params[url_key] = str(value)
+    # Two-element ranges → "lo,hi".
+    for url_key, state_key in {
+        **_SHARE_INT_RANGE_PARAMS,
+        **_SHARE_FLOAT_RANGE_PARAMS,
+    }.items():
+        value = st.session_state.get(state_key)
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            params[url_key] = f"{value[0]},{value[1]}"
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 
@@ -907,16 +1027,31 @@ def _render_share_link_widget(query: str) -> None:
 
 def _render_share_panel(data_choice: str) -> None:
     """Fill the header's Share slot with a popover that builds a deep link to the
-    current view (data source + trial + visualization settings)."""
+    current view (data source + trial + visualization settings).
+
+    The link is built **lazily** — only when the user clicks *Refresh link* (and
+    once on first open so there's always something to copy). It is NOT rebuilt on
+    every rerun, so tweaking an unrelated control doesn't silently rewrite a link
+    the user is about to share; the link reflects the settings as of the last
+    refresh."""
     with st.popover("Share", icon=":material/share:", width="content"):
         st.markdown(
             "**Share this view** — a link that reopens Scanpath Studio on the "
             "current trial with your visualization settings."
         )
-        query, caveats = _build_share_query(data_choice)
+        refresh = st.button(
+            "🔄 Refresh link",
+            key="share_refresh",
+            type="primary",
+            help="Rebuild the link from the current trial + settings.",
+        )
+        if refresh or st.session_state.get("_share_query_frozen") is None:
+            st.session_state["_share_query_frozen"] = _build_share_query(data_choice)
+        query, caveats = st.session_state["_share_query_frozen"]
         for note in caveats:
             st.caption("⚠️ " + note)
         _render_share_link_widget(query)
+        st.caption("Reflects your settings as of the last refresh.")
 
 
 # -----------------------------------------------------------------------------
@@ -1015,7 +1150,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
 
 def _load_public_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Dataset picker + dispatch for the "Public datasets" source."""
-    chosen = st.sidebar.selectbox(
+    chosen = st.sidebar.radio(
         "Dataset",
         options=list(PUBLIC_DATASET_REGISTRY),
         key="public_dataset_choice",
@@ -1648,6 +1783,22 @@ def _finalize_wizard_dataset() -> None:
     st.session_state["_pending_source_choice"] = ds_name
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
+    # Flag the transition so main() paints a "loading" bridge over the wizard
+    # while the new dataset's first figure builds — otherwise the wizard lingers
+    # on screen (stale DOM) for the seconds the heavy first render takes.
+    st.session_state["_wizard_finalizing"] = True
+
+
+def _remove_dataset(name: str) -> None:
+    """Remove a previously added dataset (the ✕ button's ``on_click`` callback).
+
+    Pops it from the ``_datasets`` store and, if it was the selected source,
+    switches back to the bundled demo via ``_pending_source_choice`` (applied
+    before the radio re-instantiates, like the wizard finalize/cancel switch)."""
+    store = st.session_state.get("_datasets", {})
+    store.pop(name, None)
+    if st.session_state.get("data_source_choice") == name:
+        st.session_state["_pending_source_choice"] = DEMO_CHOICE
 
 
 def _enter_add_data_wizard() -> None:
@@ -1741,10 +1892,28 @@ def render_sidebar_data_source() -> str:
         key="data_source_choice",
         label_visibility="collapsed",
     )
+    # Let the user remove datasets they added earlier (✕ next to each). Selecting
+    # the removed one falls back to the demo (see _remove_dataset).
+    added = list(st.session_state.get("_datasets", {}).keys())
+    if added:
+        source.caption("Remove an added dataset")
+        for name in added:
+            name_col, x_col = source.columns([5, 1])
+            name_col.write(name)
+            x_col.button(
+                "✕",
+                key=f"remove_dataset_{name}",
+                on_click=_remove_dataset,
+                args=(name,),
+                help=f"Remove '{name}'",
+            )
     if not public_datasets_enabled():
-        source.button(
+        source.radio(
             "Public Datasets",
+            options=list(PUBLIC_DATASET_REGISTRY),
+            index=None,
             disabled=True,
+            key="public_datasets_preview",
             help="Curated public corpora — coming soon.",
         )
     # The state change runs in an on_click callback (before widgets instantiate)
@@ -1875,6 +2044,14 @@ def render_sidebar_canvas_controls(
         key="global_font_family",
         help="Font for the word labels. Use the exact font from your experiment "
         "(e.g. 'Courier New') or a CSS fallback stack.",
+    )
+    # Base reading-text colour (highlighted-text colour lives in Visualization
+    # controls). Read back into viz_settings by controls.sidebar_controls.
+    st.session_state.setdefault("global_text_color", WORD_LABEL_COLOR)
+    display.color_picker(
+        "Text color",
+        key="global_text_color",
+        help="Colour of the reading text drawn over the stimulus.",
     )
 
     # Plot background lives here (Experimental Setup) rather than under
@@ -2350,7 +2527,11 @@ def _wizard_restore_config(host) -> None:
         host.warning(f"Couldn't read config: {exc}")
         return
     if isinstance(config, dict):
-        _seed_column_mapping(config.get("column_mapping"))
+        # Overwrite: the wizard's mapping widgets were already created on a prior
+        # render, so their keys exist — setdefault would no-op and the restore
+        # would silently fail. This step runs before the widgets re-instantiate
+        # this pass, so writing the keys is safe, and it reruns afterwards.
+        _seed_column_mapping(config.get("column_mapping"), overwrite=True)
         # Remember the restored config's provenance so the caller can show which
         # dataset (and when) it was exported from, below the upload box (9.1).
         st.session_state["_wizard_restored_meta"] = {
@@ -2436,8 +2617,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "Name your dataset, upload your tables, then map a few columns — only "
             "the step you still need to fill stays open."
         )
-        # Step-by-step guide: auto-opens once per session, replayable via button.
+        # Step-by-step guide: a bottom-right card that auto-opens once per session
+        # and is replayable via the button. Arm it (auto/first-visit) then render
+        # the card early so it streams before the heavy upload/normalize work.
         maybe_show_wizard_guide()
+        render_spotlight_wizard_guide()
         render_wizard_guide_button(st)
         body = st.container()
     else:
@@ -2968,6 +3152,13 @@ def main() -> None:
     # Data source selection (sidebar)
     _sidebar_group("📂 Data")
     data_choice = render_sidebar_data_source()
+    # Just-finalized upload: paint a "loading" bridge into the main area now so it
+    # repaints over the wizard (instead of the wizard lingering until the slow
+    # first figure finishes). Cleared just before the tabs render below.
+    _finalizing_bridge = None
+    if st.session_state.pop("_wizard_finalizing", False):
+        _finalizing_bridge = st.empty()
+        _finalizing_bridge.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
     # Reserve the "Experimental Setup" slot under the 📂 Data group (TODO 5);
     # the canvas/monitor/font controls fill it later (they need the filtered
     # data), but it renders here — beside the data source it describes.
@@ -3204,6 +3395,11 @@ def main() -> None:
         if not words_all.empty
         else raw_gaze_df
     )
+
+    # Clear the post-finalize "loading" bridge now that the real content is about
+    # to render in its place.
+    if _finalizing_bridge is not None:
+        _finalizing_bridge.empty()
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its

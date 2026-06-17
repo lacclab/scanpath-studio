@@ -32,7 +32,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 _BIG_FILES = {
     # output subdir → source CSV.zip name
     "ia": "ia_Paragraph.csv.zip",

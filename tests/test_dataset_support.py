@@ -14,7 +14,6 @@ from scanpath_studio import data as data_module
 from scanpath_studio import datasets as datasets_module
 from scanpath_studio.plots import make_scanpath_figure
 
-
 # ---------------------------------------------------------------------------
 # Multi-file reading
 # ---------------------------------------------------------------------------

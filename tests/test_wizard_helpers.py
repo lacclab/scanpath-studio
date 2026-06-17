@@ -7,8 +7,12 @@ of through the heavy AppTest path.
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from scanpath_studio import app
+
+streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+AppTest = streamlit_testing.AppTest
 
 
 class TestDefaultTrialColumns:
@@ -97,3 +101,71 @@ class TestSafeDatasetName:
 
     def test_plain_name_passes_through_trimmed(self):
         assert app._safe_dataset_name("  My data  ") == "My data"
+
+
+def _seed_overwrite_app():
+    import streamlit as st
+
+    from scanpath_studio.app import _seed_column_mapping
+
+    # A widget already created these keys on a prior render of the wizard.
+    st.session_state["col_map_trial_unified"] = ["default_col"]
+    st.session_state["col_map_fix_x"] = "OLD_X"
+    # The wizard restore must WIN over the already-set widget keys.
+    _seed_column_mapping(
+        {
+            "col_map_trial_unified": ["restored_a", "restored_b"],
+            "col_map_fix_x": "NEW_X",
+        },
+        overwrite=True,
+    )
+
+
+def _seed_setdefault_app():
+    import streamlit as st
+
+    from scanpath_studio.app import _seed_column_mapping
+
+    st.session_state["col_map_fix_x"] = "OLD_X"
+    # The plot-config path runs before widgets render → must not clobber.
+    _seed_column_mapping({"col_map_fix_x": "NEW_X"})
+
+
+def _remove_dataset_app():
+    import streamlit as st
+
+    from scanpath_studio.app import _remove_dataset
+
+    st.session_state["_datasets"] = {"DS1": {"x": 1}, "DS2": {"y": 2}}
+    st.session_state["data_source_choice"] = "DS1"
+    _remove_dataset("DS1")
+
+
+class TestWizardRestoreSeeding:
+    def test_overwrite_replaces_existing_widget_keys(self):
+        # Regression: the wizard "Restore a saved setup" silently did nothing
+        # because setdefault no-ops on keys the mapping widgets already created.
+        at = AppTest.from_function(_seed_overwrite_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["col_map_trial_unified"] == [
+            "restored_a",
+            "restored_b",
+        ]
+        assert at.session_state["col_map_fix_x"] == "NEW_X"
+
+    def test_setdefault_does_not_clobber(self):
+        at = AppTest.from_function(_seed_setdefault_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["col_map_fix_x"] == "OLD_X"
+
+
+class TestRemoveDataset:
+    def test_removes_and_falls_back_to_demo_when_selected(self):
+        at = AppTest.from_function(_remove_dataset_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert "DS1" not in at.session_state["_datasets"]
+        assert "DS2" in at.session_state["_datasets"]
+        assert at.session_state["_pending_source_choice"] == app.DEMO_CHOICE

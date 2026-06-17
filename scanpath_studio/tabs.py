@@ -2149,7 +2149,9 @@ def render_aggregated_views_tab(
                     show_order=False,
                     show_saccades=False,
                     show_heatmap=True,
-                    color_by="duration_ms",
+                    # No fixations here (words-only heatmap), so color_by is never
+                    # read; point it at a real column anyway for defensiveness.
+                    color_by=measure_col,
                     heatmap_metric=heatmap_metric,
                     heatmap_style="Word boxes",
                     marker_size_range=(8, 24),

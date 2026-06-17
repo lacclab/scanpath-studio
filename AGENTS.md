@@ -22,7 +22,8 @@ docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
 ```text
 scanpath_studio/
 ├─ app.py            entry point: page config, data load, trial filters, dispatch to tabs
-├─ tabs.py           tab implementations (Interactive, Reading Measures, Animation, Raw Data, Statistics)
+├─ tabs.py           tab implementations (Scanpath Visualization, Corpus Analysis [Generations + Aggregated Views subtabs], Data Inspection, Bulk Export)
+├─ aggregation.py    pure corpus-level aggregation helpers for the Aggregated Views subtab (trial-index/fixation-index trends, per-text word aggregates, grouped metric distributions)
 ├─ controls.py       sidebar viz controls + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions) + geometry helpers (line clustering, in-text test)

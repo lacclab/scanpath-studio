@@ -9,6 +9,13 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from scanpath_studio.aggregation import (
+    aggregate_word_measures_by_text,
+    grouped_metric_values,
+    metric_by_fixation_index,
+    metric_by_trial_index,
+    text_read_counts,
+)
 from scanpath_studio.animation_export import (
     AnimationExportError,
     export_animation,
@@ -22,7 +29,12 @@ from scanpath_studio.constants import (
     SACCADE_DASH_OPTIONS,
     WORD_LABEL_COLOR,
 )
-from scanpath_studio.data import compute_word_metrics, frame_fingerprint
+from scanpath_studio.data import (
+    compute_word_metrics,
+    derive_trial_index,
+    frame_fingerprint,
+    has_explicit_trial_index,
+)
 from scanpath_studio.export import (
     ExportProgress,
     bulk_export,
@@ -34,10 +46,12 @@ from scanpath_studio.model_scanpaths import (
 )
 from scanpath_studio.plots import (
     animation_playback_ms,
+    make_aggregated_histogram,
     make_comparison_figure,
     make_metric_convergence_figure,
     make_scanpath_animation,
     make_scanpath_figure,
+    make_trend_figure,
 )
 from scanpath_studio.similarity import (
     METRICS,
@@ -2067,6 +2081,286 @@ def _render_comparison_figure(
     )
     _render_true_scale_chart(fig_compare, key="compare")
     return fig_compare
+
+
+# -----------------------------------------------------------------------------
+# Corpus Analysis Tab  (parent of Generations + Aggregated Views)
+# -----------------------------------------------------------------------------
+
+# Aggregated-views metric registry: label → (frame, column, supports_fixation_trend).
+# ``frame`` is "fixations" (per-fixation) or "words" (per-word reading measure).
+_AGG_METRICS = {
+    "Fixation duration (ms)": ("fixations", "duration_ms", True),
+    "Saccade amplitude (px)": ("fixations", "saccade_amplitude", True),
+    "First fixation duration — FFD (ms)": ("words", "first_fixation_ms", False),
+    "First-pass gaze — FPRT (ms)": ("words", "first_pass_gaze_duration_ms", False),
+    "Regression-path — RPD (ms)": ("words", "regression_path_duration_ms", False),
+    "Total fixation duration — TFD (ms)": (
+        "words",
+        "total_fixation_duration_ms",
+        False,
+    ),
+    "Fixations per word": ("words", "n_fixations", False),
+}
+
+
+def _text_column(frame: pd.DataFrame) -> Optional[str]:
+    """Canonical text/passage id column, if any."""
+    for col in ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id"):
+        if col in frame.columns:
+            return col
+    return None
+
+
+@st.cache_data(show_spinner=False)
+def _agg_with_trial_index(_frame: pd.DataFrame, metric: str, fkey) -> pd.DataFrame:
+    """Per-trial-index trend, cached on a frame fingerprint (``fkey``)."""
+    f = _frame.copy()
+    f["trial_index"] = derive_trial_index(f)
+    return metric_by_trial_index(f, metric)
+
+
+@st.cache_data(show_spinner=False)
+def _agg_by_fixation_index(_fixations: pd.DataFrame, metric: str, fkey) -> pd.DataFrame:
+    return metric_by_fixation_index(_fixations, metric)
+
+
+@st.cache_data(show_spinner=False)
+def _agg_word_heatmap(
+    _words: pd.DataFrame, text_col: str, text_id, fkey
+) -> pd.DataFrame:
+    return aggregate_word_measures_by_text(_words, text_col, text_id)
+
+
+def render_corpus_analysis_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    combos: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    viz_settings: dict,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    scale_text_to_boxes: bool = True,
+) -> None:
+    """Corpus Analysis tab — corpus-level views beyond a single trial.
+
+    Two subtabs: **Generations (WIP)** (the real-vs-model scanpath comparison)
+    and **Aggregated Views** (trial-index / fixation-index trends, per-text
+    heatmaps, and grouped metric distributions across many trials).
+    """
+    gen_tab, agg_tab = st.tabs(["Generations (WIP)", "Aggregated Views"])
+    with gen_tab:
+        render_multiple_comparison_tab(
+            words_filtered,
+            fixations_filtered,
+            combos,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            viz_settings=viz_settings,
+            line_spacing=line_spacing,
+            scale_text_to_boxes=scale_text_to_boxes,
+        )
+    with agg_tab:
+        render_aggregated_views_tab(
+            words_filtered,
+            fixations_filtered,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            line_spacing=line_spacing,
+            scale_text_to_boxes=scale_text_to_boxes,
+        )
+
+
+def render_aggregated_views_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    scale_text_to_boxes: bool = True,
+) -> None:
+    """Aggregated views over the (filtered) corpus: trends, per-text heatmaps,
+    and grouped metric distributions."""
+    st.caption(
+        "Corpus-level summaries across the **filtered** trials — narrow the "
+        "sidebar *Filter trials* panel to scope these. Trends average a metric "
+        "over the session's trial order and the within-trial fixation index; the "
+        "heatmap pools a text's readers; the histogram pools a metric by group."
+    )
+    if fixations_filtered.empty and words_filtered.empty:
+        st.info("No data after filtering.")
+        return
+
+    # Metric picker — only metrics whose column is actually present.
+    def _metric_available(spec) -> bool:
+        frame_name, col, _ = spec
+        frame = fixations_filtered if frame_name == "fixations" else words_filtered
+        return col in frame.columns
+
+    metric_options = [m for m, spec in _AGG_METRICS.items() if _metric_available(spec)]
+    if not metric_options:
+        st.info("No aggregatable metrics found in this dataset.")
+        return
+    metric_label = st.selectbox(
+        "Metric",
+        options=metric_options,
+        key="agg_metric",
+        help="Eye-movement measure to summarise across trials.",
+    )
+    frame_name, metric_col, supports_fix_trend = _AGG_METRICS[metric_label]
+    metric_frame = fixations_filtered if frame_name == "fixations" else words_filtered
+
+    # --- Trial-index + within-trial fixation-index trends --------------------
+    st.markdown("#### Trends")
+    if not has_explicit_trial_index(metric_frame):
+        st.caption(
+            "ℹ️ No `trial_index` column in the data — trial order is derived from "
+            "each participant's fixation timestamps."
+        )
+    trial_df = _agg_with_trial_index(
+        metric_frame, metric_col, frame_fingerprint(metric_frame)
+    )
+    cols = st.columns(2) if supports_fix_trend else [st.container()]
+    with cols[0]:
+        fig_trial = make_trend_figure(
+            trial_df,
+            x_col="trial_index",
+            y_label=metric_label,
+            title=f"Average {metric_label} by trial index",
+            canvas_width=int(canvas_width * 0.46)
+            if supports_fix_trend
+            else canvas_width,
+            base_font_size=base_font_size,
+            font_family=font_family,
+        )
+        st.plotly_chart(fig_trial, use_container_width=True)
+    if supports_fix_trend:
+        fix_df = _agg_by_fixation_index(
+            fixations_filtered, metric_col, frame_fingerprint(fixations_filtered)
+        )
+        with cols[1]:
+            fig_fix = make_trend_figure(
+                fix_df,
+                x_col="fixation_index",
+                y_label=metric_label,
+                title=f"Average {metric_label} by fixation index",
+                canvas_width=int(canvas_width * 0.46),
+                base_font_size=base_font_size,
+                font_family=font_family,
+            )
+            st.plotly_chart(fig_fix, use_container_width=True)
+
+    # --- Per-text aggregated heatmap -----------------------------------------
+    text_col = _text_column(words_filtered)
+    if text_col is not None and "word_id" in words_filtered.columns:
+        st.markdown("#### Per-text heatmap")
+        counts = text_read_counts(words_filtered, text_col)
+        if not counts.empty:
+            labels = {
+                f"{row.text}  ({row.n_participants} readers)": row.text
+                for row in counts.itertuples()
+            }
+            chosen = st.selectbox(
+                "Text",
+                options=list(labels),
+                key="agg_heatmap_text",
+                help="Aggregate a word-level measure over everyone who read this text.",
+            )
+            weight = st.radio(
+                "Heatmap weight",
+                options=["Total fixation duration", "Fixation count"],
+                horizontal=True,
+                key="agg_heatmap_weight",
+            )
+            agg_words = _agg_word_heatmap(
+                words_filtered,
+                text_col,
+                labels[chosen],
+                frame_fingerprint(words_filtered),
+            )
+            heatmap_metric = (
+                "duration_ms" if weight == "Total fixation duration" else None
+            )
+            measure_col = (
+                "total_fixation_duration_ms"
+                if heatmap_metric == "duration_ms"
+                else "n_fixations"
+            )
+            if not agg_words.empty and measure_col in agg_words.columns:
+                fig_heat = make_scanpath_figure(
+                    agg_words,
+                    pd.DataFrame(),
+                    canvas_width=int(canvas_width),
+                    canvas_height=int(canvas_height),
+                    base_font_size=int(base_font_size),
+                    font_family=font_family,
+                    x_field="x",
+                    y_field="y",
+                    show_words=True,
+                    show_word_labels=True,
+                    show_fixations=False,
+                    show_order=False,
+                    show_saccades=False,
+                    show_heatmap=True,
+                    # No fixations here (words-only heatmap), so color_by is never
+                    # read; point it at a real column anyway for defensiveness.
+                    color_by=measure_col,
+                    heatmap_metric=heatmap_metric,
+                    heatmap_style="Word boxes",
+                    marker_size_range=(8, 24),
+                    order_font_size=10,
+                    order_font_color="#111111",
+                    show_colorbars=True,
+                    fixation_color_range=None,
+                    heatmap_range=None,
+                    line_spacing=line_spacing,
+                    scale_text_to_boxes=scale_text_to_boxes,
+                )
+                _render_true_scale_chart(fig_heat, key="agg_heatmap")
+            else:
+                st.info(
+                    "This text has no aggregatable word-level measures "
+                    "(needs total fixation duration / fixation counts per word)."
+                )
+
+    # --- Grouped metric distribution -----------------------------------------
+    st.markdown("#### Distribution")
+    group_specs = {"All data": None}
+    if text_col is not None:
+        group_specs["By text"] = text_col
+    if "participant_id" in metric_frame.columns:
+        group_specs["By participant"] = "participant_id"
+    for field in ("question_preview", "repeated_reading_trial", "difficulty_level"):
+        if field in metric_frame.columns:
+            group_specs[f"By {field}"] = field
+    grouping = st.selectbox(
+        "Group by",
+        options=list(group_specs),
+        key="agg_hist_group",
+        help="Split the distribution into one histogram per group.",
+    )
+    group_col = group_specs[grouping]
+    groups, dropped = grouped_metric_values(metric_frame, metric_col, group_col)
+    if dropped:
+        st.caption(f"Showing the 12 largest groups; {dropped} smaller group(s) hidden.")
+    fig_hist = make_aggregated_histogram(
+        groups,
+        metric_label=metric_label,
+        canvas_width=canvas_width,
+        base_font_size=base_font_size,
+        font_family=font_family,
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
 
 
 # -----------------------------------------------------------------------------

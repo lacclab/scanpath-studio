@@ -2845,3 +2845,139 @@ def make_metric_convergence_figure(
             text="No data", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper"
         )
     return fig
+
+
+def make_trend_figure(
+    df: pd.DataFrame,
+    *,
+    x_col: str,
+    y_label: str,
+    title: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 340,
+) -> go.Figure:
+    """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
+
+    ``df`` has columns ``[x_col, "value", "sem"]`` (see
+    ``aggregation.metric_by_trial_index`` / ``metric_by_fixation_index``). Used
+    by the Aggregated Views subtab for the trial-index and within-trial
+    fixation-index trends.
+    """
+    fig = go.Figure()
+    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    if df is None or df.empty:
+        fig.update_layout(
+            template="plotly_white",
+            font=font_settings,
+            title=f"{title} (no data)",
+            height=height,
+        )
+        return fig
+    xs = df[x_col].to_numpy()
+    ys = df["value"].to_numpy()
+    sem = df["sem"].to_numpy() if "sem" in df.columns else np.zeros(len(xs))
+    # ±SEM band (drawn first so the line sits on top).
+    fig.add_trace(
+        go.Scatter(
+            x=np.concatenate([xs, xs[::-1]]),
+            y=np.concatenate([ys + sem, (ys - sem)[::-1]]),
+            fill="toself",
+            fillcolor="rgba(31,119,180,0.15)",
+            line=dict(width=0),
+            hoverinfo="skip",
+            showlegend=False,
+            name="±SEM",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=xs,
+            y=ys,
+            mode="lines+markers",
+            line=dict(color=COMPARISON_PALETTE[0], width=2),
+            marker=dict(size=5, color=COMPARISON_PALETTE[0]),
+            name=y_label,
+            hovertemplate=f"{x_col}: %{{x}}<br>{y_label}: %{{y:.1f}}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=height,
+        width=canvas_width,
+        autosize=False,
+        margin=dict(l=60, r=10, t=40, b=45),
+        template="plotly_white",
+        font=font_settings,
+        xaxis=dict(title=x_col.replace("_", " ").title()),
+        yaxis=dict(title=y_label),
+        title=title,
+        showlegend=False,
+    )
+    return fig
+
+
+def make_aggregated_histogram(
+    groups: dict,
+    *,
+    metric_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    bins: int = 30,
+    height: int = 360,
+) -> go.Figure:
+    """Overlaid binned histograms — one series per group.
+
+    ``groups`` maps a label → a 1-D array of metric values. All series share one
+    set of bin edges so they line up; binning is server-side (counts only) so a
+    corpus of millions of fixations doesn't serialize every raw value. Used by
+    the Aggregated Views subtab's distribution plot.
+    """
+    fig = go.Figure()
+    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    arrays = [(str(name), np.asarray(arr)) for name, arr in groups.items() if len(arr)]
+    if not arrays:
+        fig.update_layout(
+            template="plotly_white",
+            font=font_settings,
+            title=f"{metric_label} distribution (no data)",
+            height=height,
+        )
+        return fig
+    all_vals = np.concatenate([arr for _, arr in arrays])
+    lo, hi = float(all_vals.min()), float(all_vals.max())
+    if hi <= lo:
+        hi = lo + 1.0
+    edges = np.linspace(lo, hi, bins + 1)
+    centers = (edges[:-1] + edges[1:]) / 2.0
+    bar_width = float(edges[1] - edges[0])
+    single = len(arrays) == 1
+    for i, (name, arr) in enumerate(arrays):
+        counts, _ = np.histogram(arr, bins=edges)
+        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
+        fig.add_trace(
+            go.Bar(
+                x=centers,
+                y=counts,
+                width=bar_width,
+                name=name,
+                opacity=0.95 if single else 0.55,
+                marker=dict(color=color, line=dict(color="white", width=0.4)),
+            )
+        )
+    fig.update_layout(
+        height=height,
+        width=canvas_width,
+        autosize=False,
+        margin=dict(l=50, r=10, t=40, b=45),
+        template="plotly_white",
+        font=font_settings,
+        xaxis=dict(title=metric_label),
+        yaxis=dict(title="Count"),
+        barmode="overlay",
+        title=f"{metric_label} distribution",
+        showlegend=not single,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig

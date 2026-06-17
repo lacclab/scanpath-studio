@@ -118,8 +118,8 @@ from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _collect_column_mapping,
     render_bulk_export_tab,
+    render_corpus_analysis_tab,
     render_data_inspection_tab,
-    render_multiple_comparison_tab,
     render_single_trial_tab,
 )
 from scanpath_studio.tour import (
@@ -1404,7 +1404,7 @@ def prepare_data(
 # drift apart.
 _MAIN_TAB_LABELS = [
     "Scanpath Visualization",
-    "Generations (WIP)",
+    "Corpus Analysis",
     "Data Inspection",
     "Bulk Export",
 ]
@@ -3425,7 +3425,7 @@ def main() -> None:
         )
 
     with tab_multi:
-        render_multiple_comparison_tab(
+        render_corpus_analysis_tab(
             words_filtered,
             fixations_filtered,
             combos,

@@ -576,6 +576,91 @@ _DISTRACTOR_SPAN_BG = "#E5E7EB"  # light grey — distractor-span words
 # light in dark mode and the highlighted text is unreadable (light-on-light).
 _HIGHLIGHT_TEXT_COLOR = "#212529"
 
+# Friendly labels + fixed span colours for the known OneStop stimulus/question
+# columns, so the OneStop experience is unchanged while the panel still works on
+# arbitrary datasets (unknown columns get a humanized name + a palette colour).
+_STIMULUS_FIELD_LABELS = {
+    "question": "Question",
+    "question_preview": "Question preview",
+    "selected_answer": "Selected answer",
+    "is_correct": "Correct",
+    "is_in_aspan": "Answer (critical) span",
+    "is_in_dspan": "Distractor span",
+}
+_KNOWN_SPAN_BG = {"is_in_aspan": _CRITICAL_SPAN_BG, "is_in_dspan": _DISTRACTOR_SPAN_BG}
+# Light backgrounds for any further detected span columns (cycled).
+_SPAN_BG_PALETTE = ["#FEF3C7", "#DBEAFE", "#DCFCE7", "#FAE8FF", "#FFE4E6"]
+# Substrings that mark a per-word boolean column as a highlightable span, and a
+# trial-level column as question/answer content. Dataset-agnostic by design.
+_SPAN_NAME_HINTS = ("span", "highlight", "critical", "target", "aoi_of_interest")
+_QA_NAME_HINTS = ("question", "answer", "correct", "response", "prompt")
+
+
+def _humanize_field(col: str) -> str:
+    """Friendly display label for a stimulus/question column."""
+    return _STIMULUS_FIELD_LABELS.get(col, col.replace("_", " ").strip().capitalize())
+
+
+def _is_boolish(series: pd.Series) -> bool:
+    """True when a column holds only boolean-like values (per-word span flags)."""
+    if pd.api.types.is_bool_dtype(series):
+        return True
+    vals = set(series.dropna().unique())
+    return bool(vals) and vals <= {
+        True,
+        False,
+        0,
+        1,
+        0.0,
+        1.0,
+        "True",
+        "False",
+        "true",
+        "false",
+        "0",
+        "1",
+    }
+
+
+def _detect_span_columns(trial_words: pd.DataFrame) -> list[str]:
+    """Per-word boolean columns that mark a highlightable span (generic).
+
+    Known OneStop spans (``is_in_aspan``/``is_in_dspan``) come first so they keep
+    their fixed colours; any further span-like boolean columns follow.
+    """
+    detected = [
+        c
+        for c in trial_words.columns
+        if any(h in c.lower() for h in _SPAN_NAME_HINTS)
+        and _is_boolish(trial_words[c])
+        and bool(trial_words[c].fillna(False).astype(bool).any())
+    ]
+    known = [c for c in ("is_in_aspan", "is_in_dspan") if c in detected]
+    rest = [c for c in detected if c not in known]
+    return known + rest
+
+
+def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
+    """Trial-level (string/scalar) columns holding question / answer content."""
+    out = []
+    for c in trial_words.columns:
+        lc = c.lower()
+        if any(h in lc for h in _QA_NAME_HINTS) and not _is_boolish_span(c):
+            out.append(c)
+    return out
+
+
+def _is_boolish_span(col: str) -> bool:
+    """A name that reads as a span flag rather than a Q&A text field."""
+    return any(h in col.lower() for h in _SPAN_NAME_HINTS)
+
+
+def _span_bg_for(col: str, idx: int) -> str:
+    """Background colour for a span column (fixed for OneStop, palette otherwise)."""
+    if col in _KNOWN_SPAN_BG:
+        return _KNOWN_SPAN_BG[col]
+    return _SPAN_BG_PALETTE[idx % len(_SPAN_BG_PALETTE)]
+
 
 def _ordered_words(trial_words: pd.DataFrame) -> pd.DataFrame:
     """Return trial_words sorted into reading order."""
@@ -585,27 +670,37 @@ def _ordered_words(trial_words: pd.DataFrame) -> pd.DataFrame:
     return trial_words
 
 
-def _render_paragraph_with_spans(trial_words: pd.DataFrame) -> None:
-    """Render paragraph text with critical-span (green) and distractor (orange)
-    word backgrounds. Falls back to plain text when span columns are absent."""
+def _render_paragraph_with_spans(
+    trial_words: pd.DataFrame, span_bg: Optional[dict] = None
+) -> None:
+    """Render the stimulus text with each detected span column highlighted.
+
+    ``span_bg`` maps a per-word boolean span column → its highlight background
+    (e.g. ``is_in_aspan`` → pink). When omitted, span columns are auto-detected.
+    Falls back to plain text when no span columns are present, so it works on any
+    dataset, not just OneStop."""
     if "text" not in trial_words.columns or trial_words.empty:
         return
     ordered = _ordered_words(trial_words)
-    has_critical = "is_in_aspan" in ordered.columns
-    has_distractor = "is_in_dspan" in ordered.columns
-    if not (has_critical or has_distractor):
+    if span_bg is None:
+        cols = _detect_span_columns(ordered)
+        span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(cols)}
+    active = [c for c in span_bg if c in ordered.columns]
+    if not active:
         st.write(" ".join(ordered["text"].astype(str).tolist()))
         return
     import html as _html
 
+    texts = ordered["text"].astype(str).tolist()
+    masks = {c: ordered[c].fillna(False).astype(bool).tolist() for c in active}
     parts: list[str] = []
-    for row in ordered.itertuples():
-        word = _html.escape(str(getattr(row, "text", "")))
+    for i, raw_word in enumerate(texts):
+        word = _html.escape(raw_word)
         bg = ""
-        if has_critical and bool(getattr(row, "is_in_aspan", False)):
-            bg = _CRITICAL_SPAN_BG
-        elif has_distractor and bool(getattr(row, "is_in_dspan", False)):
-            bg = _DISTRACTOR_SPAN_BG
+        for col in active:  # first matching span wins (known spans listed first)
+            if masks[col][i]:
+                bg = span_bg[col]
+                break
         if bg:
             parts.append(
                 f'<span style="background-color:{bg};color:{_HIGHLIGHT_TEXT_COLOR};'
@@ -725,50 +820,69 @@ def _render_paragraph_panel(
     trial_fixations: Optional[pd.DataFrame] = None,
     expanded: bool = True,
 ) -> None:
-    """Render the paragraph + comprehension-question panel.
+    """Render the stimulus-text + questions panel, generically.
 
-    Shows the paragraph with highlighted spans, the reading regime
-    (Hunting/Gathering), the question, the participant's selected answer and
-    correctness, and the answer (critical) / distractor span texts — each
-    annotated with whether it was fixated when ``trial_fixations`` is given.
-    Skips silently when no word text is available."""
+    Detects the dataset's text-span columns (any boolean per-word column whose
+    name reads as a span/highlight) and question/answer columns (any trial-level
+    column whose name reads as question/answer/correct), so it works on any
+    corpus — not just OneStop. Known OneStop columns keep their friendly labels
+    and span colours, so the OneStop view is unchanged. Each span is annotated
+    with whether it was fixated when ``trial_fixations`` is given. Skips silently
+    when no word text is available."""
     if "text" not in trial_words.columns or trial_words.empty:
         return
-    with st.expander("Text & question", expanded=expanded):
-        _render_paragraph_with_spans(trial_words)
+    span_cols = _detect_span_columns(trial_words)
+    span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
+    qa_cols = _detect_question_columns(trial_words)
 
-        question_val = _first_str(trial_words, "question")
-        if question_val:
-            st.markdown(f"**Question:** {question_val}")
+    with st.expander("Stimulus & questions", expanded=expanded):
+        _render_paragraph_with_spans(trial_words, span_bg)
 
-        # Participant's answer + correctness. The data carries the chosen option
-        # (e.g. 'A'/'B') and a correctness flag, but not the option texts.
-        answer_val = _first_str(trial_words, "selected_answer")
-        correct = _first_bool(trial_words, "is_correct")
-        if answer_val or correct is not None:
-            bits = []
-            if answer_val:
-                bits.append(f"selected **{answer_val}**")
-            if correct is not None:
-                bits.append("✓ correct" if correct else "✗ incorrect")
-            st.markdown("**Answer:** " + " · ".join(bits))
+        # Question / answer fields, generically. Keep OneStop's combined
+        # "selected X · ✓ correct" answer line when both columns are present.
+        question_cols = [c for c in qa_cols if "question" in c.lower()]
+        for col in question_cols:
+            val = _first_str(trial_words, col)
+            if val:
+                st.markdown(f"**{_humanize_field(col)}:** {val}")
 
-        critical_text = _span_text(trial_words, "is_in_aspan")
-        if critical_text:
-            note = _span_fixated_note(trial_words, trial_fixations, "is_in_aspan")
+        rendered = set(question_cols)
+        if "selected_answer" in qa_cols and "is_correct" in qa_cols:
+            answer_val = _first_str(trial_words, "selected_answer")
+            correct = _first_bool(trial_words, "is_correct")
+            if answer_val or correct is not None:
+                bits = []
+                if answer_val:
+                    bits.append(f"selected **{answer_val}**")
+                if correct is not None:
+                    bits.append("✓ correct" if correct else "✗ incorrect")
+                st.markdown("**Answer:** " + " · ".join(bits))
+            rendered.update({"selected_answer", "is_correct"})
+
+        # Any remaining detected answer/correct columns, rendered generically.
+        for col in qa_cols:
+            if col in rendered:
+                continue
+            bval = _first_bool(trial_words, col) if "correct" in col.lower() else None
+            if bval is not None:
+                st.markdown(
+                    f"**{_humanize_field(col)}:** " + ("✓ yes" if bval else "✗ no")
+                )
+            else:
+                val = _first_str(trial_words, col)
+                if val:
+                    st.markdown(f"**{_humanize_field(col)}:** {val}")
+
+        # Each highlighted span's text + (optional) fixation note.
+        for col in span_cols:
+            span_str = _span_text(trial_words, col)
+            if not span_str:
+                continue
+            note = _span_fixated_note(trial_words, trial_fixations, col)
             st.markdown(
-                f'<span style="background-color:{_CRITICAL_SPAN_BG};'
+                f'<span style="background-color:{span_bg[col]};'
                 f'color:{_HIGHLIGHT_TEXT_COLOR};padding:0 4px;border-radius:2px;">'
-                f"<b>Answer (critical) span:</b></span> {critical_text}{note}",
-                unsafe_allow_html=True,
-            )
-        distractor_text = _span_text(trial_words, "is_in_dspan")
-        if distractor_text:
-            note = _span_fixated_note(trial_words, trial_fixations, "is_in_dspan")
-            st.markdown(
-                f'<span style="background-color:{_DISTRACTOR_SPAN_BG};'
-                f'color:{_HIGHLIGHT_TEXT_COLOR};padding:0 4px;border-radius:2px;">'
-                f"<b>Distractor span:</b></span> {distractor_text}{note}",
+                f"<b>{_humanize_field(col)}:</b></span> {span_str}{note}",
                 unsafe_allow_html=True,
             )
 

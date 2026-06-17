@@ -407,10 +407,10 @@ class TestUnmappedRawDataView:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        # The dataset picker renders the registry entries (PoTeC today).
-        pickers = [s for s in at.selectbox if s.label == "Dataset"]
-        assert pickers, "expected a Dataset selectbox under Public datasets"
-        assert pickers[0].options == list(app.PUBLIC_DATASET_REGISTRY)
+        # The dataset picker renders the registry entries (PoTeC today) as a radio.
+        pickers = [r for r in at.radio if r.label == "Dataset"]
+        assert pickers, "expected a Dataset radio under Public datasets"
+        assert list(pickers[0].options) == list(app.PUBLIC_DATASET_REGISTRY)
 
 
 class TestGroupedUploadMapping:

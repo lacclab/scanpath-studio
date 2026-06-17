@@ -409,14 +409,22 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
         st.session_state["_url_trial_applied"] = True
 
 
-def _seed_column_mapping(mapping) -> None:
+def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
     """Seed the ``col_map_*`` session keys from a saved config's ``column_mapping``
     so a restored config pre-fills the wizard mapping + kept-field choices (and
-    the user skips re-mapping). Uses ``setdefault`` so a manual change after the
-    restore isn't clobbered. Stale values that don't match the current data are
+    the user skips re-mapping). Stale values that don't match the current data are
     tolerated by the mapping widgets (selectbox index fallback / multiselect
     cleanup). Old configs used ``*_paragraph`` keys (now ``*_text_id``) — these
-    are translated for backward compatibility."""
+    are translated for backward compatibility.
+
+    ``overwrite`` controls the write semantics. The plot-config restore runs
+    *before* any widget renders, so ``setdefault`` (overwrite=False) is correct —
+    it never clobbers a value a later widget will set. The wizard's "Restore a
+    saved setup" step, however, runs *after* the mapping widgets were created on a
+    previous render, so those keys already exist; ``setdefault`` would be a no-op
+    and the restore would silently do nothing. There, pass ``overwrite=True`` so
+    an explicit restore wins (the step reruns afterwards, and it runs before the
+    mapping widgets re-instantiate, so writing the keys is safe)."""
     if not isinstance(mapping, dict):
         return
     for raw_key, value in mapping.items():
@@ -429,7 +437,10 @@ def _seed_column_mapping(mapping) -> None:
         key = raw_key
         if key.endswith("_paragraph"):
             key = key[: -len("_paragraph")] + "_text_id"
-        st.session_state.setdefault(key, value)
+        if overwrite:
+            st.session_state[key] = value
+        else:
+            st.session_state.setdefault(key, value)
 
 
 def _restore_plot_config(
@@ -1015,7 +1026,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
 
 def _load_public_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Dataset picker + dispatch for the "Public datasets" source."""
-    chosen = st.sidebar.selectbox(
+    chosen = st.sidebar.radio(
         "Dataset",
         options=list(PUBLIC_DATASET_REGISTRY),
         key="public_dataset_choice",
@@ -1648,6 +1659,22 @@ def _finalize_wizard_dataset() -> None:
     st.session_state["_pending_source_choice"] = ds_name
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
+    # Flag the transition so main() paints a "loading" bridge over the wizard
+    # while the new dataset's first figure builds — otherwise the wizard lingers
+    # on screen (stale DOM) for the seconds the heavy first render takes.
+    st.session_state["_wizard_finalizing"] = True
+
+
+def _remove_dataset(name: str) -> None:
+    """Remove a previously added dataset (the ✕ button's ``on_click`` callback).
+
+    Pops it from the ``_datasets`` store and, if it was the selected source,
+    switches back to the bundled demo via ``_pending_source_choice`` (applied
+    before the radio re-instantiates, like the wizard finalize/cancel switch)."""
+    store = st.session_state.get("_datasets", {})
+    store.pop(name, None)
+    if st.session_state.get("data_source_choice") == name:
+        st.session_state["_pending_source_choice"] = DEMO_CHOICE
 
 
 def _enter_add_data_wizard() -> None:
@@ -1741,10 +1768,28 @@ def render_sidebar_data_source() -> str:
         key="data_source_choice",
         label_visibility="collapsed",
     )
+    # Let the user remove datasets they added earlier (✕ next to each). Selecting
+    # the removed one falls back to the demo (see _remove_dataset).
+    added = list(st.session_state.get("_datasets", {}).keys())
+    if added:
+        source.caption("Remove an added dataset")
+        for name in added:
+            name_col, x_col = source.columns([5, 1])
+            name_col.write(name)
+            x_col.button(
+                "✕",
+                key=f"remove_dataset_{name}",
+                on_click=_remove_dataset,
+                args=(name,),
+                help=f"Remove '{name}'",
+            )
     if not public_datasets_enabled():
-        source.button(
+        source.radio(
             "Public Datasets",
+            options=list(PUBLIC_DATASET_REGISTRY),
+            index=None,
             disabled=True,
+            key="public_datasets_preview",
             help="Curated public corpora — coming soon.",
         )
     # The state change runs in an on_click callback (before widgets instantiate)
@@ -2350,7 +2395,11 @@ def _wizard_restore_config(host) -> None:
         host.warning(f"Couldn't read config: {exc}")
         return
     if isinstance(config, dict):
-        _seed_column_mapping(config.get("column_mapping"))
+        # Overwrite: the wizard's mapping widgets were already created on a prior
+        # render, so their keys exist — setdefault would no-op and the restore
+        # would silently fail. This step runs before the widgets re-instantiate
+        # this pass, so writing the keys is safe, and it reruns afterwards.
+        _seed_column_mapping(config.get("column_mapping"), overwrite=True)
         # Remember the restored config's provenance so the caller can show which
         # dataset (and when) it was exported from, below the upload box (9.1).
         st.session_state["_wizard_restored_meta"] = {
@@ -2968,6 +3017,13 @@ def main() -> None:
     # Data source selection (sidebar)
     _sidebar_group("📂 Data")
     data_choice = render_sidebar_data_source()
+    # Just-finalized upload: paint a "loading" bridge into the main area now so it
+    # repaints over the wizard (instead of the wizard lingering until the slow
+    # first figure finishes). Cleared just before the tabs render below.
+    _finalizing_bridge = None
+    if st.session_state.pop("_wizard_finalizing", False):
+        _finalizing_bridge = st.empty()
+        _finalizing_bridge.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
     # Reserve the "Experimental Setup" slot under the 📂 Data group (TODO 5);
     # the canvas/monitor/font controls fill it later (they need the filtered
     # data), but it renders here — beside the data source it describes.
@@ -3204,6 +3260,11 @@ def main() -> None:
         if not words_all.empty
         else raw_gaze_df
     )
+
+    # Clear the post-finalize "loading" bridge now that the real content is about
+    # to render in its place.
+    if _finalizing_bridge is not None:
+        _finalizing_bridge.empty()
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its

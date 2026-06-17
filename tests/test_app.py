@@ -235,6 +235,9 @@ class _FakeSt:
         self.session_state = {}
         self.query_params = {}
 
+    def warning(self, *args, **kwargs):  # noqa: D102 - no-op stand-in
+        pass
+
 
 @pytest.fixture
 def fake_st(monkeypatch):
@@ -338,6 +341,31 @@ class TestBuildShareQuery:
         assert ss["global_order_font_size"] == 18
         assert ss["global_line_spacing"] == 2.5
         assert ss["global_scale_text_to_boxes"] is False
+
+    def test_out_of_bounds_url_values_are_clamped(self, fake_st):
+        # A hand-crafted link with out-of-range values must NOT reach the widget
+        # unclamped (Streamlit would raise on render). Clamp to widget bounds.
+        fake_st.query_params = {
+            "marker_size_range": "1,99",  # widget bounds [4, 40]
+            "line_spacing": "999",  # bounds [1.0, 10.0]
+            "order_font_size": "1000",  # bounds [6, 72]
+        }
+        _apply_url_preset()
+        ss = fake_st.session_state
+        assert ss["global_marker_size_range"] == (4, 40)
+        assert ss["global_line_spacing"] == 10.0
+        assert ss["global_order_font_size"] == 72
+
+    def test_malformed_range_url_value_is_skipped(self, fake_st):
+        # Malformed range params are caught and skipped (no crash, key not set).
+        fake_st.query_params = {
+            "marker_size_range": "notarange",
+            "fixation_color_range": "10",  # only one value
+        }
+        _apply_url_preset()  # must not raise
+        ss = fake_st.session_state
+        assert "global_marker_size_range" not in ss
+        assert "global_fixation_color_range" not in ss
 
 
 class TestApplyUrlTrialSelection:

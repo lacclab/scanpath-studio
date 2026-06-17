@@ -264,6 +264,32 @@ _URL_PRESETS = {
     **{k: (s, _parse_int_range) for k, s in _SHARE_INT_RANGE_PARAMS.items()},
     **{k: (s, _parse_float_range) for k, s in _SHARE_FLOAT_RANGE_PARAMS.items()},
 }
+
+# Widget bounds for the URL-restorable params that feed a min/max-bounded widget
+# (slider / number_input). A hand-crafted link with an out-of-range value would
+# otherwise crash the widget on render — Streamlit raises when a Session-State
+# value falls outside the widget's range. Clamp on the way in. (Data-dependent
+# colour ranges aren't here — the sidebar's `_clamp_range` handles those against
+# the live data.)
+_URL_BOUNDED = {
+    "global_line_spacing": (1.0, 10.0),
+    "global_order_font_size": (6, 72),
+    "global_marker_size_range": (4, 40),
+}
+
+
+def _clamp_url_value(state_key: str, value):
+    """Clamp a deep-linked value to its widget bounds (scalars and 2-tuples)."""
+    bounds = _URL_BOUNDED.get(state_key)
+    if bounds is None:
+        return value
+    lo, hi = bounds
+    if isinstance(value, (tuple, list)) and len(value) == 2:
+        a, b = max(lo, min(value[0], hi)), max(lo, min(value[1], hi))
+        return (min(a, b), max(a, b))
+    return max(lo, min(value, hi))
+
+
 # data_choice → ?source= value, for the built-in sources a URL can fully rebuild.
 # Sources absent here (uploaded tables, stored datasets, public corpora) can't be
 # reconstructed from a link — the Share panel warns and shares the view settings
@@ -341,6 +367,9 @@ def _apply_url_preset() -> Optional[str]:
         except (ValueError, TypeError):
             st.warning(f"Ignored bad URL param ?{url_key}={raw!r}")
             continue
+        # Clamp bounded widgets so a hand-crafted out-of-range link can't crash
+        # the slider / number_input on render.
+        value = _clamp_url_value(state_key, value)
         st.session_state.setdefault(state_key, value)
 
     # Heatmap / fixation colorscale only render under the Advanced expander —

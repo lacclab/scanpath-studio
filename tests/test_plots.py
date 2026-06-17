@@ -921,7 +921,51 @@ class TestMakeComparisonFigure:
             base_font_size=12,
         )
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Two traces for two trials
+        # Each trial contributes a saccade line trace + a fixation-marker trace.
+        marker_traces = [t for t in fig.data if t.mode and "markers" in t.mode]
+        assert len(marker_traces) == 2
+        # Default per-scanpath colours come from the comparison palette.
+        from scanpath_studio.constants import COMPARISON_PALETTE
+
+        assert marker_traces[0].marker.color == COMPARISON_PALETTE[0]
+        assert marker_traces[1].marker.color == COMPARISON_PALETTE[1]
+
+    def test_comparison_per_scanpath_style(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        """Per-scanpath style overrides (colour, hollow, dashed saccades) apply."""
+        words_multi = pd.concat(
+            [
+                normalized_words_df.assign(participant_id="p1", trial_id="t1"),
+                normalized_words_df.assign(participant_id="p2", trial_id="t1"),
+            ]
+        )
+        fixations_multi = pd.concat(
+            [
+                normalized_fixations_df.assign(participant_id="p1", trial_id="t1"),
+                normalized_fixations_df.assign(participant_id="p2", trial_id="t1"),
+            ]
+        )
+        fig = make_comparison_figure(
+            words_multi,
+            fixations_multi,
+            trial_a=("p1", "t1"),
+            trial_b=("p2", "t1"),
+            canvas_width=800,
+            canvas_height=600,
+            font_family="Arial",
+            base_font_size=12,
+            style_a={"fix_color": "#123456", "hollow": True},
+            style_b={"saccade_color": "#abcdef", "saccade_style": "dash"},
+        )
+        marker_traces = [t for t in fig.data if t.mode and "markers" in t.mode]
+        # Scanpath 1 is hollow: transparent fill, coloured outline.
+        assert marker_traces[0].marker.color == "rgba(0,0,0,0)"
+        assert marker_traces[0].marker.line.color == "#123456"
+        # Scanpath 2 saccades are dashed in the requested colour.
+        sac_traces = [t for t in fig.data if t.mode == "lines"]
+        dashed = [t for t in sac_traces if t.line.dash == "dash"]
+        assert dashed and dashed[0].line.color == "#abcdef"
 
 
 class TestPlotEnhancements:
@@ -991,6 +1035,33 @@ class TestPlotEnhancements:
         )
         line_traces = [t for t in fig.data if str(t.name).startswith("line:")]
         assert len(line_traces) == 2
+
+    def test_hollow_fixations(self, synthetic_words_df, synthetic_fixations_df):
+        # Hollow markers have a transparent fill and a visible outline.
+        fig = self._figure(
+            synthetic_words_df, synthetic_fixations_df, hollow_fixations=True
+        )
+        fix = next(t for t in fig.data if t.name == "Fixations")
+        assert fix.marker.color == "rgba(0,0,0,0)"
+        assert float(fix.marker.line.width) >= 1.0
+
+    def test_saccade_style_dash(self, synthetic_words_df, synthetic_fixations_df):
+        fig = self._figure(
+            synthetic_words_df, synthetic_fixations_df, saccade_style="dash"
+        )
+        sac = next(t for t in fig.data if t.name == "saccades")
+        assert sac.line.dash == "dash"
+
+    def test_text_color_applied(self, synthetic_words_df, synthetic_fixations_df):
+        fig = self._figure(
+            synthetic_words_df,
+            synthetic_fixations_df,
+            show_word_labels=True,
+            text_color="#0a0b0c",
+        )
+        words = next(t for t in fig.data if t.name == "words")
+        # No highlight column active -> a single base colour for all words.
+        assert words.textfont.color == "#0a0b0c"
 
 
 class TestTrueToScaleText:

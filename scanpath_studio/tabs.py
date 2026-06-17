@@ -15,7 +15,13 @@ from scanpath_studio.animation_export import (
     mime_for,
 )
 from scanpath_studio.annotations import render_trial_annotations
-from scanpath_studio.constants import DEFAULT_LINE_SPACING, SACCADE_COLOR
+from scanpath_studio.constants import (
+    DEFAULT_LINE_SPACING,
+    HIGHLIGHTED_TEXT_COLOR,
+    SACCADE_COLOR,
+    SACCADE_DASH_OPTIONS,
+    WORD_LABEL_COLOR,
+)
 from scanpath_studio.data import compute_word_metrics, frame_fingerprint
 from scanpath_studio.export import (
     ExportProgress,
@@ -421,6 +427,14 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         critical_span_style=viz_settings.get("critical_span_style", "Mark text"),
         highlight_column=viz_settings.get("highlight_column", "is_in_aspan"),
         saccade_color=viz_settings.get("saccade_color", SACCADE_COLOR),
+        saccade_style=SACCADE_DASH_OPTIONS.get(
+            viz_settings.get("saccade_style", "Solid"), "solid"
+        ),
+        hollow_fixations=viz_settings.get("hollow_fixations", False),
+        text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
+        highlight_text_color=viz_settings.get(
+            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
+        ),
         color_by_line=viz_settings.get("color_by_line", False),
         highlight_out_of_text=viz_settings.get("highlight_out_of_text", False),
         background_color=viz_settings.get("background_color"),
@@ -1048,6 +1062,8 @@ def _build_studio_config(
             "fixation_colorscale": figure_settings["fixation_colorscale"],
             "heatmap_colorscale": figure_settings["heatmap_colorscale"],
             "saccade_color": figure_settings.get("saccade_color", SACCADE_COLOR),
+            "saccade_style": viz_settings.get("saccade_style", "Solid"),
+            "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
         },
         "sizing": {
             "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
@@ -1063,6 +1079,7 @@ def _build_studio_config(
                 figure_settings.get("line_spacing", DEFAULT_LINE_SPACING)
             ),
             "font_family": font_family,
+            "text_color": figure_settings.get("text_color", WORD_LABEL_COLOR),
         },
         "highlighting": {
             "critical_span_style": figure_settings.get(
@@ -1071,6 +1088,9 @@ def _build_studio_config(
             "highlight_column": figure_settings.get("highlight_column", "is_in_aspan"),
             "highlight_out_of_text": bool(
                 figure_settings.get("highlight_out_of_text", False)
+            ),
+            "highlight_text_color": figure_settings.get(
+                "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
             ),
             "background_color": figure_settings.get("background_color"),
         },
@@ -1367,6 +1387,10 @@ def _build_and_render_animation(
         fixation_color_range=viz_settings["fixation_color_range"],
         show_colorbars=viz_settings["show_colorbars"],
         saccade_color=viz_settings.get("saccade_color", SACCADE_COLOR),
+        saccade_style=SACCADE_DASH_OPTIONS.get(
+            viz_settings.get("saccade_style", "Solid"), "solid"
+        ),
+        hollow_fixations=viz_settings.get("hollow_fixations", False),
         background_color=viz_settings.get("background_color"),
         fixations_b=fixations_b if dual else None,
         words_b=words_b if dual else None,
@@ -1898,6 +1922,17 @@ def _render_comparison_figure(
         show_word_labels=viz_settings["show_labels"],
         trial_labels=(primary_label, compare_label),
         layout=layout,
+        style_a=viz_settings.get("compare_style_a"),
+        style_b=viz_settings.get("compare_style_b"),
+        marker_size_range=viz_settings.get("marker_size_range", (8, 24)),
+        show_saccades=viz_settings.get("show_saccades", True),
+        show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
+        show_order=viz_settings.get("show_order", False),
+        order_font_size=viz_settings.get("order_font_size"),
+        text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
+        highlight_text_color=viz_settings.get(
+            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
+        ),
         background_color=viz_settings.get("background_color"),
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,

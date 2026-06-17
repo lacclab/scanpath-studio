@@ -20,6 +20,8 @@ from .constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     FIX_MARKER_OUTLINE,
     FONT_FAMILY,
+    HIGHLIGHTED_TEXT_COLOR,
+    HOLLOW_OUTLINE_WIDTH,
     OUT_OF_TEXT_COLOR,
     SACCADE_COLOR,
     WORD_BOX_COLOR,
@@ -27,6 +29,61 @@ from .constants import (
 )
 
 COLORBAR_LEN_FRACTION = 0.33
+
+
+def _sample_colorscale_colors(
+    values, colorscale: str, cmin: Optional[float], cmax: Optional[float]
+) -> object:
+    """Map numeric values to concrete CSS colours via a named Plotly colorscale.
+
+    Used for hollow markers: Plotly can render a colorscale on a marker *fill*
+    but not on its outline, so the gradient is sampled to literal colours that
+    can sit on ``marker.line.color``. Falls back to a single outline colour if
+    sampling is unavailable.
+    """
+    try:
+        from plotly.colors import sample_colorscale
+    except Exception:
+        return FIX_MARKER_OUTLINE
+    vals = pd.to_numeric(pd.Series(list(values)), errors="coerce")
+    lo = float(cmin) if cmin is not None else float(vals.min())
+    hi = float(cmax) if cmax is not None else float(vals.max())
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+        norm = [0.5] * len(vals)
+    else:
+        norm = ((vals.clip(lo, hi) - lo) / (hi - lo)).fillna(0.0).tolist()
+    try:
+        return sample_colorscale(colorscale, norm)
+    except Exception:
+        return FIX_MARKER_OUTLINE
+
+
+def _make_hollow(marker: dict) -> dict:
+    """Return a copy of a fixation marker dict rendered as outline-only.
+
+    The fill colour is moved onto the outline (so the colour is preserved) and
+    the fill itself is made transparent. Numeric colorscale colours are sampled
+    to concrete CSS colours because Plotly can't map a colorscale onto an
+    outline. The colorbar is dropped in hollow mode (it needs the coloured fill).
+    """
+    m = dict(marker)
+    color = m.get("color")
+    colorscale = m.get("colorscale")
+    if colorscale is not None and color is not None and not isinstance(color, str):
+        outline_color = _sample_colorscale_colors(
+            color, colorscale, m.get("cmin"), m.get("cmax")
+        )
+    else:
+        outline_color = color if color is not None else FIX_MARKER_OUTLINE
+    line = dict(m.get("line") or {})
+    line["color"] = outline_color
+    line["width"] = HOLLOW_OUTLINE_WIDTH
+    m["line"] = line
+    m["color"] = "rgba(0,0,0,0)"
+    m["colorscale"] = None
+    m["showscale"] = False
+    m["colorbar"] = None
+    return m
 
 
 def _compute_axis_ranges(
@@ -391,7 +448,7 @@ def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
 _CRITICAL_FRAME_COLOR = "#000000"  # black — high-contrast frame, readable over heatmaps
 _CRITICAL_FRAME_WIDTH = 2
 _CRITICAL_TEXT_COLOR = (
-    "#C8097C"  # dark pink — used when critical_span_style="Mark text"
+    HIGHLIGHTED_TEXT_COLOR  # dark pink — used when critical_span_style="Mark text"
 )
 
 
@@ -451,6 +508,8 @@ def _add_word_label_trace(
     row: Optional[int] = None,
     col: Optional[int] = None,
     highlight_column: Optional[str] = None,
+    text_color: str = WORD_LABEL_COLOR,
+    highlight_text_color: str = _CRITICAL_TEXT_COLOR,
 ) -> None:
     if words.empty or "text" not in words.columns:
         return
@@ -469,23 +528,23 @@ def _add_word_label_trace(
             "Word %{text}<br>Word ID %{customdata[0]}"
             "<br>Line %{customdata[1]}<extra></extra>"
         )
-    # Per-word text color: dark pink for highlighted words when the caller asks
-    # for "Mark text" (``highlight_column`` set), default label color otherwise.
+    # Per-word text color: the highlight colour for highlighted words when the
+    # caller asks for "Mark text" (``highlight_column`` set), the base text
+    # colour otherwise. Both are configurable from the sidebar.
     if highlight_column and highlight_column in words.columns:
         critical_mask = words[highlight_column].fillna(False).astype(bool)
-        text_color = [
-            _CRITICAL_TEXT_COLOR if is_crit else WORD_LABEL_COLOR
-            for is_crit in critical_mask
+        label_color = [
+            highlight_text_color if is_crit else text_color for is_crit in critical_mask
         ]
     else:
-        text_color = WORD_LABEL_COLOR
+        label_color = text_color
     trace = go.Scatter(
         x=words["x"] + words["width"] / 2,
         y=words["y"] + words["height"] / 2,
         text=words["text"],
         mode="text",
         showlegend=False,
-        textfont=dict(color=text_color, size=base_font_size, family=font_family),
+        textfont=dict(color=label_color, size=base_font_size, family=font_family),
         hovertemplate=hover,
         customdata=customdata,
         name="words",
@@ -529,6 +588,10 @@ def make_scanpath_figure(
     critical_span_style: str = "Mark text",
     highlight_column: Optional[str] = "is_in_aspan",
     saccade_color: str = SACCADE_COLOR,
+    saccade_style: str = "solid",
+    hollow_fixations: bool = False,
+    text_color: str = WORD_LABEL_COLOR,
+    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
     color_by_line: bool = False,
     highlight_out_of_text: bool = False,
@@ -602,6 +665,8 @@ def make_scanpath_figure(
                 label_font_px,
                 font_settings["family"],
                 highlight_column=highlight_column if highlight_text else None,
+                text_color=text_color,
+                highlight_text_color=highlight_text_color,
             )
 
     if show_raw_gaze and raw_gaze is not None and not raw_gaze.empty:
@@ -720,7 +785,7 @@ def make_scanpath_figure(
                     x=sx,
                     y=sy,
                     mode="lines",
-                    line=dict(color=saccade_color, width=2),
+                    line=dict(color=saccade_color, width=2, dash=saccade_style),
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccades",
@@ -777,30 +842,33 @@ def make_scanpath_figure(
             color_data, is_numeric_color
         )
         sizes = _compute_marker_sizes(ordered["duration_ms"], marker_size_range)
+        marker = dict(
+            size=sizes,
+            color=marker_color,
+            colorscale=fixation_colorscale if is_numeric_color else None,
+            showscale=show_colorbars and is_numeric_color,
+            colorbar=dict(
+                title=color_label.replace("_", " ").title(),
+                x=1.12,
+                lenmode="fraction",
+                len=COLORBAR_LEN_FRACTION,
+                y=0.5,
+                yanchor="middle",
+            )
+            if show_colorbars and is_numeric_color
+            else None,
+            cmin=fixation_color_range[0] if fixation_color_range else None,
+            cmax=fixation_color_range[1] if fixation_color_range else None,
+            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+        )
+        if hollow_fixations:
+            marker = _make_hollow(marker)
         fig.add_trace(
             go.Scatter(
                 x=ordered[x_field],
                 y=ordered[y_field],
                 mode="markers+text" if show_order else "markers",
-                marker=dict(
-                    size=sizes,
-                    color=marker_color,
-                    colorscale=fixation_colorscale if is_numeric_color else None,
-                    showscale=show_colorbars and is_numeric_color,
-                    colorbar=dict(
-                        title=color_label.replace("_", " ").title(),
-                        x=1.12,
-                        lenmode="fraction",
-                        len=COLORBAR_LEN_FRACTION,
-                        y=0.5,
-                        yanchor="middle",
-                    )
-                    if show_colorbars and is_numeric_color
-                    else None,
-                    cmin=fixation_color_range[0] if fixation_color_range else None,
-                    cmax=fixation_color_range[1] if fixation_color_range else None,
-                    line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
-                ),
+                marker=marker,
                 text=ordered["order_in_trial"] if show_order else None,
                 textfont=dict(
                     color=order_font_color,
@@ -1552,6 +1620,8 @@ def make_scanpath_animation(
     fixation_color_range: Optional[Tuple[float, float]] = None,
     show_colorbars: bool = False,
     saccade_color: str = SACCADE_COLOR,
+    saccade_style: str = "solid",
+    hollow_fixations: bool = False,
     background_color: Optional[str] = None,
     fixations_b: Optional[pd.DataFrame] = None,
     words_b: Optional[pd.DataFrame] = None,
@@ -1692,12 +1762,15 @@ def make_scanpath_animation(
         only which positions are revealed does. Restating the whole marker keeps
         the colorscale/cmin/cmax/colorbar attached to the trail."""
         colors = s["marker_colors"]
-        return dict(
+        marker = dict(
             size=list(s["sizes"]),
             color=colors if colors is not None else s["color"],
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             **s["marker_extra"],
         )
+        if hollow_fixations:
+            marker = _make_hollow(marker)
+        return marker
 
     # Base traces, with stable indices the frames update by position. Each
     # animated trace is built at FULL length (one slot per fixation); the replay
@@ -1778,7 +1851,7 @@ def make_scanpath_animation(
                     x=sac_x,
                     y=sac_y,
                     mode="lines",
-                    line=dict(color=s["sac_color"], width=2),
+                    line=dict(color=s["sac_color"], width=2, dash=saccade_style),
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -1895,7 +1968,7 @@ def make_scanpath_animation(
                         x=sac_x,
                         y=sac_y,
                         mode="lines",
-                        line=dict(color=s["sac_color"], width=2),
+                        line=dict(color=s["sac_color"], width=2, dash=saccade_style),
                     )
                 )
                 traces_idx_in_frame.append(s["idx_sac"])
@@ -2019,44 +2092,131 @@ def _resolve_trial_display_name(
     return f"{trial_str} · {participant}"
 
 
+def _comparison_scanpath_style(
+    idx: int,
+    override: Optional[dict] = None,
+    *,
+    default_marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
+) -> dict:
+    """Resolve the per-scanpath style for a comparison trace.
+
+    Defaults reproduce the classic two-flat-colour look (``COMPARISON_PALETTE``);
+    ``override`` (from the sidebar's per-scanpath styling panel) wins per key.
+    """
+    base = {
+        "fix_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
+        "saccade_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
+        "saccade_style": "solid",
+        "marker_size_range": default_marker_size_range,
+        "hollow": False,
+    }
+    if override:
+        base.update({k: v for k, v in override.items() if v is not None})
+    return base
+
+
 def _add_comparison_fixation_trace(
     fig: go.Figure,
     trial_fix: pd.DataFrame,
     display_name: str,
-    color: str,
+    style: dict,
     font_settings: dict,
-    marker_size_range: Tuple[int, int],
+    *,
+    show_saccades: bool = True,
+    show_saccade_arrows: bool = False,
+    show_order: bool = True,
+    order_font_size: Optional[int] = None,
     row: Optional[int] = None,
     col: Optional[int] = None,
 ) -> None:
+    """Add one scanpath's saccades + fixation markers to a comparison figure.
+
+    Saccades and markers are separate traces (mirroring the single-trial figure)
+    so the per-scanpath saccade colour/line-style and hollow markers all apply,
+    and the shared ``show_saccades`` / ``show_saccade_arrows`` / ``show_order``
+    toggles take effect. Fixation colour is a single per-scanpath colour so the
+    two readings stay distinguishable; order numbers are tinted to match.
+    """
     if trial_fix.empty:
         return
-    sizes = _compute_marker_sizes(trial_fix["duration_ms"], marker_size_range)
-    trace = go.Scatter(
-        x=trial_fix["x"],
-        y=trial_fix["y"],
-        mode="markers+lines",
-        marker=dict(
-            size=sizes,
-            color=color,
-            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
-        ),
-        line=dict(color=color, width=2, dash="solid"),
-        name=display_name,
-        text=trial_fix["order_in_trial"],
-        textposition="top center",
-        textfont=font_settings,
-        hovertemplate=(
-            f"{display_name} "
-            "Order %{text}<br>Time %{customdata[0]} ms<br>"
-            "Duration %{customdata[1]} ms<extra></extra>"
-        ),
-        customdata=trial_fix[["timestamp_ms", "duration_ms"]],
+    fix_color = style["fix_color"]
+    saccade_color = style["saccade_color"]
+    saccade_style = style.get("saccade_style", "solid")
+
+    def _add(trace):
+        if row is not None and col is not None:
+            fig.add_trace(trace, row=row, col=col)
+        else:
+            fig.add_trace(trace)
+
+    if show_saccades and len(trial_fix) > 1:
+        sx, sy = _saccade_segments(trial_fix, "x", "y")
+        if sx:
+            _add(
+                go.Scatter(
+                    x=sx,
+                    y=sy,
+                    mode="lines",
+                    line=dict(color=saccade_color, width=2, dash=saccade_style),
+                    name=display_name,
+                    legendgroup=display_name,
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+    if show_saccade_arrows and len(trial_fix) > 1:
+        amx, amy, aang = _saccade_arrow_markers(trial_fix, "x", "y")
+        if amx:
+            _add(
+                go.Scatter(
+                    x=amx,
+                    y=amy,
+                    mode="markers",
+                    marker=dict(
+                        symbol="arrow",
+                        size=12,
+                        angle=aang,
+                        angleref="up",
+                        color=saccade_color,
+                        line=dict(width=0),
+                    ),
+                    legendgroup=display_name,
+                    showlegend=False,
+                    hoverinfo="skip",
+                )
+            )
+
+    sizes = _compute_marker_sizes(trial_fix["duration_ms"], style["marker_size_range"])
+    marker = dict(
+        size=sizes,
+        color=fix_color,
+        line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
     )
-    if row is not None and col is not None:
-        fig.add_trace(trace, row=row, col=col)
-    else:
-        fig.add_trace(trace)
+    if style.get("hollow"):
+        marker = _make_hollow(marker)
+    order_font = dict(font_settings)
+    order_font["color"] = fix_color
+    if order_font_size is not None:
+        order_font["size"] = order_font_size
+    _add(
+        go.Scatter(
+            x=trial_fix["x"],
+            y=trial_fix["y"],
+            mode="markers+text" if show_order else "markers",
+            marker=marker,
+            name=display_name,
+            legendgroup=display_name,
+            text=trial_fix["order_in_trial"] if show_order else None,
+            textposition="top center",
+            textfont=order_font,
+            hovertemplate=(
+                f"{display_name} "
+                "Order %{customdata[2]}<br>Time %{customdata[0]} ms<br>"
+                "Duration %{customdata[1]} ms<extra></extra>"
+            ),
+            customdata=trial_fix[["timestamp_ms", "duration_ms", "order_in_trial"]],
+        )
+    )
 
 
 def _make_split_comparison_figure(
@@ -2074,6 +2234,13 @@ def _make_split_comparison_figure(
     trial_labels: Optional[Tuple[str, str]],
     orientation: str,
     marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
+    styles: Optional[Tuple[dict, dict]] = None,
+    show_saccades: bool = True,
+    show_saccade_arrows: bool = False,
+    show_order: bool = False,
+    order_font_size: Optional[int] = None,
+    text_color: str = WORD_LABEL_COLOR,
+    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
@@ -2082,7 +2249,6 @@ def _make_split_comparison_figure(
     from plotly.subplots import make_subplots
 
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    palette = COMPARISON_PALETTE
     is_stacked = orientation == "stacked"
     # Per-panel pixel size (approx; subplot spacing/titles shave a little) used to
     # size word labels true-to-scale within each panel.
@@ -2101,12 +2267,18 @@ def _make_split_comparison_figure(
         display_name = _resolve_trial_display_name(
             participant, trial_id, trial_words, trial_labels, idx
         )
+        style = _comparison_scanpath_style(
+            idx,
+            styles[idx] if styles else None,
+            default_marker_size_range=marker_size_range,
+        )
         trial_specs.append(
             dict(
                 trial_words=trial_words,
                 trial_fix=trial_fix,
                 display_name=display_name,
-                color=palette[idx],
+                style=style,
+                color=style["fix_color"],
             )
         )
 
@@ -2176,9 +2348,12 @@ def _make_split_comparison_figure(
             fig,
             trial_fix,
             spec["display_name"],
-            spec["color"],
+            spec["style"],
             font_settings,
-            marker_size_range,
+            show_saccades=show_saccades,
+            show_saccade_arrows=show_saccade_arrows,
+            show_order=show_order,
+            order_font_size=order_font_size,
             row=row,
             col=col,
         )
@@ -2201,6 +2376,8 @@ def _make_split_comparison_figure(
                 font_settings["family"],
                 row=row,
                 col=col,
+                text_color=text_color,
+                highlight_text_color=highlight_text_color,
             )
 
         xaxis_key = "xaxis" if idx == 0 else f"xaxis{idx + 1}"
@@ -2272,6 +2449,14 @@ def make_comparison_figure(
     trial_labels: Optional[Tuple[str, str]] = None,
     layout: str = "overlay",
     marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
+    style_a: Optional[dict] = None,
+    style_b: Optional[dict] = None,
+    show_saccades: bool = True,
+    show_saccade_arrows: bool = False,
+    show_order: bool = False,
+    order_font_size: Optional[int] = None,
+    text_color: str = WORD_LABEL_COLOR,
+    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
@@ -2291,6 +2476,13 @@ def make_comparison_figure(
             trial_labels=trial_labels,
             orientation=layout,
             marker_size_range=marker_size_range,
+            styles=(style_a, style_b),
+            show_saccades=show_saccades,
+            show_saccade_arrows=show_saccade_arrows,
+            show_order=show_order,
+            order_font_size=order_font_size,
+            text_color=text_color,
+            highlight_text_color=highlight_text_color,
             background_color=background_color,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
@@ -2298,7 +2490,7 @@ def make_comparison_figure(
 
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
-    palette = COMPARISON_PALETTE
+    overrides = (style_a, style_b)
 
     trial_specs = []
     for idx, trial in enumerate([trial_a, trial_b]):
@@ -2313,12 +2505,16 @@ def make_comparison_figure(
         display_name = _resolve_trial_display_name(
             participant, trial_id, trial_words, trial_labels, idx
         )
+        style = _comparison_scanpath_style(
+            idx, overrides[idx], default_marker_size_range=marker_size_range
+        )
         trial_specs.append(
             dict(
                 trial_words=trial_words,
                 trial_fix=trial_fix,
                 display_name=display_name,
-                color=palette[idx],
+                style=style,
+                color=style["fix_color"],
             )
         )
 
@@ -2343,9 +2539,12 @@ def make_comparison_figure(
             fig,
             spec["trial_fix"],
             spec["display_name"],
-            spec["color"],
+            spec["style"],
             font_settings,
-            marker_size_range,
+            show_saccades=show_saccades,
+            show_saccade_arrows=show_saccade_arrows,
+            show_order=show_order,
+            order_font_size=order_font_size,
         )
         if show_words:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -2365,6 +2564,8 @@ def make_comparison_figure(
                     scale_text_to_boxes=scale_text_to_boxes,
                 ),
                 font_settings["family"],
+                text_color=text_color,
+                highlight_text_color=highlight_text_color,
             )
 
     shapes = list(fig.layout.shapes) if fig.layout.shapes else []

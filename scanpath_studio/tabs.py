@@ -35,6 +35,7 @@ from scanpath_studio.data import (
     frame_fingerprint,
     has_explicit_trial_index,
 )
+from scanpath_studio.controls import render_trial_filters
 from scanpath_studio.export import (
     ExportProgress,
     bulk_export,
@@ -861,6 +862,7 @@ def _render_paragraph_panel(
     *,
     trial_fixations: Optional[pd.DataFrame] = None,
     expanded: bool = True,
+    bare: bool = False,
 ) -> None:
     """Render the stimulus-text + questions panel, generically.
 
@@ -870,14 +872,20 @@ def _render_paragraph_panel(
     corpus — not just OneStop. Known OneStop columns keep their friendly labels
     and span colours, so the OneStop view is unchanged. Each span is annotated
     with whether it was fixated when ``trial_fixations`` is given. Skips silently
-    when no word text is available."""
+    when no word text is available. ``bare=True`` drops the expander wrapper so
+    the panel can sit directly inside a subtab."""
     if "text" not in trial_words.columns or trial_words.empty:
         return
     span_cols = _detect_span_columns(trial_words)
     span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
     qa_cols = _detect_question_columns(trial_words)
 
-    with st.expander("Stimulus & questions", expanded=expanded):
+    container = (
+        st.container()
+        if bare
+        else st.expander("Stimulus & questions", expanded=expanded)
+    )
+    with container:
         _render_paragraph_with_spans(trial_words, span_bg)
 
         # Question / answer fields, generically. Keep OneStop's combined
@@ -971,6 +979,43 @@ def _summary_rows(
     return rows
 
 
+def _trial_id_rows(
+    participant: str, trial_id: str, trial_words: pd.DataFrame
+) -> list[dict]:
+    """Field/Value rows identifying a trial: id, participant, text id, and any
+    composite-id component columns.
+
+    These lead the metadata table so a trial's identity sits with its stats —
+    folding in the former standalone "Trial Info" block. Mirrors the text-id /
+    composite probe in ``_render_trial_header`` (which stays for the Generations
+    tab + its tests)."""
+    rows = [
+        {"Field": "Trial id", "Value": str(trial_id)},
+        {"Field": "Participant", "Value": str(participant)},
+    ]
+    text_cols = ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id")
+    text_id = None
+    for col in text_cols:
+        if col in trial_words.columns and not trial_words.empty:
+            value = trial_words[col].iloc[0]
+            if pd.notna(value):
+                text_id = value
+                break
+    if text_id is not None:
+        rows.append({"Field": "Text", "Value": str(text_id)})
+    composite_cols = st.session_state.get("_composite_trial_columns") or []
+    already_shown = {"participant_id", *text_cols}
+    for col in composite_cols:
+        if col in already_shown or col not in trial_words.columns or trial_words.empty:
+            continue
+        value = trial_words[col].iloc[0]
+        if pd.notna(value):
+            rows.append(
+                {"Field": col.replace("_", " ").capitalize(), "Value": str(value)}
+            )
+    return rows
+
+
 # Row-wise palette for the trial-metadata table. Picked light so the text
 # stays readable. `is_correct` keeps the row background neutral but tints
 # the value text green/red — adding a background there clashed with the
@@ -1023,13 +1068,17 @@ def _render_metadata_selector(
     fixations_filtered: pd.DataFrame,
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
+    selected_participant: str,
+    selected_trial: str,
     compare: Optional[dict] = None,
+    bare: bool = False,
 ):
-    """Render the trial summary + metadata table.
+    """Render the Trial Info panel: identity rows + summary + metadata table.
 
-    The table always leads with the trial's headline numbers (reading time,
-    word / fixation counts, in-text fixation count — see `_summary_rows`), then
-    lists the metadata fields chosen in the sidebar picker.
+    The table leads with the trial's identity (id / participant / text — see
+    `_trial_id_rows`, folding in the former standalone "Trial Info" block), then
+    its headline numbers (reading time, word / fixation counts, in-text fixation
+    count — see `_summary_rows`), then the metadata fields chosen in the picker.
 
     When ``compare`` is given (keys: ``words``, ``fixations``,
     ``label_primary``, ``label_compare``), the table shows one value column per
@@ -1065,8 +1114,12 @@ def _render_metadata_selector(
 
     # Metadata table under a default-closed toggle (TODO 1.9), with the
     # field picker directly below it (TODO 1.10).
-    with st.expander("Trial metadata", expanded=False):
+    container = st.container() if bare else st.expander("Trial Info", expanded=True)
+    with container:
         if compare is None:
+            info = pd.DataFrame(
+                _trial_id_rows(selected_participant, selected_trial, trial_words)
+            )
             summary = pd.DataFrame(_summary_rows(trial_words, trial_fixations))
             metadata_df = (
                 _prefix_is_correct(
@@ -1077,7 +1130,7 @@ def _render_metadata_selector(
                 if selected_metadata
                 else pd.DataFrame(columns=["Field", "Value"])
             )
-            table = pd.concat([summary, metadata_df], ignore_index=True)
+            table = pd.concat([info, summary, metadata_df], ignore_index=True)
             if not table.empty:
                 styled = table.style.apply(_style_metadata_row, axis=1)
                 st.dataframe(styled, hide_index=True, width="stretch")
@@ -1085,6 +1138,25 @@ def _render_metadata_selector(
             # Comparison mode: one value column per trial, merged on Field.
             label_a = compare["label_primary"]
             label_b = compare["label_compare"]
+            # Identity rows for both trials, side by side, leading the table.
+            info_a = {
+                r["Field"]: r["Value"]
+                for r in _trial_id_rows(
+                    selected_participant, selected_trial, trial_words
+                )
+            }
+            info_b = {
+                r["Field"]: r["Value"]
+                for r in _trial_id_rows(
+                    compare["participant"], compare["trial"], compare["words"]
+                )
+            }
+            info = pd.DataFrame(
+                [
+                    {"Field": f, label_a: info_a.get(f, "—"), label_b: info_b.get(f, "—")}
+                    for f in dict.fromkeys([*info_a, *info_b])
+                ]
+            )
             # Summary rows share the same fields/order across both trials, so
             # pair them directly to keep row order rather than outer-merging.
             summary_b = {
@@ -1123,7 +1195,7 @@ def _render_metadata_selector(
                 )
             else:
                 merged = pd.DataFrame(columns=["Field", label_a, label_b])
-            table = pd.concat([summary, merged], ignore_index=True)
+            table = pd.concat([info, summary, merged], ignore_index=True)
             if not table.empty:
                 st.dataframe(table, hide_index=True, width="stretch")
 
@@ -1329,7 +1401,7 @@ def _render_save_restore_expander(
             file_name="scanpath_studio_config.json",
             mime="application/json",
             key="plot_config_download",
-            use_container_width=True,
+            width="stretch",
         )
         st.file_uploader(
             "Restore from JSON",
@@ -1385,34 +1457,9 @@ def _build_compare_meta(
         "fixations": compare_fix,
         "label_primary": label_primary,
         "label_compare": label_compare,
+        "participant": compare_participant,
+        "trial": compare_trial,
     }
-
-
-def _render_trial_info(
-    selected_participant: str,
-    selected_trial: str,
-    trial_words: pd.DataFrame,
-    compare: Optional[dict] = None,
-) -> None:
-    """Render the "Trial Info" block: the primary trial's id/participant/text,
-    and — when comparing — the second trial's info next to it (TODO 1.14)."""
-    if compare is None:
-        _render_trial_header(
-            selected_participant, selected_trial, trial_words, prefix="Trial:"
-        )
-        return
-    col_a, col_b = st.columns(2)
-    with col_a:
-        _render_trial_header(
-            selected_participant, selected_trial, trial_words, prefix="Trial:"
-        )
-    with col_b:
-        _render_trial_header(
-            compare["participant"],
-            compare["trial"],
-            compare["words"],
-            prefix="Compare:",
-        )
 
 
 # Playback-speed options shared by the animation control.
@@ -1564,41 +1611,73 @@ def _build_and_render_animation(
     return fig, playback_ms, save_slug, file_stem
 
 
-def _render_export_toggle(
+def _render_export_panel(
     displayed_fig,
     *,
     animate: bool,
+    save_slug: str,
+    playback_ms: Optional[float],
+    file_stem: Optional[str],
+    combos: pd.DataFrame,
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    combos_all: pd.DataFrame,
+    words_all: pd.DataFrame,
+    fixations_all: pd.DataFrame,
     canvas_width: int,
     canvas_height: int,
-    save_slug: str,
-    playback_ms: Optional[float] = None,
-    file_stem: Optional[str] = None,
+    base_font_size: int,
+    font_family: str,
+    viz_settings: dict,
+    line_spacing: float,
+    scale_text_to_boxes: bool,
 ) -> None:
-    """Single-trial export under a default-closed "Export" toggle (TODO 1.16).
+    """Consolidated Export subtab: the currently-viewed figure on top, then a
+    bulk multi-trial export below.
 
-    Shows the animation export (HTML/GIF/MP4) when animating, else the static
-    image export (PNG/SVG/PDF/HTML). Bulk export lives in its own tab."""
+    Replaces both the old single-trial Export toggle and the standalone Bulk
+    Export tab. "This trial" exports the live figure (static PNG/SVG/PDF/HTML, or
+    the HTML/GIF/MP4 animation when animating) so the on-screen view — including
+    a comparison or animation — round-trips exactly; the bulk section rebuilds
+    static figures across many trials."""
+    st.markdown("#### This trial")
     if displayed_fig is None:
-        return
-    with st.expander("Export", expanded=False):
-        st.caption(
-            "Export this single trial. To export many trials at once, use the "
-            "**Bulk Export** tab."
+        st.caption("Select a trial to export its figure.")
+    elif animate:
+        _render_animation_export(
+            displayed_fig,
+            file_stem=file_stem or "animation",
+            playback_ms=playback_ms or 0.0,
         )
-        if animate:
-            _render_animation_export(
-                displayed_fig,
-                file_stem=file_stem or "animation",
-                playback_ms=playback_ms or 0.0,
-            )
-        else:
-            _render_save_plot_button(
-                displayed_fig,
-                canvas_width=int(canvas_width),
-                canvas_height=int(canvas_height),
-                slug=save_slug,
-                key_prefix="single",
-            )
+    else:
+        _render_save_plot_button(
+            displayed_fig,
+            canvas_width=int(canvas_width),
+            canvas_height=int(canvas_height),
+            slug=save_slug,
+            key_prefix="single",
+        )
+
+    st.divider()
+    st.markdown("#### Multiple trials")
+    bulk_settings = _build_figure_settings(viz_settings, False)
+    bulk_settings["line_spacing"] = line_spacing
+    bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    _render_bulk_export(
+        combos,
+        words_filtered,
+        fixations_filtered,
+        combos_all,
+        words_all,
+        fixations_all,
+        canvas_width=int(canvas_width),
+        canvas_height=int(canvas_height),
+        base_font_size=int(base_font_size),
+        font_family=font_family,
+        x_field=viz_settings["x_field"],
+        y_field=viz_settings["y_field"],
+        figure_settings=bulk_settings,
+    )
 
 
 def render_single_trial_tab(
@@ -1614,34 +1693,54 @@ def render_single_trial_tab(
     raw_gaze: Optional[pd.DataFrame] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
-    plot_config_slot=None,
+    combos_all: Optional[pd.DataFrame] = None,
+    words_all: Optional[pd.DataFrame] = None,
+    fixations_all: Optional[pd.DataFrame] = None,
 ) -> None:
     """Render the main Scanpath Visualization tab (static + animated).
 
-    Layout: 30 / 70 split. Left side panel, top to bottom: Trial Info, the
-    "Select trials by" controls, the Animate + Compare toggles, annotations,
-    the metadata table, and an Export toggle. The plot (static, animated, or a
-    two-trial comparison) plus the paragraph panel fill the right column. Bulk
-    export has its own tab; Save & restore lives in the sidebar.
-    """
-    col_side, col_main = st.columns([3, 7], gap="medium")
+    Layout: a 30 / 70 split holds the trial selectors (+ Animate / Compare) on
+    the left and the plot (static, animated, or a two-trial comparison) on the
+    right. Below the split, a full-width subtab bar carries the per-trial panels:
+    **Stimulus & questions · Annotations · Trial Info · Export** (Export folds in
+    the former standalone Bulk Export tab — see ``_render_export_panel``). Save &
+    restore lives in the sidebar.
 
-    with col_side:
-        # A slot for the Trial Info block (heading + info), filled once the
-        # selection (and any compare trial) is known — so the info sits ABOVE the
-        # trial selectors (TODO 1.11 / 1.12 / 1.14). The heading lives in the
-        # fill (below), not here, so it isn't left dangling above an empty space
-        # when select_trial `st.stop()`s or returns no trial.
-        trial_info_slot = st.container()
+    ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
+    the Export subtab's bulk section uses for its "whole dataset" scope; they
+    fall back to the filtered frames when not supplied.
+    """
+    if combos_all is None:
+        combos_all = combos
+    if words_all is None:
+        words_all = words_filtered
+    if fixations_all is None:
+        fixations_all = fixations_filtered
+    # The plot sits full-width at the TOP; it's filled (below) once the selection
+    # is resolved. A reserved container lets the Trial Selection panel render
+    # *under* the plot in the page while still being evaluated first.
+    plot_slot = st.container()
+
+    # --- Trial Selection (below the plot) -------------------------------------
+    st.markdown("### 🎯 Trial Selection")
+    sel_col, filt_col = st.columns([3, 2], gap="large")
+    with sel_col:
         selected_participant, selected_trial, selection_mode, selected_text = (
             select_trial(combos, key_prefix="single")
         )
+    with filt_col:
+        # The former sidebar "Filter trials" panel now lives with selection. It
+        # renders every run the tab is shown (a collapsed expander still renders
+        # its children), writing the selections to session_state; app.main reads
+        # them via read_trial_filters and applies the filter globally.
+        filt_exp = st.expander("🔍 Filter trials", expanded=False)
+        filt_exp.caption("Narrow the trial pool shown in every view.")
+        render_trial_filters(words_all, fixations_all, host=filt_exp)
     if not (selected_participant and selected_trial):
         return
 
     # Remember the resolved selection so the header Share button can build a deep
-    # link back to exactly this trial (app._build_share_query reads it; this tab
-    # renders every rerun regardless of the active tab, so it stays current).
+    # link back to exactly this trial (app._build_share_query reads it).
     st.session_state["_share_selection"] = {
         "participant_id": selected_participant,
         "trial_id": selected_trial,
@@ -1667,22 +1766,21 @@ def render_single_trial_tab(
     x_field = viz_settings["x_field"]
     y_field = viz_settings["y_field"]
 
-    with col_side:
-        # Animate toggle ABOVE the compare toggle (TODO 1.17b).
-        animate = st.checkbox(
+    # Animate + Compare sit in the Trial Selection panel, below the selectors.
+    opt_col, cmp_col = st.columns(2, gap="large")
+    with opt_col:
+        animate = st.toggle(
             "Animate scanpath",
             value=False,
             key="single_animate",
             help="Replay the trial fixation by fixation; use the "
             "play / pause / restart controls below the plot.",
         )
-        # Reading-time / playback info box sits right under the Animate toggle
-        # (TODO 3.1); filled below once the playback speed + any compare trial
-        # are known.
+        # Reading-time / playback info box, filled below once playback speed + any
+        # compare trial are known.
         anim_info_slot = st.container()
-        # Playback speed sits in the left panel (TODO 1.17d), shown only when
-        # animating a trial that actually has fixations. Default ×4 — a brisk
-        # review pace (real-time ÷ 4); drop it for a closer look (TODO 3.2).
+        # Playback speed shows only when animating a trial that has fixations.
+        # Default ×4 — a brisk review pace (real-time ÷ 4).
         playback_speed = _ANIM_DEFAULT_SPEED
         if animate and not trial_fixations.empty:
             st.session_state.setdefault("single_playback_speed", _ANIM_DEFAULT_SPEED)
@@ -1693,6 +1791,7 @@ def render_single_trial_tab(
                 help="Playback speed relative to the recorded fixation timings.",
                 key="single_playback_speed",
             )
+    with cmp_col:
         compare_participant, compare_trial, compare_layout = (
             _render_comparison_controls(
                 combos,
@@ -1703,8 +1802,8 @@ def render_single_trial_tab(
                 animate=animate,
             )
         )
-        if global_raw_toggle and not trial_has_raw_gaze:
-            st.warning("Raw gaze not available for this trial.", icon="⚠️")
+    if global_raw_toggle and not trial_has_raw_gaze:
+        st.warning("Raw gaze not available for this trial.", icon="⚠️")
 
     # Second trial's words/fixations + labels for the comparison figure and the
     # side-by-side Trial Info / metadata table.
@@ -1718,24 +1817,6 @@ def render_single_trial_tab(
     )
     comparing = compare_participant is not None and compare_trial is not None
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
-
-    # Fill the Trial Info slot now the selection (+ any compare trial) is known.
-    with trial_info_slot:
-        st.markdown("### Trial Info")
-        _render_trial_info(
-            selected_participant,
-            selected_trial,
-            trial_words,
-            compare=(
-                {
-                    "participant": compare_participant,
-                    "trial": compare_trial,
-                    "words": compare_meta["words"],
-                }
-                if comparing and compare_meta
-                else None
-            ),
-        )
 
     displayed_fig = None
     save_slug = f"{selected_participant}__{selected_trial}"
@@ -1758,7 +1839,7 @@ def render_single_trial_tab(
                 playback_speed,
             )
 
-    with col_main:
+    with plot_slot:
         if animate and trial_fixations.empty:
             st.info(
                 "Animation needs a **fixations** table — there's nothing to "
@@ -1831,92 +1912,54 @@ def render_single_trial_tab(
             )
             _render_true_scale_chart(displayed_fig, key="single")
 
-        # Paragraph text (with question + critical/distractor span overlays)
-        # sits below the figure so reviewers can read the text while comparing
-        # it to the scanpath right above.
+    # Per-trial panels sit BELOW the plot as a single full-width subtab bar
+    # (they must be created outside the columns to span the page width). The
+    # Stimulus tab leads so reviewers land on the reading text under the plot.
+    tab_stim, tab_annot, tab_info, tab_export = st.tabs(
+        ["Stimulus & questions", "📝 Annotations", "Trial Info", "Export"]
+    )
+    with tab_stim:
         _render_paragraph_panel(
-            trial_words, trial_fixations=trial_fixations, expanded=True
+            trial_words, trial_fixations=trial_fixations, bare=True
         )
-
-    with col_side:
-        # Annotations sit ABOVE the metadata table (TODO 1.8); the Export toggle
-        # sits below it (TODO 1.16).
-        render_trial_annotations(selected_participant, selected_trial)
+    with tab_annot:
+        render_trial_annotations(selected_participant, selected_trial, bare=True)
+    with tab_info:
         _render_metadata_selector(
             words_filtered,
             fixations_filtered,
             trial_words,
             trial_fixations,
+            selected_participant,
+            selected_trial,
             compare=compare_meta,
+            bare=True,
         )
-        _render_export_toggle(
+    with tab_export:
+        _render_export_panel(
             displayed_fig,
             animate=animate,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
             save_slug=save_slug,
             playback_ms=anim_playback_ms,
             file_stem=anim_file_stem,
+            combos=combos,
+            words_filtered=words_filtered,
+            fixations_filtered=fixations_filtered,
+            combos_all=combos_all,
+            words_all=words_all,
+            fixations_all=fixations_all,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            viz_settings=viz_settings,
+            line_spacing=line_spacing,
+            scale_text_to_boxes=scale_text_to_boxes,
         )
 
-    # Save & restore (plot config + annotations) renders into the reserved
-    # sidebar slot (see _render_save_restore_expander / app.main).
-    _render_save_restore_expander(
-        selected_participant,
-        selected_trial,
-        canvas_width,
-        canvas_height,
-        x_field,
-        y_field,
-        figure_settings,
-        viz_settings,
-        base_font_size,
-        trial_raw_gaze,
-        font_family=font_family,
-        slot=plot_config_slot,
-    )
-
-
-def render_bulk_export_tab(
-    combos: pd.DataFrame,
-    words_filtered: pd.DataFrame,
-    fixations_filtered: pd.DataFrame,
-    combos_all: pd.DataFrame,
-    words_all: pd.DataFrame,
-    fixations_all: pd.DataFrame,
-    *,
-    canvas_width: int,
-    canvas_height: int,
-    base_font_size: int,
-    font_family: str,
-    viz_settings: dict,
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
-) -> None:
-    """Render the Bulk Export tab (TODO 1.6).
-
-    Bundles per-trial figures + tabular data for many trials into one zip.
-    Operates on the filtered trial pool by default; ticking "Export the whole
-    dataset" switches to the unfiltered frames (TODO 1.7)."""
-    st.subheader("Bulk export")
-    figure_settings = _build_figure_settings(viz_settings, False)
-    figure_settings["line_spacing"] = line_spacing
-    figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
-    _render_bulk_export(
-        combos,
-        words_filtered,
-        fixations_filtered,
-        combos_all,
-        words_all,
-        fixations_all,
-        canvas_width=int(canvas_width),
-        canvas_height=int(canvas_height),
-        base_font_size=int(base_font_size),
-        font_family=font_family,
-        x_field=viz_settings["x_field"],
-        y_field=viz_settings["y_field"],
-        figure_settings=figure_settings,
-    )
+    # Save & restore (plot config + annotations) is rendered by app.main on every
+    # view (it must stay reachable when a non-Scanpath view is active), sourcing
+    # the trial selection from _share_selection.
 
 
 def _render_bulk_export(
@@ -1955,16 +1998,10 @@ def _render_bulk_export(
             type="primary",
             disabled=(
                 active_combos.empty
-                or not any(
-                    [
-                        options.include_png,
-                        options.include_svg,
-                        options.include_pdf,
-                        options.include_plot_config,
-                        options.include_fixations,
-                        options.include_measures,
-                        options.include_mega_table,
-                    ]
+                or not (
+                    options.figure_formats()
+                    or options.include_plot_config
+                    or options.any_table()
                 )
             ),
         )
@@ -2243,7 +2280,7 @@ def render_aggregated_views_tab(
             base_font_size=base_font_size,
             font_family=font_family,
         )
-        st.plotly_chart(fig_trial, use_container_width=True)
+        st.plotly_chart(fig_trial, width="stretch")
     if supports_fix_trend:
         fix_df = _agg_by_fixation_index(
             fixations_filtered, metric_col, frame_fingerprint(fixations_filtered)
@@ -2258,7 +2295,7 @@ def render_aggregated_views_tab(
                 base_font_size=base_font_size,
                 font_family=font_family,
             )
-            st.plotly_chart(fig_fix, use_container_width=True)
+            st.plotly_chart(fig_fix, width="stretch")
 
     # --- Per-text aggregated heatmap -----------------------------------------
     text_col = _text_column(words_filtered)
@@ -2360,7 +2397,7 @@ def render_aggregated_views_tab(
         base_font_size=base_font_size,
         font_family=font_family,
     )
-    st.plotly_chart(fig_hist, use_container_width=True)
+    st.plotly_chart(fig_hist, width="stretch")
 
 
 # -----------------------------------------------------------------------------

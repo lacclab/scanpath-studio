@@ -190,8 +190,12 @@ def _add_tag_callback(tags_key: str, newtag_key: str) -> None:
     st.session_state[newtag_key] = ""
 
 
-def render_trial_annotations(participant_id: str, trial_id: str) -> None:
-    """Render the per-trial annotations expander (star / tags / notes)."""
+def render_trial_annotations(
+    participant_id: str, trial_id: str, *, bare: bool = False
+) -> None:
+    """Render the per-trial annotations (star / tags / notes).
+
+    ``bare=True`` drops the expander wrapper so it can sit inside a subtab."""
     entry = get_entry(participant_id, trial_id)
     slug = f"{participant_id}__{trial_id}"
     star_key = f"{_WIDGET_PREFIX}star_{slug}"
@@ -208,7 +212,8 @@ def render_trial_annotations(participant_id: str, trial_id: str) -> None:
     label = "📝 Annotations" + (" ⭐" if entry["star"] else "")
     if entry["tags"]:
         label += f" · {', '.join(entry['tags'])}"
-    with st.expander(label, expanded=False):
+    container = st.container() if bare else st.expander(label, expanded=False)
+    with container:
         star = st.checkbox("⭐ Favorite (star this trial)", key=star_key)
         # Options must include every currently-selected tag (incl. ones added
         # via the input) or st.multiselect raises.

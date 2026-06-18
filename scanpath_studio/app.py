@@ -74,8 +74,8 @@ from scanpath_studio.controls import (
     column_mapping_ui,
     data_dictionary_help_text,
     numeric_field_options,
+    read_trial_filters,
     sidebar_controls,
-    sidebar_trial_filters,
 )
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
@@ -116,12 +116,14 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
+    _build_figure_settings,
     _collect_column_mapping,
-    render_bulk_export_tab,
+    _render_save_restore_expander,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
     render_single_trial_tab,
 )
+from scanpath_studio.utils import extract_trial
 from scanpath_studio.tour import (
     maybe_show_welcome_tour,
     maybe_show_wizard_guide,
@@ -806,29 +808,37 @@ def configure_page() -> None:
 
 
 def _render_about_panel() -> "DeltaGenerator":
-    """Compact header: title + a Share popover + an About popover.
+    """Compact header: title + caption + a Share popover.
 
     Returns the header container reserved for the Share popover. Share is filled
     later by ``main()`` (via ``_render_share_panel``) because the link it builds
     needs the resolved data source / trial selection, which aren't known this
     early — but a keyed container holds its position in the header regardless of
-    when it's filled.
+    when it's filled. The **About** popover lives in the sidebar Help group now
+    (``_render_about_sidebar``), keeping the header lean.
     """
-    from scanpath_studio import __version__
-    from scanpath_studio.constants import CITATION
-
     header = st.container(key="about_header")
     title_col, buttons_col = header.columns([5, 2], vertical_alignment="center")
     with title_col:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")
-    # Share + About share one right-aligned flex row (see `.st-key-header_buttons`
-    # in styles.py) so they sit side by side with just a small gap, instead of in
-    # separate columns that left a wide blank between them.
+    # The keyed wrapper right-aligns the content-sized Share trigger (see
+    # `.st-key-share_btn` / `.st-key-header_buttons` in styles.py).
     button_row = buttons_col.container(key="header_buttons")
-    # The keyed wrapper right-aligns the content-sized trigger (see
-    # `.st-key-share_btn` in styles.py), matching the About button beside it.
     share_slot = button_row.container(key="share_btn")
+    return share_slot
+
+
+def _render_about_sidebar() -> None:
+    """Render the **About** popover in the sidebar Help group.
+
+    Holds the version, authors, code link, and citation. Lives in the sidebar
+    (next to **🎓 Show tutorial**) rather than the header so the header stays
+    lean; Share remains in the header because the link it builds is contextual to
+    the current trial/view."""
+    from scanpath_studio import __version__
+    from scanpath_studio.constants import CITATION
+
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Berzak, Yevgeni},\n"
@@ -840,15 +850,9 @@ def _render_about_panel() -> "DeltaGenerator":
         "year = {2026}\n"
         "}"
     )
-    with button_row.container(key="about_btn"):
-        # `width="content"` keeps the button just as wide as its label instead
-        # of stretching across the column (which left whitespace either side).
-        # The `about_btn` keyed wrapper lets the stylesheet right-align this
-        # content-sized button to the column's (and thus the page content's)
-        # right edge — see `.st-key-about_btn` in styles.py.
-        with st.popover("About", icon="ℹ️", width="content"):
-            st.markdown(
-                f"""
+    with st.sidebar.popover("ℹ️ About", width="stretch"):
+        st.markdown(
+            f"""
 **Scanpath Studio** v{__version__} — interactive visualization of eye
 movements in reading.
 
@@ -862,10 +866,10 @@ and TBD at the [LaCC Lab]({CITATION["lab_url"]}), Technion.
 
 📖 **How to cite** — a paper is in preparation; until then:
 """
-            )
-            st.code(bibtex, language="bibtex", wrap_lines=True)
-            st.markdown(
-                """
+        )
+        st.code(bibtex, language="bibtex", wrap_lines=True)
+        st.markdown(
+            """
 If you use the bundled demo data, also cite
 [OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2)
 (Berzak et al., 2025, *Scientific Data*).
@@ -875,8 +879,7 @@ If you use the bundled demo data, also cite
 [Digital Linguistics](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html) ·
 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/)
 """
-            )
-    return share_slot
+        )
 
 
 def _build_share_query(data_choice: str) -> Tuple[str, list]:
@@ -946,7 +949,7 @@ def _render_share_link_widget(query: str) -> None:
     """Render the copyable share link (read-only field + Copy button).
 
     A same-origin ``components.html`` iframe (same trick as the tour — see
-    ``_render_tab_persistence``) composes the full URL from the *live* address:
+    ``tour.render_spotlight_tour``) composes the full URL from the *live* address:
     ``window.parent.location.origin + pathname`` + the query string built
     server-side. Doing the origin/path join client-side means the link is correct
     wherever the app is served (localhost, Streamlit Cloud, a reverse proxy)
@@ -1402,94 +1405,32 @@ def prepare_data(
 # Labels of the top-level tab strip, shared by the real tabs, the
 # unmapped-data placeholder view, and the tab-persistence script so they can't
 # drift apart.
+# Bulk export is no longer a top-level tab — it's folded into the Scanpath
+# Visualization tab's "Export" subtab (see tabs._render_export_panel).
 _MAIN_TAB_LABELS = [
     "Scanpath Visualization",
     "Corpus Analysis",
     "Data Inspection",
-    "Bulk Export",
 ]
 
 
-def _render_tab_persistence() -> None:
-    """Keep the focused top-level tab across reruns.
+def _render_main_nav() -> str:
+    """Render the primary navigation in the sidebar and return the active view.
 
-    Native ``st.tabs`` tracks the active tab purely in the browser and usually
-    preserves it across reruns — but it resets to the first tab whenever the
-    tab strip is torn down and rebuilt (which can happen on a rerun triggered
-    by an unrelated widget, e.g. the sidebar trial filters). ``st.tabs`` exposes
-    no key and no way to read/set the active tab from Python, so we can't fix
-    this server-side.
-
-    Instead we inject a tiny script into the *parent* document (the app already
-    uses same-origin ``components.html`` iframes for the tour — see
-    ``tour.py``). It remembers the user's last-clicked top-level tab in
-    ``sessionStorage`` and re-selects it whenever Streamlit resets the strip to
-    the first tab. The script lives in the parent document — not the throwaway
-    iframe — so its click listener + observer survive across reruns; it injects
-    itself once (guarded by element id) and targets only the top-level strip
-    (matched by the known labels), leaving nested sub-tabs alone.
-    """
-    labels_json = json.dumps(_MAIN_TAB_LABELS)
-    components.html(
-        f"""<script>
-        (function () {{
-            const doc = window.parent.document;
-            if (doc.getElementById("spx-tab-persist")) return;  // inject once
-            const s = doc.createElement("script");
-            s.id = "spx-tab-persist";
-            s.textContent = `
-                (function () {{
-                    const KEY = "spx_active_main_tab";
-                    const LABELS = {labels_json};
-                    const d = document;
-                    const ss = window.sessionStorage;
-                    function topList() {{
-                        for (const t of d.querySelectorAll('button[role=\\"tab\\"]')) {{
-                            if (LABELS.includes(t.innerText.trim()))
-                                return t.closest('[role=\\"tablist\\"]');
-                        }}
-                        return null;
-                    }}
-                    // Remember the user's clicks on the top-level tabs.
-                    d.addEventListener("click", function (ev) {{
-                        const tab = ev.target.closest &&
-                            ev.target.closest('button[role=\\"tab\\"]');
-                        if (!tab) return;
-                        const label = tab.innerText.trim();
-                        if (!LABELS.includes(label)) return;          // skip sub-tabs
-                        if (tab.closest('[role=\\"tablist\\"]') !== topList()) return;
-                        try {{ ss.setItem(KEY, label); }} catch (e) {{}}
-                    }}, true);
-                    // Re-select the saved tab if Streamlit reset it.
-                    function restore() {{
-                        let want;
-                        try {{ want = ss.getItem(KEY); }} catch (e) {{ return; }}
-                        if (!want) return;
-                        const list = topList();
-                        if (!list) return;
-                        const tabs = list.querySelectorAll('button[role=\\"tab\\"]');
-                        for (const t of tabs) {{
-                            if (t.innerText.trim() === want) {{
-                                if (t.getAttribute("aria-selected") !== "true")
-                                    t.click();
-                                return;
-                            }}
-                        }}
-                    }}
-                    let pending;
-                    const obs = new MutationObserver(function () {{
-                        clearTimeout(pending);
-                        pending = setTimeout(restore, 40);
-                    }});
-                    obs.observe(d.body, {{ childList: true, subtree: true }});
-                    restore();
-                }})();
-            `;
-            doc.head.appendChild(s);
-        }})();
-        </script>""",
-        height=0,
+    Replaces the former top tab strip. A keyed ``st.radio`` persists the active
+    view in session_state across reruns automatically — so this needs none of
+    the brittle client-side ``sessionStorage`` re-selection the old ``st.tabs``
+    required (st.tabs exposes no key). The keyed container is the spotlight-tour
+    target (``.st-key-tour_grp_nav``)."""
+    nav = st.sidebar.container(key="tour_grp_nav")
+    choice = nav.radio(
+        "View",
+        options=_MAIN_TAB_LABELS,
+        key="main_nav",
+        label_visibility="collapsed",
     )
+    nav.divider()
+    return choice or _MAIN_TAB_LABELS[0]
 
 
 def _render_raw_preview(label: str, df: pd.DataFrame) -> None:
@@ -1498,38 +1439,38 @@ def _render_raw_preview(label: str, df: pd.DataFrame) -> None:
         return
     st.markdown(f"#### {label} — {len(df):,} rows × {df.shape[1]} columns")
     st.caption("Columns: " + ", ".join(str(c) for c in df.columns))
-    st.dataframe(df.head(200), use_container_width=True, height=320)
+    st.dataframe(df.head(200), width="stretch", height=320)
 
 
 def _render_unmapped_view(
     raw_words_df: pd.DataFrame,
     raw_fixations_df: pd.DataFrame,
     problems: list,
+    active_view: str,
 ) -> None:
     """Show the raw uploaded data while the column mapping is incomplete.
 
-    Renders the usual tab strip so the layout is familiar, but only the **Data
-    Inspection** tab has content (the uploaded tables, unmodified) — the plotting
-    tabs point back to the sidebar. Lets the user inspect column names and
-    values to fill in the *Column mapping* panels without the app halting.
+    Only the **Data Inspection** view has content (the uploaded tables,
+    unmodified) — the other views point back to the sidebar. Lets the user
+    inspect column names and values to fill in the *Column mapping* panels
+    without the app halting. ``active_view`` is the sidebar nav selection.
     """
     st.warning(
         "**Finish the column mapping to draw scanpaths.** Map the missing "
         "field(s) in the **Column mapping** panel below each upload box in the "
-        "sidebar — the raw uploaded data is shown in the **Data Inspection** tab "
-        "below to help you choose. Still needed:\n\n"
+        "sidebar — the raw uploaded data is shown in the **Data Inspection** view "
+        "to help you choose. Still needed:\n\n"
         + "\n".join(f"- {p}" for p in problems)
     )
-    tab_single, tab_multi, tab_inspect, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
-    for tab in (tab_single, tab_multi, tab_bulk):
-        with tab:
-            st.info("Complete the column mapping in the sidebar to see this view.")
-    with tab_inspect:
-        if raw_words_df is None or raw_words_df.empty:
-            if raw_fixations_df is None or raw_fixations_df.empty:
-                st.info("No data loaded yet.")
+    if active_view == "Data Inspection":
+        if (raw_words_df is None or raw_words_df.empty) and (
+            raw_fixations_df is None or raw_fixations_df.empty
+        ):
+            st.info("No data loaded yet.")
         _render_raw_preview("Words / IA", raw_words_df)
         _render_raw_preview("Fixations", raw_fixations_df)
+    else:
+        st.info("Complete the column mapping in the sidebar to see this view.")
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
@@ -2599,6 +2540,32 @@ def _render_setup_download(host) -> None:
     )
 
 
+def _render_wizard_progress(body) -> None:
+    """A native step indicator at the top of the active setup wizard.
+
+    Read-only, driven by the *actual* wizard state (uploads present + whether
+    last run's column mapping validated) rather than an independent counter — so
+    the bar tracks real progression. ``_wizard_problems_last`` is written near the
+    end of ``_render_data_setup`` once this run's validation `problems` are known.
+    """
+    name_done = bool(st.session_state.get("wizard_dataset_name"))
+    uploaded = bool(
+        st.session_state.get("col_map_fix_upload")
+        or st.session_state.get("col_map_words_upload")
+        or st.session_state.get("col_map_raw_gaze_upload")
+    )
+    # No problems last run (and something uploaded) ⇒ the mapping validates.
+    # Default to "not yet" until a run has actually computed problems.
+    mapped = uploaded and not st.session_state.get("_wizard_problems_last", ["pending"])
+    steps = [("Name", name_done), ("Upload", uploaded), ("Map columns", mapped)]
+    done_n = sum(1 for _, ok in steps if ok)
+    body.progress(done_n / len(steps), text=f"Setup progress — {done_n} / {len(steps)}")
+    body.caption(
+        " · ".join(f"{'✅' if ok else '⬜'} {lbl}" for lbl, ok in steps)
+        + " · 🏁 Add dataset"
+    )
+
+
 def _render_data_setup(active: bool) -> _UploadResult:
     """Hybrid data-setup surface for the Upload source.
 
@@ -2624,6 +2591,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         render_spotlight_wizard_guide()
         render_wizard_guide_button(st)
         body = st.container()
+        _render_wizard_progress(body)
     else:
         panel = st.expander("📋 Data & mapping", expanded=False)
         body = panel
@@ -2970,6 +2938,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # blocking a usable dataset — fold it into `problems` so finalize is gated.
     if not has_words and not has_fix and raw_gaze_problems:
         problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
+    # Feed the wizard step indicator (read at the top of the next run).
+    st.session_state["_wizard_problems_last"] = list(problems)
 
     # === 5. Filter & keep — one cross-table picker each (not per table) ===
     subsection("Filter & keep (optional)", number=5)
@@ -3149,9 +3119,20 @@ def main() -> None:
     maybe_show_welcome_tour()
     render_spotlight_tour()
 
+    # Primary navigation lives at the top of the sidebar (replaces the former top
+    # tab strip). Read here so the dispatch below — and the unmapped-data view —
+    # render only the active view.
+    active_view = _render_main_nav()
+
     # Data source selection (sidebar)
     _sidebar_group("📂 Data")
     data_choice = render_sidebar_data_source()
+    # Drop a stale share/save selection when the data source changes — its trial
+    # id won't exist in the new dataset, so a Share link or saved config must not
+    # carry it over. The active view rewrites _share_selection for the new source.
+    if st.session_state.get("_share_selection_source") != data_choice:
+        st.session_state.pop("_share_selection", None)
+        st.session_state["_share_selection_source"] = data_choice
     # Just-finalized upload: paint a "loading" bridge into the main area now so it
     # repaints over the wizard (instead of the wizard lingering until the slow
     # first figure finishes). Cleared just before the tabs render below.
@@ -3243,7 +3224,9 @@ def main() -> None:
         # A required column is still unmapped. Rather than halt the whole app
         # (which hid the data the user needs to choose the mapping), show the
         # raw uploaded tables; the sidebar Column-mapping panels stay editable.
-        _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
+        _render_unmapped_view(
+            raw_words_df, raw_fixations_df, mapping_problems, active_view
+        )
         return
 
     # Optional raw gaze: the Upload source already mapped + normalized it above;
@@ -3256,11 +3239,13 @@ def main() -> None:
     # ignoring the current filters (TODO 1.7).
     words_all, fixations_all = words_df, fixations_df
 
-    # Trial-level filtering / grouping (sidebar): narrow by participant, by
-    # condition (Hunting/Gathering, difficulty, first/repeated reading,
-    # correctness), and by annotation state (favorites / tags) before anything
-    # downstream sees the data.
-    trial_filters = sidebar_trial_filters(words_df, fixations_df)
+    # Trial-level filtering / grouping: narrow by participant, by condition
+    # (Hunting/Gathering, difficulty, first/repeated reading, correctness), and by
+    # annotation state (favorites / tags) before anything downstream sees the
+    # data. The controls now live in the Scanpath tab's Trial Selection panel
+    # (rendered there via render_trial_filters); here we just read the last
+    # selection from session_state so filtering stays global across every view.
+    trial_filters = read_trial_filters()
     words_df, fixations_df = filter_trials(
         words_df,
         fixations_df,
@@ -3404,27 +3389,11 @@ def main() -> None:
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
     # own tab. Raw Data + Data Statistics are merged into Data Inspection.
-    tab_single, tab_multi, tab_inspect, tab_bulk = st.tabs(_MAIN_TAB_LABELS)
-    # Keep the focused tab across reruns (see _render_tab_persistence).
-    _render_tab_persistence()
-
-    with tab_single:
-        render_single_trial_tab(
-            words_filtered,
-            fixations_filtered,
-            combos,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            viz_settings=viz_settings,
-            raw_gaze=raw_gaze_filtered,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-            plot_config_slot=save_restore_slot,
-        )
-
-    with tab_multi:
+    # Dispatch the active view (sidebar nav). Only one view body renders per run
+    # — the keyed nav widget persists the selection across reruns, so no JS hack
+    # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection
+    # and fills the Save & restore slot when it's the active view.
+    if active_view == "Corpus Analysis":
         render_corpus_analysis_tab(
             words_filtered,
             fixations_filtered,
@@ -3437,39 +3406,72 @@ def main() -> None:
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
         )
-
-    with tab_inspect:
+    elif active_view == "Data Inspection":
         render_data_inspection_tab(
             words_filtered, fixations_filtered, raw_gaze_filtered
         )
-
-    with tab_bulk:
-        render_bulk_export_tab(
-            combos,
+    else:
+        render_single_trial_tab(
             words_filtered,
             fixations_filtered,
-            combos_all,
-            words_all,
-            fixations_all,
+            combos,
             canvas_width=canvas_width,
             canvas_height=canvas_height,
             base_font_size=base_font_size,
             font_family=font_family,
             viz_settings=viz_settings,
+            raw_gaze=raw_gaze_filtered,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
+            combos_all=combos_all,
+            words_all=words_all,
+            fixations_all=fixations_all,
         )
 
-    # Fill the header's Share popover now — after the tabs, so the resolved trial
-    # (_share_selection, written by render_single_trial_tab, which runs every
-    # rerun) and the live viz settings the link encodes are all current.
+    # Save & restore (plot config + annotations) renders on EVERY view so it stays
+    # reachable when a non-Scanpath view is active (it's a sidebar panel). The
+    # trial selection comes from _share_selection (written by the Scanpath view;
+    # blank before any trial has been resolved this session).
+    _sr_sel = st.session_state.get("_share_selection") or {}
+    _sr_pid = str(_sr_sel.get("participant_id") or "")
+    _sr_trial = str(_sr_sel.get("trial_id") or "")
+    _sr_raw_gaze = (
+        extract_trial(raw_gaze_filtered, _sr_pid, _sr_trial)
+        if _sr_pid and _sr_trial and not raw_gaze_filtered.empty
+        else pd.DataFrame()
+    )
+    _sr_figure_settings = _build_figure_settings(viz_settings, not _sr_raw_gaze.empty)
+    _sr_figure_settings["raw_gaze"] = _sr_raw_gaze if not _sr_raw_gaze.empty else None
+    _sr_figure_settings["line_spacing"] = line_spacing
+    _sr_figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    _render_save_restore_expander(
+        _sr_pid,
+        _sr_trial,
+        canvas_width,
+        canvas_height,
+        viz_settings["x_field"],
+        viz_settings["y_field"],
+        _sr_figure_settings,
+        viz_settings,
+        base_font_size,
+        _sr_raw_gaze,
+        font_family=font_family,
+        slot=save_restore_slot,
+    )
+
+    # Fill the header's Share popover now — after the view dispatch, so the
+    # resolved trial (_share_selection, written by render_single_trial_tab when
+    # the Scanpath view is active; persisted from the last visit otherwise, and
+    # cleared on a data-source switch) and the live viz settings are all current.
     with share_slot:
         _render_share_panel(data_choice)
 
     # Sidebar Help group (bottom): replay the welcome tour (the tour itself
-    # renders early in this function — see the maybe_show_welcome_tour call).
+    # renders early in this function — see the maybe_show_welcome_tour call) and
+    # the About popover (moved here from the header).
     _sidebar_group("❓ Help")
     render_tour_replay_button()
+    _render_about_sidebar()
 
 
 if __name__ == "__main__":

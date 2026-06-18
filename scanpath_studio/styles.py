@@ -7,7 +7,7 @@ def get_app_css() -> str:
     """Return custom CSS to reduce whitespace and disable animations."""
     return """
     <style>
-    section.main > div.block-container {padding-top: 0.5rem; padding-bottom: 0.5rem;}
+    section.main > div.block-container {padding-top: 1.25rem; padding-bottom: 0.5rem;}
     /* Remove all whitespace around plotly charts */
     div[data-testid="stPlotlyChart"] {margin: 0 !important; padding: 0 !important; line-height: 0 !important;}
     div[data-testid="stPlotlyChart"] > div {margin: 0 !important; padding: 0 !important;}
@@ -106,6 +106,94 @@ def get_app_css() -> str:
         0%   { box-shadow: 0 0 0 0 rgba(90, 169, 230, 0.6), 0 8px 24px rgba(31,119,180,0.38); }
         70%  { box-shadow: 0 0 0 16px rgba(90, 169, 230, 0.0), 0 8px 24px rgba(31,119,180,0.38); }
         100% { box-shadow: 0 0 0 0 rgba(90, 169, 230, 0.0), 0 8px 24px rgba(31,119,180,0.38); }
+    }
+
+    /* === Visual polish ==========================================================
+       Tasteful, theme-robust chrome styling (header, tabs, chips, cards, buttons).
+       Colors are either the brand blue (which reads on both the light and dark
+       themes) or translucent neutrals (grey/blue at low alpha) that tint whatever
+       background sits behind them, so a single rule set works in both themes
+       without depending on a theme class Streamlit doesn't expose. The scientific
+       scanpath plot itself is untouched — only the surrounding UI is styled. */
+    .stApp {
+        --sps-accent: #1f77b4;
+        --sps-accent-soft: rgba(31, 119, 180, 0.10);
+        --sps-accent-border: rgba(31, 119, 180, 0.22);
+        --sps-border: rgba(128, 128, 128, 0.22);
+        --sps-code-fg: #15639c;
+        --sps-shadow-hover: 0 6px 18px rgba(31, 119, 180, 0.16);
+    }
+    /* In dark mode the brand blue is too dark for badge text; brighten it.
+       The app's theme is "Auto" (follows the OS) in the common case, so the OS
+       preference and prefers-color-scheme agree here. */
+    @media (prefers-color-scheme: dark) {
+        .stApp { --sps-code-fg: #8fc7f5; }
+    }
+
+    /* Page title: a restrained brand-blue gradient + tighter tracking. One <h1>
+       exists (st.title in the header), so this scopes cleanly to it. */
+    [data-testid="stHeading"] h1 {
+        background: linear-gradient(95deg, #1f77b4 0%, #4a9fd4 70%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+        font-weight: 800;
+        letter-spacing: -0.015em;
+    }
+    /* Section headings (### / st.subheader) — a touch heavier and tighter. */
+    [data-testid="stHeading"] h2,
+    [data-testid="stHeading"] h3 { font-weight: 700; letter-spacing: -0.005em; }
+
+    /* Tabs: hover affordance, bolder labels, brand-tinted active label. */
+    [data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 0.25rem; }
+    [data-testid="stTab"] {
+        padding: 0.45rem 0.85rem;
+        border-radius: 8px 8px 0 0;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+    [data-testid="stTab"]:hover { background: var(--sps-accent-soft); }
+    [data-testid="stTab"] p { font-weight: 600; }
+    [data-testid="stTab"][aria-selected="true"] p { color: var(--sps-accent); }
+
+    /* Inline code chips (Trial / Participant / Text ids, etc.) -> clean pill
+       badges. `:not(pre code)` leaves multi-line code blocks (e.g. the BibTeX in
+       the About popover) alone. */
+    [data-testid="stMarkdownContainer"] code:not(pre code) {
+        background: var(--sps-accent-soft);
+        border: 1px solid var(--sps-accent-border);
+        border-radius: 6px;
+        padding: 0.05rem 0.4rem;
+        font-weight: 600;
+        color: var(--sps-code-fg);
+    }
+
+    /* Expander / bordered-container cards: rounder corners + a subtle hover lift.
+       Covers the side-panel expanders (Annotations, Trial metadata, Export) and
+       the sidebar group cards (Data source, Experimental Setup, Filter trials). */
+    [data-testid="stExpander"] details {
+        border: 1px solid var(--sps-border);
+        border-radius: 10px;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    [data-testid="stExpander"] details:hover {
+        border-color: var(--sps-accent-border);
+        box-shadow: var(--sps-shadow-hover);
+    }
+    [data-testid="stExpander"] summary { font-weight: 600; border-radius: 10px; }
+
+    /* Buttons: smooth hover with a slight lift + brand-blue glow. Scoped to real
+       buttons, so the app-wide "animation: none" rules (which target plot/element
+       containers, not buttons) don't apply. */
+    [data-testid="stBaseButton-secondary"],
+    [data-testid="stBaseButton-primary"] {
+        transition: transform 0.12s ease, box-shadow 0.15s ease,
+                    border-color 0.15s ease, background 0.15s ease;
+    }
+    [data-testid="stBaseButton-secondary"]:hover,
+    [data-testid="stBaseButton-primary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--sps-shadow-hover);
     }
     </style>
     """

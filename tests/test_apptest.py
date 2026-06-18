@@ -119,8 +119,13 @@ class TestAppLaunches:
             at.run(timeout=30)
             assert not at.exception, f"{mode}: {at.exception}"
             assert at.error == [], f"{mode}: {[e.value for e in at.error]}"
+            # The trial id now leads the Trial Info table (st.dataframe) rather
+            # than a markdown header, so scan both surfaces.
             markdown = " ".join(m.value for m in at.markdown)
-            assert "synthetic_2line_demo" in markdown, (
+            tables = " ".join(
+                df.value.to_string() for df in at.dataframe if df.value is not None
+            )
+            assert "synthetic_2line_demo" in (markdown + " " + tables), (
                 f"{mode} mode did not resolve the single trial"
             )
 
@@ -256,6 +261,7 @@ class TestDataInspectionTab:
 
     def test_merged_sections_present_and_old_removed(self):
         at = _make_apptest(synthetic=True)
+        at.session_state["main_nav"] = "Data Inspection"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -285,6 +291,7 @@ class TestDataInspectionTab:
 
     def test_column_mapping_table_renders(self):
         at = _make_apptest(synthetic=True)
+        at.session_state["main_nav"] = "Data Inspection"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -300,14 +307,21 @@ class TestDataInspectionTab:
         # Every mapped row names a real source field.
         assert (table["Mapped column"].astype(str).str.len() > 0).all()
 
-    def test_top_level_tabs_merged(self):
+    def test_top_level_nav_views(self):
+        # Top-level navigation is now a sidebar radio (key "main_nav"), not a tab
+        # strip. Data Inspection is one view; the old Raw Data / Data Statistics /
+        # Bulk Export top-level entries are gone (merged / folded into subtabs).
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        labels = [t.label for t in at.get("tab")]
-        assert "Data Inspection" in labels
-        assert "Raw Data" not in labels
-        assert "Data Statistics" not in labels
+        nav = [r for r in at.radio if r.key == "main_nav"]
+        assert nav, "main nav radio missing"
+        options = list(nav[0].options)
+        assert "Data Inspection" in options
+        assert "Scanpath Visualization" in options
+        assert "Corpus Analysis" in options
+        for gone in ("Raw Data", "Data Statistics", "Bulk Export"):
+            assert gone not in options, f"{gone} should not be a top-level view"
 
 
 @pytest.mark.timeout(90)
@@ -338,8 +352,10 @@ class TestUnmappedRawDataView:
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         # Past the setup wizard (collapsed "Data & mapping" panel), an incomplete
-        # mapping still surfaces the raw data so the user can fix it.
+        # mapping still surfaces the raw data so the user can fix it. The raw
+        # tables show in the Data Inspection view.
         at.session_state["setup_complete"] = True
+        at.session_state["main_nav"] = "Data Inspection"
         at.run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -1174,6 +1190,7 @@ class TestCorpusAnalysisTab:
         # Demo source: several participants / trials / texts, so the trends,
         # per-text heatmap, and grouped histogram all have data.
         at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
         at.run(timeout=40)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
@@ -1210,3 +1227,44 @@ class TestShareLinkLazy:
         q3, _ = at.session_state["_share_query_frozen"]
         assert q3 != q1, "Refresh must rebuild the link from current settings"
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+
+@pytest.mark.timeout(120)
+class TestNavRegressions:
+    """Guards for the sidebar-nav + Trial-Selection-panel refactor."""
+
+    def test_participant_filter_applies_same_run(self):
+        # The Filter-trials controls live in the Scanpath tab now; changing one
+        # must narrow the trial pool on the SAME rerun (regression: it used to lag
+        # one rerun because the result was read from the previous run's stash).
+        at = _make_apptest()  # bundled 3-participant demo
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        picker = [s for s in at.selectbox if s.key == "single_trial_id"]
+        assert picker, "trial picker (single_trial_id) not found"
+        n_before = len(picker[0].options)
+        fp = [m for m in at.multiselect if m.key == "filter_participants"]
+        assert fp, "participant filter not found"
+        assert len(fp[0].options) > 1
+        # Interact (fires on_change) — not a bare session_state set.
+        fp[0].set_value([fp[0].options[0]]).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        picker2 = [s for s in at.selectbox if s.key == "single_trial_id"]
+        assert picker2, "trial picker missing after filtering"
+        n_after = len(picker2[0].options)
+        assert n_after < n_before, (
+            f"participant filter did not apply on the same run: {n_before} -> {n_after}"
+        )
+
+    def test_save_restore_present_on_every_view(self):
+        # The Save & restore sidebar panel must be reachable on all three views
+        # (regression: it only rendered on the Scanpath view after the nav change).
+        for view in ("Scanpath Visualization", "Corpus Analysis", "Data Inspection"):
+            at = _make_apptest(synthetic=True)
+            at.session_state["main_nav"] = view
+            at.run(timeout=60)
+            assert not at.exception, f"{view}: {at.exception}"
+            captions = " ".join(c.value for c in at.caption)
+            assert "Save the full plot configuration" in captions, (
+                f"Save & restore panel missing on the {view} view"
+            )

@@ -8,6 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Scanpath Visualization screen redesign (cognitive-load pass).** The plot now
+  sits full-width at the top; a **Trial Selection** panel below it gathers the
+  trial picker, the **Filter trials** controls (moved out of the sidebar), the
+  **Compare with another trial** toggle, and **Animate** in one place. The
+  per-trial panels became one full-width subtab bar under the plot —
+  **Stimulus & questions · Annotations · Trial Info · Export**.
+- **Quick-view presets.** One-click buttons in the Visualization panel
+  (**Scanpath · Heatmap · Reading order · Everything**) set the layers for a
+  focused picture instead of toggling each one.
+- **Calmer default.** First load now shows just the core scanpath (text +
+  fixations + saccades); the density **Heatmap** and the **Bounding boxes** grid
+  are off by default and one click (or one Quick view) away.
+- **Layer toggles + inline styling.** Each main layer (Fixations, Saccades, Text,
+  Heatmap, Bounding boxes, Raw gaze) is now an `st.toggle` with a **bold** label,
+  and that layer's styling appears inline only while it's on — no catch-all
+  "advanced" drawer.
+- **Sidebar navigation.** The top tab strip is replaced by a vertical menu at the
+  top of the sidebar (Scanpath Visualization · Corpus Analysis · Data Inspection),
+  removing the brittle client-side tab-persistence hack.
+- **Consolidated Export.** The standalone **Bulk Export** tab is folded into an
+  **Export** subtab with two sections — **This trial** (the live figure: static
+  PNG/SVG/PDF/HTML, or the HTML/GIF/MP4 animation) and **Multiple trials** (the
+  bulk export). Bulk export gained an **HTML** figure format, and its figure /
+  config / tabular pickers were modernized (pills + a toggle).
+- **About in the sidebar.** The About popover (version, authors, citation) moved
+  to the sidebar **Help** group; **Share** stays in the header.
+- **Setup-wizard progress indicator.** The upload wizard shows a native progress
+  bar + step checklist driven by the actual upload/mapping state.
+- **Trial Info table.** The trial id / participant / text now lead the metadata
+  table (renamed **Trial Info**); the separate header block is gone.
+
+### Changed
+- **Streamlit 1.58** and all dependencies bumped to current latest;
+  `use_container_width` migrated to the `width=` API.
+- Cohesive visual polish (gradient title, refined tabs / expanders / buttons,
+  pill-style id badges) that adapts to both light and dark themes.
+
+### Fixed
+- Saccade **direction arrows** no longer draw when the **Saccades** layer is off.
+- **Highlight a span** is now an on/off `st.toggle` that reveals the
+  Mark-text / Mark-border choice only when on (the "None" option is gone).
+
+### Added
 - **One Data Inspection tab.** The former **Raw Data** and **Data Statistics**
   tabs are merged into a single **Data Inspection** tab that, top to bottom,
   shows the headline dataset counts, every raw table (Stimuli, Word-level,

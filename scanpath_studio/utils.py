@@ -603,13 +603,11 @@ def select_trial(
     if mode_key and st.session_state.get(mode_key) not in modes:
         st.session_state.pop(mode_key, None)
     if len(modes) > 1:
-        st.markdown("#### Select trials by")
         selection_mode = st.radio(
-            label="Select trials by",
+            label="Browse by",
             options=modes,
             horizontal=True,
             key=mode_key,
-            label_visibility="collapsed",
         )
     else:
         selection_mode = "Trial"

@@ -54,6 +54,9 @@ class ExportOptions:
     include_png: bool = True
     include_svg: bool = True
     include_pdf: bool = False
+    # HTML is a browser-free figure format (fig.to_html — no Kaleido/Chrome) and
+    # stays interactive; handled specially in the export loop.
+    include_html: bool = False
     include_plot_config: bool = True
     include_fixations: bool = False
     include_measures: bool = False
@@ -86,7 +89,13 @@ class ExportOptions:
             formats.append("svg")
         if self.include_pdf:
             formats.append("pdf")
+        if self.include_html:
+            formats.append("html")
         return formats
+
+    def raster_formats(self) -> List[str]:
+        """Figure formats that need Kaleido/Chrome (everything but HTML)."""
+        return [f for f in self.figure_formats() if f != "html"]
 
 
 @dataclass
@@ -219,11 +228,12 @@ def _render_scope_picker(
     # (the whole dataset, ignoring the sidebar filter) and "All filtered trials"
     # (the current sidebar selection) are always offered — they coincide only
     # when no filter is active.
+    # A single trial is exported from the "This trial" section above (the
+    # currently-viewed trial), so the bulk picker only offers multi-trial scopes.
     options_map: dict[str, tuple[str, bool]] = {
         "All": ("all", True),
         "All filtered trials": ("all", False),
     }
-    options_map["A single trial"] = ("trial", False)
     options_map["All trials of one participant"] = ("participant", False)
     options_map["All trials of one text"] = ("text", False)
 
@@ -306,9 +316,10 @@ def render_export_options(
     st = st_module
     # No expander — the options are always displayed (TODO 2.1).
     with st.container():
-        st.markdown(
-            "Choose which trials to include and which artifacts to bundle. "
-            "Everything is packaged into a single zip you can download."
+        st.caption(
+            "Export many trials at once. Everything is packaged into a single "
+            "zip you can download. (To export just the trial on screen, use "
+            "**This trial** above.)"
         )
 
         st.markdown("##### Scope")
@@ -321,16 +332,29 @@ def render_export_options(
             export_unfiltered,
         ) = _render_scope_picker(st, combos, key_prefix, combos_all=combos_all)
 
+        # Figures are the headline artifact, so they lead with a single
+        # multi-select of formats (pills) rather than a column of checkboxes.
         st.markdown("##### Figures")
-        # One checkbox per row, vector-first (TODO 3); PDF + Config on by
-        # default (TODO 2).
-        include_pdf = st.checkbox("PDF (vector)", value=True, key=f"{key_prefix}_pdf")
-        include_svg = st.checkbox("SVG (vector)", value=False, key=f"{key_prefix}_svg")
-        include_png = st.checkbox("PNG (raster)", value=False, key=f"{key_prefix}_png")
-        # Only surface the scale stepper when PNG is on, and keep it narrow —
-        # it's a single small number, not a full-width control.
+        fig_formats = (
+            st.pills(
+                "Formats",
+                options=["PDF", "SVG", "PNG", "HTML"],
+                selection_mode="multi",
+                default=["PDF"],
+                key=f"{key_prefix}_figfmts",
+                help="PDF / SVG are vector; PNG is raster (set the scale below). "
+                "PDF / SVG / PNG render via Kaleido (needs Chrome). HTML is "
+                "interactive and needs no browser.",
+            )
+            or []
+        )
+        include_pdf = "PDF" in fig_formats
+        include_svg = "SVG" in fig_formats
+        include_png = "PNG" in fig_formats
+        include_html = "HTML" in fig_formats
+        # Only surface the scale stepper when PNG is on, and keep it narrow.
         if include_png:
-            scale_col, _ = st.columns([1, 4])
+            scale_col, _ = st.columns([1, 3])
             png_scale = scale_col.number_input(
                 "PNG scale",
                 min_value=1,
@@ -341,46 +365,51 @@ def render_export_options(
             )
         else:
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
-        st.caption(
-            "The plot config is a JSON snapshot of every plot setting (layers, "
-            "colors, sizing, text scaling) — bundle it to reproduce or restore "
-            "these exact figures later."
-        )
-        include_plot_config = st.checkbox("Config", value=True, key=f"{key_prefix}_cfg")
 
-        st.markdown("##### Tabular data")
-        include_fixations = st.checkbox(
-            "Per-trial fixations", value=False, key=f"{key_prefix}_fix"
+        st.markdown("##### Also include")
+        include_plot_config = st.toggle(
+            "Plot config (JSON)",
+            value=True,
+            key=f"{key_prefix}_cfg",
+            help="A JSON snapshot of every plot setting (layers, colors, sizing, "
+            "text scaling) — bundle it to reproduce or restore these exact "
+            "figures later.",
         )
-        include_measures = st.checkbox(
-            "Per-trial word measures (FFD/FPRT/RPD/TFD/...)",
-            value=False,
-            key=f"{key_prefix}_mes",
+        tabular = (
+            st.pills(
+                "Tabular data",
+                options=["Fixations", "Word measures", "Mega-table"],
+                selection_mode="multi",
+                default=[],
+                key=f"{key_prefix}_tabular",
+                help="Fixations: per-trial fixation rows. Word measures: per-word "
+                "FFD / FPRT / RPD / TFD … Mega-table: one aggregated table across "
+                "every selected trial.",
+            )
+            or []
         )
-        include_mega_table = st.checkbox(
-            "Aggregated mega-table across selected trials",
-            value=False,
-            key=f"{key_prefix}_mega",
-        )
-        any_table = include_fixations or include_measures or include_mega_table
-        table_format = st.radio(
-            "Table format",
-            options=["csv", "parquet", "both"],
-            index=0,
-            key=f"{key_prefix}_fmt",
-            horizontal=True,
-            disabled=not any_table,
-            help=(
-                "Tick at least one tabular option above to enable this."
-                if not any_table
-                else None
-            ),
-        )
+        include_fixations = "Fixations" in tabular
+        include_measures = "Word measures" in tabular
+        include_mega_table = "Mega-table" in tabular
+        any_table = bool(tabular)
+        if any_table:
+            table_format = (
+                st.segmented_control(
+                    "Table format",
+                    options=["csv", "parquet", "both"],
+                    default="csv",
+                    key=f"{key_prefix}_fmt",
+                )
+                or "csv"
+            )
+        else:
+            table_format = str(st.session_state.get(f"{key_prefix}_fmt", "csv"))
 
     return ExportOptions(
         include_png=include_png,
         include_svg=include_svg,
         include_pdf=include_pdf,
+        include_html=include_html,
         include_plot_config=include_plot_config,
         include_fixations=include_fixations,
         include_measures=include_measures,
@@ -487,9 +516,10 @@ def bulk_export(
     zf.writestr("README.md", "\n".join(readme_lines))
 
     # One warm Kaleido browser for every trial's figure (see _figure_renderer)
-    # instead of cold-starting Chrome on each render.
+    # instead of cold-starting Chrome on each render. HTML needs no browser, so
+    # only spin Kaleido up when a raster/vector format was requested.
     figure_formats = options.figure_formats()
-    with _figure_renderer(bool(figure_formats)) as render_figure:
+    with _figure_renderer(bool(options.raster_formats())) as render_figure:
         for combo in combos.itertuples(index=False):
             participant = getattr(combo, "participant_id")
             trial = getattr(combo, "trial_id")
@@ -573,8 +603,14 @@ def bulk_export(
                     out_w = int(fig.layout.width or canvas_width)
                     out_h = int(fig.layout.height or canvas_height)
                     for fmt in figure_formats:
-                        scale = options.png_scale if fmt == "png" else 1
-                        data = render_figure(fig, fmt, out_w, out_h, scale)
+                        if fmt == "html":
+                            # Browser-free + interactive; no Kaleido needed.
+                            data = fig.to_html(
+                                include_plotlyjs="cdn", full_html=True
+                            ).encode("utf-8")
+                        else:
+                            scale = options.png_scale if fmt == "png" else 1
+                            data = render_figure(fig, fmt, out_w, out_h, scale)
                         zf.writestr(f"{prefix}figure.{fmt}", data)
                         progress.bytes_written += len(data)
                 except Exception as exc:

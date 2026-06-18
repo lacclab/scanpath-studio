@@ -618,15 +618,15 @@ the repo root (kept current as the code changes); this is the short version.</p>
 <tbody>
 <tr>
 <td><code>app.py</code></td>
-<td>Streamlit entry point: page config, URL deep-link presets, sidebar, data load, filtering, and dispatch to the four tabs.</td>
+<td>Streamlit entry point: page config, URL deep-link presets, sidebar, data load, filtering, and dispatch to the three tabs.</td>
 </tr>
 <tr>
 <td><code>tabs.py</code></td>
-<td>Tab renderers: Scanpath Visualization, Corpus Analysis (Generations + Aggregated Views subtabs), Data Inspection, Bulk Export.</td>
+<td>Tab renderers: Scanpath Visualization (Annotations / Stimulus &amp; questions / Export subtabs — Export folds in the former Bulk Export tab), Corpus Analysis (Generations + Aggregated Views subtabs), Data Inspection.</td>
 </tr>
 <tr>
 <td><code>controls.py</code></td>
-<td>Sidebar visualization controls, column-mapping UI, trial-filter panel.</td>
+<td>Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel.</td>
 </tr>
 <tr>
 <td><code>data.py</code></td>

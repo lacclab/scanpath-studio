@@ -36,7 +36,11 @@ from scanpath_studio.data import (
     frame_fingerprint,
     has_explicit_trial_index,
 )
-from scanpath_studio.controls import render_trial_filters, sidebar_controls
+from scanpath_studio.controls import (
+    SUMMARY_CHIP_FIELDS,
+    render_trial_filters,
+    sidebar_controls,
+)
 from scanpath_studio.export import (
     ExportProgress,
     bulk_export,
@@ -66,9 +70,9 @@ from scanpath_studio.utils import (
     compute_trial_stats,
     extract_trial,
     friendly_trial_label,
-    gather_trial_metadata,
     safe_summary,
     select_trial,
+    selection_modes,
 )
 
 # -----------------------------------------------------------------------------
@@ -123,6 +127,11 @@ def _render_true_scale_chart(
         full_html=False,
         config={"responsive": False, "displaylogo": False},
         div_id=f"truescale-{key}",
+        # to_html defaults to auto_play=True, which auto-runs an animated figure on
+        # load at Plotly's default frame duration (ignoring the configured playback
+        # speed). Start paused so the animation only plays — at the right speed —
+        # when the user presses Play. No effect on static (frame-less) figures.
+        auto_play=False,
     )
     # Scale factor: shrink to the available width, and (when capped) also to the
     # cell height, never upscaling past 1×.
@@ -533,9 +542,12 @@ def _render_comparison_controls(
     When ``animate`` is on the layout is forced to "overlay" — an animated
     comparison co-animates both scanpaths on one clock, so side-by-side /
     stacked don't apply (TODO 1.17c) and the layout picker is hidden.
+
+    Styled like a layer: a **toggle** plus a ⚙ **popover** for the configuration
+    (the second-trial picker + the overlay/side-by-side/stacked layout).
     """
-    compare_enabled = st.checkbox(
-        "Compare with another trial",
+    compare_enabled = st.toggle(
+        "**Compare**",
         value=False,
         key="single_compare_toggle",
         help=(
@@ -559,39 +571,30 @@ def _render_comparison_controls(
     option_labels = [opt[2] for opt in comparison_options]
     label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in comparison_options}
 
-    if animate:
+    layout = "overlay"
+    with st.popover("⚙️ Compare options", width="stretch"):
         selected_compare_label = st.selectbox(
             "Compare with trial",
             options=option_labels,
             key="single_compare_trial",
-            help="★ indicates same text as primary trial. Animated comparison "
-            "overlays both scanpaths on one shared clock.",
+            help="★ indicates same text as primary trial."
+            + (" Animated comparison overlays both on one clock." if animate else ""),
         )
-        layout = "overlay"
-    else:
-        col_trial, col_layout = st.columns([2, 1])
-        with col_trial:
-            selected_compare_label = st.selectbox(
-                "Compare with trial",
-                options=option_labels,
-                key="single_compare_trial",
-                help="★ indicates same text as primary trial",
+        if not animate:
+            layout_label = (
+                st.segmented_control(
+                    "View",
+                    options=["Overlay", "Side by side", "Stacked"],
+                    key="single_compare_layout",
+                    help="Stacked = trials shown one above the other.",
+                )
+                or "Overlay"
             )
-        with col_layout:
-            layout_label = st.radio(
-                "View",
-                options=["Overlay", "Side by side", "Stacked"],
-                index=0,
-                key="single_compare_layout",
-                horizontal=True,
-                help="Stacked = trials shown one above the other.",
-            )
-        layout_map = {
-            "Overlay": "overlay",
-            "Side by side": "side_by_side",
-            "Stacked": "stacked",
-        }
-        layout = layout_map.get(layout_label, "overlay")
+            layout = {
+                "Overlay": "overlay",
+                "Side by side": "side_by_side",
+                "Stacked": "stacked",
+            }.get(layout_label, "overlay")
 
     if selected_compare_label:
         participant, trial = label_to_trial[selected_compare_label]
@@ -980,43 +983,6 @@ def _summary_rows(
     return rows
 
 
-def _trial_id_rows(
-    participant: str, trial_id: str, trial_words: pd.DataFrame
-) -> list[dict]:
-    """Field/Value rows identifying a trial: id, participant, text id, and any
-    composite-id component columns.
-
-    These lead the metadata table so a trial's identity sits with its stats —
-    folding in the former standalone "Trial Info" block. Mirrors the text-id /
-    composite probe in ``_render_trial_header`` (which stays for the Generations
-    tab + its tests)."""
-    rows = [
-        {"Field": "Trial id", "Value": str(trial_id)},
-        {"Field": "Participant", "Value": str(participant)},
-    ]
-    text_cols = ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id")
-    text_id = None
-    for col in text_cols:
-        if col in trial_words.columns and not trial_words.empty:
-            value = trial_words[col].iloc[0]
-            if pd.notna(value):
-                text_id = value
-                break
-    if text_id is not None:
-        rows.append({"Field": "Text", "Value": str(text_id)})
-    composite_cols = st.session_state.get("_composite_trial_columns") or []
-    already_shown = {"participant_id", *text_cols}
-    for col in composite_cols:
-        if col in already_shown or col not in trial_words.columns or trial_words.empty:
-            continue
-        value = trial_words[col].iloc[0]
-        if pd.notna(value):
-            rows.append(
-                {"Field": col.replace("_", " ").capitalize(), "Value": str(value)}
-            )
-    return rows
-
-
 # Row-wise palette for the trial-metadata table. Picked light so the text
 # stays readable. `is_correct` keeps the row background neutral but tints
 # the value text green/red — adding a background there clashed with the
@@ -1024,188 +990,6 @@ def _trial_id_rows(
 _DIFFICULTY_COLORS = {"ele": "#d4edda", "adv": "#fff3cd"}
 _REPEAT_COLOR = "#cfe2ff"  # light blue — clearly distinct from the Ele/Adv tints
 _PREVIEW_COLOR = "#DBEAFE"  # light blue — Hunting/preview trials
-
-
-def _style_metadata_row(row: pd.Series) -> list[str]:
-    field = str(row.get("Field", ""))
-    value = str(row.get("Value", ""))
-    # Pin a dark text color alongside the light background so the row stays
-    # readable in dark mode (the inherited theme text color would go light).
-    bg = ""
-    if field == "difficulty_level":
-        for prefix, color in _DIFFICULTY_COLORS.items():
-            if value.lower().startswith(prefix):
-                bg = f"background-color: {color}; color: {_HIGHLIGHT_TEXT_COLOR};"
-                break
-    elif field == "repeated_reading_trial" and value.lower().startswith("true"):
-        bg = f"background-color: {_REPEAT_COLOR}; color: {_HIGHLIGHT_TEXT_COLOR};"
-    elif field == "question_preview" and value.lower().startswith("true"):
-        bg = f"background-color: {_PREVIEW_COLOR}; color: {_HIGHLIGHT_TEXT_COLOR};"
-
-    field_style = bg
-    value_style = bg
-    if field == "is_correct":
-        if value.startswith("✓"):
-            value_style = "color: #198754; font-weight: 600;"
-        elif value.startswith("✗"):
-            value_style = "color: #dc3545; font-weight: 600;"
-    return [field_style, value_style]
-
-
-def _prefix_is_correct(metadata_df: pd.DataFrame) -> pd.DataFrame:
-    """Prefix the is_correct row's Value with ✓ / ✗ for at-a-glance scanning."""
-    mask = metadata_df["Field"] == "is_correct"
-    if mask.any():
-        val = str(metadata_df.loc[mask, "Value"].iloc[0])
-        if val.lower().startswith("true"):
-            metadata_df.loc[mask, "Value"] = f"✓ {val}"
-        elif val.lower().startswith("false"):
-            metadata_df.loc[mask, "Value"] = f"✗ {val}"
-    return metadata_df
-
-
-def _render_metadata_selector(
-    words_filtered: pd.DataFrame,
-    fixations_filtered: pd.DataFrame,
-    trial_words: pd.DataFrame,
-    trial_fixations: pd.DataFrame,
-    selected_participant: str,
-    selected_trial: str,
-    compare: Optional[dict] = None,
-    bare: bool = False,
-):
-    """Render the Trial Info panel: identity rows + summary + metadata table.
-
-    The table leads with the trial's identity (id / participant / text — see
-    `_trial_id_rows`, folding in the former standalone "Trial Info" block), then
-    its headline numbers (reading time, word / fixation counts, in-text fixation
-    count — see `_summary_rows`), then the metadata fields chosen in the picker.
-
-    When ``compare`` is given (keys: ``words``, ``fixations``,
-    ``label_primary``, ``label_compare``), the table shows one value column per
-    trial so the two compared trials can be read side by side.
-    """
-    metadata_candidates = []
-    for col in list(words_filtered.columns) + list(fixations_filtered.columns):
-        if col not in metadata_candidates:
-            metadata_candidates.append(col)
-
-    default_metadata = [
-        field
-        for field in [
-            "difficulty_level",
-            "repeated_reading_trial",
-            "question_preview",
-            "selected_answer",
-            "is_correct",
-        ]
-        if field in metadata_candidates
-    ]
-    # Field picker (key "trial_metadata_fields") is seeded once then read here,
-    # so the table can render above the picker that controls it (TODO 1.10).
-    # Prune stale selections (e.g. after a dataset switch) so the multiselect
-    # below never raises on an option it no longer offers.
-    st.session_state.setdefault(
-        "trial_metadata_fields", default_metadata or metadata_candidates
-    )
-    st.session_state["trial_metadata_fields"] = [
-        f for f in st.session_state["trial_metadata_fields"] if f in metadata_candidates
-    ]
-    selected_metadata = st.session_state["trial_metadata_fields"]
-
-    # Metadata table under a default-closed toggle (TODO 1.9), with the
-    # field picker directly below it (TODO 1.10).
-    container = st.container() if bare else st.expander("Trial Info", expanded=True)
-    with container:
-        if compare is None:
-            info = pd.DataFrame(
-                _trial_id_rows(selected_participant, selected_trial, trial_words)
-            )
-            summary = pd.DataFrame(_summary_rows(trial_words, trial_fixations))
-            metadata_df = (
-                _prefix_is_correct(
-                    gather_trial_metadata(
-                        trial_words, trial_fixations, selected_metadata
-                    )
-                )
-                if selected_metadata
-                else pd.DataFrame(columns=["Field", "Value"])
-            )
-            table = pd.concat([info, summary, metadata_df], ignore_index=True)
-            if not table.empty:
-                styled = table.style.apply(_style_metadata_row, axis=1)
-                st.dataframe(styled, hide_index=True, width="stretch")
-        else:
-            # Comparison mode: one value column per trial, merged on Field.
-            label_a = compare["label_primary"]
-            label_b = compare["label_compare"]
-            # Identity rows for both trials, side by side, leading the table.
-            info_a = {
-                r["Field"]: r["Value"]
-                for r in _trial_id_rows(
-                    selected_participant, selected_trial, trial_words
-                )
-            }
-            info_b = {
-                r["Field"]: r["Value"]
-                for r in _trial_id_rows(
-                    compare["participant"], compare["trial"], compare["words"]
-                )
-            }
-            info = pd.DataFrame(
-                [
-                    {"Field": f, label_a: info_a.get(f, "—"), label_b: info_b.get(f, "—")}
-                    for f in dict.fromkeys([*info_a, *info_b])
-                ]
-            )
-            # Summary rows share the same fields/order across both trials, so
-            # pair them directly to keep row order rather than outer-merging.
-            summary_b = {
-                r["Field"]: r["Value"]
-                for r in _summary_rows(compare["words"], compare["fixations"])
-            }
-            summary = pd.DataFrame(
-                [
-                    {
-                        "Field": r["Field"],
-                        label_a: r["Value"],
-                        label_b: summary_b.get(r["Field"], "—"),
-                    }
-                    for r in _summary_rows(trial_words, trial_fixations)
-                ]
-            )
-            if selected_metadata:
-                primary = _prefix_is_correct(
-                    gather_trial_metadata(
-                        trial_words, trial_fixations, selected_metadata
-                    )
-                ).rename(columns={"Value": label_a})
-                other = _prefix_is_correct(
-                    gather_trial_metadata(
-                        compare["words"], compare["fixations"], selected_metadata
-                    )
-                ).rename(columns={"Value": label_b})
-                # Outer merge in case the two trials' sources expose different
-                # columns; fill any gap with the same "—" the summary uses.
-                merged = primary.merge(other, on="Field", how="outer").fillna("—")
-                order = {field: i for i, field in enumerate(selected_metadata)}
-                merged = (
-                    merged.assign(_o=merged["Field"].map(order))
-                    .sort_values("_o")
-                    .drop(columns="_o")
-                )
-            else:
-                merged = pd.DataFrame(columns=["Field", label_a, label_b])
-            table = pd.concat([info, summary, merged], ignore_index=True)
-            if not table.empty:
-                st.dataframe(table, hide_index=True, width="stretch")
-
-        st.multiselect(
-            "Metadata fields to show",
-            options=metadata_candidates,
-            key="trial_metadata_fields",
-            help="Columns listed in the table above, beneath the trial totals.",
-        )
 
 
 def _build_studio_config(
@@ -1478,7 +1262,7 @@ _ANIM_SPEED_LABELS = [
     "×8",
 ]
 # Default playback speed — brisk enough for quick review (real-time ÷ 4) but
-# still legible; users can slow it down for a close look (TODO 3.2).
+# still legible; the Playback popover's speed slider slows it down (to ×0.25).
 _ANIM_DEFAULT_SPEED = 4.0
 
 
@@ -1693,21 +1477,31 @@ _CHIP_FIELD_LABELS = {
 
 
 def _chip_field_label(col: str) -> str:
-    """Friendly label for a chip field (identity fields, else humanized)."""
+    """Friendly label for a chip field (summary / identity, else humanized)."""
+    if col in SUMMARY_CHIP_FIELDS:
+        return SUMMARY_CHIP_FIELDS[col]
     return _CHIP_FIELD_LABELS.get(col, _humanize_field(col))
 
 
-def _chip_raw_value(col, trial_words, trial_fixations, participant):
-    """First non-null value for ``col`` in the trial (words first, then
-    fixations); ``participant_id`` resolves to the selected participant."""
+def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
+    """``(value, is_trial_level)`` for ``col`` in the trial.
+
+    ``value`` is the first non-null (words first, then fixations);
+    ``participant_id`` resolves to the selected participant. ``is_trial_level`` is
+    False when the column varies *within* this trial (so the single chip value is
+    misleading) — a cheap ``nunique`` on the trial's own (small) rows, used only to
+    warn. ``participant_id`` is trivially trial-level. Returns ``(None, True)``
+    when nothing resolves."""
     if col == "participant_id":
-        return participant or None
+        return (participant or None, True)
     for src in (trial_words, trial_fixations):
         if src is not None and not src.empty and col in src.columns:
-            value = src[col].iloc[0]
-            if pd.notna(value):
-                return value
-    return None
+            series = src[col]
+            non_null = series.dropna()
+            if non_null.empty:
+                return (None, True)
+            return (non_null.iloc[0], int(series.nunique(dropna=True)) <= 1)
+    return (None, True)
 
 
 def _chip_color(col: str, value_str: str) -> str:
@@ -1737,25 +1531,48 @@ def _render_trial_condition_chips(
     fields,
 ) -> None:
     """Render a compact, glanceable strip of ``Field = Value`` chips above the
-    plot — the trial's key identity + experiment conditions, so the most
-    important "what am I looking at" facts are visible without opening the Trial
-    Info subtab.
+    plot — the trial's identity, experiment conditions, and summary stats, so the
+    key "what am I looking at" facts are visible at a glance (these chips replaced
+    the Trial Info subtab).
 
-    ``fields`` is the configurable list of columns to surface (sidebar
-    ``trial_chip_fields`` — participant id, text id, difficulty, question
-    preview, …). Colours mirror the metadata table (``_style_metadata_row``).
-    Skips silently when nothing resolves."""
+    ``fields`` is the configurable list of fields to surface (sidebar
+    ``trial_chip_fields`` — participant id, text id, conditions, and the computed
+    summary stats folded in from the former Trial Info tab). Chips are meant for
+    *trial-level* fields (one value per trial); a data column that varies within
+    the trial is still shown (first value) but flagged with ⚠️ and named in a
+    caption, since its single chip value is misleading. Condition colours mirror
+    the per-trial metadata styling. Skips silently when nothing resolves."""
     chips: list[tuple[str, str]] = []
+    varying: list[str] = []
+    summary_lookup: Optional[dict] = None  # computed once, only if a summary chip
     for col in fields or []:
-        value = _chip_raw_value(col, trial_words, trial_fixations, participant)
+        # Virtual summary fields (reading time / counts) — always trial-level,
+        # computed once from `_summary_rows`.
+        if col in SUMMARY_CHIP_FIELDS:
+            if summary_lookup is None:
+                summary_lookup = {
+                    r["Field"]: r["Value"]
+                    for r in _summary_rows(trial_words, trial_fixations)
+                }
+            label = SUMMARY_CHIP_FIELDS[col]
+            value = summary_lookup.get(label)
+            if value in (None, ""):
+                continue  # e.g. "Fixations in word boxes" unavailable for this trial
+            chips.append((f"{label} = {value}", _CHIP_NEUTRAL_BG))
+            continue
+        value, trial_level = _chip_value_and_uniqueness(
+            col, trial_words, trial_fixations, participant
+        )
         if value is None:
             continue
         value_str = str(value)
         if not value_str:
             continue
-        chips.append(
-            (f"{_chip_field_label(col)} = {value_str}", _chip_color(col, value_str))
-        )
+        label = _chip_field_label(col)
+        prefix = "" if trial_level else "⚠️ "
+        if not trial_level:
+            varying.append(label)
+        chips.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
     if not chips:
         return
     spans = "".join(
@@ -1763,6 +1580,12 @@ def _render_trial_condition_chips(
         for label, bg in chips
     )
     st.markdown(f'<div class="sps-trial-chips">{spans}</div>', unsafe_allow_html=True)
+    if varying:
+        st.caption(
+            "⚠️ Not trial-level (varies within this trial): "
+            + ", ".join(varying)
+            + " — showing the first value."
+        )
 
 
 def render_single_trial_tab(
@@ -1793,9 +1616,10 @@ def render_single_trial_tab(
        rail on the right carrying the **view modes** (Animate / Compare) and the
        **visualization controls** (formerly in the sidebar — see
        ``controls.sidebar_controls``, rendered here with ``host=``).
-    3. A full-width **subtab bar** below: Stimulus & questions · Annotations ·
-       Trial Info · Export (Export folds in the former Bulk Export tab — see
-       ``_render_export_panel``). Save & restore lives in the sidebar.
+    3. A full-width **subtab bar** below: 📝 Annotations · Stimulus & questions ·
+       Export (Export folds in the former Bulk Export tab — see
+       ``_render_export_panel``). The former Trial Info subtab was folded into the
+       configurable chips above the plot. Save & restore lives in the sidebar.
 
     ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
     the Export subtab's bulk section uses for its "whole dataset" scope; they
@@ -1810,24 +1634,42 @@ def render_single_trial_tab(
 
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
-    # built for the sidebar-closed workflow. The selection bar + chips + plot all
-    # live in the left column; the per-trial subtabs render full-width below.
-    plot_col, rail_col = st.columns([7, 3], gap="large")
+    # built for the sidebar-closed workflow. The selection menus + chips + plot all
+    # live in the left column; the per-trial subtabs render full-width below. The
+    # rail is kept narrow (the plot is the hero).
+    plot_col, rail_col = st.columns([4, 1], gap="large")
     with rail_col:
         rail = st.container(key="scanpath_rail")
 
+    modes = selection_modes(combos)
+    multi_mode = len(modes) > 1
     with plot_col:
         st.markdown("### 🎯 Trial")
+        # One selection line: [Browse by] [pills] [trial selectbox(s)] [Filter] —
+        # the pills (mode_host) and selectbox(s) (picker_host) are filled by
+        # select_trial; the scrubbing slider lands on the line below. Filter is a
+        # content-width popover overlay (no plot shove). Vertically centered so the
+        # label, pills, selectbox and button line up.
+        if multi_mode:
+            label_col, mode_host, picker_host, filter_col = st.columns(
+                [1, 2.3, 3, 1.4], vertical_alignment="center"
+            )
+            label_col.markdown("**Browse by**")
+        else:
+            picker_host, filter_col = st.columns([3, 1.4], vertical_alignment="center")
+            mode_host = None
+        with filter_col:
+            filt_pop = st.popover("🔍 Filter trials", width="content")
+            filt_pop.caption("Narrow the trial pool shown in every view.")
+            render_trial_filters(words_all, fixations_all, host=filt_pop)
         selected_participant, selected_trial, selection_mode, selected_text = (
-            select_trial(combos, key_prefix="single")
+            select_trial(
+                combos,
+                key_prefix="single",
+                mode_host=mode_host,
+                picker_host=picker_host,
+            )
         )
-        # Filter trials — a popover (opens as an overlay, so it doesn't shove the
-        # plot down) sitting with the Browse-by controls on the left. Its children
-        # render every run, writing session_state; app.main reads them via
-        # read_trial_filters and applies the filter globally.
-        filt_pop = st.popover("🔍 Filter trials", width="content")
-        filt_pop.caption("Narrow the trial pool shown in every view.")
-        render_trial_filters(words_all, fixations_all, host=filt_pop)
         # Slots filled once the selection is resolved (chips need the trial).
         chips_slot = st.container()
         plot_slot = st.container()
@@ -1852,43 +1694,45 @@ def render_single_trial_tab(
     trial_has_raw_gaze = not trial_raw_gaze.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
-    # Condition chips above the plot — configurable via the sidebar picker
-    # (`trial_chip_fields`); shows `Field = Value` for the chosen columns.
-    with chips_slot:
-        _render_trial_condition_chips(
-            trial_words,
-            trial_fixations,
-            selected_participant,
-            st.session_state.get("trial_chip_fields") or [],
-        )
+    # Condition chips above the plot are filled later (into chips_slot), once the
+    # comparison selection is known — so a second chip strip can show the compared
+    # trial too.
 
     # Render the rail (view modes + viz controls) before the figure so it sees the
     # resolved Animate / Compare / viz settings; its right-side position is fixed
     # by the column split regardless of render order.
     with rail:
         st.markdown("##### 🎬 View modes")
+        # Animate styled like a layer: a toggle + a ⚙ popover for its config
+        # (playback speed) — matching Compare and the visualization layers below.
         animate = st.toggle(
-            "Animate scanpath",
+            "**Animate**",
             value=False,
             key="single_animate",
-            help="Replay the trial fixation by fixation; use the "
-            "play / pause / restart controls below the plot.",
+            help="Replay the trial fixation by fixation; the play / pause / "
+            "restart controls sit below the plot.",
         )
         # Reading-time / playback info box, filled below once playback speed + any
-        # compare trial are known.
-        anim_info_slot = st.container()
+        # compare trial are known (lives inside the Playback popover).
+        anim_info_slot = None
         # Playback speed shows only when animating a trial that has fixations.
         # Default ×4 — a brisk review pace (real-time ÷ 4).
         playback_speed = _ANIM_DEFAULT_SPEED
         if animate and not trial_fixations.empty:
-            st.session_state.setdefault("single_playback_speed", _ANIM_DEFAULT_SPEED)
-            playback_speed = st.select_slider(
-                "Playback speed",
-                options=_ANIM_SPEED_OPTIONS,
-                format_func=lambda x: _ANIM_SPEED_LABELS[_ANIM_SPEED_OPTIONS.index(x)],
-                help="Playback speed relative to the recorded fixation timings.",
-                key="single_playback_speed",
-            )
+            with st.popover("⚙️ Playback", width="stretch"):
+                st.session_state.setdefault(
+                    "single_playback_speed", _ANIM_DEFAULT_SPEED
+                )
+                playback_speed = st.select_slider(
+                    "Playback speed",
+                    options=_ANIM_SPEED_OPTIONS,
+                    format_func=lambda x: _ANIM_SPEED_LABELS[
+                        _ANIM_SPEED_OPTIONS.index(x)
+                    ],
+                    help="Playback speed relative to the recorded fixation timings.",
+                    key="single_playback_speed",
+                )
+                anim_info_slot = st.container()
         compare_participant, compare_trial, compare_layout = (
             _render_comparison_controls(
                 combos,
@@ -1935,14 +1779,33 @@ def render_single_trial_tab(
     comparing = compare_participant is not None and compare_trial is not None
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
 
+    # Condition chips above the plot — configurable via the sidebar picker
+    # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
+    # a second labelled strip shows the compared trial too.
+    chip_fields = st.session_state.get("trial_chip_fields") or []
+    with chips_slot:
+        if comparing and compare_meta:
+            st.caption(f"**{compare_meta['label_primary']}**")
+        _render_trial_condition_chips(
+            trial_words, trial_fixations, selected_participant, chip_fields
+        )
+        if comparing and compare_meta:
+            st.caption(f"**{compare_meta['label_compare']}** (compared)")
+            _render_trial_condition_chips(
+                compare_meta["words"],
+                compare_meta["fixations"],
+                compare_participant,
+                chip_fields,
+            )
+
     displayed_fig = None
     save_slug = f"{selected_participant}__{selected_trial}"
     anim_playback_ms = None
     anim_file_stem = None
     dual_anim = animate and comparing and not compare_fix.empty
 
-    # Animation info box, in the slot under the Animate toggle (in the rail).
-    if animate and not trial_fixations.empty:
+    # Animation info box, in its slot inside the rail's Playback popover.
+    if animate and not trial_fixations.empty and anim_info_slot is not None:
         with anim_info_slot:
             _render_anim_info_box(
                 trial_words,
@@ -2031,29 +1894,17 @@ def render_single_trial_tab(
             )
             _render_true_scale_chart(displayed_fig, key="single")
 
-    # Per-trial panels sit BELOW the plot as a single full-width subtab bar
-    # (they must be created outside the columns to span the page width). The
-    # Stimulus tab leads so reviewers land on the reading text under the plot.
-    tab_stim, tab_annot, tab_info, tab_export = st.tabs(
-        ["Stimulus & questions", "📝 Annotations", "Trial Info", "Export"]
+    # Per-trial panels sit BELOW the plot as a single full-width subtab bar (they
+    # must be created outside the columns to span the page width). Trial Info is
+    # gone — the chip strip above the plot now carries the trial's identity,
+    # conditions and summary stats (configurable via the sidebar 🏷️ Trial chips).
+    tab_annot, tab_stim, tab_export = st.tabs(
+        ["📝 Annotations", "Stimulus & questions", "Export"]
     )
-    with tab_stim:
-        _render_paragraph_panel(
-            trial_words, trial_fixations=trial_fixations, bare=True
-        )
     with tab_annot:
         render_trial_annotations(selected_participant, selected_trial, bare=True)
-    with tab_info:
-        _render_metadata_selector(
-            words_filtered,
-            fixations_filtered,
-            trial_words,
-            trial_fixations,
-            selected_participant,
-            selected_trial,
-            compare=compare_meta,
-            bare=True,
-        )
+    with tab_stim:
+        _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
     with tab_export:
         _render_export_panel(
             displayed_fig,

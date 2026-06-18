@@ -14,10 +14,12 @@ from scanpath_studio.app import (
     _build_comparison_options,
     _build_share_query,
     build_combo_options,
-    compute_trial_stats,
-    gather_trial_metadata,
 )
 from scanpath_studio.data import compute_canvas_size
+
+# Imported from their real home (utils); app.py no longer re-exports these
+# test-only helpers.
+from scanpath_studio.utils import compute_trial_stats, gather_trial_metadata
 
 
 class TestBuildComboOptions:

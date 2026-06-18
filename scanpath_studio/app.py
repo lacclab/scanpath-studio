@@ -135,13 +135,10 @@ from scanpath_studio.tour import (
     spotlight_tour_pending,
 )
 
-# Some of these are re-exported (a few with a private alias) so tests can import
-# them from `app`; keep the F401 silence for the whole block.
-from scanpath_studio.utils import (  # noqa: F401
-    build_combo_options,
-    compute_trial_stats,
-    gather_trial_metadata,
-)
+from scanpath_studio.utils import build_combo_options
+
+# Re-exported under a private alias so tests can import them from `app`; keep the
+# F401 silence (they're not used by app.py itself).
 from scanpath_studio.utils import (  # noqa: F401
     build_comparison_options as _build_comparison_options,
 )
@@ -320,7 +317,8 @@ def _apply_url_preset() -> Optional[str]:
         &trial_id=p001_3_Adv     → land on this exact trial id, any picker mode
                                    (applied after combos build — see
                                    _apply_url_trial_selection; emitted by Share)
-        &tab=animation           → land on Animated Scanpath tab
+        &tab=animation           → pre-tick the Animate toggle (legacy; there's
+                                   no separate Animated Scanpath tab anymore)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
@@ -337,10 +335,10 @@ def _apply_url_preset() -> Optional[str]:
     if not qp:
         return None
 
-    # Seed selection state for every tab that exposes a `select_trial` widget.
-    # `?participant=` + `?trial=` map onto Participant mode with the matching
-    # participant / slider value. Without this loop the Animated Scanpath tab
-    # (key_prefix="anim") would default to "Trial" mode and land on the
+    # Seed selection state for every `select_trial` host (the prefixes in
+    # `_SELECTION_PREFIXES`). `?participant=` + `?trial=` map onto Participant mode
+    # with the matching participant / slider value. Seeding every prefix keeps a
+    # non-first picker from defaulting to "Trial" mode and landing on the
     # alphabetically-first trial instead of the deep-linked one.
     if "participant" in qp or "trial" in qp:
         if "participant" in qp:
@@ -1460,8 +1458,7 @@ def _render_unmapped_view(
         "**Finish the column mapping to draw scanpaths.** Map the missing "
         "field(s) in the **Column mapping** panel below each upload box in the "
         "sidebar — the raw uploaded data is shown in the **Data Inspection** view "
-        "to help you choose. Still needed:\n\n"
-        + "\n".join(f"- {p}" for p in problems)
+        "to help you choose. Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
     )
     if active_view == "Data Inspection":
         if (raw_words_df is None or raw_words_df.empty) and (

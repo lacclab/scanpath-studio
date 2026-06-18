@@ -7,7 +7,7 @@ def get_app_css() -> str:
     """Return custom CSS to reduce whitespace and disable animations."""
     return """
     <style>
-    section.main > div.block-container {padding-top: 1.25rem; padding-bottom: 0.5rem;}
+    section.main > div.block-container {padding-top: 0.5rem; padding-bottom: 0.5rem;}
     /* Remove all whitespace around plotly charts */
     div[data-testid="stPlotlyChart"] {margin: 0 !important; padding: 0 !important; line-height: 0 !important;}
     div[data-testid="stPlotlyChart"] > div {margin: 0 !important; padding: 0 !important;}
@@ -229,6 +229,10 @@ def get_app_css() -> str:
     }
     .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
+    /* The rail is deliberately narrow — keep its short headers + toggle labels on
+       one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
+    .st-key-scanpath_rail h5,
+    .st-key-scanpath_rail [data-testid="stWidgetLabel"] p { white-space: nowrap; }
     /* Per-layer styling popovers + the comparison-styling expander: full-width,
        left-aligned triggers so the rail stays a clean single column. */
     .st-key-scanpath_rail [data-testid="stPopover"] button {

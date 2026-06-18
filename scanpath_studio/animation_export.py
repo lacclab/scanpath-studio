@@ -1,7 +1,8 @@
 """Render a Plotly scanpath animation to a shareable GIF or MP4 clip.
 
-The *Animated Scanpath* tab builds a Plotly ``go.Figure`` with one frame per
-fixation onset (see :func:`scanpath_studio.plots.make_scanpath_animation`). The
+The **Animate** toggle (in the Scanpath Visualization control rail) builds a Plotly
+``go.Figure`` with one frame per fixation onset (see
+:func:`scanpath_studio.plots.make_scanpath_animation`). The
 interactive **HTML** export keeps that figure verbatim — play button, slider and
 all. This module is the non-interactive counterpart: it rasterizes the very same
 frames and encodes them into a GIF or MP4 you can drop into a slide deck, a paper,
@@ -14,7 +15,7 @@ How it stays faithful to what the user sees on screen:
   order numbers and the orange current-fixation highlight all match the live view.
 * **Same clock.** The on-screen Play button advances every frame at one average
   duration (``plots._anim_timeline``); we reproduce that exactly, so the clip's
-  runtime equals the playback time the tab quotes (``animation_playback_ms``).
+  runtime equals the playback time quoted on screen (``animation_playback_ms``).
 * **Same readout.** The slider's "Elapsed: X.Xs" value is re-drawn as a static
   annotation per frame, since the interactive slider can't survive rasterization.
 

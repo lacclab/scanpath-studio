@@ -653,10 +653,13 @@ def make_scanpath_figure(
     highlight_text = has_highlight and critical_span_style == "Mark text"
 
     if spatial_axes and not words.empty:
-        if show_words:
-            shapes = build_word_boxes(words)
-            if has_highlight and critical_span_style == "Mark border":
-                shapes = shapes + build_critical_span_overlay(words, highlight_column)
+        # Word-box grid (the "Bounding boxes" layer) and the "Mark border" span
+        # overlay are independent: the span borders show even when the boxes are
+        # off (then only the span outline is drawn).
+        shapes = build_word_boxes(words) if show_words else []
+        if has_highlight and critical_span_style == "Mark border":
+            shapes = shapes + build_critical_span_overlay(words, highlight_column)
+        if shapes:
             fig.update_layout(shapes=shapes)
         if show_word_labels:
             _add_word_label_trace(

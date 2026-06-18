@@ -144,9 +144,18 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 
 
 def _select_trial_none_mode(
-    combos: pd.DataFrame, trial_field: str, text_field: str, key_prefix: str
+    combos: pd.DataFrame,
+    trial_field: str,
+    text_field: str,
+    key_prefix: str,
+    picker_host=None,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Handle trial selection when mode is 'None' (direct trial selection)."""
+    """Handle trial selection when mode is 'None' (direct trial selection).
+
+    The id selectbox renders into ``picker_host`` (the column between Browse-by
+    and Filter); the scrubbing slider stays in the current container (the line
+    below). Both default to the current container."""
+    host = picker_host if picker_host is not None else st
     available_trials = combos.drop_duplicates(subset=[trial_field])
     trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
     if not trial_options:
@@ -159,44 +168,47 @@ def _select_trial_none_mode(
 
     # The selectbox (`*_trial_id`) is the canonical selection — it's what the
     # deep-link / Save-&-restore code seeds (`_restore_selection`). A scrubbing
-    # slider sits above it for stepping through trials (replacing the old ◀ ▶
-    # buttons); both stay in sync via the selection's position.
+    # select-slider sits above it (replacing the old ◀ ▶ buttons) and shows the
+    # current trial id above its thumb; both stay in sync via the trial id.
     current_label = st.session_state.get(trial_id_key) if trial_id_key else None
     if current_label not in trial_options:
         current_label = trial_options[0]
         if trial_id_key:
             st.session_state[trial_id_key] = current_label
-    current_idx = trial_options.index(current_label)
 
     if n_trials > 1:
-        # Mirror the slider's position to the current selection BEFORE it renders,
-        # so picking a trial in the dropdown moves the slider too. On drag, the
-        # callback writes the selectbox key, so this reconciles cleanly next run.
-        st.session_state[slider_key] = current_idx + 1
+        # Mirror the slider to the current selection BEFORE it renders, so picking
+        # a trial in the dropdown moves the slider too. On drag, the callback
+        # writes the selectbox key, so this reconciles cleanly next run.
+        st.session_state[slider_key] = current_label
 
         def _on_trial_slider() -> None:
-            pos = int(st.session_state[slider_key]) - 1
-            pos = max(0, min(pos, n_trials - 1))
             if trial_id_key:
-                st.session_state[trial_id_key] = trial_options[pos]
+                st.session_state[trial_id_key] = st.session_state[slider_key]
 
-        st.slider(
-            "Trial",
-            min_value=1,
-            max_value=n_trials,
-            key=slider_key,
-            on_change=_on_trial_slider,
-            help=f"Scrub through the {n_trials} trials; the dropdown below jumps "
-            "to a specific id.",
-            label_visibility="collapsed",
-        )
-        st.caption(f"Trial **{current_idx + 1}** of **{n_trials}**")
-
-    selected_trial_label = st.selectbox(
+    # Selectbox (jump to a specific id) renders into picker_host → the line-1
+    # column between Browse-by and Filter; label hidden (the slider shows the id).
+    selected_trial_label = host.selectbox(
         "Unique trial id",
         options=trial_options,
         key=trial_id_key,
+        label_visibility="collapsed",
     )
+
+    if n_trials > 1:
+        # select_slider over the ids → the thumb shows the current trial id (not a
+        # bare position). Renders in the current container (the line below the
+        # selection row). Guarded by n_trials > 1 (a single option throws).
+        st.select_slider(
+            "Trial",
+            options=trial_options,
+            key=slider_key,
+            on_change=_on_trial_slider,
+            help=f"Scrub through the {n_trials} trials; the dropdown jumps to a "
+            "specific id.",
+            label_visibility="collapsed",
+        )
+
     if not selected_trial_label:
         return None, None, None
 
@@ -208,38 +220,64 @@ def _select_trial_none_mode(
 
 
 def _select_trial_text_mode(
-    combos: pd.DataFrame, text_field: str, key_prefix: str
+    combos: pd.DataFrame, text_field: str, key_prefix: str, picker_host=None
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Handle trial selection when mode is 'Text' (select by text first)."""
+    """Handle trial selection when mode is 'Text' (select by text first).
+
+    Shows a single **Text** selectbox (into ``picker_host``, the column between
+    Browse-by and Filter) with a **participant** scrubbing slider on the line
+    below; a Reading selectbox appears only for a participant who read the text
+    more than once."""
+    host = picker_host if picker_host is not None else st
     text_options = sorted(combos[text_field].dropna().astype(str).unique())
     if not text_options:
         st.warning("No texts available after filtering.")
         st.stop()
 
-    selected_text = st.selectbox(
+    selected_text = host.selectbox(
         "Text",
         options=text_options,
         key=f"{key_prefix}_text_id" if key_prefix else None,
+        label_visibility="collapsed",
     )
     if not selected_text:
         st.warning("No text selected after filtering.")
         st.stop()
 
     text_combos = combos[combos[text_field].astype(str) == str(selected_text)]
-    participant_options = sorted(text_combos["participant_id"].dropna().unique())
+    participant_options = sorted(
+        text_combos["participant_id"].dropna().astype(str).unique()
+    )
     if not participant_options:
         st.warning("No participants available for this text.")
         st.stop()
 
-    selected_participant = st.selectbox(
-        "Participant",
-        options=participant_options,
-        key=f"{key_prefix}_participant_text" if key_prefix else None,
-    )
+    # Participant scrubbing slider on the line below (st.select_slider over the
+    # participant ids). A lone participant degrades to a caption (a one-option
+    # select_slider throws a browser RangeError).
+    p_key = f"{key_prefix}_text_participant" if key_prefix else "text_participant"
+    if len(participant_options) == 1:
+        selected_participant = participant_options[0]
+        st.caption(f"Participant: **{selected_participant}** (only one)")
+    else:
+        if (
+            p_key in st.session_state
+            and st.session_state[p_key] not in participant_options
+        ):
+            del st.session_state[p_key]
+        selected_participant = st.select_slider(
+            "Participant",
+            options=participant_options,
+            key=p_key,
+            label_visibility="collapsed",
+            help="Scrub through the participants who read this text.",
+        )
 
-    # Handle multiple readings
+    # A participant may have read the text more than once — offer the readings.
     candidate_trials = (
-        text_combos[text_combos["participant_id"] == selected_participant]
+        text_combos[
+            text_combos["participant_id"].astype(str) == str(selected_participant)
+        ]
         .drop_duplicates(subset=["trial_id"])
         .sort_values("trial_id")
     )
@@ -248,7 +286,7 @@ def _select_trial_text_mode(
 
     if len(candidate_trials) > 1:
         trial_options = candidate_trials["trial_id"].tolist()
-        selected_trial = st.selectbox(
+        selected_trial = host.selectbox(
             "Reading (multiple trials available)",
             options=trial_options,
             key=f"{key_prefix}_reading_text" if key_prefix else None,
@@ -265,17 +303,25 @@ def _select_trial_participant_mode(
     text_field: str,
     trial_index_field: Optional[str],
     key_prefix: str,
+    picker_host=None,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Handle trial selection when mode is 'Participant' (select participant first)."""
+    """Handle trial selection when mode is 'Participant' (select participant first).
+
+    The participant selector renders into ``picker_host`` (the column between
+    Browse-by and Filter). The **Pick by** sub-mode renders on its own row below
+    — a label + pills, mirroring the Browse-by row. The scrubbing slider stays in
+    the current container (the line below that)."""
+    host = picker_host if picker_host is not None else st
     participants = sorted(combos["participant_id"].dropna().unique())
     if not participants:
         st.warning("No participants available after filtering.")
         st.stop()
 
-    selected_participant = st.selectbox(
+    selected_participant = host.selectbox(
         "Participant",
         options=participants,
         key=f"{key_prefix}_participant" if key_prefix else None,
+        label_visibility="collapsed",
     )
 
     participant_trials = combos[combos["participant_id"] == selected_participant]
@@ -294,7 +340,7 @@ def _select_trial_participant_mode(
     methods.append("Trial ID")
     # A filter can drop "Trial index" out of `methods` (a participant with no
     # trial-index values) while session_state still holds it from a prior run —
-    # clear the stale pick so st.radio falls back to the first option instead of
+    # clear the stale pick so the widget falls back to the first option instead of
     # raising (same guard as the select_slider below / _select_trial_composite_mode).
     sub_mode_key = f"{key_prefix}_participant_by" if key_prefix else None
     if (
@@ -304,13 +350,23 @@ def _select_trial_participant_mode(
     ):
         del st.session_state[sub_mode_key]
     if len(methods) > 1:
-        st.markdown("##### Pick trial by")
-        sub_mode = st.radio(
-            "Pick trial by",
-            options=methods,
-            horizontal=True,
-            key=sub_mode_key,
-            label_visibility="collapsed",
+        # A "Pick by" row mirroring the Browse-by row: a label + pills, one line
+        # below the main selection row. The column ratio matches the selection
+        # row (utils caller's st.columns) so the label/pills line up under it.
+        if sub_mode_key:
+            st.session_state.setdefault(sub_mode_key, methods[0])
+        pick_label, pick_pills, _, _ = st.columns(
+            [1, 2.3, 3, 1.4], vertical_alignment="center"
+        )
+        pick_label.markdown("**Pick by**")
+        sub_mode = (
+            pick_pills.pills(
+                "Pick by",
+                options=methods,
+                key=sub_mode_key,
+                label_visibility="collapsed",
+            )
+            or methods[0]
         )
     else:
         sub_mode = methods[0]
@@ -471,13 +527,16 @@ def _select_trial_composite_mode(
     component_cols: list[str],
     text_field: str,
     key_prefix: str,
+    picker_host=None,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Trial selection when the trial id was composed from several columns.
 
     Renders one cascading selector per component (each narrowed by the previous
     picks), mirroring the Text / Participant modes instead of a single opaque
-    ``a_b_c`` dropdown."""
-    st.caption("Composite trial id — pick each part to narrow to a trial.")
+    ``a_b_c`` dropdown. Selectors render into ``picker_host`` (the column between
+    Browse-by and Filter), defaulting to the current container."""
+    host = picker_host if picker_host is not None else st
+    host.caption("Composite trial id — pick each part to narrow to a trial.")
     filtered = combos
     for col in component_cols:
         options = sorted(filtered[col].dropna().astype(str).unique())
@@ -492,7 +551,7 @@ def _select_trial_composite_mode(
         # back to the first valid option instead of raising.
         if state_key in st.session_state and st.session_state[state_key] not in options:
             del st.session_state[state_key]
-        chosen = st.selectbox(_component_label(col), options=options, key=state_key)
+        chosen = host.selectbox(_component_label(col), options=options, key=state_key)
         filtered = filtered[filtered[col].astype(str) == str(chosen)]
         if filtered.empty:
             st.warning("No trial matches the selected combination.")
@@ -505,7 +564,7 @@ def _select_trial_composite_mode(
         # The components didn't fully determine a single trial — offer the
         # remaining ones, like the other modes' "Reading" selector.
         trial_options = candidates["trial_id"].astype(str).tolist()
-        selected_trial = st.selectbox(
+        selected_trial = host.selectbox(
             "Reading (multiple trials available)",
             options=trial_options,
             key=f"{key_prefix}_composite_reading"
@@ -524,14 +583,40 @@ def _select_trial_composite_mode(
     return row["participant_id"], selected_trial, text
 
 
+def selection_modes(combos: pd.DataFrame) -> list:
+    """The "Browse by" modes the data supports.
+
+    Always offers ``Trial``; ``Text`` / ``Participant`` are offered whenever those
+    columns exist — even with a single value (the single-option pickers degrade
+    to a caption / one-option dropdown) — so the three options are always visible.
+    Shared by ``select_trial`` and the caller deciding whether to render a menu."""
+    if combos.empty:
+        return ["Trial"]
+    text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
+    modes = ["Trial"]
+    if text_field in combos.columns:
+        modes.append("Text")
+    if "participant_id" in combos.columns:
+        modes.append("Participant")
+    return modes
+
+
 def select_trial(
-    combos: pd.DataFrame, key_prefix: str = ""
+    combos: pd.DataFrame, key_prefix: str = "", mode_host=None, picker_host=None
 ) -> Tuple[Optional[str], Optional[str], str, Optional[str]]:
     """Select a trial using a three-mode UI (Trial/Text/Participant).
 
     In ``Trial`` mode a composite trial id (built from several mapped columns)
     is broken into one cascading selector per component; otherwise a single
     unique-trial dropdown is shown.
+
+    ``mode_host`` is the container to render the "Browse by" selector into (the
+    Scanpath screen passes a column so it sits inline with the picker + Filter
+    menu) — ``st.pills`` there; when ``None`` it renders inline as a segmented
+    control. ``picker_host`` is the container for the mode's selectbox(es) (the
+    column between Browse-by and Filter); the scrubbing slider always renders in
+    the current container (so it lands on the line below). Both default to the
+    current container.
 
     Returns:
         Tuple of (participant_id, trial_id, selection_mode, selected_text).
@@ -548,34 +633,34 @@ def select_trial(
         (c for c in ["TRIAL_INDEX", "trial_index"] if c in combos.columns), None
     )
 
-    # Only offer the Text / Participant modes when those dimensions actually vary
-    # — a single anonymous participant or a single text makes them no-ops, so the
-    # picker collapses to a plain trial dropdown.
-    modes = ["Trial"]
-    if text_field in combos.columns and combos[text_field].nunique(dropna=True) > 1:
-        modes.append("Text")
-    if (
-        "participant_id" in combos.columns
-        and combos["participant_id"].nunique(dropna=True) > 1
-    ):
-        modes.append("Participant")
-
+    modes = selection_modes(combos)
     mode_key = f"{key_prefix}_select_trial_mode" if key_prefix else None
-    # Drop a stale stored mode that's no longer offered so the radio doesn't raise.
+    # Drop a stale stored mode that's no longer offered so the widget doesn't raise.
     if mode_key and st.session_state.get(mode_key) not in modes:
         st.session_state.pop(mode_key, None)
     if len(modes) > 1:
-        # Segmented control reads cleaner than a radio for a small mode set; the
-        # `or modes[0]` guards the deselect case (segmented_control returns None
-        # if the active segment is clicked off).
-        selection_mode = (
-            st.segmented_control(
-                "Browse by",
-                options=modes,
-                key=mode_key,
+        # Seed a default so a pill/segment is selected on first render (the widget
+        # reads the key; `or modes[0]` then only guards an explicit deselect).
+        if mode_key:
+            st.session_state.setdefault(mode_key, modes[0])
+        if mode_host is not None:
+            # Pills inline beside the picker — one click, no popover (the caller
+            # shows the "Browse by" label in the same row).
+            selection_mode = (
+                mode_host.pills(
+                    "Browse by",
+                    options=modes,
+                    key=mode_key,
+                    label_visibility="collapsed",
+                )
+                or modes[0]
             )
-            or modes[0]
-        )
+        else:
+            # Inline segmented control (the `or modes[0]` guards a deselect → None).
+            selection_mode = (
+                st.segmented_control("Browse by", options=modes, key=mode_key)
+                or modes[0]
+            )
     else:
         selection_mode = "Trial"
 
@@ -583,19 +668,19 @@ def select_trial(
         composite_cols = _composite_columns_for(combos)
         if len(composite_cols) >= 2:
             participant, trial, text = _select_trial_composite_mode(
-                combos, composite_cols, text_field, key_prefix
+                combos, composite_cols, text_field, key_prefix, picker_host=picker_host
             )
         else:
             participant, trial, text = _select_trial_none_mode(
-                combos, trial_field, text_field, key_prefix
+                combos, trial_field, text_field, key_prefix, picker_host=picker_host
             )
     elif selection_mode == "Text":
         participant, trial, text = _select_trial_text_mode(
-            combos, text_field, key_prefix
+            combos, text_field, key_prefix, picker_host=picker_host
         )
     else:
         participant, trial, text = _select_trial_participant_mode(
-            combos, text_field, trial_index_field, key_prefix
+            combos, text_field, trial_index_field, key_prefix, picker_host=picker_host
         )
 
     return participant, trial, selection_mode, text

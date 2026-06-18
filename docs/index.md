@@ -32,8 +32,9 @@ The scanpath plot is built from layers you toggle independently — **text** at
 true pixel coordinates, **fixations** (sized by duration, colored by any
 column), **saccades**, **areas of interest**, and a word-level **heatmap** —
 plus **animated replay**, two-trial **comparison**, and **bulk export**. The app
-is organized into four tabs: **Scanpath Visualization**, **Corpus Analysis**
-(model generations + aggregated views), **Data Inspection**, and **Bulk Export**.
+is organized into three tabs: **Scanpath Visualization**, **Corpus Analysis**
+(model generations + aggregated views), and **Data Inspection** (bulk export is
+the **Export** subtab of Scanpath Visualization).
 
 Everything the app draws is also available headless through the
 [Python API](api.md) and the [CLI](cli.md) — same pipeline, same figure.

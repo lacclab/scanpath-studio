@@ -1572,9 +1572,7 @@ def _render_trial_condition_chips(
         prefix = "" if trial_level else "⚠️ "
         if not trial_level:
             varying.append(label)
-        chips.append(
-            (f"{prefix}{label} = {value_str}", _chip_color(col, value_str))
-        )
+        chips.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
     if not chips:
         return
     spans = "".join(
@@ -1906,9 +1904,7 @@ def render_single_trial_tab(
     with tab_annot:
         render_trial_annotations(selected_participant, selected_trial, bare=True)
     with tab_stim:
-        _render_paragraph_panel(
-            trial_words, trial_fixations=trial_fixations, bare=True
-        )
+        _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
     with tab_export:
         _render_export_panel(
             displayed_fig,

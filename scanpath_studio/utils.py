@@ -260,7 +260,10 @@ def _select_trial_text_mode(
         selected_participant = participant_options[0]
         st.caption(f"Participant: **{selected_participant}** (only one)")
     else:
-        if p_key in st.session_state and st.session_state[p_key] not in participant_options:
+        if (
+            p_key in st.session_state
+            and st.session_state[p_key] not in participant_options
+        ):
             del st.session_state[p_key]
         selected_participant = st.select_slider(
             "Participant",
@@ -272,7 +275,9 @@ def _select_trial_text_mode(
 
     # A participant may have read the text more than once — offer the readings.
     candidate_trials = (
-        text_combos[text_combos["participant_id"].astype(str) == str(selected_participant)]
+        text_combos[
+            text_combos["participant_id"].astype(str) == str(selected_participant)
+        ]
         .drop_duplicates(subset=["trial_id"])
         .sort_values("trial_id")
     )
@@ -356,7 +361,9 @@ def _select_trial_participant_mode(
         pick_label.markdown("**Pick by**")
         sub_mode = (
             pick_pills.pills(
-                "Pick by", options=methods, key=sub_mode_key,
+                "Pick by",
+                options=methods,
+                key=sub_mode_key,
                 label_visibility="collapsed",
             )
             or methods[0]
@@ -641,7 +648,9 @@ def select_trial(
             # shows the "Browse by" label in the same row).
             selection_mode = (
                 mode_host.pills(
-                    "Browse by", options=modes, key=mode_key,
+                    "Browse by",
+                    options=modes,
+                    key=mode_key,
                     label_visibility="collapsed",
                 )
                 or modes[0]

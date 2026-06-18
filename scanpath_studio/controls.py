@@ -605,9 +605,11 @@ def _render_compare_scanpath_styles(host=None) -> tuple[dict, dict]:
     ``host`` is the container to render into (defaults to the sidebar); the app
     now passes the scanpath rail so it sits with the rest of the viz controls.
     """
-    panel = (host if host is not None else st.sidebar).container(
-        key="tour_grp_compare_styles"
-    ).expander("Per-scanpath styling (comparison)", expanded=False)
+    panel = (
+        (host if host is not None else st.sidebar)
+        .container(key="tour_grp_compare_styles")
+        .expander("Per-scanpath styling (comparison)", expanded=False)
+    )
     panel.caption(
         "Style each scanpath independently — applies to the two-trial comparison."
     )
@@ -697,7 +699,9 @@ def _seed_viz_state(
     if highlight_options:
         st.session_state.setdefault(
             "global_highlight_column",
-            "is_in_aspan" if "is_in_aspan" in highlight_options else highlight_options[0],
+            "is_in_aspan"
+            if "is_in_aspan" in highlight_options
+            else highlight_options[0],
         )
     return color_fields, numeric_fields, highlight_options
 
@@ -788,7 +792,8 @@ def _collect_viz_settings(
         show_order=bool(ss.get("global_show_order")),
         show_saccades=show_saccades,
         # Arrows are a saccade sub-layer: never report them on when saccades off.
-        show_saccade_arrows=bool(ss.get("global_show_saccade_arrows")) and show_saccades,
+        show_saccade_arrows=bool(ss.get("global_show_saccade_arrows"))
+        and show_saccades,
         show_heatmap=show_heatmap,
         # `or default` (not get-default) so a segmented_control deselect → None
         # falls back instead of propagating None into the figure builders.
@@ -927,15 +932,21 @@ def sidebar_controls(
                 "fixation by the text line it lands on.",
             )
             st.slider(
-                "Size", 4, 40, key="global_marker_size_range",
+                "Size",
+                4,
+                40,
+                key="global_marker_size_range",
                 help="Fixation marker size (px).",
             )
             st.checkbox(
-                "Hollow circles", key="global_hollow_fixations",
+                "Hollow circles",
+                key="global_hollow_fixations",
                 help="Draw fixation markers as outlines only (filled by default).",
             )
             st.selectbox(
-                "Colorscale", options=COLORSCALES, key="global_fixation_colorscale",
+                "Colorscale",
+                options=COLORSCALES,
+                key="global_fixation_colorscale",
                 help="Colour palette for fixation markers when colouring by numeric "
                 "values.",
             )
@@ -959,21 +970,29 @@ def sidebar_controls(
                 )
                 st.slider(
                     "Fixation color range",
-                    min_value=cmin, max_value=cmax_eff, step=1.0, format="%d",
+                    min_value=cmin,
+                    max_value=cmax_eff,
+                    step=1.0,
+                    format="%d",
                     key="global_fixation_color_range",
                 )
             show_order = st.checkbox("Fixation index", key="global_show_order")
             if show_order:
                 st.color_picker(
-                    "Index label color", key="global_order_font_color",
+                    "Index label color",
+                    key="global_order_font_color",
                     help="Fixation-index label colour.",
                 )
                 st.slider(
-                    "Index label size", 6, 72, key="global_order_font_size",
+                    "Index label size",
+                    6,
+                    72,
+                    key="global_order_font_size",
                     help="Fixation-index label size.",
                 )
             st.checkbox(
-                "Mark out-of-text fixations", key="global_highlight_out_of_text",
+                "Mark out-of-text fixations",
+                key="global_highlight_out_of_text",
                 help="Draw a red ✕ on fixations that fall outside every word box.",
             )
 
@@ -982,19 +1001,23 @@ def sidebar_controls(
     if show_saccades:
         with viz.popover("⚙️ Saccade style", width="stretch"):
             st.checkbox(
-                "Direction arrows", key="global_show_saccade_arrows",
+                "Direction arrows",
+                key="global_show_saccade_arrows",
                 help="Draw an arrowhead on each saccade pointing in the gaze "
                 "direction.",
             )
             st.color_picker(
-                "Saccade color", key="global_saccade_color",
+                "Saccade color",
+                key="global_saccade_color",
                 help="Colour of the saccade lines and direction arrows (single "
                 "scanpath; two-trial comparisons use the per-scanpath styling "
                 "panel below).",
             )
             st.segmented_control(
-                "Saccade line style", options=list(SACCADE_DASH_OPTIONS.keys()),
-                key="global_saccade_style", help="Line style for the saccade traces.",
+                "Saccade line style",
+                options=list(SACCADE_DASH_OPTIONS.keys()),
+                key="global_saccade_style",
+                help="Line style for the saccade traces.",
             )
 
     # --- Text -------------------------------------------------------------
@@ -1111,7 +1134,10 @@ def sidebar_controls(
                 )
                 st.slider(
                     "Heatmap color range",
-                    min_value=hmin, max_value=hmax_eff, step=1.0, format="%d",
+                    min_value=hmin,
+                    max_value=hmax_eff,
+                    step=1.0,
+                    format="%d",
                     key="global_heatmap_color_range",
                 )
 
@@ -1271,7 +1297,12 @@ def read_trial_filters() -> Dict:
 
 
 # --- Trial summary chips (the "Field = Value" strip above the plot) ----------
-_CHIP_TEXT_ID_COLS = ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id")
+_CHIP_TEXT_ID_COLS = (
+    "unique_text_id",
+    "text_id",
+    "unique_paragraph_id",
+    "paragraph_id",
+)
 # Sensible default chips: trial identity + the common OneStop conditions + the
 # computed trial-level summary stats (which the chips replaced the Trial Info tab
 # with). The "@"-prefixed keys are virtual fields computed per trial in
@@ -1371,7 +1402,9 @@ def _default_chip_fields(available: List[str]) -> List[str]:
     return [f for f in wanted if f in available]
 
 
-def render_trial_chip_picker(words: pd.DataFrame, fixations: pd.DataFrame, host) -> None:
+def render_trial_chip_picker(
+    words: pd.DataFrame, fixations: pd.DataFrame, host
+) -> None:
     """Render the sidebar multiselect that configures which fields appear as the
     ``Field = Value`` chips above the scanpath (read by
     ``tabs._render_trial_condition_chips`` via ``st.session_state['trial_chip_fields']``).
@@ -1388,7 +1421,10 @@ def render_trial_chip_picker(words: pd.DataFrame, fixations: pd.DataFrame, host)
     signature = (tuple(words.columns), tuple(fixations.columns))
     cache = st.session_state.get("_trial_level_cache")
     if not cache or cache.get("signature") != signature:
-        cache = {"signature": signature, "fields": _trial_level_columns(words, fixations)}
+        cache = {
+            "signature": signature,
+            "fields": _trial_level_columns(words, fixations),
+        }
         st.session_state["_trial_level_cache"] = cache
 
     available = _chip_field_options(words, fixations, cache["fields"])
@@ -1482,7 +1518,10 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
         spec = _FILTER_FIELD_LABELS.get(col, {})
         if pd.api.types.is_bool_dtype(frame[col]):
             vals = _bool_filter_narrowing(
-                col, frame, spec.get("true", "Yes"), spec.get("false", "No"),
+                col,
+                frame,
+                spec.get("true", "Yes"),
+                spec.get("false", "No"),
                 f"filter_{col}",
             )
             if vals is not None:
@@ -1542,8 +1581,14 @@ def render_trial_filters(
         label = spec.get("label", col.replace("_", " ").strip().title())
         if pd.api.types.is_bool_dtype(frame[col]):
             _bool_metadata_filter(
-                label, col, frame, spec.get("true", "Yes"), spec.get("false", "No"),
-                f"filter_{col}", host, on_change=_apply,
+                label,
+                col,
+                frame,
+                spec.get("true", "Yes"),
+                spec.get("false", "No"),
+                f"filter_{col}",
+                host,
+                on_change=_apply,
             )
         else:
             values = _column_unique_strs(
@@ -1558,29 +1603,35 @@ def render_trial_filters(
     host.markdown("**By annotation**")
     if "filter_favorites" not in st.session_state:
         st.session_state["filter_favorites"] = bool(
-            st.session_state.get("_trial_filters_raw", {}).get("filter_favorites", False)
+            st.session_state.get("_trial_filters_raw", {}).get(
+                "filter_favorites", False
+            )
         )
     host.checkbox("⭐ Favorites only", key="filter_favorites", on_change=_apply)
     tags = known_tags()
     if tags:
         _seed_filter_widget("filter_req_tags", tags, [])
         host.multiselect(
-            "With any of these tags", options=tags, key="filter_req_tags",
+            "With any of these tags",
+            options=tags,
+            key="filter_req_tags",
             on_change=_apply,
         )
         _seed_filter_widget("filter_exc_tags", tags, [])
         host.multiselect(
-            "Excluding tags", options=tags, key="filter_exc_tags", on_change=_apply,
+            "Excluding tags",
+            options=tags,
+            key="filter_exc_tags",
+            on_change=_apply,
             help="e.g. hide everything tagged 'To exclude'.",
         )
 
     # Mirror the rendered widget values so _seed_filter_widget can restore them on
     # a run where this panel isn't shown (the keys get cleared); then publish the
     # derived result for read_trial_filters (covers no-change runs).
-    keys = (
-        ["filter_participants", "filter_req_tags", "filter_exc_tags"]
-        + [f"filter_{c}" for c in _filter_fields_for(words, fixations)]
-    )
+    keys = ["filter_participants", "filter_req_tags", "filter_exc_tags"] + [
+        f"filter_{c}" for c in _filter_fields_for(words, fixations)
+    ]
     st.session_state["_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state
     }

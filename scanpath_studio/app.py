@@ -1458,8 +1458,7 @@ def _render_unmapped_view(
         "**Finish the column mapping to draw scanpaths.** Map the missing "
         "field(s) in the **Column mapping** panel below each upload box in the "
         "sidebar — the raw uploaded data is shown in the **Data Inspection** view "
-        "to help you choose. Still needed:\n\n"
-        + "\n".join(f"- {p}" for p in problems)
+        "to help you choose. Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
     )
     if active_view == "Data Inspection":
         if (raw_words_df is None or raw_words_df.empty) and (

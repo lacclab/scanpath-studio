@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 from typing import Optional
 
@@ -35,7 +36,7 @@ from scanpath_studio.data import (
     frame_fingerprint,
     has_explicit_trial_index,
 )
-from scanpath_studio.controls import render_trial_filters
+from scanpath_studio.controls import render_trial_filters, sidebar_controls
 from scanpath_studio.export import (
     ExportProgress,
     bulk_export,
@@ -1680,6 +1681,90 @@ def _render_export_panel(
     )
 
 
+_CHIP_NEUTRAL_BG = "#EEF2F7"
+# Friendly labels for the identity fields; everything else is humanized.
+_CHIP_FIELD_LABELS = {
+    "participant_id": "Participant",
+    "unique_text_id": "Text",
+    "text_id": "Text",
+    "unique_paragraph_id": "Text",
+    "paragraph_id": "Text",
+}
+
+
+def _chip_field_label(col: str) -> str:
+    """Friendly label for a chip field (identity fields, else humanized)."""
+    return _CHIP_FIELD_LABELS.get(col, _humanize_field(col))
+
+
+def _chip_raw_value(col, trial_words, trial_fixations, participant):
+    """First non-null value for ``col`` in the trial (words first, then
+    fixations); ``participant_id`` resolves to the selected participant."""
+    if col == "participant_id":
+        return participant or None
+    for src in (trial_words, trial_fixations):
+        if src is not None and not src.empty and col in src.columns:
+            value = src[col].iloc[0]
+            if pd.notna(value):
+                return value
+    return None
+
+
+def _chip_color(col: str, value_str: str) -> str:
+    """Background for a chip — known conditions keep their metadata-table colour
+    (so a condition reads the same everywhere), everything else is neutral."""
+    v = value_str.lower()
+    if col == "difficulty_level":
+        for prefix, color in _DIFFICULTY_COLORS.items():
+            if v.startswith(prefix):
+                return color
+    elif col == "question_preview" and v in ("true", "1"):
+        return _PREVIEW_COLOR
+    elif col == "repeated_reading_trial" and v in ("true", "1"):
+        return _REPEAT_COLOR
+    elif col == "is_correct":
+        if v in ("true", "1"):
+            return "#d4edda"
+        if v in ("false", "0"):
+            return "#f8d7da"
+    return _CHIP_NEUTRAL_BG
+
+
+def _render_trial_condition_chips(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    participant: Optional[str],
+    fields,
+) -> None:
+    """Render a compact, glanceable strip of ``Field = Value`` chips above the
+    plot — the trial's key identity + experiment conditions, so the most
+    important "what am I looking at" facts are visible without opening the Trial
+    Info subtab.
+
+    ``fields`` is the configurable list of columns to surface (sidebar
+    ``trial_chip_fields`` — participant id, text id, difficulty, question
+    preview, …). Colours mirror the metadata table (``_style_metadata_row``).
+    Skips silently when nothing resolves."""
+    chips: list[tuple[str, str]] = []
+    for col in fields or []:
+        value = _chip_raw_value(col, trial_words, trial_fixations, participant)
+        if value is None:
+            continue
+        value_str = str(value)
+        if not value_str:
+            continue
+        chips.append(
+            (f"{_chip_field_label(col)} = {value_str}", _chip_color(col, value_str))
+        )
+    if not chips:
+        return
+    spans = "".join(
+        f'<span class="sps-chip" style="background:{bg};">{html.escape(label)}</span>'
+        for label, bg in chips
+    )
+    st.markdown(f'<div class="sps-trial-chips">{spans}</div>', unsafe_allow_html=True)
+
+
 def render_single_trial_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -1689,7 +1774,6 @@ def render_single_trial_tab(
     canvas_height: int,
     base_font_size: int,
     font_family: str,
-    viz_settings: dict,
     raw_gaze: Optional[pd.DataFrame] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
@@ -1697,14 +1781,21 @@ def render_single_trial_tab(
     words_all: Optional[pd.DataFrame] = None,
     fixations_all: Optional[pd.DataFrame] = None,
 ) -> None:
-    """Render the main Scanpath Visualization tab (static + animated).
+    """Render the main Scanpath Visualization screen (static + animated).
 
-    Layout: a 30 / 70 split holds the trial selectors (+ Animate / Compare) on
-    the left and the plot (static, animated, or a two-trial comparison) on the
-    right. Below the split, a full-width subtab bar carries the per-trial panels:
-    **Stimulus & questions · Annotations · Trial Info · Export** (Export folds in
-    the former standalone Bulk Export tab — see ``_render_export_panel``). Save &
-    restore lives in the sidebar.
+    Layout, designed for use with the sidebar closed (everything needed is beside
+    the plot, no scrolling):
+
+    1. A compact **selection bar** above the plot — the trial picker + a 🔍 Filter
+       expander, with a strip of experiment-condition chips below it (the trial's
+       "what am I looking at" at a glance).
+    2. A **plot + right rail** split: the scanpath plot on the left, and a control
+       rail on the right carrying the **view modes** (Animate / Compare) and the
+       **visualization controls** (formerly in the sidebar — see
+       ``controls.sidebar_controls``, rendered here with ``host=``).
+    3. A full-width **subtab bar** below: Stimulus & questions · Annotations ·
+       Trial Info · Export (Export folds in the former Bulk Export tab — see
+       ``_render_export_panel``). Save & restore lives in the sidebar.
 
     ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
     the Export subtab's bulk section uses for its "whole dataset" scope; they
@@ -1716,26 +1807,31 @@ def render_single_trial_tab(
         words_all = words_filtered
     if fixations_all is None:
         fixations_all = fixations_filtered
-    # The plot sits full-width at the TOP; it's filled (below) once the selection
-    # is resolved. A reserved container lets the Trial Selection panel render
-    # *under* the plot in the page while still being evaluated first.
-    plot_slot = st.container()
 
-    # --- Trial Selection (below the plot) -------------------------------------
-    st.markdown("### 🎯 Trial Selection")
-    sel_col, filt_col = st.columns([3, 2], gap="large")
-    with sel_col:
+    # --- Plot (left) + control rail (right) -----------------------------------
+    # Columns FIRST so the rail starts at the very top, beside the selection —
+    # built for the sidebar-closed workflow. The selection bar + chips + plot all
+    # live in the left column; the per-trial subtabs render full-width below.
+    plot_col, rail_col = st.columns([7, 3], gap="large")
+    with rail_col:
+        rail = st.container(key="scanpath_rail")
+
+    with plot_col:
+        st.markdown("### 🎯 Trial")
         selected_participant, selected_trial, selection_mode, selected_text = (
             select_trial(combos, key_prefix="single")
         )
-    with filt_col:
-        # The former sidebar "Filter trials" panel now lives with selection. It
-        # renders every run the tab is shown (a collapsed expander still renders
-        # its children), writing the selections to session_state; app.main reads
-        # them via read_trial_filters and applies the filter globally.
-        filt_exp = st.expander("🔍 Filter trials", expanded=False)
-        filt_exp.caption("Narrow the trial pool shown in every view.")
-        render_trial_filters(words_all, fixations_all, host=filt_exp)
+        # Filter trials — a popover (opens as an overlay, so it doesn't shove the
+        # plot down) sitting with the Browse-by controls on the left. Its children
+        # render every run, writing session_state; app.main reads them via
+        # read_trial_filters and applies the filter globally.
+        filt_pop = st.popover("🔍 Filter trials", width="content")
+        filt_pop.caption("Narrow the trial pool shown in every view.")
+        render_trial_filters(words_all, fixations_all, host=filt_pop)
+        # Slots filled once the selection is resolved (chips need the trial).
+        chips_slot = st.container()
+        plot_slot = st.container()
+
     if not (selected_participant and selected_trial):
         return
 
@@ -1753,22 +1849,24 @@ def render_single_trial_tab(
     trial_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
         trial_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
-
     trial_has_raw_gaze = not trial_raw_gaze.empty
-    global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
-    effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
-    figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
-    figure_settings["raw_gaze"] = trial_raw_gaze if trial_has_raw_gaze else None
-    # Carried into both the live figure and the bulk export so exported plots are
-    # sized identically to what's on screen (true-to-scale reading text).
-    figure_settings["line_spacing"] = line_spacing
-    figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
-    x_field = viz_settings["x_field"]
-    y_field = viz_settings["y_field"]
+    has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
-    # Animate + Compare sit in the Trial Selection panel, below the selectors.
-    opt_col, cmp_col = st.columns(2, gap="large")
-    with opt_col:
+    # Condition chips above the plot — configurable via the sidebar picker
+    # (`trial_chip_fields`); shows `Field = Value` for the chosen columns.
+    with chips_slot:
+        _render_trial_condition_chips(
+            trial_words,
+            trial_fixations,
+            selected_participant,
+            st.session_state.get("trial_chip_fields") or [],
+        )
+
+    # Render the rail (view modes + viz controls) before the figure so it sees the
+    # resolved Animate / Compare / viz settings; its right-side position is fixed
+    # by the column split regardless of render order.
+    with rail:
+        st.markdown("##### 🎬 View modes")
         animate = st.toggle(
             "Animate scanpath",
             value=False,
@@ -1791,7 +1889,6 @@ def render_single_trial_tab(
                 help="Playback speed relative to the recorded fixation timings.",
                 key="single_playback_speed",
             )
-    with cmp_col:
         compare_participant, compare_trial, compare_layout = (
             _render_comparison_controls(
                 combos,
@@ -1802,8 +1899,28 @@ def render_single_trial_tab(
                 animate=animate,
             )
         )
-    if global_raw_toggle and not trial_has_raw_gaze:
-        st.warning("Raw gaze not available for this trial.", icon="⚠️")
+        st.divider()
+        st.markdown("##### 🎨 Visualization")
+        # The visualization controls moved out of the sidebar into this rail
+        # (host=rail) so they sit beside the plot with the sidebar closed.
+        viz_settings = sidebar_controls(
+            fixations_filtered,
+            base_font_size,
+            host=rail,
+            has_raw_gaze=has_raw_gaze,
+            words=words_filtered,
+        )
+
+    global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
+    effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
+    figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
+    figure_settings["raw_gaze"] = trial_raw_gaze if trial_has_raw_gaze else None
+    # Carried into both the live figure and the bulk export so exported plots are
+    # sized identically to what's on screen (true-to-scale reading text).
+    figure_settings["line_spacing"] = line_spacing
+    figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    x_field = viz_settings["x_field"]
+    y_field = viz_settings["y_field"]
 
     # Second trial's words/fixations + labels for the comparison figure and the
     # side-by-side Trial Info / metadata table.
@@ -1824,7 +1941,7 @@ def render_single_trial_tab(
     anim_file_stem = None
     dual_anim = animate and comparing and not compare_fix.empty
 
-    # Animation info box, in the slot under the Animate toggle (TODO 3.1).
+    # Animation info box, in the slot under the Animate toggle (in the rail).
     if animate and not trial_fixations.empty:
         with anim_info_slot:
             _render_anim_info_box(
@@ -1840,6 +1957,8 @@ def render_single_trial_tab(
             )
 
     with plot_slot:
+        if global_raw_toggle and not trial_has_raw_gaze:
+            st.warning("Raw gaze not available for this trial.", icon="⚠️")
         if animate and trial_fixations.empty:
             st.info(
                 "Animation needs a **fixations** table — there's nothing to "

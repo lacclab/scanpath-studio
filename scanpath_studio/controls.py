@@ -576,7 +576,24 @@ def _clamp_range(state_key: str, lo: float, hi: float) -> None:
     st.session_state[state_key] = (min(a, b), max(a, b))
 
 
-def _render_compare_scanpath_styles() -> tuple[dict, dict]:
+def _clamped_pair(val, lo: float, hi: float) -> Optional[tuple]:
+    """Pure twin of ``_clamp_range``: clamp a stored ``(min, max)`` into ``[lo,
+    hi]`` and return it, or ``None`` for a malformed/missing value — WITHOUT
+    touching session_state. Used by ``_collect_viz_settings`` (the non-rendering
+    reader) so a colour range stored on differently-scaled data is clamped the
+    same way the rendered slider clamps it, instead of leaking out-of-bounds into
+    the Corpus / Save-&-restore figures."""
+    if not (isinstance(val, (list, tuple)) and len(val) == 2):
+        return None
+    try:
+        a, b = float(val[0]), float(val[1])
+    except (TypeError, ValueError):
+        return None
+    a, b = max(lo, min(a, hi)), max(lo, min(b, hi))
+    return (min(a, b), max(a, b))
+
+
+def _render_compare_scanpath_styles(host=None) -> tuple[dict, dict]:
     """Per-scanpath styling for the two-trial comparison.
 
     Rendered only when the "Compare with another trial" toggle is on. Returns
@@ -584,10 +601,13 @@ def _render_compare_scanpath_styles() -> tuple[dict, dict]:
     ``fix_color``, ``saccade_color``, ``saccade_style`` (Plotly dash),
     ``marker_size_range``, ``hollow``. Defaults reproduce the classic two-colour
     look, so the figure is unchanged until the user tweaks a control.
+
+    ``host`` is the container to render into (defaults to the sidebar); the app
+    now passes the scanpath rail so it sits with the rest of the viz controls.
     """
-    panel = st.sidebar.container(key="tour_grp_compare_styles").expander(
-        "Per-scanpath styling (comparison)", expanded=False
-    )
+    panel = (host if host is not None else st.sidebar).container(
+        key="tour_grp_compare_styles"
+    ).expander("Per-scanpath styling (comparison)", expanded=False)
     panel.caption(
         "Style each scanpath independently — applies to the two-trial comparison."
     )
@@ -627,22 +647,25 @@ def _render_compare_scanpath_styles() -> tuple[dict, dict]:
     return styles[0], styles[1]
 
 
-def sidebar_controls(
+def _seed_viz_state(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
-    has_raw_gaze: bool = False,
-    words: Optional[pd.DataFrame] = None,
-) -> Dict:
-    # Seed defaults for the widgets that the plot-config restore can set
-    # (app._restore_plot_config). These render WITHOUT a `value=`/`index=`
-    # argument so their key can be assigned programmatically without tripping
-    # Streamlit's "default value but also set via Session State API" warning;
-    # the default lives here instead. Widgets the restore never touches keep
-    # their inline `value=`. `setdefault` leaves any URL-preset / restored value
-    # in place.
+    words: Optional[pd.DataFrame],
+) -> tuple[List[str], List[str], List[str]]:
+    """Seed every viz widget's session_state default (pure — renders nothing).
+
+    Both ``sidebar_controls`` (which renders the widgets) and
+    ``viz_settings_from_state`` (the non-rendering reader used by the Corpus view
+    and the Save & restore panel) call this first, so the controls and their
+    consumers can't drift. The widgets render WITHOUT a ``value=``/``index=``
+    argument and rely on these defaults, which keeps their keys programmatically
+    settable (deep links / plot-config restore) without Streamlit's "default
+    value but also set via Session State API" warning. ``setdefault`` leaves any
+    URL-preset / restored value in place. Returns ``(color_fields,
+    numeric_fields, highlight_options)`` for the caller to reuse.
+    """
     for _key, _default in _VIZ_WIDGET_DEFAULTS.items():
         st.session_state.setdefault(_key, _default)
-
     st.session_state.setdefault("global_order_font_size", int(base_font_size))
     st.session_state.setdefault("global_marker_size_range", (8, 24))
 
@@ -652,31 +675,221 @@ def sidebar_controls(
         "global_color_by",
         "duration_ms" if "duration_ms" in color_fields else color_fields[0],
     )
+
     numeric_fields = numeric_field_options(trial_fixations)
+    if numeric_fields:
+        x_default = "x" if "x" in numeric_fields else numeric_fields[0]
+        y_default = (
+            "y"
+            if "y" in numeric_fields
+            else numeric_fields[min(1, len(numeric_fields) - 1)]
+        )
+        _drop_stale("global_x_field", numeric_fields)
+        st.session_state.setdefault("global_x_field", x_default)
+        _drop_stale("global_y_field", numeric_fields)
+        st.session_state.setdefault("global_y_field", y_default)
+
+    # Highlight-column default + stale-clear run every time (even when the Text
+    # styling popover isn't rendered this run) so a restored config on data with
+    # no boolean columns can't carry a dangling pick.
+    highlight_options = highlight_column_options(words)
+    _drop_stale("global_highlight_column", highlight_options)
+    if highlight_options:
+        st.session_state.setdefault(
+            "global_highlight_column",
+            "is_in_aspan" if "is_in_aspan" in highlight_options else highlight_options[0],
+        )
+    return color_fields, numeric_fields, highlight_options
+
+
+def _collect_viz_settings(
+    trial_fixations: pd.DataFrame,
+    words: Optional[pd.DataFrame],
+    *,
+    numeric_fields: Optional[List[str]] = None,
+    highlight_options: Optional[List[str]] = None,
+) -> Dict:
+    """Build the viz-settings dict from session_state (pure — renders nothing).
+
+    The single source of truth for the dict the figure builders consume, so the
+    rendered controls (``sidebar_controls``) and the non-rendering reader
+    (``viz_settings_from_state``) return identical shapes. Conditionally-applied
+    fields (colour ranges, the highlight column, saccade arrows) are gated here
+    exactly as the widgets gate them, so a stored value for an off layer doesn't
+    leak into the figure. ``compare_style_a``/``_b`` are ``None``; the rendering
+    path fills them in when the comparison toggle is on.
+    """
+    ss = st.session_state
+    if highlight_options is None:
+        highlight_options = highlight_column_options(words)
+
+    show_fix = bool(ss.get("global_show_fix"))
+    show_saccades = bool(ss.get("global_show_saccades"))
+    show_heatmap = bool(ss.get("global_show_heatmap"))
+    show_labels = bool(ss.get("global_show_labels"))
+    color_by = ss.get("global_color_by")
+
+    # Fixation colour range only applies when fixations are shown AND coloured by
+    # a numeric column with a valid spread — mirror the widget's gate.
+    fixation_color_range = None
+    if (
+        show_fix
+        and color_by in trial_fixations.columns
+        and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
+    ):
+        cmin, cmax = trial_fixations[color_by].min(), trial_fixations[color_by].max()
+        if pd.notna(cmin) and pd.notna(cmax):
+            # Clamp to the same [floor(min), ceil(max)] bounds the rendered slider
+            # uses, so the non-rendering reader can't leak a stale out-of-bounds
+            # range (cmax_eff mirrors the slider's `cmax if cmax > cmin else +1`).
+            lo = float(math.floor(cmin))
+            hi = float(math.ceil(cmax))
+            hi = hi if hi > lo else lo + 1.0
+            fixation_color_range = _clamped_pair(
+                ss.get("global_fixation_color_range"), lo, hi
+            )
+
+    # Heatmap colour range only applies for the duration-weighted heatmap.
+    heatmap_range = None
+    if (
+        show_heatmap
+        and ss.get("global_heatmap_metric") == "duration_ms"
+        and "duration_ms" in trial_fixations.columns
+    ):
+        heat = trial_fixations["duration_ms"]
+        if len(heat) > 0 and pd.notna(heat.min()) and pd.notna(heat.max()):
+            lo = float(math.floor(heat.min()))
+            hi = float(math.ceil(heat.max()))
+            hi = hi if hi > lo else lo + 1.0
+            heatmap_range = _clamped_pair(ss.get("global_heatmap_color_range"), lo, hi)
+
+    # Highlight column only applies when Text is shown and a span style is active.
+    critical_span_style = ss.get("global_critical_span_style", "Mark text")
+    highlight_column = None
+    if show_labels and critical_span_style != "None" and highlight_options:
+        candidate = ss.get("global_highlight_column")
+        highlight_column = candidate if candidate in highlight_options else None
+
+    # Background colour comes from the Experimental Setup picker (read here so it
+    # flows into the figure via viz_settings).
+    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
+    bg_choice = ss.get("global_bg_choice", bg_options[0])
+    if bg_choice == "Custom…":
+        background_color = ss.get("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
+    else:
+        background_color = BACKGROUND_PRESETS.get(
+            bg_choice, BACKGROUND_PRESETS[bg_options[0]]
+        )
+
+    return dict(
+        show_words=bool(ss.get("global_show_words")),
+        show_labels=show_labels,
+        show_fix=show_fix,
+        show_order=bool(ss.get("global_show_order")),
+        show_saccades=show_saccades,
+        # Arrows are a saccade sub-layer: never report them on when saccades off.
+        show_saccade_arrows=bool(ss.get("global_show_saccade_arrows")) and show_saccades,
+        show_heatmap=show_heatmap,
+        # `or default` (not get-default) so a segmented_control deselect → None
+        # falls back instead of propagating None into the figure builders.
+        heatmap_style=ss.get("global_heatmap_style") or "Word boxes",
+        show_raw_gaze=bool(ss.get("global_show_raw_gaze")),
+        color_by=color_by,
+        heatmap_metric=ss.get("global_heatmap_metric") or "duration_ms",
+        x_field=ss.get("global_x_field"),
+        y_field=ss.get("global_y_field"),
+        marker_size_range=tuple(ss.get("global_marker_size_range", (8, 24))),
+        order_font_size=ss.get("global_order_font_size"),
+        order_font_color=ss.get("global_order_font_color"),
+        show_colorbars=bool(ss.get("global_show_colorbars")),
+        fixation_color_range=fixation_color_range,
+        heatmap_range=heatmap_range,
+        fixation_colorscale=ss.get("global_fixation_colorscale"),
+        heatmap_colorscale=ss.get("global_heatmap_colorscale"),
+        critical_span_style=critical_span_style,
+        highlight_column=highlight_column,
+        saccade_color=ss.get("global_saccade_color", SACCADE_COLOR),
+        saccade_style=ss.get("global_saccade_style") or "Solid",
+        hollow_fixations=bool(ss.get("global_hollow_fixations")),
+        highlight_text_color=ss.get("global_highlight_text_color"),
+        text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
+        color_by_line=color_by == "line",
+        highlight_out_of_text=bool(ss.get("global_highlight_out_of_text")),
+        background_color=background_color,
+        compare_style_a=None,
+        compare_style_b=None,
+    )
+
+
+def viz_settings_from_state(
+    trial_fixations: pd.DataFrame,
+    base_font_size: int,
+    words: Optional[pd.DataFrame] = None,
+) -> Dict:
+    """Resolve the viz-settings dict from session_state WITHOUT rendering widgets.
+
+    Used by the views that consume the settings but don't host the controls — the
+    Corpus Analysis figures and the Save & restore panel — so they stay in sync
+    with the scanpath rail (which renders the actual widgets via
+    ``sidebar_controls``) on whatever the user last set.
+    """
+    _, numeric_fields, highlight_options = _seed_viz_state(
+        trial_fixations, base_font_size, words
+    )
+    return _collect_viz_settings(
+        trial_fixations,
+        words,
+        numeric_fields=numeric_fields,
+        highlight_options=highlight_options,
+    )
+
+
+def sidebar_controls(
+    trial_fixations: pd.DataFrame,
+    base_font_size: int,
+    *,
+    host=None,
+    has_raw_gaze: bool = False,
+    words: Optional[pd.DataFrame] = None,
+) -> Dict:
+    """Render the visualization controls and return the resolved settings dict.
+
+    Layout (cognitive-overload-conscious):
+      1. Quick-view presets up top — one click for a focused picture.
+      2. Layer on/off toggles. The layer's detailed styling lives in a per-layer
+         popover shown only while the layer is on, so the panel stays compact
+         (it now sits in a fixed rail beside the plot, not the scrollable
+         sidebar) — fixations keep their primary "Color by" control inline.
+      3. Global axes / colour bars in a collapsed expander.
+
+    ``host`` is the container to render into; it defaults to ``st.sidebar`` for
+    backwards compatibility, but the app passes the scanpath rail
+    (``tabs.render_single_trial_tab``). The returned dict is built by
+    ``_collect_viz_settings`` (shared with ``viz_settings_from_state``) so the
+    rendered controls and the non-rendering readers can't drift.
+    """
+    color_fields, numeric_fields, highlight_options = _seed_viz_state(
+        trial_fixations, base_font_size, words
+    )
     if not numeric_fields:
         st.error("No numeric fields found in fixations to map axes.")
         st.stop()
 
-    # The Visualization panel, redesigned to cut cognitive overload:
-    #   1. Quick-view presets up top — one click for a focused picture.
-    #   2. Layer on/off toggles, each with its *primary* control inline and shown
-    #      ONLY while the layer is on (no greyed-out controls for off layers).
-    #   3. Every fiddly knob (colorscales, ranges, fixation-index font, saccade
-    #      colour/style, heatmap palette/metric, axes, colour bars) tucked into a
-    #      collapsed "Advanced styling" expander.
     # The keyed container is the spotlight-tour target
-    # (`.st-key-tour_grp_viz_controls`); it is a plain container (not an expander)
-    # so the Advanced sub-expander can nest under it. Values for controls that
-    # aren't rendered this run are read back from session_state (re-seeded each
-    # run by the `_VIZ_WIDGET_DEFAULTS` setdefault loop above), so the returned
-    # dict always has every key — the figure builders depend on that.
-    viz = st.sidebar.container(key="tour_grp_viz_controls")
+    # (`.st-key-tour_grp_viz_controls`). Values for controls not rendered this run
+    # are read back from session_state by `_collect_viz_settings`, so the returned
+    # dict always carries every key the figure builders depend on.
+    viz = (host if host is not None else st.sidebar).container(
+        key="tour_grp_viz_controls"
+    )
 
     # --- Quick views ------------------------------------------------------
+    # Two presets only (keeps the rail short); the Reading-order / Everything
+    # presets are still reachable by toggling layers. The remaining preset keys
+    # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
     viz.caption("Quick views")
-    _qv_top = viz.columns(2)
-    _qv_bot = viz.columns(2)
-    _qv_top[0].button(
+    _qv = viz.columns(2)
+    _qv[0].button(
         "👁️ Scanpath",
         key="viz_view_scanpath",
         width="stretch",
@@ -684,7 +897,7 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("scanpath",),
     )
-    _qv_top[1].button(
+    _qv[1].button(
         "🔥 Heatmap",
         key="viz_view_heatmap",
         width="stretch",
@@ -692,288 +905,219 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("heatmap",),
     )
-    _qv_bot[0].button(
-        "🔢 Reading order",
-        key="viz_view_order",
-        width="stretch",
-        help="Numbered fixations + saccades, to follow the reading sequence.",
-        on_click=_apply_view_preset,
-        args=("reading_order",),
-    )
-    _qv_bot[1].button(
-        "✳️ Everything",
-        key="viz_view_everything",
-        width="stretch",
-        help="Turn every layer on at once.",
-        on_click=_apply_view_preset,
-        args=("everything",),
-    )
 
     viz.divider()
 
-    # Each main layer is an `st.toggle` (a clearer on/off affordance than a
-    # checkbox), and that layer's styling renders *inline right below it, only
-    # while it is on* — so the panel shows exactly the controls relevant to what's
-    # currently drawn, with no catch-all "advanced" drawer. The tradeoff: a
-    # layer's per-layer style resets to default if you toggle the layer off and
-    # back on (Streamlit clears hidden widgets); values for layers that are off
-    # are read back from session_state (re-seeded by the setdefault loop above) so
-    # the returned dict always carries every key.
+    # Each main layer is an `st.toggle`; the layer's detailed styling lives in a
+    # per-layer popover shown only while the layer is on — so the rail shows just
+    # the toggles (plus, for fixations, the primary "Color by" control), and the
+    # fiddly knobs open in an overlay instead of growing the rail past the plot.
+    # Values for off layers are read back from session_state by
+    # `_collect_viz_settings`, so the returned dict always carries every key.
 
     # --- Fixations --------------------------------------------------------
     show_fix = viz.toggle("**Fixations**", key="global_show_fix")
-    color_by = st.session_state["global_color_by"]
-    size_min, size_max = st.session_state["global_marker_size_range"]
-    hollow_fixations = st.session_state["global_hollow_fixations"]
-    fixation_colorscale = st.session_state["global_fixation_colorscale"]
-    fixation_color_range = None
-    show_order = st.session_state["global_show_order"]
-    order_font_color = st.session_state["global_order_font_color"]
-    order_font_size = st.session_state["global_order_font_size"]
-    highlight_out_of_text = st.session_state["global_highlight_out_of_text"]
     if show_fix:
-        color_by = viz.selectbox(
-            "Color fixations by",
-            options=color_fields,
-            key="global_color_by",
-            help="Fixation marker colour. Pick a column, or 'line' to tint each "
-            "fixation by the text line it lands on.",
-        )
-        size_min, size_max = viz.slider(
-            "Size",
-            4,
-            40,
-            key="global_marker_size_range",
-            help="Fixation marker size (px).",
-        )
-        hollow_fixations = viz.checkbox(
-            "Hollow circles",
-            key="global_hollow_fixations",
-            help="Draw fixation markers as outlines only (filled by default).",
-        )
-        fixation_colorscale = viz.selectbox(
-            "Colorscale",
-            options=COLORSCALES,
-            help="Colour palette for fixation markers when colouring by numeric "
-            "values.",
-            key="global_fixation_colorscale",
-        )
-        raw_cmin = (
-            trial_fixations[color_by].min()
-            if color_by in trial_fixations.columns
-            and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
-            else None
-        )
-        raw_cmax = trial_fixations[color_by].max() if raw_cmin is not None else None
-        if pd.notna(raw_cmin) and pd.notna(raw_cmax):
-            # Integer bounds + step so the range reads as whole numbers (durations,
-            # surprisal, … all read cleaner as ints); values stay floats so a
-            # restored config built on different data still clamps in.
-            cmin = float(math.floor(raw_cmin))
-            cmax = float(math.ceil(raw_cmax))
-            cmax_eff = cmax if cmax > cmin else cmin + 1.0
-            _clamp_range("global_fixation_color_range", cmin, cmax_eff)
-            st.session_state.setdefault(
-                "global_fixation_color_range", (cmin, cmax_eff)
+        with viz.popover("⚙️ Fixation style", width="stretch"):
+            color_by = st.selectbox(
+                "Color fixations by",
+                options=color_fields,
+                key="global_color_by",
+                help="Fixation marker colour. Pick a column, or 'line' to tint each "
+                "fixation by the text line it lands on.",
             )
-            fixation_color_range = viz.slider(
-                "Fixation color range",
-                min_value=cmin,
-                max_value=cmax_eff,
-                step=1.0,
-                format="%d",
-                key="global_fixation_color_range",
+            st.slider(
+                "Size", 4, 40, key="global_marker_size_range",
+                help="Fixation marker size (px).",
             )
-        show_order = viz.checkbox("Fixation index", key="global_show_order")
-        if show_order:
-            order_font_color = viz.color_picker(
-                "Index label color",
-                key="global_order_font_color",
-                help="Fixation-index label colour.",
+            st.checkbox(
+                "Hollow circles", key="global_hollow_fixations",
+                help="Draw fixation markers as outlines only (filled by default).",
             )
-            order_font_size = viz.slider(
-                "Index label size",
-                6,
-                72,
-                key="global_order_font_size",
-                help="Fixation-index label size.",
+            st.selectbox(
+                "Colorscale", options=COLORSCALES, key="global_fixation_colorscale",
+                help="Colour palette for fixation markers when colouring by numeric "
+                "values.",
             )
-        highlight_out_of_text = viz.checkbox(
-            "Mark out-of-text fixations",
-            key="global_highlight_out_of_text",
-            help="Draw a red ✕ on fixations that fall outside every word box.",
-        )
-    # "line" routes through the dedicated by-line colouring in the plot builders
-    # (which guard against it being a missing column); see plots.make_*_figure.
-    color_by_line = color_by == "line"
+            raw_cmin = (
+                trial_fixations[color_by].min()
+                if color_by in trial_fixations.columns
+                and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
+                else None
+            )
+            raw_cmax = trial_fixations[color_by].max() if raw_cmin is not None else None
+            if pd.notna(raw_cmin) and pd.notna(raw_cmax):
+                # Integer bounds + step so the range reads as whole numbers
+                # (durations, surprisal, … all read cleaner as ints); values stay
+                # floats so a restored config built on different data clamps in.
+                cmin = float(math.floor(raw_cmin))
+                cmax = float(math.ceil(raw_cmax))
+                cmax_eff = cmax if cmax > cmin else cmin + 1.0
+                _clamp_range("global_fixation_color_range", cmin, cmax_eff)
+                st.session_state.setdefault(
+                    "global_fixation_color_range", (cmin, cmax_eff)
+                )
+                st.slider(
+                    "Fixation color range",
+                    min_value=cmin, max_value=cmax_eff, step=1.0, format="%d",
+                    key="global_fixation_color_range",
+                )
+            show_order = st.checkbox("Fixation index", key="global_show_order")
+            if show_order:
+                st.color_picker(
+                    "Index label color", key="global_order_font_color",
+                    help="Fixation-index label colour.",
+                )
+                st.slider(
+                    "Index label size", 6, 72, key="global_order_font_size",
+                    help="Fixation-index label size.",
+                )
+            st.checkbox(
+                "Mark out-of-text fixations", key="global_highlight_out_of_text",
+                help="Draw a red ✕ on fixations that fall outside every word box.",
+            )
 
     # --- Saccades ---------------------------------------------------------
     show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
-    # Arrows are a saccade sub-layer: force them off whenever saccades are off so
-    # a stale "arrows on" setting can't draw arrowheads over a hidden saccade
-    # layer (the figure builders also guard this, belt-and-suspenders).
-    show_saccade_arrows = False
-    saccade_color = st.session_state["global_saccade_color"]
-    saccade_style_label = st.session_state["global_saccade_style"]
     if show_saccades:
-        show_saccade_arrows = viz.checkbox(
-            "Direction arrows",
-            key="global_show_saccade_arrows",
-            help="Draw an arrowhead on each saccade pointing in the gaze direction.",
-        )
-        saccade_color = viz.color_picker(
-            "Saccade color",
-            key="global_saccade_color",
-            help="Colour of the saccade lines and direction arrows (single "
-            "scanpath; two-trial comparisons use the per-scanpath styling panel "
-            "below).",
-        )
-        saccade_style_label = viz.selectbox(
-            "Saccade line style",
-            options=list(SACCADE_DASH_OPTIONS.keys()),
-            key="global_saccade_style",
-            help="Line style for the saccade traces.",
-        )
+        with viz.popover("⚙️ Saccade style", width="stretch"):
+            st.checkbox(
+                "Direction arrows", key="global_show_saccade_arrows",
+                help="Draw an arrowhead on each saccade pointing in the gaze "
+                "direction.",
+            )
+            st.color_picker(
+                "Saccade color", key="global_saccade_color",
+                help="Colour of the saccade lines and direction arrows (single "
+                "scanpath; two-trial comparisons use the per-scanpath styling "
+                "panel below).",
+            )
+            st.segmented_control(
+                "Saccade line style", options=list(SACCADE_DASH_OPTIONS.keys()),
+                key="global_saccade_style", help="Line style for the saccade traces.",
+            )
 
     # --- Text -------------------------------------------------------------
     show_labels = viz.toggle("**Text**", key="global_show_labels")
-    critical_span_style = st.session_state["global_critical_span_style"]
-    highlight_text_color = st.session_state["global_highlight_text_color"]
-    highlight_options = highlight_column_options(words)
-    highlight_column = None
-    # Always clear a stale pick (e.g. a restored config on data with no boolean
-    # columns), even when the selector itself isn't rendered this run.
-    _drop_stale("global_highlight_column", highlight_options)
-    if highlight_options:
-        st.session_state.setdefault(
-            "global_highlight_column",
-            "is_in_aspan"
-            if "is_in_aspan" in highlight_options
-            else highlight_options[0],
-        )
     if show_labels:
-        # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
-        # choice appears only when it's on (no "None" option). The canonical
-        # value stays in `global_critical_span_style` ("Mark text" | "Mark border"
-        # | "None") so deep-links / Share / restore are unchanged — the toggle +
-        # mode widgets are derived from it each run, and their callbacks write it
-        # back on interaction.
-        canonical = st.session_state.get("global_critical_span_style", "Mark text")
+        with viz.popover("⚙️ Text & highlight", width="stretch"):
+            # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
+            # choice appears only when it's on (no "None" option). The canonical
+            # value stays in `global_critical_span_style` ("Mark text" |
+            # "Mark border" | "None") so deep-links / Share / restore are
+            # unchanged — the toggle + mode widgets are derived from it each run,
+            # and their callbacks write it back on interaction.
+            canonical = st.session_state.get("global_critical_span_style", "Mark text")
 
-        def _on_span_toggle():
-            st.session_state["global_critical_span_style"] = (
-                st.session_state.get("global_highlight_span_mode", "Mark text")
-                if st.session_state["global_highlight_span_on"]
-                else "None"
-            )
-
-        def _on_span_mode():
-            st.session_state["global_critical_span_style"] = st.session_state[
-                "global_highlight_span_mode"
-            ]
-
-        st.session_state["global_highlight_span_on"] = canonical != "None"
-        if canonical in ("Mark text", "Mark border"):
-            st.session_state["global_highlight_span_mode"] = canonical
-        else:
-            st.session_state.setdefault("global_highlight_span_mode", "Mark text")
-
-        span_on = viz.toggle(
-            "Highlight a span",
-            key="global_highlight_span_on",
-            on_change=_on_span_toggle,
-            help="Highlight a per-word span (e.g. the answer span) on the text.",
-        )
-        if span_on:
-            critical_span_style = viz.radio(
-                "Style",
-                options=["Mark text", "Mark border"],
-                horizontal=True,
-                key="global_highlight_span_mode",
-                on_change=_on_span_mode,
-                help="Mark text: colour the span's words. Mark border: draw a "
-                "thin outline around the span.",
-            )
-        else:
-            critical_span_style = "None"
-        st.session_state["global_critical_span_style"] = critical_span_style
-        if critical_span_style != "None":
-            if critical_span_style == "Mark text":
-                highlight_text_color = viz.color_picker(
-                    "Highlighted text color",
-                    key="global_highlight_text_color",
-                    help="Colour of the highlighted reading text (used with "
-                    "'Mark text').",
+            def _on_span_toggle():
+                st.session_state["global_critical_span_style"] = (
+                    st.session_state.get("global_highlight_span_mode", "Mark text")
+                    if st.session_state["global_highlight_span_on"]
+                    else "None"
                 )
-            if highlight_options:
-                highlight_column = viz.selectbox(
-                    "Highlight words by",
-                    options=highlight_options,
-                    key="global_highlight_column",
-                    help="Which per-word column to highlight on the text (words "
-                    "where it is true). Defaults to the OneStop answer span.",
+
+            def _on_span_mode():
+                st.session_state["global_critical_span_style"] = st.session_state[
+                    "global_highlight_span_mode"
+                ]
+
+            st.session_state["global_highlight_span_on"] = canonical != "None"
+            if canonical in ("Mark text", "Mark border"):
+                st.session_state["global_highlight_span_mode"] = canonical
+            else:
+                st.session_state.setdefault("global_highlight_span_mode", "Mark text")
+
+            span_on = st.toggle(
+                "Highlight a span",
+                key="global_highlight_span_on",
+                on_change=_on_span_toggle,
+                help="Highlight a per-word span (e.g. the answer span) on the text.",
+            )
+            if span_on:
+                critical_span_style = st.radio(
+                    "Style",
+                    options=["Mark text", "Mark border"],
+                    horizontal=True,
+                    key="global_highlight_span_mode",
+                    on_change=_on_span_mode,
+                    help="Mark text: colour the span's words. Mark border: draw a "
+                    "thin outline around the span.",
                 )
+            else:
+                critical_span_style = "None"
+            st.session_state["global_critical_span_style"] = critical_span_style
+            if critical_span_style != "None":
+                if critical_span_style == "Mark text":
+                    st.color_picker(
+                        "Highlighted text color",
+                        key="global_highlight_text_color",
+                        help="Colour of the highlighted reading text (used with "
+                        "'Mark text').",
+                    )
+                if highlight_options:
+                    st.selectbox(
+                        "Highlight words by",
+                        options=highlight_options,
+                        key="global_highlight_column",
+                        help="Which per-word column to highlight on the text (words "
+                        "where it is true). Defaults to the OneStop answer span.",
+                    )
 
     # --- Heatmap ----------------------------------------------------------
     show_heatmap = viz.toggle("**Heatmap**", key="global_show_heatmap")
-    heatmap_style = st.session_state["global_heatmap_style"]
-    heatmap_colorscale = st.session_state["global_heatmap_colorscale"]
-    heatmap_metric = st.session_state["global_heatmap_metric"]
-    heatmap_range = None
     if show_heatmap:
-        heatmap_style = viz.radio(
-            "Heatmap style",
-            options=["Word boxes", "Interpolated"],
-            horizontal=True,
-            key="global_heatmap_style",
-            help=(
-                "Word boxes: tint each word box by fixation count / duration. "
-                "Interpolated: a smooth Gaussian density over the fixations "
-                "themselves, independent of the word boxes (classic eye-movement "
-                "heatmap)."
-            ),
-        )
-        heatmap_colorscale = viz.selectbox(
-            "Heatmap colorscale",
-            options=COLORSCALES,
-            help="Colour palette for the density heatmap overlay.",
-            key="global_heatmap_colorscale",
-        )
-        heatmap_metric = viz.selectbox(
-            "Heatmap metric",
-            options=["duration_ms", "counts"],
-            help="Heatmap can be raw counts or weighted by fixation duration.",
-            key="global_heatmap_metric",
-        )
-        heat_data = (
-            trial_fixations["duration_ms"]
-            if heatmap_metric == "duration_ms"
-            and "duration_ms" in trial_fixations.columns
-            else None
-        )
-        if (
-            heat_data is not None
-            and len(heat_data) > 0
-            and pd.notna(heat_data.min())
-            and pd.notna(heat_data.max())
-        ):
-            hmin = float(math.floor(heat_data.min()))
-            hmax = float(math.ceil(heat_data.max()))
-            hmax_eff = hmax if hmax > hmin else hmin + 1.0
-            _clamp_range("global_heatmap_color_range", hmin, hmax_eff)
-            st.session_state.setdefault("global_heatmap_color_range", (hmin, hmax_eff))
-            heatmap_range = viz.slider(
-                "Heatmap color range",
-                min_value=hmin,
-                max_value=hmax_eff,
-                step=1.0,
-                format="%d",
-                key="global_heatmap_color_range",
+        with viz.popover("⚙️ Heatmap style", width="stretch"):
+            st.segmented_control(
+                "Heatmap style",
+                options=["Word boxes", "Interpolated"],
+                key="global_heatmap_style",
+                help=(
+                    "Word boxes: tint each word box by fixation count / duration. "
+                    "Interpolated: a smooth Gaussian density over the fixations "
+                    "themselves, independent of the word boxes (classic "
+                    "eye-movement heatmap)."
+                ),
             )
+            st.selectbox(
+                "Heatmap colorscale",
+                options=COLORSCALES,
+                help="Colour palette for the density heatmap overlay.",
+                key="global_heatmap_colorscale",
+            )
+            heatmap_metric = st.selectbox(
+                "Heatmap metric",
+                options=["duration_ms", "counts"],
+                help="Heatmap can be raw counts or weighted by fixation duration.",
+                key="global_heatmap_metric",
+            )
+            heat_data = (
+                trial_fixations["duration_ms"]
+                if heatmap_metric == "duration_ms"
+                and "duration_ms" in trial_fixations.columns
+                else None
+            )
+            if (
+                heat_data is not None
+                and len(heat_data) > 0
+                and pd.notna(heat_data.min())
+                and pd.notna(heat_data.max())
+            ):
+                hmin = float(math.floor(heat_data.min()))
+                hmax = float(math.ceil(heat_data.max()))
+                hmax_eff = hmax if hmax > hmin else hmin + 1.0
+                _clamp_range("global_heatmap_color_range", hmin, hmax_eff)
+                st.session_state.setdefault(
+                    "global_heatmap_color_range", (hmin, hmax_eff)
+                )
+                st.slider(
+                    "Heatmap color range",
+                    min_value=hmin, max_value=hmax_eff, step=1.0, format="%d",
+                    key="global_heatmap_color_range",
+                )
 
     # --- Bounding boxes / Raw gaze (no extra styling) ---------------------
-    show_words = viz.toggle("**Bounding boxes**", key="global_show_words")
-    show_raw_gaze = viz.toggle(
+    viz.toggle("**Bounding boxes**", key="global_show_words")
+    viz.toggle(
         "**Raw gaze data**",
         help="Display millisecond-level gaze positions as small dots. "
         + ("" if has_raw_gaze else "(No raw gaze data loaded)"),
@@ -983,79 +1127,24 @@ def sidebar_controls(
 
     # --- Axes & color bars (global plot settings, rarely changed) ---------
     axes = viz.expander("Axes & color bars", expanded=False)
-    show_colorbars = axes.checkbox("Show color bars", key="global_show_colorbars")
-    x_default = "x" if "x" in numeric_fields else numeric_fields[0]
-    y_default = (
-        "y"
-        if "y" in numeric_fields
-        else numeric_fields[min(1, len(numeric_fields) - 1)]
-    )
-    _drop_stale("global_x_field", numeric_fields)
-    st.session_state.setdefault("global_x_field", x_default)
-    x_field = axes.selectbox(
-        "X axis field", options=numeric_fields, key="global_x_field"
-    )
-    _drop_stale("global_y_field", numeric_fields)
-    st.session_state.setdefault("global_y_field", y_default)
-    y_field = axes.selectbox(
-        "Y axis field", options=numeric_fields, key="global_y_field"
-    )
+    axes.checkbox("Show color bars", key="global_show_colorbars")
+    axes.selectbox("X axis field", options=numeric_fields, key="global_x_field")
+    axes.selectbox("Y axis field", options=numeric_fields, key="global_y_field")
 
-    # Plot background and text colour are chosen in Experimental Setup; read the
-    # values here so they flow into the figure via viz_settings.
-    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    bg_choice = st.session_state.get("global_bg_choice", bg_options[0])
-    if bg_choice == "Custom…":
-        background_color = st.session_state.get(
-            "global_bg_custom", DEFAULT_BACKGROUND_COLOR
-        )
-    else:
-        background_color = BACKGROUND_PRESETS.get(
-            bg_choice, BACKGROUND_PRESETS[bg_options[0]]
-        )
-    text_color = st.session_state.get("global_text_color", WORD_LABEL_COLOR)
-
-    # Per-scanpath styling for the two-trial comparison, shown only when the
-    # comparison toggle (rendered in the Scanpath tab) is on.
-    compare_style_a, compare_style_b = (None, None)
+    # Build the dict from session_state so it matches viz_settings_from_state
+    # exactly; then fill in the per-scanpath comparison styling, shown only when
+    # the Compare toggle (rail view-modes section) is on, so all styling sits here.
+    settings = _collect_viz_settings(
+        trial_fixations,
+        words,
+        numeric_fields=numeric_fields,
+        highlight_options=highlight_options,
+    )
     if st.session_state.get("single_compare_toggle"):
-        compare_style_a, compare_style_b = _render_compare_scanpath_styles()
-
-    return dict(
-        show_words=show_words,
-        show_labels=show_labels,
-        show_fix=show_fix,
-        show_order=show_order,
-        show_saccades=show_saccades,
-        show_saccade_arrows=show_saccade_arrows,
-        show_heatmap=show_heatmap,
-        heatmap_style=heatmap_style,
-        show_raw_gaze=show_raw_gaze,
-        color_by=color_by,
-        heatmap_metric=heatmap_metric,
-        x_field=x_field,
-        y_field=y_field,
-        marker_size_range=(size_min, size_max),
-        order_font_size=order_font_size,
-        order_font_color=order_font_color,
-        show_colorbars=show_colorbars,
-        fixation_color_range=fixation_color_range,
-        heatmap_range=heatmap_range,
-        fixation_colorscale=fixation_colorscale,
-        heatmap_colorscale=heatmap_colorscale,
-        critical_span_style=critical_span_style,
-        highlight_column=highlight_column,
-        saccade_color=saccade_color,
-        saccade_style=saccade_style_label,
-        hollow_fixations=hollow_fixations,
-        highlight_text_color=highlight_text_color,
-        text_color=text_color,
-        color_by_line=color_by_line,
-        highlight_out_of_text=highlight_out_of_text,
-        background_color=background_color,
-        compare_style_a=compare_style_a,
-        compare_style_b=compare_style_b,
-    )
+        settings["compare_style_a"], settings["compare_style_b"] = (
+            _render_compare_scanpath_styles(host=viz)
+        )
+    return settings
 
 
 # Cached option-list scans for the sidebar filter panel. These run on every
@@ -1179,6 +1268,72 @@ def read_trial_filters() -> Dict:
     stays global even though the controls now live in the Trial Selection panel.
     """
     return dict(st.session_state.get("_trial_filters", _EMPTY_TRIAL_FILTERS))
+
+
+# --- Trial summary chips (the "Field = Value" strip above the plot) ----------
+_CHIP_TEXT_ID_COLS = ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id")
+# Sensible default chips: trial identity + the common OneStop conditions.
+_CHIP_DEFAULT_CONDITIONS = [
+    "difficulty_level",
+    "question_preview",
+    "repeated_reading_trial",
+    "is_correct",
+]
+
+
+def available_chip_fields(words: pd.DataFrame, fixations: pd.DataFrame) -> List[str]:
+    """Columns offerable as trial-summary chips: participant + a single text id
+    column up front, then every other column (so any metadata field is pickable)."""
+    cols: List[str] = []
+
+    def add(c: str) -> None:
+        if c and c not in cols:
+            cols.append(c)
+
+    if "participant_id" in words.columns or "participant_id" in fixations.columns:
+        add("participant_id")
+    add(next((c for c in _CHIP_TEXT_ID_COLS if c in words.columns), ""))
+    for c in list(words.columns) + list(fixations.columns):
+        add(c)
+    return cols
+
+
+def _default_chip_fields(available: List[str]) -> List[str]:
+    text_col = next((c for c in _CHIP_TEXT_ID_COLS if c in available), None)
+    wanted = (
+        ["participant_id"]
+        + ([text_col] if text_col else [])
+        + _CHIP_DEFAULT_CONDITIONS
+    )
+    return [f for f in wanted if f in available]
+
+
+def render_trial_chip_picker(words: pd.DataFrame, fixations: pd.DataFrame, host) -> None:
+    """Render the sidebar multiselect that configures which fields appear as the
+    ``Field = Value`` chips above the scanpath (read by
+    ``tabs._render_trial_condition_chips`` via ``st.session_state['trial_chip_fields']``).
+
+    Default seeded once from the data (participant + text id + common OneStop
+    conditions); the user can change it any time. Stale picks (after a dataset
+    switch) are pruned so the multiselect never raises on a missing option."""
+    available = available_chip_fields(words, fixations)
+    if not available:
+        return
+    if "trial_chip_fields" in st.session_state:
+        st.session_state["trial_chip_fields"] = [
+            f for f in st.session_state["trial_chip_fields"] if f in available
+        ]
+    st.session_state.setdefault("trial_chip_fields", _default_chip_fields(available))
+    host.multiselect(
+        "Chips above the plot",
+        options=available,
+        format_func=lambda c: {"participant_id": "Participant", **{
+            t: "Text" for t in _CHIP_TEXT_ID_COLS
+        }}.get(c, c.replace("_", " ").strip().capitalize()),
+        key="trial_chip_fields",
+        help="Trial fields shown as a `Field = Value` chip strip above the "
+        "scanpath. Set it up here; change it any time.",
+    )
 
 
 def _seed_filter_widget(key: str, options: list, default: list) -> None:

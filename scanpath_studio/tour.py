@@ -169,17 +169,21 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
+        # Lives in the Scanpath screen's right-hand rail now (not the sidebar), so
+        # the scroll logic must treat it as a main-area target.
+        "in_sidebar": False,
         "title": "🎨 Visualization controls",
-        "body": "Toggle and style every layer — fixations, saccades, heatmap, "
-        "word boxes, text. **Experimental Setup** (above) sets your monitor so "
-        "it stays true-to-scale.",
+        "body": "Right beside the plot: toggle and style every layer — fixations, "
+        "saccades, heatmap, word boxes, text — plus **Animate** and **Compare**. "
+        "Set your monitor in **Experimental Setup** (sidebar) to keep it "
+        "true-to-scale.",
     },
     {
         "selector": ".st-key-tour_grp_nav",
         "title": "🧭 Views",
         "body": "Switch between **Scanpath Visualization**, **Corpus Analysis**, "
-        "and **Data Inspection**. The **Trial Selection** panel under the plot "
-        "picks, filters, compares & animates trials — and **Export** is a subtab.",
+        "and **Data Inspection**. Pick, filter, compare & animate trials right by "
+        "the plot — and **Export** is a subtab below it.",
     },
     {
         "selector": ".st-key-tour_grp_save_restore",
@@ -404,7 +408,14 @@ def render_spotlight_tour() -> None:
             # - The iframe stays INSIDE the fixed-position card: when it sat
             #   at the bottom of the main column, its (re)mount could yank
             #   the main scroller to the page bottom to reveal it.
-            in_sidebar = step["selector"].startswith(".st-key-tour_grp_")
+            # Most keyed-wrapper targets live in the sidebar, but some (the viz
+            # controls now sit in the Scanpath rail) are in the main area — let a
+            # step opt out explicitly; otherwise fall back to the prefix rule.
+            in_sidebar = step.get(
+                "in_sidebar",
+                bool(step["selector"])
+                and step["selector"].startswith(".st-key-tour_grp_"),
+            )
             components.html(
                 f"""<script>
                 (function () {{

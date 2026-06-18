@@ -153,50 +153,50 @@ def _select_trial_none_mode(
         st.warning("No trials available after filtering.")
         st.stop()
 
-    # Session state for navigation
-    state_key = f"{key_prefix}_trial_index" if key_prefix else "trial_index"
-    if state_key not in st.session_state:
-        st.session_state[state_key] = 0
+    n_trials = len(trial_options)
+    trial_id_key = f"{key_prefix}_trial_id" if key_prefix else None
+    slider_key = f"{key_prefix}_trial_pos" if key_prefix else "trial_pos"
 
-    current_idx = st.session_state[state_key]
-    current_idx = max(0, min(current_idx, len(trial_options) - 1))
-    st.session_state[state_key] = current_idx
+    # The selectbox (`*_trial_id`) is the canonical selection — it's what the
+    # deep-link / Save-&-restore code seeds (`_restore_selection`). A scrubbing
+    # slider sits above it for stepping through trials (replacing the old ◀ ▶
+    # buttons); both stay in sync via the selection's position.
+    current_label = st.session_state.get(trial_id_key) if trial_id_key else None
+    if current_label not in trial_options:
+        current_label = trial_options[0]
+        if trial_id_key:
+            st.session_state[trial_id_key] = current_label
+    current_idx = trial_options.index(current_label)
 
-    # Navigation buttons — compact (no `width="stretch"`) so they don't wrap
-    # to 3 lines inside the narrow 30% side panel. `vertical_alignment="center"`
-    # drops the arrows to line up with the labelled selectbox beside them
-    # (otherwise they sit flush to the top, leaving empty space below).
-    nav_col1, nav_col2, select_col = st.columns([1, 1, 4], vertical_alignment="center")
-    with nav_col1:
-        if st.button(
-            "◀",
-            key=f"{key_prefix}_prev_btn" if key_prefix else "prev_btn",
-            disabled=current_idx <= 0,
-            help="Previous trial",
-        ):
-            st.session_state[state_key] = current_idx - 1
-            st.rerun()
-    with nav_col2:
-        if st.button(
-            "▶",
-            key=f"{key_prefix}_next_btn" if key_prefix else "next_btn",
-            disabled=current_idx >= len(trial_options) - 1,
-            help="Next trial",
-        ):
-            st.session_state[state_key] = current_idx + 1
-            st.rerun()
-    with select_col:
-        selected_trial_label = st.selectbox(
-            "Unique trial id",
-            options=trial_options,
-            index=current_idx,
-            key=f"{key_prefix}_trial_id" if key_prefix else None,
+    if n_trials > 1:
+        # Mirror the slider's position to the current selection BEFORE it renders,
+        # so picking a trial in the dropdown moves the slider too. On drag, the
+        # callback writes the selectbox key, so this reconciles cleanly next run.
+        st.session_state[slider_key] = current_idx + 1
+
+        def _on_trial_slider() -> None:
+            pos = int(st.session_state[slider_key]) - 1
+            pos = max(0, min(pos, n_trials - 1))
+            if trial_id_key:
+                st.session_state[trial_id_key] = trial_options[pos]
+
+        st.slider(
+            "Trial",
+            min_value=1,
+            max_value=n_trials,
+            key=slider_key,
+            on_change=_on_trial_slider,
+            help=f"Scrub through the {n_trials} trials; the dropdown below jumps "
+            "to a specific id.",
+            label_visibility="collapsed",
         )
-        if selected_trial_label:
-            new_idx = trial_options.index(selected_trial_label)
-            if new_idx != current_idx:
-                st.session_state[state_key] = new_idx
+        st.caption(f"Trial **{current_idx + 1}** of **{n_trials}**")
 
+    selected_trial_label = st.selectbox(
+        "Unique trial id",
+        options=trial_options,
+        key=trial_id_key,
+    )
     if not selected_trial_label:
         return None, None, None
 
@@ -364,51 +364,13 @@ def _select_trial_participant_mode(
             key_prefix,
         )
 
-    # Prev/Next buttons flank the slider so reviewers can step through trials
-    # without dragging. Mutations live in an `on_click` callback (the slider's
-    # session-state key can't be mutated after the widget instantiates).
-
-    def _step_slider(direction: int) -> None:
-        opts = slider_options
-        current = st.session_state.get(state_key)
-        try:
-            idx = opts.index(current) if current is not None else 0
-        except ValueError:
-            idx = 0
-        new_idx = max(0, min(idx + direction, len(opts) - 1))
-        st.session_state[state_key] = opts[new_idx]
-
-    current_val = st.session_state.get(state_key, slider_options[0])
-    try:
-        current_pos = slider_options.index(current_val)
-    except ValueError:
-        current_pos = 0
-
-    nav_prev, slider_col, nav_next = st.columns([1, 8, 1], vertical_alignment="center")
-    with nav_prev:
-        st.button(
-            "◀",
-            key=f"{key_prefix}_slider_prev" if key_prefix else "slider_prev",
-            disabled=current_pos <= 0,
-            help=f"Previous {slider_label.lower()}",
-            on_click=_step_slider,
-            args=(-1,),
-        )
-    with nav_next:
-        st.button(
-            "▶",
-            key=f"{key_prefix}_slider_next" if key_prefix else "slider_next",
-            disabled=current_pos >= len(slider_options) - 1,
-            help=f"Next {slider_label.lower()}",
-            on_click=_step_slider,
-            args=(+1,),
-        )
-    with slider_col:
-        slider_value = st.select_slider(
-            slider_label,
-            options=slider_options,
-            key=state_key,
-        )
+    # A select-slider scrubs through this participant's trials (drag, or focus +
+    # arrow keys) — no separate ◀ ▶ buttons.
+    slider_value = st.select_slider(
+        slider_label,
+        options=slider_options,
+        key=state_key,
+    )
     if slider_value is None:
         return None, None, None
 
@@ -603,11 +565,16 @@ def select_trial(
     if mode_key and st.session_state.get(mode_key) not in modes:
         st.session_state.pop(mode_key, None)
     if len(modes) > 1:
-        selection_mode = st.radio(
-            label="Browse by",
-            options=modes,
-            horizontal=True,
-            key=mode_key,
+        # Segmented control reads cleaner than a radio for a small mode set; the
+        # `or modes[0]` guards the deselect case (segmented_control returns None
+        # if the active segment is clicked off).
+        selection_mode = (
+            st.segmented_control(
+                "Browse by",
+                options=modes,
+                key=mode_key,
+            )
+            or modes[0]
         )
     else:
         selection_mode = "Trial"

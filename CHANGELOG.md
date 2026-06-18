@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Visualization controls moved beside the plot.** With the viz controls now out
+  of the sidebar, the Scanpath Visualization screen is built for use with the
+  sidebar closed: the trial picker + **Filter trials** sit in a compact bar above
+  the plot, and a **right-hand control rail** beside the plot carries the
+  **view modes** (Animate / Compare) and the **visualization controls**
+  (quick-view presets + layer toggles). Per-layer styling now opens in compact
+  **popovers** (instead of expanding inline) so the rail stays glanceable without
+  scrolling.
+- **Experiment-condition chips.** The trial's key conditions — text id,
+  difficulty, **question preview** (OneStop Hunting), repeated reading, answer
+  correctness — show as a compact chip strip under the selector, so the most
+  important "what am I looking at" facts are visible at a glance without opening
+  the Trial Info subtab.
+
+- **Trial picker overhaul.** "Browse by" is now a segmented control, and the
+  default trial picker scrubs with a **slider** (`Trial n of N`) instead of
+  ◀ ▶ buttons; the participant-mode arrows were dropped too (the select-slider
+  remains). The 🔍 **Filter trials** control moved to the left beside Browse-by
+  and opens as a **popover overlay** (it no longer pushes the plot down).
+- **Configurable trial chips.** The chip strip above the plot is now a general
+  `Field = Value` list (e.g. `Question preview = True`) and **includes the
+  participant id**. Which fields show is configurable in the sidebar **🏷️ Trial
+  chips** picker (under 📂 Data) and changeable any time.
+- **Tidier control rail.** The rail now starts at the top (beside the selection),
+  Quick views are down to **Scanpath / Heatmap**, and the fixations **Color by**
+  control moved into the **⚙ Fixation style** popover so the rail stays compact.
+  Several pickers became `st.segmented_control` (Browse by, heatmap style, saccade
+  line style).
+- **Sidebar menu buttons.** The view navigation renders as full-width menu
+  buttons (active item highlighted) instead of a radio list.
+
+### Internal
+- The viz-settings dict now has one source of truth (`controls._collect_viz_settings`)
+  shared by the rendered rail (`controls.sidebar_controls(host=…)`) and the
+  non-rendering reader (`controls.viz_settings_from_state`) used by the Corpus
+  view and Save & restore, so the controls and their consumers can't drift.
+  `_collect_viz_settings` coerces the segmented-control fields (`heatmap_style`,
+  `saccade_style`) away from a possible `None` (deselect) so the figure builders
+  never receive it.
+
 ## [0.21.0] - 2026-06-18
 
 ### Added

@@ -75,7 +75,8 @@ from scanpath_studio.controls import (
     data_dictionary_help_text,
     numeric_field_options,
     read_trial_filters,
-    sidebar_controls,
+    render_trial_chip_picker,
+    viz_settings_from_state,
 )
 from scanpath_studio.data import (
     FIX_OPTIONAL_FIELDS,
@@ -3144,6 +3145,9 @@ def main() -> None:
     # the canvas/monitor/font controls fill it later (they need the filtered
     # data), but it renders here — beside the data source it describes.
     experimental_setup_slot = st.sidebar.container()
+    # Reserve the "Trial chips" picker slot here too (under 📂 Data, the setup
+    # area) — filled once the filtered columns are known; see render_trial_chip_picker.
+    chip_picker_slot = st.sidebar.container()
 
     # Load + map core data. The **Upload** source renders each table as an
     # [upload box → mapping] group in the sidebar (words, fixations, raw gaze) and
@@ -3353,20 +3357,28 @@ def main() -> None:
         data_choice,
         slot=experimental_setup_slot,
     )
-    _sidebar_group("🎨 Visualization")
+    # The visualization controls moved out of the sidebar into the Scanpath
+    # screen's right-hand rail (tabs.render_single_trial_tab renders them via
+    # controls.sidebar_controls with host=rail). The other views — and the Save &
+    # restore panel below — still need the resolved settings, so read them from
+    # session_state without rendering any widgets; the rail's widgets are the
+    # source of truth and write the same keys.
+    viz_settings = viz_settings_from_state(
+        fixations_filtered, base_font_size, words=words_filtered
+    )
 
-    has_raw_gaze = not raw_gaze_filtered.empty
-    viz_settings = sidebar_controls(
+    # Fill the "Trial chips" picker (reserved under 📂 Data above) now that the
+    # filtered columns are known — it sets `trial_chip_fields`, read by the
+    # Scanpath screen's condition-chip strip.
+    render_trial_chip_picker(
+        words_filtered,
         fixations_filtered,
-        base_font_size,
-        has_raw_gaze=has_raw_gaze,
-        words=words_filtered,
+        host=chip_picker_slot.expander("🏷️ Trial chips", expanded=False),
     )
 
     # Reserve the "💾 Save & restore" slot here (a keyed container so the
-    # spotlight tour can target it) so it renders under the 🎨 Visualization
-    # group; the Scanpath Visualization tab fills it later (it needs the live
-    # selection + figure settings for the download). See
+    # spotlight tour can target it); the active view fills it later (it needs the
+    # live selection + figure settings for the download). See
     # tabs._render_save_restore_expander. This single panel merges the former
     # Plot-configuration and Annotations sidebar panels (TODO 1.19).
     save_restore_slot = st.sidebar.container(key="tour_grp_save_restore")
@@ -3411,6 +3423,9 @@ def main() -> None:
             words_filtered, fixations_filtered, raw_gaze_filtered
         )
     else:
+        # The Scanpath view renders the viz controls itself (right rail) and
+        # writes the global_* keys; re-read them below so Save & restore captures
+        # any edits the user just made in the rail.
         render_single_trial_tab(
             words_filtered,
             fixations_filtered,
@@ -3419,7 +3434,6 @@ def main() -> None:
             canvas_height=canvas_height,
             base_font_size=base_font_size,
             font_family=font_family,
-            viz_settings=viz_settings,
             raw_gaze=raw_gaze_filtered,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
@@ -3427,6 +3441,13 @@ def main() -> None:
             words_all=words_all,
             fixations_all=fixations_all,
         )
+
+    # Re-resolve viz settings from session_state AFTER the dispatch so the Save &
+    # restore panel reflects any edits made in the Scanpath rail this run (the
+    # widgets there write the global_* keys during render).
+    viz_settings = viz_settings_from_state(
+        fixations_filtered, base_font_size, words=words_filtered
+    )
 
     # Save & restore (plot config + annotations) renders on EVERY view so it stays
     # reachable when a non-Scanpath view is active (it's a sidebar panel). The

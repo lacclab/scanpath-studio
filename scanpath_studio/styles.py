@@ -195,5 +195,79 @@ def get_app_css() -> str:
         transform: translateY(-1px);
         box-shadow: var(--sps-shadow-hover);
     }
+
+    /* === Scanpath screen: condition chips + control rail ====================
+       The viz controls moved out of the sidebar into a rail beside the plot, so
+       the trial's key experiment conditions ride above the plot as a compact
+       chip strip and the rail reads as a tidy inspector panel. */
+    .sps-trial-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin: 0.1rem 0 0.5rem;
+    }
+    .sps-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.12rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        line-height: 1.55;
+        /* Chip backgrounds are always light (set inline), so pin dark text so it
+           stays readable in dark mode too. */
+        color: #212529;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    /* Control rail: a subtle card so it reads as a panel, with a hair more
+       breathing room between the stacked toggles than the app-wide gap:0 rule. */
+    .st-key-scanpath_rail {
+        border: 1px solid var(--sps-border);
+        border-radius: 12px;
+        padding: 0.55rem 0.85rem 0.35rem;
+        background: var(--sps-accent-soft);
+    }
+    .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
+    .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
+    /* Per-layer styling popovers + the comparison-styling expander: full-width,
+       left-aligned triggers so the rail stays a clean single column. */
+    .st-key-scanpath_rail [data-testid="stPopover"] button {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    /* === Sidebar navigation as menu buttons =================================
+       The primary nav is a keyed radio (`main_nav`) — restyle its options into
+       full-width menu buttons (the radio dot hidden, the active item a filled
+       brand pill) without changing the widget, so deep-links / AppTest still see
+       a radio. `:has(input:checked)` flags the active option. */
+    .st-key-tour_grp_nav div[role="radiogroup"] { gap: 0.35rem; }
+    .st-key-tour_grp_nav div[role="radiogroup"] > label {
+        width: 100%;
+        margin: 0;
+        padding: 0.5rem 0.8rem;
+        border: 1px solid var(--sps-border);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .st-key-tour_grp_nav div[role="radiogroup"] > label:hover {
+        background: var(--sps-accent-soft);
+        border-color: var(--sps-accent-border);
+    }
+    /* Hide the radio circle (first child of each option label). */
+    .st-key-tour_grp_nav div[role="radiogroup"] > label > div:first-child {
+        display: none;
+    }
+    .st-key-tour_grp_nav div[role="radiogroup"] > label p { font-weight: 600; }
+    /* Active item → filled brand pill. */
+    .st-key-tour_grp_nav div[role="radiogroup"] > label:has(input:checked) {
+        background: var(--sps-accent-soft);
+        border-color: var(--sps-accent);
+    }
+    .st-key-tour_grp_nav div[role="radiogroup"] > label:has(input:checked) p {
+        color: var(--sps-accent);
+        font-weight: 700;
+    }
     </style>
     """

@@ -1693,7 +1693,6 @@ def render_single_trial_tab(
     raw_gaze: Optional[pd.DataFrame] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
-    plot_config_slot=None,
     combos_all: Optional[pd.DataFrame] = None,
     words_all: Optional[pd.DataFrame] = None,
     fixations_all: Optional[pd.DataFrame] = None,
@@ -1958,22 +1957,9 @@ def render_single_trial_tab(
             scale_text_to_boxes=scale_text_to_boxes,
         )
 
-    # Save & restore (plot config + annotations) renders into the reserved
-    # sidebar slot (see _render_save_restore_expander / app.main).
-    _render_save_restore_expander(
-        selected_participant,
-        selected_trial,
-        canvas_width,
-        canvas_height,
-        x_field,
-        y_field,
-        figure_settings,
-        viz_settings,
-        base_font_size,
-        trial_raw_gaze,
-        font_family=font_family,
-        slot=plot_config_slot,
-    )
+    # Save & restore (plot config + annotations) is rendered by app.main on every
+    # view (it must stay reachable when a non-Scanpath view is active), sourcing
+    # the trial selection from _share_selection.
 
 
 def _render_bulk_export(

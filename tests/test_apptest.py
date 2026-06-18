@@ -1227,3 +1227,44 @@ class TestShareLinkLazy:
         q3, _ = at.session_state["_share_query_frozen"]
         assert q3 != q1, "Refresh must rebuild the link from current settings"
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+
+@pytest.mark.timeout(120)
+class TestNavRegressions:
+    """Guards for the sidebar-nav + Trial-Selection-panel refactor."""
+
+    def test_participant_filter_applies_same_run(self):
+        # The Filter-trials controls live in the Scanpath tab now; changing one
+        # must narrow the trial pool on the SAME rerun (regression: it used to lag
+        # one rerun because the result was read from the previous run's stash).
+        at = _make_apptest()  # bundled 3-participant demo
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        picker = [s for s in at.selectbox if s.key == "single_trial_id"]
+        assert picker, "trial picker (single_trial_id) not found"
+        n_before = len(picker[0].options)
+        fp = [m for m in at.multiselect if m.key == "filter_participants"]
+        assert fp, "participant filter not found"
+        assert len(fp[0].options) > 1
+        # Interact (fires on_change) — not a bare session_state set.
+        fp[0].set_value([fp[0].options[0]]).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        picker2 = [s for s in at.selectbox if s.key == "single_trial_id"]
+        assert picker2, "trial picker missing after filtering"
+        n_after = len(picker2[0].options)
+        assert n_after < n_before, (
+            f"participant filter did not apply on the same run: {n_before} -> {n_after}"
+        )
+
+    def test_save_restore_present_on_every_view(self):
+        # The Save & restore sidebar panel must be reachable on all three views
+        # (regression: it only rendered on the Scanpath view after the nav change).
+        for view in ("Scanpath Visualization", "Corpus Analysis", "Data Inspection"):
+            at = _make_apptest(synthetic=True)
+            at.session_state["main_nav"] = view
+            at.run(timeout=60)
+            assert not at.exception, f"{view}: {at.exception}"
+            captions = " ".join(c.value for c in at.caption)
+            assert "Save the full plot configuration" in captions, (
+                f"Save & restore panel missing on the {view} view"
+            )

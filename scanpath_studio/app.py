@@ -116,11 +116,14 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
+    _build_figure_settings,
     _collect_column_mapping,
+    _render_save_restore_expander,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
     render_single_trial_tab,
 )
+from scanpath_studio.utils import extract_trial
 from scanpath_studio.tour import (
     maybe_show_welcome_tour,
     maybe_show_wizard_guide,
@@ -946,7 +949,7 @@ def _render_share_link_widget(query: str) -> None:
     """Render the copyable share link (read-only field + Copy button).
 
     A same-origin ``components.html`` iframe (same trick as the tour — see
-    ``_render_tab_persistence``) composes the full URL from the *live* address:
+    ``tour.render_spotlight_tour``) composes the full URL from the *live* address:
     ``window.parent.location.origin + pathname`` + the query string built
     server-side. Doing the origin/path join client-side means the link is correct
     wherever the app is served (localhost, Streamlit Cloud, a reverse proxy)
@@ -3124,6 +3127,12 @@ def main() -> None:
     # Data source selection (sidebar)
     _sidebar_group("📂 Data")
     data_choice = render_sidebar_data_source()
+    # Drop a stale share/save selection when the data source changes — its trial
+    # id won't exist in the new dataset, so a Share link or saved config must not
+    # carry it over. The active view rewrites _share_selection for the new source.
+    if st.session_state.get("_share_selection_source") != data_choice:
+        st.session_state.pop("_share_selection", None)
+        st.session_state["_share_selection_source"] = data_choice
     # Just-finalized upload: paint a "loading" bridge into the main area now so it
     # repaints over the wizard (instead of the wizard lingering until the slow
     # first figure finishes). Cleared just before the tabs render below.
@@ -3414,15 +3423,46 @@ def main() -> None:
             raw_gaze=raw_gaze_filtered,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
-            plot_config_slot=save_restore_slot,
             combos_all=combos_all,
             words_all=words_all,
             fixations_all=fixations_all,
         )
 
-    # Fill the header's Share popover now — after the tabs, so the resolved trial
-    # (_share_selection, written by render_single_trial_tab, which runs every
-    # rerun) and the live viz settings the link encodes are all current.
+    # Save & restore (plot config + annotations) renders on EVERY view so it stays
+    # reachable when a non-Scanpath view is active (it's a sidebar panel). The
+    # trial selection comes from _share_selection (written by the Scanpath view;
+    # blank before any trial has been resolved this session).
+    _sr_sel = st.session_state.get("_share_selection") or {}
+    _sr_pid = str(_sr_sel.get("participant_id") or "")
+    _sr_trial = str(_sr_sel.get("trial_id") or "")
+    _sr_raw_gaze = (
+        extract_trial(raw_gaze_filtered, _sr_pid, _sr_trial)
+        if _sr_pid and _sr_trial and not raw_gaze_filtered.empty
+        else pd.DataFrame()
+    )
+    _sr_figure_settings = _build_figure_settings(viz_settings, not _sr_raw_gaze.empty)
+    _sr_figure_settings["raw_gaze"] = _sr_raw_gaze if not _sr_raw_gaze.empty else None
+    _sr_figure_settings["line_spacing"] = line_spacing
+    _sr_figure_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    _render_save_restore_expander(
+        _sr_pid,
+        _sr_trial,
+        canvas_width,
+        canvas_height,
+        viz_settings["x_field"],
+        viz_settings["y_field"],
+        _sr_figure_settings,
+        viz_settings,
+        base_font_size,
+        _sr_raw_gaze,
+        font_family=font_family,
+        slot=save_restore_slot,
+    )
+
+    # Fill the header's Share popover now — after the view dispatch, so the
+    # resolved trial (_share_selection, written by render_single_trial_tab when
+    # the Scanpath view is active; persisted from the last visit otherwise, and
+    # cleared on a data-source switch) and the live viz settings are all current.
     with share_slot:
         _render_share_panel(data_choice)
 

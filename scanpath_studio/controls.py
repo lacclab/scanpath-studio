@@ -1095,12 +1095,30 @@ def _bool_metadata_filter(
     false_label: str,
     key: str,
     host,
-) -> Optional[set]:
-    """Friendly multiselect for a boolean metadata column.
+    on_change=None,
+) -> None:
+    """Render a friendly multiselect for a boolean metadata column.
 
-    Returns the set of raw bool values to keep, or None when the column is
-    absent, has fewer than two classes, or the user kept everything (no
-    narrowing)."""
+    Rendering only — the narrowing value is derived from the widget key by
+    ``_compute_trial_filters``. Renders nothing when the column is absent or has
+    fewer than two classes."""
+    if col not in df.columns:
+        return
+    present = _column_present_bools(df, col, cache_key=(frame_fingerprint(df), col))
+    label_to_val = {true_label: True, false_label: False}
+    options = [lbl for lbl, val in label_to_val.items() if val in present]
+    if len(options) < 2:
+        return
+    _seed_filter_widget(key, options, options)
+    host.multiselect(label, options=options, key=key, on_change=on_change)
+
+
+def _bool_filter_narrowing(
+    col: str, df: pd.DataFrame, true_label: str, false_label: str, key: str
+) -> Optional[set]:
+    """The set of raw bool values to keep for a boolean metadata column, read
+    from its widget key — or None when absent / fewer than two classes / the user
+    kept everything (no narrowing). The read-side twin of ``_bool_metadata_filter``."""
     if col not in df.columns:
         return None
     present = _column_present_bools(df, col, cache_key=(frame_fingerprint(df), col))
@@ -1108,11 +1126,11 @@ def _bool_metadata_filter(
     options = [lbl for lbl, val in label_to_val.items() if val in present]
     if len(options) < 2:
         return None
-    _seed_filter_widget(key, options, options)
-    chosen = host.multiselect(label, options=options, key=key)
+    chosen = st.session_state.get(key)
     if not chosen or set(chosen) == set(options):
         return None
-    return {label_to_val[c] for c in chosen}
+    vals = {label_to_val[c] for c in chosen if c in label_to_val}
+    return vals or None
 
 
 # Friendly labels for well-known trial-level condition columns. Any other field
@@ -1182,6 +1200,70 @@ def _seed_filter_widget(key: str, options: list, default: list) -> None:
         st.session_state[key] = list(default)
 
 
+def _filter_fields_for(words: pd.DataFrame, fixations: pd.DataFrame) -> list:
+    """Trial-level condition columns to offer as filters (wizard-chosen for an
+    upload, else the built-in defaults present in the data)."""
+    filter_fields = st.session_state.get("wizard_filter_fields")
+    if filter_fields is None:
+        filter_fields = [
+            c
+            for c in _DEFAULT_FILTER_FIELDS
+            if c in words.columns or c in fixations.columns
+        ]
+    return filter_fields
+
+
+def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict:
+    """Derive the narrowing filter result from the live filter-widget values.
+
+    Reads the widget keys (filter_participants / filter_<col> / filter_favorites /
+    filter_req_tags / filter_exc_tags) — which Streamlit has already updated on the
+    rerun the user changed a filter — so the filter applies on the SAME run. The
+    on_change callbacks in ``render_trial_filters`` call this *before* the rerun;
+    it also runs at the end of that function for no-change runs. Only narrowing
+    selections feed the result.
+    """
+    result: Dict = {
+        "participants": None,
+        "metadata": {},
+        "favorites_only": False,
+        "required_tags": [],
+        "excluded_tags": [],
+    }
+    parts = _participant_options(
+        words,
+        fixations,
+        cache_key=(frame_fingerprint(words), frame_fingerprint(fixations)),
+    )
+    if len(parts) > 1:
+        sel = st.session_state.get("filter_participants")
+        if sel and len(sel) < len(parts):
+            result["participants"] = list(sel)
+    for col in _filter_fields_for(words, fixations):
+        frame = words if col in words.columns else fixations
+        if col not in frame.columns:
+            continue
+        spec = _FILTER_FIELD_LABELS.get(col, {})
+        if pd.api.types.is_bool_dtype(frame[col]):
+            vals = _bool_filter_narrowing(
+                col, frame, spec.get("true", "Yes"), spec.get("false", "No"),
+                f"filter_{col}",
+            )
+            if vals is not None:
+                result["metadata"][col] = vals
+        else:
+            values = _column_unique_strs(
+                frame, col, cache_key=(frame_fingerprint(frame), col)
+            )
+            sel = st.session_state.get(f"filter_{col}")
+            if sel and len(values) > 1 and len(sel) < len(values):
+                result["metadata"][col] = set(sel)
+    result["favorites_only"] = bool(st.session_state.get("filter_favorites", False))
+    result["required_tags"] = list(st.session_state.get("filter_req_tags") or [])
+    result["excluded_tags"] = list(st.session_state.get("filter_exc_tags") or [])
+    return result
+
+
 def render_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, host=None
 ) -> Dict:
@@ -1190,21 +1272,18 @@ def render_trial_filters(
     Lets the user narrow the trial pool by participant and by categorical
     condition (Hunting/Gathering, difficulty, first/repeated reading,
     correctness) plus annotation state (favorites / tags). Renders into ``host``
-    (the Trial Selection panel; defaults to the sidebar). The result is stashed in
-    session_state (`_trial_filters`) so ``main()`` can apply it globally via
-    ``read_trial_filters`` — see that function. Only *narrowing* selections feed
-    the result; an untouched field is a no-op.
+    (the Trial Selection panel; defaults to the sidebar). The narrowing result is
+    derived by ``_compute_trial_filters`` and stashed in session_state
+    (`_trial_filters`); each widget's ``on_change`` recomputes it *before* the
+    rerun so ``main()``'s ``read_trial_filters`` applies the change on the same
+    run. The persisted value also survives runs where this panel isn't rendered
+    (a non-Scanpath view under the sidebar nav).
     """
     if host is None:
         host = st.sidebar
-    result: Dict = {
-        "participants": None,
-        "metadata": {},
-        "favorites_only": False,
-        "required_tags": [],
-        "excluded_tags": [],
-    }
-    raw: Dict = {}
+
+    def _apply() -> None:
+        st.session_state["_trial_filters"] = _compute_trial_filters(words, fixations)
 
     # Union across both frames — single-report datasets have participants in only
     # one of them. Cached so it doesn't re-scan the corpus per rerun.
@@ -1215,78 +1294,60 @@ def render_trial_filters(
     )
     if len(parts) > 1:
         _seed_filter_widget("filter_participants", parts, parts)
-        chosen = host.multiselect(
-            "Participants", options=parts, key="filter_participants"
+        host.multiselect(
+            "Participants", options=parts, key="filter_participants", on_change=_apply
         )
-        raw["filter_participants"] = list(chosen)
-        if chosen and len(chosen) < len(parts):
-            result["participants"] = chosen
 
-    # Dynamic condition filters. The Upload wizard records which fields the user
-    # picked (``wizard_filter_fields``); built-in sources auto-offer the known
-    # trial-level conditions present in the data. ``None``/absent → built-in
-    # defaults; an explicit ``[]`` (upload with zero kept fields) → show none.
-    filter_fields = st.session_state.get("wizard_filter_fields")
-    if filter_fields is None:
-        filter_fields = [
-            c
-            for c in _DEFAULT_FILTER_FIELDS
-            if c in words.columns or c in fixations.columns
-        ]
-    for col in filter_fields:
+    for col in _filter_fields_for(words, fixations):
         frame = words if col in words.columns else fixations
         if col not in frame.columns:
             continue
         spec = _FILTER_FIELD_LABELS.get(col, {})
         label = spec.get("label", col.replace("_", " ").strip().title())
         if pd.api.types.is_bool_dtype(frame[col]):
-            chosen = _bool_metadata_filter(
-                label,
-                col,
-                frame,
-                spec.get("true", "Yes"),
-                spec.get("false", "No"),
-                f"filter_{col}",
-                host,
+            _bool_metadata_filter(
+                label, col, frame, spec.get("true", "Yes"), spec.get("false", "No"),
+                f"filter_{col}", host, on_change=_apply,
             )
-            if chosen is not None:
-                result["metadata"][col] = chosen
         else:
             values = _column_unique_strs(
                 frame, col, cache_key=(frame_fingerprint(frame), col)
             )
             if len(values) > 1:
                 _seed_filter_widget(f"filter_{col}", values, values)
-                sel = host.multiselect(label, options=values, key=f"filter_{col}")
-                raw[f"filter_{col}"] = list(sel)
-                if sel and len(sel) < len(values):
-                    result["metadata"][col] = set(sel)
+                host.multiselect(
+                    label, options=values, key=f"filter_{col}", on_change=_apply
+                )
 
     host.markdown("**By annotation**")
     if "filter_favorites" not in st.session_state:
         st.session_state["filter_favorites"] = bool(
             st.session_state.get("_trial_filters_raw", {}).get("filter_favorites", False)
         )
-    result["favorites_only"] = host.checkbox(
-        "⭐ Favorites only", key="filter_favorites"
-    )
-    raw["filter_favorites"] = result["favorites_only"]
+    host.checkbox("⭐ Favorites only", key="filter_favorites", on_change=_apply)
     tags = known_tags()
     if tags:
         _seed_filter_widget("filter_req_tags", tags, [])
-        result["required_tags"] = host.multiselect(
-            "With any of these tags", options=tags, key="filter_req_tags"
+        host.multiselect(
+            "With any of these tags", options=tags, key="filter_req_tags",
+            on_change=_apply,
         )
-        raw["filter_req_tags"] = list(result["required_tags"])
         _seed_filter_widget("filter_exc_tags", tags, [])
-        result["excluded_tags"] = host.multiselect(
-            "Excluding tags",
-            options=tags,
-            key="filter_exc_tags",
+        host.multiselect(
+            "Excluding tags", options=tags, key="filter_exc_tags", on_change=_apply,
             help="e.g. hide everything tagged 'To exclude'.",
         )
-        raw["filter_exc_tags"] = list(result["excluded_tags"])
 
-    st.session_state["_trial_filters_raw"] = raw
+    # Mirror the rendered widget values so _seed_filter_widget can restore them on
+    # a run where this panel isn't shown (the keys get cleared); then publish the
+    # derived result for read_trial_filters (covers no-change runs).
+    keys = (
+        ["filter_participants", "filter_req_tags", "filter_exc_tags"]
+        + [f"filter_{c}" for c in _filter_fields_for(words, fixations)]
+    )
+    st.session_state["_trial_filters_raw"] = {
+        k: st.session_state[k] for k in keys if k in st.session_state
+    }
+    result = _compute_trial_filters(words, fixations)
     st.session_state["_trial_filters"] = result
     return result

@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Comparison info in the chips.** When comparing two trials, the chip strip now
+  shows a second labelled row for the compared trial, so both trials' conditions
+  and summary stats are visible side by side.
+
 ### Changed
+- **Browse-by always offers Trial / Text / Participant** (even when the dataset
+  has a single text or participant), and each mode is more focused:
+  **Text** mode shows one Text selectbox with a **participant** scrubbing slider;
+  **Participant** mode shows the participant selector with a **Pick by** pill row
+  (Trial index / Text / Trial ID) styled like the Browse-by row, on the line
+  below it.
 - **Visualization controls moved beside the plot.** With the viz controls now out
   of the sidebar, the Scanpath Visualization screen is built for use with the
   sidebar closed: the trial picker + **Filter trials** sit in a compact bar above
@@ -38,6 +49,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line style).
 - **Sidebar menu buttons.** The view navigation renders as full-width menu
   buttons (active item highlighted) instead of a radio list.
+- **Single-line selection row.** The trial selection now reads as one line —
+  **Browse by** `[Trial][Text][Participant]` pills · trial-id selectbox ·
+  **Filter trials** — with the scrubbing slider on the line below. "Browse by" is
+  `st.pills` (one click, no popover); the trial-id selectbox sits between Browse-by
+  and Filter; the **Filter trials** button is content-width (no longer stretched).
+  The scrubber shows the **current trial id** (not a bare position) above its thumb.
+- **Tidier, narrower rail.** **Animate** and **Compare** now match the layer
+  style — a toggle plus a ⚙ popover for their settings (playback speed; compare
+  trial + layout). Quick views stack vertically, letting the whole rail be
+  narrower. The page top margin was reduced so the title sits higher.
+- **Trial chips are trial-level.** Chips are meant for one-value-per-trial
+  fields; a selected field that varies *within* the trial is flagged with ⚠️ and
+  named in a caption (a cheap per-trial uniqueness check), so the single chip
+  value isn't taken at face value.
+- **Trial Info tab folded into the chips.** The standalone **Trial Info** subtab
+  is gone — its identity, conditions and summary stats now live in the chip strip.
+  The chips gained the computed summary fields (**Total reading time (s)**,
+  **Number of words**, **Number of fixations**, **Fixations in word boxes**), the
+  sidebar **🏷️ Trial chips** picker now offers only *trial-level* fields (the set
+  is sampled once per dataset and cached, with a **🔄 Refresh** button to re-scan),
+  and the per-trial subtabs are now **📝 Annotations · Stimulus & questions ·
+  Export** (Annotations first).
+
+### Fixed
+- **"Mark border" works with Bounding boxes off.** The answer-span border now
+  draws independently of the word-box grid — turning off **Bounding boxes** with
+  **Highlight a span → Mark border** on shows just the span outline.
+- `CITATION.cff` version bumped to 0.21.0 (was 0.19.1), clearing the
+  `test_citation_cff_version_matches_package` check.
+- **Animation no longer autoplays on toggle.** Turning on **Animate** loaded the
+  replay already running at Plotly's default frame rate (ignoring the chosen
+  playback speed); it now starts paused (`to_html(auto_play=False)`) and plays at
+  the configured speed only when you press **Play**.
 
 ### Internal
 - The viz-settings dict now has one source of truth (`controls._collect_viz_settings`)

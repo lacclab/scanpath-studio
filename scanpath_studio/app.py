@@ -135,13 +135,10 @@ from scanpath_studio.tour import (
     spotlight_tour_pending,
 )
 
-# Some of these are re-exported (a few with a private alias) so tests can import
-# them from `app`; keep the F401 silence for the whole block.
-from scanpath_studio.utils import (  # noqa: F401
-    build_combo_options,
-    compute_trial_stats,
-    gather_trial_metadata,
-)
+from scanpath_studio.utils import build_combo_options
+
+# Re-exported under a private alias so tests can import them from `app`; keep the
+# F401 silence (they're not used by app.py itself).
 from scanpath_studio.utils import (  # noqa: F401
     build_comparison_options as _build_comparison_options,
 )

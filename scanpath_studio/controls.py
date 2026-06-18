@@ -888,8 +888,8 @@ def sidebar_controls(
     # presets are still reachable by toggling layers. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
     viz.caption("Quick views")
-    _qv = viz.columns(2)
-    _qv[0].button(
+    # Stacked (one above the other) so the rail can be narrow.
+    viz.button(
         "👁️ Scanpath",
         key="viz_view_scanpath",
         width="stretch",
@@ -897,7 +897,7 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("scanpath",),
     )
-    _qv[1].button(
+    viz.button(
         "🔥 Heatmap",
         key="viz_view_heatmap",
         width="stretch",
@@ -1272,18 +1272,67 @@ def read_trial_filters() -> Dict:
 
 # --- Trial summary chips (the "Field = Value" strip above the plot) ----------
 _CHIP_TEXT_ID_COLS = ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id")
-# Sensible default chips: trial identity + the common OneStop conditions.
+# Sensible default chips: trial identity + the common OneStop conditions + the
+# computed trial-level summary stats (which the chips replaced the Trial Info tab
+# with). The "@"-prefixed keys are virtual fields computed per trial in
+# `tabs._render_trial_condition_chips` (see SUMMARY_CHIP_FIELDS).
 _CHIP_DEFAULT_CONDITIONS = [
     "difficulty_level",
     "question_preview",
     "repeated_reading_trial",
     "is_correct",
 ]
+# Virtual chip fields → label. These are computed per trial (not data columns),
+# always trial-level, and folded in from the former Trial Info tab's summary.
+SUMMARY_CHIP_FIELDS = {
+    "@reading_time_s": "Total reading time (s)",
+    "@word_count": "Number of words",
+    "@fixation_count": "Number of fixations",
+    "@in_text_fixations": "Fixations in word boxes",
+}
 
 
-def available_chip_fields(words: pd.DataFrame, fixations: pd.DataFrame) -> List[str]:
-    """Columns offerable as trial-summary chips: participant + a single text id
-    column up front, then every other column (so any metadata field is pickable)."""
+def _trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
+    """Columns that are constant within a trial (so a single chip value is
+    meaningful), sampled from the first trial only — cheap, and trial-level-ness
+    is essentially a property of the dataset, not the specific trial. A column
+    counts as trial-level when it has ≤1 distinct value within that sample trial.
+    """
+    level: set = set()
+    src = fixations if (fixations is not None and not fixations.empty) else words
+    if (
+        src is None
+        or src.empty
+        or "participant_id" not in src.columns
+        or "trial_id" not in src.columns
+    ):
+        return level
+    pid, tid = str(src["participant_id"].iloc[0]), str(src["trial_id"].iloc[0])
+    for frame in (words, fixations):
+        if (
+            frame is None
+            or frame.empty
+            or "participant_id" not in frame.columns
+            or "trial_id" not in frame.columns
+        ):
+            continue
+        sub = frame[
+            (frame["participant_id"].astype(str) == pid)
+            & (frame["trial_id"].astype(str) == tid)
+        ]
+        if sub.empty:
+            continue
+        for col in sub.columns:
+            if sub[col].nunique(dropna=True) <= 1:
+                level.add(col)
+    return level
+
+
+def _chip_field_options(words, fixations, trial_level: set) -> List[str]:
+    """Pickable chip fields: participant + a text id + the data's *trial-level*
+    columns + the computed summary fields. Non-trial-level columns (per-word /
+    per-fixation) are intentionally excluded — a single chip value for them would
+    be misleading."""
     cols: List[str] = []
 
     def add(c: str) -> None:
@@ -1294,8 +1343,21 @@ def available_chip_fields(words: pd.DataFrame, fixations: pd.DataFrame) -> List[
         add("participant_id")
     add(next((c for c in _CHIP_TEXT_ID_COLS if c in words.columns), ""))
     for c in list(words.columns) + list(fixations.columns):
-        add(c)
+        if c in trial_level:
+            add(c)
+    cols.extend(SUMMARY_CHIP_FIELDS)
     return cols
+
+
+def _chip_option_label(col: str) -> str:
+    """Display label for a chip-field option (identity / virtual / humanized)."""
+    if col in SUMMARY_CHIP_FIELDS:
+        return SUMMARY_CHIP_FIELDS[col]
+    if col == "participant_id":
+        return "Participant"
+    if col in _CHIP_TEXT_ID_COLS:
+        return "Text"
+    return col.replace("_", " ").strip().capitalize()
 
 
 def _default_chip_fields(available: List[str]) -> List[str]:
@@ -1304,6 +1366,7 @@ def _default_chip_fields(available: List[str]) -> List[str]:
         ["participant_id"]
         + ([text_col] if text_col else [])
         + _CHIP_DEFAULT_CONDITIONS
+        + list(SUMMARY_CHIP_FIELDS)
     )
     return [f for f in wanted if f in available]
 
@@ -1313,10 +1376,22 @@ def render_trial_chip_picker(words: pd.DataFrame, fixations: pd.DataFrame, host)
     ``Field = Value`` chips above the scanpath (read by
     ``tabs._render_trial_condition_chips`` via ``st.session_state['trial_chip_fields']``).
 
-    Default seeded once from the data (participant + text id + common OneStop
-    conditions); the user can change it any time. Stale picks (after a dataset
-    switch) are pruned so the multiselect never raises on a missing option."""
-    available = available_chip_fields(words, fixations)
+    Only *trial-level* fields are offered (constant within a trial) plus the
+    computed summary stats — so the chips never suggest a per-word column whose
+    single value would mislead. The trial-level set is computed once (sampling the
+    first trial) and cached per column-signature; a **Refresh** button recomputes
+    it on demand. Default seeded once (participant + text + common conditions +
+    summary); the user can change it any time. Stale picks are pruned so the
+    multiselect never raises on a missing option."""
+    # Cache the trial-level field set per column-signature (stable across trials /
+    # filters within a dataset), recomputed on a dataset/column change or Refresh.
+    signature = (tuple(words.columns), tuple(fixations.columns))
+    cache = st.session_state.get("_trial_level_cache")
+    if not cache or cache.get("signature") != signature:
+        cache = {"signature": signature, "fields": _trial_level_columns(words, fixations)}
+        st.session_state["_trial_level_cache"] = cache
+
+    available = _chip_field_options(words, fixations, cache["fields"])
     if not available:
         return
     if "trial_chip_fields" in st.session_state:
@@ -1327,12 +1402,18 @@ def render_trial_chip_picker(words: pd.DataFrame, fixations: pd.DataFrame, host)
     host.multiselect(
         "Chips above the plot",
         options=available,
-        format_func=lambda c: {"participant_id": "Participant", **{
-            t: "Text" for t in _CHIP_TEXT_ID_COLS
-        }}.get(c, c.replace("_", " ").strip().capitalize()),
+        format_func=_chip_option_label,
         key="trial_chip_fields",
-        help="Trial fields shown as a `Field = Value` chip strip above the "
-        "scanpath. Set it up here; change it any time.",
+        help="Trial-level fields shown as a `Field = Value` chip strip above the "
+        "scanpath. Only fields constant within a trial are offered (plus the "
+        "summary stats). Set it up here; change it any time.",
+    )
+    host.button(
+        "🔄 Refresh fields",
+        key="trial_chip_refresh",
+        help="Re-scan which fields are trial-level (if the offered list looks off "
+        "for the current data).",
+        on_click=lambda: st.session_state.pop("_trial_level_cache", None),
     )
 
 

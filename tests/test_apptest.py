@@ -97,11 +97,10 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_single_trial_participant_mode_skips_slider(self):
-        # The synthetic source has a single participant, so the picker no longer
-        # offers a Participant mode (it would be a no-op) and collapses to a
-        # plain Trial dropdown — which in particular never instantiates a
-        # one-option st.select_slider (that crashes the browser with a
-        # `RangeError: min (0) is equal/bigger than max (0)`).
+        # Participant mode is always offered now (even for the single-participant
+        # synthetic source), but with a single trial it must degrade to a caption
+        # rather than instantiate a one-option st.select_slider (that crashes the
+        # browser with `RangeError: min (0) is equal/bigger than max (0)`).
         at = _make_apptest(synthetic=True)
         at.session_state["single_select_trial_mode"] = "Participant"
         at.run(timeout=30)
@@ -119,13 +118,16 @@ class TestAppLaunches:
             at.run(timeout=30)
             assert not at.exception, f"{mode}: {at.exception}"
             assert at.error == [], f"{mode}: {[e.value for e in at.error]}"
-            # The trial id now leads the Trial Info table (st.dataframe) rather
-            # than a markdown header, so scan both surfaces.
+            # The Trial Info table is gone; the resolved trial id now surfaces in
+            # the picker widgets (selectbox / select_slider options) and the chips
+            # markdown — scan all of them.
             markdown = " ".join(m.value for m in at.markdown)
-            tables = " ".join(
-                df.value.to_string() for df in at.dataframe if df.value is not None
+            options = " ".join(
+                str(list(w.options))
+                for w in [*at.selectbox, *at.select_slider]
+                if getattr(w, "options", None) is not None
             )
-            assert "synthetic_2line_demo" in (markdown + " " + tables), (
+            assert "synthetic_2line_demo" in (markdown + " " + options), (
                 f"{mode} mode did not resolve the single trial"
             )
 
@@ -192,26 +194,25 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_participant_mode_sub_selection_methods(self):
-        # Participant mode offers a trial-index / text / trial-id sub-selector
-        # (TODO 1.15); picking Trial ID resolves a trial without error.
+        # Participant mode offers a "Pick by" trial-index / text / trial-id
+        # sub-selector (now st.pills, key `single_participant_by`); picking Trial
+        # ID resolves a trial without error.
         at = _make_apptest()
-        at.run(timeout=30)
         at.session_state["single_select_trial_mode"] = "Participant"
-        at.run(timeout=30)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        sub = [
-            r for r in at.radio if set(r.options) == {"Trial index", "Text", "Trial ID"}
-        ]
-        assert sub, "participant-mode sub-selection radio not found"
-        sub[0].set_value("Trial ID")
+        at.session_state["single_participant_by"] = "Trial ID"
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        # The "Pick by" pills carry the three methods.
+        pills = [
+            p for p in at.pills if set(p.options) == {"Trial index", "Text", "Trial ID"}
+        ]
+        assert pills, "participant-mode 'Pick by' pills not found"
 
     def test_participant_mode_stale_sub_method_does_not_crash(self):
         # A stale "Trial index" sub-method pick must not crash when the current
         # data offers only Text / Trial ID (the synthetic source has no
-        # trial-index column) — the radio's stale value is dropped, not raised.
+        # trial-index column) — the "Pick by" pills' stale value is dropped.
         at = _make_apptest(synthetic=True)
         at.session_state["single_select_trial_mode"] = "Participant"
         at.session_state["single_participant_by"] = "Trial index"  # unavailable here

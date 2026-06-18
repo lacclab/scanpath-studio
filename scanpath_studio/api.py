@@ -1,8 +1,11 @@
 """Headless programmatic API for scanpath-studio.
 
 The Streamlit app and this module share one pipeline (``data`` → ``measures``
-→ ``plots``), so a figure produced here is pixel-identical to the app's
-canonical visualization. Typical use::
+→ ``plots``), so a figure produced here goes through the exact same builders as
+the app and is pixel-identical *given the same settings*. The headless defaults
+(``CANONICAL_FIGURE_DEFAULTS``) render the full canonical figure; the interactive
+app instead opens on a more minimal first view (core scanpath only), so the two
+*default* outputs differ — pass kwargs to match whichever you want. Typical use::
 
     import scanpath_studio as sps
 
@@ -57,9 +60,12 @@ from .plots import make_scanpath_animation, make_scanpath_figure  # noqa: E402
 TableLike = Union[pd.DataFrame, str, Path]
 TablesLike = Union[TableLike, "list[TableLike]"]
 
-# Mirrors the app's sidebar defaults (controls.sidebar_controls) — the
-# "canonical" scanpath rendering. `heatmap_metric="counts"` is translated to
-# the figure-level `None` in _figure_kwargs, like tabs._build_figure_settings.
+# The headless "canonical" rendering — every core layer on. (The interactive app
+# instead starts minimal: word boxes / heatmap / fixation-index off by default —
+# see controls._VIZ_WIDGET_DEFAULTS — so the app's *default* first view differs;
+# override any layer via plot_scanpath kwargs.) `heatmap_metric="counts"` is
+# translated to the figure-level `None` in _figure_kwargs, like
+# tabs._build_figure_settings.
 CANONICAL_FIGURE_DEFAULTS: dict = dict(
     show_words=True,
     show_word_labels=True,

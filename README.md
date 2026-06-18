@@ -52,14 +52,13 @@ On top of that:
 
 *Overlay a second reading to compare two readers of the same text on a shared clock.*
 
-The app is organized into four tabs:
+The app is organized into three tabs:
 
 | Tab | What's there |
 |-----|--------------|
-| **Scanpath Visualization** | The layered scanpath with the trial picker, metadata, and two-trial comparison (style each scanpath independently). Tick **Animate** to replay it frame by frame (export HTML / GIF / MP4). |
+| **Scanpath Visualization** | The layered scanpath: a **Browse by** selection row above the plot (trial / text / participant) and, beside it, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below: three subtabs — **Annotations**, **Stimulus & questions**, and **Export**, where Export bundles single-trial *and* bulk export (HTML / GIF / MP4 and figures / settings / tabular data across the filtered trials — or the whole dataset). |
 | **Corpus Analysis** | Two subtabs: **Generations (WIP)** — a real scanpath vs. several model-generated ones over the same text, scored by similarity *(placeholders for now)*; and **Aggregated Views** — trends of a metric by trial index and within-trial fixation index, per-text heatmaps pooled over readers, and grouped metric distributions. |
 | **Data Inspection** | Paginated word / fixation / raw-gaze tables (CSV + Parquet download), summary statistics, and the active column mapping. |
-| **Bulk Export** | One zip of per-trial figures, plot settings, and tabular data across the filtered trials — or the whole dataset. |
 
 ![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/app_screenshot.png)
 

@@ -8,9 +8,9 @@ the repo root (kept current as the code changes); this is the short version.
 
 | Module | Responsibility |
 |--------|----------------|
-| `app.py` | Streamlit entry point: page config, URL deep-link presets, sidebar, data load, filtering, and dispatch to the four tabs. |
-| `tabs.py` | Tab renderers: Scanpath Visualization, Corpus Analysis (Generations + Aggregated Views subtabs), Data Inspection, Bulk Export. |
-| `controls.py` | Sidebar visualization controls, column-mapping UI, trial-filter panel. |
+| `app.py` | Streamlit entry point: page config, URL deep-link presets, sidebar, data load, filtering, and dispatch to the three tabs. |
+| `tabs.py` | Tab renderers: Scanpath Visualization (Annotations / Stimulus & questions / Export subtabs — Export folds in the former Bulk Export tab), Corpus Analysis (Generations + Aggregated Views subtabs), Data Inspection. |
+| `controls.py` | Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel. |
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
 | `measures.py` | Canonical reading measures (FFD/FPRT/RPD/TFD, regressions) + geometry helpers. |
 | `plots.py` | Plotly figure builders (scanpath, animation, comparison, trends, histograms, heatmaps). |

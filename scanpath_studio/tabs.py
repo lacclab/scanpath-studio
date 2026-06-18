@@ -1262,7 +1262,7 @@ _ANIM_SPEED_LABELS = [
     "×8",
 ]
 # Default playback speed — brisk enough for quick review (real-time ÷ 4) but
-# still legible; users can slow it down for a close look (TODO 3.2).
+# still legible; the Playback popover's speed slider slows it down (to ×0.25).
 _ANIM_DEFAULT_SPEED = 4.0
 
 
@@ -1618,9 +1618,10 @@ def render_single_trial_tab(
        rail on the right carrying the **view modes** (Animate / Compare) and the
        **visualization controls** (formerly in the sidebar — see
        ``controls.sidebar_controls``, rendered here with ``host=``).
-    3. A full-width **subtab bar** below: Stimulus & questions · Annotations ·
-       Trial Info · Export (Export folds in the former Bulk Export tab — see
-       ``_render_export_panel``). Save & restore lives in the sidebar.
+    3. A full-width **subtab bar** below: 📝 Annotations · Stimulus & questions ·
+       Export (Export folds in the former Bulk Export tab — see
+       ``_render_export_panel``). The former Trial Info subtab was folded into the
+       configurable chips above the plot. Save & restore lives in the sidebar.
 
     ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
     the Export subtab's bulk section uses for its "whole dataset" scope; they

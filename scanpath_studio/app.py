@@ -317,7 +317,8 @@ def _apply_url_preset() -> Optional[str]:
         &trial_id=p001_3_Adv     → land on this exact trial id, any picker mode
                                    (applied after combos build — see
                                    _apply_url_trial_selection; emitted by Share)
-        &tab=animation           → land on Animated Scanpath tab
+        &tab=animation           → pre-tick the Animate toggle (legacy; there's
+                                   no separate Animated Scanpath tab anymore)
         &heatmap_colorscale=Greens
         &hide_fixation_numbers=1
         &show_saccades=1
@@ -334,10 +335,10 @@ def _apply_url_preset() -> Optional[str]:
     if not qp:
         return None
 
-    # Seed selection state for every tab that exposes a `select_trial` widget.
-    # `?participant=` + `?trial=` map onto Participant mode with the matching
-    # participant / slider value. Without this loop the Animated Scanpath tab
-    # (key_prefix="anim") would default to "Trial" mode and land on the
+    # Seed selection state for every `select_trial` host (the prefixes in
+    # `_SELECTION_PREFIXES`). `?participant=` + `?trial=` map onto Participant mode
+    # with the matching participant / slider value. Seeding every prefix keeps a
+    # non-first picker from defaulting to "Trial" mode and landing on the
     # alphabetically-first trial instead of the deep-linked one.
     if "participant" in qp or "trial" in qp:
         if "participant" in qp:

@@ -71,9 +71,9 @@ _STEPS = [
         "text. **Experimental Setup** sets your monitor so it stays true-to-scale.",
     ),
     (
-        "🗂 Four views",
+        "🗂 Three views",
         "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
-        "**Data Inspection** · **Bulk Export**.",
+        "**Data Inspection**. Bulk export is the **Export** subtab in Scanpath.",
     ),
     (
         "📝 Annotate & save",

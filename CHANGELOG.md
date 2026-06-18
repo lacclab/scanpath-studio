@@ -7,34 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **More plot, less chrome.** Dropped the "🎯 Trial" heading; the chip strip stays
-  on **one line** with an inline **More** dropdown (only the stats not already
-  shown — reading time, word/fixation counts) and a `?` pointing to the sidebar
-  picker; quick views sit side by side. Saccade **direction arrows are now off by
-  default**. The trial slider gained a **Trial X / N** counter on its left, and the
-  participant **Pick by** sub-step reads as nested under Browse-by (↳). The
-  stimulus text and its question now have breathing room between them.
-- **Comparison styling lives with each layer.** The per-scanpath (Scanpath 1 / 2)
-  comparison controls moved out of a separate panel into the **Fixation** and
-  **Saccade** style popovers, beside their single-trial counterparts.
-- **More styling control.** Span **Mark border** takes a colour; the out-of-text
-  marker is choosable (emoji-labelled); colour bars can go horizontal with
-  rotatable, resizable tick labels; the fixation-index default size is now 10.
-- **Tighter control rail.** Trimmed the dead space around the rail's section
-  dividers so View modes, Visualization, and the layers sit close together.
+### Added
+- **MultiplEYE corpus loader.** `scanpath_studio.load_multipleye(root)` (and the
+  pre-normalization `datasets.multipleye_raw_frames` / `multipleye_inventory`)
+  load the multilingual MultiplEYE reading corpus, whose identity lives only in
+  folder + file names. It parses participant / session / trial / stimulus from
+  the paths, drops non-reading screens (`question_*`, `*_rating_screen`,
+  `subject_difficulty_screen`), and aggregates the character-level AOI files to
+  one word box per `(page, word_idx)`. Each reader is a *session*
+  (`participant_id = "001_ZH_CH_1_ET1"` — ET1/ET2 read disjoint stimuli) and
+  each stimulus *page* is its own trial (`trial_id = "Lit_Alchemist_4__page_1"`,
+  since pages reuse the same screen coordinates), with `text_id` kept as the
+  stimulus for stimulus-level merges. `MULTIPLEYE_MONITOR = (1920, 1080)`.
+  Fixation source is `scanpaths/` (page/word-tagged) or `fixations/` (raw).
+- **MultiplEYE in the in-app "Public datasets" picker** (behind the same
+  `SCANPATH_PUBLIC_DATASETS=1` flag as PoTeC), with directory / session /
+  stimulus / fixation-source controls and the corpus monitor size.
+- **Derive ids from the filename (upload wizard).** A new optional step splits
+  the captured `source_file` into `file_part_N` columns (pick the delimiter) so
+  a trial / participant id that lives only in the filename can be mapped (and
+  composed from several parts). `read_tables` now records `source_file` for a
+  single file too, not just multi-file sets (`data.split_source_file`).
 
-### Fixed
-- **Heatmap colour now matches the picker.** The heatmap defaulted to a colorscale
-  that a popover-hosted selectbox couldn't display (it showed the first option and
-  could silently overwrite the value on the next click) — the default is now blue,
-  in sync with the picker and the figure. Heatmap **style** uses a radio so the
-  active style always shows selected.
-- **Save & restore now captures every setting.** A saved config silently dropped
-  the colour-bar orientation/tick angle/tick size, the out-of-text marker, the span
-  border colour, and all per-scanpath comparison styling — they now round-trip.
-- **Chips truly stay one line.** The strip no longer wraps when space is tight: the
-  identity/condition chips clip at the edge while the `?` and **More** stay pinned.
+### Changed
+- **Schema auto-detection** now recognizes MultiplEYE column conventions:
+  fixation `location_x` / `location_y` / `onset`, word-box origin `top_left_x` /
+  `top_left_y`, and `word_idx` / `char_idx` word ids.
 
 ## [0.22.0] - 2026-06-19
 

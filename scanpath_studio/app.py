@@ -80,8 +80,10 @@ from scanpath_studio.controls import (
     viz_settings_from_state,
 )
 from scanpath_studio.data import (
+    FILE_PART_PREFIX,
     FIX_OPTIONAL_FIELDS,
     PARTICIPANT_CANDIDATES,
+    SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
     categorize_columns,
     compute_canvas_size,
@@ -110,6 +112,7 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_table,
     read_tables,
+    split_source_file,
     trial_id_series,
     trial_mapping_columns,
     validate_fix_schema,
@@ -163,6 +166,8 @@ PUBLIC_DATASETS_CHOICE = "Public datasets"
 # Default PoTeC location + a small default subset so the first load is quick.
 POTEC_DEFAULT_DIR = "data/PoTeC"
 POTEC_TEXT_IDS = [f"{d}{i}" for d in ("b", "p") for i in range(6)]
+# Default MultiplEYE location (the read-only ZH/Chinese Zurich sample).
+MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 
 
 def public_datasets_enabled() -> bool:
@@ -1204,6 +1209,99 @@ def _load_potec_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
         return pd.DataFrame(), pd.DataFrame()
 
 
+@st.cache_data(show_spinner="Loading MultiplEYE…")
+def _cached_multipleye_raw_frames(
+    root: str,
+    sessions: Optional[Tuple[str, ...]],
+    stimuli: Optional[Tuple[str, ...]],
+    fixation_source: str,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached raw MultiplEYE frames (pre-normalization) for the GUI data source.
+
+    Same shape as an upload — the normal auto-detect → normalize → harmonize
+    pipeline then handles them — cached on the selection so re-runs (toggling
+    viz controls) don't re-read the files."""
+    from scanpath_studio.datasets import multipleye_raw_frames
+
+    return multipleye_raw_frames(
+        root,
+        sessions=list(sessions) if sessions else None,
+        stimuli=list(stimuli) if stimuli else None,
+        fixation_source=fixation_source,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _cached_multipleye_inventory(
+    root: str, fixation_source: str
+) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    from scanpath_studio.datasets import multipleye_inventory
+
+    return multipleye_inventory(root, fixation_source=fixation_source)
+
+
+def _load_multipleye_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Sidebar controls + loader for the MultiplEYE corpus data source.
+
+    MultiplEYE can't be loaded through the generic Upload flow (participant /
+    trial / stimulus live only in the folder + file names), so this dedicated
+    source wraps ``datasets.multipleye_raw_frames``. The returned raw frames go
+    through the same normalization as an upload, so the sidebar Column-mapping
+    panels still appear and stay overridable.
+    """
+    cfg = st.sidebar.expander("MultiplEYE options", expanded=True)
+    root = cfg.text_input(
+        "Data directory",
+        value=MULTIPLEYE_DEFAULT_DIR,
+        help="Folder holding a MultiplEYE session set, e.g. the read-only "
+        "ZH-CH-Zurich sample (per-session subfolders under fixations/ and "
+        "scanpaths/).",
+    )
+    fixation_source = cfg.radio(
+        "Fixation source",
+        options=["scanpaths", "fixations"],
+        help="scanpaths/ fixations are pre-tagged with page + word index "
+        "(richer); fixations/ are raw onset/duration/x/y with no word linkage.",
+    )
+    try:
+        sessions_all, stimuli_all = _cached_multipleye_inventory(root, fixation_source)
+    except (FileNotFoundError, OSError):
+        sessions_all, stimuli_all = (), ()
+    if not sessions_all:
+        cfg.warning(
+            "No MultiplEYE sessions found here — point at a session set folder "
+            "(e.g. the ZH-CH-Zurich sample). Showing the demo meanwhile."
+        )
+        return load_sample_data()
+    sessions = cfg.multiselect(
+        "Sessions",
+        options=list(sessions_all),
+        default=list(sessions_all[:1]),
+        help="Reader sessions to load (ET1/ET2 are distinct readers — they read "
+        "different stimuli). Fewer sessions load faster.",
+    )
+    stimuli = cfg.multiselect(
+        "Stimuli (optional)",
+        options=list(stimuli_all),
+        default=[],
+        help="Limit to specific stimuli; leave blank for all stimuli the chosen "
+        "sessions read.",
+    )
+    if not sessions:
+        st.sidebar.info("Pick at least one MultiplEYE session to load.")
+        return load_sample_data()
+    try:
+        return _cached_multipleye_raw_frames(
+            root, tuple(sessions), tuple(stimuli) or None, fixation_source
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        st.sidebar.error(
+            f"Couldn't load MultiplEYE from `{root}`: {exc} "
+            "Point at a MultiplEYE session set folder."
+        )
+        return pd.DataFrame(), pd.DataFrame()
+
+
 # Registry behind the "Public datasets" source: label → loader (renders its
 # own sidebar options and returns raw, pre-normalization frames) + the
 # corpus' presentation-monitor size (canvas default for true-to-scale
@@ -1214,6 +1312,10 @@ PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
         monitor=(1680, 1050),  # DELL P2210
+    ),
+    "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
+        loader=_load_multipleye_source,
+        monitor=(1920, 1080),  # MultiplEYE ZH-CH-Zurich lab config
     ),
 }
 
@@ -2288,6 +2390,50 @@ def _render_unified_identifier(
             st.session_state[words_key] = list(chosen)
 
 
+def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
+    """Optional step: split the captured ``source_file`` into ``file_part_N``
+    columns so the user can map a trial / participant id that lives only in the
+    filename. Returns the (possibly augmented) frames so the identifier pickers
+    below see the new columns. No-op unless the split toggle is on."""
+    body.caption(
+        "When identity lives in the file name (no column carries it), the "
+        "uploaded filename is captured as `source_file` — split it into parts "
+        "you can map as the Trial or Participant id below. E.g. "
+        "`reader0_b0_scanpath` split on `_` gives reader0 / b0 / scanpath."
+    )
+    if not body.toggle(
+        "Split the filename into parts",
+        key="wizard_filename_split",
+        help="Adds file_part_1, file_part_2, … columns derived from source_file.",
+    ):
+        return raw_words, raw_fix, raw_gaze
+    delimiter = (
+        body.text_input(
+            "Delimiter",
+            value="_",
+            key="wizard_filename_delim",
+            max_chars=8,
+            help="Character(s) to split the filename on.",
+        )
+        or "_"
+    )
+    out = [
+        split_source_file(fr, delimiter=delimiter) if not fr.empty else fr
+        for fr in (raw_words, raw_fix, raw_gaze)
+    ]
+    raw_words, raw_fix, raw_gaze = out
+    preview = raw_fix if not raw_fix.empty else raw_words
+    part_cols = [c for c in preview.columns if c.startswith(FILE_PART_PREFIX)]
+    if part_cols:
+        body.caption("Filename parts (first rows) — map them as ids below:")
+        body.dataframe(
+            preview[[SOURCE_FILE_COLUMN, *part_cols]].drop_duplicates().head(),
+            width="stretch",
+            hide_index=True,
+        )
+    return raw_words, raw_fix, raw_gaze
+
+
 def _wizard_trial_step(
     body,
     raw_words,
@@ -2835,6 +2981,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     restore_box = toggle("Restore a saved setup (optional)", done=True)
     _wizard_restore_config(restore_box)
     _render_restored_config_caption(restore_box)
+
+    # Derive ids from the filename (optional) — must run *before* the trial /
+    # participant pickers so the split-out file_part_N columns are mappable.
+    if (has_words or has_fix) and any(
+        SOURCE_FILE_COLUMN in fr.columns for fr in (raw_fix, raw_words) if not fr.empty
+    ):
+        derive_box = toggle("Derive ids from filename (optional)", done=True)
+        raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
+            derive_box, raw_words, raw_fix, raw_gaze
+        )
 
     # Trial identifier (required → opens first if not yet mapped).
     if has_words or has_fix:

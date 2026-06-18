@@ -13,13 +13,14 @@ __all__ = [
     "animate_scanpath",
     "save_figure",
     "load_potec",
+    "load_multipleye",
 ]
 __version__ = "0.22.0"
 
 # Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
 # streamlit until first use.
-_DATASET_EXPORTS = frozenset({"load_potec"})
+_DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye"})
 _API_EXPORTS = frozenset(__all__) - {"__version__", "main"} - _DATASET_EXPORTS
 
 

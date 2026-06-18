@@ -326,20 +326,32 @@ TEXT_CANDIDATES = [
     "content",
     "token",
 ]
-WORD_ID_CANDIDATES = ["word_id", "IA_ID", "ia_index", "word_index", "aoi"]
+# `word_idx` / `char_idx` are MultiplEYE's word- and character-level indices
+# (word_idx first so word-level boxes win over per-character ones).
+WORD_ID_CANDIDATES = [
+    "word_id",
+    "IA_ID",
+    "ia_index",
+    "word_index",
+    "aoi",
+    "word_idx",
+    "char_idx",
+]
 LINE_CANDIDATES = ["line_idx", "line", "line_index", "IA_LINE_ID"]
 
-WORD_X_CANDIDATES = ["x", "left"]
-WORD_Y_CANDIDATES = ["y", "top"]
+# `top_left_x` / `top_left_y` are MultiplEYE's box origin (paired with width/height).
+WORD_X_CANDIDATES = ["x", "left", "top_left_x"]
+WORD_Y_CANDIDATES = ["y", "top", "top_left_y"]
 WORD_WIDTH_CANDIDATES = ["width"]
 WORD_HEIGHT_CANDIDATES = ["height"]
-WORD_LEFT_CANDIDATES = ["IA_LEFT", "left", "start_x"]
+WORD_LEFT_CANDIDATES = ["IA_LEFT", "left", "start_x", "top_left_x"]
 WORD_RIGHT_CANDIDATES = ["IA_RIGHT", "right", "end_x"]
-WORD_TOP_CANDIDATES = ["IA_TOP", "top", "start_y"]
+WORD_TOP_CANDIDATES = ["IA_TOP", "top", "start_y", "top_left_y"]
 WORD_BOTTOM_CANDIDATES = ["IA_BOTTOM", "bottom", "end_y"]
 
-FIX_X_CANDIDATES = ["x", "CURRENT_FIX_X", "FPOGX"]
-FIX_Y_CANDIDATES = ["y", "CURRENT_FIX_Y", "FPOGY"]
+# `location_x` / `location_y` are MultiplEYE's fixation pixel coordinates.
+FIX_X_CANDIDATES = ["x", "CURRENT_FIX_X", "FPOGX", "location_x"]
+FIX_Y_CANDIDATES = ["y", "CURRENT_FIX_Y", "FPOGY", "location_y"]
 FIX_DURATION_CANDIDATES = [
     "duration_ms",
     "CURRENT_FIX_DURATION",
@@ -353,6 +365,7 @@ FIX_TIMESTAMP_CANDIDATES = [
     "CURRENT_FIX_START_TIME",
     "CURRENT_FIX_TIME",
     "CURRENT_FIX_ONSET",
+    "onset",  # MultiplEYE fixation onset (ms)
 ]
 FIX_FIXATION_ID_CANDIDATES = [
     "fixation_id",
@@ -367,6 +380,8 @@ FIX_WORD_ID_CANDIDATES = [
     "CURRENT_FIX_INTEREST_AREA_INDEX",
     "word_index_in_text",
     "word_index",
+    "word_idx",  # MultiplEYE word index (resets per page)
+    "char_idx",  # MultiplEYE character index
 ]
 RAW_GAZE_X_CANDIDATES = ["x", "FPOGX", "gaze_x"]
 RAW_GAZE_Y_CANDIDATES = ["y", "FPOGY", "gaze_y"]
@@ -499,7 +514,38 @@ def validate_raw_gaze_schema(schema: Dict[str, Optional[str]]) -> list:
 # of) the Trial/Participant ID.
 SOURCE_FILE_COLUMN = "source_file"
 
+# Prefix for the positional columns split out of `source_file` by
+# `split_source_file` (file_part_1, file_part_2, …).
+FILE_PART_PREFIX = "file_part_"
+
 TablesInput = Union[str, os.PathLike, object, List]
+
+
+def split_source_file(
+    df: pd.DataFrame,
+    *,
+    delimiter: str = "_",
+    column: str = SOURCE_FILE_COLUMN,
+    prefix: str = FILE_PART_PREFIX,
+) -> pd.DataFrame:
+    """Split a ``source_file`` column into positional ``file_part_N`` columns.
+
+    Lets the upload wizard derive a trial / participant id from a structured
+    filename when no data column carries it — e.g. ``reader0_b0_scanpath`` split
+    on ``_`` yields ``file_part_1=reader0``, ``file_part_2=b0``,
+    ``file_part_3=scanpath`` (the user then maps the relevant part(s), composing
+    several if needed). Returns ``df`` unchanged if ``column`` is absent or
+    ``delimiter`` is empty. Rows with fewer parts get empty strings for the
+    missing tail, so every row has the same part columns."""
+    if column not in df.columns or not delimiter:
+        return df
+    parts = (
+        df[column].astype(str).str.split(delimiter, expand=True, regex=False).fillna("")
+    )
+    df = df.copy()
+    for i in range(parts.shape[1]):
+        df[f"{prefix}{i + 1}"] = parts[i].to_numpy()
+    return df
 
 
 def _read_by_extension(buf, name: str) -> pd.DataFrame:
@@ -525,19 +571,28 @@ def _read_by_extension(buf, name: str) -> pd.DataFrame:
 
 
 def _tag_and_concat(
-    frames: List[pd.DataFrame], labels: List[str], source_column: Optional[str]
+    frames: List[pd.DataFrame],
+    labels: List[str],
+    source_column: Optional[str],
+    *,
+    always_tag: bool = False,
 ) -> pd.DataFrame:
-    """Concatenate frames into one. With more than one frame, tag each with its
-    source label in ``source_column`` (unless that frame already carries the
-    column, or ``source_column`` is None) so rows stay traceable to their
-    origin. Columns are aligned by name; fields absent from a frame become NaN
-    for its rows."""
-    if len(frames) == 1:
-        return frames[0]
-    if source_column:
+    """Concatenate frames into one, tagging each with its source label in
+    ``source_column`` (unless that frame already carries the column, or
+    ``source_column`` is None) so rows stay traceable to their origin.
+
+    By default only multi-frame reads are tagged (a lone frame needs no origin
+    marker). ``always_tag=True`` tags a single frame too — used by
+    :func:`read_tables` so a one-file upload still exposes its filename (as
+    ``source_file``), which the upload wizard can map as the trial / participant
+    id when no column carries it. Columns are aligned by name; fields absent
+    from a frame become NaN for its rows."""
+    if source_column and (always_tag or len(frames) > 1):
         for df, label in zip(frames, labels):
             if source_column not in df.columns:
                 df[source_column] = label
+    if len(frames) == 1:
+        return frames[0]
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
@@ -606,17 +661,18 @@ def read_tables(
     """Read one or many tabular files and concatenate them into one frame.
 
     ``inputs`` may be a single path or file-like object, a glob pattern, or a
-    list mixing those (a ``.zip`` member counts as a file too). When more than
-    one file is read, each part gets a ``source_file`` column holding the file's
-    stem (unless the data already has that column, or ``source_column=None``) so
-    rows stay traceable to their origin file. Columns are aligned by name across
-    files; fields absent from a file become NaN for its rows."""
+    list mixing those (a ``.zip`` member counts as a file too). Each part gets a
+    ``source_file`` column holding the file's stem (unless the data already has
+    that column, or ``source_column=None``) — *including a single file*, so
+    datasets that key identity in the filename can recover it (the upload wizard
+    maps ``source_file`` as the trial / participant id). Columns are aligned by
+    name across files; fields absent from a file become NaN for its rows."""
     items = expand_table_inputs(inputs)
     frames, labels = [], []
     for item in items:
         frames.append(read_table(item))
         labels.append(Path(getattr(item, "name", str(item))).stem)
-    return _tag_and_concat(frames, labels, source_column)
+    return _tag_and_concat(frames, labels, source_column, always_tag=True)
 
 
 def _load_bundled(name: str) -> pd.DataFrame:

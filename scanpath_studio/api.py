@@ -12,7 +12,7 @@ app instead opens on a more minimal first view (core scanpath only), so the two
     words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
     print(sps.list_trials(words, fixations))
     fig = sps.plot_scanpath(words, fixations, participant="p1", trial="t1")
-    sps.save_figure(fig, "scanpath.html")   # or .png/.svg/.pdf (needs Chrome)
+    sps.save_figure(fig, "scanpath.png")   # or .svg/.pdf/.html — all browser-free
 
 Every keyword accepted by :func:`plots.make_scanpath_figure` /
 :func:`plots.make_scanpath_animation` can be overridden through
@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import pandas as pd
-import plotly.graph_objects as go
+from matplotlib.figure import Figure
 
 # Outside a Streamlit runtime the @st.cache_data decorators in `data` fall
 # back to bare-mode caching and log a "No runtime found" warning per cached
@@ -55,7 +55,11 @@ from .constants import (  # noqa: E402
     FONT_FAMILY,
     SACCADE_COLOR,
 )
-from .plots import make_scanpath_animation, make_scanpath_figure  # noqa: E402
+from .plots import (  # noqa: E402
+    ScanpathAnimation,
+    make_scanpath_animation,
+    make_scanpath_figure,
+)
 
 TableLike = Union[pd.DataFrame, str, Path]
 TablesLike = Union[TableLike, "list[TableLike]"]
@@ -265,7 +269,7 @@ def plot_scanpath(
     font_family: str = FONT_FAMILY,
     raw_gaze: Optional[pd.DataFrame] = None,
     **figure_overrides,
-) -> go.Figure:
+) -> Figure:
     """Build the canonical scanpath figure for one trial.
 
     ``words`` / ``fixations`` are normalized frames from
@@ -317,13 +321,14 @@ def animate_scanpath(
     font_family: str = FONT_FAMILY,
     playback_speed: float = 1.0,
     **animation_overrides,
-) -> go.Figure:
+) -> ScanpathAnimation:
     """Build the animated scanpath replay for one trial.
 
     Same trial selection and canvas semantics as :func:`plot_scanpath`. The
-    returned Plotly figure plays in real reading time scaled by
-    ``playback_speed``; save it as interactive HTML with :func:`save_figure`,
-    or rasterize to GIF/MP4 with :func:`animation_export.export_animation`.
+    returned :class:`~scanpath_studio.plots.ScanpathAnimation` plays in real
+    reading time scaled by ``playback_speed``; save it as an interactive HTML
+    player with :func:`save_figure` (``.html``), or rasterize to GIF/MP4 with
+    :func:`animation_export.export_animation`.
 
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``,
@@ -362,26 +367,40 @@ def animate_scanpath(
     )
 
 
-def save_figure(fig: go.Figure, path: Union[str, Path], *, scale: int = 2) -> Path:
-    """Save a figure by extension: ``.html`` (interactive, browser-free) or
-    ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs a Chrome/Chromium;
-    run ``plotly_get_chrome -y`` once if missing). Returns the written path."""
+def save_figure(fig, path: Union[str, Path], *, scale: int = 2) -> Path:
+    """Save a figure or animation by file extension — all browser-free.
+
+    For a static :class:`~matplotlib.figure.Figure`: ``.png`` (raster; ``scale``
+    is a DPI multiplier), ``.svg`` / ``.pdf`` (vector), or ``.html`` (a
+    self-contained SVG page). For a :class:`~scanpath_studio.plots.ScanpathAnimation`
+    only ``.html`` is supported — an interactive ``to_jshtml`` player. Returns the
+    written path.
+    """
+    from . import mpl_render as mr
+
     path = Path(path)
     suffix = path.suffix.lower()
+
+    if isinstance(fig, ScanpathAnimation):
+        if suffix == ".html":
+            path.write_text(fig.to_jshtml(), encoding="utf-8")
+            return path
+        raise ValueError(f"An animation can only be saved as .html (got {suffix!r}).")
+
     if suffix == ".html":
-        fig.write_html(str(path))
+        svg = mr.save_to_buffer(fig, "svg").decode("utf-8")
+        svg = svg[svg.find("<svg") :]
+        path.write_text(
+            "<!doctype html><html><head><meta charset='utf-8'></head>"
+            "<body style='margin:0'>" + svg + "</body></html>",
+            encoding="utf-8",
+        )
         return path
     if suffix in (".png", ".svg", ".pdf"):
-        try:
-            fig.write_image(str(path), scale=scale)
-        except OSError:
-            raise  # filesystem problem — the original error says it best
-        except Exception as exc:  # Kaleido raises various types
-            raise RuntimeError(
-                f"Static {suffix} export failed: {exc} — if Kaleido can't find "
-                "a Chrome/Chromium binary, run `plotly_get_chrome -y` once, or "
-                "save as .html instead."
-            ) from exc
+        data = mr.save_to_buffer(
+            fig, suffix[1:], scale=scale if suffix == ".png" else 1
+        )
+        path.write_bytes(data)
         return path
     raise ValueError(
         f"Unsupported extension {suffix!r} — use .html, .png, .svg, or .pdf."

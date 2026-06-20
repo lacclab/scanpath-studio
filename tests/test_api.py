@@ -1,12 +1,14 @@
 """Tests for the headless programmatic API (scanpath_studio.api)."""
 
 import pandas as pd
-import plotly.graph_objects as go
 import pytest
+from matplotlib.figure import Figure
 
 import scanpath_studio as sps
 from scanpath_studio import api
 from scanpath_studio import data as data_module
+from scanpath_studio.plots import ScanpathAnimation
+from tests import mpl_helpers as mh
 
 
 @pytest.fixture(scope="module")
@@ -72,10 +74,12 @@ def test_plot_scanpath_returns_figure(sample):
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
-    assert isinstance(fig, go.Figure)
-    assert len(fig.data) > 0
-    # Word boxes arrive as layout shapes (canonical defaults show them).
-    assert len(fig.layout.shapes) > 0
+    assert isinstance(fig, Figure)
+    ax = mh.data_axes(fig)
+    # At least one drawn data layer (fixations/saccades/etc.).
+    assert len(ax.collections) + len(ax.patches) > 0
+    # Word boxes arrive as Rectangle patches (canonical defaults show them).
+    assert len(mh.rectangles(fig)) > 0
 
 
 def test_plot_scanpath_overrides(sample):
@@ -91,10 +95,10 @@ def test_plot_scanpath_overrides(sample):
         show_heatmap=False,
         heatmap_metric="counts",
     )
-    assert isinstance(fig, go.Figure)
-    # Word boxes gone: only the canvas border rect remains, vs one shape per
-    # word (plus border) in the canonical default.
-    assert len(fig.layout.shapes or ()) < len(default_fig.layout.shapes)
+    assert isinstance(fig, Figure)
+    # Word boxes gone: only the canvas border rect remains, vs one Rectangle
+    # patch per word (plus border) in the canonical default.
+    assert len(mh.rectangles(fig)) < len(mh.rectangles(default_fig))
 
 
 def test_plot_scanpath_axis_field_override(sample):
@@ -103,7 +107,7 @@ def test_plot_scanpath_axis_field_override(sample):
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.plot_scanpath(words, fixations, pid, tid, x_field="order_in_trial")
-    assert isinstance(fig, go.Figure)
+    assert isinstance(fig, Figure)
 
 
 def test_plot_scanpath_filters_raw_gaze(sample):
@@ -123,8 +127,8 @@ def test_plot_scanpath_filters_raw_gaze(sample):
         }
     )
     fig = sps.plot_scanpath(words, fixations, pid, tid, raw_gaze=raw_gaze)
-    raw_traces = [t for t in fig.data if t.name == "Raw gaze"]
-    assert raw_traces and len(raw_traces[0].x) == 2
+    raw = mh.path_collection(fig, "Raw gaze")
+    assert raw is not None and len(raw.get_offsets()) == 2
 
 
 def test_animate_scanpath_rejects_static_only_options(sample):
@@ -164,9 +168,9 @@ def test_plot_scanpath_unknown_trial_raises(sample):
 def test_animate_scanpath_returns_frames(sample):
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
-    fig = sps.animate_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
-    assert isinstance(fig, go.Figure)
-    assert len(fig.frames) > 0
+    anim = sps.animate_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
+    assert isinstance(anim, ScanpathAnimation)
+    assert len(anim.frames) > 0
 
 
 def test_compute_word_metrics(sample):
@@ -185,6 +189,6 @@ def test_save_figure_html(sample, tmp_path):
 
 
 def test_save_figure_bad_extension(sample, tmp_path):
-    fig = go.Figure()
+    fig = Figure()
     with pytest.raises(ValueError, match="Unsupported extension"):
         sps.save_figure(fig, tmp_path / "fig.docx")

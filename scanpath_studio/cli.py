@@ -36,9 +36,8 @@ def _render_parser() -> argparse.ArgumentParser:
         prog="scanpath-studio render",
         description=(
             "Render one trial's scanpath to a file without launching the app. "
-            "HTML output is interactive and browser-free; PNG/SVG/PDF go "
-            "through Kaleido and need a Chrome/Chromium binary "
-            "(`plotly_get_chrome -y`)."
+            "PNG/SVG/PDF are native image files and HTML is a self-contained "
+            "page — all rendered locally with matplotlib, no browser needed."
         ),
     )
     src = parser.add_argument_group("input (bundled sample, or words and/or fixations)")

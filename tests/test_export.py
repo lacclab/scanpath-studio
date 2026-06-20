@@ -125,8 +125,8 @@ class TestBulkExport:
     def test_html_figures_need_no_kaleido(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):
-        # HTML figures go through fig.to_html (no Kaleido/Chrome), so they export
-        # cleanly even where the raster backend is unavailable.
+        # HTML figures wrap the matplotlib SVG in a self-contained page (no
+        # Kaleido/Chrome), so they export cleanly with no browser backend.
         opts = ExportOptions(
             include_png=False,
             include_svg=False,
@@ -135,7 +135,9 @@ class TestBulkExport:
             include_plot_config=False,
         )
         assert opts.figure_formats() == ["html"]
-        assert opts.raster_formats() == []
+        # HTML is not a native image format; no PNG/SVG/PDF are produced.
+        assert opts.image_formats() == []
+        assert opts.raster_formats() == []  # backwards-compat alias
         zip_bytes, progress = bulk_export(
             minimal_combos,
             minimal_words,
@@ -156,7 +158,9 @@ class TestBulkExport:
             assert "per_trial/p1__t1/figure.html" in names
             assert "per_trial/p1__t2/figure.html" in names
             html = zf.read("per_trial/p1__t1/figure.html").decode("utf-8")
-            assert "plotly" in html.lower()
+            # The HTML page is now a self-contained SVG render, not Plotly.
+            assert "<svg" in html.lower()
+            assert "plotly" not in html.lower()
 
     def test_parquet_format(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings

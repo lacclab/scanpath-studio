@@ -13,6 +13,7 @@ import scanpath_studio as sps
 from scanpath_studio import data as data_module
 from scanpath_studio import datasets as datasets_module
 from scanpath_studio.plots import make_scanpath_figure
+from tests import mpl_helpers as mh
 
 # ---------------------------------------------------------------------------
 # Multi-file reading
@@ -205,7 +206,8 @@ def test_fixations_only_load_list_and_plot(tmp_path):
     assert combos.to_records(index=False).tolist() == [("p0", "t1")]
 
     fig = sps.plot_scanpath(words, fixations, "p0", "t1")
-    assert len(fig.data) > 0
+    # fixations-only trial: the fixation layer is drawn
+    assert mh.path_collection(fig, "Fixations") is not None
 
 
 def test_words_only_load_list_and_plot(sample_words_df):
@@ -216,7 +218,9 @@ def test_words_only_load_list_and_plot(sample_words_df):
     assert ("p1", "t1") in {tuple(r) for r in combos.to_numpy()}
 
     fig = sps.plot_scanpath(words, fixations, "p1", "t1")
-    assert len(fig.data) > 0
+    # words-only trial: word boxes are drawn (no fixation layer)
+    assert len(mh.rectangles(fig)) > 0
+    assert mh.path_collection(fig, "Fixations") is None
 
 
 def test_words_only_heatmap_uses_preaggregated_measures(sample_words_df):
@@ -225,7 +229,7 @@ def test_words_only_heatmap_uses_preaggregated_measures(sample_words_df):
     words, fixations = sps.load_scanpath_data(words=sample_words_df)
     trial_words = words[words["participant_id"] == "p1"]
 
-    def n_shapes(show_heatmap):
+    def n_rectangles(show_heatmap):
         fig = make_scanpath_figure(
             trial_words,
             fixations,
@@ -250,11 +254,11 @@ def test_words_only_heatmap_uses_preaggregated_measures(sample_words_df):
             fixation_color_range=None,
             heatmap_range=None,
         )
-        return len(fig.layout.shapes or [])
+        return len(mh.rectangles(fig))
 
-    # word boxes only vs. word boxes + heatmap rectangles for the two
+    # word boxes only vs. word boxes + heatmap fill rectangles for the two
     # words with nonzero pre-aggregated dwell time
-    assert n_shapes(True) == n_shapes(False) + 2
+    assert n_rectangles(True) == n_rectangles(False) + 2
 
 
 def test_default_filters_fixations_only(tmp_path):
@@ -318,7 +322,7 @@ def test_stimulus_words_broadcast_and_aoi_xy(stimulus_words_df, aoi_fixations_df
     assert fixations["y"].tolist() == [75.0] * 4
 
     fig = sps.plot_scanpath(words, fixations, "7", "t1")
-    assert len(fig.data) > 0
+    assert mh.path_collection(fig, "Fixations") is not None
 
 
 def test_stimulus_words_without_fixations_get_synthetic_participant(stimulus_words_df):
@@ -387,7 +391,9 @@ def test_asymmetric_participant_reconciles_word_boxes():
     assert set(words_n["participant_id"]) == {data_module.SYNTHETIC_PARTICIPANT}
     # The boxes for the trial the picker offers ('(all)', 't1') are now reachable.
     fig = sps.plot_scanpath(words_n, fix_n, data_module.SYNTHETIC_PARTICIPANT, "t1")
-    assert len(fig.data) > 0
+    # re-keyed boxes render and the fixation layer is drawn
+    assert len(mh.rectangles(fig)) > 0
+    assert mh.path_collection(fig, "Fixations") is not None
 
 
 def test_frame_fingerprint_distinguishes_unhashable_columns():
@@ -476,7 +482,7 @@ def test_load_potec(potec_root):
     assert reader0["word_id"].tolist() == [1.0, 2.0, 1.0]
 
     fig = sps.plot_scanpath(words, fixations, "1", "b0", canvas_size=(1680, 1050))
-    assert len(fig.data) > 0
+    assert mh.path_collection(fig, "Fixations") is not None
 
 
 def test_load_potec_reader_subset(potec_root):

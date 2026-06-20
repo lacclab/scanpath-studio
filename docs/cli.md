@@ -22,9 +22,9 @@ compatibility.
 
 ## `render` — headless figures
 
-Render one trial's scanpath to a file without launching the app. **HTML** output
-is interactive and browser-free; **PNG / SVG / PDF** go through Kaleido and need
-a Chrome/Chromium binary (`plotly_get_chrome -y`).
+Render one trial's scanpath to a file without launching the app. All static
+formats — **HTML** (a self-contained SVG page) and **PNG / SVG / PDF** — render
+natively with matplotlib, so no Chrome/Chromium is needed.
 
 ```bash
 scanpath-studio render --sample --list-trials              # what's available

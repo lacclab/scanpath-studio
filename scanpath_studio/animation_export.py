@@ -1,29 +1,26 @@
-"""Render a Plotly scanpath animation to a shareable GIF or MP4 clip.
+"""Render a scanpath animation to a shareable GIF or MP4 clip.
 
-The **Animate** toggle (in the Scanpath Visualization control rail) builds a Plotly
-``go.Figure`` with one frame per fixation onset (see
-:func:`scanpath_studio.plots.make_scanpath_animation`). The
-interactive **HTML** export keeps that figure verbatim — play button, slider and
-all. This module is the non-interactive counterpart: it rasterizes the very same
-frames and encodes them into a GIF or MP4 you can drop into a slide deck, a paper,
-or a chat without needing a browser to replay it.
+The **Animate** toggle (in the Scanpath Visualization control rail) builds a
+:class:`scanpath_studio.plots.ScanpathAnimation` with one frame per fixation onset.
+The interactive **HTML** export embeds its ``to_jshtml`` player. This module is the
+non-interactive counterpart: it rasterizes the very same frames and encodes them
+into a GIF or MP4 you can drop into a slide deck, a paper, or a chat.
 
 How it stays faithful to what the user sees on screen:
 
-* **Same frames.** Each ``go.Frame`` is applied onto a frameless copy of the base
-  figure and rendered to PNG, so word boxes, true-to-scale labels, saccades,
-  order numbers and the orange current-fixation highlight all match the live view.
-* **Same clock.** The on-screen Play button advances every frame at one average
-  duration (``plots._anim_timeline``); we reproduce that exactly, so the clip's
-  runtime equals the playback time quoted on screen (``animation_playback_ms``).
-* **Same readout.** The slider's "Elapsed: X.Xs" value is re-drawn as a static
-  annotation per frame, since the interactive slider can't survive rasterization.
+* **Same frames.** Each frame is drawn by ``anim.draw_frame(k)`` (the exact closure
+  the on-screen player uses) and saved to PNG, so word boxes, true-to-scale labels,
+  saccades, order numbers and the orange current-fixation highlight all match.
+* **Same clock.** The player advances every frame at one average duration
+  (``plots._anim_timeline``); we reproduce that exactly, so the clip's runtime
+  equals the playback time quoted on screen (``animation_playback_ms``).
+* **Same readout.** The "Elapsed: X.Xs" readout is part of the animation figure and
+  updates per frame, so it rasterizes for free.
 
-Rendering goes through Kaleido (headless Chrome), the same engine the PNG/SVG/PDF
-exports use. A *single* browser is kept warm across all frames
-(``start_sync_server`` → ``calc_fig_sync`` → ``stop_sync_server``): the per-call
-``fig.to_image`` cold-starts Chrome every time (~10 s/frame), whereas a warm
-browser renders each frame in a fraction of a second.
+Rendering is fully in-process — matplotlib ``savefig`` per frame, no headless
+browser — so it's fast and needs no Chrome/Chromium. Only the encode half differs
+by format: Pillow for GIF, imageio-ffmpeg for MP4 (which still needs an ffmpeg
+binary, bundled via the ``imageio[ffmpeg]`` extra).
 """
 
 from __future__ import annotations
@@ -32,18 +29,13 @@ import io
 from typing import Callable, List, Optional, Tuple
 
 import numpy as np
-import plotly.graph_objects as go
+
+from . import mpl_render as mr
 
 # The interactive formats live elsewhere; these are the rasterized clip formats.
 VIDEO_FORMATS: Tuple[str, ...] = ("gif", "mp4")
 
 _MIME = {"gif": "image/gif", "mp4": "video/mp4"}
-
-# make_scanpath_animation reserves this many px of top margin for the play/slider
-# controls. With the controls stripped we reclaim it down to a slim band that
-# still fits the "Elapsed" annotation.
-_CONTROL_BAND_PX = 80
-_STATIC_TOP_MARGIN_PX = 28
 
 # Floor on a GIF frame delay: the format stores delays in centiseconds and many
 # viewers silently promote sub-20 ms delays to ~100 ms, so clamp here to keep
@@ -62,54 +54,13 @@ ProgressCallback = Callable[[int, int], None]
 class AnimationExportError(RuntimeError):
     """Frame rendering or encoding failed.
 
-    The most common cause is a missing Chrome/Chromium for Kaleido; the message
-    is surfaced to the user with a hint to fall back to the HTML export.
+    For MP4 the usual cause is a missing ffmpeg binary; the message is surfaced to
+    the user with a hint to fall back to GIF or the HTML export.
     """
 
 
 def mime_for(fmt: str) -> str:
     return _MIME[fmt.lower()]
-
-
-def _elapsed_labels(fig: go.Figure, n_frames: int) -> List[str]:
-    """Per-frame "elapsed reading time" labels, lifted from the slider steps.
-
-    ``_animation_time_slider`` already computes one ``"X.Xs"`` label per frame, so
-    we reuse them verbatim rather than recomputing onsets. Falls back to blanks if
-    the figure has no slider (e.g. an empty animation).
-    """
-    sliders = fig.layout.sliders
-    if sliders and sliders[0].steps:
-        labels = [step.label or "" for step in sliders[0].steps]
-        if len(labels) >= n_frames:
-            return list(labels[:n_frames])
-        return list(labels) + [""] * (n_frames - len(labels))
-    return [""] * n_frames
-
-
-def _static_base(fig: go.Figure) -> go.Figure:
-    """A frameless deep copy of ``fig`` with interactive controls removed.
-
-    The play/pause/restart buttons and the slider are meaningless in a rasterized
-    clip — and worse, they'd be burnt into every frame. ``update_layout`` can't
-    clear array layout properties (passing ``None`` is a no-op and ``[]`` doesn't
-    truncate the existing entries), so we assign the attributes directly. The
-    reserved control band is then reclaimed so the clip isn't topped by an empty
-    strip; a slim margin remains for the "Elapsed" annotation.
-    """
-    base = go.Figure(fig)
-    base.frames = ()
-    base.layout.updatemenus = []
-    base.layout.sliders = []
-    height = int(fig.layout.height or 600)
-    base.update_layout(
-        margin=dict(l=0, r=0, t=_STATIC_TOP_MARGIN_PX, b=0),
-        height=max(
-            height - (_CONTROL_BAND_PX - _STATIC_TOP_MARGIN_PX),
-            _STATIC_TOP_MARGIN_PX + 1,
-        ),
-    )
-    return base
 
 
 def _select_frames(n: int, max_frames: Optional[int]) -> List[int]:
@@ -126,96 +77,47 @@ def _select_frames(n: int, max_frames: Optional[int]) -> List[int]:
 
 
 def render_png_frames(
-    fig: go.Figure,
+    anim,
     *,
     scale: float = 1.0,
     show_elapsed: bool = True,
     frame_indices: Optional[List[int]] = None,
     progress_callback: Optional[ProgressCallback] = None,
 ) -> Tuple[List[bytes], Tuple[int, int]]:
-    """Rasterize the animation's frames to PNG bytes via one persistent Kaleido browser.
+    """Rasterize the animation's frames to PNG bytes with matplotlib (no browser).
 
-    Returns ``(png_bytes_per_frame, (width, height))``. ``frame_indices`` selects a
-    subset (for downsampling); defaults to every frame. ``progress_callback`` is
-    called ``(done, total)`` after each frame so the UI can drive a progress bar.
+    ``anim`` is a :class:`scanpath_studio.plots.ScanpathAnimation`. Each frame is
+    drawn by ``anim.draw_frame(k)`` and saved at the figure's pixel size × ``scale``
+    (a retina/poster multiplier). Returns ``(png_bytes_per_frame, (width, height))``;
+    ``frame_indices`` selects a subset (for downsampling). ``progress_callback`` is
+    called ``(done, total)`` after each frame. The "Elapsed" readout is part of the
+    figure and rasterizes for free.
 
-    Raises :class:`AnimationExportError` if the figure has no frames, Kaleido is
-    missing, the browser won't start, or a frame fails to render (e.g. no Chrome).
+    Raises :class:`AnimationExportError` if the animation has no frames.
     """
-    try:
-        import kaleido
-    except Exception as exc:  # pragma: no cover - import guard
-        raise AnimationExportError(
-            "Kaleido is not installed, so the animation can't be rasterized to "
-            "GIF/MP4. Use the HTML export instead, or `pip install kaleido`."
-        ) from exc
-
-    frames = list(fig.frames or ())
+    frames = list(anim.frames or [])
     if not frames:
         raise AnimationExportError("This animation has no frames to export.")
 
     indices = frame_indices if frame_indices is not None else list(range(len(frames)))
-    base = _static_base(fig)
-    width = int(fig.layout.width or 900)
-    height = int(base.layout.height)
-    elapsed = _elapsed_labels(fig, len(frames)) if show_elapsed else None
-
-    try:
-        kaleido.start_sync_server(silence_warnings=True)
-    except Exception as exc:
-        raise AnimationExportError(
-            f"Could not start the Kaleido browser for image export: {exc}. "
-            "PNG/GIF/MP4 export needs a Chrome/Chromium binary; the HTML export "
-            "needs no browser."
-        ) from exc
+    fig = anim.figure
+    base_w, base_h = mr.figure_px_size(fig)
+    out_w = int(round(base_w * scale))
+    out_h = int(round(base_h * scale))
 
     pngs: List[bytes] = []
-    try:
-        for done, k in enumerate(indices, start=1):
-            frame = frames[k]
-            for data_obj, trace_idx in zip(frame.data, frame.traces):
-                base.data[trace_idx].update(data_obj)
-            if elapsed is not None:
-                base.update_layout(
-                    annotations=[
-                        dict(
-                            text=f"Elapsed: {elapsed[k]}",
-                            x=0.99,
-                            y=1.0,
-                            xref="paper",
-                            yref="paper",
-                            xanchor="right",
-                            yanchor="bottom",
-                            showarrow=False,
-                            font=dict(size=14, color="#444"),
-                        )
-                    ]
-                )
-            try:
-                png = kaleido.calc_fig_sync(
-                    base,
-                    opts={
-                        "format": "png",
-                        "width": width,
-                        "height": height,
-                        "scale": scale,
-                    },
-                )
-            except Exception as exc:
-                raise AnimationExportError(
-                    f"Rendering frame {k + 1}/{len(frames)} failed: {exc}. "
-                    "Static image export needs a Chrome/Chromium browser (Kaleido)."
-                ) from exc
-            pngs.append(bytes(png))
-            if progress_callback is not None:
-                progress_callback(done, len(indices))
-    finally:
+    for done, k in enumerate(indices, start=1):
+        anim.draw_frame(k)
         try:
-            kaleido.stop_sync_server(silence_warnings=True)
-        except Exception:  # pragma: no cover - best-effort teardown
-            pass
+            pngs.append(mr.save_to_buffer(fig, "png", scale=scale))
+        except Exception as exc:  # pragma: no cover - render guard
+            raise AnimationExportError(
+                f"Rendering frame {k + 1}/{len(frames)} failed: {exc}."
+            ) from exc
+        if progress_callback is not None:
+            progress_callback(done, len(indices))
 
-    return pngs, (width, height)
+    return pngs, (out_w, out_h)
 
 
 def _load_rgb_frames(pngs: List[bytes]) -> List["np.ndarray"]:
@@ -317,7 +219,7 @@ def encode_mp4(pngs: List[bytes], frame_duration_ms: float) -> bytes:
 
 
 def export_animation(
-    fig: go.Figure,
+    anim,
     *,
     fmt: str,
     frame_duration_ms: float,
@@ -326,20 +228,19 @@ def export_animation(
     max_frames: Optional[int] = None,
     progress_callback: Optional[ProgressCallback] = None,
 ) -> bytes:
-    """Render a scanpath-animation figure to GIF or MP4 bytes.
+    """Render a scanpath animation to GIF or MP4 bytes.
 
     Args:
-        fig: the figure from :func:`make_scanpath_animation` (must have ``.frames``).
+        anim: a :class:`scanpath_studio.plots.ScanpathAnimation` (must have frames).
         fmt: ``"gif"`` or ``"mp4"``.
         frame_duration_ms: uniform per-frame duration — pass the same average the
             tab quotes (``animation_playback_ms(...) / n_frames``) so the clip's
             runtime matches the on-screen Play.
-        scale: Kaleido render scale (1.0 = on-screen px; <1 is faster/smaller,
-            >1 is crisper/larger).
-        show_elapsed: draw the "Elapsed: X.Xs" readout in the top margin.
+        scale: render scale (1.0 = on-screen px; <1 is faster/smaller, >1 crisper).
+        show_elapsed: accepted for API compatibility; the readout is drawn by the
+            animation figure itself.
         max_frames: cap the number of rendered frames by even downsampling; the
-            frame duration is scaled up to keep the total runtime unchanged. The
-            UI uses this to bound render time on very long trials.
+            frame duration is scaled up to keep the total runtime unchanged.
         progress_callback: ``(done, total)`` after each rendered frame.
 
     Raises:
@@ -352,7 +253,7 @@ def export_animation(
             f"Unsupported format {fmt!r}; expected one of {VIDEO_FORMATS}."
         )
 
-    n_total = len(fig.frames or ())
+    n_total = len(anim.frames or [])
     indices = _select_frames(n_total, max_frames)
     # Preserve total runtime when downsampling: fewer frames, each held longer.
     effective_duration = frame_duration_ms
@@ -360,7 +261,7 @@ def export_animation(
         effective_duration = frame_duration_ms * n_total / len(indices)
 
     pngs, _size = render_png_frames(
-        fig,
+        anim,
         scale=scale,
         show_elapsed=show_elapsed,
         frame_indices=indices,

@@ -108,8 +108,9 @@ sps.save_figure(fig, "scanpath.png")                       # .html / .png / .svg
 measures = sps.compute_word_metrics(words, fixations)      # FFD / FPRT / RPD / TFD …
 ```
 
-HTML export is browser-free; PNG/SVG/PDF/GIF/MP4 go through Kaleido (run
-`plotly_get_chrome -y` once). See `scanpath-studio render --help` for all flags.
+Static export (PNG/SVG/PDF/HTML) and GIF are fully browser-free; MP4 needs
+ffmpeg, bundled via the `imageio[ffmpeg]` extra. See
+`scanpath-studio render --help` for all flags.
 
 ## Run from source
 

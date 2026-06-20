@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Migrated the visualization layer from Plotly to matplotlib.** Every figure
+  builder in `plots.py` (scanpath, heatmaps, comparison, and the research charts)
+  now returns a `matplotlib.figure.Figure`; a new `mpl_render.py` module holds the
+  matplotlib rendering helpers. Static export (PNG/SVG/PDF) and the GIF/MP4
+  animation rasterizer are now native matplotlib `savefig` — fully in-process, so
+  they no longer need Kaleido or a headless Chrome/Chromium. `.html` static export
+  is a self-contained SVG page; the animation's `.html` is an interactive
+  matplotlib HTML5 player. Removed the `chromium` system dependency (the repo-root
+  `packages.txt`) and the `plotly_get_chrome` step; MP4 still needs ffmpeg but it
+  stays bundled via the `imageio[ffmpeg]` extra. Dependencies swap `plotly` +
+  `kaleido` for `matplotlib`.
+
 ## [0.22.0] - 2026-06-19
 
 ### Changed

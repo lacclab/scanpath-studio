@@ -27,7 +27,8 @@ scanpath_studio/
 ├─ controls.py       sidebar viz controls + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions) + geometry helpers (line clustering, in-text test)
-├─ plots.py          Plotly figure builders (scanpath, animation, comparison, bar, histogram); background color, out-of-text + by-line fixation options, hollow fixation markers, dashed/dotted saccades, base + highlighted text colors, and per-scanpath comparison styling (the comparison builders now honor the fixation/saccade viz controls, not just text/boxes)
+├─ plots.py          matplotlib figure builders (scanpath, animation, comparison, bar, histogram); background color, out-of-text + by-line fixation options, hollow fixation markers, dashed/dotted saccades, base + highlighted text colors, and per-scanpath comparison styling (the comparison builders now honor the fixation/saccade viz controls, not just text/boxes)
+├─ mpl_render.py     matplotlib rendering helpers: fixed render DPI, screen-px↔point unit conversions, Plotly-compatible color/colorscale/dash parsing, exact-pixel figure scaffolding
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
 ├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source)
@@ -185,7 +186,8 @@ first existing column.
 1. Add a `make_*_figure` function in `plots.py` using the helpers
    `_compute_axis_ranges`, `_compute_marker_sizes`, `_saccade_segments`,
    `_add_word_label_trace`.
-2. Wire it into a tab via `tabs.py` with a Plotly chart call.
+2. Wire it into a tab via `tabs.py` (research charts go through `st.pyplot`;
+   spatial plots use the true-to-scale SVG embed, `tabs._render_true_scale_chart`).
 3. Add a smoke test in `tests/test_smoke.py` that builds the figure against
    the bundled sample.
 

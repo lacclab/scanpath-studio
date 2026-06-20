@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-import plotly.graph_objects as go
 import pytest
+from matplotlib.figure import Figure
+
+from tests import mpl_helpers as mh
 
 from scanpath_studio.data import (
     compute_word_metrics,
@@ -14,6 +16,7 @@ from scanpath_studio.data import (
     normalize_words,
 )
 from scanpath_studio.plots import (
+    ScanpathAnimation,
     make_comparison_figure,
     make_fixation_duration_histogram,
     make_scanpath_animation,
@@ -117,13 +120,14 @@ class TestPipelineFigures:
             fixation_color_range=None,
             heatmap_range=None,
         )
-        assert isinstance(fig, go.Figure)
-        assert len(fig.data) >= 1, "Expected at least one trace"
+        assert isinstance(fig, Figure)
+        assert mh.n_drawn_layers(fig) >= 1, "Expected at least one drawn layer"
 
     def test_saccades_collapsed_into_single_trace(self, normalized_demo):
         """Regression: the per-saccade-trace explosion (one trace per saccade)
-        was a known perf bug. A trial with N fixations should now yield at
-        most a small constant number of traces, not O(N)."""
+        was a known perf bug. A trial with N fixations should now collapse all
+        saccades into a SINGLE LineCollection, so the number of drawn layers
+        stays a small constant, not O(N)."""
         words, fixations = normalized_demo
         biggest = fixations.groupby(["participant_id", "trial_id"]).size().idxmax()
         pid, tid = biggest
@@ -156,9 +160,21 @@ class TestPipelineFigures:
             fixation_color_range=None,
             heatmap_range=None,
         )
-        # Expect (in any order): saccades trace (1) + fixations trace (1) + optional word labels.
-        # Never one-per-saccade.
-        assert len(fig.data) <= 5, f"Too many traces: {len(fig.data)}"
+        ax = mh.data_axes(fig)
+        # All saccades collapse into exactly ONE LineCollection, never N lines.
+        assert mh.line_collection(fig, "saccades") is not None, (
+            "Expected a single 'saccades' LineCollection"
+        )
+        n_saccade_collections = sum(
+            1 for c in ax.collections if c.get_label() == "saccades"
+        )
+        assert n_saccade_collections == 1, (
+            f"Saccades should be one LineCollection, got {n_saccade_collections}"
+        )
+        # The total layer count stays a small constant regardless of N fixations.
+        assert mh.n_drawn_layers(fig) <= 5, (
+            f"Too many drawn layers: {mh.n_drawn_layers(fig)}"
+        )
 
     def test_word_measure_bar(self, normalized_demo):
         words, fixations = normalized_demo
@@ -190,7 +206,7 @@ class TestPipelineFigures:
             base_font_size=14,
             font_family="monospace",
         )
-        assert isinstance(fig, go.Figure)
+        assert isinstance(fig, Figure)
 
     def test_fixation_duration_histogram(self, normalized_demo):
         _, fixations = normalized_demo
@@ -200,7 +216,7 @@ class TestPipelineFigures:
             base_font_size=14,
             font_family="monospace",
         )
-        assert isinstance(fig, go.Figure)
+        assert isinstance(fig, Figure)
 
     def test_animation_has_frames(self, normalized_demo):
         words, fixations = normalized_demo
@@ -210,7 +226,7 @@ class TestPipelineFigures:
         tf = fixations[
             (fixations["participant_id"] == pid) & (fixations["trial_id"] == tid)
         ]
-        fig = make_scanpath_animation(
+        anim = make_scanpath_animation(
             tw,
             tf,
             canvas_width=1024,
@@ -218,7 +234,9 @@ class TestPipelineFigures:
             base_font_size=14,
             font_family="monospace",
         )
-        assert len(fig.frames) == len(tf), (
+        assert isinstance(anim, ScanpathAnimation)
+        assert isinstance(anim.figure, Figure)
+        assert len(anim.frames) == len(tf), (
             "Animation should have one frame per fixation"
         )
 
@@ -242,7 +260,7 @@ class TestPipelineFigures:
             base_font_size=14,
             layout="overlay",
         )
-        assert isinstance(fig, go.Figure)
+        assert isinstance(fig, Figure)
 
     def test_marker_sizes_consistent_across_figure_types(self, normalized_demo):
         """The same fixation should render at the same size in single-trial

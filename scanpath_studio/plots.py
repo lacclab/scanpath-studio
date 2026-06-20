@@ -1,13 +1,37 @@
-"""Plotly figure builders for scanpath visualization."""
+"""Matplotlib figure builders for scanpath visualization.
+
+These builders replace the former Plotly implementation; they return
+``matplotlib.figure.Figure`` objects (and a :class:`ScanpathAnimation` for the
+replay). The *pure* geometry/sizing/clock helpers (axis ranges, the true-to-scale
+word-label font math, marker sizes, saccade arrows, the animation timeline) are
+backend-agnostic and unchanged. The rendering primitives — exact-pixel figure
+scaffolding and the screen-px↔point unit conversions that keep the word labels
+matched to their boxes — live in :mod:`scanpath_studio.mpl_render`.
+
+True-to-scale text, recap: word labels are sized in *data* px so each glyph fills
+the same physical fraction of its word box, then converted to the figure's screen
+px via the data→screen ``scale``. The equal-aspect plot region is pinned to an
+exact ``fitted_w × fitted_h`` pixel box (``ax.set_aspect('equal')`` + the fitted
+size), and colorbars/legends/animation controls are reserved *outside* that box
+so they never shrink it — the matplotlib analog of Plotly's
+``automargin=False`` + reserved margins.
+"""
 
 from __future__ import annotations
 
-from typing import Iterable, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Callable, Iterable, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
+from matplotlib.cm import ScalarMappable
+from matplotlib.collections import LineCollection
+from matplotlib.colors import Normalize
+from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
 
+from . import mpl_render as mr
 from .constants import (
     CANVAS_PAD_FRACTION,
     CANVAS_PAD_MIN_PX,
@@ -30,62 +54,27 @@ from .constants import (
 
 COLORBAR_LEN_FRACTION = 0.33
 
-
-def _sample_colorscale_colors(
-    values, colorscale: str, cmin: Optional[float], cmax: Optional[float]
-) -> object:
-    """Map numeric values to concrete CSS colours via a named Plotly colorscale.
-
-    Used for hollow markers: Plotly can render a colorscale on a marker *fill*
-    but not on its outline, so the gradient is sampled to literal colours that
-    can sit on ``marker.line.color``. Falls back to a single outline colour if
-    sampling is unavailable.
-    """
-    try:
-        from plotly.colors import sample_colorscale
-    except Exception:
-        return FIX_MARKER_OUTLINE
-    vals = pd.to_numeric(pd.Series(list(values)), errors="coerce")
-    lo = float(cmin) if cmin is not None else float(vals.min())
-    hi = float(cmax) if cmax is not None else float(vals.max())
-    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
-        norm = [0.5] * len(vals)
-    else:
-        norm = ((vals.clip(lo, hi) - lo) / (hi - lo)).fillna(0.0).tolist()
-    try:
-        return sample_colorscale(colorscale, norm)
-    except Exception:
-        return FIX_MARKER_OUTLINE
+# Draw-order (zorder) for the layered spatial scene, lowest first. Mirrors the
+# Plotly layer order (heatmap below, boxes, labels, saccades, fixations, order
+# numbers, out-of-text, critical-span border, canvas border on top).
+_Z_HEATMAP = 0.5
+_Z_BOX = 1.0
+_Z_LABEL = 1.5
+_Z_SACCADE = 2.0
+_Z_ARROW = 2.3
+_Z_RAW = 2.5
+_Z_FIX = 3.0
+_Z_OOT = 3.5
+_Z_ORDER = 4.0
+_Z_CURRENT = 4.5
+_Z_CRITICAL = 5.0
+_Z_BORDER = 6.0
 
 
-def _make_hollow(marker: dict) -> dict:
-    """Return a copy of a fixation marker dict rendered as outline-only.
-
-    The fill colour is moved onto the outline (so the colour is preserved) and
-    the fill itself is made transparent. Numeric colorscale colours are sampled
-    to concrete CSS colours because Plotly can't map a colorscale onto an
-    outline. The colorbar is dropped in hollow mode (it needs the coloured fill).
-    """
-    m = dict(marker)
-    color = m.get("color")
-    colorscale = m.get("colorscale")
-    if colorscale is not None and color is not None and not isinstance(color, str):
-        outline_color = _sample_colorscale_colors(
-            color, colorscale, m.get("cmin"), m.get("cmax")
-        )
-    else:
-        outline_color = color if color is not None else FIX_MARKER_OUTLINE
-    line = dict(m.get("line") or {})
-    line["color"] = outline_color
-    line["width"] = HOLLOW_OUTLINE_WIDTH
-    m["line"] = line
-    m["color"] = "rgba(0,0,0,0)"
-    m["colorscale"] = None
-    m["showscale"] = False
-    m["colorbar"] = None
-    return m
-
-
+# ---------------------------------------------------------------------------
+# Pure geometry / sizing helpers (backend-agnostic — unchanged across the
+# Plotly→matplotlib migration; the true-to-scale text contract lives here).
+# ---------------------------------------------------------------------------
 def _compute_axis_ranges(
     canvas_width: int,
     canvas_height: int,
@@ -137,11 +126,9 @@ def _compute_axis_ranges(
 
 
 # Cap the *fixed* render size so the true-to-scale plot (rendered at exactly
-# these pixels via tabs._render_true_scale_chart) fits a typical research display
-# without horizontal scrolling. Aspect ratio is preserved when shrinking — both
-# dims scale together, so boxes/text/fixations keep one true scale. A wider
-# monitor just leaves margin (the plot is "narrower than the column", never
-# stretched); a narrower window scrolls rather than distorting.
+# these pixels and uniformly CSS-scaled to the column in the app) fits a typical
+# research display without horizontal scrolling. Aspect ratio is preserved when
+# shrinking — both dims scale together, so boxes/text/fixations keep one scale.
 _DISPLAY_MAX_HEIGHT = 650
 _DISPLAY_MAX_WIDTH = 900
 
@@ -153,14 +140,11 @@ def _fit_display_size(
     y_range: list,
     spatial_axes: bool,
 ) -> Tuple[int, int]:
-    """Return (width, height) for `fig.update_layout` so the plot fits onscreen.
+    """Return the (width, height) px for the equal-aspect plot region.
 
-    With `scaleanchor="x", scaleratio=1` the plot domain shrinks to the data
-    aspect ratio, leaving large blank vertical strips when the figure box is
-    the full monitor height. We match the figure box to the actual plot
-    domain — and additionally clamp both dims so the whole plot fits in one
-    viewport without scrolling. Falls back to (canvas_w, canvas_h) when axes
-    aren't spatial or the data range is degenerate.
+    The plot region is matched to the data aspect ratio (so equal aspect leaves
+    no large blank strips) and clamped so the whole plot fits one viewport.
+    Falls back to (canvas_w, canvas_h) when axes aren't spatial or degenerate.
     """
     if not spatial_axes:
         return canvas_width, canvas_height
@@ -170,7 +154,6 @@ def _fit_display_size(
         return canvas_width, canvas_height
     aspect = x_span / y_span
     w, h = canvas_width, int(round(canvas_width / aspect))
-    # Shrink (preserving aspect) until both dims fit the viewport caps.
     if h > _DISPLAY_MAX_HEIGHT:
         h = _DISPLAY_MAX_HEIGHT
         w = int(round(h * aspect))
@@ -181,55 +164,15 @@ def _fit_display_size(
 
 
 # Extra figure size (px) reserved OUTSIDE the equal-aspect plot region for a
-# right-side colorbar or a top legend. Without this, Plotly's automargin shrinks
-# the scaleanchor'd plot domain to fit them — and because the word labels are
-# sized for the full fitted_w x fitted_h plot region, a shrunken plot leaves the
-# text overflowing the boxes (the "colorbar / discrete colour legend shrinks the
-# plot and breaks the aspect ratio" bug). Mirroring the _CONTROLS_MARGIN_PX trick
-# the animation uses for its transport controls, we instead grow the figure by
-# the reserve and pin it as an explicit margin, so the plot region stays exactly
-# fitted_w x fitted_h whether or not a colorbar/legend is shown.
+# right-side colorbar or a top legend, so they never shrink the plot (which is
+# sized for the true-to-scale labels — the "colorbar shrinks the plot" bug).
 _COLORBAR_RESERVE_PX = 160
 _LEGEND_RESERVE_PX = 60
-# Top reserve for the overlay-comparison figure's title + A/B legend (same idea
-# as _LEGEND_RESERVE_PX, but the title needs a touch more room).
+# Top reserve for the overlay-comparison figure's title + A/B legend.
 _OVERLAY_TOP_PX = 64
 
-
-def _decoration_margins(
-    fitted_w: int,
-    fitted_h: int,
-    *,
-    colorbar: bool,
-    legend: bool,
-    bottom: int = 0,
-) -> dict:
-    """Grow a spatial figure so a right colorbar / top legend sit in reserved
-    margin instead of stealing space from the equal-aspect plot region.
-
-    Returns ``{"width", "height", "margin"}`` for ``fig.update_layout``: the plot
-    region stays ``fitted_w x fitted_h`` (so the true-to-scale word labels keep
-    matching the boxes); ``bottom`` reserves additional space below the plot for
-    transport controls (the animation figure).
-    """
-    right = _COLORBAR_RESERVE_PX if colorbar else 0
-    top = _LEGEND_RESERVE_PX if legend else 0
-    return {
-        "width": fitted_w + right,
-        "height": fitted_h + top + bottom,
-        "margin": dict(l=0, r=right, t=top, b=bottom),
-    }
-
-
-# Text in Plotly is sized in screen pixels with no native "data unit" mode, so
-# to keep word labels true-to-scale we convert a real (monitor-pixel) font size
-# into the figure's screen pixels using the same scale the boxes/fixations use.
 _MIN_LABEL_PX = 1.0
-
 # Advance-width / em of a typical monospaced font (DejaVu Sans Mono ≈ 0.6).
-# Reading experiments use monospaced fonts (OneStop included), so we can cap the
-# label size by the box *width* — stopping long words from colliding when the
-# on-screen font is a touch wider than the one the experiment was rendered in.
 _MONO_ASPECT = 0.6
 _WIDTH_FIT_MARGIN = 0.92  # leave a sliver of horizontal padding inside each box
 
@@ -237,10 +180,9 @@ _WIDTH_FIT_MARGIN = 0.92  # leave a sliver of horizontal padding inside each box
 def _width_fit_font(words: pd.DataFrame) -> Optional[float]:
     """Largest font (data px) at which every word still fits its box width.
 
-    Word boxes are drawn around the rendered text, so ``box_width / n_chars`` is
-    the per-character advance; dividing by the monospace aspect recovers the em.
-    The tightest words bind, so we take a low quantile (robust to one odd box).
-    Returns None when there's no text/width to measure.
+    ``box_width / n_chars`` is the per-character advance; dividing by the
+    monospace aspect recovers the em. The tightest words bind, so we take a low
+    quantile (robust to one odd box). None when there's no text/width.
     """
     if "width" not in words.columns or "text" not in words.columns:
         return None
@@ -256,7 +198,7 @@ def _width_fit_font(words: pd.DataFrame) -> Optional[float]:
 def _display_scale(x_range: list, y_range: list, fitted_w: int, fitted_h: int) -> float:
     """Screen px per data unit for a fixed-size, equal-aspect spatial plot.
 
-    With ``scaleratio=1`` the x and y mappings are identical; we take the min so
+    With equal aspect the x and y mappings are identical; we take the min so
     rounding can never make text/markers sized through this overflow the boxes.
     Returns 1.0 for degenerate ranges.
     """
@@ -277,21 +219,12 @@ def _word_label_font_px(
 ) -> float:
     """Word-label font size in *screen* px so the text stays true-to-scale.
 
-    The experiment's font lives in monitor pixels. To keep the rendered glyphs
-    the same physical fraction of the (data-space) word boxes at any display
-    size, the font is expressed in data px and multiplied by ``scale`` (screen
-    px per data unit):
-
-    - ``scale_text_to_boxes`` (default): one line of text fills
-      ``1 / line_spacing`` of the line pitch, where the pitch is the median word
-      box height from the data. For OneStop the boxes tile the lines
-      (height == pitch) and ``line_spacing == 3`` (one blank line above + below),
-      so the height budget is box_height / 3. The size is *also* capped so the
-      longest words still fit their box width (see :func:`_width_fit_font`), which
-      keeps the default monospaced font from colliding; the smaller of the two
-      wins.
-    - otherwise / no usable boxes: ``manual_font_px`` is treated as the real
-      monitor font size and scaled the same way.
+    ``scale_text_to_boxes`` (default): one line of text fills ``1 / line_spacing``
+    of the line pitch (the median word-box height), also capped so the longest
+    words fit their box width (:func:`_width_fit_font`); the smaller wins.
+    Otherwise ``manual_font_px`` is treated as the real monitor font and scaled
+    the same way. The returned value is multiplied by ``scale`` (screen px per
+    data unit); the caller converts px→points via :func:`mpl_render.px_to_pt`.
     """
     font_data_px = float(manual_font_px)
     if scale_text_to_boxes and not words.empty and "height" in words.columns:
@@ -321,13 +254,12 @@ _QUALITATIVE_PALETTE = [
 def _resolve_marker_colors(
     color_data: Optional[pd.Series], is_numeric_color: bool
 ) -> Tuple[object, list]:
-    """Return (marker_color, category_legend) for the fixation scatter trace.
+    """Return (marker_color, category_legend) for the fixation scatter.
 
-    - Numeric color_data is passed straight through (Plotly maps it via colorscale).
-    - Categorical color_data is mapped to a discrete palette so the picker has
-      visible effect; the returned legend is a list of (category, hex) pairs the
-      caller can render as legend-only scatter traces.
-    - Missing / unmappable color_data falls back to the first palette color.
+    - Numeric color_data is passed straight through (mapped via colorscale).
+    - Categorical color_data maps to a discrete palette; the returned legend is a
+      list of (category, hex) pairs the caller renders as legend proxies.
+    - Missing color_data falls back to the first palette color.
     """
     if color_data is None:
         return _QUALITATIVE_PALETTE[0], []
@@ -347,7 +279,7 @@ def _resolve_marker_colors(
 def _compute_marker_sizes(
     durations: pd.Series, size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
 ) -> np.ndarray:
-    """Map fixation durations to marker sizes by linear interpolation."""
+    """Map fixation durations to marker *pixel diameters* by linear interpolation."""
     durations = pd.to_numeric(durations, errors="coerce").fillna(0)
     d_min, d_max = float(durations.min()), float(durations.max())
     min_size, max_size = size_range
@@ -359,7 +291,11 @@ def _compute_marker_sizes(
 def _saccade_segments(
     fix_df: pd.DataFrame, x_col: str, y_col: str
 ) -> Tuple[list, list]:
-    """Return concatenated x/y arrays separated by None for a single saccade trace."""
+    """Return concatenated x/y arrays separated by None for a single saccade trace.
+
+    Kept for backward compatibility / callers that want the flat form; the
+    matplotlib builders use :func:`_saccade_segment_pairs` (a LineCollection).
+    """
     if len(fix_df) < 2:
         return [], []
     ordered = fix_df.sort_values("timestamp_ms")
@@ -373,6 +309,21 @@ def _saccade_segments(
     return xs, ys
 
 
+def _saccade_segment_pairs(fix_df: pd.DataFrame, x_col: str, y_col: str) -> list:
+    """Return ``[[(x0,y0),(x1,y1)], …]`` segments for one ``LineCollection``.
+
+    Drawing every saccade as a single ``LineCollection`` (rather than N lines)
+    keeps the artist count constant — the matplotlib analog of the old
+    one-trace-for-all-saccades perf contract.
+    """
+    if len(fix_df) < 2:
+        return []
+    ordered = fix_df.sort_values("timestamp_ms")
+    xs = ordered[x_col].tolist()
+    ys = ordered[y_col].tolist()
+    return [[(xs[i], ys[i]), (xs[i + 1], ys[i + 1])] for i in range(len(ordered) - 1)]
+
+
 # Saccades shorter than this fraction of the fixation-extent diagonal get no
 # direction arrow — their heading is sub-pixel noise (refixations on one word).
 _ARROW_MIN_LEN_FRAC = 0.005
@@ -380,24 +331,21 @@ _ARROW_MIN_LEN_FRAC = 0.005
 
 def _saccade_arrow_markers(
     fix_df: pd.DataFrame, x_col: str, y_col: str
-) -> Tuple[list, list, list]:
-    """Arrowhead position + rotation for each saccade, for a marker trace.
+) -> Tuple[list, list, list, list]:
+    """Arrowhead position + direction for each saccade.
 
-    Returns (mid_x, mid_y, angle_deg) with one entry per consecutive-fixation
-    segment: a marker at the segment midpoint, rotated to point along the gaze
-    direction. Angles follow Plotly's ``marker.angle`` convention (degrees
-    clockwise from "up") and account for the reversed y-axis — data y grows
-    downward on screen — so they read correctly on the plot.
+    Returns ``(mid_x, mid_y, dir_x, dir_y)`` with one entry per consecutive
+    fixation segment: a point at the segment midpoint and a *unit direction
+    vector* (in data space) pointing along the gaze. matplotlib's ``quiver`` and
+    inverted y-axis render the data-space vector correctly on screen, so no
+    angle convention is needed. Micro-saccades (sub-pixel, scaled to the data
+    extent) and zero-length segments are dropped.
     """
     if len(fix_df) < 2:
-        return [], [], []
+        return [], [], [], []
     ordered = fix_df.sort_values("timestamp_ms")
     xv = pd.to_numeric(ordered[x_col], errors="coerce").to_numpy()
     yv = pd.to_numeric(ordered[y_col], errors="coerce").to_numpy()
-    # Suppress arrowheads on micro-saccades: a sub-pixel refixation has a
-    # well-defined midpoint but its direction is just noise, so a full-size
-    # arrow would point a random way. Threshold scales with the data extent so
-    # it's dataset-agnostic.
     finite = np.isfinite(xv) & np.isfinite(yv)
     if finite.any():
         x_ext = float(np.nanmax(xv[finite]) - np.nanmin(xv[finite]))
@@ -407,7 +355,8 @@ def _saccade_arrow_markers(
         min_len = 0.0
     mid_x: list = []
     mid_y: list = []
-    angles: list = []
+    dir_x: list = []
+    dir_y: list = []
     for i in range(len(ordered) - 1):
         x0, y0, x1, y1 = xv[i], yv[i], xv[i + 1], yv[i + 1]
         if not np.isfinite((x0, y0, x1, y1)).all():
@@ -418,13 +367,19 @@ def _saccade_arrow_markers(
             continue
         mid_x.append((x0 + x1) / 2.0)
         mid_y.append((y0 + y1) / 2.0)
-        # marker.angle is clockwise from up; screen-up is decreasing data y
-        # (the y-axis is drawn reversed), so negate dy.
-        angles.append(float(np.degrees(np.arctan2(dx, -dy))))
-    return mid_x, mid_y, angles
+        dir_x.append(float(dx / seg_len))
+        dir_y.append(float(dy / seg_len))
+    return mid_x, mid_y, dir_x, dir_y
 
 
 def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
+    """Return backend-neutral rect specs (one per word box).
+
+    Each spec is ``{type:'rect', x0, y0, x1, y1, line, fillcolor}``; the
+    matplotlib builders turn them into ``Rectangle`` patches via
+    :func:`_add_rect_shapes`. The neutral dict is kept so the spec is shared and
+    testable without a backend.
+    """
     shapes = []
     for row in words.itertuples():
         x0, y0 = row.x, row.y
@@ -443,25 +398,21 @@ def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
     return shapes
 
 
-# Bold-frame overlay for critical-span words; rendered on top of regular word
-# boxes only when the trial was shown with a preview question (Hunting condition).
 _CRITICAL_FRAME_COLOR = "#000000"  # black — high-contrast frame, readable over heatmaps
 _CRITICAL_FRAME_WIDTH = 2
 _CRITICAL_TEXT_COLOR = (
-    HIGHLIGHTED_TEXT_COLOR  # dark pink — used when critical_span_style="Mark text"
+    HIGHLIGHTED_TEXT_COLOR  # dark pink — for critical_span_style="Mark text"
 )
 
 
 def build_critical_span_overlay(
     words: pd.DataFrame, column: str = "is_in_aspan"
 ) -> list:
-    """Return outline shapes for the highlighted span (``column``, default the
-    OneStop answer span ``is_in_aspan``).
+    """Return outline rect specs for the highlighted span (``column``).
 
-    Each visual line that contains highlighted words gets its own outline
-    rectangle, going from the *first* to the *last* highlighted word on that
-    line (not the whole line). Returns [] when the column is missing or no
-    words match.
+    One outline per visual line that contains highlighted words, from the first
+    to the last highlighted word on that line. Lines are clustered by y (the
+    source ``line_idx`` is often constant). Returns [] when no words match.
     """
     if not column or column not in words.columns:
         return []
@@ -470,10 +421,6 @@ def build_critical_span_overlay(
         return []
     span = words[mask].copy()
 
-    # Cluster words into visual lines by y. `line_idx` upstream is often a
-    # constant (no real per-word line numbers in OneStop IA exports), so we
-    # group by y with a tolerance of ~half a word-height: rows whose y jumps
-    # by more than that are on a new line.
     typical_h = float(span["height"].median() or 1.0)
     y_sorted = span["y"].sort_values()
     line_ids = (y_sorted.diff().fillna(0) > typical_h * 0.5).cumsum()
@@ -500,61 +447,357 @@ def build_critical_span_overlay(
     return shapes
 
 
-def _add_word_label_trace(
-    fig: go.Figure,
+# ---------------------------------------------------------------------------
+# matplotlib drawing primitives (shared by the spatial builders)
+# ---------------------------------------------------------------------------
+def _as_color_array(marker_color):
+    """Normalise a colour (single string) or list of colours to a matplotlib
+    facecolor argument — RGBA array for a list, passthrough for a scalar."""
+    if isinstance(marker_color, (list, tuple, np.ndarray, pd.Series)) and not (
+        isinstance(marker_color, str)
+    ):
+        return np.array([mr.to_mpl_color(c) for c in marker_color])
+    return mr.to_mpl_color(marker_color)
+
+
+def _add_rect_shapes(ax, shapes: list, *, zorder: float) -> None:
+    """Draw backend-neutral rect specs (from build_word_boxes / overlays) as
+    ``Rectangle`` patches in data coords. Honours each spec's fill/line/opacity;
+    ``layer='above'`` bumps the zorder above regular boxes."""
+    for shp in shapes:
+        x0, y0, x1, y1 = shp["x0"], shp["y0"], shp["x1"], shp["y1"]
+        line = shp.get("line") or {}
+        lw = mr.px_to_pt(line.get("width", 1))
+        edge = mr.to_mpl_color(line.get("color", WORD_BOX_COLOR))
+        face = mr.to_mpl_color(shp.get("fillcolor"), default="none")
+        z = zorder + (0.5 if shp.get("layer") == "above" else 0.0)
+        ax.add_patch(
+            Rectangle(
+                (x0, y0),
+                x1 - x0,
+                y1 - y0,
+                facecolor=face if face is not None else "none",
+                edgecolor=edge,
+                linewidth=lw if lw > 0 else 0,
+                alpha=shp.get("opacity"),
+                zorder=z,
+            )
+        )
+
+
+def _draw_canvas_border(ax, x_range, y_range) -> None:
+    """The thin black plot border, drawn as a data-space rectangle (Plotly drew
+    it as a layout shape; matplotlib hides the spines and draws this instead)."""
+    ax.add_patch(
+        Rectangle(
+            (x_range[0], y_range[1]),
+            x_range[1] - x_range[0],
+            y_range[0] - y_range[1],
+            facecolor="none",
+            edgecolor="#000000",
+            linewidth=mr.px_to_pt(1),
+            zorder=_Z_BORDER,
+            label="canvas-border",
+        )
+    )
+
+
+def _draw_word_labels(
+    ax,
     words: pd.DataFrame,
-    base_font_size: int,
+    font_px: float,
     font_family: str,
-    row: Optional[int] = None,
-    col: Optional[int] = None,
+    *,
     highlight_column: Optional[str] = None,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = _CRITICAL_TEXT_COLOR,
-) -> None:
-    if words.empty or "text" not in words.columns:
-        return
-    customdata = None
-    hover = "Word %{text}<extra></extra>"
-    if "word_id" in words.columns:
-        from .measures import cluster_word_lines
+    zorder: float = _Z_LABEL,
+) -> list:
+    """Draw word labels centred in each box, sized true-to-scale.
 
-        # The source ``line_idx`` is often a constant (OneStop IA exports rarely
-        # carry a real per-word line number), so infer the visual line from
-        # word-box geometry — same clustering the by-line coloring uses — and
-        # show it 1-based.
-        line_display = (cluster_word_lines(words) + 1).rename("line")
-        customdata = pd.concat([words["word_id"], line_display], axis=1)
-        hover = (
-            "Word %{text}<br>Word ID %{customdata[0]}"
-            "<br>Line %{customdata[1]}<extra></extra>"
-        )
-    # Per-word text color: the highlight colour for highlighted words when the
-    # caller asks for "Mark text" (``highlight_column`` set), the base text
-    # colour otherwise. Both are configurable from the sidebar.
+    ``font_px`` is the screen-px size from :func:`_word_label_font_px`; it is
+    converted to points so a save at :data:`mpl_render.DPI` renders the glyph at
+    that pixel size. Returns the list of ``Text`` artists.
+    """
+    if words.empty or "text" not in words.columns:
+        return []
+    fontsize_pt = mr.px_to_pt(font_px)
     if highlight_column and highlight_column in words.columns:
         critical_mask = words[highlight_column].fillna(False).astype(bool)
-        label_color = [
-            highlight_text_color if is_crit else text_color for is_crit in critical_mask
-        ]
     else:
-        label_color = text_color
-    trace = go.Scatter(
-        x=words["x"] + words["width"] / 2,
-        y=words["y"] + words["height"] / 2,
-        text=words["text"],
-        mode="text",
-        showlegend=False,
-        textfont=dict(color=label_color, size=base_font_size, family=font_family),
-        hovertemplate=hover,
-        customdata=customdata,
-        name="words",
+        critical_mask = None
+    texts = []
+    xs = words["x"] + words["width"] / 2
+    ys = words["y"] + words["height"] / 2
+    for (idx, row), cx, cy in zip(words.iterrows(), xs, ys):
+        is_crit = bool(critical_mask.loc[idx]) if critical_mask is not None else False
+        color = highlight_text_color if is_crit else text_color
+        texts.append(
+            ax.text(
+                cx,
+                cy,
+                str(row["text"]),
+                ha="center",
+                va="center",
+                fontsize=fontsize_pt,
+                family=font_family,
+                color=mr.to_mpl_color(color),
+                zorder=zorder,
+                label="words",
+            )
+        )
+    return texts
+
+
+def _draw_fixation_markers(
+    ax,
+    x,
+    y,
+    sizes_px,
+    *,
+    marker_color,
+    is_numeric: bool,
+    colorscale: str,
+    cmin: Optional[float],
+    cmax: Optional[float],
+    hollow: bool,
+    zorder: float = _Z_FIX,
+    label: str = "Fixations",
+):
+    """Draw the fixation markers. Returns (collection, mappable-or-None).
+
+    Handles filled/hollow × numeric/categorical: numeric maps ``marker_color``
+    through ``colorscale`` with a fixed ``Normalize`` (so a colorbar can attach);
+    hollow moves the colour to the outline and clears the fill.
+    """
+    s = mr.marker_area(sizes_px)
+    outline = mr.to_mpl_color(FIX_MARKER_OUTLINE)
+    mappable = None
+    if hollow:
+        # Transparent (alpha-0) fill rather than "none" so the fill colour is
+        # introspectable; the colour moves to the outline.
+        if is_numeric:
+            edge = mr.sample_colors(marker_color, colorscale, cmin, cmax)
+        else:
+            edge = _as_color_array(marker_color)
+        coll = ax.scatter(
+            x,
+            y,
+            s=s,
+            facecolors=(0.0, 0.0, 0.0, 0.0),
+            edgecolors=edge,
+            linewidths=mr.px_to_pt(HOLLOW_OUTLINE_WIDTH),
+            zorder=zorder,
+            label=label,
+        )
+    elif is_numeric:
+        norm = Normalize(vmin=cmin, vmax=cmax)
+        coll = ax.scatter(
+            x,
+            y,
+            s=s,
+            c=np.asarray(
+                pd.to_numeric(pd.Series(list(marker_color)), errors="coerce"),
+                dtype=float,
+            ),
+            cmap=mr.resolve_cmap(colorscale),
+            norm=norm,
+            edgecolors=outline,
+            linewidths=mr.px_to_pt(0.5),
+            zorder=zorder,
+            label=label,
+        )
+        mappable = coll
+    else:
+        face = _as_color_array(marker_color)
+        # A single colour goes through `color=` (a per-point `c=` of one RGBA
+        # tuple trips matplotlib's value-mapping ambiguity warning).
+        color_kw = (
+            {"c": face}
+            if isinstance(face, np.ndarray) and face.ndim == 2
+            else {"color": face}
+        )
+        coll = ax.scatter(
+            x,
+            y,
+            s=s,
+            edgecolors=outline,
+            linewidths=mr.px_to_pt(0.5),
+            zorder=zorder,
+            label=label,
+            **color_kw,
+        )
+    return coll, mappable
+
+
+def _draw_saccades(
+    ax, fix_df, x_col, y_col, *, color, linestyle, zorder=_Z_SACCADE, label="saccades"
+):
+    """Draw all saccades as one ``LineCollection`` (constant artist count)."""
+    segs = _saccade_segment_pairs(fix_df, x_col, y_col)
+    if not segs:
+        return None
+    lc = LineCollection(
+        segs,
+        colors=[mr.to_mpl_color(color)],
+        linewidths=mr.px_to_pt(2),
+        linestyles=mr.mpl_linestyle(linestyle),
+        zorder=zorder,
     )
-    if row is not None and col is not None:
-        fig.add_trace(trace, row=row, col=col)
-    else:
-        fig.add_trace(trace)
+    lc.set_label(label)
+    ax.add_collection(lc)
+    return lc
 
 
+# Arrowhead length + shaft width in screen px (mirrors the old ~12 px arrow
+# marker); converted to data units via the display scale so they render ~constant
+# under uniform scaling and the head stays proportional to the shaft.
+_ARROW_PX = 14.0
+_ARROW_SHAFT_PX = 1.8
+
+
+def _draw_saccade_arrows(
+    ax,
+    fix_df,
+    x_col,
+    y_col,
+    *,
+    color,
+    scale,
+    zorder=_Z_ARROW,
+    label="saccade direction",
+):
+    """Draw saccade-direction arrowheads as a single ``quiver`` artist.
+
+    Both the arrow length and the shaft width are expressed in *data* units
+    (``units="xy"``) so they render at a roughly constant pixel size (via the
+    display ``scale``) and the head stays proportional to the length — otherwise
+    quiver's default axes-fraction width makes a short arrow's head balloon into
+    a blob (the "arrows look like hexagons" bug).
+    """
+    mid_x, mid_y, dir_x, dir_y = _saccade_arrow_markers(fix_df, x_col, y_col)
+    if not mid_x:
+        return None
+    inv_scale = 1.0 / max(scale, 1e-9)
+    arrow_len_data = _ARROW_PX * inv_scale  # ~_ARROW_PX px long
+    shaft_w_data = _ARROW_SHAFT_PX * inv_scale  # ~_ARROW_SHAFT_PX px wide
+    q = ax.quiver(
+        mid_x,
+        mid_y,
+        dir_x,
+        dir_y,
+        angles="xy",
+        scale_units="xy",
+        scale=1.0 / arrow_len_data,
+        units="xy",
+        width=shaft_w_data,
+        headwidth=3.5,
+        headlength=4.5,
+        headaxislength=4.0,
+        pivot="mid",
+        color=mr.to_mpl_color(color),
+        zorder=zorder,
+        label=label,
+    )
+    return q
+
+
+def _draw_order_numbers(ax, xs, ys, labels, *, color, size_px, family, zorder=_Z_ORDER):
+    """Draw fixation order numbers above each marker. Returns the Text artists."""
+    fontsize_pt = mr.px_to_pt(size_px)
+    col = mr.to_mpl_color(color)
+    texts = []
+    for x, y, txt in zip(xs, ys, labels):
+        if x is None or (isinstance(x, float) and np.isnan(x)):
+            continue
+        texts.append(
+            ax.annotate(
+                str(txt),
+                (x, y),
+                textcoords="offset points",
+                xytext=(0, 4),
+                ha="center",
+                va="bottom",
+                fontsize=fontsize_pt,
+                family=family,
+                color=col,
+                zorder=zorder,
+            )
+        )
+    return texts
+
+
+def _finish_spatial_axes(ax, x_range, y_range, *, background_color) -> None:
+    """Pin the equal-aspect, inverted-y data limits and strip the chrome.
+
+    ``set_aspect('equal')`` realises ``px-per-data == _display_scale`` (the min of
+    the two axis scales), which is exactly the scale the true-to-scale font was
+    computed against — so the labels keep filling the boxes.
+    """
+    ax.set_xlim(x_range[0], x_range[1])
+    ax.set_ylim(y_range[0], y_range[1])  # descending → y grows downward (reading order)
+    ax.set_aspect("equal", adjustable="box")
+    mr.strip_spatial_axes(ax)
+    if background_color is not None:
+        ax.set_facecolor(mr.to_mpl_color(background_color))
+
+
+def _add_colorbars(fig, mappables, *, left, bottom, fitted_w, fitted_h, font_family):
+    """Place up to two colorbars in the reserved right strip (does not shrink the
+    plot). ``mappables`` is a list of ``(mappable, title)``."""
+    cbar_h = COLORBAR_LEN_FRACTION * fitted_h
+    y0 = bottom + (fitted_h - cbar_h) / 2.0
+    for i, (mappable, title) in enumerate(mappables[:2]):
+        cax = mr.add_axes_px(
+            fig,
+            left + fitted_w + 14 + i * 74,
+            y0,
+            16,
+            cbar_h,
+        )
+        cb = fig.colorbar(mappable, cax=cax)
+        if title:
+            cb.set_label(title, fontsize=mr.px_to_pt(12), family=font_family)
+        cax.tick_params(labelsize=mr.px_to_pt(10))
+
+
+def _add_top_legend(ax, handles, labels, *, font_family):
+    """Add the figure legend in the reserved top strip (Plotly's horizontal
+    top-right legend)."""
+    if not handles:
+        return
+    ax.legend(
+        handles,
+        labels,
+        loc="lower right",
+        bbox_to_anchor=(1.0, 1.005),
+        ncol=max(1, min(len(handles), 4)),
+        frameon=False,
+        fontsize=mr.px_to_pt(11),
+        handletextpad=0.4,
+        columnspacing=1.0,
+        prop={"family": font_family} if font_family else None,
+    )
+
+
+def _legend_proxy(color, *, marker="o", markersize=8, hollow=False):
+    """A Line2D legend proxy with no line, just a marker (for category/raw-gaze/
+    out-of-text legend entries)."""
+    c = mr.to_mpl_color(color)
+    return Line2D(
+        [],
+        [],
+        marker=marker,
+        linestyle="none",
+        markersize=markersize,
+        markerfacecolor="none" if hollow else c,
+        markeredgecolor=c if hollow else mr.to_mpl_color(FIX_MARKER_OUTLINE),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Core spatial figure
+# ---------------------------------------------------------------------------
 def make_scanpath_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -597,15 +840,9 @@ def make_scanpath_figure(
     highlight_out_of_text: bool = False,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
-) -> go.Figure:
-    fig = go.Figure()
+) -> Figure:
     spatial_axes = x_field == "x" and y_field == "y"
-    # Track whether a colorbar / legend will render, to reserve margin for them
-    # below (so they don't shrink the equal-aspect plot). See _decoration_margins.
-    legend_active = False
-    heatmap_rendered = False
-    is_numeric_color = False
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    font_family = font_family or FONT_FAMILY
 
     raw_for_range = raw_gaze if (show_raw_gaze and raw_gaze is not None) else None
     if spatial_axes:
@@ -623,9 +860,6 @@ def make_scanpath_figure(
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
-    # Fix the display size up front so the data->screen scale is known: word
-    # labels are then sized in that scale (true-to-scale text), and the same
-    # fitted_w/fitted_h drive the final layout below.
     fitted_w, fitted_h = _fit_display_size(
         canvas_width, canvas_height, x_range, y_range, spatial_axes
     )
@@ -640,10 +874,6 @@ def make_scanpath_figure(
         scale_text_to_boxes=scale_text_to_boxes,
     )
 
-    # Words flagged by ``highlight_column`` (default the OneStop answer span
-    # ``is_in_aspan``) get marked one of two ways:
-    #   - "Mark text": color the highlighted words dark pink (no border).
-    #   - "Mark border": draw a thin black outline around the span.
     has_highlight = (
         bool(highlight_column)
         and highlight_column in words.columns
@@ -652,60 +882,153 @@ def make_scanpath_figure(
     )
     highlight_text = has_highlight and critical_span_style == "Mark text"
 
+    # --- Resolve everything that decides colorbar/legend reserves up front, so
+    # the figure can be sized before drawing (the data axes must occupy an exact
+    # fitted_w × fitted_h box). ---
+    ordered = (
+        fixations.sort_values("timestamp_ms")
+        if (show_fixations and not fixations.empty)
+        else fixations.iloc[0:0]
+    )
+    is_numeric_color = False
+    marker_color: object = None
+    category_legend: list = []
+    color_label = color_by
+    if show_fixations and not ordered.empty:
+        if color_by_line and spatial_axes and not words.empty:
+            from .measures import assign_fixation_lines
+
+            line_ids = assign_fixation_lines(ordered, words)
+            color_data = line_ids.map(
+                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
+            )
+            color_label = "line"
+            is_numeric_color = False
+        else:
+            color_data = ordered[color_by] if color_by in ordered.columns else None
+            is_numeric_color = color_data is not None and pd.api.types.is_numeric_dtype(
+                color_data
+            )
+        marker_color, category_legend = _resolve_marker_colors(
+            color_data, is_numeric_color
+        )
+
+    out_of_text_df = None
+    if (
+        show_fixations
+        and not ordered.empty
+        and highlight_out_of_text
+        and spatial_axes
+        and not words.empty
+    ):
+        from .measures import fixation_in_text_mask
+
+        off = ordered[~fixation_in_text_mask(ordered, words)]
+        if not off.empty:
+            out_of_text_df = off
+
+    raw_active = show_raw_gaze and raw_gaze is not None and not raw_gaze.empty
+    heatmap_intent = bool(spatial_axes and show_heatmap) and (
+        (not fixations.empty)
+        or (
+            not words.empty
+            and (
+                "total_fixation_duration_ms"
+                if heatmap_metric == "duration_ms"
+                else "n_fixations"
+            )
+            in words.columns
+        )
+    )
+    legend_active = bool(category_legend) or raw_active or (out_of_text_df is not None)
+    colorbar_active = show_colorbars and (is_numeric_color or heatmap_intent)
+
+    right = _COLORBAR_RESERVE_PX if (spatial_axes and colorbar_active) else 0
+    top = _LEGEND_RESERVE_PX if (spatial_axes and legend_active) else 0
+
+    # --- Build the figure with the data axes pinned to fitted_w × fitted_h. ---
+    if spatial_axes:
+        fig = mr.new_figure(
+            fitted_w + right, fitted_h + top, background_color=background_color
+        )
+        ax = mr.add_axes_px(
+            fig, 0, 0, fitted_w, fitted_h, background_color=background_color
+        )
+        _finish_spatial_axes(ax, x_range, y_range, background_color=background_color)
+    else:
+        fig = mr.new_figure(fitted_w, fitted_h, background_color=background_color)
+        ax = mr.add_axes_px(
+            fig,
+            70,
+            55,
+            max(fitted_w - 95, 50),
+            max(fitted_h - 80, 50),
+            background_color=background_color,
+        )
+        ax.set_xlabel(x_field.replace("_", " ").title())
+        ax.set_ylabel(y_field.replace("_", " ").title())
+        ax.grid(True, color="#e6e6e6", linewidth=0.6)
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+
+    mappables: list = []
+    legend_handles: list = []
+    legend_labels: list = []
+
+    # Word boxes + critical-span border + labels.
     if spatial_axes and not words.empty:
-        # Word-box grid (the "Bounding boxes" layer) and the "Mark border" span
-        # overlay are independent: the span borders show even when the boxes are
-        # off (then only the span outline is drawn).
-        shapes = build_word_boxes(words) if show_words else []
+        if show_words:
+            _add_rect_shapes(ax, build_word_boxes(words), zorder=_Z_BOX)
         if has_highlight and critical_span_style == "Mark border":
-            shapes = shapes + build_critical_span_overlay(words, highlight_column)
-        if shapes:
-            fig.update_layout(shapes=shapes)
+            _add_rect_shapes(
+                ax,
+                build_critical_span_overlay(words, highlight_column),
+                zorder=_Z_CRITICAL,
+            )
         if show_word_labels:
-            _add_word_label_trace(
-                fig,
+            _draw_word_labels(
+                ax,
                 words,
                 label_font_px,
-                font_settings["family"],
+                font_family,
                 highlight_column=highlight_column if highlight_text else None,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
             )
 
-    if show_raw_gaze and raw_gaze is not None and not raw_gaze.empty:
+    # Raw gaze overlay.
+    if raw_active:
         if "timestamp_ms" in raw_gaze.columns:
-            color_vals = raw_gaze["timestamp_ms"]
-            colorscale = "Viridis"
-        else:
-            color_vals = "#888888"
-            colorscale = None
-        fig.add_trace(
-            go.Scatter(
-                x=raw_gaze["x"],
-                y=raw_gaze["y"],
-                mode="markers",
-                marker=dict(
-                    size=4,
-                    color=color_vals,
-                    colorscale=colorscale,
-                    opacity=0.6,
-                    showscale=False,
+            ax.scatter(
+                raw_gaze["x"],
+                raw_gaze["y"],
+                s=mr.marker_area(4),
+                c=np.asarray(
+                    pd.to_numeric(raw_gaze["timestamp_ms"], errors="coerce"),
+                    dtype=float,
                 ),
-                hovertemplate=(
-                    "Raw gaze<br>x: %{x:.1f}<br>y: %{y:.1f}"
-                    "<br>t: %{customdata} ms<extra></extra>"
-                ),
-                customdata=raw_gaze["timestamp_ms"]
-                if "timestamp_ms" in raw_gaze.columns
-                else None,
-                name="Raw gaze",
-                showlegend=True,
+                cmap=mr.resolve_cmap("Viridis"),
+                alpha=0.6,
+                linewidths=0,
+                zorder=_Z_RAW,
+                label="Raw gaze",
             )
-        )
-        legend_active = True
+        else:
+            ax.scatter(
+                raw_gaze["x"],
+                raw_gaze["y"],
+                s=mr.marker_area(4),
+                color=mr.to_mpl_color("#888888"),
+                alpha=0.6,
+                linewidths=0,
+                zorder=_Z_RAW,
+                label="Raw gaze",
+            )
+        legend_handles.append(_legend_proxy("#888888"))
+        legend_labels.append("Raw gaze")
 
+    # Heatmap.
     if spatial_axes and show_heatmap and not fixations.empty:
-        heatmap_rendered = True
         weights = fixations["duration_ms"] if heatmap_metric == "duration_ms" else None
         x_min = (
             x_min_data if x_min_data is not None else float(fixations[x_field].min())
@@ -720,9 +1043,8 @@ def make_scanpath_figure(
             y_max_data if y_max_data is not None else float(fixations[y_field].max())
         )
         if heatmap_style == "Interpolated":
-            # Smooth, word-box-independent density over the fixations themselves.
-            _add_interpolated_heatmap(
-                fig,
+            hm = _add_interpolated_heatmap(
+                ax,
                 fixations,
                 x_field=x_field,
                 y_field=y_field,
@@ -732,11 +1054,19 @@ def make_scanpath_figure(
                 y_max=y_max,
                 weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
-                show_colorbars=show_colorbars,
             )
+            if hm is not None and show_colorbars:
+                mappables.append(
+                    (
+                        hm,
+                        "Dwell-time density"
+                        if weights is not None
+                        else "Fixation density",
+                    )
+                )
         elif not words.empty:
-            _add_word_level_heatmap(
-                fig,
+            hm = _add_word_level_heatmap(
+                ax,
                 words,
                 fixations,
                 x_field=x_field,
@@ -744,11 +1074,14 @@ def make_scanpath_figure(
                 weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
-                show_colorbars=show_colorbars,
             )
+            if hm is not None and show_colorbars:
+                mappables.append(
+                    (hm, "Fixation count" if weights is None else "Duration (ms)")
+                )
         else:
-            _add_density_heatmap(
-                fig,
+            hm = _add_density_heatmap(
+                ax,
                 fixations,
                 x_field=x_field,
                 y_field=y_field,
@@ -759,276 +1092,132 @@ def make_scanpath_figure(
                 weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
-                show_colorbars=show_colorbars,
             )
+            if hm is not None and show_colorbars:
+                mappables.append(
+                    (hm, "Fixation density" if weights is None else "Duration (ms)")
+                )
     elif spatial_axes and show_heatmap and not words.empty:
-        # Words-only dataset (no fixation report): fall back to the words
-        # frame's own pre-aggregated reading measures for the box heatmap.
         measure = (
             "total_fixation_duration_ms"
             if heatmap_metric == "duration_ms"
             else "n_fixations"
         )
         if measure in words.columns:
-            heatmap_rendered = True
-            _add_word_measure_heatmap(
-                fig,
+            hm = _add_word_measure_heatmap(
+                ax,
                 words,
                 measure,
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
-                show_colorbars=show_colorbars,
             )
-
-    if spatial_axes and show_saccades and len(fixations) > 1:
-        sx, sy = _saccade_segments(fixations, x_field, y_field)
-        if sx:
-            fig.add_trace(
-                go.Scatter(
-                    x=sx,
-                    y=sy,
-                    mode="lines",
-                    line=dict(color=saccade_color, width=2, dash=saccade_style),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name="saccades",
-                )
-            )
-
-    # Directional arrowheads on each saccade (opt-in). Independent of the line
-    # above so it can be toggled separately; rendered before the fixation
-    # markers so the dots sit on top.
-    if spatial_axes and show_saccades and show_saccade_arrows and len(fixations) > 1:
-        amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field)
-        if amx:
-            fig.add_trace(
-                go.Scatter(
-                    x=amx,
-                    y=amy,
-                    mode="markers",
-                    marker=dict(
-                        symbol="arrow",
-                        size=12,
-                        angle=aang,
-                        angleref="up",
-                        color=saccade_color,
-                        line=dict(width=0),
-                    ),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name="saccade direction",
-                )
-            )
-
-    if show_fixations and not fixations.empty:
-        ordered = fixations.sort_values("timestamp_ms")
-        # "Color by line" overrides the chosen color field: each fixation is
-        # tinted by the text line it lands on (lines inferred from word
-        # geometry). Rendered as discrete categories so the legend reads
-        # "line: Line 1", "line: Line 2", …
-        if color_by_line and spatial_axes and not words.empty:
-            from .measures import assign_fixation_lines
-
-            line_ids = assign_fixation_lines(ordered, words)
-            color_data = line_ids.map(
-                lambda v: f"Line {int(v) + 1}" if pd.notna(v) else "(off-text)"
-            )
-            color_label = "line"
-            is_numeric_color = False
-        else:
-            color_data = ordered[color_by] if color_by in ordered.columns else None
-            color_label = color_by
-            is_numeric_color = color_data is not None and pd.api.types.is_numeric_dtype(
-                color_data
-            )
-        marker_color, category_legend = _resolve_marker_colors(
-            color_data, is_numeric_color
-        )
-        sizes = _compute_marker_sizes(ordered["duration_ms"], marker_size_range)
-        marker = dict(
-            size=sizes,
-            color=marker_color,
-            colorscale=fixation_colorscale if is_numeric_color else None,
-            showscale=show_colorbars and is_numeric_color,
-            colorbar=dict(
-                title=color_label.replace("_", " ").title(),
-                x=1.12,
-                lenmode="fraction",
-                len=COLORBAR_LEN_FRACTION,
-                y=0.5,
-                yanchor="middle",
-            )
-            if show_colorbars and is_numeric_color
-            else None,
-            cmin=fixation_color_range[0] if fixation_color_range else None,
-            cmax=fixation_color_range[1] if fixation_color_range else None,
-            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
-        )
-        if hollow_fixations:
-            marker = _make_hollow(marker)
-        fig.add_trace(
-            go.Scatter(
-                x=ordered[x_field],
-                y=ordered[y_field],
-                mode="markers+text" if show_order else "markers",
-                marker=marker,
-                text=ordered["order_in_trial"] if show_order else None,
-                textfont=dict(
-                    color=order_font_color,
-                    size=order_font_size,
-                    family=font_settings["family"],
-                ),
-                textposition="top center",
-                hovertemplate=(
-                    "Fixation #%{customdata[0]}<br>"
-                    "Duration %{customdata[1]} ms<br>"
-                    "Word #%{customdata[2]}<extra></extra>"
-                ),
-                customdata=np.stack(
-                    [
-                        ordered["order_in_trial"],
-                        ordered["duration_ms"],
-                        ordered.get("word_id", pd.Series([np.nan] * len(ordered))),
-                    ],
-                    axis=1,
-                ),
-                name="Fixations",
-                showlegend=False,
-            )
-        )
-        legend_limit = len(_QUALITATIVE_PALETTE)
-        truncated_legend = category_legend[:legend_limit]
-        if category_legend:
-            legend_active = True
-        for category, color in truncated_legend:
-            fig.add_trace(
-                go.Scatter(
-                    x=[None],
-                    y=[None],
-                    mode="markers",
-                    marker=dict(
-                        size=10,
-                        color=color,
-                        line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
-                    ),
-                    name=f"{color_label}: {category}",
-                    showlegend=True,
-                    hoverinfo="skip",
-                )
-            )
-        if len(category_legend) > legend_limit:
-            fig.add_trace(
-                go.Scatter(
-                    x=[None],
-                    y=[None],
-                    mode="markers",
-                    marker=dict(size=10, color="#cccccc"),
-                    name=f"… +{len(category_legend) - legend_limit} more",
-                    showlegend=True,
-                    hoverinfo="skip",
-                )
-            )
-
-        # Out-of-text overlay: mark fixations falling outside every word box
-        # with a red ✕ on top of the regular marker. Requires word boxes +
-        # spatial axes to define "in text".
-        if highlight_out_of_text and spatial_axes and not words.empty:
-            from .measures import fixation_in_text_mask
-
-            off = ordered[~fixation_in_text_mask(ordered, words)]
-            if not off.empty:
-                legend_active = True
-                fig.add_trace(
-                    go.Scatter(
-                        x=off[x_field],
-                        y=off[y_field],
-                        mode="markers",
-                        marker=dict(
-                            symbol="x",
-                            size=13,
-                            color=OUT_OF_TEXT_COLOR,
-                            line=dict(color="#ffffff", width=1),
-                        ),
-                        name="Out-of-text",
-                        showlegend=True,
-                        hovertemplate=(
-                            "Out-of-text fixation<br>x %{x:.0f}, y %{y:.0f}"
-                            "<extra></extra>"
-                        ),
+            if hm is not None and show_colorbars:
+                mappables.append(
+                    (
+                        hm,
+                        "Fixation count"
+                        if measure == "n_fixations"
+                        else "Duration (ms)",
                     )
                 )
 
-    xaxis_cfg = dict(showticklabels=False, showgrid=False, zeroline=False, title=None)
-    yaxis_cfg = dict(showticklabels=False, showgrid=False, zeroline=False, title=None)
-    if spatial_axes:
-        # automargin off: the colorbar/legend live in the reserved margin we size
-        # below (_decoration_margins), so Plotly must not also shrink the
-        # equal-aspect plot domain to fit them.
-        xaxis_cfg.update(range=x_range, constrain="domain", automargin=False)
-        yaxis_cfg.update(
-            range=y_range,
-            constrain="domain",
-            scaleanchor="x",
-            scaleratio=1,
-            automargin=False,
+    # Saccades + arrows.
+    if spatial_axes and show_saccades and len(fixations) > 1:
+        _draw_saccades(
+            ax,
+            fixations,
+            x_field,
+            y_field,
+            color=saccade_color,
+            linestyle=saccade_style,
         )
-    else:
-        xaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=x_field.replace("_", " ").title()
-        )
-        yaxis_cfg.update(
-            showticklabels=True, showgrid=True, title=y_field.replace("_", " ").title()
-        )
-
-    shapes = list(fig.layout.shapes) if fig.layout.shapes else []
-    if spatial_axes:
-        shapes.append(
-            dict(
-                type="rect",
-                x0=x_range[0],
-                y0=y_range[1],
-                x1=x_range[1],
-                y1=y_range[0],
-                line=dict(color="#000000", width=1),
-                fillcolor="rgba(0,0,0,0)",
+        if show_saccade_arrows:
+            _draw_saccade_arrows(
+                ax, fixations, x_field, y_field, color=saccade_color, scale=scale
             )
-        )
 
-    # fitted_w / fitted_h were computed up front (so the label scale matched). A
-    # colorbar (numeric colour / heatmap) or legend (discrete colour categories,
-    # out-of-text, raw gaze) is given reserved margin so it never shrinks the
-    # equal-aspect plot region — keeping the word labels matched to the boxes.
-    decoration = (
-        _decoration_margins(
-            fitted_w,
-            fitted_h,
-            colorbar=show_colorbars and (is_numeric_color or heatmap_rendered),
-            legend=legend_active,
+    # Fixation markers + order numbers + categorical legend + out-of-text.
+    if show_fixations and not ordered.empty:
+        sizes = _compute_marker_sizes(ordered["duration_ms"], marker_size_range)
+        cmin = fixation_color_range[0] if fixation_color_range else None
+        cmax = fixation_color_range[1] if fixation_color_range else None
+        _coll, mappable = _draw_fixation_markers(
+            ax,
+            ordered[x_field],
+            ordered[y_field],
+            sizes,
+            marker_color=marker_color,
+            is_numeric=is_numeric_color,
+            colorscale=fixation_colorscale,
+            cmin=cmin,
+            cmax=cmax,
+            hollow=hollow_fixations,
         )
-        if spatial_axes
-        else {"width": fitted_w, "height": fitted_h, "margin": dict(l=0, r=0, t=0, b=0)}
-    )
-    fig.update_layout(
-        height=decoration["height"],
-        width=decoration["width"],
-        autosize=False,
-        margin=decoration["margin"],
-        xaxis=xaxis_cfg,
-        yaxis=yaxis_cfg,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        template="plotly_white",
-        # None leaves the template's default white; a hex value paints both the
-        # plotting area and the surrounding paper (e.g. a neutral gray).
-        plot_bgcolor=background_color,
-        paper_bgcolor=background_color,
-        font=font_settings,
-        shapes=shapes,
-    )
+        if mappable is not None and show_colorbars and not hollow_fixations:
+            mappables.append((mappable, color_label.replace("_", " ").title()))
+        if show_order:
+            _draw_order_numbers(
+                ax,
+                ordered[x_field],
+                ordered[y_field],
+                ordered["order_in_trial"],
+                color=order_font_color,
+                size_px=order_font_size,
+                family=font_family,
+            )
+        legend_limit = len(_QUALITATIVE_PALETTE)
+        for category, color in category_legend[:legend_limit]:
+            legend_handles.append(_legend_proxy(color))
+            legend_labels.append(f"{color_label}: {category}")
+        if len(category_legend) > legend_limit:
+            legend_handles.append(_legend_proxy("#cccccc"))
+            legend_labels.append(f"… +{len(category_legend) - legend_limit} more")
+
+        if out_of_text_df is not None:
+            ax.scatter(
+                out_of_text_df[x_field],
+                out_of_text_df[y_field],
+                s=mr.marker_area(13),
+                marker="x",
+                c=[mr.to_mpl_color(OUT_OF_TEXT_COLOR)],
+                linewidths=mr.px_to_pt(1.5),
+                zorder=_Z_OOT,
+                label="Out-of-text",
+            )
+            legend_handles.append(
+                Line2D(
+                    [],
+                    [],
+                    marker="x",
+                    linestyle="none",
+                    markeredgecolor=mr.to_mpl_color(OUT_OF_TEXT_COLOR),
+                )
+            )
+            legend_labels.append("Out-of-text")
+
+    if spatial_axes:
+        _draw_canvas_border(ax, x_range, y_range)
+        if mappables:
+            _add_colorbars(
+                fig,
+                mappables,
+                left=0,
+                bottom=0,
+                fitted_w=fitted_w,
+                fitted_h=fitted_h,
+                font_family=font_family,
+            )
+        if legend_handles:
+            _add_top_legend(ax, legend_handles, legend_labels, font_family=font_family)
+
     return fig
 
 
+# ---------------------------------------------------------------------------
+# Heatmaps
+# ---------------------------------------------------------------------------
 def _add_word_level_heatmap(
-    fig: go.Figure,
+    ax,
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
@@ -1037,12 +1226,7 @@ def _add_word_level_heatmap(
     weights: Optional[pd.Series],
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
-    show_colorbars: bool,
-) -> None:
-    # Pull the fixation coordinates (and optional weights) into numpy arrays once,
-    # then test box membership per word against the arrays. Same O(words × fix)
-    # work as before but without rebuilding pandas Series each iteration, and with
-    # O(fix) memory (no full words × fix matrix).
+):
     fx = pd.to_numeric(fixations[x_field], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fixations[y_field], errors="coerce").to_numpy(dtype=float)
     w_arr = (
@@ -1061,114 +1245,75 @@ def _add_word_level_heatmap(
             else float(in_word.sum())
         )
         word_values.append(val)
-
-    _draw_word_value_heatmap(
-        fig,
+    return _draw_word_value_heatmap(
+        ax,
         words,
         word_values,
         heatmap_colorscale=heatmap_colorscale,
         heatmap_range=heatmap_range,
-        show_colorbars=show_colorbars,
-        colorbar_title="Fixation count" if weights is None else "Duration (ms)",
     )
 
 
 def _add_word_measure_heatmap(
-    fig: go.Figure,
+    ax,
     words: pd.DataFrame,
     measure: str,
     *,
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
-    show_colorbars: bool,
-) -> None:
-    """Word-box heatmap from a pre-aggregated per-word measure column.
-
-    Used for words-only datasets (IA report without a fixation report): the
-    usual heatmap aggregates fixation durations/counts into the boxes, but
-    with no fixations the dataset's own reading measures (e.g. total fixation
-    duration) carry the same information."""
+):
+    """Word-box heatmap from a pre-aggregated per-word measure (words-only data)."""
     values = pd.to_numeric(words[measure], errors="coerce").fillna(0.0)
-    _draw_word_value_heatmap(
-        fig,
+    return _draw_word_value_heatmap(
+        ax,
         words,
         [float(v) for v in values],
         heatmap_colorscale=heatmap_colorscale,
         heatmap_range=heatmap_range,
-        show_colorbars=show_colorbars,
-        colorbar_title="Fixation count"
-        if measure == "n_fixations"
-        else "Duration (ms)",
     )
 
 
 def _draw_word_value_heatmap(
-    fig: go.Figure,
+    ax,
     words: pd.DataFrame,
     word_values: list,
     *,
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
-    show_colorbars: bool,
-    colorbar_title: str,
-) -> None:
-    from plotly.colors import sample_colorscale
+):
+    """Translucent per-word colour fill (one Rectangle per nonzero word).
 
+    Returns a ``ScalarMappable`` (for an optional colorbar) or ``None`` when no
+    word has a positive value. Colours use a fixed ``Normalize`` over
+    ``heatmap_range`` (or the data min/max) so the scale is stable.
+    """
     nonzero_rows = [(wr, v) for wr, v in zip(words.itertuples(), word_values) if v > 0]
     if not nonzero_rows:
-        return
+        return None
     vals = [v for _, v in nonzero_rows]
     z_min = heatmap_range[0] if heatmap_range else float(min(vals))
     z_max = heatmap_range[1] if heatmap_range else float(max(vals))
-    z_span = max(z_max - z_min, 1e-9)
-
-    heatmap_shapes = []
+    cmap = mr.resolve_cmap(heatmap_colorscale)
+    norm = Normalize(vmin=z_min, vmax=z_max)
     for wr, v in nonzero_rows:
-        norm = max(0.0, min(1.0, (v - z_min) / z_span))
-        color = sample_colorscale(heatmap_colorscale, [norm])[0]
-        heatmap_shapes.append(
-            dict(
-                type="rect",
-                x0=wr.x,
-                y0=wr.y,
-                x1=wr.x + wr.width,
-                y1=wr.y + wr.height,
-                line=dict(width=0),
-                fillcolor=color,
-                opacity=0.5,
-                layer="below",
+        ax.add_patch(
+            Rectangle(
+                (wr.x, wr.y),
+                wr.width,
+                wr.height,
+                facecolor=cmap(norm(v)),
+                edgecolor="none",
+                alpha=0.5,
+                zorder=_Z_HEATMAP,
             )
         )
-    existing = list(fig.layout.shapes) if fig.layout.shapes else []
-    fig.update_layout(shapes=existing + heatmap_shapes)
-    if show_colorbars:
-        fig.add_trace(
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(
-                    colorscale=heatmap_colorscale,
-                    showscale=True,
-                    cmin=z_min,
-                    cmax=z_max,
-                    colorbar=dict(
-                        title=colorbar_title,
-                        x=1.02,
-                        lenmode="fraction",
-                        len=COLORBAR_LEN_FRACTION,
-                        y=0.5,
-                        yanchor="middle",
-                    ),
-                ),
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
+    sm = ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([z_min, z_max])
+    return sm
 
 
 def _add_density_heatmap(
-    fig: go.Figure,
+    ax,
     fixations: pd.DataFrame,
     *,
     x_field: str,
@@ -1180,37 +1325,43 @@ def _add_density_heatmap(
     weights: Optional[pd.Series],
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
-    show_colorbars: bool,
-) -> None:
+):
+    """2-D histogram density heatmap (40×40 bins) via ``pcolormesh``."""
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
-    fig.add_trace(
-        go.Histogram2d(
-            x=fixations[x_field],
-            y=fixations[y_field],
-            xbins=dict(start=x_min, end=x_max, size=x_span / 40.0),
-            ybins=dict(start=y_min, end=y_max, size=y_span / 40.0),
-            colorscale=heatmap_colorscale,
-            opacity=0.35,
-            showscale=show_colorbars,
-            colorbar=dict(
-                title="Fixation density" if weights is None else "Duration (ms)",
-                x=1.02,
-                lenmode="fraction",
-                len=COLORBAR_LEN_FRACTION,
-                y=0.5,
-                yanchor="middle",
-            ),
-            histfunc="sum" if weights is not None else "count",
-            z=weights,
-            zmin=heatmap_range[0] if heatmap_range else None,
-            zmax=heatmap_range[1] if heatmap_range else None,
-        )
+    nx = max(2, int(round(x_span / (x_span / 40.0))))
+    ny = max(2, int(round(y_span / (y_span / 40.0))))
+    x_edges = np.linspace(x_min, x_max, nx + 1)
+    y_edges = np.linspace(y_min, y_max, ny + 1)
+    xs = pd.to_numeric(fixations[x_field], errors="coerce").to_numpy()
+    ys = pd.to_numeric(fixations[y_field], errors="coerce").to_numpy()
+    valid = np.isfinite(xs) & np.isfinite(ys)
+    w = (
+        pd.to_numeric(weights, errors="coerce").to_numpy()[valid]
+        if weights is not None
+        else None
     )
+    hist, _, _ = np.histogram2d(
+        xs[valid], ys[valid], bins=[x_edges, y_edges], weights=w
+    )
+    grid = np.ma.masked_less_equal(hist.T, 0.0)
+    vmin = heatmap_range[0] if heatmap_range else None
+    vmax = heatmap_range[1] if heatmap_range else None
+    mesh = ax.pcolormesh(
+        x_edges,
+        y_edges,
+        grid,
+        cmap=mr.resolve_cmap(heatmap_colorscale),
+        alpha=0.35,
+        vmin=vmin,
+        vmax=vmax,
+        zorder=_Z_HEATMAP,
+        shading="flat",
+    )
+    return mesh
 
 
 def _gaussian_kernel_1d(sigma: float) -> np.ndarray:
-    """Normalized 1-D Gaussian kernel, truncated at 3 sigma."""
     radius = max(1, int(round(sigma * 3)))
     offsets = np.arange(-radius, radius + 1)
     kernel = np.exp(-(offsets**2) / (2.0 * sigma * sigma))
@@ -1220,7 +1371,6 @@ def _gaussian_kernel_1d(sigma: float) -> np.ndarray:
 def _gaussian_blur_2d(
     grid: np.ndarray, sigma_rows: float, sigma_cols: float
 ) -> np.ndarray:
-    """Separable Gaussian blur (a numpy-only stand-in for scipy.ndimage)."""
     out = grid.astype(float)
     if sigma_rows and sigma_rows > 0:
         k = _gaussian_kernel_1d(sigma_rows)
@@ -1231,18 +1381,15 @@ def _gaussian_blur_2d(
     return out
 
 
-# Interpolated-heatmap tuning. The Gaussian sigma defaults to a fraction of the
-# larger data span — enough to merge a fixation cluster into one smooth blob
-# without bleeding across neighbouring text lines.
-_INTERP_GRID = 240  # cells along the wider axis
-_INTERP_SIGMA_FRAC = 0.02  # sigma as a fraction of the larger data span
+_INTERP_GRID = 240
+_INTERP_SIGMA_FRAC = 0.02
 _INTERP_MIN_SIGMA_PX = 8.0
 _INTERP_OPACITY = 0.45
-_INTERP_FLOOR_FRAC = 0.02  # cells below this fraction of the peak render transparent
+_INTERP_FLOOR_FRAC = 0.02
 
 
 def _add_interpolated_heatmap(
-    fig: go.Figure,
+    ax,
     fixations: pd.DataFrame,
     *,
     x_field: str,
@@ -1253,20 +1400,17 @@ def _add_interpolated_heatmap(
     y_max: float,
     weights: Optional[pd.Series],
     heatmap_colorscale: str,
-    show_colorbars: bool,
-) -> None:
-    """Smooth, word-box-independent fixation heatmap (Gaussian-interpolated).
+):
+    """Smooth Gaussian-interpolated fixation heatmap via ``imshow``.
 
-    Bins the fixations onto a fine grid (weighted by duration when ``weights``
-    is given), then blurs with a Gaussian — the classic eye-movement heatmap
-    (cf. PyGaze's gaze plotter). Empty cells render transparent so the reading
-    text stays legible underneath.
+    Empty cells render transparent (masked) so the reading text stays legible.
+    Returns the ``AxesImage`` (a mappable) or ``None``.
     """
     xs = pd.to_numeric(fixations[x_field], errors="coerce")
     ys = pd.to_numeric(fixations[y_field], errors="coerce")
     valid = xs.notna() & ys.notna()
     if not valid.any():
-        return
+        return None
     if weights is not None:
         w = (
             pd.to_numeric(weights, errors="coerce")
@@ -1285,10 +1429,8 @@ def _add_interpolated_heatmap(
     ny = max(10, int(round(_INTERP_GRID * y_span / x_span)))
     x_edges = np.linspace(x_min, x_max, nx + 1)
     y_edges = np.linspace(y_min, y_max, ny + 1)
-    # histogram2d returns shape (nx, ny); transpose so rows index y, cols index x
-    # (the orientation go.Heatmap's z expects).
     hist, _, _ = np.histogram2d(xs, ys, bins=[x_edges, y_edges], weights=w)
-    grid = hist.T
+    grid = hist.T  # rows index y, cols index x
 
     sigma_px = max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
     blurred = _gaussian_blur_2d(
@@ -1296,70 +1438,42 @@ def _add_interpolated_heatmap(
     )
     peak = float(blurred.max())
     if peak <= 0:
-        return
-    # Near-zero cells -> NaN so Plotly renders them transparent (only populated
-    # regions get tinted, keeping the text readable).
-    z = np.where(blurred < peak * _INTERP_FLOOR_FRAC, np.nan, blurred)
-
-    fig.add_trace(
-        go.Heatmap(
-            x=(x_edges[:-1] + x_edges[1:]) / 2.0,
-            y=(y_edges[:-1] + y_edges[1:]) / 2.0,
-            z=z,
-            colorscale=heatmap_colorscale,
-            opacity=_INTERP_OPACITY,
-            showscale=show_colorbars,
-            # z is a Gaussian-smoothed density in arbitrary (weighted) units, not
-            # the per-word counts/ms the `heatmap_range` slider is calibrated for,
-            # so it autoscales from 0 rather than borrowing that range.
-            zmin=0.0,
-            colorbar=dict(
-                title="Dwell-time density"
-                if weights is not None
-                else "Fixation density",
-                x=1.02,
-                lenmode="fraction",
-                len=COLORBAR_LEN_FRACTION,
-                y=0.5,
-                yanchor="middle",
-            ),
-            hoverinfo="skip",
-            name="Fixation heatmap",
-        )
+        return None
+    masked = np.ma.masked_less(blurred, peak * _INTERP_FLOOR_FRAC)
+    # extent maps the grid to data coords; origin='upper' keeps row 0 at the top
+    # of the (inverted) y-axis, matching the histogram's y orientation.
+    img = ax.imshow(
+        masked,
+        extent=(x_min, x_max, y_max, y_min),
+        origin="upper",
+        cmap=mr.resolve_cmap(heatmap_colorscale),
+        alpha=_INTERP_OPACITY,
+        vmin=0.0,
+        aspect="auto",
+        interpolation="bilinear",
+        zorder=_Z_HEATMAP,
     )
+    return img
 
 
 # =============================================================================
 # Scanpath animation — one or two scanpaths on a shared real reading-time clock
 # =============================================================================
-
-# Floor on per-frame duration: ~one 60 fps display frame. Browsers can't redraw
-# faster than this, so it's the lowest value at which the quoted playback time
-# (n_frames * avg) still matches the observed runtime — going lower would just
-# make the quote understate reality. Also keeps the briefest gaps perceptible.
 _ANIM_MIN_FRAME_MS = 16
 
-# Vertical space (px) reserved BELOW the animation plot for the transport
-# controls (play / pause / restart buttons + the time slider with its "Elapsed"
-# readout). The figure is grown by this much (plus a small safety buffer) and
-# the controls are placed in the bottom margin, so Plotly's automargin never has
-# to shrink the equal-aspect plot to fit them — which would make the word boxes
-# smaller than the true-to-scale label font computed for fitted_h (the
-# text-too-large bug). Keeps the animation plot the SAME size as the static one.
-_CONTROLS_MARGIN_PX = 116
-_CONTROLS_SAFETY_PX = 24
+# The interactive ``to_jshtml`` player inlines every frame as a base64 PNG, so a
+# long reading (hundreds/thousands of fixations) would be a huge page. Cap the
+# on-screen player here, preserving the total runtime; the GIF/MP4 export has its
+# own (separate) cap.
+_PLAYER_FRAME_CAP = 250
 
 
 def _scanpath_anim_specs(entries, marker_size_range):
     """Build per-scanpath animation specs from (fixations, color, label) entries.
 
-    Empty/None fixations are skipped. Onsets are the recorded ``timestamp_ms``
-    rebased to each reading's first fixation, so multiple scanpaths share one
-    *real reading-time* clock. When timestamps aren't real times — missing, or
-    the 0,1,2,… row index ``data.normalize_fixations`` synthesises when the
-    source has no timestamp column — fixations are instead laid out back-to-back
-    by their durations. Marker sizes are scaled over the COMBINED durations so
-    equal durations render at equal sizes across scanpaths.
+    Onsets are ``timestamp_ms`` rebased to each reading's first fixation (shared
+    real-time clock), falling back to back-to-back durations when timestamps are
+    synthetic. Marker sizes scale over the COMBINED durations.
     """
     from .measures import rebased_fixation_onsets
 
@@ -1369,9 +1483,6 @@ def _scanpath_anim_specs(entries, marker_size_range):
             continue
         ordered = fix_df.sort_values("timestamp_ms").reset_index(drop=True)
         dur = pd.to_numeric(ordered["duration_ms"], errors="coerce").fillna(0)
-        # Recorded-timestamp-vs-synthetic-index heuristic (shared with the
-        # similarity time-curve): trust recorded timestamps only when they look
-        # like real times, else lay fixations back-to-back by their durations.
         onsets = rebased_fixation_onsets(ordered)
         specs.append(
             dict(
@@ -1399,10 +1510,9 @@ def _anim_timeline(specs, playback_speed):
     """Merged frame timeline across all scanpaths.
 
     Returns ``(onset_times, frame_durations_ms, avg_frame_duration,
-    reading_span_ms)``. A frame is emitted at every distinct fixation onset
-    across all scanpaths; each frame lasts the gap to the next onset divided by
-    ``playback_speed``, floored at ``_ANIM_MIN_FRAME_MS``. ``reading_span_ms`` is
-    the longest reading's real span (all readings are rebased to t=0).
+    reading_span_ms)``. A frame is emitted at every distinct fixation onset;
+    each lasts the gap to the next onset / ``playback_speed``, floored at
+    ``_ANIM_MIN_FRAME_MS``.
     """
     onset_times = sorted({float(t) for s in specs for t in s["onsets"]})
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
@@ -1421,48 +1531,12 @@ def _anim_timeline(specs, playback_speed):
     return onset_times, frame_durations_ms, avg, reading_span_ms
 
 
-def _revealed_xy(all_x, all_y, kk):
-    """Full-length x/y with only the first ``kk`` fixations revealed.
-
-    Not-yet-reached fixations are masked to ``None`` so Plotly draws nothing
-    there. The array length is the SAME in every frame — the replay reveals a
-    fixation by un-masking its coordinate, never by growing the array — which is
-    what lets the Play button animate with ``redraw=False`` (only positions
-    change, so Plotly skips redrawing the static word boxes/labels each frame).
-    """
-    n = len(all_x)
-    xs = [all_x[i] if i < kk else None for i in range(n)]
-    ys = [all_y[i] if i < kk else None for i in range(n)]
-    return xs, ys
-
-
-def _revealed_saccade_xy(all_x, all_y, kk):
-    """Constant-length saccade polyline for the first ``kk`` fixations.
-
-    Every consecutive fixation pair occupies a fixed ``(x0, x1, None)`` slot;
-    segments past the ``kk``-th fixation are blanked to ``None`` so the trace
-    length never changes frame to frame (same ``redraw=False`` requirement as
-    :func:`_revealed_xy`). Only which segments are drawn changes.
-    """
-    sx, sy = [], []
-    for j in range(len(all_x) - 1):
-        if j < kk - 1:
-            sx.extend([all_x[j], all_x[j + 1], None])
-            sy.extend([all_y[j], all_y[j + 1], None])
-        else:
-            sx.extend([None, None, None])
-            sy.extend([None, None, None])
-    return sx, sy
-
-
 def animation_playback_ms(fixations_list, playback_speed):
     """Reading span and *actual* animation runtime for the given scanpath(s).
 
-    Returns ``(reading_span_ms, playback_ms)``. ``playback_ms`` is the real
-    runtime the Play button produces: Play advances every frame at the average
-    frame duration, so the total is ``n_frames * avg`` — quoting that in the side
-    panel makes the stated playback time match what the user actually observes.
-    Both 0 when there are no fixations.
+    Returns ``(reading_span_ms, playback_ms)``; ``playback_ms == n_frames * avg``
+    (the player advances every frame at the average frame duration). Both 0 with
+    no fixations.
     """
     specs = _scanpath_anim_specs(
         [(f, None, None) for f in fixations_list], DEFAULT_MARKER_SIZE_RANGE
@@ -1475,130 +1549,74 @@ def animation_playback_ms(fixations_list, playback_speed):
     return reading_span_ms, float(len(onset_times) * avg)
 
 
-def _animation_play_buttons(frame_duration):
-    """Play / Pause / Restart buttons.
+@dataclass
+class ScanpathAnimation:
+    """A matplotlib scanpath replay.
 
-    Play uses ``redraw=False``: every animated trace is full length with
-    not-yet-reached fixations masked to ``None`` (see :func:`_revealed_xy`), so
-    advancing a frame only changes point positions — Plotly updates just those
-    few traces instead of redrawing the whole figure (the static word boxes +
-    labels) every frame. A full redraw of the scanpath figure costs ~50 ms, which
-    on a long trial dwarfed the per-frame budget and made the replay run far
-    slower than its quoted time; skipping it lets the replay actually hit
-    ``n_frames * frame_duration``. Transitions are 0 so frames snap into place
-    (no tweening), and the constant array length means a new fixation/number
-    appears on its mark instead of gliding in from the corner.
+    Holds the prepared figure with its static layers drawn and a ``draw_frame``
+    closure that updates only the dynamic artists for a given frame. ``frames``
+    is ``range(n)`` over the merged onsets (so ``len(anim.frames)`` is the frame
+    count downstream consumers read). The in-app view embeds :meth:`to_jshtml`
+    (an interactive HTML5 player); the GIF/MP4 exporter rasterises each frame via
+    :meth:`draw_frame` + ``savefig``.
     """
-    return [
-        dict(
-            type="buttons",
-            showactive=False,
-            # A horizontal row just below the plot (y=0 = plot bottom; yanchor=
-            # "top" hangs the row into the bottom margin); the time slider sits
-            # below it. direction="right" keeps the three buttons on one line.
-            direction="right",
-            y=0.0,
-            x=0.0,
-            xanchor="left",
-            yanchor="top",
-            pad=dict(t=8, l=8),
-            buttons=[
-                dict(
-                    label="▶ Play",
-                    method="animate",
-                    args=[
-                        None,
-                        dict(
-                            frame=dict(duration=frame_duration, redraw=False),
-                            fromcurrent=True,
-                            transition=dict(duration=0),
-                        ),
-                    ],
-                ),
-                dict(
-                    label="⏸ Pause",
-                    method="animate",
-                    args=[
-                        [None],
-                        dict(
-                            frame=dict(duration=0, redraw=False),
-                            mode="immediate",
-                            transition=dict(duration=0),
-                        ),
-                    ],
-                ),
-                dict(
-                    label="⟲ Restart",
-                    method="animate",
-                    args=[
-                        ["0"],
-                        dict(
-                            frame=dict(duration=0, redraw=True),
-                            mode="immediate",
-                            transition=dict(duration=0),
-                        ),
-                    ],
-                ),
-            ],
+
+    figure: Figure
+    frames: list
+    frame_durations_ms: list
+    avg_frame_duration: float
+    elapsed_labels: list
+    reading_span_ms: float
+    width: int
+    height: int
+    # The per-scanpath trail marker collections (A, then B), for introspection.
+    trails: list = field(default_factory=list, repr=False)
+    _draw: Callable[[int], list] = field(repr=False, default=lambda k: [])
+
+    def draw_frame(self, k: int) -> list:
+        """Update the figure to frame ``k``; returns the changed artists."""
+        return self._draw(k)
+
+    def _player_frame_indices(self, max_frames: Optional[int]) -> list:
+        n = len(self.frames)
+        if not max_frames or max_frames <= 0 or n <= max_frames:
+            return list(range(n))
+        # Even downsample keeping the endpoints (start empty, end full).
+        return sorted({int(round(i)) for i in np.linspace(0, n - 1, max_frames)})
+
+    def funcanimation(
+        self,
+        *,
+        interval: Optional[float] = None,
+        blit: bool = False,
+        max_frames: Optional[int] = _PLAYER_FRAME_CAP,
+    ):
+        """A ``FuncAnimation`` over the frames.
+
+        ``max_frames`` evenly downsamples very long readings (the inlined
+        ``to_jshtml`` player base64-encodes every frame, so an uncapped 1000-frame
+        reading would be a huge page); the per-frame interval is scaled up to keep
+        the total runtime unchanged.
+        """
+        from matplotlib.animation import FuncAnimation
+
+        idx = self._player_frame_indices(max_frames)
+        base = interval if interval is not None else self.avg_frame_duration
+        if len(idx) < len(self.frames):
+            base = base * len(self.frames) / len(idx)
+        return FuncAnimation(
+            self.figure, self._draw, frames=idx, interval=base, blit=blit, repeat=True
         )
-    ]
 
-
-def _animation_time_slider(onset_times):
-    """Slider whose handle position maps to elapsed reading time (not fixation
-    index), so scrubbing moves through seconds into the reading. Steps jump
-    instantly (duration 0).
-
-    A long reading has hundreds of fixations. Drawing a tick + time label under
-    *every* step renders an illegible wall of overlapping numbers — but the
-    per-step ``label`` is also what the single "Elapsed" readout shows, so we
-    can't simply blank most of them (the readout would go empty between the few
-    kept labels). Instead every step keeps its real time label — so the readout
-    updates smoothly on every frame and the handle stays frame-accurate — while
-    the per-step tick ruler (``ticklen``/``minorticklen=0``) and the per-step
-    labels (transparent ``font``) are hidden. The "Elapsed: X.Xs" readout is then
-    the one, uncluttered time display.
-    """
-    return [
-        dict(
-            active=0,
-            # Sit below the plot (y=0 = plot bottom; yanchor="top" hangs it into
-            # the bottom margin), under the play/pause/restart buttons.
-            yanchor="top",
-            xanchor="left",
-            ticklen=0,
-            minorticklen=0,
-            # Per-step labels feed the "Elapsed" readout but must not pile up
-            # under the track, so draw them fully transparent.
-            font=dict(color="rgba(0,0,0,0)"),
-            currentvalue=dict(
-                font=dict(size=14, color="#444"),
-                prefix="Elapsed: ",
-                visible=True,
-                xanchor="right",
-            ),
-            transition=dict(duration=0),
-            pad=dict(t=48, b=10),
-            len=0.9,
-            x=0.05,
-            y=0.0,
-            steps=[
-                dict(
-                    args=[
-                        [str(k)],
-                        dict(
-                            frame=dict(duration=0, redraw=True),
-                            mode="immediate",
-                            transition=dict(duration=0),
-                        ),
-                    ],
-                    label=f"{onset_times[k] / 1000:.1f}s",
-                    method="animate",
-                )
-                for k in range(len(onset_times))
-            ],
-        )
-    ]
+    def to_jshtml(
+        self,
+        *,
+        interval: Optional[float] = None,
+        max_frames: Optional[int] = _PLAYER_FRAME_CAP,
+    ) -> str:
+        """Self-contained interactive HTML5 player (play/pause/scrub), no browser
+        needed to build it. Embedded by the in-app animation view."""
+        return self.funcanimation(interval=interval, max_frames=max_frames).to_jshtml()
 
 
 def make_scanpath_animation(
@@ -1632,34 +1650,17 @@ def make_scanpath_animation(
     label_b: str = "Scanpath B",
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
-) -> go.Figure:
+) -> ScanpathAnimation:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
-    Pass ``fixations_b`` (and optionally ``words_b``) to overlay a SECOND
-    scanpath animated on the same clock. Every scanpath is rebased to its first
-    fixation's ``timestamp_ms``, so they share *real reading time* including the
-    saccade/blink gaps between fixations; a frame is emitted at every fixation
-    onset across all scanpaths, and the shorter reading finishes first and holds
-    while the longer keeps going. The Play button advances frames at the average
-    frame duration, so the whole replay takes ``reading_span / playback_speed``
-    — exactly what :func:`animation_playback_ms` reports (and the side panel
-    quotes), so the stated time matches the observed runtime.
-
-    With two scanpaths the trails take the two comparison colours, order numbers
-    are tinted per-scanpath, and a legend names them; word boxes/labels come from
-    ``words`` (scanpath A), so the overlay is meaningful for two readings of the
-    same text. With one scanpath the behaviour matches the classic single replay
-    (order numbers honour ``order_font_color``, no legend).
-
-    The single replay honours the same fixation-colouring options as
-    :func:`make_scanpath_figure`: ``color_by`` (numeric → ``fixation_colorscale``
-    pinned to the whole trial's range so colours stay stable as the trail grows,
-    categorical → discrete palette + legend), ``color_by_line``, and an optional
-    colorbar. The dual overlay ignores them — there the flat A/B colours are
-    what tells the two readings apart.
+    Pass ``fixations_b`` (+ optional ``words_b``) to overlay a SECOND scanpath on
+    the same clock. The single replay honours the static figure's fixation
+    colouring (``color_by`` numeric → ``fixation_colorscale`` pinned to the whole
+    trial's range so colours stay stable as the trail grows; categorical →
+    discrete palette + legend; ``color_by_line``). The dual overlay uses the flat
+    A/B comparison colours. Returns a :class:`ScanpathAnimation`.
     """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    font_family = font_family or FONT_FAMILY
 
     word_frames = [w for w in (words, words_b) if w is not None and not w.empty]
     x_range, y_range, *_ = _compute_axis_ranges(
@@ -1669,9 +1670,6 @@ def make_scanpath_animation(
         (fixations_b, "x", "y"),
         word_frames=word_frames,
     )
-
-    # Fix the display size first so word labels are sized in the data->screen
-    # scale (true-to-scale text); the same fitted_w/fitted_h drive the layout.
     fitted_w, fitted_h = _fit_display_size(
         canvas_width, canvas_height, x_range, y_range, spatial_axes=True
     )
@@ -1684,10 +1682,6 @@ def make_scanpath_animation(
         scale_text_to_boxes=scale_text_to_boxes,
     )
 
-    shapes = build_word_boxes(words) if show_words and not words.empty else []
-    if show_word_labels and not words.empty:
-        _add_word_label_trace(fig, words, label_font_px, font_settings["family"])
-
     specs = _scanpath_anim_specs(
         [
             (fixations, COMPARISON_PALETTE[0], label_a),
@@ -1697,22 +1691,17 @@ def make_scanpath_animation(
     )
     dual = len(specs) > 1
     if not dual and specs:
-        # A lone scanpath always wears the canonical single-replay colour,
-        # whether it arrived as `fixations` or (degenerately) only as
-        # `fixations_b`, so the trail never silently renders in the B colour.
         specs[0]["color"] = COMPARISON_PALETTE[0]
 
-    # Metric colouring, mirroring the static figure's fixation trace. Single
-    # replay only: the dual overlay keeps its flat A/B colours (they're what
-    # tells the readings apart). Numeric metrics map through
-    # `fixation_colorscale` with cmin/cmax pinned to the WHOLE trial (or the
-    # caller's range) up front — otherwise the scale would renormalise to the
-    # partial trail on every frame and colours would drift during playback.
+    # Metric colouring (single replay only), pinned to the whole trial up front.
     for s in specs:
         s["marker_colors"] = None
-        s["marker_extra"] = {}
+        s["is_numeric"] = False
+        s["cmin"] = None
+        s["cmax"] = None
     category_legend: list = []
     color_label = color_by or ""
+    numeric_mappable_spec = None
     if not dual and specs and (color_by or color_by_line):
         ordered0 = specs[0]["ordered"]
         if color_by_line and not words.empty:
@@ -1734,350 +1723,257 @@ def make_scanpath_animation(
                 color_data, is_numeric_color
             )
             specs[0]["marker_colors"] = list(marker_color)
+            specs[0]["is_numeric"] = is_numeric_color
             if is_numeric_color:
                 rng = fixation_color_range or (
                     float(color_data.min()),
                     float(color_data.max()),
                 )
-                specs[0]["marker_extra"] = dict(
-                    colorscale=fixation_colorscale,
-                    cmin=rng[0],
-                    cmax=rng[1],
-                    showscale=show_colorbars,
-                    colorbar=dict(
-                        title=color_label.replace("_", " ").title(),
-                        x=1.12,
-                        lenmode="fraction",
-                        len=COLORBAR_LEN_FRACTION,
-                        y=0.5,
-                        yanchor="middle",
-                    )
-                    if show_colorbars
-                    else None,
-                )
+                specs[0]["cmin"], specs[0]["cmax"] = rng[0], rng[1]
+                numeric_mappable_spec = specs[0]
 
-    def _trail_marker(s):
-        """Marker dict for a (full-length) trail trace.
+    colorbar_active = show_colorbars and numeric_mappable_spec is not None
+    legend_active = dual or bool(category_legend)
+    right = _COLORBAR_RESERVE_PX if colorbar_active else 0
 
-        Every animated trace is full length with not-yet-reached fixations masked
-        to ``None`` positions (see :func:`_revealed_xy`), so the size/colour
-        arrays are stated once at full length and never change frame to frame —
-        only which positions are revealed does. Restating the whole marker keeps
-        the colorscale/cmin/cmax/colorbar attached to the trail."""
-        colors = s["marker_colors"]
-        marker = dict(
-            size=list(s["sizes"]),
-            color=colors if colors is not None else s["color"],
-            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
-            **s["marker_extra"],
-        )
-        if hollow_fixations:
-            marker = _make_hollow(marker)
-        return marker
+    fig = mr.new_figure(fitted_w + right, fitted_h, background_color=background_color)
+    ax = mr.add_axes_px(
+        fig, 0, 0, fitted_w, fitted_h, background_color=background_color
+    )
+    _finish_spatial_axes(ax, x_range, y_range, background_color=background_color)
 
-    # Base traces, with stable indices the frames update by position. Each
-    # animated trace is built at FULL length (one slot per fixation); the replay
-    # reveals a fixation by un-masking its x/y, never by growing the array or
-    # rewriting `text`. Constant length + position-only changes are what let the
-    # Play button animate with `redraw=False` (see `_animation_play_buttons`):
-    # Plotly then re-renders only these few traces per frame instead of redrawing
-    # the static word boxes + labels every time — the redraw cost that made a
-    # long replay run far slower than its quoted time. It also keeps the trail's
-    # fixation number in `text` (hover only); the visible order numbers live in a
-    # separate text trace (below).
+    # Static layers (drawn once).
+    if show_words and not words.empty:
+        _add_rect_shapes(ax, build_word_boxes(words), zorder=_Z_BOX)
+    if show_word_labels and not words.empty:
+        _draw_word_labels(ax, words, label_font_px, font_family)
+    _draw_canvas_border(ax, x_range, y_range)
+
+    onset_times, frame_durations, avg_frame_duration, _span = _anim_timeline(
+        specs, playback_speed
+    )
+    elapsed_labels = [f"{t / 1000:.1f}s" for t in onset_times]
+
+    # Per-scanpath dynamic artists, built empty and updated per frame.
+    legend_handles: list = []
+    legend_labels: list = []
     for s in specs:
         ordered = s["ordered"]
-        n_total = len(ordered)
-        all_x = ordered["x"].tolist()
-        all_y = ordered["y"].tolist()
-        s["all_x"] = all_x
-        s["all_y"] = all_y
-        s["n_total"] = n_total
-        s["customdata"] = ordered["duration_ms"].tolist()
-        s["order_text"] = [str(j + 1) for j in range(n_total)]
+        s["all_x"] = ordered["x"].to_numpy(dtype=float)
+        s["all_y"] = ordered["y"].to_numpy(dtype=float)
+        s["n_total"] = len(ordered)
+        s["order_text"] = [str(j + 1) for j in range(s["n_total"])]
         s["text_color"] = s["color"] if dual else order_font_color
         s["sac_color"] = s["color"] if dual else saccade_color
         s["curr_outline"] = s["color"] if dual else CURRENT_FIX_OUTLINE
-        s["curr_outline_w"] = 2.5 if dual else 2
+        s["curr_outline_w"] = 2.5 if dual else 2.0
 
-        base_x, base_y = _revealed_xy(all_x, all_y, 1)
-        s["idx_trail"] = len(fig.data)
-        fig.add_trace(
-            go.Scatter(
-                x=base_x,
-                y=base_y,
-                mode="markers",
-                marker=_trail_marker(s),
-                text=s["order_text"],
-                showlegend=dual,
-                name=s["label"],
-                legendgroup=s["label"],
-                hovertemplate=(
-                    (s["label"] + "<br>" if dual else "")
-                    + "Fixation #%{text}<br>Duration %{customdata} ms<extra></extra>"
+        # Trail markers: created at full length with real positions (so the
+        # colour array / normalisation are computed whole and never re-masked);
+        # each frame then masks the *offsets* of unreached fixations so they
+        # aren't drawn, while the colour array stays pinned to the whole trial.
+        sizes = s["sizes"]
+        transparent = (0.0, 0.0, 0.0, 0.0)
+        if s["is_numeric"]:
+            norm = Normalize(vmin=s["cmin"], vmax=s["cmax"])
+            cmap = mr.resolve_cmap(fixation_colorscale)
+            trail = ax.scatter(
+                s["all_x"],
+                s["all_y"],
+                s=mr.marker_area(sizes),
+                c=np.asarray(
+                    pd.to_numeric(pd.Series(s["marker_colors"]), errors="coerce"),
+                    dtype=float,
                 ),
-                customdata=s["customdata"],
+                cmap=cmap,
+                norm=norm,
+                edgecolors=transparent
+                if hollow_fixations
+                else mr.to_mpl_color(FIX_MARKER_OUTLINE),
+                linewidths=mr.px_to_pt(
+                    HOLLOW_OUTLINE_WIDTH if hollow_fixations else 0.5
+                ),
+                zorder=_Z_FIX,
+                label=s["label"],
             )
-        )
-        # Order numbers: a text trace holding EVERY fixation's final position,
-        # with not-yet-reached fixations masked to None x/y (so nothing is drawn
-        # there). A number snaps on at its fixation when that position un-masks —
-        # no gliding in from the (0,0) corner — and because the `text` strings
-        # never change frame to frame, `redraw=False` renders the reveal purely
-        # from the position change.
-        if show_order:
-            s["idx_order"] = len(fig.data)
-            fig.add_trace(
-                go.Scatter(
-                    x=base_x,
-                    y=base_y,
-                    mode="text",
-                    text=s["order_text"],
-                    textfont=dict(
-                        color=s["text_color"],
-                        size=order_font_size,
-                        family=font_settings["family"],
-                    ),
-                    textposition="top center",
-                    showlegend=False,
-                    legendgroup=s["label"],
-                    hoverinfo="skip",
-                )
-            )
+            if hollow_fixations:
+                trail.set_facecolor(transparent)
         else:
-            s["idx_order"] = None
+            if s["marker_colors"] is not None:
+                face = _as_color_array(s["marker_colors"])
+            else:
+                face = mr.to_mpl_color(s["color"])
+            trail = ax.scatter(
+                s["all_x"],
+                s["all_y"],
+                s=mr.marker_area(sizes),
+                facecolors=transparent if hollow_fixations else face,
+                edgecolors=face
+                if hollow_fixations
+                else mr.to_mpl_color(FIX_MARKER_OUTLINE),
+                linewidths=mr.px_to_pt(
+                    HOLLOW_OUTLINE_WIDTH if hollow_fixations else 0.5
+                ),
+                zorder=_Z_FIX,
+                label=s["label"],
+            )
+        s["trail"] = trail
+
+        # Saccade polyline (empty LineCollection, segments set per frame).
         if show_saccades:
-            sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, 1)
-            s["idx_sac"] = len(fig.data)
-            fig.add_trace(
-                go.Scatter(
-                    x=sac_x,
-                    y=sac_y,
-                    mode="lines",
-                    line=dict(color=s["sac_color"], width=2, dash=saccade_style),
-                    showlegend=False,
-                    legendgroup=s["label"],
-                    hoverinfo="skip",
-                )
+            lc = LineCollection(
+                [],
+                colors=[mr.to_mpl_color(s["sac_color"])],
+                linewidths=mr.px_to_pt(2),
+                linestyles=mr.mpl_linestyle(saccade_style),
+                zorder=_Z_SACCADE,
             )
+            ax.add_collection(lc)
+            s["sac"] = lc
         else:
-            s["idx_sac"] = None
-        s["idx_curr"] = len(fig.data)
-        fig.add_trace(
-            go.Scatter(
-                x=[all_x[0]],
-                y=[all_y[0]],
-                mode="markers",
-                marker=dict(
-                    size=[float(s["sizes"][0]) + 8],
-                    color=CURRENT_FIX_COLOR,
-                    line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
-                ),
-                showlegend=False,
-                legendgroup=s["label"],
-                hoverinfo="skip",
-            )
-        )
+            s["sac"] = None
 
-    # Categorical colour legend (single replay), as in the static figure. These
-    # dummy traces sit AFTER the per-scanpath traces so the frame indices
-    # recorded above stay valid; frames never touch them.
+        # Order numbers: one Text per fixation at its true position, hidden until
+        # revealed (visibility toggle → numbers never glide in from the corner).
+        if show_order:
+            order_texts = []
+            for j in range(s["n_total"]):
+                t = ax.annotate(
+                    s["order_text"][j],
+                    (s["all_x"][j], s["all_y"][j]),
+                    textcoords="offset points",
+                    xytext=(0, 4),
+                    ha="center",
+                    va="bottom",
+                    fontsize=mr.px_to_pt(order_font_size),
+                    family=font_family,
+                    color=mr.to_mpl_color(s["text_color"]),
+                    zorder=_Z_ORDER,
+                )
+                t.set_visible(False)
+                order_texts.append(t)
+            s["order_texts"] = order_texts
+        else:
+            s["order_texts"] = []
+
+        # Current-fixation highlight marker.
+        curr = ax.scatter(
+            [np.nan],
+            [np.nan],
+            s=[mr.marker_area(float(sizes[0]) + 8)],
+            facecolors=[mr.to_mpl_color(CURRENT_FIX_COLOR)],
+            edgecolors=[mr.to_mpl_color(s["curr_outline"])],
+            linewidths=mr.px_to_pt(s["curr_outline_w"]),
+            zorder=_Z_CURRENT,
+        )
+        s["curr"] = curr
+
+        if dual:
+            legend_handles.append(_legend_proxy(s["color"]))
+            legend_labels.append(s["label"])
+
     legend_limit = len(_QUALITATIVE_PALETTE)
     for category, color in category_legend[:legend_limit]:
-        fig.add_trace(
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(
-                    size=10,
-                    color=color,
-                    line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
-                ),
-                name=f"{color_label}: {category}",
-                showlegend=True,
-                hoverinfo="skip",
-            )
-        )
+        legend_handles.append(_legend_proxy(color))
+        legend_labels.append(f"{color_label}: {category}")
     if len(category_legend) > legend_limit:
-        fig.add_trace(
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(size=10, color="#cccccc"),
-                name=f"… +{len(category_legend) - legend_limit} more",
-                showlegend=True,
-                hoverinfo="skip",
-            )
+        legend_handles.append(_legend_proxy("#cccccc"))
+        legend_labels.append(f"… +{len(category_legend) - legend_limit} more")
+    if legend_active and legend_handles:
+        ax.legend(
+            legend_handles,
+            legend_labels,
+            loc="upper right",
+            fontsize=mr.px_to_pt(11),
+            framealpha=0.7,
+            prop={"family": font_family} if font_family else None,
         )
 
-    onset_times, _frame_durations, avg_frame_duration, _span = _anim_timeline(
-        specs, playback_speed
+    if colorbar_active and numeric_mappable_spec is not None:
+        _add_colorbars(
+            fig,
+            [(numeric_mappable_spec["trail"], color_label.replace("_", " ").title())],
+            left=0,
+            bottom=0,
+            fitted_w=fitted_w,
+            fitted_h=fitted_h,
+            font_family=font_family,
+        )
+
+    # Elapsed-time readout (top-left, inside the plot — like the classic clock).
+    # The label list stays the raw "X.Xs" clock values; the on-screen readout
+    # prefixes "Elapsed: " (mirroring the old slider readout).
+    def _elapsed_text(k: int) -> str:
+        return f"Elapsed: {elapsed_labels[k]}" if elapsed_labels else ""
+
+    elapsed_artist = ax.text(
+        0.01,
+        0.99,
+        _elapsed_text(0),
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+        fontsize=mr.px_to_pt(14),
+        color="#444444",
+        bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7),
+        zorder=_Z_BORDER + 1,
     )
 
-    frames = []
-    for k, t in enumerate(onset_times):
-        traces_in_frame = []
-        traces_idx_in_frame = []
+    def _draw(k: int):
+        changed = []
         for s in specs:
-            all_x = s["all_x"]
-            all_y = s["all_y"]
-            # Fixations whose recorded onset has been reached by time t.
-            kk = max(int(np.searchsorted(s["onsets"], t, side="right")), 1)
-
-            # Trail: full-length, fixations past kk masked to None. The marker
-            # (sizes/colours) and `text` are full-length and identical every
-            # frame, so only positions change — `redraw=False` then re-renders
-            # just this trace, not the whole figure.
-            tx, ty = _revealed_xy(all_x, all_y, kk)
-            traces_in_frame.append(
-                go.Scatter(
-                    x=tx,
-                    y=ty,
-                    mode="markers",
-                    marker=_trail_marker(s),
-                    text=s["order_text"],
-                    customdata=s["customdata"],
-                )
-            )
-            traces_idx_in_frame.append(s["idx_trail"])
-
-            if show_order:
-                # Same full-length positions/text as the base order trace; the
-                # reveal is purely the un-masking of x/y for reached fixations,
-                # so numbers appear in place (and `redraw=False` shows them).
-                ox, oy = _revealed_xy(all_x, all_y, kk)
-                traces_in_frame.append(
-                    go.Scatter(
-                        x=ox,
-                        y=oy,
-                        mode="text",
-                        text=s["order_text"],
-                        textfont=dict(
-                            color=s["text_color"],
-                            size=order_font_size,
-                            family=font_settings["family"],
-                        ),
-                        textposition="top center",
-                    )
-                )
-                traces_idx_in_frame.append(s["idx_order"])
-
-            if show_saccades:
-                sac_x, sac_y = _revealed_saccade_xy(all_x, all_y, kk)
-                traces_in_frame.append(
-                    go.Scatter(
-                        x=sac_x,
-                        y=sac_y,
-                        mode="lines",
-                        line=dict(color=s["sac_color"], width=2, dash=saccade_style),
-                    )
-                )
-                traces_idx_in_frame.append(s["idx_sac"])
-
+            onsets = s["onsets"]
+            kk = max(int(np.searchsorted(onsets, onset_times[k], side="right")), 1)
+            kk = min(kk, s["n_total"])
+            ax_x, ax_y = s["all_x"], s["all_y"]
+            # Mask (don't NaN) the offsets of unreached fixations: masked points
+            # aren't drawn, but the colour array / Normalize stay intact, so
+            # colours never renormalise to the partial trail.
+            offs = np.ma.array(np.column_stack([ax_x, ax_y]), mask=False)
+            if kk < len(ax_x):
+                offs[kk:] = np.ma.masked
+            s["trail"].set_offsets(offs)
+            changed.append(s["trail"])
+            if s["sac"] is not None:
+                segs = [
+                    [(ax_x[j], ax_y[j]), (ax_x[j + 1], ax_y[j + 1])]
+                    for j in range(kk - 1)
+                ]
+                s["sac"].set_segments(segs)
+                changed.append(s["sac"])
+            for j, t in enumerate(s["order_texts"]):
+                t.set_visible(j < kk)
+                changed.append(t)
             ci = kk - 1
-            traces_in_frame.append(
-                go.Scatter(
-                    x=[all_x[ci]],
-                    y=[all_y[ci]],
-                    mode="markers",
-                    marker=dict(
-                        size=[float(s["sizes"][ci]) + 8],
-                        color=CURRENT_FIX_COLOR,
-                        line=dict(color=s["curr_outline"], width=s["curr_outline_w"]),
-                    ),
-                )
-            )
-            traces_idx_in_frame.append(s["idx_curr"])
+            s["curr"].set_offsets([[ax_x[ci], ax_y[ci]]])
+            changed.append(s["curr"])
+        if elapsed_labels:
+            elapsed_artist.set_text(_elapsed_text(k))
+            changed.append(elapsed_artist)
+        return changed
 
-        frames.append(
-            go.Frame(data=traces_in_frame, name=str(k), traces=traces_idx_in_frame)
-        )
-    fig.frames = frames
+    # Seed frame 0 so a static save (or the first player frame) is populated.
+    if onset_times:
+        _draw(0)
 
-    shapes.append(
-        dict(
-            type="rect",
-            x0=x_range[0],
-            y0=y_range[1],
-            x1=x_range[1],
-            y1=y_range[0],
-            line=dict(color="#000000", width=1),
-            fillcolor="rgba(0,0,0,0)",
-        )
+    return ScanpathAnimation(
+        figure=fig,
+        frames=list(range(len(onset_times))),
+        frame_durations_ms=frame_durations,
+        avg_frame_duration=float(avg_frame_duration),
+        elapsed_labels=elapsed_labels,
+        reading_span_ms=float(_span),
+        width=fitted_w + right,
+        height=fitted_h,
+        trails=[s["trail"] for s in specs],
+        _draw=_draw,
     )
 
-    sliders = _animation_time_slider(onset_times) if onset_times else []
-    updatemenus = _animation_play_buttons(avg_frame_duration) if onset_times else []
 
-    # fitted_w / fitted_h were computed up front (so the label scale matched).
-    # ALL transport controls (play/pause/restart buttons + the time slider with
-    # its "Elapsed" readout) sit BELOW the plot in the bottom margin. Critically,
-    # the figure is made tall enough that the plot region stays >= fitted_h after
-    # Plotly's automargin reserves space for those controls — otherwise the
-    # equal-aspect (`scaleanchor`) plot would shrink to fit the leftover height,
-    # making the word boxes smaller than the true-to-scale label font computed
-    # for fitted_h (text-too-large bug). _CONTROLS_MARGIN_PX is that reserve.
-    # A single-replay numeric colorbar gets the same treatment on the right
-    # (the dual-overlay legend overlays the plot, so it needs no reserve).
-    anim_colorbar = bool(specs and specs[0].get("marker_extra", {}).get("showscale"))
-    right_reserve = _COLORBAR_RESERVE_PX if anim_colorbar else 0
-    layout = dict(
-        height=fitted_h + _CONTROLS_MARGIN_PX + _CONTROLS_SAFETY_PX,
-        width=fitted_w + right_reserve,
-        autosize=False,
-        margin=dict(l=0, r=right_reserve, t=0, b=_CONTROLS_MARGIN_PX),
-        xaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=x_range,
-            constrain="domain",
-            automargin=False,
-        ),
-        yaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=y_range,
-            constrain="domain",
-            scaleanchor="x",
-            scaleratio=1,
-            automargin=False,
-        ),
-        template="plotly_white",
-        plot_bgcolor=background_color,
-        paper_bgcolor=background_color,
-        font=font_settings,
-        shapes=shapes,
-        sliders=sliders,
-        updatemenus=updatemenus,
-    )
-    if dual or category_legend:
-        layout["legend"] = dict(
-            orientation="h",
-            yanchor="top",
-            y=0.99,
-            xanchor="right",
-            x=0.99,
-            bgcolor="rgba(255,255,255,0.7)",
-            bordercolor="#cccccc",
-            borderwidth=1,
-        )
-    fig.update_layout(**layout)
-    return fig
-
-
-def _resolve_trial_display_name(
-    participant: str,
-    trial_id: str,
-    trial_words: pd.DataFrame,
-    trial_labels: Optional[Tuple[str, str]],
-    idx: int,
-) -> str:
+# =============================================================================
+# Comparison figures
+# =============================================================================
+def _resolve_trial_display_name(participant, trial_id, trial_words, trial_labels, idx):
     if trial_labels is not None and len(trial_labels) > idx:
         return trial_labels[idx]
     text_id = None
@@ -2096,16 +1992,8 @@ def _resolve_trial_display_name(
 
 
 def _comparison_scanpath_style(
-    idx: int,
-    override: Optional[dict] = None,
-    *,
-    default_marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
-) -> dict:
-    """Resolve the per-scanpath style for a comparison trace.
-
-    Defaults reproduce the classic two-flat-colour look (``COMPARISON_PALETTE``);
-    ``override`` (from the sidebar's per-scanpath styling panel) wins per key.
-    """
+    idx, override=None, *, default_marker_size_range=DEFAULT_MARKER_SIZE_RANGE
+):
     base = {
         "fix_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
         "saccade_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
@@ -2119,142 +2007,105 @@ def _comparison_scanpath_style(
 
 
 def _add_comparison_fixation_trace(
-    fig: go.Figure,
+    ax,
     trial_fix: pd.DataFrame,
     display_name: str,
     style: dict,
-    font_settings: dict,
     *,
+    font_family: str,
+    scale: float,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     show_order: bool = True,
     order_font_size: Optional[int] = None,
-    row: Optional[int] = None,
-    col: Optional[int] = None,
-) -> None:
-    """Add one scanpath's saccades + fixation markers to a comparison figure.
-
-    Saccades and markers are separate traces (mirroring the single-trial figure)
-    so the per-scanpath saccade colour/line-style and hollow markers all apply,
-    and the shared ``show_saccades`` / ``show_saccade_arrows`` / ``show_order``
-    toggles take effect. Fixation colour is a single per-scanpath colour so the
-    two readings stay distinguishable; order numbers are tinted to match.
-    """
+):
+    """Draw one scanpath's saccades + arrows + fixation markers (+ order numbers)
+    onto ``ax`` with a single flat per-scanpath colour. Returns the marker
+    collection (for legend handles)."""
     if trial_fix.empty:
-        return
+        return None
     fix_color = style["fix_color"]
     saccade_color = style["saccade_color"]
     saccade_style = style.get("saccade_style", "solid")
 
-    def _add(trace):
-        if row is not None and col is not None:
-            fig.add_trace(trace, row=row, col=col)
-        else:
-            fig.add_trace(trace)
-
     if show_saccades and len(trial_fix) > 1:
-        sx, sy = _saccade_segments(trial_fix, "x", "y")
-        if sx:
-            _add(
-                go.Scatter(
-                    x=sx,
-                    y=sy,
-                    mode="lines",
-                    line=dict(color=saccade_color, width=2, dash=saccade_style),
-                    name=display_name,
-                    legendgroup=display_name,
-                    showlegend=False,
-                    hoverinfo="skip",
-                )
-            )
-    if show_saccade_arrows and len(trial_fix) > 1:
-        amx, amy, aang = _saccade_arrow_markers(trial_fix, "x", "y")
-        if amx:
-            _add(
-                go.Scatter(
-                    x=amx,
-                    y=amy,
-                    mode="markers",
-                    marker=dict(
-                        symbol="arrow",
-                        size=12,
-                        angle=aang,
-                        angleref="up",
-                        color=saccade_color,
-                        line=dict(width=0),
-                    ),
-                    legendgroup=display_name,
-                    showlegend=False,
-                    hoverinfo="skip",
-                )
-            )
-
-    sizes = _compute_marker_sizes(trial_fix["duration_ms"], style["marker_size_range"])
-    marker = dict(
-        size=sizes,
-        color=fix_color,
-        line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
-    )
-    if style.get("hollow"):
-        marker = _make_hollow(marker)
-    order_font = dict(font_settings)
-    order_font["color"] = fix_color
-    if order_font_size is not None:
-        order_font["size"] = order_font_size
-    _add(
-        go.Scatter(
-            x=trial_fix["x"],
-            y=trial_fix["y"],
-            mode="markers+text" if show_order else "markers",
-            marker=marker,
-            name=display_name,
-            legendgroup=display_name,
-            text=trial_fix["order_in_trial"] if show_order else None,
-            textposition="top center",
-            textfont=order_font,
-            hovertemplate=(
-                f"{display_name} "
-                "Order %{customdata[2]}<br>Time %{customdata[0]} ms<br>"
-                "Duration %{customdata[1]} ms<extra></extra>"
-            ),
-            customdata=trial_fix[["timestamp_ms", "duration_ms", "order_in_trial"]],
+        _draw_saccades(
+            ax,
+            trial_fix,
+            "x",
+            "y",
+            color=saccade_color,
+            linestyle=saccade_style,
+            label=display_name,
         )
+    if show_saccade_arrows and len(trial_fix) > 1:
+        _draw_saccade_arrows(
+            ax,
+            trial_fix,
+            "x",
+            "y",
+            color=saccade_color,
+            scale=scale,
+            label=display_name,
+        )
+
+    ordered = trial_fix.sort_values("timestamp_ms")
+    sizes = _compute_marker_sizes(ordered["duration_ms"], style["marker_size_range"])
+    coll, _ = _draw_fixation_markers(
+        ax,
+        ordered["x"],
+        ordered["y"],
+        sizes,
+        marker_color=fix_color,
+        is_numeric=False,
+        colorscale=None,
+        cmin=None,
+        cmax=None,
+        hollow=bool(style.get("hollow")),
+        label=display_name,
     )
+    if show_order:
+        _draw_order_numbers(
+            ax,
+            ordered["x"],
+            ordered["y"],
+            ordered["order_in_trial"],
+            color=fix_color,
+            size_px=order_font_size if order_font_size is not None else 10,
+            family=font_family,
+        )
+    return coll
 
 
 def _make_split_comparison_figure(
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
-    trial_a: Tuple[str, str],
-    trial_b: Tuple[str, str],
+    words,
+    fixations,
+    trial_a,
+    trial_b,
     *,
-    canvas_width: int,
-    canvas_height: int,
-    font_family: str,
-    base_font_size: int,
-    show_words: bool,
-    show_word_labels: bool,
-    trial_labels: Optional[Tuple[str, str]],
-    orientation: str,
-    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
-    styles: Optional[Tuple[dict, dict]] = None,
-    show_saccades: bool = True,
-    show_saccade_arrows: bool = False,
-    show_order: bool = False,
-    order_font_size: Optional[int] = None,
-    text_color: str = WORD_LABEL_COLOR,
-    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
-    background_color: Optional[str] = None,
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
-) -> go.Figure:
-    """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked)."""
-    from plotly.subplots import make_subplots
-
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    canvas_width,
+    canvas_height,
+    font_family,
+    base_font_size,
+    show_words,
+    show_word_labels,
+    trial_labels,
+    orientation,
+    marker_size_range=DEFAULT_MARKER_SIZE_RANGE,
+    styles=None,
+    show_saccades=True,
+    show_saccade_arrows=False,
+    show_order=False,
+    order_font_size=None,
+    text_color=WORD_LABEL_COLOR,
+    highlight_text_color=HIGHLIGHTED_TEXT_COLOR,
+    background_color=None,
+    line_spacing=DEFAULT_LINE_SPACING,
+    scale_text_to_boxes=True,
+) -> Figure:
+    """Two-panel comparison: horizontal (side-by-side) or vertical (stacked)."""
+    font_family = font_family or FONT_FAMILY
     is_stacked = orientation == "stacked"
-    # Per-panel pixel size (approx; subplot spacing/titles shave a little) used to
-    # size word labels true-to-scale within each panel.
     per_panel_w = canvas_width if is_stacked else canvas_width // 2
 
     trial_specs = []
@@ -2285,185 +2136,115 @@ def _make_split_comparison_figure(
             )
         )
 
-    if is_stacked:
-        fig = make_subplots(
-            rows=2,
-            cols=1,
-            vertical_spacing=0.08,
-            subplot_titles=[
-                trial_specs[0]["display_name"],
-                trial_specs[1]["display_name"],
-            ],
-        )
-    else:
-        fig = make_subplots(
-            rows=1,
-            cols=2,
-            horizontal_spacing=0.04,
-            subplot_titles=[
-                trial_specs[0]["display_name"],
-                trial_specs[1]["display_name"],
-            ],
-        )
-
-    all_shapes: list = []
-    for idx, spec in enumerate(trial_specs):
-        if is_stacked:
-            row, col = idx + 1, 1
-            axis_suffix = "" if idx == 0 else str(idx + 1)
-        else:
-            row, col = 1, idx + 1
-            axis_suffix = "" if idx == 0 else str(idx + 1)
-        xref = f"x{axis_suffix}"
-        yref = f"y{axis_suffix}"
-        trial_words = spec["trial_words"]
-        trial_fix = spec["trial_fix"]
-
+    # Size each panel (and the whole figure) the same way the single plot does.
+    panel_geoms = []
+    for spec in trial_specs:
         x_range, y_range, *_ = _compute_axis_ranges(
             canvas_width,
             canvas_height,
-            (trial_fix, "x", "y"),
-            word_frames=[trial_words] if not trial_words.empty else [],
+            (spec["trial_fix"], "x", "y"),
+            word_frames=[spec["trial_words"]] if not spec["trial_words"].empty else [],
+        )
+        pf_w, pf_h = _fit_display_size(
+            per_panel_w, canvas_height, x_range, y_range, spatial_axes=True
+        )
+        panel_scale = _display_scale(x_range, y_range, pf_w, pf_h)
+        panel_geoms.append(
+            dict(x_range=x_range, y_range=y_range, w=pf_w, h=pf_h, scale=panel_scale)
         )
 
-        if show_words and not trial_words.empty:
-            for box in build_word_boxes(trial_words, color=spec["color"]):
-                box = dict(box)
-                box["xref"] = xref
-                box["yref"] = yref
-                all_shapes.append(box)
+    panel_w = panel_geoms[-1]["w"]
+    panel_h = panel_geoms[-1]["h"]
+    title_band = 36
+    gap = 24
+    if is_stacked:
+        total_width = panel_w
+        total_height = panel_h * 2 + title_band * 2 + gap
+    else:
+        total_width = panel_w * 2 + gap
+        total_height = panel_h + title_band
 
-        all_shapes.append(
-            dict(
-                type="rect",
-                xref=xref,
-                yref=yref,
-                x0=x_range[0],
-                y0=y_range[1],
-                x1=x_range[1],
-                y1=y_range[0],
-                line=dict(color="#000000", width=1),
-                fillcolor="rgba(0,0,0,0)",
+    fig = mr.new_figure(total_width, total_height, background_color=background_color)
+
+    for idx, (spec, geom) in enumerate(zip(trial_specs, panel_geoms)):
+        if is_stacked:
+            ax_x = (total_width - panel_w) / 2.0
+            ax_y = total_height - (idx + 1) * (panel_h + title_band) - idx * gap
+        else:
+            ax_x = idx * (panel_w + gap)
+            ax_y = 0
+        ax = mr.add_axes_px(
+            fig, ax_x, ax_y, panel_w, panel_h, background_color=background_color
+        )
+        _finish_spatial_axes(
+            ax, geom["x_range"], geom["y_range"], background_color=background_color
+        )
+        ax.set_title(spec["display_name"], fontsize=mr.px_to_pt(13), family=font_family)
+
+        if show_words and not spec["trial_words"].empty:
+            _add_rect_shapes(
+                ax,
+                build_word_boxes(spec["trial_words"], color=spec["color"]),
+                zorder=_Z_BOX,
             )
-        )
-
+        _draw_canvas_border(ax, geom["x_range"], geom["y_range"])
         _add_comparison_fixation_trace(
-            fig,
-            trial_fix,
+            ax,
+            spec["trial_fix"],
             spec["display_name"],
             spec["style"],
-            font_settings,
+            font_family=font_family,
+            scale=geom["scale"],
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
             show_order=show_order,
             order_font_size=order_font_size,
-            row=row,
-            col=col,
         )
-
         if show_word_labels:
-            pf_w, pf_h = _fit_display_size(
-                per_panel_w, canvas_height, x_range, y_range, spatial_axes=True
-            )
-            panel_scale = _display_scale(x_range, y_range, pf_w, pf_h)
-            _add_word_label_trace(
-                fig,
-                trial_words,
+            _draw_word_labels(
+                ax,
+                spec["trial_words"],
                 _word_label_font_px(
-                    trial_words,
-                    scale=panel_scale,
+                    spec["trial_words"],
+                    scale=geom["scale"],
                     line_spacing=line_spacing,
                     manual_font_px=base_font_size,
                     scale_text_to_boxes=scale_text_to_boxes,
                 ),
-                font_settings["family"],
-                row=row,
-                col=col,
+                font_family,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
             )
-
-        xaxis_key = "xaxis" if idx == 0 else f"xaxis{idx + 1}"
-        yaxis_key = "yaxis" if idx == 0 else f"yaxis{idx + 1}"
-        fig.update_layout(
-            **{
-                xaxis_key: dict(
-                    showticklabels=False,
-                    showgrid=False,
-                    zeroline=False,
-                    title=None,
-                    range=x_range,
-                    constrain="domain",
-                ),
-                yaxis_key: dict(
-                    showticklabels=False,
-                    showgrid=False,
-                    zeroline=False,
-                    title=None,
-                    range=y_range,
-                    constrain="domain",
-                    scaleanchor=xref,
-                    scaleratio=1,
-                ),
-            }
-        )
-
-    # Fit the figure to the data aspect just like the single-trial plot.
-    # `x_range` / `y_range` from the inner loop are per-trial; the two trials
-    # being compared usually share the paragraph (same canvas), so re-using
-    # the last loop iteration's range is fine. `per_panel_w` was set above.
-    panel_w, panel_h = _fit_display_size(
-        per_panel_w, canvas_height, x_range, y_range, spatial_axes=True
-    )
-    if is_stacked:
-        total_width = panel_w
-        total_height = panel_h * 2 + 40
-    else:  # side-by-side
-        total_width = panel_w * 2
-        total_height = panel_h
-    fig.update_layout(
-        height=total_height,
-        width=total_width,
-        autosize=False,
-        margin=dict(l=0, r=0, t=40, b=0),
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
-        template="plotly_white",
-        plot_bgcolor=background_color,
-        paper_bgcolor=background_color,
-        title="Stacked comparison" if is_stacked else "Side-by-side comparison",
-        font=font_settings,
-        shapes=all_shapes,
-    )
     return fig
 
 
 def make_comparison_figure(
-    words: pd.DataFrame,
-    fixations: pd.DataFrame,
-    trial_a: Tuple[str, str],
-    trial_b: Tuple[str, str],
+    words,
+    fixations,
+    trial_a,
+    trial_b,
     *,
-    canvas_width: int,
-    canvas_height: int,
-    font_family: str,
-    base_font_size: int,
-    show_words: bool = True,
-    show_word_labels: bool = False,
-    trial_labels: Optional[Tuple[str, str]] = None,
-    layout: str = "overlay",
-    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
-    style_a: Optional[dict] = None,
-    style_b: Optional[dict] = None,
-    show_saccades: bool = True,
-    show_saccade_arrows: bool = False,
-    show_order: bool = False,
-    order_font_size: Optional[int] = None,
-    text_color: str = WORD_LABEL_COLOR,
-    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
-    background_color: Optional[str] = None,
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
-) -> go.Figure:
+    canvas_width,
+    canvas_height,
+    font_family,
+    base_font_size,
+    show_words=True,
+    show_word_labels=False,
+    trial_labels=None,
+    layout="overlay",
+    marker_size_range=DEFAULT_MARKER_SIZE_RANGE,
+    style_a=None,
+    style_b=None,
+    show_saccades=True,
+    show_saccade_arrows=False,
+    show_order=False,
+    order_font_size=None,
+    text_color=WORD_LABEL_COLOR,
+    highlight_text_color=HIGHLIGHTED_TEXT_COLOR,
+    background_color=None,
+    line_spacing=DEFAULT_LINE_SPACING,
+    scale_text_to_boxes=True,
+) -> Figure:
     if layout in {"side_by_side", "stacked"}:
         return _make_split_comparison_figure(
             words,
@@ -2491,8 +2272,7 @@ def make_comparison_figure(
             scale_text_to_boxes=scale_text_to_boxes,
         )
 
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    font_family = font_family or FONT_FAMILY
     overrides = (style_a, style_b)
 
     trial_specs = []
@@ -2526,38 +2306,33 @@ def make_comparison_figure(
         canvas_height,
         *((spec["trial_fix"], "x", "y") for spec in trial_specs),
         word_frames=[
-            spec["trial_words"] for spec in trial_specs if not spec["trial_words"].empty
+            s["trial_words"] for s in trial_specs if not s["trial_words"].empty
         ],
     )
-
-    # Both trials are overlaid on one shared canvas, so one display scale sizes
-    # every word label true-to-scale (geometry is identical across the readings).
     fitted_w, fitted_h = _fit_display_size(
         canvas_width, canvas_height, x_range, y_range, spatial_axes=True
     )
     overlay_scale = _display_scale(x_range, y_range, fitted_w, fitted_h)
 
+    fig = mr.new_figure(
+        fitted_w, fitted_h + _OVERLAY_TOP_PX, background_color=background_color
+    )
+    ax = mr.add_axes_px(
+        fig, 0, 0, fitted_w, fitted_h, background_color=background_color
+    )
+    _finish_spatial_axes(ax, x_range, y_range, background_color=background_color)
+
+    legend_handles, legend_labels = [], []
     for spec in trial_specs:
-        _add_comparison_fixation_trace(
-            fig,
-            spec["trial_fix"],
-            spec["display_name"],
-            spec["style"],
-            font_settings,
-            show_saccades=show_saccades,
-            show_saccade_arrows=show_saccade_arrows,
-            show_order=show_order,
-            order_font_size=order_font_size,
-        )
         if show_words:
-            existing = list(fig.layout.shapes) if fig.layout.shapes else []
-            fig.update_layout(
-                shapes=existing
-                + build_word_boxes(spec["trial_words"], color=spec["color"])
+            _add_rect_shapes(
+                ax,
+                build_word_boxes(spec["trial_words"], color=spec["color"]),
+                zorder=_Z_BOX,
             )
         if show_word_labels:
-            _add_word_label_trace(
-                fig,
+            _draw_word_labels(
+                ax,
                 spec["trial_words"],
                 _word_label_font_px(
                     spec["trial_words"],
@@ -2566,66 +2341,64 @@ def make_comparison_figure(
                     manual_font_px=base_font_size,
                     scale_text_to_boxes=scale_text_to_boxes,
                 ),
-                font_settings["family"],
+                font_family,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
             )
-
-    shapes = list(fig.layout.shapes) if fig.layout.shapes else []
-    shapes.append(
-        dict(
-            type="rect",
-            x0=x_range[0],
-            y0=y_range[1],
-            x1=x_range[1],
-            y1=y_range[0],
-            line=dict(color="#000000", width=1),
-            fillcolor="rgba(0,0,0,0)",
+        coll = _add_comparison_fixation_trace(
+            ax,
+            spec["trial_fix"],
+            spec["display_name"],
+            spec["style"],
+            font_family=font_family,
+            scale=overlay_scale,
+            show_saccades=show_saccades,
+            show_saccade_arrows=show_saccade_arrows,
+            show_order=show_order,
+            order_font_size=order_font_size,
         )
-    )
+        if coll is not None:
+            legend_handles.append(_legend_proxy(spec["color"]))
+            legend_labels.append(spec["display_name"])
 
-    # fitted_w / fitted_h were computed up front (so the label scale matched).
-    # The title + top A/B legend get reserved space above the plot so they don't
-    # shrink the equal-aspect plot region (same fix as make_scanpath_figure).
-    fig.update_layout(
-        height=fitted_h + _OVERLAY_TOP_PX,
-        width=fitted_w,
-        autosize=False,
-        margin=dict(l=0, r=0, t=_OVERLAY_TOP_PX, b=0),
-        xaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=x_range,
-            constrain="domain",
-            automargin=False,
-        ),
-        yaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=y_range,
-            constrain="domain",
-            scaleanchor="x",
-            scaleratio=1,
-            automargin=False,
-        ),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        template="plotly_white",
-        plot_bgcolor=background_color,
-        paper_bgcolor=background_color,
-        title="Overlay comparison",
-        font=font_settings,
-        shapes=shapes,
-    )
+    _draw_canvas_border(ax, x_range, y_range)
+    ax.set_title("Overlay comparison", fontsize=mr.px_to_pt(14), family=font_family)
+    if legend_handles:
+        _add_top_legend(ax, legend_handles, legend_labels, font_family=font_family)
     return fig
 
 
 # =============================================================================
-# Reading-research figures: per-word bar, fixation-duration histogram
+# Reading-research figures: per-word bar, fixation-duration histogram, trends
 # =============================================================================
+def _research_fig(canvas_width: int, height: int, *, font_family: str):
+    """A plain (non-spatial) research figure + axes sized in px."""
+    font_family = font_family or FONT_FAMILY
+    fig = mr.new_figure(int(canvas_width), int(height))
+    ax = mr.add_axes_px(
+        fig, 64, 52, max(int(canvas_width) - 88, 80), max(int(height) - 84, 60)
+    )
+    ax.grid(True, axis="y", color="#ececec", linewidth=0.6)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    return fig, ax, font_family
+
+
+def _empty_research_fig(canvas_width, height, *, font_family, title):
+    fig, ax, _ = _research_fig(canvas_width or 600, height, font_family=font_family)
+    ax.set_title(title, fontsize=mr.px_to_pt(14))
+    ax.text(
+        0.5,
+        0.5,
+        "No data",
+        transform=ax.transAxes,
+        ha="center",
+        va="center",
+        color="#888888",
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+    return fig
 
 
 def make_word_measure_bar_figure(
@@ -2636,56 +2409,60 @@ def make_word_measure_bar_figure(
     base_font_size: int,
     font_family: str,
     height: int = 360,
-) -> go.Figure:
-    """Vertical bar plot of a per-word measure, with word text on the x-axis."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+) -> Figure:
+    """Vertical bar plot of a per-word measure, coloured by value."""
     if words.empty or measure not in words.columns:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
+        return _empty_research_fig(
+            canvas_width,
+            height,
+            font_family=font_family,
             title=f"No data for '{measure}'",
-            height=height,
         )
-        return fig
+    fig, ax, font_family = _research_fig(canvas_width, height, font_family=font_family)
     ordered = words.sort_values(["line_idx", "word_id"]).reset_index(drop=True)
     labels = [
         f"{int(wid)}: {txt}" if pd.notna(wid) else str(txt)
         for wid, txt in zip(ordered["word_id"], ordered.get("text", ordered["word_id"]))
     ]
     values = pd.to_numeric(ordered[measure], errors="coerce")
-    fig.add_trace(
-        go.Bar(
-            x=labels,
-            y=values,
-            marker=dict(
-                color=values,
-                colorscale=DEFAULT_HEATMAP_COLORSCALE,
-                showscale=True,
-                colorbar=dict(title=measure.replace("_", " ").title()),
-            ),
-            hovertemplate="%{x}<br>" + measure + ": %{y}<extra></extra>",
-        )
+    cmap = mr.resolve_cmap(DEFAULT_HEATMAP_COLORSCALE)
+    finite = values.dropna()
+    norm = Normalize(
+        vmin=float(finite.min()) if len(finite) else 0.0,
+        vmax=float(finite.max()) if len(finite) else 1.0,
     )
-    mean_value = float(values.dropna().mean()) if values.dropna().size else None
+    positions = np.arange(len(labels))
+    ax.bar(
+        positions,
+        values.fillna(0.0).to_numpy(),
+        color=[cmap(norm(v)) for v in values.fillna(0.0)],
+    )
+    ax.set_xticks(positions)
+    ax.set_xticklabels(labels, rotation=-45, ha="left", fontsize=mr.px_to_pt(10))
+    sm = ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.02)
+    cb.set_label(measure.replace("_", " ").title(), fontsize=mr.px_to_pt(11))
+    mean_value = float(finite.mean()) if finite.size else None
     if mean_value is not None:
-        fig.add_hline(
-            y=mean_value,
-            line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dot"),
-            annotation_text=f"mean {mean_value:.2f}",
-            annotation_position="top right",
+        ax.axhline(
+            mean_value,
+            color=mr.to_mpl_color(COMPARISON_PALETTE[1]),
+            linewidth=mr.px_to_pt(2),
+            linestyle=":",
         )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=80),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Word", tickangle=-45, automargin=True),
-        yaxis=dict(title=measure.replace("_", " ").title()),
-        title=f"Per-word {measure.replace('_', ' ')}",
-    )
+        ax.annotate(
+            f"mean {mean_value:.2f}",
+            (1.0, mean_value),
+            xycoords=("axes fraction", "data"),
+            ha="right",
+            va="bottom",
+            fontsize=mr.px_to_pt(10),
+            color=mr.to_mpl_color(COMPARISON_PALETTE[1]),
+        )
+    ax.set_xlabel("Word")
+    ax.set_ylabel(measure.replace("_", " ").title())
+    ax.set_title(f"Per-word {measure.replace('_', ' ')}", fontsize=mr.px_to_pt(14))
     return fig
 
 
@@ -2698,23 +2475,18 @@ def make_fixation_duration_histogram(
     bins: int = 30,
     overlay_words: Optional[pd.DataFrame] = None,
     height: int = 320,
-) -> go.Figure:
-    """Histogram of fixation durations, optionally with overlaid summary stats."""
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+) -> Figure:
+    """Histogram of fixation durations (server-side pre-binned), with optional
+    overlaid FFD/FPRT/TFD series and mean/median markers."""
     if fixations.empty:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
+        return _empty_research_fig(
+            canvas_width,
+            height,
+            font_family=font_family,
             title="Fixation duration distribution (no data)",
-            height=height,
         )
-        return fig
+    fig, ax, font_family = _research_fig(canvas_width, height, font_family=font_family)
     durations = pd.to_numeric(fixations["duration_ms"], errors="coerce").dropna()
-
-    # Pre-bin server-side and draw bars instead of go.Histogram, which would
-    # serialize *every* raw value to the browser — prohibitive for millions of
-    # fixations. All series share one set of bin edges so the overlays align.
     series_list = [("All fixations", durations.to_numpy(), COMPARISON_PALETTE[0], 1.0)]
     if overlay_words is not None and not overlay_words.empty:
         for name, col in (
@@ -2735,52 +2507,44 @@ def make_fixation_duration_histogram(
     edges = np.linspace(lo, hi, bins + 1)
     centers = (edges[:-1] + edges[1:]) / 2.0
     bar_width = float(edges[1] - edges[0])
-
+    palette = iter(_QUALITATIVE_PALETTE[1:])
     for name, arr, color, opacity in series_list:
         counts, _ = np.histogram(arr, bins=edges)
-        marker = (
-            dict(color=color, line=dict(color="white", width=0.5))
+        col = (
+            mr.to_mpl_color(color)
             if color is not None
-            else None
+            else mr.to_mpl_color(next(palette))
         )
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=opacity,
-                marker=marker,
-            )
+        ax.bar(
+            centers,
+            counts,
+            width=bar_width,
+            label=name,
+            alpha=opacity,
+            color=col,
+            edgecolor="white",
+            linewidth=0.5,
         )
-
     mean_ms = float(durations.mean()) if len(durations) else 0.0
     median_ms = float(durations.median()) if len(durations) else 0.0
-    fig.add_vline(
-        x=mean_ms,
-        line=dict(color=COMPARISON_PALETTE[1], width=2, dash="dash"),
-        annotation_text=f"mean {mean_ms:.0f} ms",
-        annotation_position="top right",
+    ax.axvline(
+        mean_ms,
+        color=mr.to_mpl_color(COMPARISON_PALETTE[1]),
+        linewidth=mr.px_to_pt(2),
+        linestyle="--",
+        label=f"mean {mean_ms:.0f} ms",
     )
-    fig.add_vline(
-        x=median_ms,
-        line=dict(color=SACCADE_COLOR, width=2, dash="dot"),
-        annotation_text=f"median {median_ms:.0f} ms",
-        annotation_position="top left",
+    ax.axvline(
+        median_ms,
+        color=mr.to_mpl_color(SACCADE_COLOR),
+        linewidth=mr.px_to_pt(2),
+        linestyle=":",
+        label=f"median {median_ms:.0f} ms",
     )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=40, r=10, t=40, b=40),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title="Duration (ms)"),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title="Fixation duration distribution",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+    ax.set_xlabel("Duration (ms)")
+    ax.set_ylabel("Count")
+    ax.set_title("Fixation duration distribution", fontsize=mr.px_to_pt(14))
+    ax.legend(fontsize=mr.px_to_pt(10), frameon=False)
     return fig
 
 
@@ -2796,56 +2560,44 @@ def make_metric_convergence_figure(
     height: int = 340,
     y_range: Tuple[float, float] = (0.0, 1.02),
     highlight_x_range: Optional[Tuple[float, float]] = None,
-) -> go.Figure:
-    """Line chart of a metric (one line per model) over a cumulative x axis.
-
-    ``series`` maps a model name to ``(xs, ys)``. Used by the Multiple Comparison
-    tab to show how each model's NLD vs. the real scanpath evolves as more of the
-    reading is included — either by cumulative fixation index or by elapsed time.
-    Optionally shades ``highlight_x_range`` (e.g. the selected fixation window).
-    """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+) -> Figure:
+    """Line chart of a metric (one line per model) over a cumulative x axis."""
+    fig, ax, font_family = _research_fig(canvas_width, height, font_family=font_family)
     has_data = False
     for i, (name, xy) in enumerate(series.items()):
         xs, ys = xy
         if not len(xs):
             continue
         has_data = True
-        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
-        fig.add_trace(
-            go.Scatter(
-                x=list(xs),
-                y=list(ys),
-                mode="lines+markers",
-                name=str(name),
-                line=dict(color=color, width=2),
-                marker=dict(size=4, color=color),
-                hovertemplate=(
-                    f"{name}<br>{x_title}: %{{x}}<br>{y_title}: %{{y:.3f}}"
-                    "<extra></extra>"
-                ),
-            )
+        color = mr.to_mpl_color(_QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)])
+        ax.plot(
+            list(xs),
+            list(ys),
+            marker="o",
+            markersize=mr.px_to_pt(4),
+            linewidth=mr.px_to_pt(2),
+            color=color,
+            label=str(name),
         )
     if has_data and highlight_x_range is not None:
         lo, hi = highlight_x_range
         if hi > lo:
-            fig.add_vrect(x0=lo, x1=hi, fillcolor="#6c757d", opacity=0.10, line_width=0)
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=55, r=10, t=40, b=45),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title=x_title),
-        yaxis=dict(title=y_title, range=list(y_range)),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        title=title,
-    )
-    if not has_data:
-        fig.add_annotation(
-            text="No data", showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper"
+            ax.axvspan(lo, hi, facecolor="#6c757d", alpha=0.10, linewidth=0)
+    ax.set_xlabel(x_title)
+    ax.set_ylabel(y_title)
+    ax.set_ylim(y_range[0], y_range[1])
+    ax.set_title(title, fontsize=mr.px_to_pt(14))
+    if has_data:
+        ax.legend(fontsize=mr.px_to_pt(10), frameon=False)
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No data",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            color="#888888",
         )
     return fig
 
@@ -2860,63 +2612,35 @@ def make_trend_figure(
     base_font_size: int,
     font_family: str,
     height: int = 340,
-) -> go.Figure:
-    """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band.
-
-    ``df`` has columns ``[x_col, "value", "sem"]`` (see
-    ``aggregation.metric_by_trial_index`` / ``metric_by_fixation_index``). Used
-    by the Aggregated Views subtab for the trial-index and within-trial
-    fixation-index trends.
-    """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+) -> Figure:
+    """Line+marker trend of ``value`` vs ``x_col`` with a ±SEM shaded band."""
     if df is None or df.empty:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
-            title=f"{title} (no data)",
-            height=height,
+        return _empty_research_fig(
+            canvas_width, height, font_family=font_family, title=f"{title} (no data)"
         )
-        return fig
+    fig, ax, font_family = _research_fig(canvas_width, height, font_family=font_family)
     xs = df[x_col].to_numpy()
     ys = df["value"].to_numpy()
     sem = df["sem"].to_numpy() if "sem" in df.columns else np.zeros(len(xs))
-    # ±SEM band (drawn first so the line sits on top).
-    fig.add_trace(
-        go.Scatter(
-            x=np.concatenate([xs, xs[::-1]]),
-            y=np.concatenate([ys + sem, (ys - sem)[::-1]]),
-            fill="toself",
-            fillcolor="rgba(31,119,180,0.15)",
-            line=dict(width=0),
-            hoverinfo="skip",
-            showlegend=False,
-            name="±SEM",
-        )
+    ax.fill_between(
+        xs,
+        ys - sem,
+        ys + sem,
+        color=(31 / 255, 119 / 255, 180 / 255, 0.15),
+        linewidth=0,
     )
-    fig.add_trace(
-        go.Scatter(
-            x=xs,
-            y=ys,
-            mode="lines+markers",
-            line=dict(color=COMPARISON_PALETTE[0], width=2),
-            marker=dict(size=5, color=COMPARISON_PALETTE[0]),
-            name=y_label,
-            hovertemplate=f"{x_col}: %{{x}}<br>{y_label}: %{{y:.1f}}<extra></extra>",
-        )
+    ax.plot(
+        xs,
+        ys,
+        marker="o",
+        markersize=mr.px_to_pt(5),
+        linewidth=mr.px_to_pt(2),
+        color=mr.to_mpl_color(COMPARISON_PALETTE[0]),
+        label=y_label,
     )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=60, r=10, t=40, b=45),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title=x_col.replace("_", " ").title()),
-        yaxis=dict(title=y_label),
-        title=title,
-        showlegend=False,
-    )
+    ax.set_xlabel(x_col.replace("_", " ").title())
+    ax.set_ylabel(y_label)
+    ax.set_title(title, fontsize=mr.px_to_pt(14))
     return fig
 
 
@@ -2929,25 +2653,17 @@ def make_aggregated_histogram(
     font_family: str,
     bins: int = 30,
     height: int = 360,
-) -> go.Figure:
-    """Overlaid binned histograms — one series per group.
-
-    ``groups`` maps a label → a 1-D array of metric values. All series share one
-    set of bin edges so they line up; binning is server-side (counts only) so a
-    corpus of millions of fixations doesn't serialize every raw value. Used by
-    the Aggregated Views subtab's distribution plot.
-    """
-    fig = go.Figure()
-    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+) -> Figure:
+    """Overlaid binned histograms — one series per group (server-side counts)."""
     arrays = [(str(name), np.asarray(arr)) for name, arr in groups.items() if len(arr)]
     if not arrays:
-        fig.update_layout(
-            template="plotly_white",
-            font=font_settings,
+        return _empty_research_fig(
+            canvas_width,
+            height,
+            font_family=font_family,
             title=f"{metric_label} distribution (no data)",
-            height=height,
         )
-        return fig
+    fig, ax, font_family = _research_fig(canvas_width, height, font_family=font_family)
     all_vals = np.concatenate([arr for _, arr in arrays])
     lo, hi = float(all_vals.min()), float(all_vals.max())
     if hi <= lo:
@@ -2958,29 +2674,20 @@ def make_aggregated_histogram(
     single = len(arrays) == 1
     for i, (name, arr) in enumerate(arrays):
         counts, _ = np.histogram(arr, bins=edges)
-        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
-        fig.add_trace(
-            go.Bar(
-                x=centers,
-                y=counts,
-                width=bar_width,
-                name=name,
-                opacity=0.95 if single else 0.55,
-                marker=dict(color=color, line=dict(color="white", width=0.4)),
-            )
+        color = mr.to_mpl_color(_QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)])
+        ax.bar(
+            centers,
+            counts,
+            width=bar_width,
+            label=name,
+            alpha=0.95 if single else 0.55,
+            color=color,
+            edgecolor="white",
+            linewidth=0.4,
         )
-    fig.update_layout(
-        height=height,
-        width=canvas_width,
-        autosize=False,
-        margin=dict(l=50, r=10, t=40, b=45),
-        template="plotly_white",
-        font=font_settings,
-        xaxis=dict(title=metric_label),
-        yaxis=dict(title="Count"),
-        barmode="overlay",
-        title=f"{metric_label} distribution",
-        showlegend=not single,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+    ax.set_xlabel(metric_label)
+    ax.set_ylabel("Count")
+    ax.set_title(f"{metric_label} distribution", fontsize=mr.px_to_pt(14))
+    if not single:
+        ax.legend(fontsize=mr.px_to_pt(10), frameon=False)
     return fig

@@ -2,34 +2,26 @@
 
 ## Figure formats
 
-| Format | How | Needs Chrome? |
-|--------|-----|---------------|
-| **HTML** | `save_figure(fig, "x.html")` / `render -o x.html` | No — browser-free (`fig.to_html`) |
-| **PNG / SVG / PDF** | `save_figure(fig, "x.png")` / `render -o x.png` | **Yes** — via Kaleido |
-| **GIF / MP4** | `animation_export.export_animation(anim, "x.mp4")` | **Yes** (Kaleido) — ffmpeg is bundled |
+Every static format renders natively with matplotlib — fully in-process, with no
+headless browser.
 
-## Kaleido needs a Chrome/Chromium binary
+| Format | How | Needs anything extra? |
+|--------|-----|-----------------------|
+| **HTML** | `save_figure(fig, "x.html")` / `render -o x.html` | No — a self-contained SVG page (the animation's HTML is an interactive matplotlib player) |
+| **PNG / SVG / PDF** | `save_figure(fig, "x.png")` / `render -o x.png` | No — matplotlib `savefig` |
+| **GIF** | `animation_export.export_animation(anim, "x.gif")` | No — encoded by Pillow |
+| **MP4** | `animation_export.export_animation(anim, "x.mp4")` | ffmpeg, bundled via the `imageio[ffmpeg]` extra |
 
-Static image export (PNG/SVG/PDF) and rasterized animation (GIF/MP4) render
-through [Kaleido](https://github.com/plotly/Kaleido) v1, which drives a headless
-Chrome. `pip install` does **not** install Chrome — run this once:
+## MP4 export
 
-```bash
-plotly_get_chrome -y
-```
+MP4 is the only format with an external piece: it encodes through an ffmpeg
+binary, which ships bundled with the `imageio[ffmpeg]` dependency — no system
+ffmpeg needed. If `export_animation` raises while writing MP4, you most likely
+installed `imageio` without the `[ffmpeg]` extra. Fall back to **GIF** or the
+interactive **HTML** player, both of which need nothing extra.
 
-On **Streamlit Community Cloud** the repo-root `packages.txt` installs
-`chromium` automatically. If Chrome is unavailable, fall back to **HTML** export
-(it's browser-free).
-
-## MP4 / GIF
-
-- **GIF** is encoded by Pillow; **MP4** uses the ffmpeg binary bundled by the
-  `imageio[ffmpeg]` dependency — no system ffmpeg needed.
-- If `export_animation` raises, you most likely installed `imageio` without the
-  `[ffmpeg]` extra, or Chrome is missing for the per-frame render.
-- The CLI's `--animate` writes **interactive HTML** only; use the Python API for
-  GIF/MP4.
+The CLI's `--animate` writes the interactive **HTML** player only; use the Python
+API (`animation_export.export_animation`) for GIF/MP4.
 
 ## Common issues
 

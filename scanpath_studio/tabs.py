@@ -50,6 +50,7 @@ from scanpath_studio.model_scanpaths import (
     DEFAULT_N_MODELS,
     generate_model_scanpaths,
 )
+from scanpath_studio import mpl_render as mr
 from scanpath_studio.plots import (
     animation_playback_ms,
     make_aggregated_histogram,
@@ -89,9 +90,9 @@ def _embed_html_iframe(html: str, *, height: int) -> None:
 
     ``st.iframe`` (Streamlit >= 1.56) supersedes ``st.components.v1.html``, which
     is deprecated and scheduled for removal. We need an *iframe* — not
-    ``st.html`` — because the embedded block runs ``<script>`` (Plotly from the
-    CDN plus the fit/scale script), which ``st.html`` strips. Fall back to the
-    old API on older Streamlit so the app still runs against the pinned baseline.
+    ``st.html`` — because the embedded block runs the fit/scale ``<script>``
+    (and, for the animation, the matplotlib HTML5 player's script), which
+    ``st.html`` strips. Fall back to the old API on older Streamlit.
     """
     if hasattr(st, "iframe"):
         st.iframe(html, height=height)
@@ -99,56 +100,43 @@ def _embed_html_iframe(html: str, *, height: int) -> None:
         components.html(html, height=height, scrolling=False)
 
 
-def _render_true_scale_chart(
-    fig, *, key: str, max_height: Optional[int] = None
-) -> None:
-    """Display a spatial figure true-to-scale, fitted to the column width.
+def _inline_svg(fig) -> str:
+    """Render a matplotlib figure to an inline ``<svg>`` string.
 
-    ``st.plotly_chart`` pins the chart width to the column but keeps the layout
-    height, re-laying-out the plot to an unknown scale — which breaks the
-    data→pixel sizing the word labels were computed for (text over/under fills
-    the boxes). Instead we render the figure at its exact pixel size, then scale
-    that whole block *uniformly* with a CSS transform so it fills the column
-    width. A uniform transform keeps boxes, fixations and text locked at one true
-    scale (unlike a Plotly re-layout, which leaves the font fixed), so the plot
-    stays faithful to the experiment at any column width — and never needs
-    horizontal scrolling. It is only scaled down to fit (capped at 1×), so on a
-    wide monitor it sits at true size with margin rather than being stretched.
-
-    ``max_height`` caps the rendered (scaled) height in px — used for the small
-    multiples in the *Multiple Comparison* grid, where the figure should also
-    shrink to fit a fixed cell height (whichever of width/height binds), and the
-    iframe is sized to that cap so panels don't leave a tall band of whitespace.
+    SVG scales losslessly under the CSS transform below (crisper than a raster at
+    any column width) and embeds with no external request. The XML prolog /
+    DOCTYPE are stripped so the markup drops straight into the page; the figure's
+    own ``viewBox`` preserves the aspect, and the wrapper sizes it to the exact
+    pixel box the true-to-scale text was computed for.
     """
-    width = int(fig.layout.width or 900)
-    height = int(fig.layout.height or 600)
-    plot_html = fig.to_html(
-        include_plotlyjs="cdn",
-        full_html=False,
-        config={"responsive": False, "displaylogo": False},
-        div_id=f"truescale-{key}",
-        # to_html defaults to auto_play=True, which auto-runs an animated figure on
-        # load at Plotly's default frame duration (ignoring the configured playback
-        # speed). Start paused so the animation only plays — at the right speed —
-        # when the user presses Play. No effect on static (frame-less) figures.
-        auto_play=False,
-    )
-    # Scale factor: shrink to the available width, and (when capped) also to the
-    # cell height, never upscaling past 1×.
+    svg = mr.save_to_buffer(fig, "svg").decode("utf-8")
+    start = svg.find("<svg")
+    return svg[start:] if start != -1 else svg
+
+
+def _fit_scale_block(
+    inner_html: str, *, key: str, width: int, height: int, max_height: Optional[int]
+) -> None:
+    """Embed ``inner_html`` at a fixed ``width × height`` px box and uniformly
+    CSS-scale it to the column width (never upscaling past 1×).
+
+    This is the true-to-scale render path: a *uniform* transform keeps boxes,
+    fixations and text locked at one scale at any column width (unlike a
+    re-layout, which would desync the px-sized labels from the boxes). The inner
+    block is sized to exactly the pixel box the builder rendered.
+    """
     if max_height is not None:
         scale_js = f"Math.min(1, avail / W, {int(max_height)} / H)"
         iframe_height = int(max_height) + 12
     else:
         scale_js = "Math.min(1, avail / W)"
         iframe_height = height + 12
-    # Wrap the fixed-size plot and scale it to the available (iframe) width.
-    # transform-origin top-left keeps it flush-left; the outer box height tracks
-    # the scaled height so there's no dead space below.
-    html = f"""
+    block = f"""
     <div id="fit-{key}" style="width:100%;overflow:hidden;">
       <div id="box-{key}" style="width:{width}px;height:{height}px;
-           transform-origin:top left;">{plot_html}</div>
+           transform-origin:top left;">{inner_html}</div>
     </div>
+    <style>#box-{key} svg{{width:{width}px;height:{height}px;display:block;}}</style>
     <script>
     (function() {{
       var W = {width}, H = {height};
@@ -166,9 +154,46 @@ def _render_true_scale_chart(
     }})();
     </script>
     """
-    # Iframe height = full true height (or the cap); the script trims the
-    # visible block to the scaled height.
-    _embed_html_iframe(html, height=iframe_height)
+    _embed_html_iframe(block, height=iframe_height)
+
+
+def _render_true_scale_chart(
+    fig, *, key: str, max_height: Optional[int] = None
+) -> None:
+    """Display a spatial matplotlib figure true-to-scale, fitted to the column.
+
+    ``st.pyplot`` re-rasterizes at Streamlit's own DPI and can't reproduce the
+    exact-pixel sizing or the uniform scale-to-column behaviour the true-to-scale
+    word labels need. Instead we render the figure to a fixed-size inline SVG and
+    uniformly CSS-scale that whole block to the column width — keeping boxes,
+    fixations and text locked at one true scale at any width.
+
+    ``max_height`` caps the rendered (scaled) height in px — used for the small
+    multiples in the *Multiple Comparison* grid so panels don't leave a tall band
+    of whitespace.
+    """
+    width, height = mr.figure_px_size(fig)
+    _fit_scale_block(
+        _inline_svg(fig), key=key, width=width, height=height, max_height=max_height
+    )
+
+
+# Extra height (px) the matplotlib HTML5 animation player needs below the figure
+# for its play/pause/scrub controls.
+_ANIM_PLAYER_CONTROLS_PX = 120
+
+
+def _render_animation_player(anim, *, key: str) -> None:
+    """Embed the scanpath replay as an interactive HTML5 player, fitted to the
+    column. ``to_jshtml`` produces a self-contained play/pause/scrub player (all
+    frames inlined) — no Plotly, no browser needed to build it."""
+    _fit_scale_block(
+        anim.to_jshtml(),
+        key=key,
+        width=int(anim.width),
+        height=int(anim.height) + _ANIM_PLAYER_CONTROLS_PX,
+        max_height=None,
+    )
 
 
 def _trial_text_id(trial_words: pd.DataFrame) -> Optional[str]:
@@ -189,6 +214,21 @@ _MIME_FOR_FORMAT = {
 }
 
 
+def _figure_html_page(fig) -> bytes:
+    """A self-contained HTML page wrapping the figure's SVG (browser-free).
+
+    matplotlib has no interactive HTML export; the SVG-in-a-page keeps the
+    "download a standalone, openable figure" affordance (vector, crisp at any
+    zoom) without Plotly or a CDN."""
+    svg = _inline_svg(fig)
+    page = (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<title>Scanpath</title></head>"
+        "<body style='margin:0'>" + svg + "</body></html>"
+    )
+    return page.encode("utf-8")
+
+
 def _render_save_plot_button(
     fig,
     *,
@@ -199,71 +239,32 @@ def _render_save_plot_button(
 ) -> None:
     """Download the currently displayed figure.
 
-    HTML is cheap (no Kaleido/Chrome) so it downloads in a single click. PNG/SVG/
-    PDF go through Kaleido, which spins up a headless Chrome — far too slow to run
-    on every Streamlit rerun — so those keep a Render step and reveal the download
-    only once the image is ready. Width/height come from the figure's own layout
-    so stacked / multi-panel figures save at their on-screen size.
+    All formats render in-process with matplotlib ``savefig`` (no browser), so
+    every one downloads in a single click — PNG/SVG/PDF as native image files and
+    HTML as a self-contained SVG page. The size comes from the figure's own pixel
+    dimensions so stacked / multi-panel figures save at their on-screen size.
     """
     if fig is None:
         return
     file_stem = f"scanpath_{_safe_filename(slug)}"
-    # Stacked (not columned) so the controls fit the narrow side-panel "Export"
-    # toggle they now live in.
     fmt = st.radio(
         "Download format",
-        # HTML is a browser-free fallback (no Kaleido/Chrome) — useful on
-        # Streamlit Cloud where static image export needs a Chromium binary.
         options=["PNG", "SVG", "PDF", "HTML"],
         index=0,
         horizontal=True,
         key=f"{key_prefix}_save_format",
-        help="PNG/SVG/PDF need a Chrome/Chromium browser (Kaleido). HTML "
-        "is interactive and needs no browser.",
+        help="PNG/SVG/PDF are native image files; HTML is a self-contained, "
+        "openable page. All render locally — no browser needed.",
     )
 
-    # HTML: one-click download — no expensive render to defer.
     if fmt == "HTML":
-        html_bytes = fig.to_html(include_plotlyjs="cdn", full_html=True).encode("utf-8")
-        st.download_button(
-            "⬇ Download HTML",
-            data=html_bytes,
-            file_name=f"{file_stem}.html",
-            mime=_MIME_FOR_FORMAT["HTML"],
-            key=f"{key_prefix}_save_button_html",
-        )
-        return
-
-    # PNG/SVG/PDF: render on click (Kaleido/Chrome), then reveal the download.
-    generate = st.button(
-        f"Render {fmt}",
-        key=f"{key_prefix}_save_generate",
-        help="Renders the image (needs Chrome/Kaleido); the download button "
-        "appears once it's ready.",
-    )
-    if not generate:
-        return
-
-    fig_width = int(fig.layout.width or canvas_width)
-    fig_height = int(fig.layout.height or canvas_height)
-    try:
-        data = fig.to_image(
-            format=fmt.lower(),
-            width=fig_width,
-            height=fig_height,
-            # The on-screen figure is sized to fit the column; render raster
-            # PNG at 3x so saved figures stay paper-quality (SVG/PDF are
-            # vector and unaffected).
-            scale=3 if fmt == "PNG" else 1,
-        )
-    except Exception as exc:
-        st.warning(
-            f"Could not render {fmt}: {exc}\n\n"
-            "Static image export (PNG/SVG/PDF) needs a Chrome/Chromium browser "
-            "for Kaleido. On Streamlit Cloud this is installed via `packages.txt`; "
-            "if it still fails, choose the **HTML** format above — it needs no browser."
-        )
-        return
+        data = _figure_html_page(fig)
+    elif fmt == "PNG":
+        # The on-screen figure is sized to fit the column; render PNG at 3× so
+        # saved figures stay paper-quality (SVG/PDF are vector and unaffected).
+        data = mr.save_to_buffer(fig, "png", scale=3)
+    else:
+        data = mr.save_to_buffer(fig, fmt.lower())
     st.download_button(
         f"⬇ Download {fmt}",
         data=data,
@@ -273,29 +274,28 @@ def _render_save_plot_button(
     )
 
 
-# Above this many frames, offer to cap the rendered frame count: each frame is a
-# headless-Chrome render (~0.1-0.25 s), so a long reading would otherwise spin for
-# a minute or more. Capping holds each kept frame proportionally longer, so the
-# clip's total duration is unchanged.
+# Above this many frames, offer to cap the rendered frame count. Each frame is now
+# an in-process matplotlib render (no headless Chrome), so it's fast — but a long
+# reading is still many frames. Capping holds each kept frame proportionally
+# longer, so the clip's total duration is unchanged.
 _ANIM_FRAME_CAP = 250
-# Rough per-frame render cost (warm browser) + one-off browser cold start, for the
-# "~Ns to render" estimate. Approximate by design.
-_ANIM_RENDER_S_PER_FRAME = 0.18
-_ANIM_RENDER_COLD_START_S = 3.0
+# Rough per-frame render cost for the "~Ns to render" estimate (matplotlib
+# savefig is ~10-40 ms/frame; no browser cold start). Approximate by design.
+_ANIM_RENDER_S_PER_FRAME = 0.04
+_ANIM_RENDER_COLD_START_S = 0.0
 
 
-def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None:
+def _render_animation_export(anim, *, file_stem: str, playback_ms: float) -> None:
     """Export the animated scanpath as interactive HTML or a rasterized GIF/MP4.
 
-    HTML is one click (no browser needed to generate, keeps interactivity). GIF and
-    MP4 rasterize every frame through Kaleido (headless Chrome) — too slow to run on
-    every rerun — so they follow the same Render-then-download pattern as the static
-    image export, with a progress bar and a result cached in session state so the
-    download button survives reruns (and a re-render isn't needed unless an option
-    changes). The clip reproduces the on-screen Play: every frame held for the same
-    average duration, so its runtime equals the quoted playback time.
+    HTML is one click — :meth:`ScanpathAnimation.to_jshtml` builds a self-contained
+    play/scrub player. GIF and MP4 rasterize every frame with matplotlib (no
+    browser); they follow a Render-then-download pattern with a progress bar and a
+    result cached in session state so the download survives reruns. The clip
+    reproduces the on-screen Play: every frame held for the same average duration,
+    so its runtime equals the quoted playback time.
     """
-    n_frames = len(fig.frames or ())
+    n_frames = len(anim.frames or ())
     fmt = st.radio(
         "Export format",
         options=["HTML", "GIF", "MP4"],
@@ -303,21 +303,22 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
         horizontal=True,
         key="anim_export_format",
         help=(
-            "HTML keeps the interactive play/slider and needs no browser to "
-            "generate. GIF and MP4 are self-playing clips (great for slides or "
-            "papers) rendered via Kaleido/Chrome — MP4 is far smaller than GIF."
+            "HTML keeps the interactive play/scrub player. GIF and MP4 are "
+            "self-playing clips (great for slides or papers) rendered in-process "
+            "with matplotlib — MP4 is far smaller than GIF."
         ),
     )
 
     if fmt == "HTML":
-        html_bytes = fig.to_html(include_plotlyjs="cdn", full_html=True).encode("utf-8")
+        html_bytes = anim.to_jshtml().encode("utf-8")
         st.download_button(
             "⬇ Download HTML",
             data=html_bytes,
             file_name=f"{file_stem}.html",
             mime="text/html",
             key="anim_export_html",
-            help="Self-contained HTML you can open in any browser; keeps play/slider interactivity.",
+            help="Self-contained HTML you can open in any browser; keeps the "
+            "play/scrub player.",
         )
         return
 
@@ -363,19 +364,27 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
         )
 
     # Re-render only when an output-affecting input changes; otherwise reuse the
-    # cached bytes so the download button persists across reruns. The figure's
-    # own JSON fingerprints every visual choice that feeds the clip — trial,
-    # playback speed, saccades/order/marker-size/background, true-to-scale text —
-    # so toggling any of them invalidates a stale render instead of serving the
-    # previous bytes. `scale`/`max_frames` are export-only (not in the figure),
-    # so they're keyed separately.
-    sig = (file_stem, fmt, float(scale), max_frames, hash(fig.to_json()))
+    # cached bytes so the download button persists across reruns. matplotlib
+    # figures aren't JSON-serializable, so we fingerprint the clip with a cheap
+    # content signature — frame count, runtime, and the drawn-artist counts on the
+    # animation axes (which change when layers toggle on/off). `scale`/`max_frames`
+    # are export-only and keyed alongside.
+    _ax = anim.figure.axes[0] if anim.figure.axes else None
+    content_sig = (
+        n_frames,
+        round(anim.reading_span_ms, 2),
+        round(anim.avg_frame_duration, 2),
+        len(_ax.patches) if _ax else 0,
+        len(_ax.collections) if _ax else 0,
+        len(_ax.texts) if _ax else 0,
+    )
+    sig = (file_stem, fmt, float(scale), max_frames, content_sig)
     cache = st.session_state.get("_anim_export_cache")
 
     if st.button(
         f"Render {fmt}",
         key="anim_export_generate",
-        help="Renders each frame via Kaleido (headless Chrome); the download "
+        help="Renders each frame in-process with matplotlib; the download "
         "appears once it's ready.",
     ):
         bar = st.progress(0.0, text=f"Rendering 0/{render_frames} frames…")
@@ -385,7 +394,7 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
 
         try:
             data = export_animation(
-                fig,
+                anim,
                 fmt=fmt.lower(),
                 frame_duration_ms=frame_ms,
                 scale=float(scale),
@@ -396,9 +405,8 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             bar.empty()
             st.warning(
                 f"Could not render {fmt}: {exc}\n\n"
-                "GIF/MP4 export rasterizes each frame with a Chrome/Chromium browser "
-                "(Kaleido). On Streamlit Cloud this is installed via `packages.txt`; "
-                "if it still fails, use the **HTML** format above — it needs no browser."
+                "If MP4 fails, ffmpeg may be unavailable — try the **GIF** or "
+                "**HTML** format above instead."
             )
             cache = None
         else:
@@ -1375,7 +1383,7 @@ def _build_and_render_animation(
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
     )
-    _render_true_scale_chart(fig, key="single_anim")
+    _render_animation_player(fig, key="single_anim")
     if dual:
         save_slug = (
             f"{selected_participant}__{selected_trial}__vs__"
@@ -2250,7 +2258,7 @@ def render_aggregated_views_tab(
             base_font_size=base_font_size,
             font_family=font_family,
         )
-        st.plotly_chart(fig_trial, width="stretch")
+        st.pyplot(fig_trial, use_container_width=True)
     if supports_fix_trend:
         fix_df = _agg_by_fixation_index(
             fixations_filtered, metric_col, frame_fingerprint(fixations_filtered)
@@ -2265,7 +2273,7 @@ def render_aggregated_views_tab(
                 base_font_size=base_font_size,
                 font_family=font_family,
             )
-            st.plotly_chart(fig_fix, width="stretch")
+            st.pyplot(fig_fix, use_container_width=True)
 
     # --- Per-text aggregated heatmap -----------------------------------------
     text_col = _text_column(words_filtered)
@@ -2367,7 +2375,7 @@ def render_aggregated_views_tab(
         base_font_size=base_font_size,
         font_family=font_family,
     )
-    st.plotly_chart(fig_hist, width="stretch")
+    st.pyplot(fig_hist, use_container_width=True)
 
 
 # -----------------------------------------------------------------------------
@@ -2640,8 +2648,7 @@ def render_multiple_comparison_tab(
         st.markdown("#### Model-generated scanpaths")
         # Estimate a uniform cell height from the figure aspect + column count
         # so panels line up and don't leave a tall whitespace band below each.
-        fig_w = float(real_fig.layout.width or 900)
-        fig_h = float(real_fig.layout.height or 600)
+        fig_w, fig_h = mr.figure_px_size(real_fig)
         aspect = fig_h / fig_w if fig_w else 0.5
         assumed_col_px = max(200, int(780 / max(1, n_cols)))
         cell_h = max(150, int(assumed_col_px * aspect) + 16)
@@ -2723,7 +2730,7 @@ def render_multiple_comparison_tab(
                 font_family=font_family,
                 highlight_x_range=(fix_start, fix_end) if windowed else None,
             )
-            st.plotly_chart(fig_idx, width="stretch", config={"responsive": True})
+            st.pyplot(fig_idx, use_container_width=True)
         with conv_cols[1]:
             fig_time = make_metric_convergence_figure(
                 time_curves,
@@ -2734,7 +2741,7 @@ def render_multiple_comparison_tab(
                 base_font_size=int(base_font_size),
                 font_family=font_family,
             )
-            st.plotly_chart(fig_time, width="stretch", config={"responsive": True})
+            st.pyplot(fig_time, use_container_width=True)
 
 
 # -----------------------------------------------------------------------------

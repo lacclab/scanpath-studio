@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from tests import mpl_helpers as mh
+
 from scanpath_studio.aggregation import (
     aggregate_word_measures_by_text,
     grouped_metric_values,
@@ -151,6 +153,8 @@ class TestPerTextAggregates:
 
 class TestAggregatedFigures:
     def test_trend_figure_has_traces(self):
+        from matplotlib.figure import Figure
+
         from scanpath_studio.plots import make_trend_figure
 
         df = pd.DataFrame(
@@ -165,9 +169,18 @@ class TestAggregatedFigures:
             base_font_size=12,
             font_family="Arial",
         )
-        assert len(fig.data) >= 1
+        assert isinstance(fig, Figure)
+        # The trend line is drawn (matplotlib analog of "has a trace").
+        ax = mh.data_axes(fig)
+        assert len(ax.lines) >= 1
+        # ...and the ±SEM band adds a shaded PolyCollection via fill_between.
+        from matplotlib.collections import PolyCollection
+
+        assert any(isinstance(c, PolyCollection) for c in ax.collections)
 
     def test_histogram_renders_bars(self):
+        from matplotlib.figure import Figure
+
         from scanpath_studio.plots import make_aggregated_histogram
 
         fig = make_aggregated_histogram(
@@ -177,7 +190,10 @@ class TestAggregatedFigures:
             base_font_size=12,
             font_family="Arial",
         )
-        assert any(t.type == "bar" for t in fig.data)
+        assert isinstance(fig, Figure)
+        # The histogram bars are Rectangle patches on the data axes.
+        ax = mh.data_axes(fig)
+        assert len(ax.patches) >= 1
 
     def test_empty_inputs_render_no_data(self):
         from scanpath_studio.plots import make_aggregated_histogram, make_trend_figure
@@ -198,5 +214,5 @@ class TestAggregatedFigures:
             base_font_size=12,
             font_family="Arial",
         )
-        assert "no data" in (f1.layout.title.text or "").lower()
-        assert "no data" in (f2.layout.title.text or "").lower()
+        assert "no data" in (mh.data_axes(f1).get_title() or "").lower()
+        assert "no data" in (mh.data_axes(f2).get_title() or "").lower()

@@ -6,7 +6,7 @@ This repo’s primary product is a Streamlit workbench packaged as `scanpath_stu
 ## Architecture & Data Flow (core path)
 - Entry/UI: `scanpath_studio/app.py` (tabs, uploads, trial selection, filtering, calls plotting)
 - Data handling: `scanpath_studio/data.py` (schema inference + normalization + filtering + metrics)
-- Plotting: `scanpath_studio/plots.py` (Plotly figure builders)
+- Plotting: `scanpath_studio/plots.py` (matplotlib figure builders) + `scanpath_studio/mpl_render.py` (matplotlib rendering helpers)
 - Controls/defaults: `scanpath_studio/controls.py`, `scanpath_studio/constants.py`
 
 Pipeline: uploaded CSVs → `infer_*_schema()` → `normalize_*()` to canonical columns → filters/metrics → `make_*_figure()` → Streamlit render.
@@ -22,8 +22,8 @@ Pipeline: uploaded CSVs → `infer_*_schema()` → `normalize_*()` to canonical 
 Schema inference uses `pick_column(df, candidates)` with **priority-ordered candidate lists**. When adding support for new upstream names, update the relevant `infer_*_schema` candidate lists in `scanpath_studio/data.py`.
 
 ## Plot/Coordinate Conventions
-- Screen coordinates: Plotly y-axis is inverted (`y_range = [max, min]`) in `make_scanpath_figure()`.
-- Word boxes and word-level heatmap overlays are implemented with Plotly `layout.shapes` (see `build_word_boxes()` and heatmap shape generation).
+- Screen coordinates: the y-axis is inverted (`y_range = [max, min]`) in `make_scanpath_figure()`.
+- Word boxes and word-level heatmap overlays are drawn as matplotlib rectangle patches (see `build_word_boxes()` and heatmap shape generation).
 
 ## Running & Dev Workflows
 - Use the existing conda env `scanpath-studio` (prefer `mamba activate scanpath-studio` if available).

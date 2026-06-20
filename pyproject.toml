@@ -27,10 +27,12 @@ classifiers = [
 dependencies = [
     "streamlit>=1.58.0",
     "pandas>=2.3.3",
-    "plotly>=6.5.2",
+    # All figures (scanpath, heatmap, animation, research charts) render with
+    # matplotlib — server-side, no headless browser. SVG/PDF/PNG export and the
+    # animation rasterizer are native, so no Kaleido/Chromium dependency.
+    "matplotlib>=3.9",
     "numpy>=2.4.1",
     "pyarrow>=23.0.0",
-    "kaleido>=1.2.0",
     "watchdog>=6.0.0",
     # Rasterized animation export (GIF/MP4): Pillow encodes GIF; imageio's ffmpeg
     # extra bundles an ffmpeg binary for MP4 (no system package needed).

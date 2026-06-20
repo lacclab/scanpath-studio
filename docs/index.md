@@ -22,8 +22,8 @@ demo, so you can try it with zero setup.
   `scanpath-studio render` (headless figures) with every flag.
 - **[Data format](data-format.md)** — what tables to bring and how column
   mapping works.
-- **[Export & troubleshooting](export-troubleshooting.md)** — HTML vs.
-  PNG/SVG/PDF (Kaleido/Chrome), GIF/MP4, and common gotchas.
+- **[Export & troubleshooting](export-troubleshooting.md)** — browser-free
+  HTML / PNG / SVG / PDF and GIF, the bundled-ffmpeg MP4 note, and common gotchas.
 - **[Architecture](architecture.md)** — a map of the codebase for contributors.
 
 ## At a glance

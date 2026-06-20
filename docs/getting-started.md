@@ -31,10 +31,10 @@ Tested on **Python 3.11–3.14** (CI runs the suite on all four). The fresh-inst
 path above — `conda create` → `pip install -e ".[test]"` → `pytest` — is verified
 to pass end to end on current dependency releases.
 
-!!! tip "Static image export needs a browser"
-    Interactive **HTML** export is browser-free. **PNG / SVG / PDF** (and GIF /
-    MP4 animation) go through [Kaleido](https://github.com/plotly/Kaleido), which
-    needs a Chrome/Chromium binary — run `plotly_get_chrome -y` once. See
+!!! tip "Figure export is browser-free"
+    **HTML / PNG / SVG / PDF** export — and the **GIF** animation — render natively
+    with matplotlib, so no Chrome/Chromium is needed. Only **MP4** animation needs
+    ffmpeg, and that's bundled via the `imageio[ffmpeg]` extra. See
     [Export & troubleshooting](export-troubleshooting.md).
 
 ## Launch the app

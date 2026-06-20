@@ -1,10 +1,11 @@
 """Tests for rasterizing the scanpath animation to GIF / MP4.
 
-The heavy Kaleido (headless-Chrome) rendering is exercised by a single
-end-to-end test that *skips* when no browser is available (mirroring how the
-bulk-export tests avoid Kaleido). Everything else — frame selection, the static
-snapshot, the elapsed labels, both encoders and the duration-preservation
-math — is tested without a browser, using PNG frames synthesized with Pillow.
+Rendering is now fully in-process — matplotlib ``savefig`` per frame, no headless
+browser — so the real-render end-to-end can ALWAYS run (no Kaleido/Chrome skip).
+``make_scanpath_animation`` returns a :class:`ScanpathAnimation` dataclass whose
+``.frames`` is one entry per fixation onset and whose ``.figure`` is a plain
+matplotlib :class:`~matplotlib.figure.Figure`. The encode tests still synthesize
+PNG frames with Pillow (they never touched the figure builder).
 """
 
 from __future__ import annotations
@@ -14,8 +15,8 @@ import os
 import tempfile
 
 import imageio.v3 as iio
-import plotly.graph_objects as go
 import pytest
+from matplotlib.figure import Figure
 from PIL import Image
 
 from scanpath_studio import animation_export as ae
@@ -26,7 +27,11 @@ from scanpath_studio.animation_export import (
     export_animation,
     mime_for,
 )
-from scanpath_studio.plots import animation_playback_ms, make_scanpath_animation
+from scanpath_studio.plots import (
+    ScanpathAnimation,
+    animation_playback_ms,
+    make_scanpath_animation,
+)
 
 _MP4_DT_MS = 1000.0 / 60.0  # the module's fixed MP4 timebase
 
@@ -72,6 +77,20 @@ def anim_fig(normalized_words_df, normalized_fixations_df):
     )
 
 
+@pytest.fixture
+def empty_anim(normalized_words_df, normalized_fixations_df):
+    """A ScanpathAnimation built from zero fixations -> zero frames."""
+    return make_scanpath_animation(
+        normalized_words_df,
+        normalized_fixations_df.iloc[0:0],
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=12,
+        font_family="Arial",
+        playback_speed=1.0,
+    )
+
+
 class TestMimeFor:
     def test_known_formats(self):
         assert mime_for("gif") == "image/gif"
@@ -98,36 +117,38 @@ class TestSelectFrames:
 
 
 class TestStaticBase:
-    def test_strips_controls_and_frames(self, anim_fig):
-        assert anim_fig.layout.updatemenus  # precondition: the live fig has controls
-        assert anim_fig.layout.sliders
-        base = ae._static_base(anim_fig)
-        assert tuple(base.layout.updatemenus) == ()
-        assert tuple(base.layout.sliders) == ()
-        assert tuple(base.frames) == ()
-        # Top margin trimmed to the slim static band, height reduced to match.
-        assert base.layout.margin.t == ae._STATIC_TOP_MARGIN_PX
-        assert int(base.layout.height) < int(anim_fig.layout.height)
+    """The animation is a matplotlib figure with no in-figure interactive widgets:
+    the transport (play/pause/scrub) comes from the external ``to_jshtml`` player
+    chrome, not from extra axes baked into the figure. Rasterizing must not mutate
+    the frame count either."""
 
-    def test_does_not_mutate_original(self, anim_fig):
+    def test_no_widget_axes_in_figure(self, anim_fig):
+        assert isinstance(anim_fig, ScanpathAnimation)
+        assert isinstance(anim_fig.figure, Figure)
+        # No slider/updatemenu axes are reserved inside the figure: just the data
+        # axes (a colorbar/legend would be an extra axes, but this fixture has
+        # neither), so the figure carries exactly one Axes.
+        assert len(anim_fig.figure.axes) == 1
+
+    def test_render_does_not_mutate_frame_count(self, anim_fig):
+        # The same anim is reused for the interactive HTML export, so the GIF/MP4
+        # render path must leave the frame list intact.
         n_frames = len(anim_fig.frames)
-        ae._static_base(anim_fig)
-        # The tab reuses the same fig for the interactive HTML export, so the
-        # snapshot must be a copy — the controls and frames must survive.
+        assert n_frames >= 1
+        pngs, _size = ae.render_png_frames(anim_fig, scale=0.5)
+        assert len(pngs) == n_frames
         assert len(anim_fig.frames) == n_frames
-        assert len(anim_fig.layout.updatemenus) == 1
-        assert len(anim_fig.layout.sliders) == 1
 
 
 class TestElapsedLabels:
-    def test_labels_match_slider_steps(self, anim_fig):
-        labels = ae._elapsed_labels(anim_fig, len(anim_fig.frames))
+    def test_one_label_per_frame(self, anim_fig):
+        labels = anim_fig.elapsed_labels
         assert len(labels) == len(anim_fig.frames)
         assert all(lbl.endswith("s") for lbl in labels)
 
-    def test_no_slider_returns_blanks(self):
-        fig = go.Figure()
-        assert ae._elapsed_labels(fig, 3) == ["", "", ""]
+    def test_empty_animation_has_no_labels(self, empty_anim):
+        assert empty_anim.elapsed_labels == []
+        assert len(empty_anim.frames) == 0
 
 
 class TestEncodeGif:
@@ -172,9 +193,10 @@ class TestExportAnimationValidation:
         with pytest.raises(ValueError):
             export_animation(anim_fig, fmt="webm", frame_duration_ms=50.0)
 
-    def test_no_frames_raises_export_error(self):
+    def test_no_frames_raises_export_error(self, empty_anim):
+        assert len(empty_anim.frames) == 0
         with pytest.raises(AnimationExportError):
-            export_animation(go.Figure(), fmt="mp4", frame_duration_ms=50.0)
+            export_animation(empty_anim, fmt="mp4", frame_duration_ms=50.0)
 
 
 class TestDownsampleDurationPreserved:
@@ -185,7 +207,7 @@ class TestDownsampleDurationPreserved:
         captured = {}
 
         def fake_render(
-            fig, *, scale, show_elapsed, frame_indices, progress_callback=None
+            anim, *, scale, show_elapsed, frame_indices, progress_callback=None
         ):
             return [_png((0, 0, 0))] * len(frame_indices), (48, 32)
 
@@ -210,7 +232,7 @@ class TestDownsampleDurationPreserved:
         captured = {}
 
         def fake_render(
-            fig, *, scale, show_elapsed, frame_indices, progress_callback=None
+            anim, *, scale, show_elapsed, frame_indices, progress_callback=None
         ):
             return [_png((1, 2, 3))] * len(frame_indices), (48, 32)
 
@@ -228,24 +250,16 @@ class TestDownsampleDurationPreserved:
 
 
 class TestEndToEnd:
-    """Real Kaleido render — skipped when no Chrome/Chromium is available."""
-
-    def _export(self, fig, fmt, **kw):
-        try:
-            return export_animation(
-                fig, fmt=fmt, frame_duration_ms=60.0, scale=0.5, **kw
-            )
-        except AnimationExportError as exc:
-            pytest.skip(f"Kaleido/Chrome unavailable: {exc}")
+    """Real in-process matplotlib render — no browser, so it always runs."""
 
     def test_mp4_end_to_end(self, anim_fig):
-        data = self._export(anim_fig, "mp4")
+        data = export_animation(anim_fig, fmt="mp4", frame_duration_ms=60.0, scale=0.5)
         assert b"ftyp" in data[:64]
         count = _mp4_frame_count(data)
         assert count >= len(anim_fig.frames)
 
     def test_gif_end_to_end(self, anim_fig):
-        data = self._export(anim_fig, "gif")
+        data = export_animation(anim_fig, fmt="gif", frame_duration_ms=60.0, scale=0.5)
         assert data[:6] in (b"GIF87a", b"GIF89a")
         img = Image.open(io.BytesIO(data))
         assert getattr(img, "n_frames", 1) == len(anim_fig.frames)
@@ -256,7 +270,7 @@ class TestEndToEnd:
         # The clip's runtime must equal the playback time the tab quotes, so it
         # must be exported with that same per-frame duration (not the helper's).
         speed = 1.0
-        fig = make_scanpath_animation(
+        anim = make_scanpath_animation(
             normalized_words_df,
             normalized_fixations_df,
             canvas_width=800,
@@ -265,15 +279,10 @@ class TestEndToEnd:
             font_family="Arial",
             playback_speed=speed,
         )
-        n = len(fig.frames)
+        n = len(anim.frames)
         _span, playback_ms = animation_playback_ms([normalized_fixations_df], speed)
         frame_ms = playback_ms / n
-        try:
-            data = export_animation(
-                fig, fmt="mp4", frame_duration_ms=frame_ms, scale=0.5
-            )
-        except AnimationExportError as exc:
-            pytest.skip(f"Kaleido/Chrome unavailable: {exc}")
+        data = export_animation(anim, fmt="mp4", frame_duration_ms=frame_ms, scale=0.5)
         # 60 fps timebase + error diffusion => round(total playback / dt) frames.
         expected_video_frames = round(n * frame_ms / _MP4_DT_MS)
         count = _mp4_frame_count(data)

@@ -13,7 +13,8 @@ the repo root (kept current as the code changes); this is the short version.
 | `controls.py` | Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel. |
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
 | `measures.py` | Canonical reading measures (FFD/FPRT/RPD/TFD, regressions) + geometry helpers. |
-| `plots.py` | Plotly figure builders (scanpath, animation, comparison, trends, histograms, heatmaps). |
+| `plots.py` | matplotlib figure builders (scanpath, animation, comparison, trends, histograms, heatmaps). |
+| `mpl_render.py` | matplotlib rendering helpers: render DPI, px↔point conversions, color/colorscale/dash parsing, exact-pixel figure scaffolding. |
 | `aggregation.py` | Pure corpus-level aggregation helpers for the Aggregated Views subtab. |
 | `export.py` | Configurable bulk export (PNG/SVG/JSON/CSV/Parquet/mega-table). |
 | `animation_export.py` | Rasterize an animated figure to GIF/MP4. |

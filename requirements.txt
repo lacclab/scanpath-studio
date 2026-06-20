@@ -4,10 +4,9 @@
 # keep both in sync when adding or upgrading a dependency.
 streamlit~=1.58.0
 pandas~=2.3.3
-plotly~=6.5.2
+matplotlib~=3.11.0
 numpy~=2.4.1
 pyarrow~=23.0.0
-kaleido~=1.2.0
 watchdog~=6.0.0
 # Rasterized animation export (GIF/MP4). imageio's ffmpeg extra bundles an
 # ffmpeg binary, so MP4 needs no system package; Pillow encodes the GIF.

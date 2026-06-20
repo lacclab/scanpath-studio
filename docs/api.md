@@ -7,7 +7,7 @@ functions. They follow one pipeline:
 load_scanpath_data / load_sample_data / load_potec   →   (words, fixations)
         list_trials            →  which (participant, trial) combos exist
         compute_word_metrics   →  per-word reading measures (FFD/FPRT/RPD/TFD …)
-        plot_scanpath          →  a static Plotly figure
+        plot_scanpath          →  a static matplotlib figure
         animate_scanpath       →  an animated replay figure
         save_figure            →  .html / .png / .svg / .pdf on disk
 ```
@@ -23,7 +23,7 @@ sps.save_figure(fig, "scanpath.png")
 ```
 
 !!! note "Lazy imports"
-    `import scanpath_studio` stays cheap — pandas / plotly / streamlit are only
+    `import scanpath_studio` stays cheap — pandas / matplotlib / streamlit are only
     pulled in on the first API call (the package re-exports `api.py` /
     `datasets.py` lazily). The first call therefore pays a one-time import cost.
 
@@ -62,8 +62,7 @@ For rasterized animation (GIF / MP4) use the animation exporter:
 from scanpath_studio.animation_export import export_animation
 
 anim = sps.animate_scanpath(words, fixations, "p1", "t3")
-export_animation(anim, "replay.mp4")   # or replay.gif — needs Kaleido + Chrome
+export_animation(anim, "replay.mp4")   # or replay.gif — browser-free; MP4 needs bundled ffmpeg
 ```
 
-See [Export & troubleshooting](export-troubleshooting.md) for the Chrome /
-ffmpeg requirements.
+See [Export & troubleshooting](export-troubleshooting.md) for the ffmpeg note.

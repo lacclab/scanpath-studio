@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from matplotlib.figure import Figure
+
+from tests import mpl_helpers as mh
 
 from scanpath_studio.model_scanpaths import (
     _MAX_DUR_MS,
@@ -208,5 +211,10 @@ def test_generated_scanpath_renders_in_figure():
         fixation_color_range=None,
         heatmap_range=None,
     )
-    assert fig is not None
-    assert len(fig.data) > 0
+    assert isinstance(fig, Figure)
+    # The generated frame actually drew content: fixations + saccades + word
+    # boxes, so the data axes carries at least one drawn layer.
+    assert mh.n_drawn_layers(fig) > 0
+    assert mh.path_collection(fig, "Fixations") is not None
+    assert mh.line_collection(fig, "saccades") is not None
+    assert len(mh.rectangles(fig)) > 0  # word boxes

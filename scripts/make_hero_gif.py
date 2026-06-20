@@ -2,13 +2,12 @@
 """Generate the README hero GIF: one reader's scanpath replayed fixation by fixation.
 
 Drives the app's *own* Animated Scanpath export path — the same builders and the
-same Kaleido frame rasterizer the in-app **GIF** download uses — so the asset is a
-faithful capture of what the app produces, not a stand-in. Writes to
-``assets/scanpath_animation.gif``.
+same matplotlib frame rasterizer the in-app **GIF** download uses — so the asset is
+a faithful capture of what the app produces, not a stand-in. No headless browser
+needed. Writes to ``assets/scanpath_animation.gif``.
 
 Usage::
 
-    plotly_get_chrome -y                  # one-time: Kaleido needs a Chrome
     python scripts/make_hero_gif.py       # writes assets/scanpath_animation.gif
 
 The trial is the bundled OneStop demo's "Polish government / wolf" elementary

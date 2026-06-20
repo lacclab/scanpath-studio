@@ -25,13 +25,13 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
 
 import pandas as pd
 
+from . import mpl_render as mr
 from .constants import (
     CITATION,
     DEFAULT_LINE_SPACING,
@@ -54,8 +54,8 @@ class ExportOptions:
     include_png: bool = True
     include_svg: bool = True
     include_pdf: bool = False
-    # HTML is a browser-free figure format (fig.to_html — no Kaleido/Chrome) and
-    # stays interactive; handled specially in the export loop.
+    # HTML wraps the figure's SVG in a self-contained page; handled specially in
+    # the export loop. (All image formats are now browser-free matplotlib saves.)
     include_html: bool = False
     include_plot_config: bool = True
     include_fixations: bool = False
@@ -93,9 +93,14 @@ class ExportOptions:
             formats.append("html")
         return formats
 
-    def raster_formats(self) -> List[str]:
-        """Figure formats that need Kaleido/Chrome (everything but HTML)."""
+    def image_formats(self) -> List[str]:
+        """Native image figure formats (PNG/SVG/PDF) — everything but the HTML
+        page wrapper. All render in-process with matplotlib (no browser)."""
         return [f for f in self.figure_formats() if f != "html"]
+
+    # Backwards-compatible alias (the formats are no longer raster-only nor
+    # Kaleido-gated, but callers/tests may still reference this name).
+    raster_formats = image_formats
 
 
 @dataclass
@@ -121,52 +126,13 @@ def _write_table(zf: zipfile.ZipFile, path: str, df: pd.DataFrame, fmt: str) -> 
     return len(data)
 
 
-@contextmanager
-def _figure_renderer(enabled: bool):
-    """Yield ``render(fig, fmt, width, height, scale) -> bytes``.
+def _render_figure_bytes(fig, fmt: str, scale: int) -> bytes:
+    """Render a matplotlib figure to ``fmt`` bytes (PNG/SVG/PDF), no browser.
 
-    When ``enabled`` and Kaleido starts, every trial's figure is rasterized
-    through one persistent Kaleido browser (``calc_fig_sync``) instead of
-    cold-starting a fresh Chrome on each ``fig.to_image`` call — the cold start
-    is the "Resorting to unclean kill browser." log noise and ~seconds-per-trial
-    latency. Falls back to per-call ``to_image`` if the warm server can't start
-    (or no figures were requested), so behavior is unchanged when Kaleido/Chrome
-    is unavailable — the per-trial failure is still surfaced as an export error.
+    PNG honours ``scale`` as a DPI multiplier (retina/poster); SVG/PDF are vector
+    and ignore it. The HTML "format" is handled by the caller (an SVG page wrap).
     """
-    server = None
-    if enabled:
-        try:
-            import kaleido
-
-            kaleido.start_sync_server(silence_warnings=True)
-            server = kaleido
-        except Exception:
-            server = None
-
-    def render(fig, fmt: str, width: int, height: int, scale: int) -> bytes:
-        if server is not None:
-            data = server.calc_fig_sync(
-                fig,
-                opts={
-                    "format": fmt,
-                    "width": int(width),
-                    "height": int(height),
-                    "scale": scale,
-                },
-            )
-            return bytes(data)
-        return fig.to_image(
-            format=fmt, width=int(width), height=int(height), scale=scale
-        )
-
-    try:
-        yield render
-    finally:
-        if server is not None:
-            try:
-                server.stop_sync_server(silence_warnings=True)
-            except Exception:  # pragma: no cover - best-effort teardown
-                pass
+    return mr.save_to_buffer(fig, fmt, scale=scale if fmt == "png" else 1)
 
 
 def _plot_config_dict(
@@ -343,8 +309,8 @@ def render_export_options(
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
                 help="PDF / SVG are vector; PNG is raster (set the scale below). "
-                "PDF / SVG / PNG render via Kaleido (needs Chrome). HTML is "
-                "interactive and needs no browser.",
+                "All render locally with matplotlib — no browser needed. HTML is "
+                "a self-contained SVG page.",
             )
             or []
         )
@@ -515,145 +481,132 @@ def bulk_export(
     ]
     zf.writestr("README.md", "\n".join(readme_lines))
 
-    # One warm Kaleido browser for every trial's figure (see _figure_renderer)
-    # instead of cold-starting Chrome on each render. HTML needs no browser, so
-    # only spin Kaleido up when a raster/vector format was requested.
+    # Figures render in-process with matplotlib (savefig) — no browser, no warm
+    # server to manage; just loop the trials.
     figure_formats = options.figure_formats()
-    with _figure_renderer(bool(options.raster_formats())) as render_figure:
-        for combo in combos.itertuples(index=False):
-            participant = getattr(combo, "participant_id")
-            trial = getattr(combo, "trial_id")
-            slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
-            prefix = f"per_trial/{slug}/"
+    for combo in combos.itertuples(index=False):
+        participant = getattr(combo, "participant_id")
+        trial = getattr(combo, "trial_id")
+        slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
+        prefix = f"per_trial/{slug}/"
 
-            trial_words = words[
-                (words["participant_id"] == participant) & (words["trial_id"] == trial)
-            ]
-            trial_fix = fixations[
-                (fixations["participant_id"] == participant)
-                & (fixations["trial_id"] == trial)
-            ]
+        trial_words = words[
+            (words["participant_id"] == participant) & (words["trial_id"] == trial)
+        ]
+        trial_fix = fixations[
+            (fixations["participant_id"] == participant)
+            & (fixations["trial_id"] == trial)
+        ]
 
-            if trial_words.empty or trial_fix.empty:
-                progress.finished_trials += 1
-                progress.errors.append(f"{slug}: empty data, skipped")
-                if progress_callback:
-                    progress_callback(progress)
-                continue
-
-            if figure_formats:
-                try:
-                    fig = make_scanpath_figure(
-                        trial_words,
-                        trial_fix,
-                        canvas_width=int(canvas_width),
-                        canvas_height=int(canvas_height),
-                        base_font_size=int(base_font_size),
-                        font_family=font_family,
-                        x_field=x_field,
-                        y_field=y_field,
-                        show_words=settings.get("show_words", True),
-                        show_word_labels=settings.get("show_word_labels", True),
-                        show_fixations=settings.get("show_fixations", True),
-                        show_order=settings.get("show_order", True),
-                        show_saccades=settings.get("show_saccades", True),
-                        show_saccade_arrows=settings.get("show_saccade_arrows", False),
-                        show_heatmap=settings.get("show_heatmap", False),
-                        heatmap_style=settings.get("heatmap_style", "Word boxes"),
-                        color_by=settings.get("color_by", "duration_ms"),
-                        heatmap_metric=settings.get("heatmap_metric"),
-                        marker_size_range=tuple(
-                            settings.get("marker_size_range", (8, 24))
-                        ),
-                        order_font_size=int(settings.get("order_font_size", 10)),
-                        order_font_color=settings.get("order_font_color", "#111111"),
-                        show_colorbars=settings.get("show_colorbars", False),
-                        fixation_color_range=settings.get("fixation_color_range"),
-                        heatmap_range=settings.get("heatmap_range"),
-                        fixation_colorscale=settings.get(
-                            "fixation_colorscale", "Blues"
-                        ),
-                        heatmap_colorscale=settings.get(
-                            "heatmap_colorscale", "Oranges"
-                        ),
-                        background_color=settings.get("background_color"),
-                        color_by_line=settings.get("color_by_line", False),
-                        highlight_out_of_text=settings.get(
-                            "highlight_out_of_text", False
-                        ),
-                        saccade_color=settings.get("saccade_color", SACCADE_COLOR),
-                        saccade_style=settings.get("saccade_style", "solid"),
-                        hollow_fixations=settings.get("hollow_fixations", False),
-                        critical_span_style=settings.get(
-                            "critical_span_style", "Mark text"
-                        ),
-                        highlight_column=settings.get(
-                            "highlight_column", "is_in_aspan"
-                        ),
-                        text_color=settings.get("text_color", WORD_LABEL_COLOR),
-                        highlight_text_color=settings.get(
-                            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
-                        ),
-                        line_spacing=settings.get("line_spacing", DEFAULT_LINE_SPACING),
-                        scale_text_to_boxes=settings.get("scale_text_to_boxes", True),
-                    )
-                    # Render at the figure's own fitted size (not the raw
-                    # monitor canvas) so the exported reading text matches the
-                    # on-screen scale.
-                    out_w = int(fig.layout.width or canvas_width)
-                    out_h = int(fig.layout.height or canvas_height)
-                    for fmt in figure_formats:
-                        if fmt == "html":
-                            # Browser-free + interactive; no Kaleido needed.
-                            data = fig.to_html(
-                                include_plotlyjs="cdn", full_html=True
-                            ).encode("utf-8")
-                        else:
-                            scale = options.png_scale if fmt == "png" else 1
-                            data = render_figure(fig, fmt, out_w, out_h, scale)
-                        zf.writestr(f"{prefix}figure.{fmt}", data)
-                        progress.bytes_written += len(data)
-                except Exception as exc:
-                    progress.errors.append(f"{slug}: figure export failed ({exc})")
-
-            if options.include_plot_config:
-                cfg = _plot_config_dict(
-                    participant,
-                    trial,
-                    canvas_width,
-                    canvas_height,
-                    x_field,
-                    y_field,
-                    settings,
-                )
-                data = json.dumps(cfg, indent=2).encode("utf-8")
-                zf.writestr(f"{prefix}plot_config.json", data)
-                progress.bytes_written += len(data)
-
-            per_trial_measures = (
-                compute_word_metrics(trial_words, trial_fix)
-                if options.include_measures or options.include_mega_table
-                else None
-            )
-
-            for fmt in options.table_formats():
-                if options.include_fixations:
-                    progress.bytes_written += _write_table(
-                        zf, f"{prefix}fixations.{fmt}", trial_fix, fmt
-                    )
-                if options.include_measures and per_trial_measures is not None:
-                    progress.bytes_written += _write_table(
-                        zf, f"{prefix}measures.{fmt}", per_trial_measures, fmt
-                    )
-
-            if options.include_mega_table:
-                mega_fixations.append(trial_fix)
-                if per_trial_measures is not None:
-                    mega_measures.append(per_trial_measures)
-
+        if trial_words.empty or trial_fix.empty:
             progress.finished_trials += 1
+            progress.errors.append(f"{slug}: empty data, skipped")
             if progress_callback:
                 progress_callback(progress)
+            continue
+
+        if figure_formats:
+            try:
+                fig = make_scanpath_figure(
+                    trial_words,
+                    trial_fix,
+                    canvas_width=int(canvas_width),
+                    canvas_height=int(canvas_height),
+                    base_font_size=int(base_font_size),
+                    font_family=font_family,
+                    x_field=x_field,
+                    y_field=y_field,
+                    show_words=settings.get("show_words", True),
+                    show_word_labels=settings.get("show_word_labels", True),
+                    show_fixations=settings.get("show_fixations", True),
+                    show_order=settings.get("show_order", True),
+                    show_saccades=settings.get("show_saccades", True),
+                    show_saccade_arrows=settings.get("show_saccade_arrows", False),
+                    show_heatmap=settings.get("show_heatmap", False),
+                    heatmap_style=settings.get("heatmap_style", "Word boxes"),
+                    color_by=settings.get("color_by", "duration_ms"),
+                    heatmap_metric=settings.get("heatmap_metric"),
+                    marker_size_range=tuple(settings.get("marker_size_range", (8, 24))),
+                    order_font_size=int(settings.get("order_font_size", 10)),
+                    order_font_color=settings.get("order_font_color", "#111111"),
+                    show_colorbars=settings.get("show_colorbars", False),
+                    fixation_color_range=settings.get("fixation_color_range"),
+                    heatmap_range=settings.get("heatmap_range"),
+                    fixation_colorscale=settings.get("fixation_colorscale", "Blues"),
+                    heatmap_colorscale=settings.get("heatmap_colorscale", "Oranges"),
+                    background_color=settings.get("background_color"),
+                    color_by_line=settings.get("color_by_line", False),
+                    highlight_out_of_text=settings.get("highlight_out_of_text", False),
+                    saccade_color=settings.get("saccade_color", SACCADE_COLOR),
+                    saccade_style=settings.get("saccade_style", "solid"),
+                    hollow_fixations=settings.get("hollow_fixations", False),
+                    critical_span_style=settings.get(
+                        "critical_span_style", "Mark text"
+                    ),
+                    highlight_column=settings.get("highlight_column", "is_in_aspan"),
+                    text_color=settings.get("text_color", WORD_LABEL_COLOR),
+                    highlight_text_color=settings.get(
+                        "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
+                    ),
+                    line_spacing=settings.get("line_spacing", DEFAULT_LINE_SPACING),
+                    scale_text_to_boxes=settings.get("scale_text_to_boxes", True),
+                )
+                # The figure is already at its own fitted size, so saving it
+                # keeps the exported reading text at the on-screen scale.
+                for fmt in figure_formats:
+                    if fmt == "html":
+                        # Self-contained SVG page (browser-free, vector, crisp).
+                        svg = mr.save_to_buffer(fig, "svg").decode("utf-8")
+                        svg = svg[svg.find("<svg") :]
+                        data = (
+                            "<!doctype html><html><head><meta charset='utf-8'>"
+                            "</head><body style='margin:0'>" + svg + "</body></html>"
+                        ).encode("utf-8")
+                    else:
+                        data = _render_figure_bytes(fig, fmt, options.png_scale)
+                    zf.writestr(f"{prefix}figure.{fmt}", data)
+                    progress.bytes_written += len(data)
+            except Exception as exc:
+                progress.errors.append(f"{slug}: figure export failed ({exc})")
+
+        if options.include_plot_config:
+            cfg = _plot_config_dict(
+                participant,
+                trial,
+                canvas_width,
+                canvas_height,
+                x_field,
+                y_field,
+                settings,
+            )
+            data = json.dumps(cfg, indent=2).encode("utf-8")
+            zf.writestr(f"{prefix}plot_config.json", data)
+            progress.bytes_written += len(data)
+
+        per_trial_measures = (
+            compute_word_metrics(trial_words, trial_fix)
+            if options.include_measures or options.include_mega_table
+            else None
+        )
+
+        for fmt in options.table_formats():
+            if options.include_fixations:
+                progress.bytes_written += _write_table(
+                    zf, f"{prefix}fixations.{fmt}", trial_fix, fmt
+                )
+            if options.include_measures and per_trial_measures is not None:
+                progress.bytes_written += _write_table(
+                    zf, f"{prefix}measures.{fmt}", per_trial_measures, fmt
+                )
+
+        if options.include_mega_table:
+            mega_fixations.append(trial_fix)
+            if per_trial_measures is not None:
+                mega_measures.append(per_trial_measures)
+
+        progress.finished_trials += 1
+        if progress_callback:
+            progress_callback(progress)
 
     if options.include_mega_table and (mega_fixations or mega_measures):
         for fmt in options.table_formats():

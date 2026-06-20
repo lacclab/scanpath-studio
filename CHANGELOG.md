@@ -23,11 +23,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MultiplEYE in the in-app "Public datasets" picker** (behind the same
   `SCANPATH_PUBLIC_DATASETS=1` flag as PoTeC), with directory / session /
   stimulus / fixation-source controls and the corpus monitor size.
-- **Derive ids from the filename (upload wizard).** A new optional step splits
-  the captured `source_file` into `file_part_N` columns (pick the delimiter) so
-  a trial / participant id that lives only in the filename can be mapped (and
-  composed from several parts). `read_tables` now records `source_file` for a
-  single file too, not just multi-file sets (`data.split_source_file`).
+- **MultiplEYE via the Add-dataset wizard (browser upload).** A **Dataset format**
+  choice in *Add dataset* now offers **MultiplEYE**: upload the corpus's
+  scanpath/fixation CSVs (+ optional word-AOI CSVs) and the app recovers identity
+  from the file names (browsers drop folders), makes each stimulus *page* a trial,
+  aggregates character AOIs into word boxes, and case-matches the lowercase AOI
+  file names to the CamelCase stimuli — no column mapping needed
+  (`datasets.multipleye_frames_from_uploads` / `load_multipleye_uploads`).
+- **Derive ids from the filename (upload wizard).** An optional step turns the
+  captured `source_file` into columns you can map as a trial / participant id —
+  either a **delimiter split** into `file_part_N` (`data.split_source_file`) or a
+  **regex** with named groups (`data.extract_columns_from_source_file`, robust to
+  variable-length parts), with optional lowercasing. `read_tables` now records
+  `source_file` for a single file too, not just multi-file sets.
+- **Aggregate character AOIs into word boxes (upload wizard).** A toggle in the
+  Text & Interest Areas step collapses one-row-per-character interest-area tables
+  (e.g. CJK corpora) into one bounding box per word
+  (`data.aggregate_char_boxes`), grouped by the mapped trial + word id.
 
 ### Changed
 - **Schema auto-detection** now recognizes MultiplEYE column conventions:

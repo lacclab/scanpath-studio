@@ -387,13 +387,51 @@ def _multipleye_aoi_dir(root: Path) -> Path:
     )
 
 
-def _multipleye_word_boxes(aoi_dir: Path, stimuli: Iterable[str]) -> pd.DataFrame:
-    """Stimulus-level word boxes: chars aggregated to one box per (page, word).
+def _multipleye_word_boxes_from_frame(
+    chars: pd.DataFrame, stimulus: str
+) -> pd.DataFrame:
+    """Aggregate one stimulus' character-level AOI rows to one box per (page, word).
 
-    One row per (stimulus, page, word_idx) with the bounding box of that word's
-    characters (``top_left_x/y`` + ``width/height``). No participant column —
-    the boxes are stimulus-level and get broadcast across the readers who read
-    each (stimulus, page) trial (``data.broadcast_stimulus_words``)."""
+    Reading pages only (``page_*``). ``stimulus`` is the (CamelCase-canonical)
+    name stamped into ``stimulus`` / ``text_id`` / ``genre`` / ``trial_id`` so the
+    boxes' per-page trial ids line up with the fixations'. Emits *edge* columns
+    (``left/right/top/bottom``) to match ``MULTIPLEYE_WORD_SCHEMA`` (no participant
+    — stimulus-level boxes broadcast across readers). Shared by the directory
+    loader and the upload recipe; returns an empty frame if no reading-page rows
+    (or no ``page`` column at all — e.g. a stray / question-AOI upload)."""
+    if "page" not in chars.columns:
+        return chars.iloc[0:0]
+    chars = chars[chars["page"].astype(str).str.startswith("page_")].copy()
+    if chars.empty:
+        return chars
+    chars["_right"] = chars["top_left_x"] + chars["width"]
+    chars["_bottom"] = chars["top_left_y"] + chars["height"]
+    boxes = (
+        chars.groupby(["page", "word_idx"], sort=False)
+        .agg(
+            left=("top_left_x", "min"),
+            top=("top_left_y", "min"),
+            right=("_right", "max"),
+            bottom=("_bottom", "max"),
+            line_idx=("line_idx", "min"),
+            word=("word", "first"),
+        )
+        .reset_index()
+    )
+    boxes["stimulus"] = stimulus
+    # `text_id` (= stimulus) so both the explicit schema and the app's auto-detect
+    # path key stimulus-level grouping on the stimulus, not the per-page trial id.
+    boxes["text_id"] = stimulus
+    boxes["genre"] = stimulus.split("_")[0]
+    boxes["trial_id"] = stimulus + _MULTIPLEYE_PAGE_SEP + boxes["page"].astype(str)
+    return boxes
+
+
+def _multipleye_word_boxes(aoi_dir: Path, stimuli: Iterable[str]) -> pd.DataFrame:
+    """Stimulus-level word boxes from per-stimulus AOI files under ``aoi_dir``.
+
+    One row per (stimulus, page, word_idx); raises if a stimulus' AOI file is
+    missing (the directory loader knows exactly which file each stimulus needs)."""
     frames = []
     for stimulus in sorted(set(stimuli)):
         path = aoi_dir / f"{stimulus.lower()}_aoi.csv"
@@ -401,31 +439,38 @@ def _multipleye_word_boxes(aoi_dir: Path, stimuli: Iterable[str]) -> pd.DataFram
             raise FileNotFoundError(
                 f"MultiplEYE AOI file not found for stimulus {stimulus!r}: {path}"
             )
-        chars = pd.read_csv(path)
-        chars = chars[chars["page"].astype(str).str.startswith("page_")].copy()
-        chars["_right"] = chars["top_left_x"] + chars["width"]
-        chars["_bottom"] = chars["top_left_y"] + chars["height"]
-        boxes = (
-            chars.groupby(["page", "word_idx"], sort=False)
-            .agg(
-                left=("top_left_x", "min"),
-                top=("top_left_y", "min"),
-                right=("_right", "max"),
-                bottom=("_bottom", "max"),
-                line_idx=("line_idx", "min"),
-                word=("word", "first"),
-            )
-            .reset_index()
-        )
-        boxes["stimulus"] = stimulus
-        # `text_id` (= stimulus) so both the explicit schema and the app's
-        # auto-detect path key stimulus-level grouping on the stimulus, not the
-        # per-page trial id.
-        boxes["text_id"] = stimulus
-        boxes["genre"] = stimulus.split("_")[0]
-        boxes["trial_id"] = stimulus + _MULTIPLEYE_PAGE_SEP + boxes["page"].astype(str)
-        frames.append(boxes)
+        frames.append(_multipleye_word_boxes_from_frame(pd.read_csv(path), stimulus))
     return pd.concat(frames, ignore_index=True)
+
+
+def _stamp_multipleye_fixations(df: pd.DataFrame, info: dict) -> pd.DataFrame:
+    """Filter to reading pages and stamp identity columns parsed from a filename.
+
+    ``info`` is a ``_multipleye_parse_filename`` dict. Returns the reading-page
+    (``page_*``; ``name == 'fixation'`` when the column is present) fixation rows
+    with the canonical identity columns, or an empty frame if none remain (or the
+    upload has no ``page`` column at all). Shared by the directory loader (one
+    file) and the upload recipe (one source_file group)."""
+    if "page" not in df.columns:
+        return df.iloc[0:0]
+    df = df[df["page"].astype(str).str.startswith("page_")]
+    if "name" in df.columns:  # scanpaths tag each row; keep fixations only
+        df = df[df["name"] == "fixation"]
+    if df.empty:
+        return df
+    df = df.copy()
+    session = info["session"]
+    stimulus = info["stimulus"]
+    df["participant_id"] = session
+    df["participant"] = session.split("_", 1)[0]  # bare pid
+    df["session"] = session.rsplit("_", 1)[-1]  # ET1 / ET2
+    df["stimulus"] = stimulus
+    df["text_id"] = stimulus  # stimulus-level grouping key (see word boxes)
+    df["genre"] = stimulus.split("_")[0]
+    df["is_practice"] = bool(info["practice"])
+    df["trial_num"] = int(info["trial_num"])
+    df["trial_id"] = stimulus + _MULTIPLEYE_PAGE_SEP + df["page"].astype(str)
+    return df
 
 
 def _multipleye_fixations(
@@ -452,26 +497,11 @@ def _multipleye_fixations(
             info = _multipleye_parse_filename(path.stem)
             if info is None:
                 continue
-            stimulus = info["stimulus"]
-            if stim_filter is not None and stimulus not in stim_filter:
+            if stim_filter is not None and info["stimulus"] not in stim_filter:
                 continue
-            df = pd.read_csv(path)
-            df = df[df["page"].astype(str).str.startswith("page_")]
-            if "name" in df.columns:  # scanpaths tag each row; keep fixations only
-                df = df[df["name"] == "fixation"]
-            if df.empty:
-                continue
-            df = df.copy()
-            df["participant_id"] = info["session"]
-            df["participant"] = info["session"].split("_", 1)[0]  # bare pid
-            df["session"] = info["session"].rsplit("_", 1)[-1]  # ET1 / ET2
-            df["stimulus"] = stimulus
-            df["text_id"] = stimulus  # stimulus-level grouping key (see word boxes)
-            df["genre"] = stimulus.split("_")[0]
-            df["is_practice"] = bool(info["practice"])
-            df["trial_num"] = int(info["trial_num"])
-            df["trial_id"] = stimulus + _MULTIPLEYE_PAGE_SEP + df["page"].astype(str)
-            frames.append(df)
+            stamped = _stamp_multipleye_fixations(pd.read_csv(path), info)
+            if not stamped.empty:
+                frames.append(stamped)
     if not frames:
         raise FileNotFoundError(
             f"No MultiplEYE {source} files matched under {base} "
@@ -617,5 +647,132 @@ def load_multipleye(
         fix_schema=dict(
             MULTIPLEYE_FIX_SCHEMA,
             word_id="word_idx" if "word_idx" in fixations_raw.columns else None,
+        ),
+    )
+
+
+# --- Browser-upload path -----------------------------------------------------
+# Loading MultiplEYE through the Add-dataset wizard: the browser strips folders,
+# so identity is recovered from each row's ``source_file`` (the uploaded filename
+# stem, tagged by ``data.read_tables``) instead of the directory tree.
+
+
+def _multipleye_aoi_stimulus_from_source(stem: str) -> str:
+    """Stimulus name from an AOI filename stem, stripping a trailing ``_aoi``.
+
+    ``lit_alchemist_4_aoi`` → ``lit_alchemist_4`` (still lowercase; the caller
+    canonicalizes the case). ``_aoi_questions`` files (question/option AOIs, whose
+    rows aren't ``page_*`` and so produce no word boxes) are handled too."""
+    s = str(stem)
+    for suffix in ("_aoi_questions", "_aoi"):
+        if s.lower().endswith(suffix):
+            return s[: -len(suffix)]
+    return s
+
+
+def _multipleye_fixations_from_frame(fixations_df: pd.DataFrame) -> pd.DataFrame:
+    """Identity-stamped reading-page fixations from a concatenated UPLOAD frame.
+
+    Rows must carry a ``source_file`` column (the uploaded filename stem). Each
+    file group is parsed with ``_multipleye_parse_filename``; groups whose name
+    isn't MultiplEYE-shaped are skipped. When both a ``_scanpath`` and a
+    ``_fixation`` file are uploaded for the same (session, trial), the scanpath
+    one wins (it carries word indices), mirroring the directory loader's source
+    preference. Returns an empty frame if nothing matched (the wizard then
+    surfaces a problem rather than crashing)."""
+    from .data import SOURCE_FILE_COLUMN
+
+    if SOURCE_FILE_COLUMN not in fixations_df.columns:
+        return pd.DataFrame()
+    # Prefer scanpath over fixation per (session, trial, stimulus) so uploading
+    # both kinds of a trial doesn't double its rows.
+    chosen: dict = {}
+    for stem, group in fixations_df.groupby(SOURCE_FILE_COLUMN, sort=False):
+        info = _multipleye_parse_filename(str(stem))
+        if info is None:
+            continue
+        key = (info["session"], info["trial_num"], info["stimulus"])
+        prev = chosen.get(key)
+        if prev is None or (
+            info["kind"] == "scanpath" and prev[0]["kind"] != "scanpath"
+        ):
+            chosen[key] = (info, group)
+    frames = [
+        stamped
+        for info, group in chosen.values()
+        if not (stamped := _stamp_multipleye_fixations(group, info)).empty
+    ]
+    return (
+        pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
+    )
+
+
+def multipleye_frames_from_uploads(
+    fixations_df: pd.DataFrame, aoi_df: Optional[pd.DataFrame] = None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Raw MultiplEYE ``(words, fixations)`` frames from UPLOADED files.
+
+    The browser-upload analogue of :func:`multipleye_raw_frames`: identity is
+    parsed from each row's ``source_file`` (the uploaded filename stem) instead of
+    the directory tree, since browser uploads drop folders. ``fixations_df`` is
+    the concatenated scanpath/fixation CSVs; ``aoi_df`` the concatenated
+    character-level AOI CSVs (optional — without it you get fixations and no word
+    boxes). AOI filenames are lowercase (``lit_alchemist_4_aoi``) while scanpath
+    filenames are CamelCase, so each AOI group's stimulus is relabeled to the
+    CamelCase name seen in the fixations before building ``trial_id`` — otherwise
+    the stimulus-words broadcast (which inner-joins on ``trial_id``) drops every
+    box. Feed the result through :func:`load_multipleye_uploads` (or
+    ``api.load_scanpath_data`` with ``MULTIPLEYE_WORD_SCHEMA`` /
+    ``MULTIPLEYE_FIX_SCHEMA``)."""
+    from .data import SOURCE_FILE_COLUMN
+
+    fixations = _multipleye_fixations_from_frame(fixations_df)
+    if fixations.empty or aoi_df is None or getattr(aoi_df, "empty", True):
+        return pd.DataFrame(), fixations
+    if SOURCE_FILE_COLUMN not in aoi_df.columns:
+        return pd.DataFrame(), fixations
+
+    # CamelCase canonical per lowercased stimulus, taken from the fixations.
+    casemap: dict = {}
+    for stim in fixations["stimulus"].unique():
+        casemap.setdefault(str(stim).lower(), str(stim))
+
+    frames = []
+    for stem, group in aoi_df.groupby(SOURCE_FILE_COLUMN, sort=False):
+        lower_stim = _multipleye_aoi_stimulus_from_source(str(stem))
+        canonical = casemap.get(lower_stim.lower(), lower_stim)
+        boxes = _multipleye_word_boxes_from_frame(group, canonical)
+        if not boxes.empty:
+            frames.append(boxes)
+    words = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    return words, fixations
+
+
+def load_multipleye_uploads(
+    fixations_df: pd.DataFrame, aoi_df: Optional[pd.DataFrame] = None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Normalized ``(words, fixations)`` from UPLOADED MultiplEYE files.
+
+    Like :func:`load_multipleye`, but for in-memory uploaded frames (identity from
+    each row's ``source_file``; see :func:`multipleye_frames_from_uploads`).
+    ``words`` is an empty frame when no AOI files were uploaded; the fixations then
+    plot at their own ``location_x/y`` with no word boxes. Raises ``ValueError``
+    (via :func:`api.load_scanpath_data`) if the fixations frame has no
+    MultiplEYE-shaped filenames."""
+    words_raw, fix_raw = multipleye_frames_from_uploads(fixations_df, aoi_df)
+
+    from . import api
+
+    return api.load_scanpath_data(
+        words=words_raw if not words_raw.empty else None,
+        fixations=fix_raw if not fix_raw.empty else None,
+        word_schema=dict(MULTIPLEYE_WORD_SCHEMA) if not words_raw.empty else None,
+        fix_schema=(
+            dict(
+                MULTIPLEYE_FIX_SCHEMA,
+                word_id="word_idx" if "word_idx" in fix_raw.columns else None,
+            )
+            if not fix_raw.empty
+            else None
         ),
     )

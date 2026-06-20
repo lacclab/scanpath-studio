@@ -1288,3 +1288,245 @@ class TestNavRegressions:
             assert "Save the full plot configuration" in captions, (
                 f"Save & restore panel missing on the {view} view"
             )
+
+
+def _mpe_upload_frames():
+    """A tiny MultiplEYE upload: scanpath rows (CamelCase filename) + char AOIs
+    (lowercase filename), each row tagged with its source_file stem."""
+    import pandas as pd
+
+    scan = pd.DataFrame(
+        {
+            "onset": [1000, 1300, 2000],
+            "duration": [200, 180, 210],
+            "name": ["fixation"] * 3,
+            "location_x": [90, 150, 90],
+            "location_y": [65, 65, 65],
+            "page": ["page_1", "page_1", "page_2"],
+            "word_idx": [0, 1, 0],
+        }
+    )
+    scan["source_file"] = "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath"
+
+    def _chars(page, word_idx, word, x0):
+        return [
+            dict(
+                char_idx=word_idx * 2 + i,
+                char=word[i],
+                top_left_x=x0 + i * 20,
+                top_left_y=50,
+                width=20,
+                height=30,
+                char_idx_in_line=word_idx * 2 + i,
+                line_idx=0,
+                page=page,
+                word_idx=word_idx,
+                word_idx_in_line=word_idx,
+                word=word,
+            )
+            for i in range(2)
+        ]
+
+    aoi = pd.DataFrame(
+        _chars("page_1", 0, "AA", 80)
+        + _chars("page_1", 1, "BB", 140)
+        + _chars("page_2", 0, "CC", 80)
+    )
+    aoi["source_file"] = "lit_demo_1_aoi"
+    return scan, aoi
+
+
+@pytest.mark.timeout(60)
+class TestMultiplEYEUploadPreset:
+    """Add-dataset → MultiplEYE format: filename-keyed browser upload."""
+
+    def _seed_preset(self, at, app, monkeypatch, scan, aoi):
+        import pandas as pd
+
+        frames = {"mpe_fix": scan, "mpe_aoi": aoi}
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
+        )
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "MultiplEYE"
+
+    def test_preset_bypasses_generic_mapping(self, monkeypatch):
+        from scanpath_studio import app
+
+        scan, aoi = _mpe_upload_frames()
+        at = _make_apptest()
+        self._seed_preset(at, app, monkeypatch, scan, aoi)
+        at.run(timeout=60)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error: {[e.value for e in at.error]}"
+        # The preset assembled a finalize payload — with single-literal trial id
+        # (no composite components) and MultiplEYE's filter facets.
+        assert "_wizard_finalize_payload" in at.session_state
+        payload = at.session_state["_wizard_finalize_payload"]
+        assert payload["composite_trial_columns"] == []
+        assert payload["filter_fields"] == ["genre", "session", "is_practice"]
+        # Per-page trials, CamelCase stimulus (case-match worked), boxes joined.
+        fixations = payload["fixations"]
+        assert set(fixations["trial_id"]) == {
+            "Lit_Demo_1__page_1",
+            "Lit_Demo_1__page_2",
+        }
+        assert not payload["words"].empty
+        # The generic column-mapping widgets are NOT rendered in this format.
+        sel_keys = {s.key for s in at.selectbox}
+        assert "col_map_words_word_id" not in sel_keys
+        assert "col_map_fix_duration" not in sel_keys
+
+    def test_preset_finalize_stores_dataset(self, monkeypatch):
+        from scanpath_studio import app
+
+        scan, aoi = _mpe_upload_frames()
+        at = _make_apptest()
+        self._seed_preset(at, app, monkeypatch, scan, aoi)
+        at.run(timeout=60)
+        finalize = [b for b in at.button if b.key == "wizard_finalize"]
+        assert finalize, "Add dataset button missing"
+        finalize[0].click().run()
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The dataset was stored and reselected — it renders without re-mapping.
+        assert "_datasets" in at.session_state and at.session_state["_datasets"], (
+            "dataset was not stored"
+        )
+        stored = next(iter(at.session_state["_datasets"].values()))
+        assert not stored["fixations"].empty
+        assert stored["composite_trial_columns"] == []
+
+    def test_preset_unrecognized_filenames_blocks(self, monkeypatch):
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        bad = pd.DataFrame(
+            {
+                "onset": [1],
+                "duration": [1],
+                "location_x": [1.0],
+                "location_y": [1.0],
+                "page": ["page_1"],
+                "word_idx": [0],
+            }
+        )
+        bad["source_file"] = "not_a_multipleye_name"
+        at = _make_apptest()
+        self._seed_preset(at, app, monkeypatch, bad, pd.DataFrame())
+        at.run(timeout=60)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        errors = " ".join(e.value for e in at.error)
+        assert "No MultiplEYE-shaped file names" in errors
+        # No finalize payload when the upload couldn't be parsed.
+        assert "_wizard_finalize_payload" not in at.session_state
+
+
+@pytest.mark.timeout(60)
+class TestGenericFilenamePowers:
+    """Generic wizard powers reusable beyond MultiplEYE: regex filename → columns
+    and the character-AOI aggregation toggle."""
+
+    def test_regex_derive_exposes_columns_and_aggregate_toggle(self, monkeypatch):
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        # A char-level words table + fixations, both keyed only by filename.
+        words = pd.DataFrame(
+            {
+                "word_idx": [0, 0],
+                "word": ["AA", "AA"],
+                "top_left_x": [80, 100],
+                "top_left_y": [50, 50],
+                "width": [20, 20],
+                "height": [30, 30],
+                "page": ["page_1", "page_1"],
+                "source_file": ["lit_demo_aoi", "lit_demo_aoi"],
+            }
+        )
+        fix = pd.DataFrame(
+            {
+                "onset": [1, 2],
+                "duration": [10, 10],
+                "location_x": [1.0, 2.0],
+                "location_y": [1.0, 1.0],
+                "page": ["page_1", "page_1"],
+                "source_file": ["p1_t1_scan", "p1_t1_scan"],
+            }
+        )
+        frames = {"col_map_words": words, "col_map_fix": fix}
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        # Enable filename derivation in regex mode.
+        at.session_state["wizard_filename_split"] = True
+        at.session_state["wizard_filename_mode"] = "Regex named groups"
+        at.session_state["wizard_filename_regex"] = (
+            r"(?P<pid>p\d+)_(?P<trial>t\d+)_scan"
+        )
+        at.run(timeout=60)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The regex-extracted columns are offered to map as ids…
+        trial_pick = [m for m in at.multiselect if m.key == "col_map_trial_unified"]
+        assert trial_pick, "trial id multiselect not rendered"
+        assert "trial" in trial_pick[0].options
+        # …and the character-AOI aggregation toggle renders for the words table.
+        assert "wizard_aggregate_char_boxes" in {t.key for t in at.toggle}
+
+    def test_aggregate_toggle_finalizes_word_boxes(self, monkeypatch):
+        # End-to-end: a char-level words upload + the aggregate toggle → the
+        # stored dataset holds one box per word (4 char rows → 2 word boxes).
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        words = pd.DataFrame(
+            {
+                "trial_id": ["t"] * 4,
+                "word_idx": [0, 0, 1, 1],
+                "word": ["AA", "AA", "BB", "BB"],
+                "top_left_x": [80, 100, 140, 160],
+                "top_left_y": [50] * 4,
+                "width": [20] * 4,
+                "height": [30] * 4,
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                words if kw["state_prefix"] == "col_map_words" else pd.DataFrame()
+            ),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "Generic"
+        at.session_state["wizard_aggregate_char_boxes"] = True
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        finalize = [b for b in at.button if b.key == "wizard_finalize"]
+        assert finalize, "Add dataset button missing (mapping incomplete?)"
+        finalize[0].click().run()
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert "_datasets" in at.session_state and at.session_state["_datasets"]
+        stored = next(iter(at.session_state["_datasets"].values()))
+        assert len(stored["words"]) == 2  # aggregated from 4 char rows

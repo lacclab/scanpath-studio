@@ -548,6 +548,126 @@ def split_source_file(
     return df
 
 
+def extract_columns_from_source_file(
+    df: pd.DataFrame,
+    pattern: str,
+    *,
+    column: str = SOURCE_FILE_COLUMN,
+    lowercase: bool = False,
+) -> pd.DataFrame:
+    """Add one column per *named group* of a regex applied to ``source_file``.
+
+    Sibling of :func:`split_source_file` for filenames whose fields are
+    positionally irregular — varying-length parts or an optional prefix make a
+    fixed delimiter split unreliable. A regex with named groups, e.g.
+    ``r"(?P<session>\\d+_\\w+_ET\\d)_.*_(?P<stimulus>.+)_scanpath"``, extracts each
+    group into its own column the wizard can then map as a trial / participant id.
+    ``lowercase`` folds the captured values (useful when one table names a field
+    CamelCase and another lowercase). No-op (returns ``df`` unchanged) when
+    ``column`` is absent, ``pattern`` is empty / uncompilable, or it declares no
+    named groups; rows that don't match get NaN. A named group that collides with
+    an existing column is **skipped** (the real data wins) — see
+    :func:`source_file_regex_collisions` to surface those in a UI."""
+    if not pattern or column not in df.columns:
+        return df
+    try:
+        compiled = re.compile(pattern)
+    except re.error:
+        return df
+    if not compiled.groupindex:
+        return df
+    extracted = df[column].astype(str).str.extract(compiled)
+    df = df.copy()
+    for group in compiled.groupindex:  # named groups only
+        if group in df.columns:  # don't clobber an existing data column
+            continue
+        values = extracted[group]
+        if lowercase:
+            values = values.str.lower()
+        df[group] = values.to_numpy()
+    return df
+
+
+def source_file_regex_collisions(df: pd.DataFrame, pattern: str) -> list:
+    """Named groups of ``pattern`` that already exist as columns in ``df``.
+
+    :func:`extract_columns_from_source_file` skips these (so it never clobbers
+    real data); the wizard surfaces them so the user can rename the group."""
+    if not pattern:
+        return []
+    try:
+        groups = re.compile(pattern).groupindex
+    except re.error:
+        return []
+    return [g for g in groups if g in df.columns]
+
+
+def aggregate_char_boxes(
+    df: pd.DataFrame, schema: Dict[str, Optional[str]]
+) -> pd.DataFrame:
+    """Collapse character-level AOI rows into one bounding box per word.
+
+    For interest-area tables shipped one row per *character* (e.g. CJK corpora
+    that have no whitespace word boundaries), aggregate the characters of each
+    word — grouped by the mapped trial id + word id (plus participant / text id
+    when mapped) — into a single bounding box: min/max over the mapped box columns,
+    first value of every other column. Run this on the RAW frame *before*
+    :func:`normalize_words` (which expects one row per word box). ``schema`` is a
+    word schema dict (field → source column). Returns ``df`` unchanged when the
+    trial or word-id column isn't mapped, or no box columns are."""
+    word_col = schema.get("word_id")
+    trial = schema.get("trial")
+    if not word_col or not trial:
+        return df
+    group_cols = list(trial_mapping_columns(trial))
+    for key in ("participant", "text_id"):
+        mapped = schema.get(key)
+        if mapped:
+            group_cols += trial_mapping_columns(mapped)
+    group_cols.append(word_col)
+    # De-dup, keep only columns actually present, and require the word id.
+    group_cols = [c for c in dict.fromkeys(group_cols) if c in df.columns]
+    if word_col not in group_cols:
+        return df
+
+    has_xywh = all(schema.get(k) for k in ("x", "y", "width", "height"))
+    has_edges = all(schema.get(k) for k in ("left", "right", "top", "bottom"))
+    if not has_xywh and not has_edges:
+        return df
+
+    df = df.copy()
+    if has_xywh:
+        left = pd.to_numeric(df[schema["x"]], errors="coerce")
+        top = pd.to_numeric(df[schema["y"]], errors="coerce")
+        df["_box_l"], df["_box_t"] = left, top
+        df["_box_r"] = left + pd.to_numeric(df[schema["width"]], errors="coerce")
+        df["_box_b"] = top + pd.to_numeric(df[schema["height"]], errors="coerce")
+    else:
+        df["_box_l"] = pd.to_numeric(df[schema["left"]], errors="coerce")
+        df["_box_r"] = pd.to_numeric(df[schema["right"]], errors="coerce")
+        df["_box_t"] = pd.to_numeric(df[schema["top"]], errors="coerce")
+        df["_box_b"] = pd.to_numeric(df[schema["bottom"]], errors="coerce")
+
+    temp = {"_box_l", "_box_r", "_box_t", "_box_b"}
+    agg = {c: "first" for c in df.columns if c not in group_cols and c not in temp}
+    agg.update(_box_l="min", _box_t="min", _box_r="max", _box_b="max")
+    out = df.groupby(group_cols, sort=False, as_index=False).agg(agg)
+
+    # Write the aggregated box back into the SAME schema columns so the existing
+    # word schema still maps it (origin+size or edges, matching the input form).
+    if has_xywh:
+        out[schema["x"]] = out["_box_l"]
+        out[schema["y"]] = out["_box_t"]
+        out[schema["width"]] = out["_box_r"] - out["_box_l"]
+        out[schema["height"]] = out["_box_b"] - out["_box_t"]
+    else:
+        out[schema["left"]] = out["_box_l"]
+        out[schema["right"]] = out["_box_r"]
+        out[schema["top"]] = out["_box_t"]
+        out[schema["bottom"]] = out["_box_b"]
+    return out.drop(columns=list(temp))
+
+
 def _read_by_extension(buf, name: str) -> pd.DataFrame:
     """Dispatch a buffer/path to a pandas reader by its (lowercased) name.
 

@@ -819,6 +819,408 @@ def test_split_source_file_uneven_and_noop():
     assert data_module.split_source_file(df2) is df2
 
 
+def test_extract_columns_from_source_file_named_groups():
+    df = pd.DataFrame(
+        {
+            "source_file": [
+                "001_ZH_CH_1_ET1_trial_1_Lit_Alchemist_4_scanpath",
+                "no_match",
+            ]
+        }
+    )
+    pattern = (
+        r"(?P<session>\d+_[A-Z]{2}_[A-Z]{2}_\d+_ET\d+)_.*trial_\d+_"
+        r"(?P<stimulus>.+)_scanpath"
+    )
+    out = data_module.extract_columns_from_source_file(df, pattern)
+    assert out["session"].tolist() == ["001_ZH_CH_1_ET1", np.nan] or pd.isna(
+        out["session"].iloc[1]
+    )
+    assert out["stimulus"].iloc[0] == "Lit_Alchemist_4"
+    # lowercase folds the captured values (useful for case-insensitive matching).
+    low = data_module.extract_columns_from_source_file(df, pattern, lowercase=True)
+    assert low["stimulus"].iloc[0] == "lit_alchemist_4"
+
+
+def test_extract_columns_from_source_file_noops():
+    df = pd.DataFrame({"source_file": ["a_b"]})
+    # empty pattern, no named groups, uncompilable pattern, and absent column.
+    assert data_module.extract_columns_from_source_file(df, "") is df
+    assert data_module.extract_columns_from_source_file(df, "a_b") is df  # no groups
+    assert data_module.extract_columns_from_source_file(df, "(((") is df  # bad regex
+    assert (
+        data_module.extract_columns_from_source_file(
+            pd.DataFrame({"x": [1]}), "(?P<g>.)"
+        )
+        is not None
+    )
+
+
+def test_aggregate_char_boxes_origin_size():
+    # 2 words x 2 chars/word, origin+size boxes; aggregate to one box per word.
+    chars = pd.DataFrame(
+        {
+            "trial_id": ["t"] * 4,
+            "word_idx": [0, 0, 1, 1],
+            "word": ["AA", "AA", "BB", "BB"],
+            "top_left_x": [80, 100, 140, 160],
+            "top_left_y": [50, 50, 50, 50],
+            "width": [20, 20, 20, 20],
+            "height": [30, 30, 30, 30],
+            "char_idx": [0, 1, 2, 3],
+        }
+    )
+    schema = dict(
+        trial="trial_id",
+        word_id="word_idx",
+        text="word",
+        x="top_left_x",
+        y="top_left_y",
+        width="width",
+        height="height",
+    )
+    out = data_module.aggregate_char_boxes(chars, schema)
+    assert len(out) == 2
+    w0 = out[out["word_idx"] == 0].iloc[0]
+    assert (w0["top_left_x"], w0["width"], w0["top_left_y"], w0["height"]) == (
+        80,
+        40,
+        50,
+        30,
+    )
+
+
+def test_aggregate_char_boxes_edges_and_noop():
+    chars = pd.DataFrame(
+        {
+            "trial_id": ["t"] * 2,
+            "word_idx": [0, 0],
+            "left": [80, 100],
+            "right": [100, 120],
+            "top": [50, 50],
+            "bottom": [80, 80],
+        }
+    )
+    schema = dict(
+        trial="trial_id",
+        word_id="word_idx",
+        left="left",
+        right="right",
+        top="top",
+        bottom="bottom",
+    )
+    out = data_module.aggregate_char_boxes(chars, schema)
+    assert len(out) == 1
+    assert (out["left"].iloc[0], out["right"].iloc[0]) == (80, 120)
+    # No-op when the word id (or trial) isn't mapped.
+    assert data_module.aggregate_char_boxes(chars, dict(schema, word_id=None)) is chars
+
+
+# ---------------------------------------------------------------------------
+# MultiplEYE browser-upload recipe (identity from source_file)
+# ---------------------------------------------------------------------------
+
+
+def _upload_frame(rows_by_file, columns=None):
+    """Concatenate per-file rows, tagging each with source_file (filename stem) —
+    mimicking ``data.read_tables`` on a multi-file upload."""
+    frames = []
+    for stem, rows in rows_by_file.items():
+        df = pd.DataFrame(rows, columns=columns)
+        df["source_file"] = stem
+        frames.append(df)
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
+def _aoi_pages(*specs):
+    """Flatten (page, word_idx, word, x0) specs into AOI char rows."""
+    rows = []
+    for page, word_idx, word, x0 in specs:
+        rows.extend(_aoi_word(page, word_idx, word, x0))
+    return rows
+
+
+def test_multipleye_uploads_case_match_join():
+    # The load-bearing blocker: scanpath filenames are CamelCase, AOI filenames
+    # lowercase — the recipe must relabel AOI stimuli to the CamelCase canonical
+    # so the stimulus-words broadcast (inner join on trial_id) keeps the boxes.
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0),
+                _scan_row(1300, 180, 150, 65, "page_1", 1),
+                _scan_row(2000, 210, 90, 65, "page_2", 0),
+            ]
+        }
+    )
+    aoi = _upload_frame(
+        {
+            "lit_demo_1_aoi": _aoi_pages(
+                ("page_1", 0, "AA", 80),
+                ("page_1", 1, "BB", 140),
+                ("page_2", 0, "CC", 80),
+            )
+        },
+        columns=_AOI_COLS,
+    )
+    words, fixations = datasets_module.load_multipleye_uploads(scan, aoi)
+    assert not words.empty  # boxes joined despite the lowercase AOI filename
+    assert set(words["text_id"]) == {"Lit_Demo_1"}  # CamelCase canonical, not lowercase
+    assert set(words["trial_id"]) <= set(fixations["trial_id"])
+    assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1"}
+
+
+def test_multipleye_uploads_fixations_only():
+    scan = _upload_frame(
+        {
+            "014_ZH_CH_1_ET2_trial_1_Arg_Other_2_scanpath": [
+                _scan_row(500, 150, 90, 65, "page_1", 0)
+            ]
+        }
+    )
+    words, fixations = datasets_module.load_multipleye_uploads(scan, None)
+    assert words.empty and not fixations.empty
+    assert fixations["x"].notna().all()
+    assert set(fixations["trial_id"]) == {"Arg_Other_2__page_1"}
+
+
+def test_multipleye_uploads_unrecognized_filenames():
+    bad = pd.DataFrame(
+        {
+            "onset": [1],
+            "duration": [1],
+            "location_x": [1.0],
+            "location_y": [1.0],
+            "page": ["page_1"],
+            "word_idx": [0],
+            "source_file": ["just_a_random_filename"],
+        }
+    )
+    words, fixations = datasets_module.multipleye_frames_from_uploads(bad, None)
+    assert words.empty and fixations.empty  # empty, not a raise
+
+
+def test_multipleye_uploads_prefers_scanpath_over_fixation():
+    # Both kinds uploaded for the same trial → scanpath wins (carries word_idx),
+    # so rows aren't doubled.
+    df = pd.concat(
+        [
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                        _scan_row(1000, 200, 90, 65, "page_1", 0)
+                    ]
+                }
+            ),
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_fixation": [
+                        {
+                            "onset": 1000,
+                            "duration": 200,
+                            "location_x": 90,
+                            "location_y": 65,
+                            "page": "page_1",
+                        }
+                    ]
+                }
+            ),
+        ],
+        ignore_index=True,
+        sort=False,
+    )
+    words, fixations = datasets_module.multipleye_frames_from_uploads(df, None)
+    assert len(fixations) == 1
+    assert fixations["word_idx"].notna().all()
+
+
+def test_multipleye_uploads_stimulus_without_aoi():
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ],
+            "001_ZH_CH_1_ET1_trial_2_Arg_Other_2_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ],
+        }
+    )
+    aoi = _upload_frame(
+        {"lit_demo_1_aoi": _aoi_pages(("page_1", 0, "AA", 80))}, columns=_AOI_COLS
+    )
+    words, fixations = datasets_module.load_multipleye_uploads(scan, aoi)
+    assert "Lit_Demo_1" in set(words["text_id"])  # has boxes
+    assert "Arg_Other_2" not in set(words["text_id"])  # no AOI → no boxes, no raise
+    assert {"Lit_Demo_1", "Arg_Other_2"} <= set(fixations["text_id"])
+
+
+def test_multipleye_uploads_match_directory_loader(multipleye_root):
+    # Read the same files as "uploads" (tagging source_file) and assert the recipe
+    # reproduces the directory loader exactly — guards against drift.
+    import glob
+
+    def tag(paths):
+        frames = []
+        for p in paths:
+            df = pd.read_csv(p)
+            df["source_file"] = __import__("pathlib").Path(p).stem
+            frames.append(df)
+        return pd.concat(frames, ignore_index=True, sort=False)
+
+    scan = tag(glob.glob(str(multipleye_root / "scanpaths" / "*" / "*_scanpath.csv")))
+    aoi = tag(
+        glob.glob(str(multipleye_root / "stimuli_*" / "aoi_stimuli_*" / "*_aoi.csv"))
+    )
+    wu, fu = datasets_module.load_multipleye_uploads(scan, aoi)
+    wd, fd = datasets_module.load_multipleye(multipleye_root)
+    assert sorted(wu["trial_id"].unique()) == sorted(wd["trial_id"].unique())
+    assert sorted(fu["trial_id"].unique()) == sorted(fd["trial_id"].unique())
+    assert set(wu["text_id"]) == set(wd["text_id"])
+    assert round(float(wu["x"].sum()), 3) == round(float(wd["x"].sum()), 3)
+
+
+def test_multipleye_uploads_prefers_scanpath_fixation_first_order():
+    # Same trial, the fixation file uploaded BEFORE the scanpath file → scanpath
+    # still wins (the dedup is order-independent).
+    df = pd.concat(
+        [
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_fixation": [
+                        {
+                            "onset": 1000,
+                            "duration": 200,
+                            "location_x": 90,
+                            "location_y": 65,
+                            "page": "page_1",
+                        }
+                    ]
+                }
+            ),
+            _upload_frame(
+                {
+                    "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                        _scan_row(1000, 200, 90, 65, "page_1", 0)
+                    ]
+                }
+            ),
+        ],
+        ignore_index=True,
+        sort=False,
+    )
+    _, fixations = datasets_module.multipleye_frames_from_uploads(df, None)
+    assert len(fixations) == 1
+    assert fixations["word_idx"].notna().all()  # the scanpath rows (with word idx)
+
+
+def test_multipleye_uploads_pageless_file_does_not_crash():
+    # A stray / question-AOI upload without a `page` column must contribute zero
+    # boxes, not crash the wizard (regression for the KeyError('page') guard).
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ]
+        }
+    )
+    good_aoi = _upload_frame(
+        {"lit_demo_1_aoi": _aoi_pages(("page_1", 0, "AA", 80))}, columns=_AOI_COLS
+    )
+    pageless = pd.DataFrame(
+        {
+            "char_idx": [0],
+            "char": ["x"],
+            "top_left_x": [1],
+            "top_left_y": [1],
+            "width": [1],
+            "height": [1],
+            "word_idx": [0],
+            "word": ["x"],
+            "source_file": ["lit_demo_1_aoi_questions"],  # no `page` column
+        }
+    )
+    aoi = pd.concat([good_aoi, pageless], ignore_index=True, sort=False)
+    words, _ = datasets_module.load_multipleye_uploads(scan, aoi)
+    assert (
+        not words.empty
+    )  # the real AOI still produced boxes; the page-less one didn't
+
+
+def test_multipleye_uploads_pageless_fixation_skipped():
+    bad = pd.DataFrame(
+        {"onset": [1], "duration": [1], "location_x": [1.0], "location_y": [1.0]}
+    )
+    bad["source_file"] = (
+        "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath"  # no `page` column
+    )
+    words, fixations = datasets_module.multipleye_frames_from_uploads(bad, None)
+    assert words.empty and fixations.empty  # skipped, not a crash
+
+
+def test_extract_columns_skips_existing_columns():
+    # A named group that collides with a real column must NOT clobber it.
+    df = pd.DataFrame({"source_file": ["p1_t1"], "duration": [123.0]})
+    out = data_module.extract_columns_from_source_file(
+        df, r"(?P<duration>p\d+)_(?P<trial>t\d+)"
+    )
+    assert out["duration"].tolist() == [123.0]  # real data preserved
+    assert out["trial"].tolist() == ["t1"]  # non-colliding group still added
+    assert data_module.source_file_regex_collisions(df, r"(?P<duration>.)") == [
+        "duration"
+    ]
+
+
+def test_aggregate_char_boxes_feeds_normalize_words():
+    # The aggregation output must be consumable by normalize_words (same schema).
+    chars = pd.DataFrame(
+        {
+            "trial_id": ["t"] * 4,
+            "word_idx": [0, 0, 1, 1],
+            "word": ["AA", "AA", "BB", "BB"],
+            "top_left_x": [80, 100, 140, 160],
+            "top_left_y": [50] * 4,
+            "width": [20] * 4,
+            "height": [30] * 4,
+        }
+    )
+    schema = dict(
+        trial="trial_id",
+        word_id="word_idx",
+        text="word",
+        x="top_left_x",
+        y="top_left_y",
+        width="width",
+        height="height",
+    )
+    words = data_module.normalize_words(
+        data_module.aggregate_char_boxes(chars, schema), schema
+    )
+    assert len(words) == 2
+    w0 = words[words["word_id"] == 0].iloc[0]
+    assert (w0["x"], w0["width"], w0["y"], w0["height"]) == (80, 40, 50, 30)
+
+
+def test_extract_columns_feeds_trial_mapping():
+    # Regex-extracted columns must work as trial / participant mappings.
+    fix = pd.DataFrame(
+        {
+            "source_file": ["p1_t1_scan", "p1_t2_scan"],
+            "x": [1.0, 2.0],
+            "y": [1.0, 1.0],
+            "duration_ms": [10, 10],
+        }
+    )
+    out = data_module.extract_columns_from_source_file(
+        fix, r"(?P<pid>p\d+)_(?P<trial>t\d+)_scan"
+    )
+    norm = data_module.normalize_fixations(
+        out,
+        dict(participant="pid", trial="trial", x="x", y="y", duration="duration_ms"),
+    )
+    assert set(norm["trial_id"]) == {"t1", "t2"}
+    assert set(norm["participant_id"]) == {"p1"}
+
+
 # ---------------------------------------------------------------------------
 # Column keep-list / pruning (perf core)
 # ---------------------------------------------------------------------------

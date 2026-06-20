@@ -85,12 +85,14 @@ from scanpath_studio.data import (
     PARTICIPANT_CANDIDATES,
     SOURCE_FILE_COLUMN,
     WORD_OPTIONAL_FIELDS,
+    aggregate_char_boxes,
     categorize_columns,
     compute_canvas_size,
     compute_keep_columns,
     default_filters,
     empty_fixations_frame,
     empty_words_frame,
+    extract_columns_from_source_file,
     filter_data,
     filter_raw_gaze,
     filter_to_keys,
@@ -112,6 +114,7 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_table,
     read_tables,
+    source_file_regex_collisions,
     split_source_file,
     trial_id_series,
     trial_mapping_columns,
@@ -1818,6 +1821,7 @@ def _reset_wizard_widgets() -> None:
         del st.session_state[key]
     for key in (
         "wizard_dataset_name",
+        "wizard_dataset_format",
         "wizard_config_restore",
         "_wizard_config_last",
         "_wizard_restored_meta",
@@ -1828,6 +1832,14 @@ def _reset_wizard_widgets() -> None:
         "wizard_trial_per_table",
         "wizard_participant_per_table",
         "wizard_text_id_per_table",
+        # MultiplEYE preset uploads + generic filename-derivation / aggregation.
+        "mpe_fix_upload",
+        "mpe_aoi_upload",
+        "wizard_filename_split",
+        "wizard_filename_mode",
+        "wizard_filename_regex",
+        "wizard_filename_regex_lower",
+        "wizard_aggregate_char_boxes",
     ):
         st.session_state.pop(key, None)
 
@@ -2391,43 +2403,105 @@ def _render_unified_identifier(
 
 
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
-    """Optional step: split the captured ``source_file`` into ``file_part_N``
-    columns so the user can map a trial / participant id that lives only in the
-    filename. Returns the (possibly augmented) frames so the identifier pickers
-    below see the new columns. No-op unless the split toggle is on."""
+    """Optional step: derive columns from the captured ``source_file`` so a trial
+    / participant id that lives only in the file name can be mapped.
+
+    Two modes: split into positional ``file_part_N`` columns on a delimiter, or
+    extract *named groups* with a regex (robust to variable-length parts, e.g. a
+    stimulus name whose length varies). Returns the (possibly augmented) frames so
+    the identifier pickers below see the new columns. No-op unless enabled."""
     body.caption(
         "When identity lives in the file name (no column carries it), the "
-        "uploaded filename is captured as `source_file` — split it into parts "
-        "you can map as the Trial or Participant id below. E.g. "
-        "`reader0_b0_scanpath` split on `_` gives reader0 / b0 / scanpath."
+        "uploaded filename is captured as `source_file` — derive columns from it "
+        "to map as the Trial or Participant id below."
     )
     if not body.toggle(
-        "Split the filename into parts",
+        "Derive columns from the filename",
         key="wizard_filename_split",
-        help="Adds file_part_1, file_part_2, … columns derived from source_file.",
+        help="Adds columns parsed from source_file (e.g. session, stimulus) you "
+        "can then map as ids.",
     ):
         return raw_words, raw_fix, raw_gaze
-    delimiter = (
-        body.text_input(
-            "Delimiter",
-            value="_",
-            key="wizard_filename_delim",
-            max_chars=8,
-            help="Character(s) to split the filename on.",
-        )
-        or "_"
+
+    mode = body.radio(
+        "How",
+        ["Split on a delimiter", "Regex named groups"],
+        key="wizard_filename_mode",
+        horizontal=True,
     )
-    out = [
-        split_source_file(fr, delimiter=delimiter) if not fr.empty else fr
-        for fr in (raw_words, raw_fix, raw_gaze)
-    ]
+    pattern = ""
+    if mode == "Split on a delimiter":
+        delimiter = (
+            body.text_input(
+                "Delimiter",
+                value="_",
+                key="wizard_filename_delim",
+                max_chars=8,
+                help="Character(s) to split the filename on — e.g. "
+                "`reader0_b0_scanpath` → reader0 / b0 / scanpath.",
+            )
+            or "_"
+        )
+        out = [
+            split_source_file(fr, delimiter=delimiter) if not fr.empty else fr
+            for fr in (raw_words, raw_fix, raw_gaze)
+        ]
+    else:
+        pattern = body.text_input(
+            "Regex (named groups)",
+            value="",
+            key="wizard_filename_regex",
+            help=r"e.g. `(?P<session>\d+_\w+_ET\d)_.*_(?P<stimulus>.+)_scanpath` — "
+            "each named group becomes a column.",
+        )
+        lower = body.toggle(
+            "Lowercase extracted values",
+            key="wizard_filename_regex_lower",
+            help="Fold case so a value matches across tables (e.g. CamelCase "
+            "scanpath names vs lowercase AOI names).",
+        )
+        if pattern:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                body.error(f"Invalid regex: {exc}")
+                return raw_words, raw_fix, raw_gaze
+            # A group named after an existing column would be skipped (real data
+            # wins) — flag it so the user renames the group instead of silently
+            # getting the original column.
+            collisions = sorted(
+                {
+                    c
+                    for fr in (raw_words, raw_fix, raw_gaze)
+                    if not fr.empty
+                    for c in source_file_regex_collisions(fr, pattern)
+                }
+            )
+            if collisions:
+                body.warning(
+                    "These group names already exist as columns and were left "
+                    f"untouched: {', '.join(collisions)}. Rename the group(s) to "
+                    "extract them."
+                )
+        out = [
+            extract_columns_from_source_file(fr, pattern, lowercase=lower)
+            if not fr.empty
+            else fr
+            for fr in (raw_words, raw_fix, raw_gaze)
+        ]
+
     raw_words, raw_fix, raw_gaze = out
     preview = raw_fix if not raw_fix.empty else raw_words
-    part_cols = [c for c in preview.columns if c.startswith(FILE_PART_PREFIX)]
-    if part_cols:
-        body.caption("Filename parts (first rows) — map them as ids below:")
+    if mode == "Split on a delimiter":
+        new_cols = [c for c in preview.columns if c.startswith(FILE_PART_PREFIX)]
+    elif pattern:
+        new_cols = [c for c in re.compile(pattern).groupindex if c in preview.columns]
+    else:
+        new_cols = []
+    if new_cols:
+        body.caption("Derived columns (first rows) — map them as ids below:")
         body.dataframe(
-            preview[[SOURCE_FILE_COLUMN, *part_cols]].drop_duplicates().head(),
+            preview[[SOURCE_FILE_COLUMN, *new_cols]].drop_duplicates().head(),
             width="stretch",
             hide_index=True,
         )
@@ -2778,6 +2852,155 @@ def _render_wizard_progress(body) -> None:
     )
 
 
+def _render_multipleye_upload(body, active: bool) -> _UploadResult:
+    """MultiplEYE preset for the Add-dataset wizard (the "MultiplEYE" format).
+
+    Skips the generic column-mapping steps: the user uploads the corpus's
+    scanpath/fixation CSVs (+ optional word-AOI CSVs) and the recipe
+    (``datasets.multipleye_frames_from_uploads``) parses participant / session /
+    trial / stimulus from the file names, makes each stimulus *page* a trial,
+    aggregates character AOIs into word boxes, and case-matches the (lowercase)
+    AOI file names to the (CamelCase) stimuli. Produces the same normalized frames
+    + ``_wizard_finalize_payload`` as a finished generic upload, so finalize /
+    reload behave identically."""
+    from scanpath_studio.datasets import (
+        MULTIPLEYE_FIX_SCHEMA,
+        MULTIPLEYE_MONITOR,
+        MULTIPLEYE_WORD_SCHEMA,
+        multipleye_frames_from_uploads,
+    )
+
+    if active:
+        body.caption(
+            "Upload the MultiplEYE **scanpath** (or fixation) CSVs and, for word "
+            "boxes, the **AOI** CSVs — identity is read from the file names, each "
+            "stimulus page becomes a trial, and character AOIs are aggregated into "
+            "word boxes automatically."
+        )
+        # Seed the MultiplEYE presentation monitor (true-to-scale default).
+        st.session_state.setdefault("global_canvas_width", MULTIPLEYE_MONITOR[0])
+        st.session_state.setdefault("global_canvas_height", MULTIPLEYE_MONITOR[1])
+        render_sidebar_canvas_controls(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            data_choice=None,
+            slot=body,
+            expanded=False,
+            title="Monitor, font & text scaling",
+        )
+
+    fix_df = _read_uploaded_frame(
+        uploader_label="Scanpath / fixation CSVs",
+        upload_help="The per-trial *_scanpath.csv (preferred — they carry the word "
+        "index) or *_fixation.csv files. Drop in as many as you like.",
+        state_prefix="mpe_fix",
+        multi=True,
+        container=body,
+    )
+    aoi_df = _read_uploaded_frame(
+        uploader_label="Word AOI CSVs (optional)",
+        upload_help="The per-stimulus *_aoi.csv files (character interest areas). "
+        "Optional — without them you get fixations and no word boxes.",
+        state_prefix="mpe_aoi",
+        multi=True,
+        container=body,
+    )
+
+    if fix_df.empty:
+        if active:
+            body.info("⬆️ Upload MultiplEYE scanpath / fixation CSVs to begin.")
+        return _UploadResult(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            ["Upload MultiplEYE scanpath / fixation CSVs to begin."],
+        )
+
+    words_raw, fix_raw = multipleye_frames_from_uploads(
+        fix_df, aoi_df if not aoi_df.empty else None
+    )
+    if fix_raw.empty:
+        problem = (
+            "No MultiplEYE-shaped file names recognized — expected "
+            "`<session>_…_trial_N_<stimulus>_<scanpath|fixation>.csv` (e.g. "
+            "`001_ZH_CH_1_ET1_trial_1_Lit_Alchemist_4_scanpath.csv`). "
+            "Browser uploads keep the file name but drop the folder, so the "
+            "name must carry the session + stimulus."
+        )
+        if active:
+            body.error(problem)
+        return _UploadResult(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            pd.DataFrame(),
+            words_raw,
+            fix_raw,
+            [problem],
+        )
+
+    has_words = not words_raw.empty
+    word_schema = dict(MULTIPLEYE_WORD_SCHEMA) if has_words else None
+    fix_schema = dict(
+        MULTIPLEYE_FIX_SCHEMA,
+        word_id="word_idx" if "word_idx" in fix_raw.columns else None,
+    )
+    # Carry MultiplEYE's trial-level facets through normalization (filter chips +
+    # Filter-trials conditions).
+    keep_fix = compute_keep_columns(
+        fix_schema,
+        keep_columns={"genre", "session", "participant", "is_practice", "trial_num"},
+    )
+    keep_words = (
+        compute_keep_columns(word_schema, keep_columns={"genre"}) if has_words else None
+    )
+    # _normalize_pair sets _composite_trial_columns from the (single-column)
+    # trial mapping → None, exactly what the reload branch expects.
+    words_norm, fixations_norm = _normalize_pair(
+        words_raw if has_words else empty_words_frame(),
+        word_schema,
+        fix_raw,
+        fix_schema,
+        keep_words=keep_words,
+        keep_fix=keep_fix,
+    )
+    filter_fields = ["genre", "session", "is_practice"]
+    st.session_state["wizard_filter_fields"] = filter_fields
+    schemas = {"words": word_schema, "fixations": fix_schema, "raw_gaze": None}
+    _stash_active_mapping("words", word_schema)
+    _stash_active_mapping("fixations", fix_schema)
+
+    if active:
+        boxes_msg = (
+            f" · **{len(words_norm):,}** word boxes"
+            if has_words
+            else " · no AOI boxes (upload *_aoi.csv for word boxes)"
+        )
+        body.success(
+            f"✓ **{fixations_norm['participant_id'].nunique()}** readers · "
+            f"**{fixations_norm['trial_id'].nunique()}** page-trials" + boxes_msg
+        )
+        st.session_state["_wizard_finalize_payload"] = {
+            "words": words_norm,
+            "fixations": fixations_norm,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": filter_fields,
+            "composite_trial_columns": [],
+            "schemas": schemas,
+        }
+        body.button(
+            "✅ Add dataset",
+            type="primary",
+            key="wizard_finalize",
+            on_click=_finalize_wizard_dataset,
+        )
+
+    return _UploadResult(
+        words_norm, fixations_norm, pd.DataFrame(), words_raw, fix_raw, []
+    )
+
+
 def _render_data_setup(active: bool) -> _UploadResult:
     """Hybrid data-setup surface for the Upload source.
 
@@ -2851,7 +3074,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             return bool(v)
         return bool(v) and v != NONE_OPTION
 
-    # === 1. Dataset name + 2. Experimental setup, at the top ===
+    # === 1. Dataset name + format ===
     if active:
         subsection("Dataset name", number=1)
         st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
@@ -2861,7 +3084,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
             label_visibility="collapsed",
             help="Shown in the Data source list so you can switch back to it.",
         )
+        body.segmented_control(
+            "Dataset format",
+            ["Generic", "MultiplEYE"],
+            key="wizard_dataset_format",
+            default="Generic",
+            help="**Generic**: map your own columns. **MultiplEYE**: upload the "
+            "corpus's scanpath/fixation + AOI CSVs and the app parses identity "
+            "from the file names (no column mapping needed).",
+        )
 
+    # A dedicated dataset format (e.g. MultiplEYE) runs its own tailored flow and
+    # bypasses the generic mapping steps below. Read from state so the collapsed
+    # review panel (active=False) branches the same way.
+    if st.session_state.get("wizard_dataset_format", "Generic") == "MultiplEYE":
+        return _render_multipleye_upload(body, active)
+
+    # === 2. Experimental setup ===
+    if active:
         subsection("Experimental setup", number=2)
         body.caption(
             "Match the screen the data was recorded on so word boxes and "
@@ -3097,6 +3337,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 ["word_id", "text", "box"],
             )
         )
+        wbox.toggle(
+            "Aggregate character AOIs into word boxes",
+            key="wizard_aggregate_char_boxes",
+            help="For interest-area tables with one row per *character* (e.g. CJK "
+            "corpora): collapse the characters of each word (grouped by the Trial "
+            "+ Word/IA id above) into one bounding box.",
+        )
 
     # More text mappings (line index) — optional.
     if has_words:
@@ -3206,6 +3453,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     }
     for table, schema in wizard_schemas.items():
         _stash_active_mapping(table, schema)
+
+    # Char→word aggregation (optional generic power): collapse character-level
+    # AOIs to one box per word using the final word mapping, before normalization
+    # (which expects one row per word box). Only fires when the user toggled it on
+    # in the Text & Interest Areas step and the words mapping is complete.
+    if has_words and st.session_state.get("wizard_aggregate_char_boxes"):
+        raw_words = aggregate_char_boxes(raw_words, word_schema)
 
     keep_words = (
         compute_keep_columns(

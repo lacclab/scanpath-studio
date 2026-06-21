@@ -251,13 +251,22 @@ def _colorbar_dict(
     )
     if horizontal:
         cb.update(
-            orientation="h", x=0.5, xanchor="center", y=-0.04, yanchor="top",
-            lenmode="fraction", len=0.6,
+            orientation="h",
+            x=0.5,
+            xanchor="center",
+            y=-0.04,
+            yanchor="top",
+            lenmode="fraction",
+            len=0.6,
         )
     else:
         cb.update(
-            x=1.02, xanchor="left", y=0.5, yanchor="middle",
-            lenmode="fraction", len=COLORBAR_LEN_FRACTION,
+            x=1.02,
+            xanchor="left",
+            y=0.5,
+            yanchor="middle",
+            lenmode="fraction",
+            len=COLORBAR_LEN_FRACTION,
         )
     return cb
 

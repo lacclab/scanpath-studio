@@ -93,7 +93,9 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Render the animated replay instead of the static figure (HTML only).",
     )
 
-    viz = parser.add_argument_group("visualization (defaults match the app)")
+    viz = parser.add_argument_group(
+        "visualization (renders the full canonical figure; use --no-* to hide layers)"
+    )
     viz.add_argument(
         "--no-words",
         dest="show_words",

@@ -200,14 +200,27 @@ def get_app_css() -> str:
        The viz controls moved out of the sidebar into a rail beside the plot, so
        the trial's key experiment conditions ride above the plot as a compact
        chip strip and the rail reads as a tidy inspector panel. */
+    /* The chip strip stays on ONE line: it never wraps; the primary
+       identity/condition chips clip at the row edge while the "?" help marker and
+       the "More" disclosure are pinned and always visible. */
     .sps-trial-chips {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        align-items: center;
         gap: 0.35rem;
         margin: 0.1rem 0 0.5rem;
     }
-    /* Keep the chip strip + its inline "More" disclosure on one line. */
-    .sps-trial-chips { align-items: center; }
+    .sps-chips-primary {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0.35rem;
+        min-width: 0;
+        flex: 0 1 auto;
+        overflow: hidden;
+    }
+    .sps-chips-primary .sps-chip { flex: 0 0 auto; }
+    .sps-chip-help, .sps-chip-more { flex: 0 0 auto; }
     /* "?" help marker → small round badge with a native hover tooltip. */
     .sps-chip-help {
         display: inline-flex;
@@ -270,6 +283,9 @@ def get_app_css() -> str:
     }
     .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
+    /* Section dividers default to 32px top+bottom margin — far too airy for the
+       narrow rail. Tighten them so the sections sit close together. */
+    .st-key-scanpath_rail hr { margin: 0.5rem 0 !important; }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
     .st-key-scanpath_rail h5,

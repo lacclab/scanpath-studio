@@ -161,6 +161,25 @@ class TestAppLaunches:
             "restored out-of-text value was overridden by an inline default"
         )
 
+    def test_compare_styles_collected_from_popover_keys(self):
+        # Per-scanpath comparison styling now lives inside the Fixation/Saccade
+        # popovers. With Compare on, controls._collect_compare_styles reads the
+        # cmp{idx}_* widget keys and threads them into the comparison figure (it
+        # runs whenever single_compare_toggle is truthy, even single-trial). The
+        # seeded values must survive (no inline default reset) and build cleanly.
+        at = _make_apptest(synthetic=True)
+        at.session_state["single_compare_toggle"] = True
+        at.session_state["cmp0_fix_color"] = "#123456"
+        at.session_state["cmp0_hollow"] = True
+        at.session_state["cmp1_saccade_color"] = "#abcdef"
+        at.session_state["cmp1_saccade_style"] = "Dashed"
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        # The per-scanpath keys render in the layer popovers and keep their value.
+        assert at.session_state["cmp0_fix_color"] == "#123456"
+        assert at.session_state["cmp1_saccade_style"] == "Dashed"
+
     def test_animate_checkbox_renders_animation(self):
         # The Scanpath Visualization tab's Animate checkbox folds the former
         # animation tab in: the playback-speed slider must appear without error.

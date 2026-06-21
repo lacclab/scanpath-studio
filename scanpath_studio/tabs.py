@@ -25,6 +25,7 @@ from scanpath_studio.animation_export import (
 from scanpath_studio.annotations import render_trial_annotations
 from scanpath_studio.constants import (
     DEFAULT_LINE_SPACING,
+    DEFAULT_MARKER_SIZE_RANGE,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
@@ -1019,6 +1020,7 @@ def _build_studio_config(
     data_source: Optional[str],
     app_version: str,
     exported_at: str,
+    compare_styles: Optional[list] = None,
 ) -> dict:
     """Build the "💾 Save & restore" JSON config dict (pure — no Streamlit).
 
@@ -1072,6 +1074,13 @@ def _build_studio_config(
             "saccade_color": figure_settings.get("saccade_color", SACCADE_COLOR),
             "saccade_style": viz_settings.get("saccade_style", "Solid"),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
+            "colorbar_orientation": figure_settings.get(
+                "colorbar_orientation", "Vertical"
+            ),
+            "colorbar_tickangle": int(figure_settings.get("colorbar_tickangle", 0)),
+            "colorbar_tickfont_size": int(
+                figure_settings.get("colorbar_tickfont_size", 12)
+            ),
         },
         "sizing": {
             "marker_size_range": [int(s) for s in figure_settings["marker_size_range"]],
@@ -1101,11 +1110,16 @@ def _build_studio_config(
                 "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
             ),
             "background_color": figure_settings.get("background_color"),
+            "out_of_text_symbol": figure_settings.get("out_of_text_symbol", "x"),
+            "span_border_color": figure_settings.get("span_border_color", "#000000"),
         },
         "raw_gaze": {
             "available": not trial_raw_gaze.empty,
             "points": len(trial_raw_gaze) if not trial_raw_gaze.empty else 0,
         },
+        # Per-scanpath styling for the two-trial comparison (None when the caller
+        # didn't collect it). Each entry holds raw widget values so it restores 1:1.
+        "compare": compare_styles,
         "annotations": annotation_records,
     }
 
@@ -1161,6 +1175,24 @@ def _render_save_restore_expander(
     # the app version + when it was exported, so a saved config records the full
     # context behind the figure, not just the plot settings.
     column_mapping = _collect_column_mapping()
+    # Per-scanpath comparison styling (cmp{idx}_* widget keys, seeded by
+    # controls._seed_compare_styles). Save the RAW values so they restore 1:1 —
+    # the saccade style stays the friendly label ("Solid"), not the resolved dash.
+    compare_styles = [
+        {
+            "fix_color": st.session_state.get(f"cmp{idx}_fix_color"),
+            "saccade_color": st.session_state.get(f"cmp{idx}_saccade_color"),
+            "saccade_style": st.session_state.get(f"cmp{idx}_saccade_style", "Solid"),
+            "marker_size_range": [
+                int(s)
+                for s in st.session_state.get(
+                    f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE
+                )
+            ],
+            "hollow": bool(st.session_state.get(f"cmp{idx}_hollow", False)),
+        }
+        for idx in range(2)
+    ]
     plot_config = _build_studio_config(
         selected_participant=selected_participant,
         selected_trial=selected_trial,
@@ -1178,6 +1210,7 @@ def _render_save_restore_expander(
         data_source=st.session_state.get("data_source_choice"),
         app_version=__version__,
         exported_at=datetime.now().isoformat(timespec="seconds"),
+        compare_styles=compare_styles,
     )
     with container.expander("💾 Save & restore", expanded=False):
         n_anno = len(annotation_records)
@@ -1604,7 +1637,9 @@ def _render_trial_condition_chips(
             "</details>"
         )
     st.markdown(
-        f'<div class="sps-trial-chips">{_spans(primary)}{help_span}{more_html}</div>',
+        '<div class="sps-trial-chips">'
+        f'<span class="sps-chips-primary">{_spans(primary)}</span>'
+        f"{help_span}{more_html}</div>",
         unsafe_allow_html=True,
     )
 

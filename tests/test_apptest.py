@@ -389,11 +389,22 @@ class TestUnmappedRawDataView:
             "raw uploaded columns should be visible in the Raw Data tab"
         )
 
-    def test_public_datasets_hidden_by_default(self, monkeypatch):
-        """The Public datasets source is feature-flagged off until release."""
+    def test_public_datasets_shown_by_default(self, monkeypatch):
+        """The Public datasets source is offered by default (PoTeC, MultiplEYE)."""
         from scanpath_studio import app
 
         monkeypatch.delenv("SCANPATH_PUBLIC_DATASETS", raising=False)
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        source_radio = [r for r in at.radio if r.key == "data_source_choice"]
+        assert source_radio, "data source radio not found"
+        assert app.PUBLIC_DATASETS_CHOICE in source_radio[0].options
+
+    def test_public_datasets_hidden_when_disabled(self, monkeypatch):
+        """Setting SCANPATH_PUBLIC_DATASETS=0 hides the source."""
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "0")
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
         source_radio = [r for r in at.radio if r.key == "data_source_choice"]
@@ -1427,6 +1438,54 @@ class TestMultiplEYEUploadPreset:
         assert "No MultiplEYE-shaped file names" in errors
         # No finalize payload when the upload couldn't be parsed.
         assert "_wizard_finalize_payload" not in at.session_state
+
+    def test_preset_questions_and_participant_metadata(self, monkeypatch):
+        import json
+
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        scan, aoi = _mpe_upload_frames()
+        questions = pd.DataFrame(
+            {
+                "stimulus_name": ["Lit_Demo"],
+                "stimulus_id": [1],
+                "question": ["Why?"],
+                "target": ["Because"],
+                "condition_name": ["local"],
+                "question_no": [1],
+                "condition_no": [1],
+            }
+        )
+        participant = pd.DataFrame(
+            {"participant_id": [1], "session": ["ET1"], "age": [22], "gender": ["F"]}
+        )
+        frames = {
+            "mpe_fix": scan,
+            "mpe_aoi": aoi,
+            "mpe_questions": questions,
+            "mpe_participant": participant,
+        }
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: frames.get(kw["state_prefix"], pd.DataFrame()),
+        )
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["_show_upload_wizard"] = True
+        at.session_state["setup_complete"] = False
+        at.session_state["wizard_dataset_format"] = "MultiplEYE"
+        at.run(timeout=60)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        payload = at.session_state["_wizard_finalize_payload"]
+        fixations = payload["fixations"]
+        assert fixations["pp_age"].dropna().iloc[0] == 22
+        assert fixations["pp_gender"].dropna().iloc[0] == "F"
+        q = json.loads(fixations["comprehension_questions"].dropna().iloc[0])
+        assert q[0]["target"] == "Because"
 
 
 @pytest.mark.timeout(60)

@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 import pytest
 
 from scanpath_studio.plots import (
+    _image_to_data_uri,
+    _png_pixel_size,
     _saccade_arrow_markers,
     _width_fit_font,
     _word_label_font_px,
@@ -14,6 +16,13 @@ from scanpath_studio.plots import (
     make_comparison_figure,
     make_scanpath_animation,
     make_scanpath_figure,
+)
+
+# A valid 1x1 RGBA PNG — header lets _png_pixel_size + base64 encoding work.
+_PNG_1x1 = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+    "890000000d49444154789c6360000002000100052301e20000000049454e44ae"
+    "426082"
 )
 
 
@@ -1204,3 +1213,71 @@ class TestTrueToScaleText:
             line_spacing=10.0,
         )
         assert self._label_size(a) == pytest.approx(self._label_size(b))
+
+
+class TestBackgroundImageLayer:
+    """The stimulus-page background image layer (MultiplEYE)."""
+
+    def test_png_size_and_data_uri(self, tmp_path):
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        assert _png_pixel_size(str(p)) == (1, 1)
+        assert _png_pixel_size(str(tmp_path / "missing.png")) is None
+        uri = _image_to_data_uri(str(p))
+        assert uri.startswith("data:image/png;base64,")
+        assert _image_to_data_uri(str(tmp_path / "missing.png")) is None
+        assert _image_to_data_uri(None) is None
+        assert (
+            _image_to_data_uri("data:image/png;base64,AAAA")
+            == "data:image/png;base64,AAAA"
+        )
+
+    def test_layer_added_below_at_data_origin(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(
+                background_image=str(p), background_image_size=(1310, 991)
+            ),
+        )
+        assert len(fig.layout.images) == 1
+        im = fig.layout.images[0]
+        assert im.layer == "below"
+        assert (im.x, im.y, im.sizex, im.sizey) == (0, 0, 1310, 991)
+        assert im.yanchor == "top"  # reversed y-axis → top-left at data (0,0)
+        assert str(im.source).startswith("data:image/png;base64,")
+
+    def test_no_layer_without_image_or_size(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        # No size → no image.
+        assert (
+            len(
+                make_scanpath_figure(
+                    normalized_words_df,
+                    normalized_fixations_df,
+                    **_scanpath_kwargs(background_image=str(p)),
+                ).layout.images
+            )
+            == 0
+        )
+        # Missing file → no image (no crash).
+        assert (
+            len(
+                make_scanpath_figure(
+                    normalized_words_df,
+                    normalized_fixations_df,
+                    **_scanpath_kwargs(
+                        background_image=str(tmp_path / "nope.png"),
+                        background_image_size=(10, 10),
+                    ),
+                ).layout.images
+            )
+            == 0
+        )

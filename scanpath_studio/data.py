@@ -685,6 +685,8 @@ def _read_by_extension(buf, name: str) -> pd.DataFrame:
         return pd.read_parquet(buf)
     if name.endswith(".feather"):
         return pd.read_feather(buf)
+    if name.endswith((".xlsx", ".xls")):
+        return pd.read_excel(buf)  # first sheet (e.g. MultiplEYE questions workbook)
     if name.endswith((".tsv", ".tab")):
         return pd.read_csv(buf, sep="\t", low_memory=False)
     return pd.read_csv(buf, low_memory=False)
@@ -1190,6 +1192,12 @@ WORD_OPTIONAL_FIELDS = [
     ("dspan_ind_end", "dspan_ind_end", "passthrough", "meta"),
     ("is_in_aspan", "is_in_aspan", "boolean", "meta"),
     ("is_in_dspan", "is_in_dspan", "boolean", "meta"),
+    # MultiplEYE side-data (also see FIX_OPTIONAL_FIELDS): the comprehension
+    # questions JSON + the per-trial stimulus-image path + the genre facet, kept
+    # so the panels / image layer can read them off the word frame too.
+    ("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
+    ("image_path", "image_path", "passthrough", "meta"),
+    ("genre", "genre", "string", "meta"),
 ]
 
 FIX_OPTIONAL_FIELDS = [
@@ -1219,6 +1227,23 @@ FIX_OPTIONAL_FIELDS = [
     ("eye", "eye", "string", "fixation"),
     ("EYE_USED", "eye", "string", "fixation"),
     ("EYE_TRACKED", "eye", "string", "fixation"),
+    # MultiplEYE trial-level facets + side-data → Trial Info chips / filter
+    # facets / the comprehension panel / the stimulus-image layer. All are
+    # MultiplEYE-specific source names (carried only when the loader emits them),
+    # so they're inert for other corpora.
+    ("genre", "genre", "string", "meta"),
+    ("session", "session", "string", "meta"),
+    ("participant", "participant", "string", "meta"),
+    ("is_practice", "is_practice", "boolean", "meta"),
+    ("trial_num", "trial_num", "numeric", "meta"),
+    ("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
+    ("image_path", "image_path", "passthrough", "meta"),
+    # Reader metadata merged from participant_data.csv (namespaced pp_*).
+    ("pp_age", "pp_age", "numeric", "meta"),
+    ("pp_gender", "pp_gender", "string", "meta"),
+    ("pp_native_language", "pp_native_language", "string", "meta"),
+    ("pp_years_education", "pp_years_education", "numeric", "meta"),
+    ("pp_education_level", "pp_education_level", "string", "meta"),
 ]
 
 

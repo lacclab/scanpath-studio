@@ -174,12 +174,12 @@ MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 
 
 def public_datasets_enabled() -> bool:
-    """Feature flag for the "Public datasets" source — hidden until a future
-    release. Everything behind it (registry, loaders, tests) stays live; set
-    ``SCANPATH_PUBLIC_DATASETS=1`` to preview it, or change this function's
-    default to release it. Read at call time so tests can toggle the env var."""
+    """Whether the "Public datasets" source (PoTeC, MultiplEYE) is offered.
+
+    Enabled by default; set ``SCANPATH_PUBLIC_DATASETS=0`` (or ``false`` / ``no``)
+    to hide it. Read at call time so tests can toggle the env var."""
     raw = os.environ.get("SCANPATH_PUBLIC_DATASETS", "").strip().lower()
-    return raw not in ("", "0", "false", "no")
+    return raw not in ("0", "false", "no")
 
 
 # Server-side OneStop lacclab bundle. Only offered when $ONESTOP_DATA_DIR is
@@ -408,6 +408,7 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "saccade_arrows": "global_show_saccade_arrows",
     "heatmap": "global_show_heatmap",
     "raw_gaze": "global_show_raw_gaze",
+    "stimulus_image": "global_show_stimulus_image",
 }
 # Static widget bounds, mirrored from controls.sidebar_controls /
 # render_sidebar_canvas_controls, so a restored value is clamped to a range the
@@ -1318,7 +1319,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
         loader=_load_multipleye_source,
-        monitor=(1920, 1080),  # MultiplEYE ZH-CH-Zurich lab config
+        monitor=(1310, 991),  # MultiplEYE stimulus-image / data coordinate space
     ),
 }
 
@@ -1646,7 +1647,7 @@ def _render_unmapped_view(
 
 # File types accepted by every upload box. ``zip`` covers single-member
 # archives wrapping any of the others (e.g. ``data.csv.zip``).
-_UPLOAD_TYPES = ["csv", "tsv", "parquet", "feather", "zip"]
+_UPLOAD_TYPES = ["csv", "tsv", "parquet", "feather", "zip", "xlsx", "xls"]
 
 
 def _uploaded_file_key(uploaded) -> tuple:
@@ -1835,6 +1836,8 @@ def _reset_wizard_widgets() -> None:
         # MultiplEYE preset uploads + generic filename-derivation / aggregation.
         "mpe_fix_upload",
         "mpe_aoi_upload",
+        "mpe_questions_upload",
+        "mpe_participant_upload",
         "wizard_filename_split",
         "wizard_filename_mode",
         "wizard_filename_regex",
@@ -2905,6 +2908,21 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
         multi=True,
         container=body,
     )
+    questions_df = _read_uploaded_frame(
+        uploader_label="Comprehension questions (optional)",
+        upload_help="The multipleye_comprehension_questions_*.xlsx workbook — "
+        "adds the questions to the Stimulus & questions panel.",
+        state_prefix="mpe_questions",
+        multi=False,
+        container=body,
+    )
+    participant_df = _read_uploaded_frame(
+        uploader_label="participant_data.csv (optional)",
+        upload_help="Reader metadata (age / gender / languages…) → Trial Info chips.",
+        state_prefix="mpe_participant",
+        multi=False,
+        container=body,
+    )
 
     if fix_df.empty:
         if active:
@@ -2919,7 +2937,10 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
         )
 
     words_raw, fix_raw = multipleye_frames_from_uploads(
-        fix_df, aoi_df if not aoi_df.empty else None
+        fix_df,
+        aoi_df if not aoi_df.empty else None,
+        questions_df=questions_df if not questions_df.empty else None,
+        participant_meta_df=participant_df if not participant_df.empty else None,
     )
     if fix_raw.empty:
         problem = (
@@ -2946,14 +2967,31 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
         MULTIPLEYE_FIX_SCHEMA,
         word_id="word_idx" if "word_idx" in fix_raw.columns else None,
     )
-    # Carry MultiplEYE's trial-level facets through normalization (filter chips +
-    # Filter-trials conditions).
+    # Carry MultiplEYE's trial-level facets + side-data through normalization
+    # (the upload path passes a keep-set, so registered meta fields must be named
+    # here to survive — the directory path uses keep=None and keeps them all).
     keep_fix = compute_keep_columns(
         fix_schema,
-        keep_columns={"genre", "session", "participant", "is_practice", "trial_num"},
+        keep_columns={
+            "genre",
+            "session",
+            "participant",
+            "is_practice",
+            "trial_num",
+            "comprehension_questions",
+            "pp_age",
+            "pp_gender",
+            "pp_native_language",
+            "pp_years_education",
+            "pp_education_level",
+        },
     )
     keep_words = (
-        compute_keep_columns(word_schema, keep_columns={"genre"}) if has_words else None
+        compute_keep_columns(
+            word_schema, keep_columns={"genre", "comprehension_questions"}
+        )
+        if has_words
+        else None
     )
     # _normalize_pair sets _composite_trial_columns from the (single-column)
     # trial mapping → None, exactly what the reload branch expects.

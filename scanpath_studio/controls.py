@@ -47,6 +47,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
     "global_show_heatmap": False,
     "global_show_raw_gaze": False,
+    "global_show_stimulus_image": False,
     "global_heatmap_style": "Word boxes",
     "global_heatmap_metric": "duration_ms",
     "global_show_colorbars": False,
@@ -828,6 +829,7 @@ def _collect_viz_settings(
         # falls back instead of propagating None into the figure builders.
         heatmap_style=ss.get("global_heatmap_style") or "Word boxes",
         show_raw_gaze=bool(ss.get("global_show_raw_gaze")),
+        show_stimulus_image=bool(ss.get("global_show_stimulus_image")),
         color_by=color_by,
         heatmap_metric=ss.get("global_heatmap_metric") or "duration_ms",
         x_field=ss.get("global_x_field"),
@@ -891,6 +893,7 @@ def sidebar_controls(
     *,
     host=None,
     has_raw_gaze: bool = False,
+    has_stimulus_image: bool = False,
     words: Optional[pd.DataFrame] = None,
 ) -> Dict:
     """Render the visualization controls and return the resolved settings dict.
@@ -1211,8 +1214,16 @@ def sidebar_controls(
                     "Lower the max for more contrast; raise it to compress.",
                 )
 
-    # --- Bounding boxes / Raw gaze (no extra styling) ---------------------
+    # --- Bounding boxes / Stimulus image / Raw gaze (no extra styling) ----
     viz.toggle("**Bounding boxes**", key="global_show_words")
+    viz.toggle(
+        "**Stimulus image**",
+        help="Show the rendered stimulus page as a background image (exact "
+        "coordinates — sidesteps font issues for CJK / RTL scripts). "
+        + ("" if has_stimulus_image else "(No stimulus image for this trial)"),
+        disabled=not has_stimulus_image,
+        key="global_show_stimulus_image",
+    )
     viz.toggle(
         "**Raw gaze data**",
         help="Display millisecond-level gaze positions as small dots. "
@@ -1285,7 +1296,11 @@ def _participant_options(
 def _column_unique_strs(_df: pd.DataFrame, column: str, cache_key) -> List[str]:
     if column not in _df.columns:
         return []
-    return sorted(_df[column].dropna().astype(str).unique())
+    # Drop missing values, including the literal "nan" a string-coerced optional
+    # field leaves for NaN (e.g. ET2 readers with no recorded gender) — a "nan"
+    # filter option would be meaningless.
+    values = _df[column].dropna().astype(str).unique()
+    return sorted(v for v in values if v.strip().lower() not in ("nan", "none", "<na>"))
 
 
 @st.cache_data(show_spinner=False)
@@ -1367,6 +1382,10 @@ _DEFAULT_FILTER_FIELDS = [
     "difficulty_level",
     "repeated_reading_trial",
     "is_correct",
+    # MultiplEYE facets (present only when that corpus is loaded).
+    "genre",
+    "session",
+    "is_practice",
 ]
 
 
@@ -1407,6 +1426,11 @@ _CHIP_DEFAULT_CONDITIONS = [
     "question_preview",
     "repeated_reading_trial",
     "is_correct",
+    # MultiplEYE facets + reader metadata (present only for that corpus).
+    "genre",
+    "session",
+    "pp_age",
+    "pp_gender",
 ]
 # Virtual chip fields → label. These are computed per trial (not data columns),
 # always trial-level, and folded in from the former Trial Info tab's summary.

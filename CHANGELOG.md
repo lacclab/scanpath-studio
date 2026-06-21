@@ -18,10 +18,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`participant_id = "001_ZH_CH_1_ET1"` — ET1/ET2 read disjoint stimuli) and
   each stimulus *page* is its own trial (`trial_id = "Lit_Alchemist_4__page_1"`,
   since pages reuse the same screen coordinates), with `text_id` kept as the
-  stimulus for stimulus-level merges. `MULTIPLEYE_MONITOR = (1920, 1080)`.
-  Fixation source is `scanpaths/` (page/word-tagged) or `fixations/` (raw).
-- **MultiplEYE in the in-app "Public datasets" picker** (behind the same
-  `SCANPATH_PUBLIC_DATASETS=1` flag as PoTeC), with directory / session /
+  stimulus for stimulus-level merges. `MULTIPLEYE_MONITOR = (1310, 991)` (the
+  stimulus-image / data coordinate space). Fixation source is `scanpaths/`
+  (page/word-tagged) or `fixations/` (raw).
+- **Public datasets are now offered by default** (PoTeC + MultiplEYE in the data
+  source picker); set `SCANPATH_PUBLIC_DATASETS=0` to hide them.
+- **MultiplEYE rich side data.** Loading MultiplEYE now enriches the trial with
+  everything the corpus ships, surfaced through the existing panels: the
+  **comprehension questions** (target + distractors) in the *Stimulus &
+  questions* panel; the corpus's **pre-aggregated reading measures**
+  (`FFD/FPRT/TFT/RPD/…` → canonical `IA_*`, preferred over recomputed metrics);
+  **reader metadata** (age / gender / native language / education) and the
+  **genre / ET-session / practice** facets as Trial Info chips + filter
+  conditions; and the **stimulus page image** as a true-to-scale background layer
+  (a new **Stimulus image** toggle — exact coordinates, sidesteps CJK/RTL fonts).
+  The browser-upload path picks up questions + reader metadata when those files
+  are uploaded too (`read_table` now reads `.xlsx`).
+- **MultiplEYE in the in-app "Public datasets" picker**, with directory / session /
   stimulus / fixation-source controls and the corpus monitor size.
 - **MultiplEYE via the Add-dataset wizard (browser upload).** A **Dataset format**
   choice in *Add dataset* now offers **MultiplEYE**: upload the corpus's
@@ -45,6 +58,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Schema auto-detection** now recognizes MultiplEYE column conventions:
   fixation `location_x` / `location_y` / `onset`, word-box origin `top_left_x` /
   `top_left_y`, and `word_idx` / `char_idx` word ids.
+- **More plot, less chrome.** Dropped the "🎯 Trial" heading; the chip strip stays
+  on **one line** with an inline **More** dropdown (only the stats not already
+  shown — reading time, word/fixation counts) and a `?` pointing to the sidebar
+  picker; quick views sit side by side. Saccade **direction arrows are now off by
+  default**. The trial slider gained a **Trial X / N** counter on its left, and the
+  participant **Pick by** sub-step reads as nested under Browse-by (↳). The
+  stimulus text and its question now have breathing room between them.
+- **Comparison styling lives with each layer.** The per-scanpath (Scanpath 1 / 2)
+  comparison controls moved out of a separate panel into the **Fixation** and
+  **Saccade** style popovers, beside their single-trial counterparts.
+- **More styling control.** Span **Mark border** takes a colour; the out-of-text
+  marker is choosable (emoji-labelled); colour bars can go horizontal with
+  rotatable, resizable tick labels; the fixation-index default size is now 10.
+- **Tighter control rail.** Trimmed the dead space around the rail's section
+  dividers so View modes, Visualization, and the layers sit close together.
+
+### Fixed
+- **Heatmap colour now matches the picker.** The heatmap defaulted to a colorscale
+  that a popover-hosted selectbox couldn't display (it showed the first option and
+  could silently overwrite the value on the next click) — the default is now blue,
+  in sync with the picker and the figure. Heatmap **style** uses a radio so the
+  active style always shows selected.
+- **Save & restore now captures every setting.** A saved config silently dropped
+  the colour-bar orientation/tick angle/tick size, the out-of-text marker, the span
+  border colour, and all per-scanpath comparison styling — they now round-trip.
+- **Chips truly stay one line.** The strip no longer wraps when space is tight: the
+  identity/condition chips clip at the edge while the `?` and **More** stay pinned.
 
 ## [0.22.0] - 2026-06-19
 

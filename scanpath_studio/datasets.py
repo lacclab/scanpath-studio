@@ -30,6 +30,7 @@ Typical use::
 from __future__ import annotations
 
 import io
+import json
 import re
 import urllib.request
 import zipfile
@@ -352,8 +353,11 @@ MULTIPLEYE_FIXATION_SOURCES = ("scanpaths", "fixations")
 
 # Presentation monitor (px) for the ZH-CH-Zurich sample, from its lab config
 # (``Monitor_resolution_in_px`` / ``RESOLUTION``). Pass as ``canvas_size`` to
-# :func:`scanpath_studio.plot_scanpath` for true-to-scale rendering.
-MULTIPLEYE_MONITOR = (1920, 1080)
+# :func:`scanpath_studio.plot_scanpath` for true-to-scale rendering. This is the
+# *stimulus-image* size (the data's coordinate space) — the AOI/fixation coords
+# are image-relative (all within 1310×991), not screen-relative (1920×1080) — so
+# the page-image background layer fills the canvas exactly at data (0,0).
+MULTIPLEYE_MONITOR = (1310, 991)
 
 # Separator between the stimulus and the page in a per-page ``trial_id``. Two
 # underscores keep it visually distinct from the single underscores already in
@@ -534,6 +538,245 @@ MULTIPLEYE_FIX_SCHEMA = dict(
     y="location_y",
     word_id="word_idx",
 )
+# When per-reader reading measures are attached, the word boxes carry a real
+# ``participant_id`` (per reader) and the per-reader IA_* measures, so they take
+# the participant branch in ``normalize_words`` (no stimulus-level broadcast).
+MULTIPLEYE_WORD_SCHEMA_PER_READER = dict(
+    MULTIPLEYE_WORD_SCHEMA, participant="participant_id"
+)
+
+
+# --- Side data: questions / reader metadata / reading measures / page images ---
+
+# Reader-metadata columns carried from participant_data.csv → namespaced ``pp_*``.
+MULTIPLEYE_PARTICIPANT_META_COLS = {
+    "age": "pp_age",
+    "gender": "pp_gender",
+    "native_language_1": "pp_native_language",
+    "years_education": "pp_years_education",
+    "level_education": "pp_education_level",
+}
+
+# MultiplEYE reading-measure column → the canonical EyeLink IA_* name the app
+# already recognizes (``data.WORD_OPTIONAL_FIELDS``) and prefers over recomputed
+# measures. Regression in/out *flags* are derived from the counts (RR is
+# "re-reading", not a regression flag, so it is intentionally not mapped).
+MULTIPLEYE_RM_MAP = {
+    "FFD": "IA_FIRST_FIXATION_DURATION",
+    "FPRT": "IA_FIRST_RUN_DWELL_TIME",  # first-pass / gaze duration
+    "TFT": "IA_DWELL_TIME",  # total fixation time
+    "TFC": "IA_FIXATION_COUNT",
+    "RPD_inc": "IA_REGRESSION_PATH_DURATION",
+    "TRC_in": "IA_REGRESSION_IN_COUNT",
+    "TRC_out": "IA_REGRESSION_OUT_COUNT",
+    "skipped": "IA_SKIP",
+}
+
+# Reading-measures file name: the stimulus part has NO trailing ``_<id>``.
+_MULTIPLEYE_RM_RE = re.compile(
+    r"^(?P<session>\d+_[A-Za-z]{2}_[A-Za-z]{2}_\d+_ET\d+)_"
+    r"(?:PRACTICE_)?trial_\d+_(?P<stim_name>.+)_reading_measures$"
+)
+
+
+def _multipleye_questions_path(root: Path) -> Optional[Path]:
+    """The comprehension-questions workbook under ``root``, or None."""
+    return next(
+        iter(sorted(root.glob("stimuli_*/multipleye_comprehension_questions_*.xlsx"))),
+        None,
+    )
+
+
+def _multipleye_image_dir(root: Path) -> Optional[Tuple[Path, str]]:
+    """``(stimulus-images dir, language tag)`` or None.
+
+    The language is read from the directory name (``stimuli_images_zh_ch_1`` →
+    ``zh``), never hardcoded, so other MultiplEYE languages work."""
+    for d in sorted(root.glob("stimuli_*/stimuli_images_*")):
+        if d.is_dir():
+            parts = d.name.removeprefix("stimuli_images_").split("_")
+            return d, (parts[0] if parts and parts[0] else "")
+    return None
+
+
+def _multipleye_questions_from_frame(qs: pd.DataFrame) -> dict:
+    """``{stimulus -> JSON list of comprehension questions}`` from a questions
+    frame (workbook sheet 0), joined by ``stimulus_name + "_" + stimulus_id``."""
+    if (
+        qs is None
+        or qs.empty
+        or not {"stimulus_name", "stimulus_id"} <= set(qs.columns)
+    ):
+        return {}
+    sort_cols = [c for c in ("condition_no", "question_no") if c in qs.columns]
+    out: dict = {}
+    for (name, sid), group in qs.groupby(["stimulus_name", "stimulus_id"]):
+        if sort_cols:
+            group = group.sort_values(sort_cols)
+        items = []
+        for _, r in group.iterrows():
+            distractors = [
+                str(r[c]).strip()
+                for c in ("distractor_a", "distractor_b", "distractor_c")
+                if c in qs.columns
+                and str(r.get(c, "nan")).strip().lower() not in ("", "nan")
+            ]
+            items.append(
+                {
+                    "question": str(r.get("question", "")),
+                    "target": str(r.get("target", "")),
+                    "distractors": distractors,
+                    "condition": str(r.get("condition_name", "")),
+                    "question_no": (
+                        int(r["question_no"])
+                        if "question_no" in qs.columns
+                        and pd.notna(r.get("question_no"))
+                        else None
+                    ),
+                }
+            )
+        out[f"{name}_{int(sid)}"] = json.dumps(items, ensure_ascii=False)
+    return out
+
+
+def _multipleye_questions_by_stimulus(xlsx_path: Path) -> dict:
+    """Read the comprehension workbook and return ``{stimulus -> questions JSON}``."""
+    return _multipleye_questions_from_frame(pd.read_excel(xlsx_path, sheet_name=0))
+
+
+def _normalize_multipleye_participant_meta(
+    df: Optional[pd.DataFrame],
+) -> Optional[pd.DataFrame]:
+    """Select + namespace reader-metadata columns from a participant_data frame.
+
+    One row per ``(participant_id:Int64, session:str)``; None if the join keys
+    are absent. Used by both the directory loader and the upload path."""
+    if df is None or not {"participant_id", "session"} <= set(df.columns):
+        return None
+    keep = {
+        src: dest
+        for src, dest in MULTIPLEYE_PARTICIPANT_META_COLS.items()
+        if src in df.columns
+    }
+    out = df[["participant_id", "session", *keep]].copy()
+    out["participant_id"] = pd.to_numeric(
+        out["participant_id"], errors="coerce"
+    ).astype("Int64")
+    out["session"] = out["session"].astype(str)
+    return out.rename(columns=keep).drop_duplicates(["participant_id", "session"])
+
+
+def _multipleye_participant_meta(root: Path) -> Optional[pd.DataFrame]:
+    """Reader metadata from ``participant_data.csv`` (namespaced ``pp_*``), or None."""
+    path = root / "participant_data.csv"
+    return (
+        _normalize_multipleye_participant_meta(pd.read_csv(path))
+        if path.is_file()
+        else None
+    )
+
+
+def _merge_multipleye_participant_meta(
+    fixations: pd.DataFrame, meta: Optional[pd.DataFrame]
+) -> pd.DataFrame:
+    """Left-merge reader metadata onto fixations by ``(int(participant), session)``.
+
+    The bare pid is zero-padded text on the fixations (``001``) but an integer in
+    participant_data (``1``) — join on the int-coerced value, never the string."""
+    if meta is None or fixations.empty:
+        return fixations
+    fixations = fixations.copy()
+    fixations["_pid_int"] = pd.to_numeric(
+        fixations["participant"], errors="coerce"
+    ).astype("Int64")
+    meta = meta.rename(columns={"participant_id": "_pid_int"})
+    merged = fixations.merge(meta, on=["_pid_int", "session"], how="left")
+    return merged.drop(columns=["_pid_int"])
+
+
+def _multipleye_read_reading_measures(
+    root: Path,
+    sessions: Optional[Iterable[str]],
+    stim_namemap: dict,
+) -> pd.DataFrame:
+    """Per-(reader, page, word) reading measures, columns renamed to IA_*.
+
+    ``stim_namemap`` resolves the id-stripped file-name stimulus (``Lit_Alchemist``)
+    to the full stimulus (``Lit_Alchemist_4``). Empty frame if none found."""
+    base = root / "reading_measures"
+    session_filter = None if sessions is None else {str(s) for s in sessions}
+    keep_src = list(MULTIPLEYE_RM_MAP)
+    frames = []
+    for session_dir in sorted(p for p in base.iterdir() if p.is_dir()):
+        if session_filter is not None and session_dir.name not in session_filter:
+            continue
+        for path in sorted(session_dir.glob("*_reading_measures.csv")):
+            m = _MULTIPLEYE_RM_RE.match(path.stem)
+            if m is None:
+                continue
+            stimulus = stim_namemap.get(m.group("stim_name"))
+            if stimulus is None:  # a stimulus not in this load (stimuli filter)
+                continue
+            df = pd.read_csv(path)
+            if "page" not in df.columns or "word_idx" not in df.columns:
+                continue
+            cols = ["page", "word_idx"] + [c for c in keep_src if c in df.columns]
+            df = df[cols].rename(columns=MULTIPLEYE_RM_MAP)
+            if "IA_REGRESSION_IN_COUNT" in df.columns:
+                df["IA_REGRESSION_IN"] = (df["IA_REGRESSION_IN_COUNT"] > 0).astype(int)
+            if "IA_REGRESSION_OUT_COUNT" in df.columns:
+                df["IA_REGRESSION_OUT"] = (df["IA_REGRESSION_OUT_COUNT"] > 0).astype(
+                    int
+                )
+            df["participant_id"] = m.group("session")
+            df["stimulus"] = stimulus
+            frames.append(df)
+    return (
+        pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
+    )
+
+
+def _multipleye_words_per_reader(
+    stim_boxes: pd.DataFrame, rm: pd.DataFrame, fixations: pd.DataFrame
+) -> pd.DataFrame:
+    """Stimulus boxes replicated per reader who read each stimulus, with that
+    reader's reading measures merged by ``(page, word_idx)`` (word_idx restarts
+    per page, so page MUST be in the join key)."""
+    pairs = fixations[["participant_id", "stimulus"]].drop_duplicates()
+    words = pairs.merge(stim_boxes, on="stimulus", how="inner")
+    if not rm.empty:
+        words = words.merge(
+            rm, on=["participant_id", "stimulus", "page", "word_idx"], how="left"
+        )
+    return words
+
+
+def _multipleye_stamp_questions(df: pd.DataFrame, questions: dict) -> pd.DataFrame:
+    """Stamp the per-stimulus comprehension-questions JSON onto a frame."""
+    if df.empty or not questions or "stimulus" not in df.columns:
+        return df
+    df = df.copy()
+    df["comprehension_questions"] = df["stimulus"].map(questions)
+    return df
+
+
+def _multipleye_stamp_image_path(
+    df: pd.DataFrame, image_dir: Path, lang: str
+) -> pd.DataFrame:
+    """Stamp the per-(stimulus, page) stimulus-image path onto a frame.
+
+    ``Lit_Alchemist_4`` + ``page_3`` → ``…/lit_alchemist_id4_page_3_<lang>.png``."""
+    if df.empty or not {"stimulus", "page"} <= set(df.columns):
+        return df
+    df = df.copy()
+    stim = df["stimulus"].astype(str)
+    name = stim.str.rsplit("_", n=1).str[0].str.lower()
+    sid = stim.str.rsplit("_", n=1).str[1]
+    pnum = df["page"].astype(str).str.replace("page_", "", regex=False)
+    df["image_path"] = (
+        f"{image_dir}/" + name + "_id" + sid + "_page_" + pnum + f"_{lang}.png"
+    )
+    return df
 
 
 def multipleye_inventory(
@@ -569,16 +812,24 @@ def multipleye_raw_frames(
     sessions: Optional[Iterable[str]] = None,
     stimuli: Optional[Iterable[str]] = None,
     fixation_source: str = "scanpaths",
+    attach_reading_measures: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) MultiplEYE ``(words, fixations)`` frames.
 
     Same inputs as :func:`load_multipleye`, but returns the frames *before*
     schema normalization — for callers that run their own auto-detection /
-    column mapping (e.g. the Streamlit app's MultiplEYE data source). Word boxes
-    are stimulus-level (one row per (stimulus, page, word), ``stimulus`` column,
-    no participant); fixations carry parsed ``participant_id`` (the session),
-    per-page ``trial_id``, and pixel ``location_x/y``. Use
-    :func:`load_multipleye` for the normalized, ready-to-plot frames.
+    column mapping (e.g. the Streamlit app's MultiplEYE data source). Fixations
+    carry parsed ``participant_id`` (the session), per-page ``trial_id``, pixel
+    ``location_x/y``, the trial-level facets (``genre`` / ``session`` /
+    ``is_practice`` / ``trial_num``), and any reader metadata
+    (``pp_*`` from participant_data.csv), comprehension questions, and stimulus
+    image path that the corpus ships.
+
+    Word boxes are stimulus-level (no participant → broadcast) *unless*
+    ``reading_measures/`` exists and ``attach_reading_measures`` is on, in which
+    case the boxes are emitted **per reader** with the corpus's pre-aggregated
+    reading measures merged in as ``IA_*`` columns (the app then prefers them over
+    recomputed metrics). Use :func:`load_multipleye` for normalized frames.
     """
     root = Path(root)
     if fixation_source not in MULTIPLEYE_FIXATION_SOURCES:
@@ -599,9 +850,34 @@ def multipleye_raw_frames(
         fixation_source = alt
 
     fixations = _multipleye_fixations(root, fixation_source, sessions, stimuli)
-    words = _multipleye_word_boxes(
+    # Reader metadata (age/gender/languages…) merged onto every fixation row.
+    fixations = _merge_multipleye_participant_meta(
+        fixations, _multipleye_participant_meta(root)
+    )
+
+    stim_boxes = _multipleye_word_boxes(
         _multipleye_aoi_dir(root), fixations["stimulus"].unique()
     )
+    # Pre-aggregated reading measures → per-reader word boxes (skips the
+    # stimulus-level broadcast). Only when the corpus ships reading_measures/.
+    if attach_reading_measures and (root / "reading_measures").is_dir():
+        stim_namemap = {s.rsplit("_", 1)[0]: s for s in fixations["stimulus"].unique()}
+        rm = _multipleye_read_reading_measures(root, sessions, stim_namemap)
+        words = _multipleye_words_per_reader(stim_boxes, rm, fixations)
+    else:
+        words = stim_boxes
+
+    # Comprehension questions + stimulus images, stamped on both frames.
+    qpath = _multipleye_questions_path(root)
+    if qpath is not None:
+        qmap = _multipleye_questions_by_stimulus(qpath)
+        words = _multipleye_stamp_questions(words, qmap)
+        fixations = _multipleye_stamp_questions(fixations, qmap)
+    image = _multipleye_image_dir(root)
+    if image is not None:
+        image_dir, lang = image
+        words = _multipleye_stamp_image_path(words, image_dir, lang)
+        fixations = _multipleye_stamp_image_path(fixations, image_dir, lang)
     return words, fixations
 
 
@@ -640,10 +916,18 @@ def load_multipleye(
 
     from . import api
 
+    # Per-reader word boxes (reading measures attached) carry a participant_id, so
+    # they take the participant branch in normalize_words (no broadcast);
+    # stimulus-level boxes (no participant_id) broadcast across readers.
+    word_schema = dict(
+        MULTIPLEYE_WORD_SCHEMA_PER_READER
+        if "participant_id" in words_raw.columns
+        else MULTIPLEYE_WORD_SCHEMA
+    )
     return api.load_scanpath_data(
         words=words_raw,
         fixations=fixations_raw,
-        word_schema=dict(MULTIPLEYE_WORD_SCHEMA),
+        word_schema=word_schema,
         fix_schema=dict(
             MULTIPLEYE_FIX_SCHEMA,
             word_id="word_idx" if "word_idx" in fixations_raw.columns else None,
@@ -708,7 +992,11 @@ def _multipleye_fixations_from_frame(fixations_df: pd.DataFrame) -> pd.DataFrame
 
 
 def multipleye_frames_from_uploads(
-    fixations_df: pd.DataFrame, aoi_df: Optional[pd.DataFrame] = None
+    fixations_df: pd.DataFrame,
+    aoi_df: Optional[pd.DataFrame] = None,
+    *,
+    questions_df: Optional[pd.DataFrame] = None,
+    participant_meta_df: Optional[pd.DataFrame] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Raw MultiplEYE ``(words, fixations)`` frames from UPLOADED files.
 
@@ -721,12 +1009,23 @@ def multipleye_frames_from_uploads(
     filenames are CamelCase, so each AOI group's stimulus is relabeled to the
     CamelCase name seen in the fixations before building ``trial_id`` — otherwise
     the stimulus-words broadcast (which inner-joins on ``trial_id``) drops every
-    box. Feed the result through :func:`load_multipleye_uploads` (or
-    ``api.load_scanpath_data`` with ``MULTIPLEYE_WORD_SCHEMA`` /
-    ``MULTIPLEYE_FIX_SCHEMA``)."""
+    box. ``questions_df`` (the comprehension workbook) and ``participant_meta_df``
+    (participant_data.csv) are merged when provided. Reading measures + stimulus
+    images need the directory tree, so they are not available on this path. Feed
+    the result through :func:`load_multipleye_uploads`."""
     from .data import SOURCE_FILE_COLUMN
 
     fixations = _multipleye_fixations_from_frame(fixations_df)
+    fixations = _merge_multipleye_participant_meta(
+        fixations, _normalize_multipleye_participant_meta(participant_meta_df)
+    )
+    qmap = (
+        _multipleye_questions_from_frame(questions_df)
+        if questions_df is not None
+        else {}
+    )
+    fixations = _multipleye_stamp_questions(fixations, qmap)
+
     if fixations.empty or aoi_df is None or getattr(aoi_df, "empty", True):
         return pd.DataFrame(), fixations
     if SOURCE_FILE_COLUMN not in aoi_df.columns:
@@ -745,21 +1044,32 @@ def multipleye_frames_from_uploads(
         if not boxes.empty:
             frames.append(boxes)
     words = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    words = _multipleye_stamp_questions(words, qmap)
     return words, fixations
 
 
 def load_multipleye_uploads(
-    fixations_df: pd.DataFrame, aoi_df: Optional[pd.DataFrame] = None
+    fixations_df: pd.DataFrame,
+    aoi_df: Optional[pd.DataFrame] = None,
+    *,
+    questions_df: Optional[pd.DataFrame] = None,
+    participant_meta_df: Optional[pd.DataFrame] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized ``(words, fixations)`` from UPLOADED MultiplEYE files.
 
     Like :func:`load_multipleye`, but for in-memory uploaded frames (identity from
     each row's ``source_file``; see :func:`multipleye_frames_from_uploads`).
     ``words`` is an empty frame when no AOI files were uploaded; the fixations then
-    plot at their own ``location_x/y`` with no word boxes. Raises ``ValueError``
-    (via :func:`api.load_scanpath_data`) if the fixations frame has no
-    MultiplEYE-shaped filenames."""
-    words_raw, fix_raw = multipleye_frames_from_uploads(fixations_df, aoi_df)
+    plot at their own ``location_x/y`` with no word boxes. Optional
+    ``questions_df`` / ``participant_meta_df`` add the comprehension panel + reader
+    metadata. Raises ``ValueError`` (via :func:`api.load_scanpath_data`) if the
+    fixations frame has no MultiplEYE-shaped filenames."""
+    words_raw, fix_raw = multipleye_frames_from_uploads(
+        fixations_df,
+        aoi_df,
+        questions_df=questions_df,
+        participant_meta_df=participant_meta_df,
+    )
 
     from . import api
 

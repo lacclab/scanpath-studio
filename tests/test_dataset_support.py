@@ -3,6 +3,7 @@ datasets (words-only / fixations-only), stimulus-level word tables, AOI-only
 fixations, and the PoTeC loader."""
 
 import io
+import json
 import zipfile
 
 import numpy as np
@@ -1219,6 +1220,148 @@ def test_extract_columns_feeds_trial_mapping():
     )
     assert set(norm["trial_id"]) == {"t1", "t2"}
     assert set(norm["participant_id"]) == {"p1"}
+
+
+# ---------------------------------------------------------------------------
+# MultiplEYE side data: questions / reader metadata / reading measures / images
+# ---------------------------------------------------------------------------
+
+
+def test_multipleye_questions_from_frame():
+    qs = pd.DataFrame(
+        {
+            "stimulus_name": ["Lit_Alchemist", "Lit_Alchemist"],
+            "stimulus_id": [4, 4],
+            "question_no": [2, 1],
+            "condition_no": [1, 1],
+            "question": ["Q2?", "Q1?"],
+            "target": ["A2", "A1"],
+            "distractor_a": ["d1", "d1"],
+            "distractor_b": ["nan", "d2"],  # 'nan' must be dropped
+            "condition_name": ["local", "local"],
+        }
+    )
+    out = datasets_module._multipleye_questions_from_frame(qs)
+    # Join key is stimulus_name + "_" + stimulus_id.
+    assert set(out) == {"Lit_Alchemist_4"}
+    items = json.loads(out["Lit_Alchemist_4"])
+    assert [q["question_no"] for q in items] == [1, 2]  # sorted by (cond, q_no)
+    assert items[0]["target"] == "A1"
+    assert items[1]["distractors"] == ["d1"]  # 'nan' distractor filtered
+
+
+def test_multipleye_participant_meta_int_join():
+    fixations = pd.DataFrame(
+        {
+            "participant": ["001", "014"],  # zero-padded text
+            "session": ["ET1", "ET2"],
+            "x": [1.0, 2.0],
+        }
+    )
+    meta = datasets_module._normalize_multipleye_participant_meta(
+        pd.DataFrame(
+            {
+                "participant_id": [1, 14],  # integer
+                "session": ["ET1", "ET2"],
+                "age": [25, 30],
+                "gender": ["F", "M"],
+            }
+        )
+    )
+    merged = datasets_module._merge_multipleye_participant_meta(fixations, meta)
+    assert merged["pp_age"].tolist() == [25, 30]  # int "001" joined int 1
+    assert merged["pp_gender"].tolist() == ["F", "M"]
+    assert "participant_id" not in merged.columns  # the meta key isn't leaked
+
+
+def test_multipleye_rm_map_no_rr_and_derived_flags():
+    # RR (re-reading) must NOT be mapped to a regression flag; in/out flags are
+    # derived from the counts.
+    assert "RR" not in datasets_module.MULTIPLEYE_RM_MAP
+    assert datasets_module.MULTIPLEYE_RM_MAP["FFD"] == "IA_FIRST_FIXATION_DURATION"
+    assert datasets_module.MULTIPLEYE_RM_MAP["TFT"] == "IA_DWELL_TIME"
+    # Every IA_* target is a recognized pre-aggregated source the app prefers.
+    word_sources = {src for src, *_ in data_module.WORD_OPTIONAL_FIELDS}
+    assert set(datasets_module.MULTIPLEYE_RM_MAP.values()) <= word_sources
+
+
+def test_multipleye_words_per_reader_merges_rm_by_page_word():
+    # word_idx restarts per page, so the RM merge key MUST include page.
+    boxes = pd.DataFrame(
+        {
+            "stimulus": ["S"] * 3,
+            "page": ["page_1", "page_1", "page_2"],
+            "word_idx": [0, 1, 0],
+            "left": [0, 10, 0],
+        }
+    )
+    rm = pd.DataFrame(
+        {
+            "participant_id": ["r1"] * 3,
+            "stimulus": ["S"] * 3,
+            "page": ["page_1", "page_1", "page_2"],
+            "word_idx": [0, 1, 0],
+            "IA_FIRST_FIXATION_DURATION": [100, 110, 120],
+        }
+    )
+    fixations = pd.DataFrame({"participant_id": ["r1"], "stimulus": ["S"]})
+    words = datasets_module._multipleye_words_per_reader(boxes, rm, fixations)
+    assert set(words["participant_id"]) == {"r1"}
+    # page_2 word 0 gets its own measure (not page_1 word 0's).
+    p2 = words[(words["page"] == "page_2") & (words["word_idx"] == 0)]
+    assert p2["IA_FIRST_FIXATION_DURATION"].iloc[0] == 120
+
+
+def test_multipleye_uploads_with_questions_and_participant_meta():
+    scan = _upload_frame(
+        {
+            "001_ZH_CH_1_ET1_trial_1_Lit_Demo_1_scanpath": [
+                _scan_row(1000, 200, 90, 65, "page_1", 0)
+            ]
+        }
+    )
+    questions = pd.DataFrame(
+        {
+            "stimulus_name": ["Lit_Demo"],
+            "stimulus_id": [1],
+            "question": ["Why?"],
+            "target": ["Because"],
+            "condition_name": ["local"],
+            "question_no": [1],
+            "condition_no": [1],
+        }
+    )
+    meta = pd.DataFrame(
+        {"participant_id": [1], "session": ["ET1"], "age": [22], "gender": ["F"]}
+    )
+    _, fixations = datasets_module.load_multipleye_uploads(
+        scan, None, questions_df=questions, participant_meta_df=meta
+    )
+    assert (
+        json.loads(fixations["comprehension_questions"].iloc[0])[0]["target"]
+        == "Because"
+    )
+    assert fixations["pp_age"].iloc[0] == 22
+    assert fixations["pp_gender"].iloc[0] == "F"
+
+
+@pytest.mark.skipif(
+    not _MULTIPLEYE_SAMPLE.is_dir(), reason="MultiplEYE sample not present"
+)
+def test_load_multipleye_real_sample_side_data():
+    words, fixations = datasets_module.load_multipleye(
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"]
+    )
+    # Per-reader words with pre-aggregated reading measures (IA_* → canonical).
+    assert "participant_id" in words.columns
+    assert words["first_fixation_ms"].notna().any()  # FFD → IA_FIRST_FIXATION_DURATION
+    assert words["total_fixation_duration_ms"].notna().any()  # TFT → IA_DWELL_TIME
+    # Reader metadata + comprehension + image path on the fixations.
+    assert fixations["pp_age"].notna().any()
+    questions = json.loads(fixations["comprehension_questions"].dropna().iloc[0])
+    assert len(questions) >= 1 and questions[0]["question"]
+    img = fixations["image_path"].dropna().iloc[0]
+    assert __import__("os").path.exists(img)
 
 
 # ---------------------------------------------------------------------------

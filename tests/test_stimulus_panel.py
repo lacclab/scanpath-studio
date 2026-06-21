@@ -22,6 +22,69 @@ streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
 
+def _comprehension_app():
+    import json
+
+    import pandas as pd
+
+    from scanpath_studio.tabs import _render_comprehension_questions
+
+    df = pd.DataFrame(
+        {
+            "comprehension_questions": [
+                json.dumps(
+                    [
+                        {
+                            "question": "Why more books?",
+                            "target": "Better pillows",
+                            "distractors": ["Cheaper", "Lighter"],
+                            "condition": "local",
+                            "question_no": 1,
+                        }
+                    ]
+                )
+            ]
+        }
+    )
+    _render_comprehension_questions(df)
+
+
+def _comprehension_malformed_app():
+    import pandas as pd
+
+    from scanpath_studio.tabs import _render_comprehension_questions
+
+    _render_comprehension_questions(
+        pd.DataFrame({"comprehension_questions": ["not json"]})
+    )
+
+
+class TestComprehensionQuestions:
+    def test_excluded_from_generic_qa_detection(self):
+        # The JSON column must NOT be caught by the generic question detector
+        # (which would render the raw JSON blob).
+        df = pd.DataFrame(
+            {"text": ["a"], "comprehension_questions": ['[{"question": "Q"}]']}
+        )
+        assert "comprehension_questions" not in _detect_question_columns(df)
+
+    def test_renders_questions_target_and_distractors(self):
+        at = AppTest.from_function(_comprehension_app)
+        at.run()
+        assert not at.exception, at.exception
+        md = " ".join(m.value for m in at.markdown)
+        assert "Comprehension questions" in md
+        assert "Why more books?" in md
+        assert "✓ Better pillows" in md  # target marked
+        assert "Cheaper" in md  # distractor
+
+    def test_malformed_json_is_silent(self):
+        at = AppTest.from_function(_comprehension_malformed_app)
+        at.run()
+        assert not at.exception
+        assert " ".join(m.value for m in at.markdown).strip() == ""
+
+
 class TestDetection:
     def test_onestop_spans_and_qa(self):
         w = pd.DataFrame(

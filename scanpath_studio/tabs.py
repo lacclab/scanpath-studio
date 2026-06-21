@@ -897,6 +897,10 @@ def _render_paragraph_panel(
     with container:
         _render_paragraph_with_spans(trial_words, span_bg)
 
+        # Breathing room between the stimulus text and the question/answer block.
+        if qa_cols:
+            st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
+
         # Question / answer fields, generically. Keep OneStop's combined
         # "selected X · ✓ correct" answer line when both columns are present.
         question_cols = [c for c in qa_cols if "question" in c.lower()]
@@ -1471,9 +1475,6 @@ def _render_export_panel(
 
 
 _CHIP_NEUTRAL_BG = "#EEF2F7"
-# Heuristic: show the "Show more" popover when more than this many inline chips
-# (they'd likely wrap past one line) even with no summary stats selected.
-_CHIP_INLINE_MAX = 6
 # Friendly labels for the identity fields; everything else is humanized.
 _CHIP_FIELD_LABELS = {
     "participant_id": "Participant",
@@ -1544,19 +1545,17 @@ def _render_trial_condition_chips(
     the Trial Info subtab).
 
     ``fields`` is the configurable list of fields to surface (sidebar
-    ``trial_chip_fields`` — participant id, text id, conditions, and the computed
-    summary stats folded in from the former Trial Info tab). The inline strip is
-    clamped to **one line** (CSS) and the computed **summary stats** live behind a
-    **Show more** popover by default, to keep the strip short and the plot tall.
-    A data column that varies within the trial is still shown (first value) but
-    flagged with ⚠️. Skips silently when nothing resolves."""
+    ``trial_chip_fields``). The whole strip — identity/condition chips, a ``?``
+    help marker, and an inline **More** disclosure — stays on **one line**; the
+    computed summary stats live inside **More** (only fields not already shown), so
+    the plot stays tall. A data column that varies within the trial is shown (first
+    value) but flagged with ⚠️. Skips silently when nothing resolves."""
     primary: list[tuple[str, str]] = []  # identity + conditions (inline)
-    summary: list[tuple[str, str]] = []  # computed stats (behind "Show more")
-    varying: list[str] = []
+    summary: list[tuple[str, str]] = []  # computed stats (inside "More")
     summary_lookup: Optional[dict] = None  # computed once, only if a summary chip
     for col in fields or []:
         # Virtual summary fields (reading time / counts) — always trial-level,
-        # computed once from `_summary_rows`; routed to the "Show more" section.
+        # computed once from `_summary_rows`; routed to the "More" disclosure.
         if col in SUMMARY_CHIP_FIELDS:
             if summary_lookup is None:
                 summary_lookup = {
@@ -1579,8 +1578,6 @@ def _render_trial_condition_chips(
             continue
         label = _chip_field_label(col)
         prefix = "" if trial_level else "⚠️ "
-        if not trial_level:
-            varying.append(label)
         primary.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
     if not primary and not summary:
         return
@@ -1591,31 +1588,25 @@ def _render_trial_condition_chips(
             for lbl, bg in items
         )
 
-    # Inline strip, clamped to one line (extra rows hidden — see styles.py).
+    # A "?" marker pointing to the sidebar picker (native HTML title tooltip).
+    help_span = (
+        '<span class="sps-chip-help" title="Change which fields show here in the '
+        'sidebar → 🏷️ Trial chips">?</span>'
+    )
+    # The summary stats sit inside an inline <details> "More" — only fields not
+    # already shown inline — so the whole strip stays one line until expanded.
+    more_html = ""
+    if summary:
+        more_html = (
+            '<details class="sps-chip-more">'
+            '<summary class="sps-chip sps-chip-more-summary">More</summary>'
+            f'<div class="sps-trial-chips sps-chip-more-body">{_spans(summary)}</div>'
+            "</details>"
+        )
     st.markdown(
-        f'<div class="sps-trial-chips sps-chips-clamp">{_spans(primary)}</div>',
+        f'<div class="sps-trial-chips">{_spans(primary)}{help_span}{more_html}</div>',
         unsafe_allow_html=True,
     )
-    # "Show more" reveals the summary stats + the full list (so a clamped overflow
-    # row stays reachable). Shown when there are stats or many primary chips.
-    if summary or len(primary) > _CHIP_INLINE_MAX:
-        with st.popover("➕ Show more", width="content"):
-            st.markdown(
-                f'<div class="sps-trial-chips">{_spans(primary + summary)}</div>',
-                unsafe_allow_html=True,
-            )
-            if varying:
-                st.caption(
-                    "⚠️ Not trial-level (varies within this trial): "
-                    + ", ".join(varying)
-                    + " — showing the first value."
-                )
-    elif varying:
-        st.caption(
-            "⚠️ Not trial-level (varies within this trial): "
-            + ", ".join(varying)
-            + " — showing the first value."
-        )
 
 
 def render_single_trial_tab(

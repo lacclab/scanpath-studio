@@ -40,7 +40,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_show_fix": True,
     "global_show_order": False,
     "global_show_saccades": True,
-    "global_show_saccade_arrows": True,
+    "global_show_saccade_arrows": False,
     "global_saccade_color": SACCADE_COLOR,
     "global_saccade_style": "Solid",
     "global_hollow_fixations": False,
@@ -612,29 +612,13 @@ def _clamped_pair(val, lo: float, hi: float) -> Optional[tuple]:
     return (min(a, b), max(a, b))
 
 
-def _render_compare_scanpath_styles(host=None) -> tuple[dict, dict]:
-    """Per-scanpath styling for the two-trial comparison.
+_COMPARE_SCANPATHS = ((0, "Scanpath 1"), (1, "Scanpath 2"))
 
-    Rendered only when the "Compare with another trial" toggle is on. Returns
-    ``(style_a, style_b)``, each a dict the comparison figure builders consume:
-    ``fix_color``, ``saccade_color``, ``saccade_style`` (Plotly dash),
-    ``marker_size_range``, ``hollow``. Defaults reproduce the classic two-colour
-    look, so the figure is unchanged until the user tweaks a control.
 
-    ``host`` is the container to render into (defaults to the sidebar); the app
-    now passes the scanpath rail so it sits with the rest of the viz controls.
-    """
-    panel = (
-        (host if host is not None else st.sidebar)
-        .container(key="tour_grp_compare_styles")
-        .expander("Per-scanpath styling (comparison)", expanded=False)
-    )
-    panel.caption(
-        "Style each scanpath independently — applies to the two-trial comparison."
-    )
-    style_labels = list(SACCADE_DASH_OPTIONS.keys())
-    styles: list[dict] = []
-    for idx, name in ((0, "Scanpath 1"), (1, "Scanpath 2")):
+def _seed_compare_styles() -> None:
+    """Seed the per-scanpath comparison styling keys (so the collected dicts have
+    values even when the relevant layer popover isn't open this run)."""
+    for idx, _ in _COMPARE_SCANPATHS:
         default_color = COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
         st.session_state.setdefault(f"cmp{idx}_fix_color", default_color)
         st.session_state.setdefault(f"cmp{idx}_saccade_color", default_color)
@@ -643,28 +627,54 @@ def _render_compare_scanpath_styles(host=None) -> tuple[dict, dict]:
             f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE
         )
         st.session_state.setdefault(f"cmp{idx}_hollow", False)
-        panel.markdown(f"**{name}**")
-        col_fix, col_sac = panel.columns(2)
-        fix_color = col_fix.color_picker("Fixations", key=f"cmp{idx}_fix_color")
-        saccade_color = col_sac.color_picker("Saccades", key=f"cmp{idx}_saccade_color")
-        size_lo, size_hi = panel.slider(
-            "Marker size", 4, 40, key=f"cmp{idx}_marker_size_range"
+
+
+def _render_compare_fix_styles() -> None:
+    """Per-scanpath *fixation* styling for the two-trial comparison — rendered
+    inside the Fixation-style popover (when comparing), beside the single-trial
+    fixation controls."""
+    st.caption("Per-scanpath (comparison)")
+    for idx, name in _COMPARE_SCANPATHS:
+        st.color_picker(f"{name} — fixation color", key=f"cmp{idx}_fix_color")
+        st.slider(f"{name} — marker size", 4, 40, key=f"cmp{idx}_marker_size_range")
+        st.checkbox(f"{name} — hollow circles", key=f"cmp{idx}_hollow")
+
+
+def _render_compare_saccade_styles() -> None:
+    """Per-scanpath *saccade* styling for the two-trial comparison — rendered
+    inside the Saccade-style popover (when comparing)."""
+    st.caption("Per-scanpath (comparison)")
+    style_labels = list(SACCADE_DASH_OPTIONS.keys())
+    for idx, name in _COMPARE_SCANPATHS:
+        st.color_picker(f"{name} — saccade color", key=f"cmp{idx}_saccade_color")
+        st.selectbox(
+            f"{name} — line style", options=style_labels, key=f"cmp{idx}_saccade_style"
         )
-        saccade_style_label = panel.selectbox(
-            "Saccade line style", options=style_labels, key=f"cmp{idx}_saccade_style"
-        )
-        hollow = panel.checkbox("Hollow circles", key=f"cmp{idx}_hollow")
+
+
+def _collect_compare_styles() -> tuple[dict, dict]:
+    """Build the ``(style_a, style_b)`` dicts the comparison figure consumes from
+    the ``cmp{idx}_*`` session keys (rendered under each layer's popover)."""
+    styles: list[dict] = []
+    for idx, _ in _COMPARE_SCANPATHS:
+        default_color = COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
         styles.append(
             dict(
-                fix_color=fix_color,
-                saccade_color=saccade_color,
-                saccade_style=SACCADE_DASH_OPTIONS.get(saccade_style_label, "solid"),
-                marker_size_range=(size_lo, size_hi),
-                hollow=hollow,
+                fix_color=st.session_state.get(f"cmp{idx}_fix_color", default_color),
+                saccade_color=st.session_state.get(
+                    f"cmp{idx}_saccade_color", default_color
+                ),
+                saccade_style=SACCADE_DASH_OPTIONS.get(
+                    st.session_state.get(f"cmp{idx}_saccade_style", "Solid"), "solid"
+                ),
+                marker_size_range=tuple(
+                    st.session_state.get(
+                        f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE
+                    )
+                ),
+                hollow=bool(st.session_state.get(f"cmp{idx}_hollow", False)),
             )
         )
-        if idx == 0:
-            panel.divider()
     return styles[0], styles[1]
 
 
@@ -688,6 +698,7 @@ def _seed_viz_state(
     for _key, _default in _VIZ_WIDGET_DEFAULTS.items():
         st.session_state.setdefault(_key, _default)
     st.session_state.setdefault("global_marker_size_range", (8, 24))
+    _seed_compare_styles()
 
     color_fields = color_field_options(trial_fixations)
     _drop_stale("global_color_by", color_fields)
@@ -1031,6 +1042,11 @@ def sidebar_controls(
                     key="global_out_of_text_symbol",
                     help="Symbol drawn on each out-of-text fixation.",
                 )
+            # When comparing two trials, the per-scanpath fixation styling lives
+            # here (under the Fixation settings), not in a separate panel.
+            if st.session_state.get("single_compare_toggle"):
+                st.divider()
+                _render_compare_fix_styles()
 
     # --- Saccades ---------------------------------------------------------
     show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
@@ -1046,8 +1062,8 @@ def sidebar_controls(
                 "Saccade color",
                 key="global_saccade_color",
                 help="Colour of the saccade lines and direction arrows (single "
-                "scanpath; two-trial comparisons use the per-scanpath styling "
-                "panel below).",
+                "scanpath; two-trial comparisons use the per-scanpath controls "
+                "below).",
             )
             st.segmented_control(
                 "Saccade line style",
@@ -1055,6 +1071,10 @@ def sidebar_controls(
                 key="global_saccade_style",
                 help="Line style for the saccade traces.",
             )
+            # Per-scanpath saccade styling for the two-trial comparison.
+            if st.session_state.get("single_compare_toggle"):
+                st.divider()
+                _render_compare_saccade_styles()
 
     # --- Text -------------------------------------------------------------
     show_labels = viz.toggle("**Text**", key="global_show_labels")
@@ -1239,9 +1259,11 @@ def sidebar_controls(
         numeric_fields=numeric_fields,
         highlight_options=highlight_options,
     )
+    # The per-scanpath comparison styling is rendered inline under each layer's
+    # popover (Fixation / Saccade) above; here we just collect it from the keys.
     if st.session_state.get("single_compare_toggle"):
         settings["compare_style_a"], settings["compare_style_b"] = (
-            _render_compare_scanpath_styles(host=viz)
+            _collect_compare_styles()
         )
     return settings
 

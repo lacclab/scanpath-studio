@@ -206,12 +206,46 @@ def get_app_css() -> str:
         gap: 0.35rem;
         margin: 0.1rem 0 0.5rem;
     }
-    /* Clamp the inline chip strip to a single row (extra rows live behind the
-       "Show more" popover) so the chips never push the plot down. */
-    .sps-trial-chips.sps-chips-clamp {
-        max-height: 1.9rem;
-        overflow: hidden;
-        margin-bottom: 0.15rem;
+    /* Keep the chip strip + its inline "More" disclosure on one line. */
+    .sps-trial-chips { align-items: center; }
+    /* "?" help marker → small round badge with a native hover tooltip. */
+    .sps-chip-help {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.05rem;
+        height: 1.05rem;
+        border-radius: 50%;
+        border: 1px solid rgba(0, 0, 0, 0.18);
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #555;
+        cursor: help;
+    }
+    /* Inline "More" disclosure: the chip-styled summary stays on the one-line
+       strip; its body (the not-already-shown summary stats) opens as a floating
+       dropdown so expanding it never reflows the chip row. */
+    .sps-chip-more { display: inline-block; position: relative; }
+    .sps-chip-more-summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        font-weight: 600;
+    }
+    .sps-chip-more-summary::-webkit-details-marker { display: none; }
+    .sps-chip-more-summary::after { content: " ▾"; font-size: 0.7rem; }
+    .sps-chip-more[open] .sps-chip-more-summary::after { content: " ▴"; }
+    .sps-chip-more-body {
+        position: absolute;
+        top: calc(100% + 0.3rem);
+        left: 0;
+        z-index: 20;
+        flex-wrap: nowrap;
+        padding: 0.4rem 0.5rem;
+        background: var(--background-color, #fff);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 0.5rem;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
     }
     .sps-chip {
         display: inline-flex;

@@ -95,6 +95,7 @@ def _full_config() -> dict:
             "saccade_arrows": True,
             "heatmap": False,
             "raw_gaze": False,
+            "stimulus_image": True,
         },
         "coloring": {
             "color_by": "pass_index",
@@ -124,6 +125,7 @@ class TestPlotConfigRestore:
         assert ss["global_show_heatmap"] is False
         assert ss["global_show_saccade_arrows"] is True
         assert ss["global_show_order"] is False
+        assert ss["global_show_stimulus_image"] is True  # round-trips like raw_gaze
         # coloring
         assert ss["global_heatmap_style"] == "Interpolated"
         assert ss["global_color_by"] == "pass_index"

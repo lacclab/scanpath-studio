@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 from typing import Optional
 
 import pandas as pd
@@ -52,6 +53,7 @@ from scanpath_studio.model_scanpaths import (
     generate_model_scanpaths,
 )
 from scanpath_studio.plots import (
+    _png_pixel_size,
     animation_playback_ms,
     make_aggregated_histogram,
     make_comparison_figure,
@@ -694,6 +696,8 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     out = []
     for c in trial_words.columns:
         lc = c.lower()
+        if c == "comprehension_questions":
+            continue  # structured JSON, rendered by _render_comprehension_questions
         if not any(h in lc for h in _QA_NAME_HINTS) or _is_boolish_span(c):
             continue
         col = trial_words[c]
@@ -701,6 +705,39 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
             continue  # per-word-varying boolean → not a trial-level Q&A field
         out.append(c)
     return out
+
+
+def _render_comprehension_questions(trial_words: pd.DataFrame) -> None:
+    """Render structured comprehension questions for the trial's stimulus.
+
+    Parses the ``comprehension_questions`` JSON column (MultiplEYE) into a list of
+    questions, each with the target (✓ reference answer) and distractors. The
+    corpus records no per-reader answer, so the target is shown as the key only —
+    not as a 'selected'/'correct' result. No-op when the column is absent or the
+    JSON is empty/malformed."""
+    raw = _first_str(trial_words, "comprehension_questions")
+    if not raw:
+        return
+    try:
+        items = json.loads(raw)
+    except (ValueError, TypeError):
+        return
+    if not items:
+        return
+    st.markdown("**Comprehension questions**")
+    for i, q in enumerate(items, 1):
+        head = f"**Q{q.get('question_no') or i}**"
+        cond = (q.get("condition") or "").strip()
+        if cond and cond.lower() != "nan":
+            head += f" · _{cond}_"
+        st.markdown(f"{head}: {q.get('question', '')}")
+        options = []
+        target = (q.get("target") or "").strip()
+        if target:
+            options.append(f"- ✓ {target}")
+        options += [f"- {d}" for d in q.get("distractors", []) if d]
+        if options:
+            st.markdown("\n".join(options))
 
 
 def _is_boolish_span(col: str) -> bool:
@@ -898,9 +935,14 @@ def _render_paragraph_panel(
     with container:
         _render_paragraph_with_spans(trial_words, span_bg)
 
-        # Breathing room between the stimulus text and the question/answer block.
-        if qa_cols:
+        # Breathing room between the stimulus text and the question block (generic
+        # Q&A fields and/or MultiplEYE's structured comprehension questions).
+        has_comprehension = bool(_first_str(trial_words, "comprehension_questions"))
+        if qa_cols or has_comprehension:
             st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
+
+        # MultiplEYE structured comprehension questions (target + distractors).
+        _render_comprehension_questions(trial_words)
 
         # Question / answer fields, generically. Keep OneStop's combined
         # "selected X · ✓ correct" answer line when both columns are present.
@@ -1053,6 +1095,7 @@ def _build_studio_config(
             "saccade_arrows": figure_settings.get("show_saccade_arrows", False),
             "heatmap": figure_settings["show_heatmap"],
             "raw_gaze": figure_settings["show_raw_gaze"],
+            "stimulus_image": viz_settings.get("show_stimulus_image", False),
         },
         "coloring": {
             "color_by": figure_settings["color_by"],
@@ -1515,6 +1558,16 @@ _CHIP_FIELD_LABELS = {
     "text_id": "Text",
     "unique_paragraph_id": "Text",
     "paragraph_id": "Text",
+    # MultiplEYE facets + reader metadata.
+    "genre": "Genre",
+    "session": "Session",
+    "is_practice": "Practice",
+    "trial_num": "Trial #",
+    "pp_age": "Age",
+    "pp_gender": "Gender",
+    "pp_native_language": "Native language",
+    "pp_years_education": "Years of education",
+    "pp_education_level": "Education",
 }
 
 
@@ -1607,7 +1660,9 @@ def _render_trial_condition_chips(
         if value is None:
             continue
         value_str = str(value)
-        if not value_str:
+        # Skip empty / missing values (a "string" optional field coerces NaN to
+        # the literal "nan", e.g. ET2 readers with no recorded gender).
+        if value_str.strip().lower() in ("", "nan", "none", "<na>"):
             continue
         label = _chip_field_label(col)
         prefix = "" if trial_level else "⚠️ "
@@ -1749,6 +1804,20 @@ def render_single_trial_tab(
     trial_has_raw_gaze = not trial_raw_gaze.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
+    # Stimulus-page background image (MultiplEYE): the per-trial image path lives
+    # on the trial's rows (directory load only — uploads carry no path). The image
+    # is offered only when it exists and its pixel size is readable (it's placed at
+    # data coords (0,0)-(image_w, image_h)).
+    trial_image_path = _first_str(trial_words, "image_path") or _first_str(
+        trial_fixations, "image_path"
+    )
+    trial_image_size = (
+        _png_pixel_size(trial_image_path)
+        if trial_image_path and os.path.exists(trial_image_path)
+        else None
+    )
+    has_stimulus_image = trial_image_size is not None
+
     # Condition chips above the plot are filled later (into chips_slot), once the
     # comparison selection is known — so a second chip strip can show the compared
     # trial too.
@@ -1807,6 +1876,7 @@ def render_single_trial_tab(
             base_font_size,
             host=rail,
             has_raw_gaze=has_raw_gaze,
+            has_stimulus_image=has_stimulus_image,
             words=words_filtered,
         )
 
@@ -1814,6 +1884,14 @@ def render_single_trial_tab(
     effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
     figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
     figure_settings["raw_gaze"] = trial_raw_gaze if trial_has_raw_gaze else None
+    # Stimulus-image background layer — only when toggled on and available for
+    # this trial. Pass the path (small cache key); plots.py base64-encodes it.
+    if viz_settings.get("show_stimulus_image") and has_stimulus_image:
+        figure_settings["background_image"] = trial_image_path
+        figure_settings["background_image_size"] = trial_image_size
+    else:
+        figure_settings["background_image"] = None
+        figure_settings["background_image_size"] = None
     # Carried into both the live figure and the bulk export so exported plots are
     # sized identically to what's on screen (true-to-scale reading text).
     figure_settings["line_spacing"] = line_spacing

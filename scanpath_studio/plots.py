@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import struct
+from pathlib import Path
 from typing import Iterable, Optional, Tuple
 
 import numpy as np
@@ -607,6 +610,49 @@ def _add_word_label_trace(
         fig.add_trace(trace)
 
 
+_IMAGE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+
+
+def _image_to_data_uri(src: Optional[str]) -> Optional[str]:
+    """A ``data:`` URI for an image path, or pass through an existing one.
+
+    Returns None for a missing / unreadable file so the background-image layer
+    simply doesn't draw (e.g. an uploaded MultiplEYE dataset has no image path)."""
+    if not src:
+        return None
+    text = str(src)
+    if text.startswith("data:"):
+        return text
+    path = Path(text)
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    mime = _IMAGE_MIME.get(path.suffix.lower(), "image/png")
+    return f"data:{mime};base64," + base64.b64encode(raw).decode("ascii")
+
+
+def _png_pixel_size(src: Optional[str]) -> Optional[Tuple[int, int]]:
+    """(width, height) of a PNG from its header, without Pillow; None otherwise."""
+    if not src:
+        return None
+    try:
+        with open(src, "rb") as fh:
+            head = fh.read(24)
+    except OSError:
+        return None
+    if head[:8] == b"\x89PNG\r\n\x1a\n" and head[12:16] == b"IHDR":
+        width, height = struct.unpack(">II", head[16:24])
+        return int(width), int(height)
+    return None
+
+
 def make_scanpath_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -654,6 +700,8 @@ def make_scanpath_figure(
     colorbar_tickfont_size: int = 12,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    background_image: Optional[str] = None,
+    background_image_size: Optional[Tuple[float, float]] = None,
 ) -> go.Figure:
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
@@ -685,6 +733,31 @@ def make_scanpath_figure(
         x_range = [0, canvas_width]
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
+
+    # Stimulus-page background image (MultiplEYE): the rendered page sits at data
+    # coordinates (0,0)-(image_w, image_h) UNDER every other layer — the AOI /
+    # fixation coordinates are image-relative, so it aligns exactly and sidesteps
+    # CJK/RTL font rendering. The data extents still drive the axis range (the
+    # image clips); yanchor="top" + the reversed y-axis put its top-left at (0,0).
+    if spatial_axes and background_image and background_image_size:
+        uri = _image_to_data_uri(background_image)
+        if uri:
+            image_w, image_h = background_image_size
+            fig.add_layout_image(
+                dict(
+                    source=uri,
+                    xref="x",
+                    yref="y",
+                    x=0,
+                    y=0,
+                    sizex=image_w,
+                    sizey=image_h,
+                    sizing="stretch",
+                    layer="below",
+                    xanchor="left",
+                    yanchor="top",
+                )
+            )
 
     # Fix the display size up front so the data->screen scale is known: word
     # labels are then sized in that scale (true-to-scale text), and the same

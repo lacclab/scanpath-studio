@@ -7,7 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **MultiplEYE corpus loader.** `scanpath_studio.load_multipleye(root)` (and the
+  pre-normalization `datasets.multipleye_raw_frames` / `multipleye_inventory`)
+  load the multilingual MultiplEYE reading corpus, whose identity lives only in
+  folder + file names. It parses participant / session / trial / stimulus from
+  the paths, drops non-reading screens (`question_*`, `*_rating_screen`,
+  `subject_difficulty_screen`), and aggregates the character-level AOI files to
+  one word box per `(page, word_idx)`. Each reader is a *session*
+  (`participant_id = "001_ZH_CH_1_ET1"` — ET1/ET2 read disjoint stimuli) and
+  each stimulus *page* is its own trial (`trial_id = "Lit_Alchemist_4__page_1"`,
+  since pages reuse the same screen coordinates), with `text_id` kept as the
+  stimulus for stimulus-level merges. `MULTIPLEYE_MONITOR = (1310, 991)` (the
+  stimulus-image / data coordinate space). Fixation source is `scanpaths/`
+  (page/word-tagged) or `fixations/` (raw).
+- **Public datasets are now offered by default** (PoTeC + MultiplEYE in the data
+  source picker); set `SCANPATH_PUBLIC_DATASETS=0` to hide them.
+- **MultiplEYE rich side data.** Loading MultiplEYE now enriches the trial with
+  everything the corpus ships, surfaced through the existing panels: the
+  **comprehension questions** (target + distractors) in the *Stimulus &
+  questions* panel; the corpus's **pre-aggregated reading measures**
+  (`FFD/FPRT/TFT/RPD/…` → canonical `IA_*`, preferred over recomputed metrics);
+  **reader metadata** (age / gender / native language / education) and the
+  **genre / ET-session / practice** facets as Trial Info chips + filter
+  conditions; and the **stimulus page image** as a true-to-scale background layer
+  (a new **Stimulus image** toggle — exact coordinates, sidesteps CJK/RTL fonts).
+  The browser-upload path picks up questions + reader metadata when those files
+  are uploaded too (`read_table` now reads `.xlsx`).
+- **MultiplEYE in the in-app "Public datasets" picker**, with directory / session /
+  stimulus / fixation-source controls and the corpus monitor size.
+- **MultiplEYE via the Add-dataset wizard (browser upload).** A **Dataset format**
+  choice in *Add dataset* now offers **MultiplEYE**: upload the corpus's
+  scanpath/fixation CSVs (+ optional word-AOI CSVs) and the app recovers identity
+  from the file names (browsers drop folders), makes each stimulus *page* a trial,
+  aggregates character AOIs into word boxes, and case-matches the lowercase AOI
+  file names to the CamelCase stimuli — no column mapping needed
+  (`datasets.multipleye_frames_from_uploads` / `load_multipleye_uploads`).
+- **Derive ids from the filename (upload wizard).** An optional step turns the
+  captured `source_file` into columns you can map as a trial / participant id —
+  either a **delimiter split** into `file_part_N` (`data.split_source_file`) or a
+  **regex** with named groups (`data.extract_columns_from_source_file`, robust to
+  variable-length parts), with optional lowercasing. `read_tables` now records
+  `source_file` for a single file too, not just multi-file sets.
+- **Aggregate character AOIs into word boxes (upload wizard).** A toggle in the
+  Text & Interest Areas step collapses one-row-per-character interest-area tables
+  (e.g. CJK corpora) into one bounding box per word
+  (`data.aggregate_char_boxes`), grouped by the mapped trial + word id.
+
 ### Changed
+- **Schema auto-detection** now recognizes MultiplEYE column conventions:
+  fixation `location_x` / `location_y` / `onset`, word-box origin `top_left_x` /
+  `top_left_y`, and `word_idx` / `char_idx` word ids.
 - **More plot, less chrome.** Dropped the "🎯 Trial" heading; the chip strip stays
   on **one line** with an inline **More** dropdown (only the stats not already
   shown — reading time, word/fixation counts) and a `?` pointing to the sidebar

@@ -93,6 +93,8 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     highlight_out_of_text=False,
     line_spacing=DEFAULT_LINE_SPACING,
     scale_text_to_boxes=True,
+    background_image=None,
+    background_image_size=None,
 )
 
 

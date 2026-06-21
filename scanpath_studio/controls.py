@@ -51,13 +51,32 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_heatmap_metric": "duration_ms",
     "global_show_colorbars": False,
     "global_order_font_color": "#111111",
+    "global_order_font_size": 10,
     "global_fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
     "global_heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
     # Restorable by the Save & restore config too, so seed here (no inline
     # value=/index=) to avoid Streamlit's "default value but also set via
     # Session State API" warning when a restore pre-sets them.
     "global_critical_span_style": "Mark text",
+    "global_span_border_color": "#000000",
     "global_highlight_out_of_text": False,
+    "global_out_of_text_symbol": "x",
+    # Colour-bar styling (Axes & color bars expander).
+    "global_colorbar_orientation": "Vertical",
+    "global_colorbar_tickangle": 0,
+    "global_colorbar_tickfont_size": 12,
+}
+
+
+# Out-of-text fixation marker options: Plotly symbol → emoji-prefixed label (the
+# emoji makes each choice stand out in the dropdown).
+_OUT_OF_TEXT_MARKERS = {
+    "x": "✖️ Cross",
+    "circle-open": "⭕ Circle",
+    "diamond-open": "🔷 Diamond",
+    "square-open": "🟦 Square",
+    "star": "⭐ Star",
+    "triangle-up-open": "🔺 Triangle",
 }
 
 
@@ -70,7 +89,7 @@ _VIEW_PRESETS: Dict[str, Dict[str, bool]] = {
     "scanpath": {
         "global_show_fix": True,
         "global_show_saccades": True,
-        "global_show_saccade_arrows": True,
+        "global_show_saccade_arrows": False,
         "global_show_labels": True,
         "global_show_order": False,
         "global_show_heatmap": False,
@@ -668,7 +687,6 @@ def _seed_viz_state(
     """
     for _key, _default in _VIZ_WIDGET_DEFAULTS.items():
         st.session_state.setdefault(_key, _default)
-    st.session_state.setdefault("global_order_font_size", int(base_font_size))
     st.session_state.setdefault("global_marker_size_range", (8, 24))
 
     color_fields = color_field_options(trial_fixations)
@@ -809,8 +827,10 @@ def _collect_viz_settings(
         show_colorbars=bool(ss.get("global_show_colorbars")),
         fixation_color_range=fixation_color_range,
         heatmap_range=heatmap_range,
-        fixation_colorscale=ss.get("global_fixation_colorscale"),
-        heatmap_colorscale=ss.get("global_heatmap_colorscale"),
+        fixation_colorscale=ss.get("global_fixation_colorscale")
+        or DEFAULT_FIXATION_COLORSCALE,
+        heatmap_colorscale=ss.get("global_heatmap_colorscale")
+        or DEFAULT_HEATMAP_COLORSCALE,
         critical_span_style=critical_span_style,
         highlight_column=highlight_column,
         saccade_color=ss.get("global_saccade_color", SACCADE_COLOR),
@@ -820,6 +840,11 @@ def _collect_viz_settings(
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
         color_by_line=color_by == "line",
         highlight_out_of_text=bool(ss.get("global_highlight_out_of_text")),
+        out_of_text_symbol=ss.get("global_out_of_text_symbol") or "x",
+        span_border_color=ss.get("global_span_border_color", "#000000"),
+        colorbar_orientation=ss.get("global_colorbar_orientation") or "Vertical",
+        colorbar_tickangle=int(ss.get("global_colorbar_tickangle") or 0),
+        colorbar_tickfont_size=int(ss.get("global_colorbar_tickfont_size") or 12),
         background_color=background_color,
         compare_style_a=None,
         compare_style_b=None,
@@ -893,8 +918,9 @@ def sidebar_controls(
     # presets are still reachable by toggling layers. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
     viz.caption("Quick views")
-    # Stacked (one above the other) so the rail can be narrow.
-    viz.button(
+    # Side by side to keep the rail short.
+    _qv = viz.columns(2)
+    _qv[0].button(
         "👁️ Scanpath",
         key="viz_view_scanpath",
         width="stretch",
@@ -902,7 +928,7 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("scanpath",),
     )
-    viz.button(
+    _qv[1].button(
         "🔥 Heatmap",
         key="viz_view_heatmap",
         width="stretch",
@@ -988,13 +1014,23 @@ def sidebar_controls(
                     6,
                     72,
                     key="global_order_font_size",
-                    help="Fixation-index label size.",
+                    help="Fixation-index label size (figure pixels; the plot is "
+                    "then scaled to fit the column, so on-screen it is a touch "
+                    "smaller). Default 10.",
                 )
-            st.checkbox(
-                "Mark out-of-text fixations",
+            out_of_text = st.checkbox(
+                "❌ Mark out-of-text fixations",
                 key="global_highlight_out_of_text",
-                help="Draw a red ✕ on fixations that fall outside every word box.",
+                help="Flag fixations that fall outside every word box.",
             )
+            if out_of_text:
+                st.selectbox(
+                    "Out-of-text marker",
+                    options=list(_OUT_OF_TEXT_MARKERS),
+                    format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
+                    key="global_out_of_text_symbol",
+                    help="Symbol drawn on each out-of-text fixation.",
+                )
 
     # --- Saccades ---------------------------------------------------------
     show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
@@ -1057,6 +1093,15 @@ def sidebar_controls(
                 help="Highlight a per-word span (e.g. the answer span) on the text.",
             )
             if span_on:
+                # Which column defines the span first, then how to mark it.
+                if highlight_options:
+                    st.selectbox(
+                        "Highlight words by",
+                        options=highlight_options,
+                        key="global_highlight_column",
+                        help="Which per-word column to highlight on the text (words "
+                        "where it is true). Defaults to the OneStop answer span.",
+                    )
                 critical_span_style = st.radio(
                     "Style",
                     options=["Mark text", "Mark border"],
@@ -1069,30 +1114,31 @@ def sidebar_controls(
             else:
                 critical_span_style = "None"
             st.session_state["global_critical_span_style"] = critical_span_style
-            if critical_span_style != "None":
-                if critical_span_style == "Mark text":
-                    st.color_picker(
-                        "Highlighted text color",
-                        key="global_highlight_text_color",
-                        help="Colour of the highlighted reading text (used with "
-                        "'Mark text').",
-                    )
-                if highlight_options:
-                    st.selectbox(
-                        "Highlight words by",
-                        options=highlight_options,
-                        key="global_highlight_column",
-                        help="Which per-word column to highlight on the text (words "
-                        "where it is true). Defaults to the OneStop answer span.",
-                    )
+            if critical_span_style == "Mark text":
+                st.color_picker(
+                    "Highlighted text color",
+                    key="global_highlight_text_color",
+                    help="Colour of the highlighted reading text (used with "
+                    "'Mark text').",
+                )
+            elif critical_span_style == "Mark border":
+                st.color_picker(
+                    "Border color",
+                    key="global_span_border_color",
+                    help="Colour of the span outline (used with 'Mark border').",
+                )
 
     # --- Heatmap ----------------------------------------------------------
     show_heatmap = viz.toggle("**Heatmap**", key="global_show_heatmap")
     if show_heatmap:
         with viz.popover("⚙️ Heatmap style", width="stretch"):
-            st.segmented_control(
+            # A radio (not segmented_control) so the active style is always shown
+            # selected from the seeded default — segmented_control could render
+            # with nothing selected on first open.
+            st.radio(
                 "Heatmap style",
                 options=["Word boxes", "Interpolated"],
+                horizontal=True,
                 key="global_heatmap_style",
                 help=(
                     "Word boxes: tint each word box by fixation count / duration. "
@@ -1139,6 +1185,10 @@ def sidebar_controls(
                     step=1.0,
                     format="%d",
                     key="global_heatmap_color_range",
+                    help="Min/max heatmap value mapped to the two ends of the "
+                    "colorscale (the metric above — fixation duration or count; "
+                    "for Interpolated, the smoothed density of those values). "
+                    "Lower the max for more contrast; raise it to compress.",
                 )
 
     # --- Bounding boxes / Raw gaze (no extra styling) ---------------------
@@ -1153,7 +1203,30 @@ def sidebar_controls(
 
     # --- Axes & color bars (global plot settings, rarely changed) ---------
     axes = viz.expander("Axes & color bars", expanded=False)
-    axes.checkbox("Show color bars", key="global_show_colorbars")
+    show_colorbars = axes.checkbox("Show color bars", key="global_show_colorbars")
+    if show_colorbars:
+        axes.radio(
+            "Color bar orientation",
+            options=["Vertical", "Horizontal"],
+            horizontal=True,
+            key="global_colorbar_orientation",
+            help="Vertical bar on the right, or a horizontal bar below the plot.",
+        )
+        axes.slider(
+            "Tick label angle",
+            min_value=-90,
+            max_value=90,
+            step=15,
+            key="global_colorbar_tickangle",
+            help="Rotate the color-bar tick labels (degrees).",
+        )
+        axes.slider(
+            "Tick label size",
+            min_value=6,
+            max_value=20,
+            key="global_colorbar_tickfont_size",
+            help="Color-bar tick-label font size (px).",
+        )
     axes.selectbox("X axis field", options=numeric_fields, key="global_x_field")
     axes.selectbox("Y axis field", options=numeric_fields, key="global_y_field")
 

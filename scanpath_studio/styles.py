@@ -206,6 +206,13 @@ def get_app_css() -> str:
         gap: 0.35rem;
         margin: 0.1rem 0 0.5rem;
     }
+    /* Clamp the inline chip strip to a single row (extra rows live behind the
+       "Show more" popover) so the chips never push the plot down. */
+    .sps-trial-chips.sps-chips-clamp {
+        max-height: 1.9rem;
+        overflow: hidden;
+        margin-bottom: 0.15rem;
+    }
     .sps-chip {
         display: inline-flex;
         align-items: center;

@@ -462,6 +462,11 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         color_by_line=viz_settings.get("color_by_line", False),
         highlight_out_of_text=viz_settings.get("highlight_out_of_text", False),
+        out_of_text_symbol=viz_settings.get("out_of_text_symbol", "x"),
+        span_border_color=viz_settings.get("span_border_color", "#000000"),
+        colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
+        colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
+        colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
         background_color=viz_settings.get("background_color"),
     )
 
@@ -1466,6 +1471,9 @@ def _render_export_panel(
 
 
 _CHIP_NEUTRAL_BG = "#EEF2F7"
+# Heuristic: show the "Show more" popover when more than this many inline chips
+# (they'd likely wrap past one line) even with no summary stats selected.
+_CHIP_INLINE_MAX = 6
 # Friendly labels for the identity fields; everything else is humanized.
 _CHIP_FIELD_LABELS = {
     "participant_id": "Participant",
@@ -1537,17 +1545,18 @@ def _render_trial_condition_chips(
 
     ``fields`` is the configurable list of fields to surface (sidebar
     ``trial_chip_fields`` — participant id, text id, conditions, and the computed
-    summary stats folded in from the former Trial Info tab). Chips are meant for
-    *trial-level* fields (one value per trial); a data column that varies within
-    the trial is still shown (first value) but flagged with ⚠️ and named in a
-    caption, since its single chip value is misleading. Condition colours mirror
-    the per-trial metadata styling. Skips silently when nothing resolves."""
-    chips: list[tuple[str, str]] = []
+    summary stats folded in from the former Trial Info tab). The inline strip is
+    clamped to **one line** (CSS) and the computed **summary stats** live behind a
+    **Show more** popover by default, to keep the strip short and the plot tall.
+    A data column that varies within the trial is still shown (first value) but
+    flagged with ⚠️. Skips silently when nothing resolves."""
+    primary: list[tuple[str, str]] = []  # identity + conditions (inline)
+    summary: list[tuple[str, str]] = []  # computed stats (behind "Show more")
     varying: list[str] = []
     summary_lookup: Optional[dict] = None  # computed once, only if a summary chip
     for col in fields or []:
         # Virtual summary fields (reading time / counts) — always trial-level,
-        # computed once from `_summary_rows`.
+        # computed once from `_summary_rows`; routed to the "Show more" section.
         if col in SUMMARY_CHIP_FIELDS:
             if summary_lookup is None:
                 summary_lookup = {
@@ -1558,7 +1567,7 @@ def _render_trial_condition_chips(
             value = summary_lookup.get(label)
             if value in (None, ""):
                 continue  # e.g. "Fixations in word boxes" unavailable for this trial
-            chips.append((f"{label} = {value}", _CHIP_NEUTRAL_BG))
+            summary.append((f"{label} = {value}", _CHIP_NEUTRAL_BG))
             continue
         value, trial_level = _chip_value_and_uniqueness(
             col, trial_words, trial_fixations, participant
@@ -1572,15 +1581,36 @@ def _render_trial_condition_chips(
         prefix = "" if trial_level else "⚠️ "
         if not trial_level:
             varying.append(label)
-        chips.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
-    if not chips:
+        primary.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
+    if not primary and not summary:
         return
-    spans = "".join(
-        f'<span class="sps-chip" style="background:{bg};">{html.escape(label)}</span>'
-        for label, bg in chips
+
+    def _spans(items: list[tuple[str, str]]) -> str:
+        return "".join(
+            f'<span class="sps-chip" style="background:{bg};">{html.escape(lbl)}</span>'
+            for lbl, bg in items
+        )
+
+    # Inline strip, clamped to one line (extra rows hidden — see styles.py).
+    st.markdown(
+        f'<div class="sps-trial-chips sps-chips-clamp">{_spans(primary)}</div>',
+        unsafe_allow_html=True,
     )
-    st.markdown(f'<div class="sps-trial-chips">{spans}</div>', unsafe_allow_html=True)
-    if varying:
+    # "Show more" reveals the summary stats + the full list (so a clamped overflow
+    # row stays reachable). Shown when there are stats or many primary chips.
+    if summary or len(primary) > _CHIP_INLINE_MAX:
+        with st.popover("➕ Show more", width="content"):
+            st.markdown(
+                f'<div class="sps-trial-chips">{_spans(primary + summary)}</div>',
+                unsafe_allow_html=True,
+            )
+            if varying:
+                st.caption(
+                    "⚠️ Not trial-level (varies within this trial): "
+                    + ", ".join(varying)
+                    + " — showing the first value."
+                )
+    elif varying:
         st.caption(
             "⚠️ Not trial-level (varies within this trial): "
             + ", ".join(varying)
@@ -1644,7 +1674,6 @@ def render_single_trial_tab(
     modes = selection_modes(combos)
     multi_mode = len(modes) > 1
     with plot_col:
-        st.markdown("### 🎯 Trial")
         # One selection line: [Browse by] [pills] [trial selectbox(s)] [Filter] —
         # the pills (mode_host) and selectbox(s) (picker_host) are filled by
         # select_trial; the scrubbing slider lands on the line below. Filter is a
@@ -1828,26 +1857,29 @@ def render_single_trial_tab(
                 "animate for this selection."
             )
         elif animate:
-            displayed_fig, anim_playback_ms, save_slug, anim_file_stem = (
-                _build_and_render_animation(
-                    trial_words,
-                    trial_fixations,
-                    compare_meta["words"] if dual_anim else None,
-                    compare_fix if dual_anim else None,
-                    selected_participant,
-                    selected_trial,
-                    compare_participant,
-                    compare_trial,
-                    canvas_width=canvas_width,
-                    canvas_height=canvas_height,
-                    base_font_size=base_font_size,
-                    font_family=font_family,
-                    viz_settings=viz_settings,
-                    playback_speed=playback_speed,
-                    line_spacing=line_spacing,
-                    scale_text_to_boxes=scale_text_to_boxes,
+            # Building the per-fixation animation frames takes a moment — show a
+            # loading banner so the screen isn't blank meanwhile.
+            with st.spinner("Building animation…"):
+                displayed_fig, anim_playback_ms, save_slug, anim_file_stem = (
+                    _build_and_render_animation(
+                        trial_words,
+                        trial_fixations,
+                        compare_meta["words"] if dual_anim else None,
+                        compare_fix if dual_anim else None,
+                        selected_participant,
+                        selected_trial,
+                        compare_participant,
+                        compare_trial,
+                        canvas_width=canvas_width,
+                        canvas_height=canvas_height,
+                        base_font_size=base_font_size,
+                        font_family=font_family,
+                        viz_settings=viz_settings,
+                        playback_speed=playback_speed,
+                        line_spacing=line_spacing,
+                        scale_text_to_boxes=scale_text_to_boxes,
+                    )
                 )
-            )
             if comparing and compare_fix.empty:
                 st.warning(
                     "The selected second scanpath has no fixations after "

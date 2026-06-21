@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **More plot, less chrome.** Dropped the "🎯 Trial" heading; the chip strip is
+  clamped to one line with the summary stats (reading time, word/fixation counts)
+  behind a **Show more** popover; quick views sit side by side and the Scanpath
+  preset no longer turns on saccade arrows — all to keep the rail short and the
+  plot tall. The trial slider gained a **Trial X / N** counter on its left, and
+  the participant **Pick by** sub-step reads as nested under Browse-by (↳).
+- **More styling control.** Span **Mark border** takes a colour; the out-of-text
+  marker is choosable (emoji-labelled); colour bars can go horizontal with
+  rotatable, resizable tick labels; the fixation-index default size is now 10.
+
+### Fixed
+- **Heatmap colour now matches the picker.** The heatmap defaulted to a colorscale
+  that a popover-hosted selectbox couldn't display (it showed the first option and
+  could silently overwrite the value on the next click) — the default is now blue,
+  in sync with the picker and the figure. Heatmap **style** uses a radio so the
+  active style always shows selected.
+
 ## [0.22.0] - 2026-06-19
 
 ### Changed

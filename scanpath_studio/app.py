@@ -70,6 +70,7 @@ from scanpath_studio.controls import (
     NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    _OUT_OF_TEXT_MARKERS,
     color_field_options,
     column_mapping_ui,
     data_dictionary_help_text,
@@ -625,6 +626,30 @@ def _restore_plot_config(
         )
     if "hollow_fixations" in coloring:
         put("global_hollow_fixations", bool(coloring["hollow_fixations"]))
+    co = coloring.get("colorbar_orientation")
+    if co is not None:
+        put_valid(
+            co in ("Vertical", "Horizontal"),
+            "global_colorbar_orientation",
+            co,
+            "color bar orientation",
+        )
+    if "colorbar_tickangle" in coloring:
+        put_int(
+            coloring["colorbar_tickangle"],
+            "global_colorbar_tickangle",
+            -90,
+            90,
+            "color bar tick angle",
+        )
+    if "colorbar_tickfont_size" in coloring:
+        put_int(
+            coloring["colorbar_tickfont_size"],
+            "global_colorbar_tickfont_size",
+            6,
+            20,
+            "color bar tick size",
+        )
     # Range sliders only render when colour bars are on; store them anyway —
     # the widgets clamp to the current data via `controls._clamp_range`.
     for cfg_key, state_key, label in (
@@ -730,6 +755,49 @@ def _restore_plot_config(
         else:
             put("global_bg_choice", "Custom…")
             put("global_bg_custom", bg)
+    sym = highlighting.get("out_of_text_symbol")
+    if sym is not None:
+        put_valid(
+            sym in _OUT_OF_TEXT_MARKERS,
+            "global_out_of_text_symbol",
+            sym,
+            "out-of-text marker",
+        )
+    sbc = highlighting.get("span_border_color")
+    if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
+        put("global_span_border_color", sbc)
+
+    # Per-scanpath comparison styling (cmp{idx}_*). A short or hand-edited list
+    # degrades gracefully — a missing field just keeps the seeded default.
+    compare = config.get("compare")
+    if isinstance(compare, list):
+        for idx, entry in enumerate(compare[:2]):
+            if not isinstance(entry, dict):
+                continue
+            fc = entry.get("fix_color")
+            if isinstance(fc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", fc):
+                put(f"cmp{idx}_fix_color", fc)
+            sc = entry.get("saccade_color")
+            if isinstance(sc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sc):
+                put(f"cmp{idx}_saccade_color", sc)
+            if "saccade_style" in entry:
+                put_valid(
+                    entry["saccade_style"] in SACCADE_DASH_OPTIONS,
+                    f"cmp{idx}_saccade_style",
+                    entry["saccade_style"],
+                    f"scanpath {idx + 1} line style",
+                )
+            rng = entry.get("marker_size_range")
+            if isinstance(rng, (list, tuple)) and len(rng) == 2:
+                lo, hi = number(rng[0]), number(rng[1])
+                if lo is None or hi is None:
+                    skipped.append(f"scanpath {idx + 1} marker size")
+                else:
+                    lo = max(_MARKER_BOUNDS[0], min(int(lo), _MARKER_BOUNDS[1]))
+                    hi = max(_MARKER_BOUNDS[0], min(int(hi), _MARKER_BOUNDS[1]))
+                    put(f"cmp{idx}_marker_size_range", (min(lo, hi), max(lo, hi)))
+            if "hollow" in entry:
+                put(f"cmp{idx}_hollow", bool(entry["hollow"]))
 
     selection = section("selection")
     if selection:

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **More styling control.** Span **Mark border** takes a colour; the out-of-text
   marker is choosable (emoji-labelled); colour bars can go horizontal with
   rotatable, resizable tick labels; the fixation-index default size is now 10.
+- **Tighter control rail.** Trimmed the dead space around the rail's section
+  dividers so View modes, Visualization, and the layers sit close together.
 
 ### Fixed
 - **Heatmap colour now matches the picker.** The heatmap defaulted to a colorscale
@@ -28,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could silently overwrite the value on the next click) — the default is now blue,
   in sync with the picker and the figure. Heatmap **style** uses a radio so the
   active style always shows selected.
+- **Save & restore now captures every setting.** A saved config silently dropped
+  the colour-bar orientation/tick angle/tick size, the out-of-text marker, the span
+  border colour, and all per-scanpath comparison styling — they now round-trip.
+- **Chips truly stay one line.** The strip no longer wraps when space is tight: the
+  identity/condition chips clip at the edge while the `?` and **More** stay pinned.
 
 ## [0.22.0] - 2026-06-19
 

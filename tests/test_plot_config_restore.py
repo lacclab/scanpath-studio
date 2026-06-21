@@ -173,6 +173,9 @@ class TestPlotConfigRestore:
             color_by="line",  # synthetic opt
             saccade_style="Dashed",
             hollow_fixations=True,
+            colorbar_orientation="Horizontal",
+            colorbar_tickangle=45,
+            colorbar_tickfont_size=14,
         )
         config["text"] = {
             "scale_text_to_boxes": False,
@@ -185,7 +188,25 @@ class TestPlotConfigRestore:
             "highlight_out_of_text": True,
             "highlight_text_color": "#fedcba",
             "background_color": "#222222",
+            "out_of_text_symbol": "star",
+            "span_border_color": "#0a0b0c",
         }
+        config["compare"] = [
+            {
+                "fix_color": "#111111",
+                "saccade_color": "#222222",
+                "saccade_style": "Dotted",
+                "marker_size_range": [6, 18],
+                "hollow": True,
+            },
+            {
+                "fix_color": "#333333",
+                "saccade_color": "#444444",
+                "saccade_style": "Solid",
+                "marker_size_range": [9, 21],
+                "hollow": False,
+            },
+        ]
         config["annotations"] = [
             {
                 "participant_id": "p1",
@@ -208,6 +229,21 @@ class TestPlotConfigRestore:
         assert ss["global_highlight_text_color"] == "#fedcba"
         assert ss["global_bg_choice"] == "Custom…"
         assert ss["global_bg_custom"] == "#222222"
+        # BATCH A settings round-trip.
+        assert ss["global_colorbar_orientation"] == "Horizontal"
+        assert ss["global_colorbar_tickangle"] == 45
+        assert ss["global_colorbar_tickfont_size"] == 14
+        assert ss["global_out_of_text_symbol"] == "star"
+        assert ss["global_span_border_color"] == "#0a0b0c"
+        # Per-scanpath comparison styling round-trips (raw widget values).
+        assert ss["cmp0_fix_color"] == "#111111"
+        assert ss["cmp0_saccade_color"] == "#222222"
+        assert ss["cmp0_saccade_style"] == "Dotted"
+        assert ss["cmp0_marker_size_range"] == (6, 18)
+        assert ss["cmp0_hollow"] is True
+        assert ss["cmp1_fix_color"] == "#333333"
+        assert ss["cmp1_saccade_style"] == "Solid"
+        assert ss["cmp1_hollow"] is False
         store = ss["trial_annotations"]
         assert ("p1", "t2") in store
         assert store[("p1", "t2")]["star"] is True
@@ -347,7 +383,28 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         "background_color": "#222222",
         "text_color": "#010203",
         "saccade_color": "#6f42c1",
+        "out_of_text_symbol": "star",
+        "span_border_color": "#0a0b0c",
+        "colorbar_orientation": "Horizontal",
+        "colorbar_tickangle": 30,
+        "colorbar_tickfont_size": 14,
     }
+    compare_styles = [
+        {
+            "fix_color": "#111111",
+            "saccade_color": "#222222",
+            "saccade_style": "Dotted",
+            "marker_size_range": [6, 18],
+            "hollow": True,
+        },
+        {
+            "fix_color": "#333333",
+            "saccade_color": "#444444",
+            "saccade_style": "Solid",
+            "marker_size_range": [9, 21],
+            "hollow": False,
+        },
+    ]
     cfg = _build_studio_config(
         selected_participant="p1",
         selected_trial="t1",
@@ -377,6 +434,7 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         data_source="Use bundled demo",
         app_version="9.9.9",
         exported_at="2026-06-15T12:00:00",
+        compare_styles=compare_styles,
     )
     assert cfg["schema"] == 2
     assert cfg["app"] == {"name": "Scanpath Studio", "version": "9.9.9"}
@@ -391,6 +449,15 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["text"]["text_color"] == "#010203"
     assert cfg["highlighting"]["highlight_text_color"] == "#fedcba"
     assert cfg["highlighting"]["background_color"] == "#222222"
+    # BATCH A settings + per-scanpath comparison styling must be captured too.
+    assert cfg["coloring"]["colorbar_orientation"] == "Horizontal"
+    assert cfg["coloring"]["colorbar_tickangle"] == 30
+    assert cfg["coloring"]["colorbar_tickfont_size"] == 14
+    assert cfg["highlighting"]["out_of_text_symbol"] == "star"
+    assert cfg["highlighting"]["span_border_color"] == "#0a0b0c"
+    assert cfg["compare"][0]["fix_color"] == "#111111"
+    assert cfg["compare"][0]["hollow"] is True
+    assert cfg["compare"][1]["saccade_style"] == "Solid"
     assert len(cfg["annotations"]) == 1
     json.dumps(cfg)  # must be JSON-serializable
 

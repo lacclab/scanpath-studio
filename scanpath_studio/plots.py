@@ -196,6 +196,10 @@ _LEGEND_RESERVE_PX = 60
 _OVERLAY_TOP_PX = 64
 
 
+# A horizontal colorbar sits below the plot, so it reserves bottom (not right).
+_COLORBAR_BOTTOM_PX = 96
+
+
 def _decoration_margins(
     fitted_w: int,
     fitted_h: int,
@@ -203,22 +207,68 @@ def _decoration_margins(
     colorbar: bool,
     legend: bool,
     bottom: int = 0,
+    colorbar_horizontal: bool = False,
 ) -> dict:
-    """Grow a spatial figure so a right colorbar / top legend sit in reserved
-    margin instead of stealing space from the equal-aspect plot region.
+    """Grow a spatial figure so a right/bottom colorbar + top legend sit in
+    reserved margin instead of stealing space from the equal-aspect plot region.
 
     Returns ``{"width", "height", "margin"}`` for ``fig.update_layout``: the plot
     region stays ``fitted_w x fitted_h`` (so the true-to-scale word labels keep
     matching the boxes); ``bottom`` reserves additional space below the plot for
-    transport controls (the animation figure).
+    transport controls (the animation figure); ``colorbar_horizontal`` reserves
+    that space below for a horizontal colorbar rather than to the right.
     """
-    right = _COLORBAR_RESERVE_PX if colorbar else 0
+    right = _COLORBAR_RESERVE_PX if (colorbar and not colorbar_horizontal) else 0
+    cb_bottom = _COLORBAR_BOTTOM_PX if (colorbar and colorbar_horizontal) else 0
     top = _LEGEND_RESERVE_PX if legend else 0
     return {
         "width": fitted_w + right,
-        "height": fitted_h + top + bottom,
-        "margin": dict(l=0, r=right, t=top, b=bottom),
+        "height": fitted_h + top + bottom + cb_bottom,
+        "margin": dict(l=0, r=right, t=top, b=bottom + cb_bottom),
     }
+
+
+def _colorbar_dict(
+    title: str,
+    *,
+    orientation: str = "Vertical",
+    tickangle: int = 0,
+    tickfont_size: int = 12,
+) -> dict:
+    """A styled Plotly colorbar dict (vertical right / horizontal below), with
+    rotatable, sizable tick labels and a slim bar."""
+    horizontal = orientation == "Horizontal"
+    cb = dict(
+        title=dict(
+            text=title,
+            side="top" if horizontal else "right",
+            font=dict(size=max(10, int(tickfont_size) + 1)),
+        ),
+        thickness=14,
+        tickangle=int(tickangle),
+        tickfont=dict(size=int(tickfont_size)),
+        outlinewidth=0,
+    )
+    if horizontal:
+        cb.update(
+            orientation="h",
+            x=0.5,
+            xanchor="center",
+            y=-0.04,
+            yanchor="top",
+            lenmode="fraction",
+            len=0.6,
+        )
+    else:
+        cb.update(
+            x=1.02,
+            xanchor="left",
+            y=0.5,
+            yanchor="middle",
+            lenmode="fraction",
+            len=COLORBAR_LEN_FRACTION,
+        )
+    return cb
 
 
 # Text in Plotly is sized in screen pixels with no native "data unit" mode, so
@@ -453,10 +503,12 @@ _CRITICAL_TEXT_COLOR = (
 
 
 def build_critical_span_overlay(
-    words: pd.DataFrame, column: str = "is_in_aspan"
+    words: pd.DataFrame,
+    column: str = "is_in_aspan",
+    color: str = _CRITICAL_FRAME_COLOR,
 ) -> list:
     """Return outline shapes for the highlighted span (``column``, default the
-    OneStop answer span ``is_in_aspan``).
+    OneStop answer span ``is_in_aspan``), outlined in ``color``.
 
     Each visual line that contains highlighted words gets its own outline
     rectangle, going from the *first* to the *last* highlighted word on that
@@ -492,7 +544,7 @@ def build_critical_span_overlay(
                 y0=y0,
                 x1=x1,
                 y1=y1,
-                line=dict(color=_CRITICAL_FRAME_COLOR, width=_CRITICAL_FRAME_WIDTH),
+                line=dict(color=color, width=_CRITICAL_FRAME_WIDTH),
                 fillcolor="rgba(0,0,0,0)",
                 layer="above",
             )
@@ -595,6 +647,11 @@ def make_scanpath_figure(
     background_color: Optional[str] = None,
     color_by_line: bool = False,
     highlight_out_of_text: bool = False,
+    out_of_text_symbol: str = "x",
+    span_border_color: str = _CRITICAL_FRAME_COLOR,
+    colorbar_orientation: str = "Vertical",
+    colorbar_tickangle: int = 0,
+    colorbar_tickfont_size: int = 12,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
 ) -> go.Figure:
@@ -605,6 +662,12 @@ def make_scanpath_figure(
     legend_active = False
     heatmap_rendered = False
     is_numeric_color = False
+    # Shared colour-bar styling (orientation / tick angle / tick size).
+    cb_style = dict(
+        orientation=colorbar_orientation,
+        tickangle=colorbar_tickangle,
+        tickfont_size=colorbar_tickfont_size,
+    )
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
 
     raw_for_range = raw_gaze if (show_raw_gaze and raw_gaze is not None) else None
@@ -658,7 +721,9 @@ def make_scanpath_figure(
         # off (then only the span outline is drawn).
         shapes = build_word_boxes(words) if show_words else []
         if has_highlight and critical_span_style == "Mark border":
-            shapes = shapes + build_critical_span_overlay(words, highlight_column)
+            shapes = shapes + build_critical_span_overlay(
+                words, highlight_column, color=span_border_color
+            )
         if shapes:
             fig.update_layout(shapes=shapes)
         if show_word_labels:
@@ -733,6 +798,7 @@ def make_scanpath_figure(
                 weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
                 show_colorbars=show_colorbars,
+                colorbar_style=cb_style,
             )
         elif not words.empty:
             _add_word_level_heatmap(
@@ -745,6 +811,7 @@ def make_scanpath_figure(
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
                 show_colorbars=show_colorbars,
+                colorbar_style=cb_style,
             )
         else:
             _add_density_heatmap(
@@ -760,6 +827,7 @@ def make_scanpath_figure(
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
                 show_colorbars=show_colorbars,
+                colorbar_style=cb_style,
             )
     elif spatial_axes and show_heatmap and not words.empty:
         # Words-only dataset (no fixation report): fall back to the words
@@ -778,6 +846,7 @@ def make_scanpath_figure(
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
                 show_colorbars=show_colorbars,
+                colorbar_style=cb_style,
             )
 
     if spatial_axes and show_saccades and len(fixations) > 1:
@@ -850,13 +919,11 @@ def make_scanpath_figure(
             color=marker_color,
             colorscale=fixation_colorscale if is_numeric_color else None,
             showscale=show_colorbars and is_numeric_color,
-            colorbar=dict(
-                title=color_label.replace("_", " ").title(),
-                x=1.12,
-                lenmode="fraction",
-                len=COLORBAR_LEN_FRACTION,
-                y=0.5,
-                yanchor="middle",
+            colorbar=_colorbar_dict(
+                color_label.replace("_", " ").title(),
+                orientation=colorbar_orientation,
+                tickangle=colorbar_tickangle,
+                tickfont_size=colorbar_tickfont_size,
             )
             if show_colorbars and is_numeric_color
             else None,
@@ -944,7 +1011,7 @@ def make_scanpath_figure(
                         y=off[y_field],
                         mode="markers",
                         marker=dict(
-                            symbol="x",
+                            symbol=out_of_text_symbol or "x",
                             size=13,
                             color=OUT_OF_TEXT_COLOR,
                             line=dict(color="#ffffff", width=1),
@@ -1004,6 +1071,7 @@ def make_scanpath_figure(
             fitted_h,
             colorbar=show_colorbars and (is_numeric_color or heatmap_rendered),
             legend=legend_active,
+            colorbar_horizontal=colorbar_orientation == "Horizontal",
         )
         if spatial_axes
         else {"width": fitted_w, "height": fitted_h, "margin": dict(l=0, r=0, t=0, b=0)}
@@ -1038,6 +1106,7 @@ def _add_word_level_heatmap(
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
+    colorbar_style: Optional[dict] = None,
 ) -> None:
     # Pull the fixation coordinates (and optional weights) into numpy arrays once,
     # then test box membership per word against the arrays. Same O(words × fix)
@@ -1070,6 +1139,7 @@ def _add_word_level_heatmap(
         heatmap_range=heatmap_range,
         show_colorbars=show_colorbars,
         colorbar_title="Fixation count" if weights is None else "Duration (ms)",
+        colorbar_style=colorbar_style,
     )
 
 
@@ -1081,6 +1151,7 @@ def _add_word_measure_heatmap(
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
+    colorbar_style: Optional[dict] = None,
 ) -> None:
     """Word-box heatmap from a pre-aggregated per-word measure column.
 
@@ -1099,6 +1170,7 @@ def _add_word_measure_heatmap(
         colorbar_title="Fixation count"
         if measure == "n_fixations"
         else "Duration (ms)",
+        colorbar_style=colorbar_style,
     )
 
 
@@ -1111,6 +1183,7 @@ def _draw_word_value_heatmap(
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
     colorbar_title: str,
+    colorbar_style: Optional[dict] = None,
 ) -> None:
     from plotly.colors import sample_colorscale
 
@@ -1152,14 +1225,7 @@ def _draw_word_value_heatmap(
                     showscale=True,
                     cmin=z_min,
                     cmax=z_max,
-                    colorbar=dict(
-                        title=colorbar_title,
-                        x=1.02,
-                        lenmode="fraction",
-                        len=COLORBAR_LEN_FRACTION,
-                        y=0.5,
-                        yanchor="middle",
-                    ),
+                    colorbar=_colorbar_dict(colorbar_title, **(colorbar_style or {})),
                 ),
                 showlegend=False,
                 hoverinfo="skip",
@@ -1181,6 +1247,7 @@ def _add_density_heatmap(
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
+    colorbar_style: Optional[dict] = None,
 ) -> None:
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
@@ -1193,13 +1260,9 @@ def _add_density_heatmap(
             colorscale=heatmap_colorscale,
             opacity=0.35,
             showscale=show_colorbars,
-            colorbar=dict(
-                title="Fixation density" if weights is None else "Duration (ms)",
-                x=1.02,
-                lenmode="fraction",
-                len=COLORBAR_LEN_FRACTION,
-                y=0.5,
-                yanchor="middle",
+            colorbar=_colorbar_dict(
+                "Fixation density" if weights is None else "Duration (ms)",
+                **(colorbar_style or {}),
             ),
             histfunc="sum" if weights is not None else "count",
             z=weights,
@@ -1254,6 +1317,7 @@ def _add_interpolated_heatmap(
     weights: Optional[pd.Series],
     heatmap_colorscale: str,
     show_colorbars: bool,
+    colorbar_style: Optional[dict] = None,
 ) -> None:
     """Smooth, word-box-independent fixation heatmap (Gaussian-interpolated).
 
@@ -1313,15 +1377,9 @@ def _add_interpolated_heatmap(
             # the per-word counts/ms the `heatmap_range` slider is calibrated for,
             # so it autoscales from 0 rather than borrowing that range.
             zmin=0.0,
-            colorbar=dict(
-                title="Dwell-time density"
-                if weights is not None
-                else "Fixation density",
-                x=1.02,
-                lenmode="fraction",
-                len=COLORBAR_LEN_FRACTION,
-                y=0.5,
-                yanchor="middle",
+            colorbar=_colorbar_dict(
+                "Dwell-time density" if weights is not None else "Fixation density",
+                **(colorbar_style or {}),
             ),
             hoverinfo="skip",
             name="Fixation heatmap",

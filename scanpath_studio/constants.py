@@ -38,7 +38,12 @@ COLORSCALES = [
 ]
 
 DEFAULT_FIXATION_COLORSCALE = "Blues"
-DEFAULT_HEATMAP_COLORSCALE = "Oranges"
+# Index 0 of COLORSCALES on purpose: a keyed selectbox first-rendered inside a
+# popover (the Heatmap-style popover) displays its first option, not the seeded
+# session value, on first open — so a non-index-0 default would show the wrong
+# colorscale (and get committed on the next interaction). Keeping the default at
+# index 0 keeps the picker and the figure in sync. See controls.sidebar_controls.
+DEFAULT_HEATMAP_COLORSCALE = "Blues"
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 DEFAULT_PAGE_SIZE = 1000

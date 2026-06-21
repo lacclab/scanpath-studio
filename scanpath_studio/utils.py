@@ -198,16 +198,21 @@ def _select_trial_none_mode(
     if n_trials > 1:
         # select_slider over the ids → the thumb shows the current trial id (not a
         # bare position). Renders in the current container (the line below the
-        # selection row). Guarded by n_trials > 1 (a single option throws).
-        st.select_slider(
-            "Trial",
-            options=trial_options,
-            key=slider_key,
-            on_change=_on_trial_slider,
-            help=f"Scrub through the {n_trials} trials; the dropdown jumps to a "
-            "specific id.",
-            label_visibility="collapsed",
-        )
+        # selection row). A "Trial X / N" counter sits to its left; the slider is
+        # narrower to fit. Guarded by n_trials > 1 (a single option throws).
+        current_idx = trial_options.index(current_label)
+        count_col, slider_col = st.columns([1, 5], vertical_alignment="center")
+        count_col.caption(f"Trial **{current_idx + 1}** / {n_trials}")
+        with slider_col:
+            st.select_slider(
+                "Trial",
+                options=trial_options,
+                key=slider_key,
+                on_change=_on_trial_slider,
+                help=f"Scrub through the {n_trials} trials; the dropdown jumps to a "
+                "specific id.",
+                label_visibility="collapsed",
+            )
 
     if not selected_trial_label:
         return None, None, None
@@ -358,13 +363,17 @@ def _select_trial_participant_mode(
         pick_label, pick_pills, _, _ = st.columns(
             [1, 2.3, 3, 1.4], vertical_alignment="center"
         )
-        pick_label.markdown("**Pick by**")
+        # The leading ↳ + alignment under the Browse-by pills signal that this is a
+        # sub-selection *within* the chosen participant (a nested step of Browse-by).
+        pick_label.markdown("↳ **Pick by**")
         sub_mode = (
             pick_pills.pills(
                 "Pick by",
                 options=methods,
                 key=sub_mode_key,
                 label_visibility="collapsed",
+                help="A sub-step of Browse-by → Participant: within the chosen "
+                "participant, pick the trial by index / text / id.",
             )
             or methods[0]
         )

@@ -365,10 +365,19 @@ def animate_scanpath(
     )
 
 
-def save_figure(fig: go.Figure, path: Union[str, Path], *, scale: int = 2) -> Path:
+def save_figure(
+    fig: go.Figure,
+    path: Union[str, Path],
+    *,
+    scale: int = 2,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+) -> Path:
     """Save a figure by extension: ``.html`` (interactive, browser-free) or
     ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs a Chrome/Chromium;
-    run ``plotly_get_chrome -y`` once if missing). Returns the written path."""
+    run ``plotly_get_chrome -y`` once if missing). ``width`` / ``height`` set the
+    raster output size in px (overriding the figure's intrinsic layout size);
+    both ignored for ``.html``. Returns the written path."""
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix == ".html":
@@ -376,7 +385,7 @@ def save_figure(fig: go.Figure, path: Union[str, Path], *, scale: int = 2) -> Pa
         return path
     if suffix in (".png", ".svg", ".pdf"):
         try:
-            fig.write_image(str(path), scale=scale)
+            fig.write_image(str(path), scale=scale, width=width, height=height)
         except OSError:
             raise  # filesystem problem — the original error says it best
         except Exception as exc:  # Kaleido raises various types

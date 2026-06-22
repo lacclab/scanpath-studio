@@ -149,10 +149,49 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Heatmap weighting (default: duration_ms).",
     )
     viz.add_argument(
+        "--heatmap-colorscale",
+        metavar="NAME",
+        help="Heatmap colorscale, e.g. Greens (default: the app's default).",
+    )
+    viz.add_argument(
+        "--fixation-colorscale",
+        metavar="NAME",
+        help="Fixation-marker colorscale, e.g. Blues (default: the app's default).",
+    )
+    viz.add_argument(
+        "--marker-size-range",
+        nargs=2,
+        type=int,
+        metavar=("MIN", "MAX"),
+        help="Min/max fixation marker size in px, e.g. 4 12 (default: 8 24). "
+        "Smaller ranges suit small thumbnails.",
+    )
+    viz.add_argument(
         "--canvas",
         metavar="WxH",
         help="Monitor size in px, e.g. 2560x1440 (default: estimated from data; "
         "the bundled sample uses 2560x1440 automatically).",
+    )
+    viz.add_argument(
+        "--width",
+        type=int,
+        metavar="PX",
+        help="Raster output width in px (PNG/SVG/PDF; default: figure's "
+        "intrinsic size). Use with --height for fixed-size thumbnails.",
+    )
+    viz.add_argument(
+        "--height",
+        type=int,
+        metavar="PX",
+        help="Raster output height in px (PNG/SVG/PDF; default: figure's "
+        "intrinsic size).",
+    )
+    viz.add_argument(
+        "--scale",
+        type=float,
+        default=2.0,
+        metavar="X",
+        help="Raster pixel-density multiplier (PNG/SVG/PDF; default: 2.0).",
     )
     viz.add_argument(
         "--font-size",
@@ -265,6 +304,12 @@ def render(argv: List[str]) -> None:
         overrides["color_by"] = args.color_by
     if args.heatmap_metric:
         overrides["heatmap_metric"] = args.heatmap_metric
+    if args.heatmap_colorscale:
+        overrides["heatmap_colorscale"] = args.heatmap_colorscale
+    if args.fixation_colorscale:
+        overrides["fixation_colorscale"] = args.fixation_colorscale
+    if args.marker_size_range:
+        overrides["marker_size_range"] = tuple(args.marker_size_range)
 
     common = dict(
         canvas_size=canvas,
@@ -290,7 +335,17 @@ def render(argv: List[str]) -> None:
                 key
                 for key, default in static_defaults.items()
                 if overrides[key] != default
-            ] + [key for key in ("color_by", "heatmap_metric") if key in overrides]
+            ] + [
+                key
+                for key in (
+                    "color_by",
+                    "heatmap_metric",
+                    "heatmap_colorscale",
+                    "fixation_colorscale",
+                    "marker_size_range",
+                )
+                if key in overrides
+            ]
             if ignored:
                 print(
                     f"Warning: not supported with --animate, ignoring: "
@@ -310,7 +365,9 @@ def render(argv: List[str]) -> None:
             fig = api.plot_scanpath(
                 words, fixations, participant, trial, **overrides, **common
             )
-        out = api.save_figure(fig, args.output)
+        out = api.save_figure(
+            fig, args.output, scale=args.scale, width=args.width, height=args.height
+        )
     except (ValueError, RuntimeError, OSError) as exc:
         raise SystemExit(str(exc))
     print(f"Wrote {out}", file=sys.stderr)

@@ -54,6 +54,38 @@ def test_render_sample_html(tmp_path, capsys):
     assert "Rendering participant=" in err
 
 
+def test_render_thumbnail_flags(tmp_path):
+    """The thumbnail-control flags parse and flow into the figure build."""
+    import scanpath_studio as sps
+
+    pid, tid = sps.list_trials(*sps.load_sample_data()).iloc[0]
+    out_file = tmp_path / "thumb.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            pid,
+            "-t",
+            tid,
+            "--marker-size-range",
+            "4",
+            "12",
+            "--heatmap-colorscale",
+            "Greens",
+            "--fixation-colorscale",
+            "Blues",
+            "--width",
+            "900",
+            "--height",
+            "600",
+            "-o",
+            str(out_file),
+        ]
+    )
+    assert out_file.is_file()
+
+
 def test_render_explicit_trial_with_flags(tmp_path):
     import scanpath_studio as sps
 

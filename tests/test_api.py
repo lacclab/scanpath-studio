@@ -188,3 +188,12 @@ def test_save_figure_bad_extension(sample, tmp_path):
     fig = go.Figure()
     with pytest.raises(ValueError, match="Unsupported extension"):
         sps.save_figure(fig, tmp_path / "fig.docx")
+
+
+def test_save_figure_forwards_size(tmp_path, monkeypatch):
+    """width/height/scale reach Kaleido for raster output (no Chrome needed)."""
+    captured = {}
+    fig = go.Figure()
+    monkeypatch.setattr(fig, "write_image", lambda path, **kw: captured.update(kw))
+    sps.save_figure(fig, tmp_path / "fig.png", scale=1, width=900, height=600)
+    assert captured == {"scale": 1, "width": 900, "height": 600}

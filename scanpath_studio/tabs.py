@@ -437,6 +437,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
         show_heatmap=viz_settings["show_heatmap"],
         heatmap_style=viz_settings.get("heatmap_style", "Word boxes"),
+        fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_raw_gaze=effective_show_raw_gaze,
         color_by=viz_settings["color_by"],
         heatmap_metric=(
@@ -1105,6 +1106,7 @@ def _build_studio_config(
             "heatmap": figure_settings["show_heatmap"],
             "raw_gaze": figure_settings["show_raw_gaze"],
             "stimulus_image": viz_settings.get("show_stimulus_image", False),
+            "full_monitor": figure_settings.get("fit_to_monitor", True),
         },
         "coloring": {
             "color_by": figure_settings["color_by"],
@@ -1463,6 +1465,7 @@ def _build_and_render_animation(
         ),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         background_color=viz_settings.get("background_color"),
+        fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         fixations_b=fixations_b if dual else None,
         words_b=words_b if dual else None,
         label_a=(
@@ -2266,6 +2269,7 @@ def _render_comparison_figure(
         background_color=viz_settings.get("background_color"),
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
+        fit_to_monitor=viz_settings.get("fit_to_monitor", True),
     )
     _render_true_scale_chart(fig_compare, key="compare")
     return fig_compare

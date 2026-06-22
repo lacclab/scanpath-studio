@@ -183,6 +183,49 @@ class TestBuildWordBoxes:
 class TestMakeScanpathFigure:
     """Tests for make_scanpath_figure function."""
 
+    def test_fit_to_monitor_spans_full_canvas(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        """fit_to_monitor frames the whole virtual monitor; default crops to data."""
+        common = dict(
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+            x_field="x",
+            y_field="y",
+            show_words=True,
+            show_word_labels=True,
+            show_fixations=True,
+            show_order=True,
+            show_saccades=True,
+            show_heatmap=False,
+            color_by="duration_ms",
+            heatmap_metric=None,
+            marker_size_range=(8, 24),
+            order_font_size=10,
+            order_font_color="#000000",
+            show_colorbars=False,
+            fixation_color_range=None,
+            heatmap_range=None,
+        )
+        cropped = make_scanpath_figure(
+            normalized_words_df, normalized_fixations_df, **common
+        )
+        full = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            fit_to_monitor=True,
+            **common,
+        )
+        # Full-monitor view spans exactly the canvas (y inverted), so the scanpath
+        # sits at its true on-screen position with the rest of the monitor around it.
+        assert list(full.layout.xaxis.range) == [0, 800]
+        assert list(full.layout.yaxis.range) == [600, 0]
+        # The default view crops tightly to the data extent — strictly inside.
+        assert cropped.layout.xaxis.range[0] > 0
+        assert cropped.layout.xaxis.range[1] < 800
+
     def test_make_scanpath_figure_basic(
         self, normalized_words_df, normalized_fixations_df
     ):

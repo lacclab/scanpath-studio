@@ -94,6 +94,7 @@ def _compute_axis_ranges(
     canvas_height: int,
     *frames_with_xy: Tuple[Optional[pd.DataFrame], str, str],
     word_frames: Iterable[pd.DataFrame] = (),
+    fit_to_monitor: bool = False,
 ) -> Tuple[
     list, list, Optional[float], Optional[float], Optional[float], Optional[float]
 ]:
@@ -102,6 +103,13 @@ def _compute_axis_ranges(
     word_frames contribute box-extent bounds: x, x+width and y, y+height.
     Falls back to (0..canvas_width, canvas_height..0) when there's no data.
     Returns: x_range, y_range (y inverted), and the unpadded mins/maxs.
+
+    With ``fit_to_monitor`` the range always spans the full virtual monitor
+    (0..canvas_width, canvas_height..0) regardless of where the data sits, so the
+    whole presentation screen is shown and the scanpath appears at its true
+    on-monitor position rather than the view cropping to the data extent. The
+    returned data mins/maxs still describe the actual data (they size the
+    interpolated heatmap grid), so only the visible window changes.
     """
     x_candidates: list = []
     y_candidates: list = []
@@ -129,6 +137,11 @@ def _compute_axis_ranges(
     x_max = float(np.nanmax(x_candidates))
     y_min = float(np.nanmin(y_candidates))
     y_max = float(np.nanmax(y_candidates))
+
+    if fit_to_monitor:
+        # Show the whole monitor; the scanpath keeps its true on-screen position.
+        # Real data mins/maxs are still returned (heatmap-grid extent).
+        return [0, canvas_width], [canvas_height, 0], x_min, x_max, y_min, y_max
 
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
@@ -703,6 +716,7 @@ def make_scanpath_figure(
     background_image: Optional[str] = None,
     background_image_size: Optional[Tuple[float, float]] = None,
     background_image_origin: Optional[Tuple[float, float]] = None,
+    fit_to_monitor: bool = False,
 ) -> go.Figure:
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
@@ -728,6 +742,7 @@ def make_scanpath_figure(
                 (fixations, x_field, y_field),
                 (raw_for_range, "x", "y"),
                 word_frames=[words] if not words.empty else [],
+                fit_to_monitor=fit_to_monitor,
             )
         )
     else:
@@ -1769,6 +1784,7 @@ def make_scanpath_animation(
     background_image: Optional[str] = None,
     background_image_size: Optional[Tuple[float, float]] = None,
     background_image_origin: Optional[Tuple[float, float]] = None,
+    fit_to_monitor: bool = False,
 ) -> go.Figure:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
@@ -1805,6 +1821,7 @@ def make_scanpath_animation(
         (fixations, "x", "y"),
         (fixations_b, "x", "y"),
         word_frames=word_frames,
+        fit_to_monitor=fit_to_monitor,
     )
 
     # Fix the display size first so word labels are sized in the data->screen
@@ -2410,6 +2427,7 @@ def _make_split_comparison_figure(
     background_color: Optional[str] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    fit_to_monitor: bool = False,
 ) -> go.Figure:
     """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked)."""
     from plotly.subplots import make_subplots
@@ -2487,6 +2505,7 @@ def _make_split_comparison_figure(
             canvas_height,
             (trial_fix, "x", "y"),
             word_frames=[trial_words] if not trial_words.empty else [],
+            fit_to_monitor=fit_to_monitor,
         )
 
         if show_words and not trial_words.empty:
@@ -2626,6 +2645,7 @@ def make_comparison_figure(
     background_color: Optional[str] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    fit_to_monitor: bool = False,
 ) -> go.Figure:
     if layout in {"side_by_side", "stacked"}:
         return _make_split_comparison_figure(
@@ -2652,6 +2672,7 @@ def make_comparison_figure(
             background_color=background_color,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
+            fit_to_monitor=fit_to_monitor,
         )
 
     fig = go.Figure()
@@ -2691,6 +2712,7 @@ def make_comparison_figure(
         word_frames=[
             spec["trial_words"] for spec in trial_specs if not spec["trial_words"].empty
         ],
+        fit_to_monitor=fit_to_monitor,
     )
 
     # Both trials are overlaid on one shared canvas, so one display scale sizes

@@ -79,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dividers so View modes, Visualization, and the layers sit close together.
 
 ### Fixed
+- **Switching public datasets re-proposes the column mapping.** The auto-detected
+  column mapping (`col_map_*`) persisted across a data-source change, so PoTeC's
+  Trial → `text_id` mapping stuck when switching to MultiplEYE (which also has a
+  `text_id` column, so the stale-column reset didn't catch it). MultiplEYE's
+  per-page `trial_id` was then ignored and every page collapsed into one
+  stimulus-level trial. Each corpus now re-detects its own mapping on a source
+  change; same-source reruns and restored configs keep theirs.
 - **Canvas now follows the selected corpus' monitor.** Selecting a public dataset
   (or switching between them) snaps the canvas to that corpus' registered monitor
   instead of leaving a previously-seeded size in place — so MultiplEYE's

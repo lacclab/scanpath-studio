@@ -517,6 +517,91 @@ class TestUnmappedRawDataView:
             at.session_state["global_canvas_height"],
         ) == monitor
 
+    def test_switching_public_datasets_re_proposes_mapping(self, monkeypatch):
+        """Switching PoTeC → MultiplEYE must re-propose each corpus' mapping.
+
+        Regression: the `col_map_*` widget keys persisted across the source
+        switch, so PoTeC's Trial → `text_id` stuck to MultiplEYE (which also has a
+        `text_id` column, so the stale-column reset didn't catch it). MultiplEYE's
+        per-page `trial_id` was then ignored and every page collapsed into one
+        stimulus-level trial."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        # PoTeC-shaped frames: trial == text_id (so its auto-mapping picks text_id).
+        potec_w = pd.DataFrame(
+            {
+                "aoi": [1, 2],
+                "start_x": [80.0, 115.0],
+                "start_y": [21.0, 21.0],
+                "end_x": [115.0, 189.0],
+                "end_y": [99.0, 99.0],
+                "word": ["Um", "null"],
+                "text_id": ["b0", "b0"],
+                "line": [1, 1],
+            }
+        )
+        potec_f = pd.DataFrame(
+            {
+                "reader_id": [0, 0],
+                "text_id": ["b0", "b0"],
+                "fixation_duration": [210, 190],
+                "fixation_index": [1, 2],
+                "word_index_in_text": [1, 2],
+                "x": [97.5, 152.0],
+                "y": [60.0, 60.0],
+            }
+        )
+        # MultiplEYE-shaped frames: trial is the per-page id; text_id is the stimulus.
+        mpe_w = pd.DataFrame(
+            {
+                "trial_id": ["X__page_01", "X__page_02"],
+                "text_id": ["X", "X"],
+                "word_idx": [0, 0],
+                "word": ["a", "b"],
+                "left": [100.0, 100.0],
+                "right": [140.0, 140.0],
+                "top": [50.0, 50.0],
+                "bottom": [80.0, 80.0],
+            }
+        )
+        mpe_f = pd.DataFrame(
+            {
+                "participant_id": ["001_ZH_CH_1_ET1"] * 2,
+                "trial_id": ["X__page_01", "X__page_02"],
+                "text_id": ["X", "X"],
+                "location_x": [110.0, 110.0],
+                "location_y": [60.0, 60.0],
+                "duration": [200.0, 180.0],
+                "onset": [0.0, 200.0],
+                "word_idx": [0, 0],
+            }
+        )
+        potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
+        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        monkeypatch.setitem(
+            app.PUBLIC_DATASET_REGISTRY[potec_key], "loader", lambda: (potec_w, potec_f)
+        )
+        monkeypatch.setitem(
+            app.PUBLIC_DATASET_REGISTRY[mpe_key], "loader", lambda: (mpe_w, mpe_f)
+        )
+
+        at = _make_apptest()
+        at.run(timeout=120)  # bundled demo
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.run(timeout=120)  # Public datasets → PoTeC (first entry) maps Trial→text_id
+        at.session_state["public_dataset_choice"] = mpe_key
+        at.run(timeout=120)  # switch to MultiplEYE
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        sbs = {s.label: s for s in at.selectbox}
+        opts = list(sbs["Unique trial id"].options) if "Unique trial id" in sbs else []
+        # Two per-page trials, not collapsed into one stimulus-level trial.
+        assert len(opts) == 2, f"expected 2 per-page trials, got {opts}"
+        assert all("· page" in o for o in opts), opts
+
 
 class TestGroupedUploadMapping:
     """Upload source: each table's mapping renders under its own upload box, and

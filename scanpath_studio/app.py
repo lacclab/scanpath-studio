@@ -3750,6 +3750,24 @@ def main() -> None:
         # fields left over from a prior upload so the sidebar falls back to the
         # built-in default conditions for these sources.
         st.session_state.pop("wizard_filter_fields", None)
+        # Re-propose the column mapping when the monitor-defining source changes.
+        # The `col_map_*` widget keys persist across reruns, so a previous corpus'
+        # mapping sticks to the next one — e.g. PoTeC maps Trial → `text_id`, and
+        # since MultiplEYE *also* has a `text_id` column the stale-column reset
+        # (which only fires when a mapped column vanishes) wouldn't catch it, so
+        # MultiplEYE's per-page `trial_id` was ignored and every page collapsed
+        # into one stimulus-level trial. Clearing on source change lets each
+        # corpus auto-detect its own mapping; same-source reruns (and restores)
+        # keep their keys. Mirrors the canvas re-seed in render_sidebar_canvas_controls.
+        source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+        if st.session_state.get("_colmap_seeded_for") != source_key:
+            for stale in [
+                k
+                for k in list(st.session_state)
+                if isinstance(k, str) and k.startswith("col_map_")
+            ]:
+                del st.session_state[stale]
+            st.session_state["_colmap_seeded_for"] = source_key
         raw_words_df, raw_fixations_df = load_words_and_fixations(
             data_choice, participant=deep_link_pid
         )

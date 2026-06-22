@@ -328,40 +328,6 @@ def get_app_css() -> str:
         justify-content: flex-start;
     }
 
-    /* === Sidebar navigation as menu buttons =================================
-       The primary nav is a keyed radio (`main_nav`) — restyle its options into
-       full-width menu buttons (the radio dot hidden, the active item a filled
-       brand pill) without changing the widget, so deep-links / AppTest still see
-       a radio. `:has(input:checked)` flags the active option. */
-    .st-key-tour_grp_nav div[role="radiogroup"] { gap: 0.35rem; }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label {
-        width: 100%;
-        margin: 0;
-        padding: 0.5rem 0.8rem;
-        border: 1px solid var(--sps-border);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: background 0.15s ease, border-color 0.15s ease;
-    }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label:hover {
-        background: var(--sps-accent-soft);
-        border-color: var(--sps-accent-border);
-    }
-    /* Hide the radio circle (first child of each option label). */
-    .st-key-tour_grp_nav div[role="radiogroup"] > label > div:first-child {
-        display: none;
-    }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label p { font-weight: 600; }
-    /* Active item → filled brand pill. */
-    .st-key-tour_grp_nav div[role="radiogroup"] > label:has(input:checked) {
-        background: var(--sps-accent-soft);
-        border-color: var(--sps-accent);
-    }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label:has(input:checked) p {
-        color: var(--sps-accent);
-        font-weight: 700;
-    }
-
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
        Streamlit renders captions as theme-text-color at opacity 0.6, which on
        the #f5f7fa panels measures 4.07:1 — below the 4.5:1 AA threshold. Lift

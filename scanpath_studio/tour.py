@@ -15,12 +15,12 @@ Mechanics worth knowing before editing:
 
 - Both styles run as *fragments*: Back/Next clicks rerun only the tour body,
   so navigation is instant instead of waiting for a full-app rerun (which
-  re-renders the heavy plot embeds, ~10 s). The spotlight's Exit/Done just
+  re-renders the heavy plot embeds, ~10 s). The spotlight's Done / ✕ just
   clear ``tour_mode`` — the fragment then renders nothing and the card +
   highlight CSS disappear with it, again with no full rerun. The dialog's
   Skip/Done close the modal client-side (``_close_dialog_clientside``).
 - The spotlight card streams to the browser *before* the heavy first-load
-  work, but its Exit/Done are ordinary Streamlit buttons — a click only
+  work, but its Done / ✕ are ordinary Streamlit buttons — a click only
   schedules a rerun, which can't run until that ~10 s load finishes, so the
   card + dimming backdrop would linger the whole time. A same-origin listener
   (``_dismiss_listener_script``) hides them instantly on click; the button's
@@ -153,45 +153,80 @@ def _tour_dialog() -> None:
 # Spotlight steps: (selector, title, body). ``selector`` is what gets the
 # pulsing outline + scroll-into-view; None for the selector-less welcome step.
 # Bodies are markdown, kept short — the card is ~400 px wide.
+# Walks the whole Scanpath screen in reading order (UX-2): the plot → the
+# selection/controls above it → the chips → the rail (view modes + controls) →
+# the bottom panel → the left sidebar. Main-area steps pass ``in_sidebar: False``;
+# the sidebar steps are kept LAST and contiguous so the sidebar opens once (the
+# welcome step starts it collapsed). Keep selectors in sync with the keyed
+# wrappers in tabs.py / app.py.
 _SPOTLIGHT_STEPS = [
     {
         "selector": None,
         "title": "👀 Welcome to Scanpath Studio",
         "body": "Visualize **eye movements in reading** — scanpaths drawn "
         "true-to-scale over the text. A demo dataset is loaded; **Next** for a "
-        "30-second tour.",
+        "quick tour.",
     },
     {
-        "selector": ".st-key-tour_grp_data_source",
-        "title": "📂 Data",
-        "body": "Use the demo, or **upload your own** fixations / word tables "
-        "(CSV / TSV / Parquet). Columns auto-detect — remap any field in the wizard.",
+        "selector": ".st-key-tour_grp_plot",
+        "in_sidebar": False,
+        "title": "🗺️ The scanpath",
+        "body": "Each dot is a **fixation**, sized by duration; the lines are "
+        "**saccades** between them. The reading text sits true-to-scale "
+        "underneath.",
+    },
+    {
+        "selector": ".st-key-tour_grp_trial_select",
+        "in_sidebar": False,
+        "title": "🎯 Pick a trial",
+        "body": "Step through trials with the selector and ◀ ▶. **Filter by** Text "
+        "or Participant to narrow the pool; **More** adds condition & annotation "
+        "filters.",
+    },
+    {
+        "selector": ".st-key-tour_grp_chips",
+        "in_sidebar": False,
+        "title": "🏷️ Trial at a glance",
+        "body": "These chips show the trial's **identity, conditions, and summary "
+        "stats**. Choose which fields appear — and drag to reorder — with "
+        "**✏️ Edit chips** at the right of the strip.",
+    },
+    {
+        "selector": ".st-key-scanpath_rail",
+        "in_sidebar": False,
+        "title": "🎬 Animate & compare",
+        "body": "Top of the rail beside the plot: **Animate** replays the trial "
+        "fixation by fixation, and **Compare** overlays a second scanpath. Each "
+        "has a ⚙ popover for its settings.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
-        # Lives in the Scanpath screen's right-hand rail now (not the sidebar), so
-        # the scroll logic must treat it as a main-area target.
         "in_sidebar": False,
-        "title": "🎨 Visualization controls",
-        "body": "Right beside the plot: toggle and style every layer — fixations, "
-        "saccades, heatmap, word boxes, text — plus **Animate** and **Compare**. "
-        "Set your monitor in **Experimental Setup** (sidebar) to keep it "
-        "true-to-scale.",
+        "title": "🎨 Visualization",
+        "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
+        "boxes, text. **Quick views** jump between Scanpath and Heatmap presets.",
     },
     {
-        "selector": ".st-key-header_buttons",
-        # The view toggle lives in the header now (not the sidebar).
+        "selector": ".st-key-tour_grp_subtabs",
         "in_sidebar": False,
-        "title": "🧭 Views",
-        "body": "This button switches to **Corpus Analysis** (and back). "
-        "**Data Inspection**, **Export**, and **Share** are subtabs right below "
-        "the plot — pick, filter, compare & animate trials beside it.",
+        "title": "📑 Per-trial panels",
+        "body": "Below the plot: **📝 Annotations**, **Stimulus & questions**, "
+        "**Export** (this trial or bulk), **🔎 Data Inspection**, and **🔗 Share** "
+        "a deep link.",
+    },
+    {
+        "selector": ".st-key-tour_grp_data_source",
+        "title": "📂 Data & setup",
+        "body": "The sidebar holds your **data source** (demo or your own upload) "
+        "and **Experimental Setup** (monitor size, for true-to-scale rendering). "
+        "Columns auto-detect — remap any field in the wizard.",
     },
     {
         "selector": ".st-key-tour_grp_save_restore",
-        "title": "💾 Save & restore",
-        "body": "Star, tag, and note trials, then filter to them. This saves the "
-        "whole setup + annotations to JSON. Replay via **🎓 Show tutorial**. 👀",
+        "title": "💾 Save, share & more",
+        "body": "**💾 Save & restore** saves the whole setup + annotations to JSON. "
+        "Switch to **📊 Corpus Analysis** from the top-right button. Replay this "
+        "tour from **🎓 Show tutorial**. 👀",
     },
 ]
 
@@ -270,12 +305,12 @@ def _exit_spotlight() -> None:
 
 def _dismiss_listener_script(
     selector: str | None,
-    exit_keys: tuple[str, ...] = ("tour_sp_exit", "tour_sp_done", "tour_sp_close"),
+    exit_keys: tuple[str, ...] = ("tour_sp_done", "tour_sp_close"),
 ) -> str:
-    """JS that lets Exit/Done close the tour *instantly*, even mid-load.
+    """JS that lets Done / ✕ close the tour *instantly*, even mid-load.
 
     The card streams to the browser early (before the ~10 s data/plot work),
-    but its Exit/Done are ordinary Streamlit buttons: a click only schedules a
+    but its Done / ✕ are ordinary Streamlit buttons: a click only schedules a
     rerun, which Streamlit can't process until the in-flight first run
     finishes — so the card and its dimming backdrop linger for the whole load.
 
@@ -335,8 +370,8 @@ def render_spotlight_tour() -> None:
     of seconds after the page opens. Replay clicks still activate it within
     the same run because the button arms the tour in its ``on_click``
     callback (``_arm_tour``), which runs before the rerun starts. Runs as a
-    fragment: Back/Next/Exit rerun only this function, so the highlight moves
-    instantly and Exit makes the card + CSS vanish without a full-app rerun
+    fragment: Back/Next/close rerun only this function, so the highlight moves
+    instantly and ✕ makes the card + CSS vanish without a full-app rerun
     (the fragment then renders nothing, which clears its previous elements).
     """
     if st.session_state.get("tour_mode") != "spotlight":
@@ -393,7 +428,9 @@ def render_spotlight_tour() -> None:
         st.markdown(f"## {step['title']}")
         st.markdown(step["body"])
         st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
-        back_col, exit_col, next_col = st.columns(3)
+        # No separate "Exit tour" button (UX-2a) — the ✕ in the corner closes the
+        # tour, so the footer is just Back / Next (or Done on the last step).
+        back_col, next_col = st.columns(2)
         back_col.button(
             "← Back",
             key="tour_sp_back",
@@ -402,12 +439,6 @@ def render_spotlight_tour() -> None:
             on_click=_step_back,
         )
         if step_idx < n - 1:
-            exit_col.button(
-                "Exit tour",
-                key="tour_sp_exit",
-                width="stretch",
-                on_click=_exit_spotlight,
-            )
             next_col.button(
                 "Next →",
                 key="tour_sp_next",
@@ -424,7 +455,7 @@ def render_spotlight_tour() -> None:
                 on_click=_exit_spotlight,
             )
 
-        # Make Exit/Done hide the tour instantly, even while the app's first
+        # Make Done / ✕ hide the tour instantly, even while the app's first
         # run is still loading (the Streamlit click alone would only take
         # effect once that ~10 s run finishes). See _dismiss_listener_script.
         components.html(_dismiss_listener_script(step["selector"]), height=0)

@@ -18,12 +18,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from .annotations import restore_records
-from .controls import (
-    _OUT_OF_TEXT_MARKERS,
-    color_field_options,
-    numeric_field_options,
-)
 from .constants import (
+    _VIEW_CORPUS,
+    _VIEW_SCANPATH,
     BACKGROUND_PRESETS,
     COLORSCALES,
     DEMO_CHOICE,
@@ -31,8 +28,12 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SYNTHETIC_CHOICE,
-    _VIEW_CORPUS,
-    _VIEW_SCANPATH,
+)
+from .controls import (
+    _FIXCLASS_MODES,
+    _OUT_OF_TEXT_MARKERS,
+    color_field_options,
+    numeric_field_options,
 )
 
 # URL query-param → session_state key map for the deep-link API. Used by
@@ -79,7 +80,6 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     "show_colorbars": "global_show_colorbars",
-    "highlight_out_of_text": "global_highlight_out_of_text",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
 }
@@ -616,8 +616,30 @@ def _restore_plot_config(
         # The sidebar's `_drop_stale` clears this if it isn't a column in the
         # restored-onto data, so it needs no validation against words here.
         put("global_highlight_column", highlighting["highlight_column"])
-    if "highlight_out_of_text" in highlighting:
-        put("global_highlight_out_of_text", bool(highlighting["highlight_out_of_text"]))
+    # Fixation classification (PRE-2): short/long/out-of-bounds highlight or discard.
+    flags = highlighting.get("fixation_flags")
+    if isinstance(flags, dict):
+        for cat in ("short", "long", "oob"):
+            spec = flags.get(cat)
+            if not isinstance(spec, dict):
+                continue
+            mode = spec.get("mode")
+            if mode in _FIXCLASS_MODES:
+                put(f"global_fixclass_{cat}_mode", mode)
+            if cat != "oob" and spec.get("threshold_ms") is not None:
+                try:
+                    put(
+                        f"global_fixclass_{cat}_threshold_ms",
+                        int(float(spec["threshold_ms"])),
+                    )
+                except (TypeError, ValueError):
+                    pass
+            sym = spec.get("symbol")
+            if sym in _OUT_OF_TEXT_MARKERS:
+                put(f"global_fixclass_{cat}_symbol", sym)
+            col = spec.get("color")
+            if isinstance(col, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", col):
+                put(f"global_fixclass_{cat}_color", col)
     htc = highlighting.get("highlight_text_color")
     if isinstance(htc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", htc):
         put("global_highlight_text_color", htc)
@@ -633,14 +655,6 @@ def _restore_plot_config(
         else:
             put("global_bg_choice", "Custom…")
             put("global_bg_custom", bg)
-    sym = highlighting.get("out_of_text_symbol")
-    if sym is not None:
-        put_valid(
-            sym in _OUT_OF_TEXT_MARKERS,
-            "global_out_of_text_symbol",
-            sym,
-            "out-of-text marker",
-        )
     sbc = highlighting.get("span_border_color")
     if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
         put("global_span_border_color", sbc)

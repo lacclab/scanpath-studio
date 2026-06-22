@@ -41,37 +41,31 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Planned`
+**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Done`
 
-The chip-field picker currently lives in the sidebar (`📂 Data → 🏷️ Trial chips`,
-[`render_trial_chip_picker`](scanpath_studio/app.py:1509) → `trial_chip_fields`),
-while the chips themselves render above the plot
-([`controls.py` chip strip](scanpath_studio/controls.py:1451),
-`tabs._render_trial_condition_chips`). Move the picker next to that chip strip and
-rename the control to **"Edit"** (or "Edit chips") so it reads as inline editing.
+Done: the sidebar `🏷️ Trial chips` picker is gone; an inline **✏️ Edit chips**
+`st.popover` now sits at the right end of the chip row
+(`tabs.render_single_trial_tab`), hosting `controls.render_trial_chip_picker`.
 
-- **UX-1a · Reorder chips in place** *(open question — investigate)*.
-  `st.multiselect` can't drag-reorder: order follows selection order, so changing
-  it today means clearing and re-picking. Options: a sortable component
-  (e.g. `streamlit-sortables`), an explicit up/down ordering control, or accept
-  selection-order. Decide before building UX-1.
+- **UX-1a · Reorder chips in place** — `Status: Done`. Built with
+  `streamlit-sortables` (`sort_items`, new dependency): a two-bucket drag UI
+  (*Shown · drag to reorder* / *Available*) handles membership **and** order in one
+  widget, written back to `trial_chip_fields`.
 
-**UX-2 · Welcome tour covers all major components, in reading order** — `Status: Planned`
+**UX-2 · Welcome tour covers all major components, in reading order** — `Status: Done`
 
-Re-script the tour ([`tour.py`](scanpath_studio/tour.py)) to walk the whole app:
-main scanpath → the selection/controls directly above it → the chips → sidebar
-controls (view modes, quick views, toggles) → the bottom panel → the left menu.
+Done: `tour._SPOTLIGHT_STEPS` is a 9-step reading-order walk (plot → trial
+selection → chips → rail view-modes/controls → bottom subtabs → sidebar data +
+save/restore), targeting new keyed wrappers (`tour_grp_plot` / `_trial_select` /
+`_chips` / `_subtabs`) added in `tabs.py`.
 
-- **UX-2a · Drop the separate Exit button.** The spotlight card already has a ✕
-  close (`tour_sp_close`, [`tour.py:224`](scanpath_studio/tour.py:224)) next to
-  Exit/Done — collapse to a single close affordance (keep ✕, drop Exit) so it's
-  not redundant.
+- **UX-2a · Drop the separate Exit button** — `Status: Done`. The card footer is
+  now Back / Next (or Done); the ✕ (`tour_sp_close`) is the only close affordance.
 
-**UX-3 · Green/red check & cross in Stimulus & questions** — `Status: Planned`
+**UX-3 · Green/red check & cross in Stimulus & questions** — `Status: Done`
 
-In the Stimulus & questions subtab, color the correctness ✓ green and ✗ red
-(currently monochrome) so correct/incorrect reads at a glance. See VIZ for the
-related "increase font size" pass.
+Done: the correctness line in `tabs._render_paragraph_panel` uses Streamlit
+colour markdown — `:green[✓ correct]` / `:red[✗ incorrect]` (and `✓ yes`/`✗ no`).
 
 ---
 
@@ -83,33 +77,32 @@ styling live in [`controls.py`](scanpath_studio/controls.py:622)
 `_render_compare_saccade_styles`, `_collect_compare_styles`); the overlay figure
 is built in [`plots.py`](scanpath_studio/plots.py).
 
-**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Planned`
+**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Done`
 
-Lift "Compare with trial" out of the rail to above the chips, mirroring the main
-trial selector's format (selectbox → slider). Add inline text/color labels so it's
-obvious which scanpath is which (A vs B).
+Done: the **Compare** toggle stays in the rail's View modes, but the second-trial
+selector (`tabs._render_compare_selector`) now renders above the chips, mirroring
+the main picker (selectbox + scrubbing slider + ◀ ▶) with an **A/B** colour-swatch
+label line.
 
-**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Planned`
+**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Done`
 
-Add a toggle to show/hide the A/B legend in the overlay figure; default to hidden
-(legend margin handled by `_LEGEND_RESERVE_PX`/the top reserve in
-[`plots.py`](scanpath_studio/plots.py:210)).
+Done: `global_show_compare_legend` (default off) threads `show_legend` into
+`make_comparison_figure` / the split figure; the overlay reclaims the top reserve
+when hidden. Toggle lives in the compare selector's ⚙ popover.
 
-**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Planned`
+**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Done`
 
-Reported mismatch between the default colors shown in the controls (saccades,
-fixations, possibly others) and what's drawn. Audit `_seed_compare_styles`
-seeding (`cmp{idx}_saccade_color`, fixation colors) vs. what
-`_collect_compare_styles` passes to the figure.
+Done: a single `constants.compare_palette_color(idx)` is now the one source of
+truth for both the per-scanpath style seeding/collection and
+`plots._comparison_scanpath_style`, so the swatches can't drift from the figure —
+and CMP-1's A/B labels read those same resolved colours.
 
-**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Planned`
+**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Done`
 
-When comparing, the rail shows the **global** `Saccade color` picker
-([`controls.py:1087`](scanpath_studio/controls.py:1087)) *and* the per-scanpath
-`Scanpath 1/2 — saccade color` pickers
-([`controls.py:651`](scanpath_studio/controls.py:651)). In compare mode the global
-one is dead/confusing — hide it (and audit fixation styling for the same
-duplication) so only the per-scanpath controls show.
+Done: in compare mode the global Saccade colour/style/width **and** the global
+fixation colour-by/size/hollow/colorscale/range controls are hidden (they're dead
+for the overlay); only the per-scanpath controls + shared toggles (Direction
+arrows, Fixation index) show.
 
 ---
 
@@ -384,12 +377,21 @@ keys, off by default, with a recompute trigger. Fold preproc settings into the
 cache key (don't break the OneStop `frame_fingerprint`/`st.cache_data` fast path).
 AC: disabled = byte-identical output to today.
 
-**PRE-2 · Fixation cleaning: discard short / long / out-of-bounds + purge** — `Status: Backlog` *(depends PRE-1)*
+**PRE-2 · Fixation cleaning: discard short / long / out-of-bounds + purge** — `Status: Partly done (visualization-only)`
 
-Port eyekit's `discard_short_fixations` (~50–80 ms), `discard_long_fixations`
-(~800 ms), `discard_out_of_bounds_fixations`, and `purge`. Excluded fixations show
-greyed/hollow (not removed) + an "N excluded" count; optional purge hard-drops &
-reindexes for export. Saccade lines bridge across excluded fixations.
+**Visualization-only version shipped** (per the user's 2026-06-23 reframing): under
+the ⚙ Fixation style controls, **short / long / out-of-bounds** each get
+Off / **Highlight** (chosen marker + colour) / **Discard** (hide from the plot
+only), with editable short/long ms thresholds (defaults 80 / 800). Threaded as a
+`fixation_flags` dict through `_collect_viz_settings` → `make_scanpath_figure`
+(classify on `ordered`, drop Discards before the marker trace, overlay Highlights);
+saccade lines still bridge across discarded fixations. Replaces the old
+out-of-text marker toggle (`global_highlight_out_of_text` removed → `fixation_flags`).
+Does **not** touch reading measures or exports.
+
+Still **Backlog** (the eyekit preprocessing version): a real `excluded` soft-flag in
+the pipeline (depends PRE-1), an "N excluded" count, and `purge` (hard-drop +
+reindex) that propagates to measures + export.
 
 **PRE-3 · Vertical drift correction (`snap_to_lines`) + before/after viz** — `Status: Backlog` *(depends PRE-1, PRE-0)*
 
@@ -471,12 +473,12 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-**BUG-1 · Trial filter persists (incorrectly) when switching datasets** — `Status: Planned`
+**BUG-1 · Trial filter persists (incorrectly) when switching datasets** — `Status: Done`
 
-The active filter carries over to a new dataset where it may make no sense. Reset
-on dataset switch — but consider remembering the per-dataset filter and restoring
-it when the user switches back. Filter state lives under `filter_*` session keys
-([`controls.py`](scanpath_studio/controls.py)).
+Done: `app.main` resets the `filter_*` keys + derived `_trial_filters` on a
+data-source change (keyed on `(data_choice, public_dataset_choice)`, matching the
+col-map reset), and **stashes/restores** the per-dataset selections so switching
+back recovers them.
 
 ---
 
@@ -504,19 +506,25 @@ Column-mapping UI, trial filters, bulk-export zip.
 
 ### Code quality
 
-**ENG-5 · Decompose `app.py`** — `Status: Backlog`
+**ENG-5 · Decompose `app.py`** — `Status: Done`
 
-It mixes data-source dispatch, deep-link restore, column mapping, and view
-dispatch — extract a data-source strategy and a view dispatcher.
+Done earlier: `url_state.py` (deep-link/share/config), `wizard.py` (upload wizard),
+and `constants.py` (source/view labels) were split out (app.py 4087 → ~1640 lines);
+view dispatch is `url_state._active_view` + a 2-branch `if/else` in `main`, and the
+data-source strategy is `PUBLIC_DATASET_REGISTRY` + `load_words_and_fixations`.
+Column mapping always lived in `controls.py`. Verified 2026-06-23.
 
-**ENG-6 · Centralize `st.session_state` keys** — `Status: Backlog`
+**ENG-6 · Centralize `st.session_state` keys** — `Status: Skipped`
 
-TypedDict/Enum to avoid stringly-typed collisions.
+Skipped at the user's request (2026-06-23): the app has hundreds of keys and
+deep-links seed many pre-widget, so a full typed migration is high-risk for low
+payoff right now.
 
-**ENG-7 · Confirm `watchdog` is actually used; drop if not** — `Status: Backlog`
+**ENG-7 · Confirm `watchdog` is actually used; drop if not** — `Status: Done`
 
-Declared in `pyproject.toml` / `requirements.txt` but no direct import found —
-likely a Streamlit file-watching runtime helper. Verify before removing.
+Done: **keep** — `watchdog` is an optional Streamlit runtime file-watcher (faster
+hot reload; not imported by app code). Added a clarifying comment in
+`pyproject.toml` + `requirements.txt`.
 
 **ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Backlog`
 
@@ -524,14 +532,18 @@ Finish it or hide it (`model_scanpaths.py` / `similarity.py` / `synthetic.py`).
 
 ### UX / robustness
 
-**ENG-9 · Surface auto-detected columns in the Column Mapping panel** — `Status: Backlog`
+**ENG-9 · Surface auto-detected columns in the Column Mapping panel** — `Status: Done`
 
-Schema auto-detection is currently silent.
+Done: `controls.column_mapping_ui` now shows a `✨ auto-detected \`col\`` caption per
+field (flagging overrides); the remap editor labels it `currently mapped` instead
+(its proposal is the saved mapping, not a fresh detect).
 
-**ENG-10 · Better animation-export errors when Chrome/Chromium is missing** — `Status: Backlog`
+**ENG-10 · Better animation-export errors when Chrome/Chromium is missing** — `Status: Done`
 
-Consider a cold-Chrome fallback if the warm Kaleido server fails
-(`animation_export.py`).
+Done: `animation_export.chrome_available()` + a shared `CHROME_INSTALL_HINT`
+(pointing to `kaleido_get_chrome` / the HTML export); a UI pre-flight before a
+GIF/MP4 render; a warm→cold `to_image` fallback when the warm Kaleido server won't
+start but Chrome exists; and the static PNG/SVG/PDF export reuses the same hint.
 
 **ENG-11 · Version saved plot-config JSON + migration path** — `Status: Backlog`
 

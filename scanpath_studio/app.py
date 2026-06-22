@@ -49,6 +49,7 @@ from scanpath_studio.annotations import (
     filter_keys,
 )
 from scanpath_studio.constants import (
+    _VIEW_CORPUS,
     BACKGROUND_PRESETS,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
@@ -63,7 +64,6 @@ from scanpath_studio.constants import (
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
     WORD_LABEL_COLOR,
-    _VIEW_CORPUS,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -72,7 +72,6 @@ from scanpath_studio.controls import (
     column_mapping_ui,
     data_dictionary_help_text,
     read_trial_filters,
-    render_trial_chip_picker,
     viz_settings_from_state,
 )
 from scanpath_studio.data import (
@@ -113,14 +112,12 @@ from scanpath_studio.tabs import (
     render_corpus_analysis_tab,
     render_single_trial_tab,
 )
-from scanpath_studio.utils import extract_trial
 from scanpath_studio.tour import (
     maybe_show_welcome_tour,
     render_spotlight_tour,
     render_tour_replay_button,
     spotlight_tour_pending,
 )
-
 from scanpath_studio.url_state import (
     _active_view,
     _apply_uploaded_plot_config,
@@ -131,12 +128,7 @@ from scanpath_studio.url_state import (
     _go_scanpath,
     _render_share_body,
 )
-from scanpath_studio.wizard import (
-    _enter_add_data_wizard,
-    _remove_dataset,
-    _render_data_setup,
-)
-from scanpath_studio.utils import build_combo_options
+from scanpath_studio.utils import build_combo_options, extract_trial
 
 # Re-exported under a private alias so tests can import them from `app`; keep the
 # F401 silence (they're not used by app.py itself).
@@ -145,6 +137,11 @@ from scanpath_studio.utils import (  # noqa: F401
 )
 from scanpath_studio.utils import (  # noqa: F401
     friendly_trial_label as _friendly_trial_label,
+)
+from scanpath_studio.wizard import (
+    _enter_add_data_wizard,
+    _remove_dataset,
+    _render_data_setup,
 )
 
 
@@ -1254,6 +1251,33 @@ def main() -> None:
     if st.session_state.get("_share_selection_source") != data_choice:
         st.session_state.pop("_share_selection", None)
         st.session_state["_share_selection_source"] = data_choice
+    # Reset the active trial filter when the data source changes (BUG-1). A filter
+    # selection (participant / text id / condition value) from the previous dataset
+    # may be meaningless or, worse, silently valid in the new one (e.g. OneStop and
+    # MultiplEYE both have a `text_id`), so it must not carry over. Keyed on the
+    # same (source, public-corpus) tuple as the col-map reset so switching
+    # PoTeC<->MultiplEYE also resets; the previous source's selections are stashed
+    # so switching back restores them. Runs before read_trial_filters() below.
+    _filter_source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    if st.session_state.get("_filters_for") != _filter_source_key:
+        prev_key = st.session_state.get("_filters_for")
+        stash = st.session_state.setdefault("_filter_stash", {})
+        if prev_key is not None:
+            stash[prev_key] = dict(st.session_state.get("_trial_filters_raw", {}))
+        for _stale in [
+            k
+            for k in list(st.session_state)
+            if isinstance(k, str) and k.startswith("filter_")
+        ]:
+            del st.session_state[_stale]
+        st.session_state.pop("_trial_filters", None)
+        # Restore this source's previously-stashed selections (if any), else clear
+        # the mirror so nothing seeds back in. _seed_filter_widget re-seeds the
+        # widget keys from _trial_filters_raw; render_trial_filters / render_narrow_by
+        # then recompute _trial_filters this run.
+        _restored = stash.get(_filter_source_key)
+        st.session_state["_trial_filters_raw"] = dict(_restored) if _restored else {}
+        st.session_state["_filters_for"] = _filter_source_key
     # Just-finalized upload: paint a "loading" bridge into the main area now so it
     # repaints over the wizard (instead of the wizard lingering until the slow
     # first figure finishes). Cleared just before the tabs render below.
@@ -1265,9 +1289,6 @@ def main() -> None:
     # the canvas/monitor/font controls fill it later (they need the filtered
     # data), but it renders here — beside the data source it describes.
     experimental_setup_slot = st.sidebar.container()
-    # Reserve the "Trial chips" picker slot here too (under 📂 Data, the setup
-    # area) — filled once the filtered columns are known; see render_trial_chip_picker.
-    chip_picker_slot = st.sidebar.container()
 
     # Load + map core data. The **Upload** source renders each table as an
     # [upload box → mapping] group in the sidebar (words, fixations, raw gaze) and
@@ -1501,15 +1522,6 @@ def main() -> None:
     # source of truth and write the same keys.
     viz_settings = viz_settings_from_state(
         fixations_filtered, base_font_size, words=words_filtered
-    )
-
-    # Fill the "Trial chips" picker (reserved under 📂 Data above) now that the
-    # filtered columns are known — it sets `trial_chip_fields`, read by the
-    # Scanpath screen's condition-chip strip.
-    render_trial_chip_picker(
-        words_filtered,
-        fixations_filtered,
-        host=chip_picker_slot.expander("🏷️ Trial chips", expanded=False),
     )
 
     # Reserve the "💾 Save & restore" slot here (a keyed container so the

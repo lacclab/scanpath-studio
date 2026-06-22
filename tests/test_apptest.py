@@ -132,21 +132,21 @@ class TestAppLaunches:
 
     def test_new_viz_toggles_build_without_error(self):
         # Flip the new plot options (color-by-line — now the "line" option in the
-        # color-by selector — out-of-text, gray background) and confirm those
-        # code paths build without error. These pre-set values mimic a Save &
-        # restore: the widgets must honour them (no inline value=/index= override
-        # — see _VIZ_WIDGET_DEFAULTS) rather than reset to their hardcoded default.
+        # color-by selector — the PRE-2 out-of-bounds highlight, gray background)
+        # and confirm those code paths build without error. These pre-set values
+        # mimic a Save & restore: the widgets must honour them (no inline
+        # value=/index= override — see _VIZ_WIDGET_DEFAULTS) rather than reset.
         at = _make_apptest(synthetic=True)
         at.session_state["global_color_by"] = "line"
-        at.session_state["global_highlight_out_of_text"] = True
+        at.session_state["global_fixclass_oob_mode"] = "Highlight"
         at.session_state["global_critical_span_style"] = "Mark border"
         at.session_state["global_bg_choice"] = "Gray"
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        out_of_text = {c.key: c.value for c in at.checkbox if c.key}
-        assert out_of_text.get("global_highlight_out_of_text") is True, (
-            "restored out-of-text value was overridden by an inline default"
+        radios = {r.key: r.value for r in at.radio if r.key}
+        assert radios.get("global_fixclass_oob_mode") == "Highlight", (
+            "restored fixation-classification value was overridden by an inline default"
         )
 
     def test_compare_styles_collected_from_popover_keys(self):
@@ -893,10 +893,10 @@ class TestSpotlightTour:
         # From step 2 on, the card drops to the corner: no backdrop.
         markdown = " ".join(m.value for m in at.markdown)
         assert "tour-backdrop" not in markdown
-        at.button(key="tour_sp_exit").click()
+        at.button(key="tour_sp_close").click()
         at.run(timeout=30)
         assert at.session_state["tour_mode"] is None
-        assert self._sp_buttons(at) == set(), "card must vanish after Exit"
+        assert self._sp_buttons(at) == set(), "card must vanish after close"
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Step list sanity: every selector-bearing step targets a keyed
         # wrapper (.st-key-*) or a stable testid that exists in the app.
@@ -921,7 +921,7 @@ class TestSpotlightTour:
     def test_spotlight_replay(self):
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
-        at.button(key="tour_sp_exit").click()
+        at.button(key="tour_sp_close").click()
         at.run(timeout=30)
         assert self._sp_buttons(at) == set()
         at.button(key="tour_replay").click()

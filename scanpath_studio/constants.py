@@ -61,6 +61,16 @@ CURRENT_FIX_OUTLINE = "#ff7f0e"
 FIX_MARKER_OUTLINE = "#111"
 COMPARISON_PALETTE = ["#1f77b4", "#e45756"]
 
+
+def compare_palette_color(idx: int) -> str:
+    """Default A/B colour for comparison scanpath ``idx`` — the single source of
+    truth shared by the per-scanpath style controls (``controls._seed_compare_styles``
+    / ``_collect_compare_styles``) and the figure builders
+    (``plots._comparison_scanpath_style``), so the swatch shown in the controls can
+    never drift from what's drawn (CMP-3)."""
+    return COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
+
+
 # Saccade line styles offered in the sidebar. Maps the friendly UI label to the
 # Plotly ``line.dash`` value used in the figure builders.
 SACCADE_DASH_OPTIONS = {

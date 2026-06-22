@@ -93,7 +93,6 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     saccade_width=DEFAULT_SACCADE_WIDTH,
     background_color=DEFAULT_BACKGROUND_COLOR,
     color_by_line=False,
-    highlight_out_of_text=False,
     line_spacing=DEFAULT_LINE_SPACING,
     scale_text_to_boxes=True,
     background_image=None,

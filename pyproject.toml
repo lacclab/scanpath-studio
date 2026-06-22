@@ -31,7 +31,13 @@ dependencies = [
     "numpy>=2.4.1",
     "pyarrow>=23.0.0",
     "kaleido>=1.2.0",
+    # Optional Streamlit runtime dep: enables fast event-based file-watching
+    # (hot reload) for `streamlit run`. Not imported by app code — Streamlit
+    # auto-detects it and falls back to polling (+ an "install Watchdog" log) if
+    # absent (ENG-7).
     "watchdog>=6.0.0",
+    # Drag-to-reorder the trial chip fields (the inline "Edit chips" popover).
+    "streamlit-sortables>=0.3.1",
     # Rasterized animation export (GIF/MP4): Pillow encodes GIF; imageio's ffmpeg
     # extra bundles an ffmpeg binary for MP4 (no system package needed).
     "pillow>=10.0",

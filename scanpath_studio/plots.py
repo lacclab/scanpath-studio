@@ -30,6 +30,7 @@ from .constants import (
     SACCADE_COLOR,
     WORD_BOX_COLOR,
     WORD_LABEL_COLOR,
+    compare_palette_color,
 )
 
 COLORBAR_LEN_FRACTION = 0.33
@@ -804,8 +805,7 @@ def make_scanpath_figure(
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
     color_by_line: bool = False,
-    highlight_out_of_text: bool = False,
-    out_of_text_symbol: str = "x",
+    fixation_flags: Optional[dict] = None,
     span_border_color: str = _CRITICAL_FRAME_COLOR,
     colorbar_orientation: str = "Vertical",
     colorbar_tickangle: int = 0,
@@ -1026,6 +1026,30 @@ def make_scanpath_figure(
 
     if show_fixations and not fixations.empty:
         ordered = fixations.sort_values("timestamp_ms")
+        # Fixation classification (PRE-2, viz-only): SHORT / LONG / OUT-OF-BOUNDS,
+        # each Off / Highlight / Discard. Apply Discard here — drop those rows from
+        # `ordered` so they vanish from the markers, fixation-index labels and
+        # marker-size scaling (the saccade layer above still bridges across them).
+        # This changes only what's DRAWN; reading measures and exports are untouched.
+        flags = fixation_flags or {}
+        if flags:
+            from .measures import fixation_in_text_mask
+
+            _dur = pd.to_numeric(ordered.get("duration_ms"), errors="coerce")
+            _oob = pd.Series(False, index=ordered.index)
+            if spatial_axes and not words.empty:
+                _oob = ~fixation_in_text_mask(ordered, words)
+            _cat_mask = {
+                "short": _dur < float(flags.get("short", {}).get("threshold_ms", 80)),
+                "long": _dur > float(flags.get("long", {}).get("threshold_ms", 800)),
+                "oob": _oob,
+            }
+            _discard = pd.Series(False, index=ordered.index)
+            for _cat, _mask in _cat_mask.items():
+                if flags.get(_cat, {}).get("mode") == "Discard":
+                    _discard = _discard | _mask.fillna(False)
+            if _discard.any():
+                ordered = ordered[~_discard]
         # "Color by line" overrides the chosen color field: each fixation is
         # tinted by the text line it lands on (lines inferred from word
         # geometry). Rendered as discrete categories so the legend reads
@@ -1131,30 +1155,52 @@ def make_scanpath_figure(
                 )
             )
 
-        # Out-of-text overlay: mark fixations falling outside every word box
-        # with a red ✕ on top of the regular marker. Requires word boxes +
-        # spatial axes to define "in text".
-        if highlight_out_of_text and spatial_axes and not words.empty:
-            from .measures import fixation_in_text_mask
-
-            off = ordered[~fixation_in_text_mask(ordered, words)]
-            if not off.empty:
+        # Highlight overlays (PRE-2): mark SHORT / LONG / OUT-OF-BOUNDS fixations
+        # in the chosen marker + colour, on top of the regular markers. Masks are
+        # recomputed on the (post-discard) `ordered`; out-of-bounds needs word
+        # boxes + spatial axes, short/long are duration-based and apply anywhere.
+        if flags:
+            _hdur = pd.to_numeric(ordered.get("duration_ms"), errors="coerce")
+            _in_text = (
+                fixation_in_text_mask(ordered, words)
+                if spatial_axes and not words.empty
+                else pd.Series(True, index=ordered.index)
+            )
+            _overlay = {
+                "short": (
+                    "Short",
+                    _hdur < float(flags.get("short", {}).get("threshold_ms", 80)),
+                ),
+                "long": (
+                    "Long",
+                    _hdur > float(flags.get("long", {}).get("threshold_ms", 800)),
+                ),
+                "oob": ("Out of bounds", ~_in_text),
+            }
+            for _cat in ("short", "long", "oob"):
+                _spec = flags.get(_cat, {})
+                if _spec.get("mode") != "Highlight":
+                    continue
+                _name, _mask = _overlay[_cat]
+                hits = ordered[_mask.fillna(False)]
+                if hits.empty:
+                    continue
                 legend_active = True
                 fig.add_trace(
                     go.Scatter(
-                        x=off[x_field],
-                        y=off[y_field],
+                        x=hits[x_field],
+                        y=hits[y_field],
                         mode="markers",
                         marker=dict(
-                            symbol=out_of_text_symbol or "x",
+                            symbol=_spec.get("symbol") or "x",
                             size=13,
-                            color=OUT_OF_TEXT_COLOR,
+                            color=_spec.get("color") or OUT_OF_TEXT_COLOR,
                             line=dict(color="#ffffff", width=1),
                         ),
-                        name="Out-of-text",
+                        name=_name,
                         showlegend=True,
                         hovertemplate=(
-                            "Out-of-text fixation<br>x %{x:.0f}, y %{y:.0f}"
+                            f"{_name} fixation<br>x %{{x:.0f}}, y %{{y:.0f}}"
                             "<extra></extra>"
                         ),
                     )
@@ -2338,8 +2384,8 @@ def _comparison_scanpath_style(
     ``override`` (from the sidebar's per-scanpath styling panel) wins per key.
     """
     base = {
-        "fix_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
-        "saccade_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
+        "fix_color": compare_palette_color(idx),
+        "saccade_color": compare_palette_color(idx),
         "saccade_style": "solid",
         "saccade_width": DEFAULT_SACCADE_WIDTH,
         "marker_size_range": default_marker_size_range,
@@ -2361,6 +2407,7 @@ def _add_comparison_fixation_trace(
     show_saccade_arrows: bool = False,
     show_order: bool = True,
     order_font_size: Optional[int] = None,
+    show_legend: bool = False,
     row: Optional[int] = None,
     col: Optional[int] = None,
 ) -> None:
@@ -2445,6 +2492,7 @@ def _add_comparison_fixation_trace(
             marker=marker,
             name=display_name,
             legendgroup=display_name,
+            showlegend=show_legend,
             text=trial_fix["order_in_trial"] if show_order else None,
             textposition="top center",
             textfont=order_font,
@@ -2477,6 +2525,7 @@ def _make_split_comparison_figure(
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     show_order: bool = False,
+    show_legend: bool = False,
     order_font_size: Optional[int] = None,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
@@ -2595,6 +2644,7 @@ def _make_split_comparison_figure(
             show_saccade_arrows=show_saccade_arrows,
             show_order=show_order,
             order_font_size=order_font_size,
+            show_legend=show_legend,
             row=row,
             col=col,
         )
@@ -2695,6 +2745,7 @@ def make_comparison_figure(
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     show_order: bool = False,
+    show_legend: bool = False,
     order_font_size: Optional[int] = None,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
@@ -2722,6 +2773,7 @@ def make_comparison_figure(
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
             show_order=show_order,
+            show_legend=show_legend,
             order_font_size=order_font_size,
             text_color=text_color,
             highlight_text_color=highlight_text_color,
@@ -2789,6 +2841,7 @@ def make_comparison_figure(
             show_saccade_arrows=show_saccade_arrows,
             show_order=show_order,
             order_font_size=order_font_size,
+            show_legend=show_legend,
         )
         if show_words:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -2827,12 +2880,15 @@ def make_comparison_figure(
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
     # The title + top A/B legend get reserved space above the plot so they don't
-    # shrink the equal-aspect plot region (same fix as make_scanpath_figure).
+    # shrink the equal-aspect plot region (same fix as make_scanpath_figure). With
+    # the legend hidden (CMP-2 default) a slimmer band still fits the title.
+    top_px = _OVERLAY_TOP_PX if show_legend else _OVERLAY_TOP_PX // 2
     fig.update_layout(
-        height=fitted_h + _OVERLAY_TOP_PX,
+        height=fitted_h + top_px,
         width=fitted_w,
         autosize=False,
-        margin=dict(l=0, r=0, t=_OVERLAY_TOP_PX, b=0),
+        showlegend=show_legend,
+        margin=dict(l=0, r=0, t=top_px, b=0),
         xaxis=dict(
             showticklabels=False,
             showgrid=False,

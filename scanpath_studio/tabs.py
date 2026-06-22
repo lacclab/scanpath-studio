@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import json
 import os
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -40,6 +40,7 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.controls import (
     SUMMARY_CHIP_FIELDS,
+    render_narrow_by,
     render_trial_filters,
     sidebar_controls,
 )
@@ -75,7 +76,6 @@ from scanpath_studio.utils import (
     friendly_trial_label,
     safe_summary,
     select_trial,
-    selection_modes,
 )
 
 # -----------------------------------------------------------------------------
@@ -1744,6 +1744,7 @@ def render_single_trial_tab(
     combos_all: Optional[pd.DataFrame] = None,
     words_all: Optional[pd.DataFrame] = None,
     fixations_all: Optional[pd.DataFrame] = None,
+    share_renderer: Optional[Callable[[], None]] = None,
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
@@ -1758,9 +1759,12 @@ def render_single_trial_tab(
        **visualization controls** (formerly in the sidebar — see
        ``controls.sidebar_controls``, rendered here with ``host=``).
     3. A full-width **subtab bar** below: 📝 Annotations · Stimulus & questions ·
-       Export (Export folds in the former Bulk Export tab — see
-       ``_render_export_panel``). The former Trial Info subtab was folded into the
-       configurable chips above the plot. Save & restore lives in the sidebar.
+       Export · 🔎 Data Inspection · 🔗 Share. Export folds in the former Bulk
+       Export tab (``_render_export_panel``); Data Inspection (the former
+       standalone view) renders inline here; Share (the former header popover)
+       builds the deep link via ``share_renderer`` (passed by ``app.main``). The
+       former Trial Info subtab was folded into the chips above the plot. Save &
+       restore lives in the sidebar.
 
     ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
     the Export subtab's bulk section uses for its "whole dataset" scope; they
@@ -1782,33 +1786,23 @@ def render_single_trial_tab(
     with rail_col:
         rail = st.container(key="scanpath_rail")
 
-    modes = selection_modes(combos)
-    multi_mode = len(modes) > 1
     with plot_col:
-        # One selection line: [Browse by] [pills] [trial selectbox(s)] [Filter] —
-        # the pills (mode_host) and selectbox(s) (picker_host) are filled by
-        # select_trial; the scrubbing slider lands on the line below. Filter is a
-        # content-width popover overlay (no plot shove). Vertically centered so the
-        # label, pills, selectbox and button line up.
-        if multi_mode:
-            label_col, mode_host, picker_host, filter_col = st.columns(
-                [1, 2.3, 3, 1.4], vertical_alignment="center"
-            )
-            label_col.markdown("**Browse by**")
-        else:
-            picker_host, filter_col = st.columns([3, 1.4], vertical_alignment="center")
-            mode_host = None
-        with filter_col:
-            filt_pop = st.popover("🔍 Filter trials", width="content")
-            filt_pop.caption("Narrow the trial pool shown in every view.")
-            render_trial_filters(words_all, fixations_all, host=filt_pop)
+        # Narrow-by row: [Narrow by] [Text multiselect] [Participant multiselect]
+        # [More popover]. The Text/Participant multiselects narrow the trial pool;
+        # "More" holds the condition + annotation filters. The specific trial is
+        # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
+        nb_label, nb_text, nb_part, more_col = st.columns(
+            [1, 2.3, 2.3, 1.2], vertical_alignment="center"
+        )
+        nb_label.markdown("**Narrow by**")
+        render_narrow_by(words_all, fixations_all, text_host=nb_text, part_host=nb_part)
+        with more_col:
+            more_pop = st.popover("More", width="content")
+            more_pop.caption("More ways to narrow — conditions & annotations.")
+            render_trial_filters(words_all, fixations_all, host=more_pop)
+        # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         selected_participant, selected_trial, selection_mode, selected_text = (
-            select_trial(
-                combos,
-                key_prefix="single",
-                mode_host=mode_host,
-                picker_host=picker_host,
-            )
+            select_trial(combos, key_prefix="single")
         )
         # Slots filled once the selection is resolved (chips need the trial).
         chips_slot = st.container()
@@ -2082,8 +2076,14 @@ def render_single_trial_tab(
     # must be created outside the columns to span the page width). Trial Info is
     # gone — the chip strip above the plot now carries the trial's identity,
     # conditions and summary stats (configurable via the sidebar 🏷️ Trial chips).
-    tab_annot, tab_stim, tab_export = st.tabs(
-        ["📝 Annotations", "Stimulus & questions", "Export"]
+    tab_annot, tab_stim, tab_export, tab_inspect, tab_share = st.tabs(
+        [
+            "📝 Annotations",
+            "Stimulus & questions",
+            "Export",
+            "🔎 Data Inspection",
+            "🔗 Share",
+        ]
     )
     with tab_annot:
         render_trial_annotations(selected_participant, selected_trial, bare=True)
@@ -2110,6 +2110,21 @@ def render_single_trial_tab(
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
         )
+    with tab_inspect:
+        # The former Data Inspection view is now a subtab here (raw tables +
+        # summary stats + column mapping). Uses the filtered frames in view.
+        render_data_inspection_tab(
+            words_filtered,
+            fixations_filtered,
+            raw_gaze if raw_gaze is not None else pd.DataFrame(),
+        )
+    with tab_share:
+        # The former header Share popover, now a subtab. app.main passes the
+        # renderer (it owns the deep-link builder + data source).
+        if share_renderer is not None:
+            share_renderer()
+        else:
+            st.caption("Sharing is unavailable in this context.")
 
     # Save & restore (plot config + annotations) is rendered by app.main on every
     # view (it must stay reachable when a non-Scanpath view is active), sourcing

@@ -43,22 +43,14 @@ def get_app_css() -> str:
     [data-stale="true"] {
         opacity: 1 !important;
     }
-    /* "About" popover in the header: pill-shaped trigger + readable body width */
-    /* The button is content-sized (width="content") and sits in a narrow column;
-       align it to the column's right edge so it lines up with the right edge of
-       the page content. The `about_btn` wrapper is a flex column, so this only
-       moves the About button — no other popover (e.g. the plot toolbar). */
-    .st-key-about_btn, .st-key-share_btn { align-items: flex-end; }
-    /* Lay Share + About side by side, right-aligned, with a small gap so the
-       Share trigger sits just beside About instead of a column apart. */
+    /* Header button row (the Corpus Analysis ⇄ Scanpath view toggle): right-align
+       the content-sized trigger so it lines up with the page content's right edge. */
     .st-key-header_buttons {
         flex-direction: row;
         justify-content: flex-end;
         align-items: center;
         gap: 0.5rem;
     }
-    .st-key-header_buttons .st-key-share_btn,
-    .st-key-header_buttons .st-key-about_btn { width: auto; }
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
     div[data-testid="stPopoverBody"] {

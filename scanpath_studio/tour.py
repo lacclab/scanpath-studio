@@ -179,11 +179,13 @@ _SPOTLIGHT_STEPS = [
         "true-to-scale.",
     },
     {
-        "selector": ".st-key-tour_grp_nav",
+        "selector": ".st-key-header_buttons",
+        # The view toggle lives in the header now (not the sidebar).
+        "in_sidebar": False,
         "title": "🧭 Views",
-        "body": "Switch between **Scanpath Visualization**, **Corpus Analysis**, "
-        "and **Data Inspection**. Pick, filter, compare & animate trials right by "
-        "the plot — and **Export** is a subtab below it.",
+        "body": "This button switches to **Corpus Analysis** (and back). "
+        "**Data Inspection**, **Export**, and **Share** are subtabs right below "
+        "the plot — pick, filter, compare & animate trials beside it.",
     },
     {
         "selector": ".st-key-tour_grp_save_restore",
@@ -208,6 +210,25 @@ _CARD_CSS = """
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     padding: 1rem 1.25rem;
 }
+/* Close (✕) pinned to the card's top-right corner. */
+.st-key-tour_sp_close {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.5rem;
+    width: auto;
+    z-index: 1;
+}
+.st-key-tour_sp_close button {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    padding: 0.05rem 0.4rem !important;
+    font-size: 1.05rem;
+    line-height: 1;
+    opacity: 0.55;
+}
+.st-key-tour_sp_close button:hover { opacity: 1; }
 """
 
 # Welcome step only: center the card like a modal and dim the app behind it
@@ -238,7 +259,7 @@ def _exit_spotlight() -> None:
 
 def _dismiss_listener_script(
     selector: str | None,
-    exit_keys: tuple[str, ...] = ("tour_sp_exit", "tour_sp_done"),
+    exit_keys: tuple[str, ...] = ("tour_sp_exit", "tour_sp_done", "tour_sp_close"),
 ) -> str:
     """JS that lets Exit/Done close the tour *instantly*, even mid-load.
 
@@ -347,6 +368,14 @@ def render_spotlight_tour() -> None:
         st.markdown('<div class="tour-backdrop"></div>', unsafe_allow_html=True)
 
     with st.container(key="tour_card"):
+        # Close (✕) in the top-right corner — exits the tour like "Exit"/"Done"
+        # (CSS pins it; the dismiss listener wires it for instant close too).
+        st.button(
+            "✕",
+            key="tour_sp_close",
+            on_click=_exit_spotlight,
+            help="Close the tour",
+        )
         st.markdown(f"#### {step['title']}")
         st.markdown(step["body"])
         st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")

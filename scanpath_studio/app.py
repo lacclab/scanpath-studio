@@ -32,14 +32,11 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import TYPE_CHECKING, Dict, NamedTuple, Optional, Tuple
+from typing import Dict, NamedTuple, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-
-if TYPE_CHECKING:
-    from streamlit.delta_generator import DeltaGenerator
 
 # Allow running via `streamlit run scanpath_studio/app.py` by adding the
 # repository root to sys.path when executed as a script instead of a package.
@@ -129,7 +126,6 @@ from scanpath_studio.tabs import (
     _collect_column_mapping,
     _render_save_restore_expander,
     render_corpus_analysis_tab,
-    render_data_inspection_tab,
     render_single_trial_tab,
 )
 from scanpath_studio.utils import extract_trial
@@ -885,26 +881,39 @@ def configure_page() -> None:
     st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
-def _render_about_panel() -> "DeltaGenerator":
-    """Compact header: title + caption + a Share popover.
+def _render_about_panel() -> None:
+    """Compact header: title + caption + the Corpus Analysis ⇄ Scanpath toggle.
 
-    Returns the header container reserved for the Share popover. Share is filled
-    later by ``main()`` (via ``_render_share_panel``) because the link it builds
-    needs the resolved data source / trial selection, which aren't known this
-    early — but a keyed container holds its position in the header regardless of
-    when it's filled. The **About** popover lives in the sidebar Help group now
-    (``_render_about_sidebar``), keeping the header lean.
+    The header button switches between the two top-level views (it replaced the
+    former Share button — Share is now a subtab of the Scanpath view). The
+    **About** popover lives in the sidebar Help group (``_render_about_sidebar``),
+    keeping the header lean.
     """
     header = st.container(key="about_header")
     title_col, buttons_col = header.columns([5, 2], vertical_alignment="center")
     with title_col:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")
-    # The keyed wrapper right-aligns the content-sized Share trigger (see
-    # `.st-key-share_btn` / `.st-key-header_buttons` in styles.py).
+    # The keyed wrapper right-aligns the content-sized trigger (see
+    # `.st-key-header_buttons` in styles.py). It's also the spotlight-tour target.
     button_row = buttons_col.container(key="header_buttons")
-    share_slot = button_row.container(key="share_btn")
-    return share_slot
+    with button_row:
+        if _active_view() == _VIEW_CORPUS:
+            st.button(
+                "← Scanpath",
+                key="nav_to_scanpath",
+                on_click=_go_scanpath,
+                width="stretch",
+                help="Back to the scanpath visualization.",
+            )
+        else:
+            st.button(
+                "📊 Corpus Analysis",
+                key="nav_to_corpus",
+                on_click=_go_corpus,
+                width="stretch",
+                help="Corpus-level analysis (generations + aggregated views).",
+            )
 
 
 def _render_about_sidebar() -> None:
@@ -1106,33 +1115,32 @@ def _render_share_link_widget(query: str) -> None:
     )
 
 
-def _render_share_panel(data_choice: str) -> None:
-    """Fill the header's Share slot with a popover that builds a deep link to the
-    current view (data source + trial + visualization settings).
+def _render_share_body(data_choice: str) -> None:
+    """Render the **Share** subtab: a deep link to the current view (data source +
+    trial + visualization settings).
 
     The link is built **lazily** — only when the user clicks *Refresh link* (and
     once on first open so there's always something to copy). It is NOT rebuilt on
     every rerun, so tweaking an unrelated control doesn't silently rewrite a link
     the user is about to share; the link reflects the settings as of the last
     refresh."""
-    with st.popover("Share", icon=":material/share:", width="content"):
-        st.markdown(
-            "**Share this view** — a link that reopens Scanpath Studio on the "
-            "current trial with your visualization settings."
-        )
-        refresh = st.button(
-            "🔄 Refresh link",
-            key="share_refresh",
-            type="primary",
-            help="Rebuild the link from the current trial + settings.",
-        )
-        if refresh or st.session_state.get("_share_query_frozen") is None:
-            st.session_state["_share_query_frozen"] = _build_share_query(data_choice)
-        query, caveats = st.session_state["_share_query_frozen"]
-        for note in caveats:
-            st.caption("⚠️ " + note)
-        _render_share_link_widget(query)
-        st.caption("Reflects your settings as of the last refresh.")
+    st.markdown(
+        "**Share this view** — a link that reopens Scanpath Studio on the "
+        "current trial with your visualization settings."
+    )
+    refresh = st.button(
+        "🔄 Refresh link",
+        key="share_refresh",
+        type="primary",
+        help="Rebuild the link from the current trial + settings.",
+    )
+    if refresh or st.session_state.get("_share_query_frozen") is None:
+        st.session_state["_share_query_frozen"] = _build_share_query(data_choice)
+    query, caveats = st.session_state["_share_query_frozen"]
+    for note in caveats:
+        st.caption("⚠️ " + note)
+    _render_share_link_widget(query)
+    st.caption("Reflects your settings as of the last refresh.")
 
 
 # -----------------------------------------------------------------------------
@@ -1582,30 +1590,33 @@ def prepare_data(
 # drift apart.
 # Bulk export is no longer a top-level tab — it's folded into the Scanpath
 # Visualization tab's "Export" subtab (see tabs._render_export_panel).
-_MAIN_TAB_LABELS = [
-    "Scanpath Visualization",
-    "Corpus Analysis",
-    "Data Inspection",
-]
+# The two top-level views. Scanpath is the default page; Corpus Analysis is
+# reached via the header button (``_render_about_panel``). Data Inspection and
+# Share are now subtabs of the Scanpath view (tabs.render_single_trial_tab),
+# not standalone views. ``main_nav`` (session state) holds the active view.
+_VIEW_SCANPATH = "Scanpath Visualization"
+_VIEW_CORPUS = "Corpus Analysis"
+_MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS]
 
 
-def _render_main_nav() -> str:
-    """Render the primary navigation in the sidebar and return the active view.
+def _go_corpus() -> None:
+    st.session_state["main_nav"] = _VIEW_CORPUS
 
-    Replaces the former top tab strip. A keyed ``st.radio`` persists the active
-    view in session_state across reruns automatically — so this needs none of
-    the brittle client-side ``sessionStorage`` re-selection the old ``st.tabs``
-    required (st.tabs exposes no key). The keyed container is the spotlight-tour
-    target (``.st-key-tour_grp_nav``)."""
-    nav = st.sidebar.container(key="tour_grp_nav")
-    choice = nav.radio(
-        "View",
-        options=_MAIN_TAB_LABELS,
-        key="main_nav",
-        label_visibility="collapsed",
+
+def _go_scanpath() -> None:
+    st.session_state["main_nav"] = _VIEW_SCANPATH
+
+
+def _active_view() -> str:
+    """The active top-level view, normalized to one of the two pages.
+
+    ``main_nav`` may carry a legacy/stale value (e.g. "Data Inspection", now a
+    subtab); anything that isn't Corpus resolves to the Scanpath page."""
+    return (
+        _VIEW_CORPUS
+        if st.session_state.get("main_nav") == _VIEW_CORPUS
+        else _VIEW_SCANPATH
     )
-    nav.divider()
-    return choice or _MAIN_TAB_LABELS[0]
 
 
 def _render_raw_preview(label: str, df: pd.DataFrame) -> None:
@@ -1621,30 +1632,25 @@ def _render_unmapped_view(
     raw_words_df: pd.DataFrame,
     raw_fixations_df: pd.DataFrame,
     problems: list,
-    active_view: str,
 ) -> None:
     """Show the raw uploaded data while the column mapping is incomplete.
 
-    Only the **Data Inspection** view has content (the uploaded tables,
-    unmodified) — the other views point back to the sidebar. Lets the user
-    inspect column names and values to fill in the *Column mapping* panels
-    without the app halting. ``active_view`` is the sidebar nav selection.
+    The uploaded tables (unmodified) are shown so the user can inspect column
+    names and values to fill in the *Column mapping* panels without the app
+    halting.
     """
     st.warning(
         "**Finish the column mapping to draw scanpaths.** Map the missing "
         "field(s) in the **Column mapping** panel below each upload box in the "
-        "sidebar — the raw uploaded data is shown in the **Data Inspection** view "
-        "to help you choose. Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
+        "sidebar — the raw uploaded data is shown below to help you choose. "
+        "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
     )
-    if active_view == "Data Inspection":
-        if (raw_words_df is None or raw_words_df.empty) and (
-            raw_fixations_df is None or raw_fixations_df.empty
-        ):
-            st.info("No data loaded yet.")
-        _render_raw_preview("Words / IA", raw_words_df)
-        _render_raw_preview("Fixations", raw_fixations_df)
-    else:
-        st.info("Complete the column mapping in the sidebar to see this view.")
+    if (raw_words_df is None or raw_words_df.empty) and (
+        raw_fixations_df is None or raw_fixations_df.empty
+    ):
+        st.info("No data loaded yet.")
+    _render_raw_preview("Words / IA", raw_words_df)
+    _render_raw_preview("Fixations", raw_fixations_df)
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
@@ -3633,9 +3639,8 @@ def main() -> None:
     # Start capturing log records into the in-app debug buffer before any data
     # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
     install_log_capture()
-    # The header reserves a slot for the Share popover; it's filled at the end of
-    # main(), once the resolved trial + viz settings the link encodes are known.
-    share_slot = _render_about_panel()
+    # The header holds the title + the Corpus Analysis ⇄ Scanpath view toggle.
+    _render_about_panel()
 
     # Apply deep-link presets BEFORE any widget renders — see _apply_url_preset
     # for the full URL schema. External tools can deep-link into this app with
@@ -3659,10 +3664,9 @@ def main() -> None:
     maybe_show_welcome_tour()
     render_spotlight_tour()
 
-    # Primary navigation lives at the top of the sidebar (replaces the former top
-    # tab strip). Read here so the dispatch below — and the unmapped-data view —
-    # render only the active view.
-    active_view = _render_main_nav()
+    # Active top-level view (set by the header Corpus⇄Scanpath button). Read here
+    # so the dispatch below renders only the active page.
+    active_view = _active_view()
 
     # Data source selection (sidebar)
     _sidebar_group("📂 Data")
@@ -3785,9 +3789,7 @@ def main() -> None:
         # A required column is still unmapped. Rather than halt the whole app
         # (which hid the data the user needs to choose the mapping), show the
         # raw uploaded tables; the sidebar Column-mapping panels stay editable.
-        _render_unmapped_view(
-            raw_words_df, raw_fixations_df, mapping_problems, active_view
-        )
+        _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         return
 
     # Optional raw gaze: the Upload source already mapped + normalized it above;
@@ -3962,7 +3964,7 @@ def main() -> None:
     # — the keyed nav widget persists the selection across reruns, so no JS hack
     # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection
     # and fills the Save & restore slot when it's the active view.
-    if active_view == "Corpus Analysis":
+    if active_view == _VIEW_CORPUS:
         render_corpus_analysis_tab(
             words_filtered,
             fixations_filtered,
@@ -3975,14 +3977,12 @@ def main() -> None:
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
         )
-    elif active_view == "Data Inspection":
-        render_data_inspection_tab(
-            words_filtered, fixations_filtered, raw_gaze_filtered
-        )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys; re-read them below so Save & restore captures
-        # any edits the user just made in the rail.
+        # any edits the user just made in the rail. Data Inspection + Share are
+        # subtabs of this view now — passed in as renderers so the page owns its
+        # subtab bar (Data Inspection renders inline; Share builds the deep link).
         render_single_trial_tab(
             words_filtered,
             fixations_filtered,
@@ -3997,6 +3997,7 @@ def main() -> None:
             combos_all=combos_all,
             words_all=words_all,
             fixations_all=fixations_all,
+            share_renderer=lambda: _render_share_body(data_choice),
         )
 
     # Re-resolve viz settings from session_state AFTER the dispatch so the Save &
@@ -4037,12 +4038,9 @@ def main() -> None:
         slot=save_restore_slot,
     )
 
-    # Fill the header's Share popover now — after the view dispatch, so the
-    # resolved trial (_share_selection, written by render_single_trial_tab when
-    # the Scanpath view is active; persisted from the last visit otherwise, and
-    # cleared on a data-source switch) and the live viz settings are all current.
-    with share_slot:
-        _render_share_panel(data_choice)
+    # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
+    # share_renderer passed into render_single_trial_tab), so it builds its deep
+    # link from the resolved trial + live viz settings right where it's shown.
 
     # Sidebar Help group (bottom): replay the welcome tour (the tour itself
     # renders early in this function — see the maybe_show_welcome_tour call) and

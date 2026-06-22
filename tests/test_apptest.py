@@ -96,51 +96,39 @@ class TestAppLaunches:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
-    def test_single_trial_participant_mode_skips_slider(self):
-        # Participant mode is always offered now (even for the single-participant
-        # synthetic source), but with a single trial it must degrade to a caption
-        # rather than instantiate a one-option st.select_slider (that crashes the
-        # browser with `RangeError: min (0) is equal/bigger than max (0)`).
+    def test_single_trial_picker_degrades_without_slider(self):
+        # The mode pills are gone — there is just one trial picker now. With a
+        # single trial (synthetic source) it must NOT instantiate a one-option
+        # st.select_slider (that crashes the browser with `RangeError`); the
+        # selectbox alone resolves it.
         at = _make_apptest(synthetic=True)
-        at.session_state["single_select_trial_mode"] = "Participant"
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         slider_keys = [s.key for s in at.select_slider]
-        assert "single_slider" not in slider_keys, (
+        assert "single_trial_pos" not in slider_keys, (
             "single-option select_slider rendered — this crashes the browser"
         )
+        # The lone synthetic trial still resolves (its id surfaces in a picker /
+        # the chips).
+        markdown = " ".join(m.value for m in at.markdown)
+        options = " ".join(
+            str(list(w.options))
+            for w in [*at.selectbox, *at.select_slider]
+            if getattr(w, "options", None) is not None
+        )
+        assert "synthetic_2line_demo" in (markdown + " " + options)
 
-    def test_single_trial_all_selection_modes(self):
-        # Trial / Text / Participant must all resolve the lone synthetic trial.
-        for mode in ["Trial", "Text", "Participant"]:
-            at = _make_apptest(synthetic=True)
-            at.session_state["single_select_trial_mode"] = mode
-            at.run(timeout=30)
-            assert not at.exception, f"{mode}: {at.exception}"
-            assert at.error == [], f"{mode}: {[e.value for e in at.error]}"
-            # The Trial Info table is gone; the resolved trial id now surfaces in
-            # the picker widgets (selectbox / select_slider options) and the chips
-            # markdown — scan all of them.
-            markdown = " ".join(m.value for m in at.markdown)
-            options = " ".join(
-                str(list(w.options))
-                for w in [*at.selectbox, *at.select_slider]
-                if getattr(w, "options", None) is not None
-            )
-            assert "synthetic_2line_demo" in (markdown + " " + options), (
-                f"{mode} mode did not resolve the single trial"
-            )
-
-    def test_multi_trial_participant_mode_keeps_slider(self):
-        # Guard the fix's other side: with several trials per participant
-        # (bundled demo), Participant mode still gets its select_slider.
+    def test_multi_trial_picker_has_slider_and_arrows(self):
+        # With several trials (bundled demo) the picker shows the scrubbing slider
+        # plus ◀ ▶ step buttons.
         at = _make_apptest()
         at.run(timeout=30)
-        at.session_state["single_select_trial_mode"] = "Participant"
-        at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        slider_keys = [s.key for s in at.select_slider]
-        assert "single_slider" in slider_keys
+        assert "single_trial_pos" in [s.key for s in at.select_slider]
+        btn_keys = {b.key for b in at.button if b.key}
+        assert {"single_prev_trial", "single_next_trial"} <= btn_keys, (
+            "trial ◀ ▶ step buttons missing"
+        )
 
     def test_new_viz_toggles_build_without_error(self):
         # Flip the new plot options (color-by-line — now the "line" option in the
@@ -212,32 +200,54 @@ class TestAppLaunches:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
-    def test_participant_mode_sub_selection_methods(self):
-        # Participant mode offers a "Pick by" trial-index / text / trial-id
-        # sub-selector (now st.pills, key `single_participant_by`); picking Trial
-        # ID resolves a trial without error.
-        at = _make_apptest()
-        at.session_state["single_select_trial_mode"] = "Participant"
-        at.session_state["single_participant_by"] = "Trial ID"
+    def test_narrow_by_text_participant_multiselects_render(self):
+        # The former Browse-by Text/Participant modes are now inline "Narrow by"
+        # multiselects (filter_text_id / filter_participants) that narrow the pool.
+        at = _make_apptest()  # bundled 3-pid demo
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        # The "Pick by" pills carry the three methods.
-        pills = [
-            p for p in at.pills if set(p.options) == {"Trial index", "Text", "Trial ID"}
-        ]
-        assert pills, "participant-mode 'Pick by' pills not found"
+        ms_keys = {m.key for m in at.multiselect if m.key}
+        assert "filter_participants" in ms_keys, (
+            "Narrow-by participant multiselect missing"
+        )
+        assert "filter_text_id" in ms_keys, "Narrow-by text multiselect missing"
 
-    def test_participant_mode_stale_sub_method_does_not_crash(self):
-        # A stale "Trial index" sub-method pick must not crash when the current
-        # data offers only Text / Trial ID (the synthetic source has no
-        # trial-index column) — the "Pick by" pills' stale value is dropped.
-        at = _make_apptest(synthetic=True)
-        at.session_state["single_select_trial_mode"] = "Participant"
-        at.session_state["single_participant_by"] = "Trial index"  # unavailable here
+        def _trial_option_count(app):
+            box = [s for s in app.selectbox if s.key == "single_trial_id"]
+            return len(box[0].options) if box else 0
+
+        total = _trial_option_count(at)
+        assert total > 1, "expected several trials in the demo"
+
+        # Narrowing by participant shrinks the trial pool feeding the picker.
+        part = [m for m in at.multiselect if m.key == "filter_participants"][0]
+        part.set_value([part.options[0]])
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        assert _trial_option_count(at) < total, (
+            "participant narrowing didn't shrink pool"
+        )
+
+    def test_narrow_by_text_shrinks_pool(self):
+        # The new text-narrowing path: picking a single text in the "Narrow by →
+        # Text" multiselect leaves only that text's trials in the picker.
+        at = _make_apptest()  # bundled 3-pid demo
+        at.run(timeout=30)
+        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"]
+        assert text_ms, "Narrow-by text multiselect missing"
+        trial_box = [s for s in at.selectbox if s.key == "single_trial_id"][0]
+        total = len(trial_box.options)
+        text_ms[0].set_value([text_ms[0].options[0]])
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        narrowed = len(
+            [s for s in at.selectbox if s.key == "single_trial_id"][0].options
+        )
+        assert 0 < narrowed < total, (
+            f"text narrowing didn't shrink pool ({narrowed}/{total})"
+        )
 
 
 @pytest.mark.timeout(90)
@@ -328,20 +338,27 @@ class TestDataInspectionTab:
         assert (table["Mapped column"].astype(str).str.len() > 0).all()
 
     def test_top_level_nav_views(self):
-        # Top-level navigation is now a sidebar radio (key "main_nav"), not a tab
-        # strip. Data Inspection is one view; the old Raw Data / Data Statistics /
-        # Bulk Export top-level entries are gone (merged / folded into subtabs).
+        # Top-level navigation is now a header button toggling the two views
+        # (Scanpath ⇄ Corpus Analysis) — not a sidebar radio. Data Inspection and
+        # Share moved to subtabs of the Scanpath view.
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        nav = [r for r in at.radio if r.key == "main_nav"]
-        assert nav, "main nav radio missing"
-        options = list(nav[0].options)
-        assert "Data Inspection" in options
-        assert "Scanpath Visualization" in options
-        assert "Corpus Analysis" in options
-        for gone in ("Raw Data", "Data Statistics", "Bulk Export"):
-            assert gone not in options, f"{gone} should not be a top-level view"
+        # No main_nav radio anymore.
+        assert not [r for r in at.radio if r.key == "main_nav"], (
+            "top-level nav should no longer be a radio"
+        )
+        # On the Scanpath page, the header offers the Corpus Analysis toggle.
+        btn_keys = {b.key for b in at.button if b.key}
+        assert "nav_to_corpus" in btn_keys, "Corpus Analysis header button missing"
+
+        # Switching to Corpus shows the back-to-Scanpath toggle instead.
+        at2 = _make_apptest(synthetic=True)
+        at2.session_state["main_nav"] = "Corpus Analysis"
+        at2.run(timeout=60)
+        assert not at2.exception, f"Streamlit exceptions: {at2.exception}"
+        btn_keys2 = {b.key for b in at2.button if b.key}
+        assert "nav_to_scanpath" in btn_keys2, "back-to-Scanpath header button missing"
 
 
 @pytest.mark.timeout(90)
@@ -597,7 +614,7 @@ class TestUnmappedRawDataView:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         sbs = {s.label: s for s in at.selectbox}
-        opts = list(sbs["Unique trial id"].options) if "Unique trial id" in sbs else []
+        opts = list(sbs["Trial id"].options) if "Trial id" in sbs else []
         # Two per-page trials, not collapsed into one stimulus-level trial.
         assert len(opts) == 2, f"expected 2 per-page trials, got {opts}"
         assert all("· page" in o for o in opts), opts
@@ -882,11 +899,10 @@ class TestSpotlightTour:
         assert self._sp_buttons(at) == set(), "card must vanish after Exit"
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Step list sanity: every selector-bearing step targets a keyed
-        # wrapper or a stable testid that exists in the app.
+        # wrapper (.st-key-*) or a stable testid that exists in the app.
         selectors = [s["selector"] for s in _SPOTLIGHT_STEPS if s["selector"]]
         assert all(
-            sel.startswith(".st-key-tour_grp_") or "data-testid" in sel
-            for sel in selectors
+            sel.startswith(".st-key-") or "data-testid" in sel for sel in selectors
         )
 
     def test_spotlight_done_on_last_step(self):
@@ -1431,9 +1447,10 @@ class TestNavRegressions:
         )
 
     def test_save_restore_present_on_every_view(self):
-        # The Save & restore sidebar panel must be reachable on all three views
-        # (regression: it only rendered on the Scanpath view after the nav change).
-        for view in ("Scanpath Visualization", "Corpus Analysis", "Data Inspection"):
+        # The Save & restore sidebar panel must be reachable on both top-level
+        # views (regression: it only rendered on the Scanpath view after the nav
+        # change). Data Inspection is now a subtab of the Scanpath view.
+        for view in ("Scanpath Visualization", "Corpus Analysis"):
             at = _make_apptest(synthetic=True)
             at.session_state["main_nav"] = view
             at.run(timeout=60)

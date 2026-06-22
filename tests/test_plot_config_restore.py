@@ -35,7 +35,7 @@ def _restore_app():
     import pandas as pd
     import streamlit as st
 
-    from scanpath_studio.app import _restore_plot_config
+    from scanpath_studio.url_state import _restore_plot_config
     from scanpath_studio.utils import build_combo_options
 
     fixations = pd.DataFrame(st.session_state["_fix"])
@@ -52,7 +52,7 @@ def _apply_app():
     import pandas as pd
     import streamlit as st
 
-    from scanpath_studio.app import _apply_uploaded_plot_config
+    from scanpath_studio.url_state import _apply_uploaded_plot_config
     from scanpath_studio.utils import build_combo_options
 
     class _FakeUpload:

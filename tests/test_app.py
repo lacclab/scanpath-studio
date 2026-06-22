@@ -244,7 +244,12 @@ class _FakeSt:
 @pytest.fixture
 def fake_st(monkeypatch):
     fake = _FakeSt()
+    # The share/deep-link helpers live in url_state now; patch its module-level
+    # `st` (and app's, for any app-side callers) so the link logic runs headless.
+    from scanpath_studio import url_state as url_state_module
+
     monkeypatch.setattr(app_module, "st", fake)
+    monkeypatch.setattr(url_state_module, "st", fake)
     return fake
 
 

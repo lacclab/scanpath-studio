@@ -1034,6 +1034,43 @@ class TestSetupWizard:
         assert "junk_col" not in words.columns
         assert "difficulty_level" in words.columns
 
+    def test_stored_dataset_remap_overwrites_in_place(self, monkeypatch):
+        """A stored dataset's Column-mapping section is editable: remapping a
+        field to a surviving column re-derives the frames and overwrites the
+        entry in place, and the columns dropped at import are recorded for the
+        note."""
+        app = self._inject(monkeypatch)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        name = at.session_state["data_source_choice"]
+        entry = at.session_state["_datasets"][name]
+        # The unmapped/unkept column is recorded as dropped (drives the note).
+        assert "junk_col" in entry["dropped_columns"]["words"]
+        # The editable remap form renders for a stored dataset.
+        assert any(b.key == f"remap_apply_{name}" for b in at.button)
+
+        # Remap the word text to a surviving (kept) column and apply.
+        text_key = f"remap_{name}_words_text"
+        text_box = [s for s in at.selectbox if s.key == text_key]
+        assert text_box, "word-text remap selectbox not rendered"
+        text_box[0].set_value("difficulty_level")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        [b for b in at.button if b.key == f"remap_apply_{name}"][0].click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # The entry was overwritten in place: new schema + re-derived frame.
+        entry = at.session_state["_datasets"][name]
+        assert entry["schemas"]["words"]["text"] == "difficulty_level"
+        assert list(entry["words"]["text"]) == ["Adv", "Adv", "Ele", "Ele"]
+
     def test_unified_trial_picker_and_setup_step(self, monkeypatch):
         """Group A + C: one shared Trial ID picker (not per-table) and the
         inline Experimental Setup controls both render in the active wizard."""

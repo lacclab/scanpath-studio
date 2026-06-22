@@ -1264,6 +1264,25 @@ def _schema_source_columns(schema: Dict) -> set:
     return cols
 
 
+def dropped_columns(
+    raw: pd.DataFrame,
+    *,
+    keep: Optional[set] = None,
+    schema: Optional[Dict] = None,
+) -> list:
+    """Original source columns discarded during normalization (sorted).
+
+    Pass ``keep`` (the set handed to ``normalize_words``/``normalize_fixations``,
+    i.e. a ``compute_keep_columns`` result) for the union-keep tables, or
+    ``schema`` for raw gaze (``normalize_raw_gaze`` keeps only the
+    schema-referenced columns). With neither, returns ``[]``."""
+    if keep is None and schema is not None:
+        keep = _schema_source_columns(schema)
+    if keep is None:
+        return []
+    return sorted(c for c in raw.columns if c not in keep)
+
+
 def _apply_optional_fields(
     df: pd.DataFrame, source: pd.DataFrame, registry: list, keep: Optional[set]
 ) -> set:
@@ -1550,6 +1569,49 @@ def empty_fixations_frame() -> pd.DataFrame:
     return pd.DataFrame(
         {col: pd.Series(dtype=dt) for col, dt in FIX_CANONICAL_COLUMNS.items()}
     )
+
+
+# Identity columns recomputed (not carried) by a remap — see remap_normalized_frame.
+_REMAP_DERIVED_IDS = ("unique_trial_id", "unique_text_id", "unique_paragraph_id")
+
+
+def remap_normalized_frame(
+    frame: pd.DataFrame, schema: Dict[str, Optional[str]], *, kind: str
+) -> pd.DataFrame:
+    """Re-derive an already-normalized frame under a new column mapping.
+
+    Stored datasets keep only their post-normalization frames — canonical column
+    names (``duration_ms``, ``x``, ``word_id``, …) plus any kept extras; the
+    original upload columns are gone. To change the mapping without re-uploading,
+    re-run the matching ``normalize_*`` over the *normalized* frame, treating its
+    current columns as the source universe. ``schema`` therefore references
+    canonical/extra column names (e.g. ``{"duration": "duration_ms",
+    "trial": "trial_id", ...}``).
+
+    The precomputed identity columns (``unique_trial_id`` etc.) are dropped first
+    so the new Trial/Text mapping is authoritative: otherwise ``normalize_*``
+    would keep deriving ``trial_id`` from the existing ``unique_trial_id`` and
+    silently ignore a changed Trial ID pick. Every surviving column is kept
+    (``keep_columns`` = all current columns) so the remap only reassigns roles
+    and never drops data that already survived the first normalization. After
+    normalization ``unique_trial_id`` is restored (= ``trial_id``) when the
+    single-column path didn't set one, so the frame's identity columns stay
+    consistent with the composite path."""
+    working = frame.drop(
+        columns=[c for c in _REMAP_DERIVED_IDS if c in frame.columns]
+    )
+    keep = set(working.columns)
+    if kind == "words":
+        result = normalize_words(working, schema, keep_columns=keep)
+    elif kind == "fixations":
+        result = normalize_fixations(working, schema, keep_columns=keep)
+    elif kind == "raw_gaze":
+        result = normalize_raw_gaze(working, schema)
+    else:
+        raise ValueError(f"unknown frame kind: {kind!r}")
+    if "unique_trial_id" not in result.columns and "trial_id" in result.columns:
+        result["unique_trial_id"] = result["trial_id"]
+    return result
 
 
 def _union_column_values(

@@ -38,9 +38,18 @@ from scanpath_studio.data import (
     derive_trial_index,
     frame_fingerprint,
     has_explicit_trial_index,
+    remap_normalized_frame,
+    trial_mapping_columns,
+    validate_fix_schema,
+    validate_raw_gaze_schema,
+    validate_word_schema,
 )
 from scanpath_studio.controls import (
+    FIX_FIELD_SPECS,
+    RAW_GAZE_FIELD_SPECS,
     SUMMARY_CHIP_FIELDS,
+    WORD_FIELD_SPECS,
+    column_mapping_ui,
     render_narrow_by,
     render_trial_filters,
     sidebar_controls,
@@ -3367,11 +3376,214 @@ def _column_mapping_rows(mapping: dict) -> list[dict]:
     return rows
 
 
+# Field-key → canonical post-normalization column for each table. The remap
+# editor seeds from these (the normalized frame's columns ARE these names) so it
+# opens showing the current mapping. The word box always seeds x/y/width/height
+# because normalize_words converts edge coordinates to origin+size.
+_WORD_REMAP_CANON = {
+    "participant": "participant_id",
+    "trial": "trial_id",
+    "word_id": "word_id",
+    "text": "text",
+    "text_id": "text_id",
+    "line": "line_idx",
+    "x": "x",
+    "y": "y",
+    "width": "width",
+    "height": "height",
+}
+_FIX_REMAP_CANON = {
+    "participant": "participant_id",
+    "trial": "trial_id",
+    "x": "x",
+    "y": "y",
+    "duration": "duration_ms",
+    "timestamp": "timestamp_ms",
+    "fixation_id": "fixation_id",
+    "text_id": "text_id",
+    "word_id": "word_id",
+}
+_RAW_GAZE_REMAP_CANON = {
+    "participant": "participant_id",
+    "trial": "trial_id",
+    "x": "x",
+    "y": "y",
+    "timestamp": "timestamp_ms",
+    "text": "text",
+}
+# (table_key, label, field_specs, canonical-map) for the editable remap form.
+_REMAP_TABLES = [
+    ("words", "Words/IA", WORD_FIELD_SPECS, _WORD_REMAP_CANON),
+    ("fixations", "Fixations", FIX_FIELD_SPECS, _FIX_REMAP_CANON),
+    ("raw_gaze", "Raw gaze", RAW_GAZE_FIELD_SPECS, _RAW_GAZE_REMAP_CANON),
+]
+# Validators keyed by table — checked before a remap is applied.
+_REMAP_VALIDATORS = {
+    "words": validate_word_schema,
+    "fixations": validate_fix_schema,
+    "raw_gaze": validate_raw_gaze_schema,
+}
+
+
+def _active_stored_dataset() -> Optional[tuple]:
+    """``(name, entry)`` for the active source when it's a stored upload, else
+    ``None`` — gates the editable remap form to stored datasets only."""
+    name = st.session_state.get("data_source_choice")
+    entry = st.session_state.get("_datasets", {}).get(name)
+    return (name, entry) if entry is not None else None
+
+
+def _remap_proposed(schema: Optional[dict], frame_columns, canon: dict) -> dict:
+    """Seed the remap editor from the stored schema: each field the dataset had
+    mapped → its canonical column (present in the now-normalized frame), else
+    ``None``. The word box (canon ``_WORD_REMAP_CANON``) always seeds its four
+    geometry keys since normalize collapses any edge format to x/y/width/height."""
+    cols = set(frame_columns)
+    schema = schema or {}
+    is_word_box = canon is _WORD_REMAP_CANON
+    proposed: dict = {}
+    for key, canonical in canon.items():
+        if canonical not in cols:
+            proposed[key] = None
+        elif is_word_box and key in ("x", "y", "width", "height"):
+            proposed[key] = canonical
+        else:
+            proposed[key] = canonical if schema.get(key) else None
+    return proposed
+
+
+def _apply_remap() -> None:
+    """Re-derive the active stored dataset's frames under the edited mapping and
+    overwrite the entry in place (the "Apply remapping" button's ``on_click``).
+
+    Reads the per-table schemas captured during render in
+    ``_remap_pending_schemas``; validates each present table; on success
+    re-normalizes via ``data.remap_normalized_frame`` and recomputes the
+    composite trial components. ``app.main``'s stored-dataset branch then
+    re-publishes the new frames + mapping on the rerun this callback triggers."""
+    active = _active_stored_dataset()
+    if active is None:
+        return
+    name, stored = active
+    pending = st.session_state.get("_remap_pending_schemas") or {}
+    problems: dict = {}
+    for table_key in ("words", "fixations", "raw_gaze"):
+        frame = stored.get(table_key)
+        if frame is None or frame.empty or table_key not in pending:
+            continue
+        probs = _REMAP_VALIDATORS[table_key](pending[table_key])
+        if probs:
+            problems[table_key] = probs
+    if problems:
+        st.session_state["_remap_problems"] = problems
+        return
+    st.session_state.pop("_remap_problems", None)
+
+    new_entry = dict(stored)
+    new_schemas = dict(stored.get("schemas") or {})
+    for table_key in ("words", "fixations", "raw_gaze"):
+        frame = stored.get(table_key)
+        if frame is None or frame.empty or table_key not in pending:
+            continue
+        schema = pending[table_key]
+        new_entry[table_key] = remap_normalized_frame(frame, schema, kind=table_key)
+        new_schemas[table_key] = schema
+    new_entry["schemas"] = new_schemas
+    # Recompute the composite trial components from the new trial mapping so the
+    # cascading trial picker stays in sync (mirrors the wizard finalize).
+    trial_schema = next(
+        (
+            new_schemas[t].get("trial")
+            for t in ("fixations", "words", "raw_gaze")
+            if new_schemas.get(t) and new_schemas[t].get("trial")
+        ),
+        None,
+    )
+    comp = trial_mapping_columns(trial_schema) if trial_schema else []
+    new_entry["composite_trial_columns"] = comp if len(comp) > 1 else []
+    st.session_state["_datasets"][name] = new_entry
+    st.session_state["_remap_applied"] = name
+
+
+def _render_remap_editor(name: str, stored: dict) -> None:
+    """Editable column-mapping form for a stored dataset (the surviving columns).
+
+    Renders one ``column_mapping_ui`` per present table seeded with the current
+    mapping, a note listing columns dropped at import, and an Apply button. The
+    widget keys are namespaced by dataset name so switching datasets never feeds
+    a stale column to a selectbox (which would raise)."""
+    st.subheader("Column mapping")
+    st.caption(
+        "Change how this dataset's columns map to the app's canonical fields. "
+        "Only columns that survived the original import are available."
+    )
+    if st.session_state.pop("_remap_applied", None) == name:
+        st.success("Mapping updated — the dataset was re-derived.")
+    problems = st.session_state.get("_remap_problems") or {}
+    composite = list(stored.get("composite_trial_columns") or [])
+    pending: dict = {}
+    for table_key, label, specs, canon in _REMAP_TABLES:
+        frame = stored.get(table_key)
+        if frame is None or frame.empty:
+            continue
+        prefix = f"remap_{name}_{table_key}"
+        proposed = _remap_proposed(
+            (stored.get("schemas") or {}).get(table_key), frame.columns, canon
+        )
+        # Composite trial id: pre-seed the multiselect with the preserved
+        # component columns (column_mapping_ui's ``proposed`` carries only a
+        # single default). Initial-seed only — never fight later user edits.
+        if composite and all(c in frame.columns for c in composite):
+            trial_key = f"{prefix}_trial"
+            if trial_key not in st.session_state:
+                st.session_state[trial_key] = list(composite)
+        pending[table_key] = column_mapping_ui(
+            frame,
+            label,
+            prefix,
+            specs,
+            proposed,
+            problems=problems.get(table_key),
+            use_expander=True,
+        )
+    st.session_state["_remap_pending_schemas"] = pending
+
+    dropped = stored.get("dropped_columns") or {}
+    flat = sorted({c for cols in dropped.values() for c in (cols or [])})
+    if flat:
+        # A popover keeps the (often long) dropped-column list out of the way —
+        # zero footprint until opened, then a height-capped, searchable table.
+        with st.popover(f"⚠️ {len(flat)} columns dropped at import"):
+            st.caption(
+                "Dropped during the original import — re-upload the file to "
+                "remap them."
+            )
+            st.dataframe(
+                pd.DataFrame({"Dropped column": flat}),
+                hide_index=True,
+                width="stretch",
+                height=320,
+            )
+    st.button(
+        "Apply remapping",
+        type="primary",
+        key=f"remap_apply_{name}",
+        on_click=_apply_remap,
+        help="Re-derive this dataset's frames with the new mapping (overwrites it).",
+    )
+
+
 def _render_column_mapping_section() -> None:
     """Show how each source column was mapped to the app's canonical fields.
 
-    Reads the schemas stashed by the data-loading paths in ``app`` under
-    ``st.session_state['_active_column_mapping']``."""
+    For a stored uploaded dataset the mapping is **editable** — the user can
+    remap among the columns that survived normalization (``_render_remap_editor``).
+    Every other source is read-only, built from the schemas stashed by the
+    data-loading paths in ``app`` under ``st.session_state['_active_column_mapping']``."""
+    active = _active_stored_dataset()
+    if active is not None:
+        _render_remap_editor(*active)
+        return
     st.subheader("Column mapping")
     mapping = st.session_state.get("_active_column_mapping") or {}
     rows = _column_mapping_rows(mapping)

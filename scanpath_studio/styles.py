@@ -248,18 +248,35 @@ def get_app_css() -> str:
     .sps-chip-more-summary::-webkit-details-marker { display: none; }
     .sps-chip-more-summary::after { content: " ▾"; font-size: 0.7rem; }
     .sps-chip-more[open] .sps-chip-more-summary::after { content: " ▴"; }
+    /* The "More" panel: a tidy key→value list of the summary stats, opened as a
+       floating card so it never reflows the chip row. */
     .sps-chip-more-body {
         position: absolute;
         top: calc(100% + 0.3rem);
-        left: 0;
+        right: 0;
         z-index: 20;
-        flex-wrap: nowrap;
-        padding: 0.4rem 0.5rem;
+        display: flex;
+        flex-direction: column;
+        min-width: 13rem;
+        padding: 0.3rem 0.65rem;
         background: var(--background-color, #fff);
         border: 1px solid rgba(0, 0, 0, 0.12);
-        border-radius: 0.5rem;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+        border-radius: 0.6rem;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
     }
+    .sps-stat {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding: 0.32rem 0;
+        font-size: 0.82rem;
+        line-height: 1.25;
+        white-space: nowrap;
+    }
+    .sps-stat + .sps-stat { border-top: 1px solid rgba(0, 0, 0, 0.07); }
+    .sps-stat-name { color: #6c757d; }
+    .sps-stat-val { font-weight: 700; color: #212529; }
     .sps-chip {
         display: inline-flex;
         align-items: center;

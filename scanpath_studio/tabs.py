@@ -1661,7 +1661,7 @@ def _render_trial_condition_chips(
             value = summary_lookup.get(label)
             if value in (None, ""):
                 continue  # e.g. "Fixations in word boxes" unavailable for this trial
-            summary.append((f"{label} = {value}", _CHIP_NEUTRAL_BG))
+            summary.append((label, str(value)))
             continue
         value, trial_level = _chip_value_and_uniqueness(
             col, trial_words, trial_fixations, participant
@@ -1685,6 +1685,16 @@ def _render_trial_condition_chips(
             for lbl, bg in items
         )
 
+    def _stat_rows(items: list[tuple[str, str]]) -> str:
+        # Summary stats read as a tidy key→value list (not squeezed pills).
+        return "".join(
+            f'<div class="sps-stat">'
+            f'<span class="sps-stat-name">{html.escape(name)}</span>'
+            f'<span class="sps-stat-val">{html.escape(value)}</span>'
+            "</div>"
+            for name, value in items
+        )
+
     # A "?" marker pointing to the sidebar picker (native HTML title tooltip).
     help_span = (
         '<span class="sps-chip-help" title="Change which fields show here in the '
@@ -1697,7 +1707,7 @@ def _render_trial_condition_chips(
         more_html = (
             '<details class="sps-chip-more">'
             '<summary class="sps-chip sps-chip-more-summary">More</summary>'
-            f'<div class="sps-trial-chips sps-chip-more-body">{_spans(summary)}</div>'
+            f'<div class="sps-chip-more-body">{_stat_rows(summary)}</div>'
             "</details>"
         )
     st.markdown(

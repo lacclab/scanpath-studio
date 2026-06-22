@@ -1605,9 +1605,7 @@ def remap_normalized_frame(
     referenced = _schema_source_columns(schema)
     working = frame.drop(
         columns=[
-            c
-            for c in _REMAP_DERIVED_IDS
-            if c in frame.columns and c not in referenced
+            c for c in _REMAP_DERIVED_IDS if c in frame.columns and c not in referenced
         ]
     )
     keep = set(working.columns)

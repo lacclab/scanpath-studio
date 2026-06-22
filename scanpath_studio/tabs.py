@@ -3560,8 +3560,7 @@ def _render_remap_editor(name: str, stored: dict) -> None:
         # zero footprint until opened, then a height-capped, searchable table.
         with st.popover(f"⚠️ {len(flat)} columns dropped at import"):
             st.caption(
-                "Dropped during the original import — re-upload the file to "
-                "remap them."
+                "Dropped during the original import — re-upload the file to remap them."
             )
             st.dataframe(
                 pd.DataFrame({"Dropped column": flat}),

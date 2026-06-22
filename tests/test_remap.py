@@ -251,7 +251,11 @@ def test_remap_proposed_always_seeds_text_id():
 
     cols = ["participant_id", "trial_id", "text_id", "x", "y", "duration_ms"]
     proposed = _remap_proposed(
-        {"participant": "participant_id", "trial": "trial_id", "duration": "duration_ms"},
+        {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "duration": "duration_ms",
+        },
         cols,
         _FIX_REMAP_CANON,
     )

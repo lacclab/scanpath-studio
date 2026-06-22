@@ -1584,9 +1584,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "words": dropped_columns(raw_words, keep=keep_words)
                 if has_words
                 else [],
-                "fixations": dropped_columns(raw_fix, keep=keep_fix)
-                if has_fix
-                else [],
+                "fixations": dropped_columns(raw_fix, keep=keep_fix) if has_fix else [],
                 "raw_gaze": dropped_columns(raw_gaze, schema=raw_gaze_schema)
                 if not raw_gaze.empty
                 else [],

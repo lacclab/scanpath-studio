@@ -1794,7 +1794,7 @@ def render_single_trial_tab(
         nb_label, nb_text, nb_part, more_col = st.columns(
             [1, 2.3, 2.3, 1.2], vertical_alignment="center"
         )
-        nb_label.markdown("**Narrow by**")
+        nb_label.markdown("**Filter by**")
         render_narrow_by(words_all, fixations_all, text_host=nb_text, part_host=nb_part)
         with more_col:
             more_pop = st.popover("More", width="content")

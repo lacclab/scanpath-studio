@@ -1,0 +1,52 @@
+// Scanpath Studio — project map. Render: dot -Tpng project_map.dot -o project_map.png
+// Solid blue = built. Dashed grey = planned (see IMPROVEMENTS.md).
+digraph ScanpathStudio {
+  rankdir=LR;
+  bgcolor="white";
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11,
+        fillcolor="#dce9f7", color="#3b6ea5", penwidth=1.4];
+  edge [color="#9aa6b2", arrowsize=0.7];
+
+  built  [label="Built", fillcolor="#dce9f7", color="#3b6ea5"];
+  todo   [label="Planned *", style="rounded,filled,dashed", fillcolor="#f1f1f1", color="#9aa6b2", fontcolor="#666666"];
+  { rank=source; built; todo; }
+  built -> todo [style=invis];
+
+  node [fillcolor="#c9ddf2", color="#2f5b8a", penwidth=1.8, fontsize=12];
+  ingest   [label="Data ingestion"];
+  single   [label="Single-trial viz"];
+  corpus   [label="Corpus analysis"];
+  triage   [label="Triage & export"];
+  iface    [label="Interfaces"];
+
+  node [fillcolor="#dce9f7", color="#3b6ea5", penwidth=1.4, fontsize=10];
+  i1 [label="Upload + schema auto-detect"];
+  i2 [label="Measures from raw fix\n(FFD/FPRT/RPD/TFD)"];
+  i3 [label="OneStop · PoTeC · MultiplEYE"];
+
+  s1 [label="True-to-scale scanpath layers"];
+  s2 [label="Animated replay (HTML/GIF/MP4)"];
+  s3 [label="Compare two readings"];
+
+  c1 [label="Trends · word heatmap · distributions"];
+
+  t1 [label="Star/tag/note + filters"];
+  t2 [label="Bulk export zip"];
+
+  f1 [label="App · CLI · Python API"];
+
+  ingest -> {i1 i2 i3};
+  single -> {s1 s2 s3};
+  corpus -> c1;
+  triage -> {t1 t2};
+  iface  -> f1;
+
+  // planned
+  node [style="rounded,filled,dashed", fillcolor="#f1f1f1", color="#9aa6b2", fontcolor="#555555"];
+  c2 [label="Per text *"];
+  c3 [label="Per participant *"];
+  c4 [label="Per group *"];
+  c5 [label="Group comparison *"];
+  c6 [label="Generations (WIP) *"];
+  corpus -> {c2 c3 c4 c5 c6};
+}

@@ -62,6 +62,12 @@ The app is organized into three tabs:
 
 ![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/app_screenshot.png)
 
+## Project map
+
+![Project map: built vs. planned capabilities](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/project_map.png)
+
+*Solid = built, dashed = planned ([IMPROVEMENTS.md](IMPROVEMENTS.md)).*
+
 ## Your data
 
 Upload **CSV, TSV, Parquet, or Feather** tables for words/AoIs, fixations, and

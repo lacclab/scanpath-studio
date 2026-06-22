@@ -21,6 +21,7 @@ from .constants import (
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_SACCADE_WIDTH,
     FIX_MARKER_OUTLINE,
     FONT_FAMILY,
     HIGHLIGHTED_TEXT_COLOR,
@@ -700,6 +701,7 @@ def make_scanpath_figure(
     highlight_column: Optional[str] = "is_in_aspan",
     saccade_color: str = SACCADE_COLOR,
     saccade_style: str = "solid",
+    saccade_width: float = DEFAULT_SACCADE_WIDTH,
     hollow_fixations: bool = False,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
@@ -948,7 +950,9 @@ def make_scanpath_figure(
                     x=sx,
                     y=sy,
                     mode="lines",
-                    line=dict(color=saccade_color, width=2, dash=saccade_style),
+                    line=dict(
+                        color=saccade_color, width=saccade_width, dash=saccade_style
+                    ),
                     hoverinfo="skip",
                     showlegend=False,
                     name="saccades",
@@ -1773,6 +1777,7 @@ def make_scanpath_animation(
     show_colorbars: bool = False,
     saccade_color: str = SACCADE_COLOR,
     saccade_style: str = "solid",
+    saccade_width: float = DEFAULT_SACCADE_WIDTH,
     hollow_fixations: bool = False,
     background_color: Optional[str] = None,
     fixations_b: Optional[pd.DataFrame] = None,
@@ -2008,7 +2013,9 @@ def make_scanpath_animation(
                     x=sac_x,
                     y=sac_y,
                     mode="lines",
-                    line=dict(color=s["sac_color"], width=2, dash=saccade_style),
+                    line=dict(
+                        color=s["sac_color"], width=saccade_width, dash=saccade_style
+                    ),
                     showlegend=False,
                     legendgroup=s["label"],
                     hoverinfo="skip",
@@ -2125,7 +2132,11 @@ def make_scanpath_animation(
                         x=sac_x,
                         y=sac_y,
                         mode="lines",
-                        line=dict(color=s["sac_color"], width=2, dash=saccade_style),
+                        line=dict(
+                            color=s["sac_color"],
+                            width=saccade_width,
+                            dash=saccade_style,
+                        ),
                     )
                 )
                 traces_idx_in_frame.append(s["idx_sac"])
@@ -2290,6 +2301,7 @@ def _comparison_scanpath_style(
         "fix_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
         "saccade_color": COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)],
         "saccade_style": "solid",
+        "saccade_width": DEFAULT_SACCADE_WIDTH,
         "marker_size_range": default_marker_size_range,
         "hollow": False,
     }
@@ -2325,6 +2337,7 @@ def _add_comparison_fixation_trace(
     fix_color = style["fix_color"]
     saccade_color = style["saccade_color"]
     saccade_style = style.get("saccade_style", "solid")
+    saccade_width = style.get("saccade_width", DEFAULT_SACCADE_WIDTH)
 
     def _add(trace):
         if row is not None and col is not None:
@@ -2340,7 +2353,9 @@ def _add_comparison_fixation_trace(
                     x=sx,
                     y=sy,
                     mode="lines",
-                    line=dict(color=saccade_color, width=2, dash=saccade_style),
+                    line=dict(
+                        color=saccade_color, width=saccade_width, dash=saccade_style
+                    ),
                     name=display_name,
                     legendgroup=display_name,
                     showlegend=False,

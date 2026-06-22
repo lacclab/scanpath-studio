@@ -60,6 +60,7 @@ from scanpath_studio.constants import (
     DEFAULT_LINE_SPACING,
     FONT_FAMILY,
     SACCADE_DASH_OPTIONS,
+    SACCADE_WIDTH_BOUNDS,
     WORD_LABEL_COLOR,
 )
 from scanpath_studio.controls import (
@@ -252,7 +253,10 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "font_family": "global_font_family",
 }
 _SHARE_INT_PARAMS = {"order_font_size": "global_order_font_size"}
-_SHARE_FLOAT_PARAMS = {"line_spacing": "global_line_spacing"}
+_SHARE_FLOAT_PARAMS = {
+    "line_spacing": "global_line_spacing",
+    "saccade_width": "global_saccade_width",
+}
 _SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
 _SHARE_FLOAT_RANGE_PARAMS = {
     "fixation_color_range": "global_fixation_color_range",
@@ -580,6 +584,14 @@ def _restore_plot_config(
         else:
             put(key, max(lo, min(int(n), hi)))
 
+    def put_float(value, key, lo, hi, skip_label):
+        """Apply a float clamped to ``[lo, hi]``; skip a non-numeric upload."""
+        n = number(value)
+        if n is None:
+            skipped.append(skip_label)
+        else:
+            put(key, max(lo, min(float(n), hi)))
+
     # Re-apply the saved column mapping + kept-field choices (so restoring a
     # config skips re-mapping). Seeded before the mapping widgets render.
     _seed_column_mapping(config.get("column_mapping"))
@@ -630,6 +642,14 @@ def _restore_plot_config(
             "global_saccade_style",
             coloring["saccade_style"],
             "saccade line style",
+        )
+    if "saccade_width" in coloring:
+        put_float(
+            coloring["saccade_width"],
+            "global_saccade_width",
+            SACCADE_WIDTH_BOUNDS[0],
+            SACCADE_WIDTH_BOUNDS[1],
+            "saccade line width",
         )
     if "hollow_fixations" in coloring:
         put("global_hollow_fixations", bool(coloring["hollow_fixations"]))
@@ -793,6 +813,14 @@ def _restore_plot_config(
                     f"cmp{idx}_saccade_style",
                     entry["saccade_style"],
                     f"scanpath {idx + 1} line style",
+                )
+            if "saccade_width" in entry:
+                put_float(
+                    entry["saccade_width"],
+                    f"cmp{idx}_saccade_width",
+                    SACCADE_WIDTH_BOUNDS[0],
+                    SACCADE_WIDTH_BOUNDS[1],
+                    f"scanpath {idx + 1} line width",
                 )
             rng = entry.get("marker_size_range")
             if isinstance(rng, (list, tuple)) and len(rng) == 2:

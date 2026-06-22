@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Saccade line width.** The Saccade-style popover gains a *Saccade line width*
+  slider (0.5–10 px, default 2) so the saccade traces can be thinned for dense
+  scanpaths or thickened for presentations. Threads through the single, animated,
+  and comparison plots (with a per-scanpath width for two-trial comparisons) and
+  bulk export, is saved/restored with the plot config, deep-linkable
+  (`?saccade_width=`), and exposed headless via `plot_scanpath(saccade_width=…)`.
 - **Show full monitor.** A new toggle (Visualization → *Axes & color bars*, on by
   default) frames the plot to the whole virtual presentation monitor so the
   scanpath sits where it actually appeared on screen, with the rest of the

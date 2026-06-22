@@ -69,6 +69,10 @@ SACCADE_DASH_OPTIONS = {
     "Dotted": "dot",
     "Dash-dot": "dashdot",
 }
+# Saccade line width (px): default + the (min, max) the width slider allows.
+DEFAULT_SACCADE_WIDTH = 2.0
+SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
+
 # Outline width (px) for hollow (outline-only) fixation markers.
 HOLLOW_OUTLINE_WIDTH = 2.0
 

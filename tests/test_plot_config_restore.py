@@ -174,6 +174,7 @@ class TestPlotConfigRestore:
             config["coloring"],
             color_by="line",  # synthetic opt
             saccade_style="Dashed",
+            saccade_width=4.0,
             hollow_fixations=True,
             colorbar_orientation="Horizontal",
             colorbar_tickangle=45,
@@ -198,6 +199,7 @@ class TestPlotConfigRestore:
                 "fix_color": "#111111",
                 "saccade_color": "#222222",
                 "saccade_style": "Dotted",
+                "saccade_width": 3.5,
                 "marker_size_range": [6, 18],
                 "hollow": True,
             },
@@ -205,6 +207,7 @@ class TestPlotConfigRestore:
                 "fix_color": "#333333",
                 "saccade_color": "#444444",
                 "saccade_style": "Solid",
+                "saccade_width": 1.5,
                 "marker_size_range": [9, 21],
                 "hollow": False,
             },
@@ -226,6 +229,7 @@ class TestPlotConfigRestore:
         assert ss["global_critical_span_style"] == "Mark border"
         assert ss["global_highlight_out_of_text"] is True
         assert ss["global_saccade_style"] == "Dashed"
+        assert ss["global_saccade_width"] == 4.0
         assert ss["global_hollow_fixations"] is True
         assert ss["global_text_color"] == "#010203"
         assert ss["global_highlight_text_color"] == "#fedcba"
@@ -241,10 +245,12 @@ class TestPlotConfigRestore:
         assert ss["cmp0_fix_color"] == "#111111"
         assert ss["cmp0_saccade_color"] == "#222222"
         assert ss["cmp0_saccade_style"] == "Dotted"
+        assert ss["cmp0_saccade_width"] == 3.5
         assert ss["cmp0_marker_size_range"] == (6, 18)
         assert ss["cmp0_hollow"] is True
         assert ss["cmp1_fix_color"] == "#333333"
         assert ss["cmp1_saccade_style"] == "Solid"
+        assert ss["cmp1_saccade_width"] == 1.5
         assert ss["cmp1_hollow"] is False
         store = ss["trial_annotations"]
         assert ("p1", "t2") in store
@@ -418,6 +424,7 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         viz_settings={
             "heatmap_metric": "duration_ms",
             "saccade_style": "Dotted",
+            "saccade_width": 6.0,
             "hollow_fixations": True,
         },
         base_font_size=16,
@@ -446,6 +453,7 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["selection"] == {"participant_id": "p1", "trial_id": "t1"}
     assert cfg["coloring"]["color_by"] == "line"
     assert cfg["coloring"]["saccade_style"] == "Dotted"
+    assert cfg["coloring"]["saccade_width"] == 6.0
     assert cfg["coloring"]["hollow_fixations"] is True
     assert cfg["text"]["font_family"] == "Courier New"
     assert cfg["text"]["text_color"] == "#010203"

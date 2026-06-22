@@ -1661,7 +1661,7 @@ def _render_trial_condition_chips(
             value = summary_lookup.get(label)
             if value in (None, ""):
                 continue  # e.g. "Fixations in word boxes" unavailable for this trial
-            summary.append((f"{label} = {value}", _CHIP_NEUTRAL_BG))
+            summary.append((label, str(value)))
             continue
         value, trial_level = _chip_value_and_uniqueness(
             col, trial_words, trial_fixations, participant
@@ -1685,10 +1685,22 @@ def _render_trial_condition_chips(
             for lbl, bg in items
         )
 
-    # A "?" marker pointing to the sidebar picker (native HTML title tooltip).
+    def _stat_rows(items: list[tuple[str, str]]) -> str:
+        # Summary stats read as a tidy key→value list (not squeezed pills).
+        return "".join(
+            f'<div class="sps-stat">'
+            f'<span class="sps-stat-name">{html.escape(name)}</span>'
+            f'<span class="sps-stat-val">{html.escape(value)}</span>'
+            "</div>"
+            for name, value in items
+        )
+
+    # A "?" marker pointing to the sidebar picker (styled hover/focus tooltip via
+    # the .sps-chip-help::after bubble; tabindex+aria-label keep it accessible).
+    _chip_help_tip = "Change which fields show here in the sidebar → 🏷️ Trial chips"
     help_span = (
-        '<span class="sps-chip-help" title="Change which fields show here in the '
-        'sidebar → 🏷️ Trial chips">?</span>'
+        f'<span class="sps-chip-help" tabindex="0" role="img" '
+        f'aria-label="{_chip_help_tip}" data-tip="{_chip_help_tip}">?</span>'
     )
     # The summary stats sit inside an inline <details> "More" — only fields not
     # already shown inline — so the whole strip stays one line until expanded.
@@ -1697,7 +1709,7 @@ def _render_trial_condition_chips(
         more_html = (
             '<details class="sps-chip-more">'
             '<summary class="sps-chip sps-chip-more-summary">More</summary>'
-            f'<div class="sps-trial-chips sps-chip-more-body">{_spans(summary)}</div>'
+            f'<div class="sps-chip-more-body">{_stat_rows(summary)}</div>'
             "</details>"
         )
     st.markdown(

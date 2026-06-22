@@ -221,8 +221,10 @@ def get_app_css() -> str:
     }
     .sps-chips-primary .sps-chip { flex: 0 0 auto; }
     .sps-chip-help, .sps-chip-more { flex: 0 0 auto; }
-    /* "?" help marker → small round badge with a native hover tooltip. */
+    /* "?" help marker → small round badge with a styled hover/focus tooltip
+       (a native title= is too easy to miss — slow, tiny, hover-only). */
     .sps-chip-help {
+        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -235,6 +237,26 @@ def get_app_css() -> str:
         color: #555;
         cursor: help;
     }
+    .sps-chip-help::after {
+        content: attr(data-tip);
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        white-space: nowrap;
+        background: #212529;
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 500;
+        padding: 0.3rem 0.5rem;
+        border-radius: 0.35rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+        opacity: 0;
+        pointer-events: none;
+        z-index: 30;
+        transition: opacity 0.12s ease;
+    }
+    .sps-chip-help:hover::after,
+    .sps-chip-help:focus::after { opacity: 1; }
     /* Inline "More" disclosure: the chip-styled summary stays on the one-line
        strip; its body (the not-already-shown summary stats) opens as a floating
        dropdown so expanding it never reflows the chip row. */
@@ -248,18 +270,35 @@ def get_app_css() -> str:
     .sps-chip-more-summary::-webkit-details-marker { display: none; }
     .sps-chip-more-summary::after { content: " ▾"; font-size: 0.7rem; }
     .sps-chip-more[open] .sps-chip-more-summary::after { content: " ▴"; }
+    /* The "More" panel: a tidy key→value list of the summary stats, opened as a
+       floating card so it never reflows the chip row. */
     .sps-chip-more-body {
         position: absolute;
         top: calc(100% + 0.3rem);
-        left: 0;
+        right: 0;
         z-index: 20;
-        flex-wrap: nowrap;
-        padding: 0.4rem 0.5rem;
+        display: flex;
+        flex-direction: column;
+        min-width: 13rem;
+        padding: 0.3rem 0.65rem;
         background: var(--background-color, #fff);
         border: 1px solid rgba(0, 0, 0, 0.12);
-        border-radius: 0.5rem;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+        border-radius: 0.6rem;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
     }
+    .sps-stat {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding: 0.32rem 0;
+        font-size: 0.82rem;
+        line-height: 1.25;
+        white-space: nowrap;
+    }
+    .sps-stat + .sps-stat { border-top: 1px solid rgba(0, 0, 0, 0.07); }
+    .sps-stat-name { color: #6c757d; }
+    .sps-stat-val { font-weight: 700; color: #212529; }
     .sps-chip {
         display: inline-flex;
         align-items: center;

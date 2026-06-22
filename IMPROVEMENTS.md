@@ -87,8 +87,9 @@ label line.
 **CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Done`
 
 Done: `global_show_compare_legend` (default off) threads `show_legend` into
-`make_comparison_figure` / the split figure; the overlay reclaims the top reserve
-when hidden. Toggle lives in the compare selector's ⚙ popover.
+`make_comparison_figure` / the split figure **and** the animated dual overlay
+(`make_scanpath_animation`); the static overlay reclaims the top reserve when
+hidden. Toggle lives in the compare selector's ⚙ popover.
 
 **CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Done`
 

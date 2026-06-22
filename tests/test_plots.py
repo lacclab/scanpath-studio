@@ -781,9 +781,25 @@ class TestDualScanpathAnimation:
         assert hasattr(fig, "frames")
         # One frame per distinct fixation onset across both scanpaths.
         assert len(fig.frames) == 4
-        # Both trails appear in the legend so the two readers are tellable apart.
-        legend_names = [t.name for t in fig.data if t.showlegend]
-        assert len(legend_names) == 2
+        # A/B legend is off by default (CMP-2) — the flat colours already tell the
+        # two readers apart.
+        assert [t.name for t in fig.data if t.showlegend] == []
+
+    def test_dual_animation_legend_when_enabled(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        # With show_legend=True both trails appear in the legend (CMP-2).
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+            fixations_b=self._second_fixations(),
+            show_legend=True,
+        )
+        assert len([t.name for t in fig.data if t.showlegend]) == 2
 
     def test_dual_animation_ignores_color_by(
         self, normalized_words_df, normalized_fixations_df

@@ -1870,6 +1870,7 @@ def make_scanpath_animation(
     words_b: Optional[pd.DataFrame] = None,
     label_a: str = "Scanpath A",
     label_b: str = "Scanpath B",
+    show_legend: bool = False,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
     background_image: Optional[str] = None,
@@ -1890,7 +1891,8 @@ def make_scanpath_animation(
     quotes), so the stated time matches the observed runtime.
 
     With two scanpaths the trails take the two comparison colours, order numbers
-    are tinted per-scanpath, and a legend names them; word boxes/labels come from
+    are tinted per-scanpath, and an optional A/B legend (``show_legend``) names
+    them; word boxes/labels come from
     ``words`` (scanpath A), so the overlay is meaningful for two readings of the
     same text. With one scanpath the behaviour matches the classic single replay
     (order numbers honour ``order_font_color``, no legend).
@@ -2054,7 +2056,10 @@ def make_scanpath_animation(
                 mode="markers",
                 marker=_trail_marker(s),
                 text=s["order_text"],
-                showlegend=dual,
+                # A/B legend on the dual overlay only — off by default, honours the
+                # compare-legend toggle (CMP-2). The single-replay colour-by legend
+                # below is separate and unaffected.
+                showlegend=dual and show_legend,
                 name=s["label"],
                 legendgroup=s["label"],
                 hovertemplate=(

@@ -1558,6 +1558,7 @@ def _build_and_render_animation(
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+        show_legend=viz_settings.get("show_compare_legend", False),
         fixations_b=fixations_b if dual else None,
         words_b=words_b if dual else None,
         label_a=(

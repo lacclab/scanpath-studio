@@ -48,8 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the single-trial controls.
 - **Compare trial selector moved above the chips** — mirrors the main picker
   (dropdown + slider + ◀ ▶) with A/B colour labels matching the overlay; the A/B
-  legend is now optional and hidden by default; the redundant global saccade /
-  fixation controls are hidden in compare mode.
+  legend (static **and** animated overlay) is now optional and hidden by default;
+  the redundant global saccade / fixation controls are hidden in compare mode.
 - **Welcome tour walks the whole Scanpath screen in reading order** (plot →
   selection → chips → rail → panels → sidebar); the redundant *Exit* button is
   gone (the ✕ closes it).

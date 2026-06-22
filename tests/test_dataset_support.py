@@ -631,34 +631,37 @@ def test_load_multipleye(multipleye_root):
 
     # Reader key = full session; ET1/ET2 are distinct readers.
     assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1", "014_ZH_CH_1_ET2"}
-    # One trial per (stimulus, page).
+    # One trial per (stimulus, page); the page is zero-padded so trials sort
+    # numerically (page_01 < page_02 < … < page_10).
     assert set(words["trial_id"]) == {
-        "Lit_Demo_1__page_1",
-        "Lit_Demo_1__page_2",
-        "Arg_Other_2__page_1",
+        "Lit_Demo_1__page_01",
+        "Lit_Demo_1__page_02",
+        "Arg_Other_2__page_01",
     }
     # text_id stays the stimulus (for stimulus-level merges/grouping).
     assert set(words["text_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
 
-    # Char AOIs aggregated to one box per (page, word_idx): AA spans x 80..120.
-    aa = words[(words["trial_id"] == "Lit_Demo_1__page_1") & (words["word_id"] == 0)]
+    # Char AOIs aggregated to one box per (page, word_idx): AA spans x 80..120 in
+    # image space, shifted to where the centered stimulus sat on the monitor.
+    off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
+    aa = words[(words["trial_id"] == "Lit_Demo_1__page_01") & (words["word_id"] == 0)]
     assert aa["text"].iloc[0] == "AA"
-    assert aa["x"].iloc[0] == 80 and aa["width"].iloc[0] == 40
-    assert aa["y"].iloc[0] == 50 and aa["height"].iloc[0] == 30
+    assert aa["x"].iloc[0] == 80 + off_x and aa["width"].iloc[0] == 40
+    assert aa["y"].iloc[0] == 50 + off_y and aa["height"].iloc[0] == 30
 
     # Fixations carry the word index (scanpaths source) and link to boxes.
     f1 = fixations[fixations["participant_id"] == "001_ZH_CH_1_ET1"]
     assert f1["word_id"].notna().all()
     assert sorted(f1["trial_id"].unique()) == [
-        "Lit_Demo_1__page_1",
-        "Lit_Demo_1__page_2",
+        "Lit_Demo_1__page_01",
+        "Lit_Demo_1__page_02",
     ]
 
     fig = sps.plot_scanpath(
         words,
         fixations,
         "001_ZH_CH_1_ET1",
-        "Lit_Demo_1__page_1",
+        "Lit_Demo_1__page_01",
         canvas_size=(1920, 1080),
     )
     assert len(fig.data) > 0
@@ -668,8 +671,8 @@ def test_load_multipleye_pages_are_separate_non_overlapping_trials(multipleye_ro
     # page_1 and page_2 reuse the SAME coordinates but are different trials with
     # different text — proving the per-page split avoids the overlap.
     words, _ = datasets_module.load_multipleye(multipleye_root, stimuli=["Lit_Demo_1"])
-    p1 = words[words["trial_id"] == "Lit_Demo_1__page_1"]
-    p2 = words[words["trial_id"] == "Lit_Demo_1__page_2"]
+    p1 = words[words["trial_id"] == "Lit_Demo_1__page_01"]
+    p2 = words[words["trial_id"] == "Lit_Demo_1__page_02"]
     assert set(p1["text"]) == {"AA", "BB"}
     assert set(p2["text"]) == {"CC", "DD"}
     # Same box geometry on both pages.
@@ -685,7 +688,34 @@ def test_load_multipleye_fixations_source_fallback(multipleye_root):
     assert fixations["word_id"].isna().all()
     assert fixations["x"].notna().all()
     assert len(fixations) == 2
-    assert set(fixations["trial_id"]) == {"Lit_Demo_1__page_1", "Lit_Demo_1__page_2"}
+    assert set(fixations["trial_id"]) == {"Lit_Demo_1__page_01", "Lit_Demo_1__page_02"}
+
+
+def test_multipleye_centered_offset(multipleye_root):
+    _, fixations = datasets_module.load_multipleye(
+        multipleye_root, sessions=["001_ZH_CH_1_ET1"], stimuli=["Lit_Demo_1"]
+    )
+    off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
+    # The centering offset is (screen - image) / 2 = (305, 44.5) for the 1310x991
+    # image on the 1920x1080 monitor — image-relative coords are shifted onto the
+    # centered on-screen position.
+    assert datasets_module.MULTIPLEYE_MONITOR == (1920, 1080)
+    assert (off_x, off_y) == (305.0, 44.5)
+    f0 = fixations.iloc[0]
+    assert f0["x"] == 90 + off_x and f0["y"] == 65 + off_y  # _scan_row(…, 90, 65, …)
+
+
+def test_multipleye_trial_id_page_is_zero_padded_for_numeric_sort():
+    # The page is zero-padded in the trial id so the picker sorts numerically
+    # (page_2 before page_10), unlike the raw "page_2" / "page_10" strings.
+    assert datasets_module._multipleye_page_label("page_2") == "page_02"
+    assert datasets_module._multipleye_page_label("page_10") == "page_10"
+    assert (
+        datasets_module._multipleye_page_label("question_1") == "question_1"
+    )  # passthrough
+    pages = ["page_2", "page_10", "page_1"]
+    labels = sorted(datasets_module._multipleye_page_label(p) for p in pages)
+    assert labels == ["page_01", "page_02", "page_10"]  # lexicographic == numeric
 
 
 def test_load_multipleye_session_and_stimulus_filters(multipleye_root):
@@ -716,7 +746,7 @@ def test_multipleye_raw_frames_auto_detect_path(multipleye_root):
     words, fixations = data_module.harmonize_frames(words, fixations)
     assert set(words["text_id"]) == {"Lit_Demo_1"}
     assert set(words["participant_id"]) == {"001_ZH_CH_1_ET1"}  # broadcast worked
-    assert set(words["trial_id"]) == {"Lit_Demo_1__page_1", "Lit_Demo_1__page_2"}
+    assert set(words["trial_id"]) == {"Lit_Demo_1__page_01", "Lit_Demo_1__page_02"}
 
 
 def test_multipleye_inventory(multipleye_root):
@@ -753,6 +783,20 @@ def test_load_multipleye_real_sample():
     # Per-page trials, all from the one stimulus.
     assert set(words["text_id"]) == {"Lit_Alchemist_4"}
     assert all(t.startswith("Lit_Alchemist_4__page_") for t in words["trial_id"])
+    # Pages are zero-padded → lexicographic order == numeric order (no page_10
+    # wedged between page_1 and page_2).
+    pages = sorted(words["trial_id"].unique())
+    nums = [int(t.rsplit("page_", 1)[1]) for t in pages]
+    assert nums == sorted(nums)
+    # Coords + image sit at the centered on-screen position (true-to-scale on the
+    # 1920x1080 monitor), and the image origin matches the coordinate offset.
+    off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
+    assert fixations["x"].between(0, 1920).all()
+    assert fixations["y"].between(0, 1080).all()
+    assert (float(words["image_x"].iloc[0]), float(words["image_y"].iloc[0])) == (
+        off_x,
+        off_y,
+    )
     pid = sorted(fixations["participant_id"])[0]
     tid = sorted(fixations["trial_id"])[0]
     fig = sps.plot_scanpath(
@@ -982,7 +1026,7 @@ def test_multipleye_uploads_fixations_only():
     words, fixations = datasets_module.load_multipleye_uploads(scan, None)
     assert words.empty and not fixations.empty
     assert fixations["x"].notna().all()
-    assert set(fixations["trial_id"]) == {"Arg_Other_2__page_1"}
+    assert set(fixations["trial_id"]) == {"Arg_Other_2__page_01"}
 
 
 def test_multipleye_uploads_unrecognized_filenames():

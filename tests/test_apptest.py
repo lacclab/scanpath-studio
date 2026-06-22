@@ -1384,8 +1384,8 @@ class TestMultiplEYEUploadPreset:
         # Per-page trials, CamelCase stimulus (case-match worked), boxes joined.
         fixations = payload["fixations"]
         assert set(fixations["trial_id"]) == {
-            "Lit_Demo_1__page_1",
-            "Lit_Demo_1__page_2",
+            "Lit_Demo_1__page_01",
+            "Lit_Demo_1__page_02",
         }
         assert not payload["words"].empty
         # The generic column-mapping widgets are NOT rendered in this format.

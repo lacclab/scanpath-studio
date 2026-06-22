@@ -16,11 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `subject_difficulty_screen`), and aggregates the character-level AOI files to
   one word box per `(page, word_idx)`. Each reader is a *session*
   (`participant_id = "001_ZH_CH_1_ET1"` — ET1/ET2 read disjoint stimuli) and
-  each stimulus *page* is its own trial (`trial_id = "Lit_Alchemist_4__page_1"`,
-  since pages reuse the same screen coordinates), with `text_id` kept as the
-  stimulus for stimulus-level merges. `MULTIPLEYE_MONITOR = (1310, 991)` (the
-  stimulus-image / data coordinate space). Fixation source is `scanpaths/`
-  (page/word-tagged) or `fixations/` (raw).
+  each stimulus *page* is its own trial (`trial_id = "Lit_Alchemist_4__page_01"`,
+  zero-padded so pages sort numerically and shown as "Lit_Alchemist_4 · page 1"
+  in the trial picker, since pages reuse the same screen coordinates), with
+  `text_id` kept as the stimulus for stimulus-level merges. The image-relative
+  coordinates are shifted onto where the **centered** stimulus appeared on the
+  full screen, so `MULTIPLEYE_MONITOR = (1920, 1080)` (the real monitor) renders
+  the scanpath true-to-scale; the stimulus-image background is placed at the same
+  centered origin. Fixation source is `scanpaths/` (page/word-tagged) or
+  `fixations/` (raw).
 - **Public datasets are now offered by default** (PoTeC + MultiplEYE in the data
   source picker); set `SCANPATH_PUBLIC_DATASETS=0` to hide them.
 - **MultiplEYE rich side data.** Loading MultiplEYE now enriches the trial with

@@ -1197,6 +1197,8 @@ WORD_OPTIONAL_FIELDS = [
     # so the panels / image layer can read them off the word frame too.
     ("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
     ("image_path", "image_path", "passthrough", "meta"),
+    ("image_x", "image_x", "numeric", "meta"),
+    ("image_y", "image_y", "numeric", "meta"),
     ("genre", "genre", "string", "meta"),
 ]
 
@@ -1238,6 +1240,8 @@ FIX_OPTIONAL_FIELDS = [
     ("trial_num", "trial_num", "numeric", "meta"),
     ("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
     ("image_path", "image_path", "passthrough", "meta"),
+    ("image_x", "image_x", "numeric", "meta"),
+    ("image_y", "image_y", "numeric", "meta"),
     # Reader metadata merged from participant_data.csv (namespaced pp_*).
     ("pp_age", "pp_age", "numeric", "meta"),
     ("pp_gender", "pp_gender", "string", "meta"),

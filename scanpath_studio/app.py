@@ -1319,7 +1319,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
         loader=_load_multipleye_source,
-        monitor=(1310, 991),  # MultiplEYE stimulus-image / data coordinate space
+        monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
     ),
 }
 

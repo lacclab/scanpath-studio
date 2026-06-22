@@ -352,17 +352,45 @@ def load_potec(
 MULTIPLEYE_FIXATION_SOURCES = ("scanpaths", "fixations")
 
 # Presentation monitor (px) for the ZH-CH-Zurich sample, from its lab config
-# (``Monitor_resolution_in_px`` / ``RESOLUTION``). Pass as ``canvas_size`` to
-# :func:`scanpath_studio.plot_scanpath` for true-to-scale rendering. This is the
-# *stimulus-image* size (the data's coordinate space) — the AOI/fixation coords
-# are image-relative (all within 1310×991), not screen-relative (1920×1080) — so
-# the page-image background layer fills the canvas exactly at data (0,0).
-MULTIPLEYE_MONITOR = (1310, 991)
+# (``Monitor_resolution_in_px`` / ``RESOLUTION``) — the physical screen the data
+# was recorded on; pass as ``canvas_size`` to :func:`scanpath_studio.plot_scanpath`
+# for true-to-scale rendering.
+MULTIPLEYE_MONITOR = (1920, 1080)
+
+# The stimulus image is smaller than the screen (config ``IMAGE_WIDTH/HEIGHT_PX``)
+# and was shown **centered**. The raw AOI/fixation coords are image-relative
+# (text starts at the image's 81/88 px margins), so the loader shifts them by the
+# centering offset below → they land where the participant actually saw them on
+# the full monitor, and the page-image background sits at that same origin.
+MULTIPLEYE_IMAGE_SIZE = (1310, 991)
+_MULTIPLEYE_IMAGE_ORIGIN = (
+    (MULTIPLEYE_MONITOR[0] - MULTIPLEYE_IMAGE_SIZE[0]) / 2,  # 305.0
+    (MULTIPLEYE_MONITOR[1] - MULTIPLEYE_IMAGE_SIZE[1]) / 2,  # 44.5
+)
 
 # Separator between the stimulus and the page in a per-page ``trial_id``. Two
 # underscores keep it visually distinct from the single underscores already in
 # stimulus names (``Lit_Alchemist_4``) while staying filename-safe for export.
 _MULTIPLEYE_PAGE_SEP = "__"
+
+
+def _multipleye_page_label(page) -> str:
+    """Zero-padded page token for a sortable ``trial_id`` (``page_1`` → ``page_01``).
+
+    The per-page ``trial_id`` (``Lit_Alchemist_4__page_01``) is what the trial
+    picker sorts on, so the page number must zero-pad to sort numerically
+    (otherwise page_10 falls between page_1 and page_2). Non-``page_N`` values
+    pass through unchanged."""
+    text = str(page)
+    if text.startswith("page_") and text[5:].isdigit():
+        return f"page_{int(text[5:]):02d}"
+    return text
+
+
+def _multipleye_trial_id(stimulus: str, page) -> pd.Series:
+    """Per-page ``trial_id`` for a page Series (zero-padded for numeric sort)."""
+    return stimulus + _MULTIPLEYE_PAGE_SEP + page.map(_multipleye_page_label)
+
 
 # Per-trial file name: ``<session>_[PRACTICE_]trial_<n>_<stimulus>_<kind>``
 # e.g. ``001_ZH_CH_1_ET1_trial_1_Lit_Alchemist_4_fixation`` or
@@ -422,12 +450,19 @@ def _multipleye_word_boxes_from_frame(
         )
         .reset_index()
     )
+    # Shift image-relative coords to where the centered stimulus appeared on the
+    # full monitor (so they're true-to-scale on MULTIPLEYE_MONITOR).
+    off_x, off_y = _MULTIPLEYE_IMAGE_ORIGIN
+    boxes["left"] += off_x
+    boxes["right"] += off_x
+    boxes["top"] += off_y
+    boxes["bottom"] += off_y
     boxes["stimulus"] = stimulus
     # `text_id` (= stimulus) so both the explicit schema and the app's auto-detect
     # path key stimulus-level grouping on the stimulus, not the per-page trial id.
     boxes["text_id"] = stimulus
     boxes["genre"] = stimulus.split("_")[0]
-    boxes["trial_id"] = stimulus + _MULTIPLEYE_PAGE_SEP + boxes["page"].astype(str)
+    boxes["trial_id"] = _multipleye_trial_id(stimulus, boxes["page"])
     return boxes
 
 
@@ -465,6 +500,10 @@ def _stamp_multipleye_fixations(df: pd.DataFrame, info: dict) -> pd.DataFrame:
     df = df.copy()
     session = info["session"]
     stimulus = info["stimulus"]
+    # Shift image-relative fixation coords to the centered on-screen position.
+    off_x, off_y = _MULTIPLEYE_IMAGE_ORIGIN
+    df["location_x"] = pd.to_numeric(df["location_x"], errors="coerce") + off_x
+    df["location_y"] = pd.to_numeric(df["location_y"], errors="coerce") + off_y
     df["participant_id"] = session
     df["participant"] = session.split("_", 1)[0]  # bare pid
     df["session"] = session.rsplit("_", 1)[-1]  # ET1 / ET2
@@ -473,7 +512,7 @@ def _stamp_multipleye_fixations(df: pd.DataFrame, info: dict) -> pd.DataFrame:
     df["genre"] = stimulus.split("_")[0]
     df["is_practice"] = bool(info["practice"])
     df["trial_num"] = int(info["trial_num"])
-    df["trial_id"] = stimulus + _MULTIPLEYE_PAGE_SEP + df["page"].astype(str)
+    df["trial_id"] = _multipleye_trial_id(stimulus, df["page"])
     return df
 
 
@@ -776,6 +815,10 @@ def _multipleye_stamp_image_path(
     df["image_path"] = (
         f"{image_dir}/" + name + "_id" + sid + "_page_" + pnum + f"_{lang}.png"
     )
+    # Where the (centered) image sits on the monitor — matches the coordinate
+    # offset applied to the fixations/boxes, so the image aligns with the data.
+    df["image_x"] = _MULTIPLEYE_IMAGE_ORIGIN[0]
+    df["image_y"] = _MULTIPLEYE_IMAGE_ORIGIN[1]
     return df
 
 

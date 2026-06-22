@@ -1251,6 +1251,24 @@ class TestBackgroundImageLayer:
         assert im.yanchor == "top"  # reversed y-axis → top-left at data (0,0)
         assert str(im.source).startswith("data:image/png;base64,")
 
+    def test_layer_honors_origin(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        # A centered stimulus (MultiplEYE) places the image at a non-zero origin.
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(
+                background_image=str(p),
+                background_image_size=(1310, 991),
+                background_image_origin=(305.0, 44.5),
+            ),
+        )
+        im = fig.layout.images[0]
+        assert (im.x, im.y) == (305.0, 44.5)
+
     def test_no_layer_without_image_or_size(
         self, tmp_path, normalized_words_df, normalized_fixations_df
     ):

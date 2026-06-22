@@ -823,6 +823,15 @@ def _first_str(df: pd.DataFrame, col: str) -> Optional[str]:
     return None
 
 
+def _first_num(df: pd.DataFrame, col: str) -> Optional[float]:
+    """First non-null value of ``col`` as a float, or None when absent/empty."""
+    if col in df.columns:
+        vals = pd.to_numeric(df[col], errors="coerce").dropna()
+        if not vals.empty:
+            return float(vals.iloc[0])
+    return None
+
+
 def _first_bool(df: pd.DataFrame, col: str) -> Optional[bool]:
     """First non-null value of ``col`` as a bool, or None when absent/empty."""
     if col in df.columns:
@@ -1806,8 +1815,9 @@ def render_single_trial_tab(
 
     # Stimulus-page background image (MultiplEYE): the per-trial image path lives
     # on the trial's rows (directory load only — uploads carry no path). The image
-    # is offered only when it exists and its pixel size is readable (it's placed at
-    # data coords (0,0)-(image_w, image_h)).
+    # is offered only when it exists and its pixel size is readable. Its origin
+    # (image_x/image_y, where the centered stimulus sits on the monitor) places it
+    # to align with the fixations, which carry the same offset.
     trial_image_path = _first_str(trial_words, "image_path") or _first_str(
         trial_fixations, "image_path"
     )
@@ -1817,6 +1827,14 @@ def render_single_trial_tab(
         else None
     )
     has_stimulus_image = trial_image_size is not None
+    trial_image_origin = (
+        _first_num(trial_words, "image_x")
+        or _first_num(trial_fixations, "image_x")
+        or 0.0,
+        _first_num(trial_words, "image_y")
+        or _first_num(trial_fixations, "image_y")
+        or 0.0,
+    )
 
     # Condition chips above the plot are filled later (into chips_slot), once the
     # comparison selection is known — so a second chip strip can show the compared
@@ -1889,9 +1907,11 @@ def render_single_trial_tab(
     if viz_settings.get("show_stimulus_image") and has_stimulus_image:
         figure_settings["background_image"] = trial_image_path
         figure_settings["background_image_size"] = trial_image_size
+        figure_settings["background_image_origin"] = trial_image_origin
     else:
         figure_settings["background_image"] = None
         figure_settings["background_image_size"] = None
+        figure_settings["background_image_origin"] = None
     # Carried into both the live figure and the bulk export so exported plots are
     # sized identically to what's on screen (true-to-scale reading text).
     figure_settings["line_spacing"] = line_spacing

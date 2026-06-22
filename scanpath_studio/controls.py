@@ -1630,6 +1630,18 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
         sel = st.session_state.get("filter_participants")
         if sel and len(sel) < len(parts):
             result["participants"] = list(sel)
+    # Text narrowing (the "Narrow by → Text" multiselect). Like a categorical
+    # condition, but the text id isn't in the condition list, so handle it here.
+    text_field, text_frame = _text_field_and_frame(words, fixations)
+    if text_field is not None:
+        text_vals = _column_unique_strs(
+            text_frame,
+            text_field,
+            cache_key=(frame_fingerprint(text_frame), text_field),
+        )
+        sel = st.session_state.get("filter_text_id")
+        if sel and len(text_vals) > 1 and len(sel) < len(text_vals):
+            result["metadata"][text_field] = set(sel)
     for col in _filter_fields_for(words, fixations):
         frame = words if col in words.columns else fixations
         if col not in frame.columns:
@@ -1658,6 +1670,67 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
     return result
 
 
+def _text_field_and_frame(words: pd.DataFrame, fixations: pd.DataFrame):
+    """The text/passage id column to narrow by + the frame it lives on (prefer
+    fixations, where trials live). ``(None, fixations)`` when no text column."""
+    for field in ("unique_text_id", "text_id"):
+        if field in fixations.columns:
+            return field, fixations
+        if field in words.columns:
+            return field, words
+    return None, fixations
+
+
+def render_narrow_by(
+    words: pd.DataFrame, fixations: pd.DataFrame, *, text_host=None, part_host=None
+) -> None:
+    """Inline **Narrow by** multiselects — Text + Participant — that narrow the
+    trial pool feeding the picker (the former Browse-by Text/Participant modes, now
+    filters). They write the same ``filter_*`` keys the "More" popover uses and
+    recompute via ``_compute_trial_filters``, so narrowing applies the same run.
+    Start empty = no narrowing; pick values to narrow."""
+
+    def _apply() -> None:
+        st.session_state["_trial_filters"] = _compute_trial_filters(words, fixations)
+
+    th = text_host if text_host is not None else st
+    ph = part_host if part_host is not None else st
+
+    text_field, text_frame = _text_field_and_frame(words, fixations)
+    if text_field is not None:
+        text_vals = _column_unique_strs(
+            text_frame,
+            text_field,
+            cache_key=(frame_fingerprint(text_frame), text_field),
+        )
+        if len(text_vals) > 1:
+            _seed_filter_widget("filter_text_id", text_vals, [])
+            th.multiselect(
+                "Text",
+                options=text_vals,
+                key="filter_text_id",
+                on_change=_apply,
+                placeholder="All texts",
+                label_visibility="collapsed",
+            )
+
+    parts = _participant_options(
+        words,
+        fixations,
+        cache_key=(frame_fingerprint(words), frame_fingerprint(fixations)),
+    )
+    if len(parts) > 1:
+        _seed_filter_widget("filter_participants", parts, [])
+        ph.multiselect(
+            "Participant",
+            options=parts,
+            key="filter_participants",
+            on_change=_apply,
+            placeholder="All participants",
+            label_visibility="collapsed",
+        )
+
+
 def render_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, host=None
 ) -> Dict:
@@ -1679,19 +1752,8 @@ def render_trial_filters(
     def _apply() -> None:
         st.session_state["_trial_filters"] = _compute_trial_filters(words, fixations)
 
-    # Union across both frames — single-report datasets have participants in only
-    # one of them. Cached so it doesn't re-scan the corpus per rerun.
-    parts = _participant_options(
-        words,
-        fixations,
-        cache_key=(frame_fingerprint(words), frame_fingerprint(fixations)),
-    )
-    if len(parts) > 1:
-        _seed_filter_widget("filter_participants", parts, parts)
-        host.multiselect(
-            "Participants", options=parts, key="filter_participants", on_change=_apply
-        )
-
+    # Text + Participant narrowing now lives in the inline "Narrow by" row
+    # (``render_narrow_by``); this popover keeps the condition + annotation filters.
     for col in _filter_fields_for(words, fixations):
         frame = words if col in words.columns else fixations
         if col not in frame.columns:
@@ -1748,9 +1810,12 @@ def render_trial_filters(
     # Mirror the rendered widget values so _seed_filter_widget can restore them on
     # a run where this panel isn't shown (the keys get cleared); then publish the
     # derived result for read_trial_filters (covers no-change runs).
-    keys = ["filter_participants", "filter_req_tags", "filter_exc_tags"] + [
-        f"filter_{c}" for c in _filter_fields_for(words, fixations)
-    ]
+    keys = [
+        "filter_participants",
+        "filter_text_id",
+        "filter_req_tags",
+        "filter_exc_tags",
+    ] + [f"filter_{c}" for c in _filter_fields_for(words, fixations)]
     st.session_state["_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state
     }

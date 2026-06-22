@@ -40,6 +40,7 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.controls import (
     SUMMARY_CHIP_FIELDS,
+    render_narrow_by,
     render_trial_filters,
     sidebar_controls,
 )
@@ -75,7 +76,6 @@ from scanpath_studio.utils import (
     friendly_trial_label,
     safe_summary,
     select_trial,
-    selection_modes,
 )
 
 # -----------------------------------------------------------------------------
@@ -1783,33 +1783,23 @@ def render_single_trial_tab(
     with rail_col:
         rail = st.container(key="scanpath_rail")
 
-    modes = selection_modes(combos)
-    multi_mode = len(modes) > 1
     with plot_col:
-        # One selection line: [Browse by] [pills] [trial selectbox(s)] [Filter] —
-        # the pills (mode_host) and selectbox(s) (picker_host) are filled by
-        # select_trial; the scrubbing slider lands on the line below. Filter is a
-        # content-width popover overlay (no plot shove). Vertically centered so the
-        # label, pills, selectbox and button line up.
-        if multi_mode:
-            label_col, mode_host, picker_host, filter_col = st.columns(
-                [1, 2.3, 3, 1.4], vertical_alignment="center"
-            )
-            label_col.markdown("**Browse by**")
-        else:
-            picker_host, filter_col = st.columns([3, 1.4], vertical_alignment="center")
-            mode_host = None
-        with filter_col:
-            filt_pop = st.popover("🔍 Filter trials", width="content")
-            filt_pop.caption("Narrow the trial pool shown in every view.")
-            render_trial_filters(words_all, fixations_all, host=filt_pop)
+        # Narrow-by row: [Narrow by] [Text multiselect] [Participant multiselect]
+        # [More popover]. The Text/Participant multiselects narrow the trial pool;
+        # "More" holds the condition + annotation filters. The specific trial is
+        # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
+        nb_label, nb_text, nb_part, more_col = st.columns(
+            [1, 2.3, 2.3, 1.2], vertical_alignment="center"
+        )
+        nb_label.markdown("**Narrow by**")
+        render_narrow_by(words_all, fixations_all, text_host=nb_text, part_host=nb_part)
+        with more_col:
+            more_pop = st.popover("More", width="content")
+            more_pop.caption("More ways to narrow — conditions & annotations.")
+            render_trial_filters(words_all, fixations_all, host=more_pop)
+        # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         selected_participant, selected_trial, selection_mode, selected_text = (
-            select_trial(
-                combos,
-                key_prefix="single",
-                mode_host=mode_host,
-                picker_host=picker_host,
-            )
+            select_trial(combos, key_prefix="single")
         )
         # Slots filled once the selection is resolved (chips need the trial).
         chips_slot = st.container()

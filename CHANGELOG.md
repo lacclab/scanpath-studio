@@ -64,10 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   view's subtab bar — so the sidebar's view nav is gone and the page leads with
   the scanpath. (Share was the former header popover; Data Inspection the former
   standalone view.)
-- **Browse-by trial controls.** ◀ ▶ step buttons flank the **Trial X / N** counter
-  and the scrubbing slider; the slider thumb now shows the trial **index** beside
-  the id (`…r0 · #3/24`); and the trial dropdown carries a **?** hint that you can
-  start typing to filter the list.
+- **Trial selection reworked into Narrow → Pick.** The Browse-by modes are gone.
+  **Narrow by** offers a **Text** and a **Participant** multiselect (plus a **More**
+  popover for conditions / annotations) that narrow the trial pool; the trial is
+  then **picked** on one row — a `Trial id` dropdown (type to filter) + a scrubbing
+  slider whose thumb reads `index/TOTAL · id` + adjacent ◀ ▶ step buttons. The
+  old "Trial X / N" caption is dropped (the slider shows it). "Filter trials" is
+  now the **More** popover (Text/Participant moved into Narrow by).
 - **Welcome tour** gained an **✕** in its top-right corner to dismiss it.
 - **Schema auto-detection** now recognizes MultiplEYE column conventions:
   fixation `location_x` / `location_y` / `onset`, word-box origin `top_left_x` /

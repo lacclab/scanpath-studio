@@ -409,6 +409,7 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "heatmap": "global_show_heatmap",
     "raw_gaze": "global_show_raw_gaze",
     "stimulus_image": "global_show_stimulus_image",
+    "full_monitor": "global_fit_to_monitor",
 }
 # Static widget bounds, mirrored from controls.sidebar_controls /
 # render_sidebar_canvas_controls, so a restored value is clamped to a range the

@@ -51,6 +51,9 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_heatmap_style": "Word boxes",
     "global_heatmap_metric": "duration_ms",
     "global_show_colorbars": False,
+    # Frame the view to the whole presentation monitor (scanpath sits at its true
+    # on-screen position) rather than cropping to the data extent. Default on.
+    "global_fit_to_monitor": True,
     "global_order_font_color": "#111111",
     "global_order_font_size": 10,
     "global_fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
@@ -838,6 +841,7 @@ def _collect_viz_settings(
         order_font_size=ss.get("global_order_font_size"),
         order_font_color=ss.get("global_order_font_color"),
         show_colorbars=bool(ss.get("global_show_colorbars")),
+        fit_to_monitor=bool(ss.get("global_fit_to_monitor")),
         fixation_color_range=fixation_color_range,
         heatmap_range=heatmap_range,
         fixation_colorscale=ss.get("global_fixation_colorscale")
@@ -1234,6 +1238,12 @@ def sidebar_controls(
 
     # --- Axes & color bars (global plot settings, rarely changed) ---------
     axes = viz.expander("Axes & color bars", expanded=False)
+    axes.toggle(
+        "**Show full monitor**",
+        key="global_fit_to_monitor",
+        help="Frame the whole presentation monitor so the scanpath sits where it "
+        "appeared on screen. Turn off to crop the view tightly to the data.",
+    )
     show_colorbars = axes.checkbox("Show color bars", key="global_show_colorbars")
     if show_colorbars:
         axes.radio(

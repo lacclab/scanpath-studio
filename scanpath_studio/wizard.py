@@ -45,6 +45,7 @@ from .data import (
     aggregate_char_boxes,
     categorize_columns,
     compute_keep_columns,
+    dropped_columns,
     empty_fixations_frame,
     empty_words_frame,
     extract_columns_from_source_file,
@@ -1032,6 +1033,13 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             "filter_fields": filter_fields,
             "composite_trial_columns": [],
             "schemas": schemas,
+            "dropped_columns": {
+                "words": dropped_columns(words_raw, keep=keep_words)
+                if has_words
+                else [],
+                "fixations": dropped_columns(fix_raw, keep=keep_fix),
+                "raw_gaze": [],
+            },
         }
         body.button(
             "✅ Add dataset",
@@ -1569,6 +1577,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # Persist the column mapping so reselecting this stored dataset can
             # repopulate the Data Inspection tab's mapping table.
             "schemas": wizard_schemas,
+            # Source columns discarded at normalization — surfaced as a note in
+            # the Data Inspection remap editor (they can't be remapped without a
+            # re-upload). set(raw.columns) - keep is exactly the dropped set.
+            "dropped_columns": {
+                "words": dropped_columns(raw_words, keep=keep_words)
+                if has_words
+                else [],
+                "fixations": dropped_columns(raw_fix, keep=keep_fix) if has_fix else [],
+                "raw_gaze": dropped_columns(raw_gaze, schema=raw_gaze_schema)
+                if not raw_gaze.empty
+                else [],
+            },
         }
         _render_setup_download(body)
         body.button(

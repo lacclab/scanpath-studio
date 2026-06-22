@@ -1,171 +1,554 @@
 # Scanpath Studio — Improvements & Roadmap
 
-Running list of planned improvements. The bulk is **new analysis views** (see
-[Analysis sections](#analysis-sections)); a shorter [Engineering](#engineering)
-section tracks code/test/docs debt.
+Working tracker for planned features, improvements, and bug fixes. Each item has a
+stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
+**Status**, and a short description with the relevant code anchors.
 
-Terminology follows `AGENTS.md`: canonical measures are **FFD**
-(`first_fixation_ms`), **FPRT** (`first_pass_gaze_duration_ms`), **RPD / go-past**
-(`regression_path_duration_ms`), **TFD** (`total_fixation_duration_ms`), plus
-`n_fixations`, `skip_flag`, `regression_in/out_flag`. Canonical keys are
-`participant_id`, `trial_id`, `paragraph_id`, `word_id`, `line_idx`.
+## How to use this file
+
+- **Status:** `Backlog` (captured, not scheduled) · `Planned` (next-ish, scoped)
+  · `In progress` · `Blocked` · `Done`.
+- **IDs are stable.** Don't renumber when an item is finished; mark it `Done` (or
+  cut it once it has shipped and is in `CHANGELOG.md`). New items get the next
+  free number in their group.
+- **Composite asks are split** into sub-items so they can land independently.
+- When implementing an item, ask for clarification as needed before starting.
+
+### Currently in progress
+- **PERF-1** — Plotly → matplotlib migration ([PR #83](https://github.com/lacclab/scanpath-studio/pull/83), `matplotlib-migration` branch).
+- **DATA-1** — Broaden dataset support (ongoing epic).
+
+### Terminology
+Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
+(`first_pass_gaze_duration_ms`), **RPD / go-past** (`regression_path_duration_ms`),
+**TFD** (`total_fixation_duration_ms`), plus `n_fixations`, `skip_flag`,
+`regression_in/out_flag`. Canonical keys: `participant_id`, `trial_id`,
+`paragraph_id`, `word_id`, `line_idx`.
+
+### Groups
+[UX & Interaction](#ux--interaction) ·
+[Compare mode](#compare-mode) ·
+[Visualization & display](#visualization--display) ·
+[Datasets & ingestion](#datasets--ingestion) ·
+[Performance](#performance) ·
+[Analysis & corpus views](#analysis--corpus-views) ·
+[Preprocessing — eyekit parity](#preprocessing--eyekit-parity) ·
+[Validation](#validation) ·
+[Bugs](#bugs) ·
+[Engineering](#engineering)
 
 ---
 
-## Analysis sections
+## UX & Interaction
+
+**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Planned`
+
+The chip-field picker currently lives in the sidebar (`📂 Data → 🏷️ Trial chips`,
+[`render_trial_chip_picker`](scanpath_studio/app.py:1509) → `trial_chip_fields`),
+while the chips themselves render above the plot
+([`controls.py` chip strip](scanpath_studio/controls.py:1451),
+`tabs._render_trial_condition_chips`). Move the picker next to that chip strip and
+rename the control to **"Edit"** (or "Edit chips") so it reads as inline editing.
+
+- **UX-1a · Reorder chips in place** *(open question — investigate)*.
+  `st.multiselect` can't drag-reorder: order follows selection order, so changing
+  it today means clearing and re-picking. Options: a sortable component
+  (e.g. `streamlit-sortables`), an explicit up/down ordering control, or accept
+  selection-order. Decide before building UX-1.
+
+**UX-2 · Welcome tour covers all major components, in reading order** — `Status: Planned`
+
+Re-script the tour ([`tour.py`](scanpath_studio/tour.py)) to walk the whole app:
+main scanpath → the selection/controls directly above it → the chips → sidebar
+controls (view modes, quick views, toggles) → the bottom panel → the left menu.
+
+- **UX-2a · Drop the separate Exit button.** The spotlight card already has a ✕
+  close (`tour_sp_close`, [`tour.py:224`](scanpath_studio/tour.py:224)) next to
+  Exit/Done — collapse to a single close affordance (keep ✕, drop Exit) so it's
+  not redundant.
+
+**UX-3 · Green/red check & cross in Stimulus & questions** — `Status: Planned`
+
+In the Stimulus & questions subtab, color the correctness ✓ green and ✗ red
+(currently monochrome) so correct/incorrect reads at a glance. See VIZ for the
+related "increase font size" pass.
+
+---
+
+## Compare mode
+
+The "Compare with trial" flow (`single_compare_toggle`) and its per-scanpath
+styling live in [`controls.py`](scanpath_studio/controls.py:622)
+(`_COMPARE_SCANPATHS`, `_render_compare_fix_styles`,
+`_render_compare_saccade_styles`, `_collect_compare_styles`); the overlay figure
+is built in [`plots.py`](scanpath_studio/plots.py).
+
+**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Planned`
+
+Lift "Compare with trial" out of the rail to above the chips, mirroring the main
+trial selector's format (selectbox → slider). Add inline text/color labels so it's
+obvious which scanpath is which (A vs B).
+
+**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Planned`
+
+Add a toggle to show/hide the A/B legend in the overlay figure; default to hidden
+(legend margin handled by `_LEGEND_RESERVE_PX`/the top reserve in
+[`plots.py`](scanpath_studio/plots.py:210)).
+
+**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Planned`
+
+Reported mismatch between the default colors shown in the controls (saccades,
+fixations, possibly others) and what's drawn. Audit `_seed_compare_styles`
+seeding (`cmp{idx}_saccade_color`, fixation colors) vs. what
+`_collect_compare_styles` passes to the figure.
+
+**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Planned`
+
+When comparing, the rail shows the **global** `Saccade color` picker
+([`controls.py:1087`](scanpath_studio/controls.py:1087)) *and* the per-scanpath
+`Scanpath 1/2 — saccade color` pickers
+([`controls.py:651`](scanpath_studio/controls.py:651)). In compare mode the global
+one is dead/confusing — hide it (and audit fixation styling for the same
+duplication) so only the per-scanpath controls show.
+
+---
+
+## Visualization & display
+
+**VIZ-1 · Warn that font sizes are px, not pt** — `Status: Planned`
+
+All font-size controls are in **pixels** (e.g. `format="%.1f px"`,
+`global_order_font_size`, `global_colorbar_tickfont_size` in
+[`controls.py`](scanpath_studio/controls.py:1052)), but stimulus typography is
+usually specified in **points**. Add a short note/warning near the font controls
+explaining the difference (and that matching the original stimulus requires a
+px↔pt conversion via DPI).
+
+**VIZ-2 · Increase font size across the app where possible** — `Status: Planned`
+
+General readability pass on app chrome (labels, captions, table text). Likely
+[`styles.py`](scanpath_studio/styles.py) / theme. Keep within Streamlit theming;
+don't regress dense layouts.
+
+**VIZ-3 · Alternative heatmap normalization** — `Status: Backlog`
+
+Explore normalization options for the heatmap views (e.g. per-trial vs per-corpus
+max, log scaling, per-word-area density). Related but distinct from the new
+`duration_mass` heatmap style (**PRE-8**).
+
+**VIZ-4 · Improve image-based stimuli support** — `Status: Backlog`
+
+Better handling/rendering when the stimulus is an image rather than laid-out text
+(scaling, alignment to fixation space, AOIs over images). Ties into the
+stimulus-image fallback used for unsupported scripts in **PRE-6**.
+
+---
+
+## Datasets & ingestion
+
+**DATA-1 · Broaden dataset support (epic)** — `Status: In progress`
+
+Ongoing work to load more corpora beyond the bundled sample / OneStop. Track
+per-dataset adapters in [`datasets.py`](scanpath_studio/datasets.py) /
+[`data.py`](scanpath_studio/data.py). Related: MultiplEYE support, EyeLink `.asc`
+import (**PRE-7**), RTL/multilingual rendering (**PRE-6**), non-English validation
+(**VAL-3**).
+
+**DATA-2 · Integrate experimental-setup parameters into display/data settings** — `Status: Backlog`
+
+Fold experimental-setup values (screen resolution, viewing distance, DPI, stimulus
+font pt, etc.) into the display/data settings so true-to-scale rendering and the
+px↔pt note (**VIZ-1**) can use them directly instead of being implicit.
+
+---
+
+## Performance
+
+**PERF-1 · Replace Plotly with matplotlib (or lighter renderer) for speed** — `Status: In progress`
+
+Interactivity isn't essential for the core spatial plot; a static renderer should
+be much faster. Tracked in [PR #83](https://github.com/lacclab/scanpath-studio/pull/83)
+(`matplotlib-migration` branch). Keep the spatial plot on the true-scale path.
+
+**PERF-2 · Investigate (and warn about) slowdowns from keeping many fields** — `Status: Backlog`
+
+Hypothesis: selecting many columns/measures/metadata fields slows the app.
+**First verify** whether it's actually true (profile a wide vs narrow frame); if
+so, add a note/warning. If not, close this item.
+
+---
+
+## Analysis & corpus views
 
 **Goal:** replace the single *Corpus Analysis → Aggregated Views* subtab with a
 set of analysis sections, each answering one question — *what does a text look
 like? a reader? a group? two groups against each other?* All sections obey the
-active trial filters and the current metric picker.
+active trial filters and the metric picker.
 
-Proposed top-level structure (tabs or sidebar radio inside Corpus Analysis):
+**Implementation convention:** keep aggregation logic **pure** in
+[`aggregation.py`](scanpath_studio/aggregation.py) (one helper per view → tidy
+DataFrame), build figures in [`plots.py`](scanpath_studio/plots.py) via the
+`make_*_figure` pattern, wire into [`tabs.py`](scanpath_studio/tabs.py). Add a
+smoke test per figure against the bundled sample (3 pid × 2 articles).
 
-| Section | Unit of analysis | Answers |
-|---|---|---|
-| **Per text** | one `paragraph_id` / `trial_id`, many readers | where in *this* text do readers slow down / regress / skip? |
-| **Per participant** | one `participant_id`, many trials | what kind of reader is this? how do their distributions look vs. the cohort? |
-| **Per group** | a cohort defined by a filter (condition, difficulty, L1/L2, site…) | what's typical within the group? |
-| **Group comparison** | two groups side by side | where do the groups differ, and is it meaningful? |
-| **Trends** *(existing)* | corpus-wide, by trial/fixation index | learning/fatigue effects across the session |
+### Per text — one `paragraph_id`/`trial_id`, many readers
 
-Implementation: keep aggregation logic **pure** in `aggregation.py` (one helper
-per view, returns a tidy DataFrame), build figures in `plots.py` via the existing
-`make_*_figure` pattern, wire into `tabs.py`. Add a smoke test per figure
-against the bundled sample (3 pid × 2 articles).
+**AN-1 · Stacked per-reader word profiles (small multiples)** — `Status: Planned` *(primary request)*
+
+X = `word_id` (reading order), Y = chosen measure (TFD default; switch FFD/FPRT/
+RPD/`n_fixations`). One panel per `participant_id`, stacked with shared X
+(`make_subplots`, `shared_xaxes`). Optional faint cohort-mean overlay per panel.
+
+**AN-2 · Word × reader heatmap** — `Status: Backlog`
+
+Same data collapsed to one heatmap: rows = participants, cols = `word_id`, color =
+measure. Bright columns = universally hard words; bright rows = uniformly slow
+reader. Reuses word-level heatmap machinery.
+
+**AN-3 · Cohort word profile with spread band** — `Status: Backlog`
+
+Mean measure per word + shaded IQR/±1 SD band across readers — the "average
+reader of this text" with uncertainty.
+
+**AN-4 · Word difficulty annotated on the stimulus** — `Status: Backlog`
+
+The text laid out (true-to-scale renderer), each word tinted by aggregate measure
+or `skip_rate` / `regression_in_rate` — corpus-level scanpath, no fixations drawn.
+
+**AN-5 · Measure vs. linguistic feature scatter** — `Status: Backlog`
+
+Per-word mean measure vs. a bundled feature (`gpt2_surprisal`,
+`wordfreq_frequency`, `word_length`, `universal_pos`) with a trend line. OneStop
+sample ships these columns.
+
+**AN-6 · Skip / regression rate per word** — `Status: Backlog`
+
+Bar/lollipop of `skip_flag` and `regression_in_flag` rates by `word_id`.
+
+### Per participant — one `participant_id`, many trials
+
+**AN-7 · Measure distributions vs. cohort** — `Status: Backlog`
+
+Histogram/violin/box of fixation `duration_ms`, `saccade_amplitude`, per-word
+TFD/FFD for the selected reader, with the cohort distribution behind. Optional KDE.
+
+**AN-8 · Reading speed & summary card** — `Status: Backlog`
+
+WPM, mean fixation duration, fixation count, regression rate, skip rate, mean
+saccade amplitude — compact stat strip + cohort percentiles.
+
+**AN-9 · Fixation duration over time** — `Status: Backlog`
+
+X = `timestamp_ms` (or `order_in_trial`), Y = `duration_ms` — within-trial
+fatigue/settling. Faceted by trial or averaged.
+
+**AN-10 · Saccade amplitude vs. fixation duration** — `Status: Backlog`
+
+2D density / hexbin — the classic oculomotor scatter (careful vs. skimming).
+
+**AN-11 · Progressive vs. regressive saccades** — `Status: Backlog`
+
+Counts/share of `is_regression` / `regression_out_flag` per trial.
+
+**AN-12 · Launch-site / landing-position curves** — `Status: Backlog`
+
+Histogram of landing position within words (needs `first_fix_x` relative to word
+box) — the preferred-viewing-location curve. Overlaps **PRE-4**'s
+`initial_landing_position`.
+
+**AN-13 · Per-trial trend for this reader** — `Status: Backlog`
+
+The existing Trends line filtered to one participant — does this person slow down
+across the session?
+
+### Per group — a cohort defined by the active filter
+
+**AN-14 · Group distribution summaries** — `Status: Backlog`
+
+Per-participant distributions pooled across the group (violin/box of fixation
+duration, saccade amplitude, TFD, reading speed).
+
+**AN-15 · Group word profile** — `Status: Backlog`
+
+Cohort word profile (mean + band) computed within the group, for a selected text.
+
+**AN-16 · Per-reader summary table for the group** — `Status: Backlog`
+
+Sortable table, one row per participant, columns = summary stats — spot outliers.
+
+**AN-17 · Group trend** — `Status: Backlog`
+
+Trends line averaged within the group (optionally per-participant faint behind).
+
+### Group comparison — two groups side by side
+
+**AN-18 · Overlaid distributions** — `Status: Backlog`
+
+Two groups' fixation-duration / saccade-amplitude / TFD distributions on shared
+axes (violin halves or overlaid KDE).
+
+**AN-19 · Difference word profile** — `Status: Backlog`
+
+Per-word measure A − B along the text with a zero reference line and diverging
+colormap — *where* the groups diverge (Adv vs. Ele, L1 vs. L2).
+
+**AN-20 · Paired summary bars** — `Status: Backlog`
+
+Side-by-side group-mean bars per measure with error bars (SD / SEM / bootstrap CI).
+
+**AN-21 · Effect size + simple test** — `Status: Backlog`
+
+Per measure: mean difference, Cohen's *d*, Mann–Whitney / t-test p-value, with a
+clear "exploratory, not pre-registered" caveat.
+
+**AN-22 · Two-group word heatmap, stacked** — `Status: Backlog`
+
+Group A heatmap above group B (shared word axis) for direct visual comparison.
+
+### Cross-cutting controls for the analysis sections
+
+**AN-23 · Shared measure picker** — `Status: Backlog`
+
+One measure picker (TFD/FFD/FPRT/RPD/`n_fixations`/skip/regression) every section
+reads from.
+
+**AN-24 · Aggregation & spread choice** — `Status: Backlog`
+
+Mean/median/sum aggregation and SD/IQR/SEM/bootstrap-CI spread where a band or
+error bar is drawn.
+
+**AN-25 · Normalization toggle (raw vs. z-scored within reader)** — `Status: Backlog`
+
+So slow and fast readers compare on shape, not absolute level.
+
+**AN-26 · Min-readers / min-trials guard** — `Status: Backlog`
+
+Gray out / warn when a per-word cell is backed by too few observations.
+
+**AN-27 · Download the underlying tidy table per view** — `Status: Backlog`
+
+Reuse the export plumbing so users can re-plot elsewhere.
 
 ---
 
-### Per text
+## Preprocessing — eyekit parity
 
-The headline idea: **TFD-by-word, one panel per reader, stacked vertically** so a
-text reads top-to-bottom and you can eyeball where individual readers diverge.
+**Epic.** Scanpath Studio is strong at *visualization* and *corpus aggregation*
+but does almost no *data preprocessing* — [eyekit](https://jwcarr.github.io/eyekit/)'s
+home turf. These items close the gap.
 
-- **Stacked per-reader word profiles (small multiples).** X = `word_id` (in
-  reading order), Y = chosen measure (TFD default; switchable to FFD/FPRT/RPD/
-  `n_fixations`). One short line/area panel per `participant_id`, panels stacked
-  with a shared X axis so word positions line up. Plotly faceted subplots
-  (`make_subplots`, shared_xaxes). Optionally overlay the cohort mean as a faint
-  line in each panel for reference. *This is the primary requested view.*
-- **Word × reader heatmap.** Same data as above but collapsed to a single
-  heatmap: rows = participants, columns = `word_id`, color = measure. Faster to
-  scan for "which words are universally hard" (bright columns) vs. "which reader
-  is slow everywhere" (bright rows). Reuses the word-level heatmap machinery.
-- **Cohort word profile with spread band.** Single line of the mean measure per
-  word, with a shaded IQR / ±1 SD band across readers. The "average reader of
-  this text" with uncertainty.
-- **Word difficulty annotated on the stimulus.** The actual text laid out
-  (existing true-to-scale renderer), each word tinted by aggregate measure or
-  `skip_rate` / `regression_in_rate` — a corpus-level version of the single-trial
-  scanpath, no fixations drawn.
-- **Measure vs. linguistic feature.** Scatter of per-word mean measure against a
-  bundled feature (`gpt2_surprisal`, `wordfreq_frequency`, `word_length`,
-  `universal_pos`), with a trend line. Connects reading behavior to text
-  properties; OneStop sample ships these columns.
-- **Skip / regression rate per word.** Bar or lollipop of `skip_flag` and
-  `regression_in_flag` rates by `word_id` — where readers jump in/over.
+**Build order:** `PRE-0` → `PRE-1` → (`PRE-2`, `PRE-3`); `PRE-4` → `PRE-5`;
+`PRE-6`, `PRE-7`, `PRE-8` independent.
 
-### Per participant
+```mermaid
+flowchart LR
+    PRE0[PRE-0 ADR] --> PRE1[PRE-1 pipeline]
+    PRE0 --> PRE7[PRE-7 ASC]
+    PRE1 --> PRE2[PRE-2 cleaning]
+    PRE1 --> PRE3[PRE-3 drift]
+    PRE0 --> PRE3
+    PRE4[PRE-4 measures] --> PRE5[PRE-5 custom IAs]
+    PRE6[PRE-6 RTL]
+    PRE8[PRE-8 duration_mass]
+```
 
-The user ask: **distributions + the plots people expect for one reader.**
+**Milestones:** M1 foundation (`PRE-0`, `PRE-1`) · M2 flagship (`PRE-2`, `PRE-3`)
+· M3 analysis (`PRE-4`, `PRE-5`) · M4 reach (`PRE-6`, `PRE-7`, `PRE-8`).
 
-- **Measure distributions.** Histogram / violin / box of fixation
-  `duration_ms`, saccade `saccade_amplitude`, and per-word TFD/FFD for the
-  selected participant, with the cohort distribution drawn behind for context
-  (this reader vs. everyone). KDE overlay optional.
-- **Reading speed & summary card.** Words-per-minute, mean fixation duration,
-  fixation count, regression rate, skip rate, mean saccade amplitude — a compact
-  stat strip per participant (and the cohort percentile for each).
-- **Fixation duration over time.** X = `timestamp_ms` (or `order_in_trial`),
-  Y = `duration_ms` — within-trial fatigue / settling. Faceted by trial or
-  averaged.
-- **Saccade amplitude vs. fixation duration.** 2D density / hexbin — the classic
-  oculomotor scatter; clusters distinguish careful vs. skimming reading.
-- **Progressive vs. regressive saccades.** Counts/share of `is_regression` (or
-  `regression_out_flag`) per trial; a reader's regression tendency.
-- **Launch-site / landing-position curves.** Histogram of fixation landing
-  position within words (needs `first_fix_x` relative to word box) — the
-  preferred-viewing-location curve, a standard reading plot.
-- **Per-trial trend for this reader.** The existing Trends line, but filtered to
-  one participant — does *this* person slow down across the session?
+**Cross-cutting acceptance criteria** (every item): new processing is optional &
+off by default · visible in the true-scale plot where applicable · reflected in
+measures + export · respects `global_*`/`single_*`/`filter_*` session-state
+conventions · spatial plot stays on `tabs._render_true_scale_chart` · CHANGELOG
+updated.
 
-### Per group
+**PRE-0 · ADR: adopt eyekit as a dependency vs. reimplement** — `Status: Decided 2026-06-23 — reimplement natively` *(blocks PRE-3, PRE-5, PRE-7)*
 
-A group = whatever the current trial filter selects (condition Hunting/Gathering,
-difficulty Adv/Ele, repeated reading, L1/L2, collection site, correctness…).
+**Decision: do NOT adopt eyekit; port the algorithms natively.** eyekit is
+**GPL-3.0** (copyleft), incompatible with this MIT project distributed on PyPI —
+taking it as a runtime dependency would impose GPL on the combined work. The
+canonical algorithm code (`jwcarr/drift`, the Carr et al. 2021 companion repo) is
+**CC BY 4.0**, so we port with attribution; only `scipy` (BSD-3) is added (the
+optimizer + k-means a few algorithms need). Reading measures (**PRE-4**) likewise
+stay native. This reverses the earlier "adopt eyekit" recommendation, on the
+licence finding above. Full rationale + per-item design (this doc serves as the
+ADR): [`plans/pre-3-vertical-drift-correction.md`](plans/pre-3-vertical-drift-correction.md). Deliverable: `scipy` in `pyproject.toml` when PRE-3 lands. **PRE-7**
+(`import_asc`) must also be reimplemented or sourced from a non-GPL parser.
 
-- **Group distribution summaries.** The per-participant distributions, pooled
-  across the group: violin/box of fixation duration, saccade amplitude, TFD,
-  reading speed — one violin per group member or one pooled shape.
-- **Group word profile.** Cohort word profile (mean + band) computed within the
-  group, for a selected text.
-- **Per-reader summary table for the group.** Sortable table: one row per
-  participant, columns = summary stats — spot outliers in the cohort.
-- **Group trend.** Trends line averaged within the group (and optionally per
-  participant faint behind the mean).
+**PRE-1 · Preprocessing pipeline stage (foundation)** — `Status: Backlog` *(depends PRE-0)*
 
-### Group comparison
+Optional stage between `data.normalize_fixations` and
+`measures.enrich_fixations`/`compute_per_word_measures`. Fixations gain an
+`excluded` flag (soft-exclude, not hard-drop) + a derived-column convention so
+corrections keep the original. New **"Preprocessing"** panel, `global_preproc_*`
+keys, off by default, with a recompute trigger. Fold preproc settings into the
+cache key (don't break the OneStop `frame_fingerprint`/`st.cache_data` fast path).
+AC: disabled = byte-identical output to today.
 
-- **Overlaid distributions.** Two groups' fixation-duration / saccade-amplitude /
-  TFD distributions on shared axes (violin halves or overlaid KDE) — the core
-  "do these groups read differently" view.
-- **Difference word profile.** Per-word measure for group A minus group B along
-  the text, with a zero reference line — *where in the text* the groups diverge
-  (e.g. Adv vs. Ele, or L1 vs. L2). Diverging colormap.
-- **Paired summary bars.** Side-by-side bars of group means per measure, with
-  error bars (SD / SEM / bootstrap CI).
-- **Effect size + simple test.** Per measure, show mean difference, Cohen's *d*,
-  and a Mann–Whitney / t-test p-value with a clear "exploratory, not
-  pre-registered" caveat. Keeps users from eyeballing significance.
-- **Two-group word heatmap, stacked.** Group A heatmap above group B (shared word
-  axis) for direct visual comparison of where each group spends time.
+**PRE-2 · Fixation cleaning: discard short / long / out-of-bounds + purge** — `Status: Backlog` *(depends PRE-1)*
 
-### Cross-cutting controls for these sections
+Port eyekit's `discard_short_fixations` (~50–80 ms), `discard_long_fixations`
+(~800 ms), `discard_out_of_bounds_fixations`, and `purge`. Excluded fixations show
+greyed/hollow (not removed) + an "N excluded" count; optional purge hard-drops &
+reindexes for export. Saccade lines bridge across excluded fixations.
 
-- A shared **measure picker** (TFD/FFD/FPRT/RPD/n_fixations/skip/regression) that
-  every section reads from.
-- **Aggregation choice** (mean / median / sum) and **spread choice** (SD / IQR /
-  SEM / bootstrap CI) where a band or error bar is drawn.
-- **Normalization toggle** — raw vs. z-scored-within-reader — so slow and fast
-  readers can be compared on shape rather than absolute level.
-- **Min-readers / min-trials guard** — gray out or warn when a per-word cell is
-  backed by too few observations (avoid over-reading n=1 words).
-- Every aggregated view should offer **download of the underlying tidy table**
-  (reuse the export plumbing) so users can re-plot elsewhere.
+**PRE-3 · Vertical drift correction (`snap_to_lines`) + before/after viz** — `Status: Backlog` *(depends PRE-1, PRE-0)*
+
+The headline gap (today only a 50px nearest-word fallback exists in
+[`measures.py`](scanpath_studio/measures.py)). **This is the "support fixation
+alignment algorithms" request.** Wrap eyekit `FixationSequence.snap_to_lines`
+(Carr et al. 2022): `chain / cluster / merge / regress / segment / slice / split /
+stretch / warp`. Adapter: word boxes → line y-centers (reuse
+`measures.cluster_word_lines`); write corrected y to a derived column. Algorithm
+picker + per-algorithm params in the Preprocessing panel. Before/after toggle on
+the true-scale plot (ghost originals, arrows to corrected, optional color-by line).
+
+▶ **Detailed plan:** [`plans/pre-3-vertical-drift-correction.md`](plans/pre-3-vertical-drift-correction.md) *(approved 2026-06-23; implementation deferred)*. Revises the approach above per the **PRE-0** decision (**port natively, not eyekit**): a new `alignment.py`, a comparison-grid subtab, and an in-place main-plot correction. The set is the Carr et al. (2021) **10** — `attach / chain / cluster / compare / merge / regress / segment / split / stretch / warp` — which adds `attach`/`compare` and **drops `slice`** (a post-2021 eyekit addition) versus the list above.
+
+**PRE-4 · Reading-measure parity** — `Status: Backlog`
+
+Extend `measures.compute_per_word_measures`: `initial_landing_position` and
+`initial_landing_distance`; `number_of_regressions_in` as an integer count (app
+has only the boolean flag); `second_pass_duration`; `single_fixation_duration`
+(FFD when exactly one first-pass fixation). Audit that the app's
+`regression_path_duration` == eyekit `go_past_duration`. Surface in per-word
+export, color-by options, corpus aggregation; keep IA_* pre-aggregated precedence.
+
+**PRE-5 · Custom interest areas + IA-level reports** — `Status: Backlog` *(depends PRE-4)*
+
+Today AOIs == precomputed per-word boxes only. Define IAs per text by word range,
+regex over word text, or eyekit-style `[bracket]{id}` markup (union of member word
+boxes). Render as distinct highlighted regions in
+[`plots.py`](scanpath_studio/plots.py). IA-level measures (reuse PRE-4) →
+`interest_area_report`-style table for Corpus Analysis + export. Persist
+definitions per `text_id` via the Save & restore JSON.
+
+**PRE-6 · RTL & multilingual text rendering** — `Status: Backlog`
+
+Lab is Technion (Hebrew); MultiplEYE anticipates an RTL sample. Today the
+true-scale renderer assumes LTR monospace. Add a `right_to_left` flag (per
+dataset/trial, auto-detect from script) that flips word/line order + label
+anchoring; Arabic shaping/bidi; a CJK-capable font option. Ensure reading-order
+inference, line clustering, landing-position direction (**PRE-4**), and order
+numbers respect direction. Keep stimulus-image background as fallback (**VIZ-4**).
+
+**PRE-7 · EyeLink `.asc` import** — `Status: Backlog` *(depends PRE-0)*
+
+App requires pre-extracted fixations today. Wrap `eyekit.io.import_asc` (EFIX
+fixations; optional messages/variables) → normalized fixation schema; derive
+participant/trial from filename (like the MultiplEYE path). New "Dataset format"
+in the upload wizard; optional raw-sample surfacing; message-based trial
+segmentation. Word boxes/AOIs still come from a separate stimulus file. Feeds
+**DATA-1**.
+
+**PRE-8 · `duration_mass` probabilistic heatmap** — `Status: Backlog`
+
+Add eyekit `measure.duration_mass` as a 4th heatmap style (alongside
+word/density/interpolated): spread each fixation's duration across nearby
+characters via a Gaussian (sigma in chars) instead of hard word assignment. New
+style + sigma param in the existing heatmap control; render through the existing
+heatmap path in [`plots.py`](scanpath_studio/plots.py). Related to **VIZ-3**.
+
+---
+
+## Validation
+
+**VAL-1 · Validate against the EyeLink-rendered image** — `Status: Backlog`
+
+Confirm the true-to-scale rendering matches what EyeLink produced for the same
+trial (word boxes / fixation positions overlay correctly).
+
+**VAL-2 · Validate OneStop text-spacing v1 (1px difference)** — `Status: Backlog`
+
+Verify the 1-pixel text-spacing difference in OneStop spacing version 1 shows up
+correctly in the layout.
+
+**VAL-3 · Check additional datasets, especially non-English** — `Status: Backlog`
+
+Smoke-test loading/rendering on non-English corpora. Surfaces RTL needs (**PRE-6**)
+and feeds **DATA-1**.
+
+---
+
+## Bugs
+
+**BUG-1 · Trial filter persists (incorrectly) when switching datasets** — `Status: Planned`
+
+The active filter carries over to a new dataset where it may make no sense. Reset
+on dataset switch — but consider remembering the per-dataset filter and restoring
+it when the user switches back. Filter state lives under `filter_*` session keys
+([`controls.py`](scanpath_studio/controls.py)).
 
 ---
 
 ## Engineering
 
-Lower priority than the analysis views, but tracked.
+Lower priority than features, but tracked.
 
 ### Tests
-- Add tests for each new `aggregation.py` helper (pure functions → easy: feed a
-  tiny tidy frame, assert the grouped output) and a smoke test per new figure.
-- Cover the OneStop per-pid shard fast-path (gated on `$ONESTOP_DATA_DIR`).
-- Cover MultiplEYE side-data enrichment (questions / reader meta / measures / images).
-- Extend `AppTest` coverage: column-mapping UI, trial filters, bulk-export zip.
+
+**ENG-1 · Tests for each `aggregation.py` helper + smoke test per new figure** — `Status: Backlog`
+
+Pure functions → feed a tiny tidy frame, assert grouped output.
+
+**ENG-2 · Cover the OneStop per-pid shard fast-path** — `Status: Backlog`
+
+Gated on `$ONESTOP_DATA_DIR`.
+
+**ENG-3 · Cover MultiplEYE side-data enrichment** — `Status: Backlog`
+
+Questions / reader meta / measures / images.
+
+**ENG-4 · Extend `AppTest` coverage** — `Status: Backlog`
+
+Column-mapping UI, trial filters, bulk-export zip.
 
 ### Code quality
-- `app.py` is the largest module and mixes data-source dispatch, deep-link
-  restore, column mapping, and view dispatch — extract a data-source strategy
-  and a view dispatcher.
-- Centralize `st.session_state` keys (TypedDict/Enum) to avoid stringly-typed
-  collisions.
-- Confirm whether `watchdog` is actually used; drop it from requirements if not.
-- Resolve / promote the "Generations (WIP)" tab — finish it or hide it.
+
+**ENG-5 · Decompose `app.py`** — `Status: Backlog`
+
+It mixes data-source dispatch, deep-link restore, column mapping, and view
+dispatch — extract a data-source strategy and a view dispatcher.
+
+**ENG-6 · Centralize `st.session_state` keys** — `Status: Backlog`
+
+TypedDict/Enum to avoid stringly-typed collisions.
+
+**ENG-7 · Confirm `watchdog` is actually used; drop if not** — `Status: Backlog`
+
+Declared in `pyproject.toml` / `requirements.txt` but no direct import found —
+likely a Streamlit file-watching runtime helper. Verify before removing.
+
+**ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Backlog`
+
+Finish it or hide it (`model_scanpaths.py` / `similarity.py` / `synthetic.py`).
 
 ### UX / robustness
-- Surface which columns schema auto-detection chose (currently silent) in the
-  Column Mapping panel.
-- Better animation-export errors when Chrome/Chromium is missing; consider a
-  cold-Chrome fallback if the warm Kaleido server fails.
-- Version saved plot-config JSON and add a migration path.
+
+**ENG-9 · Surface auto-detected columns in the Column Mapping panel** — `Status: Backlog`
+
+Schema auto-detection is currently silent.
+
+**ENG-10 · Better animation-export errors when Chrome/Chromium is missing** — `Status: Backlog`
+
+Consider a cold-Chrome fallback if the warm Kaleido server fails
+(`animation_export.py`).
+
+**ENG-11 · Version saved plot-config JSON + migration path** — `Status: Backlog`
+
+So old saved configs keep loading as the schema evolves.
 
 ### Docs
-- Document the **true-to-scale text rendering** model (data-space word size →
-  screen px) — it's central and currently only in code comments.
-- Document the new analysis sections in `docs/` once built.
+
+**ENG-12 · Document the true-to-scale text rendering model** — `Status: Backlog`
+
+Data-space word size → screen px; currently only in code comments. (Relates to
+VIZ-1 px↔pt and DATA-2.)
+
+**ENG-13 · Document the new analysis sections once built** — `Status: Backlog`
+
+Add to `docs/` after AN-* land.
+
+---
 
 > When any view, measure, severity, or path here lands, update `AGENTS.md`,
 > `scanpath_studio/CLAUDE.md`, `CHANGELOG.md`, and the `docs/` site in the same

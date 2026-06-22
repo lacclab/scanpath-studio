@@ -18,7 +18,13 @@ import sys
 from typing import List, Optional
 
 from . import __version__
-from .constants import FONT_FAMILY
+from .constants import (
+    DEFAULT_SACCADE_WIDTH,
+    FONT_FAMILY,
+    SACCADE_COLOR,
+    SACCADE_DASH_OPTIONS,
+    SACCADE_WIDTH_BOUNDS,
+)
 
 
 def launch_app(extra_args: List[str]) -> None:
@@ -137,6 +143,24 @@ def _render_parser() -> argparse.ArgumentParser:
         dest="show_saccade_arrows",
         action="store_true",
         help="Draw saccade direction arrowheads.",
+    )
+    viz.add_argument(
+        "--saccade-color",
+        metavar="COLOR",
+        help=f"Saccade line/arrow color, hex or CSS name (default: {SACCADE_COLOR}).",
+    )
+    viz.add_argument(
+        "--saccade-style",
+        choices=list(SACCADE_DASH_OPTIONS.values()),
+        help="Saccade line dash style (default: solid).",
+    )
+    viz.add_argument(
+        "--saccade-width",
+        type=float,
+        metavar="PX",
+        help=f"Saccade line width in px, "
+        f"{SACCADE_WIDTH_BOUNDS[0]:g}–{SACCADE_WIDTH_BOUNDS[1]:g} "
+        f"(default: {DEFAULT_SACCADE_WIDTH:g}).",
     )
     viz.add_argument(
         "--color-by",
@@ -265,6 +289,12 @@ def render(argv: List[str]) -> None:
         overrides["color_by"] = args.color_by
     if args.heatmap_metric:
         overrides["heatmap_metric"] = args.heatmap_metric
+    if args.saccade_color:
+        overrides["saccade_color"] = args.saccade_color
+    if args.saccade_style:
+        overrides["saccade_style"] = args.saccade_style
+    if args.saccade_width is not None:
+        overrides["saccade_width"] = args.saccade_width
 
     common = dict(
         canvas_size=canvas,
@@ -281,6 +311,8 @@ def render(argv: List[str]) -> None:
                 "show_saccades",
                 "show_order",
             )
+            # Saccade styling is honored by the animation builder too.
+            saccade_keys = ("saccade_color", "saccade_style", "saccade_width")
             static_defaults = {
                 "show_fixations": True,
                 "show_heatmap": True,
@@ -297,13 +329,17 @@ def render(argv: List[str]) -> None:
                     f"{', '.join(sorted(ignored))}",
                     file=sys.stderr,
                 )
+            anim_kwargs = {k: overrides[k] for k in anim_keys}
+            anim_kwargs.update(
+                {k: overrides[k] for k in saccade_keys if k in overrides}
+            )
             fig = api.animate_scanpath(
                 words,
                 fixations,
                 participant,
                 trial,
                 playback_speed=args.playback_speed,
-                **{k: overrides[k] for k in anim_keys},
+                **anim_kwargs,
                 **common,
             )
         else:

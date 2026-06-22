@@ -1537,7 +1537,7 @@ def _render_export_panel(
     the HTML/GIF/MP4 animation when animating) so the on-screen view — including
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
-    st.markdown("#### This trial")
+    st.markdown("## This trial")
     if displayed_fig is None:
         st.caption("Select a trial to export its figure.")
     elif animate:
@@ -1556,7 +1556,7 @@ def _render_export_panel(
         )
 
     st.divider()
-    st.markdown("#### Multiple trials")
+    st.markdown("## Multiple trials")
     bulk_settings = _build_figure_settings(viz_settings, False)
     bulk_settings["line_spacing"] = line_spacing
     bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
@@ -1868,7 +1868,7 @@ def render_single_trial_tab(
     # resolved Animate / Compare / viz settings; its right-side position is fixed
     # by the column split regardless of render order.
     with rail:
-        st.markdown("##### 🎬 View modes")
+        st.markdown("## 🎬 View modes")
         # Animate styled like a layer: a toggle + a ⚙ popover for its config
         # (playback speed) — matching Compare and the visualization layers below.
         animate = st.toggle(
@@ -1910,7 +1910,7 @@ def render_single_trial_tab(
             )
         )
         st.divider()
-        st.markdown("##### 🎨 Visualization")
+        st.markdown("## 🎨 Visualization")
         # The visualization controls moved out of the sidebar into this rail
         # (host=rail) so they sit beside the plot with the sidebar closed.
         viz_settings = sidebar_controls(

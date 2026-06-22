@@ -210,6 +210,17 @@ _CARD_CSS = """
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     padding: 1rem 1.25rem;
 }
+/* The card title is an <h2> for a valid page heading outline (see the title
+   render in render_spotlight_tour); pin it back to the original <h4> size so
+   the card looks unchanged. */
+.st-key-tour_card h2 {
+    font-size: 24px !important;
+    line-height: 1.3 !important;
+    font-weight: 600 !important;
+    letter-spacing: normal !important;
+    padding: 0.25rem 1.5rem 0.4rem 0 !important;
+    margin: 0 !important;
+}
 /* Close (✕) pinned to the card's top-right corner. */
 .st-key-tour_sp_close {
     position: absolute;
@@ -376,7 +387,10 @@ def render_spotlight_tour() -> None:
             on_click=_exit_spotlight,
             help="Close the tour",
         )
-        st.markdown(f"#### {step['title']}")
+        # <h2> keeps the page heading outline valid (the card sits right under
+        # the page <h1>; an <h4> here would be an h1→h4 jump). Sized back down
+        # to the original compact look via `.st-key-tour_card h2` in _CARD_CSS.
+        st.markdown(f"## {step['title']}")
         st.markdown(step["body"])
         st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
         back_col, exit_col, next_col = st.columns(3)
@@ -713,7 +727,8 @@ def render_spotlight_wizard_guide() -> None:
     )
 
     with st.container(key="tour_card"):
-        st.markdown(f"#### {title}")
+        # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.
+        st.markdown(f"## {title}")
         st.markdown(body)
         st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
         back_col, exit_col, next_col = st.columns(3)

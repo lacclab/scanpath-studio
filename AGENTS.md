@@ -22,12 +22,14 @@ docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
 ```text
 scanpath_studio/
 ├─ app.py            entry point: page config, data load, trial filters, dispatch to tabs
+├─ url_state.py      deep links + plot-config save/restore + Share link + Corpus⇄Scanpath view toggle (split from app.py)
+├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
 ├─ tabs.py           tab implementations (Scanpath Visualization [Annotations + Stimulus & questions + Export subtabs; Export folds in single-trial + bulk export], Corpus Analysis [Generations + Aggregated Views subtabs], Data Inspection)
 ├─ aggregation.py    pure corpus-level aggregation helpers for the Aggregated Views subtab (trial-index/fixation-index trends, per-text word aggregates, grouped metric distributions)
 ├─ controls.py       sidebar viz controls + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions) + geometry helpers (line clustering, in-text test)
-├─ plots.py          Plotly figure builders (scanpath, animation, comparison, bar, histogram); background color, out-of-text + by-line fixation options, hollow fixation markers, dashed/dotted saccades, base + highlighted text colors, and per-scanpath comparison styling (the comparison builders now honor the fixation/saccade viz controls, not just text/boxes)
+├─ plots.py          Plotly figure builders (scanpath, animation, comparison, bar, histogram); background color, out-of-text + by-line fixation options, hollow fixation markers, dashed/dotted + adjustable-width saccades, base + highlighted text colors, and per-scanpath comparison styling (the comparison builders now honor the fixation/saccade viz controls, not just text/boxes)
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
 ├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source)

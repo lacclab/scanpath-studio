@@ -244,7 +244,12 @@ class _FakeSt:
 @pytest.fixture
 def fake_st(monkeypatch):
     fake = _FakeSt()
+    # The share/deep-link helpers live in url_state now; patch its module-level
+    # `st` (and app's, for any app-side callers) so the link logic runs headless.
+    from scanpath_studio import url_state as url_state_module
+
     monkeypatch.setattr(app_module, "st", fake)
+    monkeypatch.setattr(url_state_module, "st", fake)
     return fake
 
 
@@ -301,6 +306,7 @@ class TestBuildShareQuery:
             "global_show_saccade_arrows": True,
             "global_saccade_style": "Dashed",
             "global_saccade_color": "#123456",
+            "global_saccade_width": 4.5,
             "global_text_color": "#0a0b0c",
             "global_highlight_text_color": "#fedcba",
             "global_color_by": "duration_ms",
@@ -316,6 +322,7 @@ class TestBuildShareQuery:
         assert parsed["show_saccade_arrows"] == ["1"]
         assert parsed["saccade_style"] == ["Dashed"]
         assert parsed["saccade_color"] == ["#123456"]
+        assert parsed["saccade_width"] == ["4.5"]
         assert parsed["text_color"] == ["#0a0b0c"]
         assert parsed["highlight_text_color"] == ["#fedcba"]
         assert parsed["color_by"] == ["duration_ms"]
@@ -335,6 +342,7 @@ class TestBuildShareQuery:
         assert ss["global_show_saccade_arrows"] is True
         assert ss["global_saccade_style"] == "Dashed"
         assert ss["global_saccade_color"] == "#123456"
+        assert ss["global_saccade_width"] == 4.5
         assert ss["global_text_color"] == "#0a0b0c"
         assert ss["global_highlight_text_color"] == "#fedcba"
         assert ss["global_color_by"] == "duration_ms"
@@ -350,12 +358,14 @@ class TestBuildShareQuery:
         fake_st.query_params = {
             "marker_size_range": "1,99",  # widget bounds [4, 40]
             "line_spacing": "999",  # bounds [1.0, 10.0]
+            "saccade_width": "99",  # bounds [0.5, 10.0]
             "order_font_size": "1000",  # bounds [6, 72]
         }
         _apply_url_preset()
         ss = fake_st.session_state
         assert ss["global_marker_size_range"] == (4, 40)
         assert ss["global_line_spacing"] == 10.0
+        assert ss["global_saccade_width"] == 10.0
         assert ss["global_order_font_size"] == 72
 
     def test_malformed_range_url_value_is_skipped(self, fake_st):

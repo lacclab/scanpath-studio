@@ -110,6 +110,66 @@ def test_render_explicit_trial_with_flags(tmp_path):
     assert out_file.is_file()
 
 
+def test_render_forwards_saccade_styling(tmp_path, monkeypatch):
+    # The --saccade-* flags must reach the figure builder via plot_scanpath.
+    import scanpath_studio.api as api
+
+    captured = {}
+
+    def fake_plot(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "plot_scanpath", fake_plot)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--saccade-color",
+            "#ff0000",
+            "--saccade-style",
+            "dash",
+            "--saccade-width",
+            "6",
+            "-o",
+            str(tmp_path / "x.html"),
+        ]
+    )
+    assert captured["saccade_color"] == "#ff0000"
+    assert captured["saccade_style"] == "dash"
+    assert captured["saccade_width"] == 6.0
+
+
+def test_render_animate_forwards_saccade_styling(tmp_path, monkeypatch):
+    # The animation builder honors the saccade trio too, so --animate forwards it.
+    import scanpath_studio.api as api
+
+    captured = {}
+
+    def fake_anim(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "animate_scanpath", fake_anim)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--animate",
+            "--saccade-color",
+            "#00ff00",
+            "--saccade-width",
+            "5",
+            "-o",
+            str(tmp_path / "a.html"),
+        ]
+    )
+    assert captured["saccade_color"] == "#00ff00"
+    assert captured["saccade_width"] == 5.0
+
+
 def test_render_animate_html(tmp_path):
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "-o", str(out_file)])

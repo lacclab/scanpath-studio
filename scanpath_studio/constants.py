@@ -69,6 +69,10 @@ SACCADE_DASH_OPTIONS = {
     "Dotted": "dot",
     "Dash-dot": "dashdot",
 }
+# Saccade line width (px): default + the (min, max) the width slider allows.
+DEFAULT_SACCADE_WIDTH = 2.0
+SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
+
 # Outline width (px) for hollow (outline-only) fixation markers.
 HOLLOW_OUTLINE_WIDTH = 2.0
 
@@ -101,3 +105,19 @@ CITATION = {
         "https://doi.org/10.1038/s41597-025-06272-2"
     ),
 }
+
+
+# --- Data-source identity + main view labels --------------------------------
+# Moved out of app.py so url_state.py / wizard.py can import them without a
+# cycle (app.py re-imports them for its own use and for tests).
+UPLOAD_CHOICE = "Upload tables"
+DEMO_CHOICE = "Bundled Demo"
+SYNTHETIC_CHOICE = "Synthetic test trial"
+PUBLIC_DATASETS_CHOICE = "Public datasets"
+POTEC_DEFAULT_DIR = "data/PoTeC"
+POTEC_TEXT_IDS = [f"{d}{i}" for d in ("b", "p") for i in range(6)]
+MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
+ONESTOP_CHOICE = "OneStop server bundle"
+_VIEW_SCANPATH = "Scanpath Visualization"
+_VIEW_CORPUS = "Corpus Analysis"
+_MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS]

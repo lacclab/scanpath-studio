@@ -27,6 +27,7 @@ from scanpath_studio.annotations import render_trial_annotations
 from scanpath_studio.constants import (
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
@@ -459,6 +460,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         saccade_style=SACCADE_DASH_OPTIONS.get(
             viz_settings.get("saccade_style", "Solid"), "solid"
         ),
+        saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
         highlight_text_color=viz_settings.get(
@@ -1127,6 +1129,9 @@ def _build_studio_config(
             "heatmap_colorscale": figure_settings["heatmap_colorscale"],
             "saccade_color": figure_settings.get("saccade_color", SACCADE_COLOR),
             "saccade_style": viz_settings.get("saccade_style", "Solid"),
+            "saccade_width": float(
+                viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
+            ),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
             "colorbar_orientation": figure_settings.get(
                 "colorbar_orientation", "Vertical"
@@ -1237,6 +1242,9 @@ def _render_save_restore_expander(
             "fix_color": st.session_state.get(f"cmp{idx}_fix_color"),
             "saccade_color": st.session_state.get(f"cmp{idx}_saccade_color"),
             "saccade_style": st.session_state.get(f"cmp{idx}_saccade_style", "Solid"),
+            "saccade_width": float(
+                st.session_state.get(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH)
+            ),
             "marker_size_range": [
                 int(s)
                 for s in st.session_state.get(
@@ -1463,6 +1471,7 @@ def _build_and_render_animation(
         saccade_style=SACCADE_DASH_OPTIONS.get(
             viz_settings.get("saccade_style", "Solid"), "solid"
         ),
+        saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),

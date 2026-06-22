@@ -8,137 +8,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Saccade line width.** The Saccade-style popover gains a *Saccade line width*
-  slider (0.5–10 px, default 2) so the saccade traces can be thinned for dense
-  scanpaths or thickened for presentations. Threads through the single, animated,
-  and comparison plots (with a per-scanpath width for two-trial comparisons) and
-  bulk export, is saved/restored with the plot config, deep-linkable
-  (`?saccade_width=`), and exposed headless via `plot_scanpath(saccade_width=…)`.
-- **Headless saccade styling.** The `render` CLI gains `--saccade-color`,
-  `--saccade-style` (`solid`/`dash`/`dot`/`dashdot`), and `--saccade-width` so
-  saccade appearance — not just visibility — is reachable from the command line
-  (honored for `--animate` too). `saccade_style` is now listed explicitly in the
-  headless `CANONICAL_FIGURE_DEFAULTS` alongside `saccade_color`/`saccade_width`,
-  so the saccade-styling trio is consistent across app, API, and CLI.
-- **Show full monitor.** A new toggle (Visualization → *Axes & color bars*, on by
-  default) frames the plot to the whole virtual presentation monitor so the
-  scanpath sits where it actually appeared on screen, with the rest of the
-  monitor shown around it — instead of the view cropping tightly to the data
-  extent. Applies to the single, animated, and comparison plots (and bulk
-  export); turn it off to recover the old fit-to-data framing. The interpolated
-  heatmap still tracks the real data extent. (The headless `plots`/`api`
-  builders keep fit-to-data as their default via `fit_to_monitor=False`.)
-- **MultiplEYE corpus loader.** `scanpath_studio.load_multipleye(root)` (and the
-  pre-normalization `datasets.multipleye_raw_frames` / `multipleye_inventory`)
-  load the multilingual MultiplEYE reading corpus, whose identity lives only in
-  folder + file names. It parses participant / session / trial / stimulus from
-  the paths, drops non-reading screens (`question_*`, `*_rating_screen`,
-  `subject_difficulty_screen`), and aggregates the character-level AOI files to
-  one word box per `(page, word_idx)`. Each reader is a *session*
-  (`participant_id = "001_ZH_CH_1_ET1"` — ET1/ET2 read disjoint stimuli) and
-  each stimulus *page* is its own trial (`trial_id = "Lit_Alchemist_4__page_01"`,
-  zero-padded so pages sort numerically and shown as "Lit_Alchemist_4 · page 1"
-  in the trial picker, since pages reuse the same screen coordinates), with
-  `text_id` kept as the stimulus for stimulus-level merges. The image-relative
-  coordinates are shifted onto where the **centered** stimulus appeared on the
-  full screen, so `MULTIPLEYE_MONITOR = (1920, 1080)` (the real monitor) renders
-  the scanpath true-to-scale; the stimulus-image background is placed at the same
-  centered origin. Fixation source is `scanpaths/` (page/word-tagged) or
-  `fixations/` (raw).
-- **Public datasets are now offered by default** (PoTeC + MultiplEYE in the data
-  source picker); set `SCANPATH_PUBLIC_DATASETS=0` to hide them.
-- **MultiplEYE rich side data.** Loading MultiplEYE now enriches the trial with
-  everything the corpus ships, surfaced through the existing panels: the
-  **comprehension questions** (target + distractors) in the *Stimulus &
-  questions* panel; the corpus's **pre-aggregated reading measures**
-  (`FFD/FPRT/TFT/RPD/…` → canonical `IA_*`, preferred over recomputed metrics);
-  **reader metadata** (age / gender / native language / education) and the
-  **genre / ET-session / practice** facets as Trial Info chips + filter
-  conditions; and the **stimulus page image** as a true-to-scale background layer
-  (a new **Stimulus image** toggle — exact coordinates, sidesteps CJK/RTL fonts).
-  The browser-upload path picks up questions + reader metadata when those files
-  are uploaded too (`read_table` now reads `.xlsx`).
-- **MultiplEYE in the in-app "Public datasets" picker**, with directory / session /
-  stimulus / fixation-source controls and the corpus monitor size.
-- **MultiplEYE via the Add-dataset wizard (browser upload).** A **Dataset format**
-  choice in *Add dataset* now offers **MultiplEYE**: upload the corpus's
-  scanpath/fixation CSVs (+ optional word-AOI CSVs) and the app recovers identity
-  from the file names (browsers drop folders), makes each stimulus *page* a trial,
-  aggregates character AOIs into word boxes, and case-matches the lowercase AOI
-  file names to the CamelCase stimuli — no column mapping needed
-  (`datasets.multipleye_frames_from_uploads` / `load_multipleye_uploads`).
-- **Derive ids from the filename (upload wizard).** An optional step turns the
-  captured `source_file` into columns you can map as a trial / participant id —
-  either a **delimiter split** into `file_part_N` (`data.split_source_file`) or a
-  **regex** with named groups (`data.extract_columns_from_source_file`, robust to
-  variable-length parts), with optional lowercasing. `read_tables` now records
-  `source_file` for a single file too, not just multi-file sets.
-- **Aggregate character AOIs into word boxes (upload wizard).** A toggle in the
-  Text & Interest Areas step collapses one-row-per-character interest-area tables
-  (e.g. CJK corpora) into one bounding box per word
-  (`data.aggregate_char_boxes`), grouped by the mapped trial + word id.
+- **Saccade line width** — a width slider (0.5–10 px, default 2) in the Saccade-style
+  popover, threaded through every plot, bulk export, save/restore, and deep links
+  (per-scanpath in comparisons); plus headless `--saccade-color`/`--saccade-style`/
+  `--saccade-width` CLI flags and a `plot_scanpath(saccade_width=…)` kwarg.
+- **Show full monitor** toggle — frame the plot to the whole presentation monitor
+  instead of cropping to the data extent (single, animated, comparison, bulk export).
+- **MultiplEYE corpus support** — `load_multipleye()`, the in-app *Public datasets*
+  picker, and the *Add dataset* wizard (browser upload) load the multilingual
+  reading corpus (identity parsed from folder/file names, one trial per stimulus
+  page, character AOIs aggregated to word boxes), with its comprehension questions,
+  pre-aggregated reading measures (`IA_*`), reader metadata, and a true-to-scale
+  stimulus-page background image.
+- **Public datasets (PoTeC + MultiplEYE) shown by default** (`SCANPATH_PUBLIC_DATASETS=0`
+  to hide). Schema auto-detection now recognizes MultiplEYE columns.
+- **Upload-wizard helpers** — derive trial/participant ids from the filename
+  (delimiter split or regex) and aggregate character AOIs into word boxes.
 
 ### Changed
-- **Navigation streamlined.** **Corpus Analysis** is now a header button (toggles
-  with Scanpath), and **Data Inspection** + **Share** moved into the Scanpath
-  view's subtab bar — so the sidebar's view nav is gone and the page leads with
-  the scanpath. (Share was the former header popover; Data Inspection the former
-  standalone view.)
-- **Trial selection reworked into Filter → Pick.** The Browse-by modes are gone.
-  **Filter by** offers a **Text** and a **Participant** multiselect (plus a **More**
-  popover for conditions / annotations) that narrow the trial pool; the trial is
-  then **picked** on one row — a `Trial id` dropdown (type to filter) + a scrubbing
-  slider whose thumb reads `index/TOTAL · id` + adjacent ◀ ▶ step buttons. The
-  old "Trial X / N" caption is dropped (the slider shows it). "Filter trials" is
-  now the **More** popover (Text/Participant moved into Filter by).
-- **Welcome tour** gained an **✕** in its top-right corner to dismiss it.
-- **Schema auto-detection** now recognizes MultiplEYE column conventions:
-  fixation `location_x` / `location_y` / `onset`, word-box origin `top_left_x` /
-  `top_left_y`, and `word_idx` / `char_idx` word ids.
-- **More plot, less chrome.** Dropped the "🎯 Trial" heading; the chip strip stays
-  on **one line** with an inline **More** dropdown (only the stats not already
-  shown — reading time, word/fixation counts) and a `?` pointing to the sidebar
-  picker; quick views sit side by side. Saccade **direction arrows are now off by
-  default**. The trial slider gained a **Trial X / N** counter on its left, and the
-  participant **Pick by** sub-step reads as nested under Browse-by (↳). The
-  stimulus text and its question now have breathing room between them.
-- **Comparison styling lives with each layer.** The per-scanpath (Scanpath 1 / 2)
-  comparison controls moved out of a separate panel into the **Fixation** and
-  **Saccade** style popovers, beside their single-trial counterparts.
-- **More styling control.** Span **Mark border** takes a colour; the out-of-text
-  marker is choosable (emoji-labelled); colour bars can go horizontal with
-  rotatable, resizable tick labels; the fixation-index default size is now 10.
-- **Tighter control rail.** Trimmed the dead space around the rail's section
-  dividers so View modes, Visualization, and the layers sit close together.
+- **Navigation streamlined** — Corpus Analysis is a header toggle; Data Inspection
+  and Share are Scanpath subtabs; the sidebar view-nav is gone.
+- **Trial selection reworked into Filter → Pick** — Text/Participant/condition
+  filters narrow the pool, then one row picks the trial (dropdown + scrubbing
+  slider + ◀ ▶); Browse-by modes removed.
+- **Comparison styling moved into the per-layer Fixation/Saccade popovers**, beside
+  the single-trial controls.
+- **Styling & chrome polish** — saccade arrows off by default, span-border colour,
+  choosable out-of-text marker, horizontal/rotatable colour bars, tighter control
+  rail, less heading clutter, a dismiss ✕ on the welcome tour.
 
 ### Fixed
-- **Stimulus image now shows in Animate mode.** The stimulus-page background layer
-  was only added to the static plot, so the **Stimulus image** toggle had no effect
-  during the animated replay. The single-scanpath animation now draws the page
-  image at its centered origin, below the traces, persisting across frames.
-- **Switching public datasets re-proposes the column mapping.** The auto-detected
-  column mapping (`col_map_*`) persisted across a data-source change, so PoTeC's
-  Trial → `text_id` mapping stuck when switching to MultiplEYE (which also has a
-  `text_id` column, so the stale-column reset didn't catch it). MultiplEYE's
-  per-page `trial_id` was then ignored and every page collapsed into one
-  stimulus-level trial. Each corpus now re-detects its own mapping on a source
-  change; same-source reruns and restored configs keep theirs.
-- **Canvas now follows the selected corpus' monitor.** Selecting a public dataset
-  (or switching between them) snaps the canvas to that corpus' registered monitor
-  instead of leaving a previously-seeded size in place — so MultiplEYE's
-  1920×1080, true-to-scale rendering shows up even in a returning session (the old
-  `setdefault` kept a stale canvas and rendered the scanpath off-scale). Manual
-  canvas edits and restored plot configs within the same source are preserved.
-- **Heatmap colour now matches the picker.** The heatmap defaulted to a colorscale
-  that a popover-hosted selectbox couldn't display (it showed the first option and
-  could silently overwrite the value on the next click) — the default is now blue,
-  in sync with the picker and the figure. Heatmap **style** uses a radio so the
-  active style always shows selected.
-- **Save & restore now captures every setting.** A saved config silently dropped
-  the colour-bar orientation/tick angle/tick size, the out-of-text marker, the span
-  border colour, and all per-scanpath comparison styling — they now round-trip.
-- **Chips truly stay one line.** The strip no longer wraps when space is tight: the
-  identity/condition chips clip at the edge while the `?` and **More** stay pinned.
+- **Stimulus image now shows in Animate mode** (was static-only).
+- **Switching public datasets re-detects the column mapping and snaps the canvas to
+  that corpus' monitor** — fixes MultiplEYE pages collapsing into one trial and
+  off-scale rendering.
+- **Heatmap colour matches the picker** (default now blue; style uses a radio).
+- **Save & restore captures every setting** — colour-bar orientation/ticks,
+  out-of-text marker, span-border colour, and per-scanpath comparison styling.
+- **Chips stay on one line** when space is tight.
 
 ## [0.22.0] - 2026-06-19
 

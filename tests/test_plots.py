@@ -112,6 +112,17 @@ class TestSaccadeColor:
         arrows = [t for t in fig.data if t.name == "saccade direction"]
         assert arrows and arrows[0].marker.color == "#123456"
 
+    def test_saccade_width_threads_to_line(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(saccade_width=5.5),
+        )
+        line = [t for t in fig.data if t.name == "saccades"]
+        assert line and float(line[0].line.width) == 5.5
+
 
 class TestHighlightColumn:
     def test_overlay_uses_chosen_column(self):

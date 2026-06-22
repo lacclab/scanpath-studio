@@ -35,6 +35,7 @@ import pandas as pd
 from .constants import (
     CITATION,
     DEFAULT_LINE_SPACING,
+    DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
     WORD_LABEL_COLOR,
@@ -584,6 +585,9 @@ def bulk_export(
                         ),
                         saccade_color=settings.get("saccade_color", SACCADE_COLOR),
                         saccade_style=settings.get("saccade_style", "solid"),
+                        saccade_width=settings.get(
+                            "saccade_width", DEFAULT_SACCADE_WIDTH
+                        ),
                         hollow_fixations=settings.get("hollow_fixations", False),
                         critical_span_style=settings.get(
                             "critical_span_style", "Mark text"

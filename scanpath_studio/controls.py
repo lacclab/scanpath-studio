@@ -15,9 +15,11 @@ from .constants import (
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
+    SACCADE_WIDTH_BOUNDS,
     WORD_LABEL_COLOR,
 )
 from .data import frame_fingerprint
@@ -43,6 +45,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_show_saccade_arrows": False,
     "global_saccade_color": SACCADE_COLOR,
     "global_saccade_style": "Solid",
+    "global_saccade_width": DEFAULT_SACCADE_WIDTH,
     "global_hollow_fixations": False,
     "global_highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
     "global_show_heatmap": False,
@@ -627,6 +630,7 @@ def _seed_compare_styles() -> None:
         st.session_state.setdefault(f"cmp{idx}_fix_color", default_color)
         st.session_state.setdefault(f"cmp{idx}_saccade_color", default_color)
         st.session_state.setdefault(f"cmp{idx}_saccade_style", "Solid")
+        st.session_state.setdefault(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH)
         st.session_state.setdefault(
             f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE
         )
@@ -654,6 +658,14 @@ def _render_compare_saccade_styles() -> None:
         st.selectbox(
             f"{name} — line style", options=style_labels, key=f"cmp{idx}_saccade_style"
         )
+        st.slider(
+            f"{name} — line width",
+            min_value=SACCADE_WIDTH_BOUNDS[0],
+            max_value=SACCADE_WIDTH_BOUNDS[1],
+            step=0.5,
+            format="%.1f px",
+            key=f"cmp{idx}_saccade_width",
+        )
 
 
 def _collect_compare_styles() -> tuple[dict, dict]:
@@ -670,6 +682,11 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                 ),
                 saccade_style=SACCADE_DASH_OPTIONS.get(
                     st.session_state.get(f"cmp{idx}_saccade_style", "Solid"), "solid"
+                ),
+                saccade_width=float(
+                    st.session_state.get(
+                        f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH
+                    )
                 ),
                 marker_size_range=tuple(
                     st.session_state.get(
@@ -852,6 +869,7 @@ def _collect_viz_settings(
         highlight_column=highlight_column,
         saccade_color=ss.get("global_saccade_color", SACCADE_COLOR),
         saccade_style=ss.get("global_saccade_style") or "Solid",
+        saccade_width=float(ss.get("global_saccade_width") or DEFAULT_SACCADE_WIDTH),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
         highlight_text_color=ss.get("global_highlight_text_color"),
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
@@ -1077,6 +1095,16 @@ def sidebar_controls(
                 options=list(SACCADE_DASH_OPTIONS.keys()),
                 key="global_saccade_style",
                 help="Line style for the saccade traces.",
+            )
+            st.slider(
+                "Saccade line width",
+                min_value=SACCADE_WIDTH_BOUNDS[0],
+                max_value=SACCADE_WIDTH_BOUNDS[1],
+                step=0.5,
+                format="%.1f px",
+                key="global_saccade_width",
+                help="Thickness of the saccade lines (single scanpath; two-trial "
+                "comparisons use the per-scanpath controls below). Default 2.",
             )
             # Per-scanpath saccade styling for the two-trial comparison.
             if st.session_state.get("single_compare_toggle"):

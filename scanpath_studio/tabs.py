@@ -1695,10 +1695,12 @@ def _render_trial_condition_chips(
             for name, value in items
         )
 
-    # A "?" marker pointing to the sidebar picker (native HTML title tooltip).
+    # A "?" marker pointing to the sidebar picker (styled hover/focus tooltip via
+    # the .sps-chip-help::after bubble; tabindex+aria-label keep it accessible).
+    _chip_help_tip = "Change which fields show here in the sidebar → 🏷️ Trial chips"
     help_span = (
-        '<span class="sps-chip-help" title="Change which fields show here in the '
-        'sidebar → 🏷️ Trial chips">?</span>'
+        f'<span class="sps-chip-help" tabindex="0" role="img" '
+        f'aria-label="{_chip_help_tip}" data-tip="{_chip_help_tip}">?</span>'
     )
     # The summary stats sit inside an inline <details> "More" — only fields not
     # already shown inline — so the whole strip stays one line until expanded.

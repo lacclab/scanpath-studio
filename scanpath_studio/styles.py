@@ -221,8 +221,10 @@ def get_app_css() -> str:
     }
     .sps-chips-primary .sps-chip { flex: 0 0 auto; }
     .sps-chip-help, .sps-chip-more { flex: 0 0 auto; }
-    /* "?" help marker → small round badge with a native hover tooltip. */
+    /* "?" help marker → small round badge with a styled hover/focus tooltip
+       (a native title= is too easy to miss — slow, tiny, hover-only). */
     .sps-chip-help {
+        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -235,6 +237,26 @@ def get_app_css() -> str:
         color: #555;
         cursor: help;
     }
+    .sps-chip-help::after {
+        content: attr(data-tip);
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        white-space: nowrap;
+        background: #212529;
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 500;
+        padding: 0.3rem 0.5rem;
+        border-radius: 0.35rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+        opacity: 0;
+        pointer-events: none;
+        z-index: 30;
+        transition: opacity 0.12s ease;
+    }
+    .sps-chip-help:hover::after,
+    .sps-chip-help:focus::after { opacity: 1; }
     /* Inline "More" disclosure: the chip-styled summary stays on the one-line
        strip; its body (the not-already-shown summary stats) opens as a floating
        dropdown so expanding it never reflows the chip row. */

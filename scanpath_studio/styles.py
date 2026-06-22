@@ -361,5 +361,42 @@ def get_app_css() -> str:
         color: var(--sps-accent);
         font-weight: 700;
     }
+
+    /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
+       Streamlit renders captions as theme-text-color at opacity 0.6, which on
+       the #f5f7fa panels measures 4.07:1 — below the 4.5:1 AA threshold. Lift
+       to 0.72 (~5.5:1 in light, still well-clear in dark). Theme-safe: the
+       underlying color is each theme's own text color, so dark mode stays
+       readable rather than getting a hardcoded gray. */
+    div[data-testid="stCaptionContainer"] { opacity: 0.72 !important; }
+
+    /* Multiselect placeholder text ("All texts", "Choose options", …) is
+       BaseWeb's theme-text at 0.6 alpha → 4.07:1, same sub-AA problem as the
+       caption. Fix it the same theme-agnostic way: take the full-strength theme
+       text colour (`inherit`) and mute it with opacity to 0.72 (~5.5:1) — works
+       in whichever theme is active, unlike a hardcoded colour. The selector
+       hits only the placeholder (the div following the search input); once
+       chips replace it there's no match, so selected tags keep their colour. */
+    [data-testid="stMultiSelect"] [data-baseweb="select"] div:has(> input) + div {
+        color: inherit !important;
+        opacity: 0.72 !important;
+    }
+
+    /* Section headers now use proper heading levels so screen-reader users get
+       a valid outline (no h1→h5 jump): the rail/export sections are <h2>, their
+       sub-sections <h3>. Pin the visual size back to the original compact look
+       (by Streamlit's stable text-derived ids) so the layout is unchanged. */
+    #view-modes, #visualization, #scope, #figures, #also-include {
+        font-size: 20px !important; line-height: 24px !important;
+        font-weight: 600 !important; padding: 6px 0 16px !important;
+        /* In the narrow plot-side rail these can wrap; only ever break at a
+           space, never mid-word ("Visualizatio↵n"). */
+        word-break: normal !important; overflow-wrap: normal !important;
+    }
+    #view-modes, #visualization { margin: 2.4px 0 1.6px !important; }
+    #this-trial, #multiple-trials {
+        font-size: 24px !important; line-height: 28.8px !important;
+        font-weight: 600 !important; padding: 8px 0 16px !important;
+    }
     </style>
     """

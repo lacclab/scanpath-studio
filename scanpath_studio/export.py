@@ -323,7 +323,7 @@ def render_export_options(
             "**This trial** above.)"
         )
 
-        st.markdown("##### Scope")
+        st.markdown("### Scope")
         # The whole-dataset choice now lives inside the scope radio (TODO 1).
         (
             scope,
@@ -335,7 +335,7 @@ def render_export_options(
 
         # Figures are the headline artifact, so they lead with a single
         # multi-select of formats (pills) rather than a column of checkboxes.
-        st.markdown("##### Figures")
+        st.markdown("### Figures")
         fig_formats = (
             st.pills(
                 "Formats",
@@ -367,7 +367,7 @@ def render_export_options(
         else:
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
 
-        st.markdown("##### Also include")
+        st.markdown("### Also include")
         include_plot_config = st.toggle(
             "Plot config (JSON)",
             value=True,

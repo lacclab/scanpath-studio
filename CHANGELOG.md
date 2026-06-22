@@ -79,6 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dividers so View modes, Visualization, and the layers sit close together.
 
 ### Fixed
+- **Canvas now follows the selected corpus' monitor.** Selecting a public dataset
+  (or switching between them) snaps the canvas to that corpus' registered monitor
+  instead of leaving a previously-seeded size in place — so MultiplEYE's
+  1920×1080, true-to-scale rendering shows up even in a returning session (the old
+  `setdefault` kept a stale canvas and rendered the scanpath off-scale). Manual
+  canvas edits and restored plot configs within the same source are preserved.
 - **Heatmap colour now matches the picker.** The heatmap defaulted to a colorscale
   that a popover-hosted selectbox couldn't display (it showed the first option and
   could silently overwrite the value on the next click) — the default is now blue,

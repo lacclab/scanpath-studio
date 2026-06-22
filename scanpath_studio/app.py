@@ -2082,10 +2082,16 @@ def render_sidebar_canvas_controls(
     # OneStop server bundle + bundled demo share the same experimental setup
     # (Dell U2715H, 2560x1440). Data-derived extents undershoot — text only
     # fills part of the screen — so hard-default to the real monitor here.
+    # ``monitor_is_authoritative`` = the source declares a real presentation
+    # monitor (OneStop/demo or a public-dataset registry entry), so the canvas
+    # should snap to it rather than to data-derived extents.
+    monitor_is_authoritative = False
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         default_canvas_w, default_canvas_h = 2560, 1440
+        monitor_is_authoritative = True
     elif (monitor := _public_dataset_monitor(data_choice)) is not None:
         default_canvas_w, default_canvas_h = monitor
+        monitor_is_authoritative = True
     elif data_choice is None or data_choice == UPLOAD_CHOICE:
         # Uploaded data (the setup wizard passes data_choice=None) defaults to a
         # common 1440p monitor — data-derived extents undershoot the real screen,
@@ -2101,6 +2107,21 @@ def render_sidebar_canvas_controls(
     # argument — that keeps the keys assignable by the plot-config restore
     # (app._restore_plot_config) without Streamlit's "default value but also set
     # via Session State API" warning.
+    #
+    # For a source with an authoritative monitor, snap the canvas to it whenever
+    # that source *changes* (selecting a public dataset, switching PoTeC↔MultiplEYE,
+    # or a public dataset whose registered monitor was updated): a plain
+    # ``setdefault`` would let a previously-seeded canvas stick, so a returning
+    # session would keep the old monitor and render the corpus off-scale. Manual
+    # canvas edits and plot-config restores within the same source are preserved
+    # (the key is unchanged, so the snap doesn't re-fire).
+    source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
+        source_key
+    ):
+        st.session_state["global_canvas_width"] = canvas_width
+        st.session_state["global_canvas_height"] = canvas_height
+        st.session_state["_canvas_seeded_for"] = source_key
     st.session_state.setdefault("global_canvas_width", canvas_width)
     st.session_state.setdefault("global_canvas_height", canvas_height)
 

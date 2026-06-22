@@ -459,6 +459,64 @@ class TestUnmappedRawDataView:
         assert pickers, "expected a Dataset radio under Public datasets"
         assert list(pickers[0].options) == list(app.PUBLIC_DATASET_REGISTRY)
 
+    def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
+        """Selecting a public dataset snaps the canvas to its registered monitor,
+        even when a previous source left a stale canvas in session state.
+
+        Regression: ``setdefault`` let a returning session keep an old canvas, so
+        a corpus' monitor update (e.g. MultiplEYE → 1920x1080) never showed and the
+        scanpath rendered off-scale."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        words = pd.DataFrame(
+            {
+                "trial_id": ["Lit_X_1__page_01", "Lit_X_1__page_01"],
+                "text_id": ["Lit_X_1", "Lit_X_1"],
+                "word_idx": [0, 1],
+                "word": ["a", "b"],
+                "left": [100.0, 140.0],
+                "right": [140.0, 180.0],
+                "top": [50.0, 50.0],
+                "bottom": [80.0, 80.0],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["001_ZH_CH_1_ET1"] * 2,
+                "trial_id": ["Lit_X_1__page_01"] * 2,
+                "location_x": [110.0, 150.0],
+                "location_y": [60.0, 60.0],
+                "duration": [200.0, 180.0],
+                "onset": [0.0, 200.0],
+                "word_idx": [0, 1],
+            }
+        )
+        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        monkeypatch.setitem(
+            app.PUBLIC_DATASET_REGISTRY[mpe_key],
+            "loader",
+            lambda: (words, fixations),
+        )
+        monitor = app.PUBLIC_DATASET_REGISTRY[mpe_key]["monitor"]
+
+        at = _make_apptest()
+        # Simulate a returning session: a stale canvas seeded by a *different* source.
+        at.session_state["global_canvas_width"] = 1310
+        at.session_state["global_canvas_height"] = 991
+        at.session_state["_canvas_seeded_for"] = (app.PUBLIC_DATASETS_CHOICE, "other")
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = mpe_key
+        at.run(timeout=60)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert (
+            at.session_state["global_canvas_width"],
+            at.session_state["global_canvas_height"],
+        ) == monitor
+
 
 class TestGroupedUploadMapping:
     """Upload source: each table's mapping renders under its own upload box, and

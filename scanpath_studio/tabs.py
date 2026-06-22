@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import json
 import os
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -1741,6 +1741,7 @@ def render_single_trial_tab(
     combos_all: Optional[pd.DataFrame] = None,
     words_all: Optional[pd.DataFrame] = None,
     fixations_all: Optional[pd.DataFrame] = None,
+    share_renderer: Optional[Callable[[], None]] = None,
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
@@ -1755,9 +1756,12 @@ def render_single_trial_tab(
        **visualization controls** (formerly in the sidebar — see
        ``controls.sidebar_controls``, rendered here with ``host=``).
     3. A full-width **subtab bar** below: 📝 Annotations · Stimulus & questions ·
-       Export (Export folds in the former Bulk Export tab — see
-       ``_render_export_panel``). The former Trial Info subtab was folded into the
-       configurable chips above the plot. Save & restore lives in the sidebar.
+       Export · 🔎 Data Inspection · 🔗 Share. Export folds in the former Bulk
+       Export tab (``_render_export_panel``); Data Inspection (the former
+       standalone view) renders inline here; Share (the former header popover)
+       builds the deep link via ``share_renderer`` (passed by ``app.main``). The
+       former Trial Info subtab was folded into the chips above the plot. Save &
+       restore lives in the sidebar.
 
     ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
     the Export subtab's bulk section uses for its "whole dataset" scope; they
@@ -2079,8 +2083,14 @@ def render_single_trial_tab(
     # must be created outside the columns to span the page width). Trial Info is
     # gone — the chip strip above the plot now carries the trial's identity,
     # conditions and summary stats (configurable via the sidebar 🏷️ Trial chips).
-    tab_annot, tab_stim, tab_export = st.tabs(
-        ["📝 Annotations", "Stimulus & questions", "Export"]
+    tab_annot, tab_stim, tab_export, tab_inspect, tab_share = st.tabs(
+        [
+            "📝 Annotations",
+            "Stimulus & questions",
+            "Export",
+            "🔎 Data Inspection",
+            "🔗 Share",
+        ]
     )
     with tab_annot:
         render_trial_annotations(selected_participant, selected_trial, bare=True)
@@ -2107,6 +2117,21 @@ def render_single_trial_tab(
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
         )
+    with tab_inspect:
+        # The former Data Inspection view is now a subtab here (raw tables +
+        # summary stats + column mapping). Uses the filtered frames in view.
+        render_data_inspection_tab(
+            words_filtered,
+            fixations_filtered,
+            raw_gaze if raw_gaze is not None else pd.DataFrame(),
+        )
+    with tab_share:
+        # The former header Share popover, now a subtab. app.main passes the
+        # renderer (it owns the deep-link builder + data source).
+        if share_renderer is not None:
+            share_renderer()
+        else:
+            st.caption("Sharing is unavailable in this context.")
 
     # Save & restore (plot config + annotations) is rendered by app.main on every
     # view (it must stay reachable when a non-Scanpath view is active), sourcing

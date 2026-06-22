@@ -200,23 +200,54 @@ def _select_trial_none_mode(
             if trial_id_key:
                 st.session_state[trial_id_key] = st.session_state[slider_key]
 
+        def _step_trial(delta: int) -> None:
+            # ◀ / ▶ : move the canonical selection one trial earlier/later.
+            if not trial_id_key:
+                return
+            try:
+                pos = trial_options.index(st.session_state.get(trial_id_key))
+            except ValueError:
+                pos = 0
+            st.session_state[trial_id_key] = trial_options[
+                max(0, min(pos + delta, n_trials - 1))
+            ]
+
     # Selectbox (jump to a specific id) renders into picker_host → the line-1
-    # column between Browse-by and Filter; label hidden (the slider shows the id).
+    # column between Browse-by and Filter. The label is shown so its help "?"
+    # icon (the type-to-search hint) is visible — a collapsed label hides it.
     selected_trial_label = host.selectbox(
-        "Unique trial id",
+        "Trial id",
         options=trial_options,
         key=trial_id_key,
-        label_visibility="collapsed",
         format_func=_trial_display_label,
+        help="💡 Click, then start typing to narrow down the trial list.",
     )
 
     if n_trials > 1:
-        # select_slider over the ids → the thumb shows the current trial id (not a
-        # bare position). Renders in the current container (the line below the
-        # selection row). A "Trial X / N" counter sits to its left; the slider is
-        # narrower to fit. Guarded by n_trials > 1 (a single option throws).
+        # select_slider over the ids → the thumb shows the current trial id AND its
+        # index (#N / total). Renders in the current container (the line below the
+        # selection row). A "Trial X / N" counter + ◀ ▶ step buttons sit to its
+        # left/right; the slider is narrower to fit. Guarded by n_trials > 1.
         current_idx = trial_options.index(current_label)
-        count_col, slider_col = st.columns([1, 5], vertical_alignment="center")
+        _idx_of = {opt: i for i, opt in enumerate(trial_options)}
+
+        def _slider_label(value: str) -> str:
+            # Thumb/end labels carry the trial id and its index, so scrubbing shows
+            # both "where am I" (index) and "which trial" (id).
+            return f"{_trial_display_label(value)}  ·  #{_idx_of.get(value, 0) + 1}/{n_trials}"
+
+        prev_col, count_col, slider_col, next_col = st.columns(
+            [0.7, 1.4, 5, 0.7], vertical_alignment="center"
+        )
+        prev_col.button(
+            "◀",
+            key=f"{key_prefix}_prev_trial" if key_prefix else "prev_trial",
+            on_click=_step_trial,
+            args=(-1,),
+            disabled=current_idx == 0,
+            help="Previous trial",
+            width="stretch",
+        )
         count_col.caption(f"Trial **{current_idx + 1}** / {n_trials}")
         with slider_col:
             st.select_slider(
@@ -227,8 +258,17 @@ def _select_trial_none_mode(
                 help=f"Scrub through the {n_trials} trials; the dropdown jumps to a "
                 "specific id.",
                 label_visibility="collapsed",
-                format_func=_trial_display_label,
+                format_func=_slider_label,
             )
+        next_col.button(
+            "▶",
+            key=f"{key_prefix}_next_trial" if key_prefix else "next_trial",
+            on_click=_step_trial,
+            args=(1,),
+            disabled=current_idx == n_trials - 1,
+            help="Next trial",
+            width="stretch",
+        )
 
     if not selected_trial_label:
         return None, None, None

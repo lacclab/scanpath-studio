@@ -328,20 +328,27 @@ class TestDataInspectionTab:
         assert (table["Mapped column"].astype(str).str.len() > 0).all()
 
     def test_top_level_nav_views(self):
-        # Top-level navigation is now a sidebar radio (key "main_nav"), not a tab
-        # strip. Data Inspection is one view; the old Raw Data / Data Statistics /
-        # Bulk Export top-level entries are gone (merged / folded into subtabs).
+        # Top-level navigation is now a header button toggling the two views
+        # (Scanpath ⇄ Corpus Analysis) — not a sidebar radio. Data Inspection and
+        # Share moved to subtabs of the Scanpath view.
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        nav = [r for r in at.radio if r.key == "main_nav"]
-        assert nav, "main nav radio missing"
-        options = list(nav[0].options)
-        assert "Data Inspection" in options
-        assert "Scanpath Visualization" in options
-        assert "Corpus Analysis" in options
-        for gone in ("Raw Data", "Data Statistics", "Bulk Export"):
-            assert gone not in options, f"{gone} should not be a top-level view"
+        # No main_nav radio anymore.
+        assert not [r for r in at.radio if r.key == "main_nav"], (
+            "top-level nav should no longer be a radio"
+        )
+        # On the Scanpath page, the header offers the Corpus Analysis toggle.
+        btn_keys = {b.key for b in at.button if b.key}
+        assert "nav_to_corpus" in btn_keys, "Corpus Analysis header button missing"
+
+        # Switching to Corpus shows the back-to-Scanpath toggle instead.
+        at2 = _make_apptest(synthetic=True)
+        at2.session_state["main_nav"] = "Corpus Analysis"
+        at2.run(timeout=60)
+        assert not at2.exception, f"Streamlit exceptions: {at2.exception}"
+        btn_keys2 = {b.key for b in at2.button if b.key}
+        assert "nav_to_scanpath" in btn_keys2, "back-to-Scanpath header button missing"
 
 
 @pytest.mark.timeout(90)
@@ -597,7 +604,7 @@ class TestUnmappedRawDataView:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         sbs = {s.label: s for s in at.selectbox}
-        opts = list(sbs["Unique trial id"].options) if "Unique trial id" in sbs else []
+        opts = list(sbs["Trial id"].options) if "Trial id" in sbs else []
         # Two per-page trials, not collapsed into one stimulus-level trial.
         assert len(opts) == 2, f"expected 2 per-page trials, got {opts}"
         assert all("· page" in o for o in opts), opts
@@ -882,11 +889,10 @@ class TestSpotlightTour:
         assert self._sp_buttons(at) == set(), "card must vanish after Exit"
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Step list sanity: every selector-bearing step targets a keyed
-        # wrapper or a stable testid that exists in the app.
+        # wrapper (.st-key-*) or a stable testid that exists in the app.
         selectors = [s["selector"] for s in _SPOTLIGHT_STEPS if s["selector"]]
         assert all(
-            sel.startswith(".st-key-tour_grp_") or "data-testid" in sel
-            for sel in selectors
+            sel.startswith(".st-key-") or "data-testid" in sel for sel in selectors
         )
 
     def test_spotlight_done_on_last_step(self):
@@ -1431,9 +1437,10 @@ class TestNavRegressions:
         )
 
     def test_save_restore_present_on_every_view(self):
-        # The Save & restore sidebar panel must be reachable on all three views
-        # (regression: it only rendered on the Scanpath view after the nav change).
-        for view in ("Scanpath Visualization", "Corpus Analysis", "Data Inspection"):
+        # The Save & restore sidebar panel must be reachable on both top-level
+        # views (regression: it only rendered on the Scanpath view after the nav
+        # change). Data Inspection is now a subtab of the Scanpath view.
+        for view in ("Scanpath Visualization", "Corpus Analysis"):
             at = _make_apptest(synthetic=True)
             at.session_state["main_nav"] = view
             at.run(timeout=60)

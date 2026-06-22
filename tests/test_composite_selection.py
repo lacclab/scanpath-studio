@@ -63,7 +63,7 @@ class TestCompositeTrialPicker:
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
         labels = [s.label for s in at.selectbox]
-        assert "Unique trial id" not in labels
+        assert "Trial id" not in labels
 
     def test_cascading_selection_resolves_a_trial(self):
         at = AppTest.from_function(_picker_app)
@@ -172,7 +172,7 @@ class TestCompositeTrialPicker:
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        assert "Unique trial id" in labels
+        assert "Trial id" in labels
 
 
 def test_trial_display_label_prettifies_multipleye_pages():

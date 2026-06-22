@@ -3447,6 +3447,11 @@ def _remap_proposed(schema: Optional[dict], frame_columns, canon: dict) -> dict:
             proposed[key] = None
         elif is_word_box and key in ("x", "y", "width", "height"):
             proposed[key] = canonical
+        elif key == "text_id":
+            # text_id always exists post-normalization (falls back to trial_id);
+            # always seed it so a remap preserves text grouping instead of
+            # collapsing every reading of a text into its own trial_id.
+            proposed[key] = canonical
         else:
             proposed[key] = canonical if schema.get(key) else None
     return proposed

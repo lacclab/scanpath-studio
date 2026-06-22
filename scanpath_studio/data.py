@@ -1274,10 +1274,11 @@ def dropped_columns(
 
     Pass ``keep`` (the set handed to ``normalize_words``/``normalize_fixations``,
     i.e. a ``compute_keep_columns`` result) for the union-keep tables, or
-    ``schema`` for raw gaze (``normalize_raw_gaze`` keeps only the
-    schema-referenced columns). With neither, returns ``[]``."""
+    ``schema`` for raw gaze (``normalize_raw_gaze`` keeps the schema-referenced
+    columns plus any ``unique_trial_id`` it consults directly). With neither,
+    returns ``[]``."""
     if keep is None and schema is not None:
-        keep = _schema_source_columns(schema)
+        keep = _schema_source_columns(schema) | {"unique_trial_id"}
     if keep is None:
         return []
     return sorted(c for c in raw.columns if c not in keep)
@@ -1591,14 +1592,23 @@ def remap_normalized_frame(
     The precomputed identity columns (``unique_trial_id`` etc.) are dropped first
     so the new Trial/Text mapping is authoritative: otherwise ``normalize_*``
     would keep deriving ``trial_id`` from the existing ``unique_trial_id`` and
-    silently ignore a changed Trial ID pick. Every surviving column is kept
+    silently ignore a changed Trial ID pick. A derived-id column the new schema
+    *references* is NOT dropped, though — a composite trial id can be built from
+    ``unique_paragraph_id``, and dropping a chosen component would make
+    ``trial_id_series`` raise ``KeyError``. Every surviving column is kept
     (``keep_columns`` = all current columns) so the remap only reassigns roles
     and never drops data that already survived the first normalization. After
-    normalization ``unique_trial_id`` is restored (= ``trial_id``) when the
-    single-column path didn't set one, so the frame's identity columns stay
-    consistent with the composite path."""
+    normalization ``unique_trial_id`` / ``unique_text_id`` are restored
+    (= ``trial_id`` / ``text_id``) when the single-column path didn't set them,
+    so the frame's identity columns stay consistent with the composite path and
+    downstream readers of ``unique_text_id`` keep working."""
+    referenced = _schema_source_columns(schema)
     working = frame.drop(
-        columns=[c for c in _REMAP_DERIVED_IDS if c in frame.columns]
+        columns=[
+            c
+            for c in _REMAP_DERIVED_IDS
+            if c in frame.columns and c not in referenced
+        ]
     )
     keep = set(working.columns)
     if kind == "words":
@@ -1611,6 +1621,8 @@ def remap_normalized_frame(
         raise ValueError(f"unknown frame kind: {kind!r}")
     if "unique_trial_id" not in result.columns and "trial_id" in result.columns:
         result["unique_trial_id"] = result["trial_id"]
+    if "unique_text_id" not in result.columns and "text_id" in result.columns:
+        result["unique_text_id"] = result["text_id"]
     return result
 
 

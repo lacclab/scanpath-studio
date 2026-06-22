@@ -163,6 +163,101 @@ class TestRemapNormalizedFrame:
         assert "freq" in out.columns
 
 
+def _normalized_onestop_fixations():
+    """A OneStop-shaped frame: text derives from ``unique_paragraph_id`` and the
+    same paragraph is read twice (disambiguated via ``TRIAL_INDEX``)."""
+    raw = pd.DataFrame(
+        {
+            "participant": ["p1", "p1", "p1", "p1"],
+            "unique_paragraph_id": ["para1", "para1", "para1", "para1"],
+            "TRIAL_INDEX": [1, 1, 2, 2],
+            "fx": [1.0, 2.0, 3.0, 4.0],
+            "fy": [1.0, 1.0, 1.0, 1.0],
+            "dur": [100, 110, 120, 130],
+        }
+    )
+    return raw
+
+
+class TestRemapOneStopShaped:
+    """Regression tests for datasets whose identity rides on unique_* columns."""
+
+    def test_composite_trial_from_unique_paragraph_id_does_not_crash(self):
+        """A composite trial built from unique_paragraph_id must not be dropped
+        before re-normalizing (else trial_id_series raises KeyError)."""
+        raw = _normalized_onestop_fixations()
+        schema = {
+            "participant": "participant",
+            "trial": ["participant", "unique_paragraph_id"],
+            "x": "fx",
+            "y": "fy",
+            "duration": "dur",
+        }
+        norm = normalize_fixations(
+            raw, schema, keep_columns=compute_keep_columns(schema)
+        )
+        # Re-map with the same composite mapping (the component column survives
+        # as unique_paragraph_id) — must not raise and must rebuild trial_id.
+        remap_schema = {
+            "participant": "participant_id",
+            "trial": ["participant", "unique_paragraph_id"],
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+            "text_id": "text_id",
+        }
+        out = remap_normalized_frame(norm, remap_schema, kind="fixations")
+        assert list(out["trial_id"]) == ["p1_para1"] * 4
+
+    def test_remap_preserves_text_id_and_unique_text_id(self):
+        """A single-column trial remap must not collapse text_id into trial_id or
+        lose unique_text_id (both derived from unique_paragraph_id originally)."""
+        raw = _normalized_onestop_fixations()
+        schema = {
+            "participant": "participant",
+            "trial": "unique_paragraph_id",
+            "x": "fx",
+            "y": "fy",
+            "duration": "dur",
+        }
+        norm = normalize_fixations(
+            raw, schema, keep_columns=compute_keep_columns(schema)
+        )
+        # The two readings share text "para1" but get distinct trial ids.
+        assert list(norm["trial_id"]) == ["para1", "para1", "para1_r2", "para1_r2"]
+        assert list(norm["text_id"]) == ["para1"] * 4
+
+        # The editor seeds text_id -> "text_id" (see _remap_proposed).
+        remap_schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+            "text_id": "text_id",
+        }
+        out = remap_normalized_frame(norm, remap_schema, kind="fixations")
+        # trial_id is preserved; text_id stays the shared text, NOT trial_id.
+        assert list(out["trial_id"]) == ["para1", "para1", "para1_r2", "para1_r2"]
+        assert list(out["text_id"]) == ["para1"] * 4
+        assert "unique_text_id" in out.columns
+        assert list(out["unique_text_id"]) == ["para1"] * 4
+
+
+def test_remap_proposed_always_seeds_text_id():
+    """The editor must seed text_id even when the stored schema had no explicit
+    text_id key — the normalized frame always has a text_id column to preserve."""
+    from scanpath_studio.tabs import _FIX_REMAP_CANON, _remap_proposed
+
+    cols = ["participant_id", "trial_id", "text_id", "x", "y", "duration_ms"]
+    proposed = _remap_proposed(
+        {"participant": "participant_id", "trial": "trial_id", "duration": "duration_ms"},
+        cols,
+        _FIX_REMAP_CANON,
+    )
+    assert proposed["text_id"] == "text_id"
+
+
 class TestDroppedColumns:
     def test_dropped_columns_from_keep_set(self):
         """Everything in the raw frame that's not in the keep set is dropped."""

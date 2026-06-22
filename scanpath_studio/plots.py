@@ -2327,7 +2327,8 @@ def _add_comparison_fixation_trace(
     """Add one scanpath's saccades + fixation markers to a comparison figure.
 
     Saccades and markers are separate traces (mirroring the single-trial figure)
-    so the per-scanpath saccade colour/line-style and hollow markers all apply,
+    so the per-scanpath saccade colour/line-style/line-width and hollow markers
+    all apply,
     and the shared ``show_saccades`` / ``show_saccade_arrows`` / ``show_order``
     toggles take effect. Fixation colour is a single per-scanpath colour so the
     two readings stay distinguishable; order numbers are tinted to match.

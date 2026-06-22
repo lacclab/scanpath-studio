@@ -284,6 +284,7 @@ _URL_PRESETS = {
 # the live data.)
 _URL_BOUNDED = {
     "global_line_spacing": (1.0, 10.0),
+    "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_order_font_size": (6, 72),
     "global_marker_size_range": (4, 40),
 }

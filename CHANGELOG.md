@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Show full monitor.** A new toggle (Visualization → *Axes & color bars*, on by
+  default) frames the plot to the whole virtual presentation monitor so the
+  scanpath sits where it actually appeared on screen, with the rest of the
+  monitor shown around it — instead of the view cropping tightly to the data
+  extent. Applies to the single, animated, and comparison plots (and bulk
+  export); turn it off to recover the old fit-to-data framing. The interpolated
+  heatmap still tracks the real data extent. (The headless `plots`/`api`
+  builders keep fit-to-data as their default via `fit_to_monitor=False`.)
 - **MultiplEYE corpus loader.** `scanpath_studio.load_multipleye(root)` (and the
   pre-normalization `datasets.multipleye_raw_frames` / `multipleye_inventory`)
   load the multilingual MultiplEYE reading corpus, whose identity lives only in

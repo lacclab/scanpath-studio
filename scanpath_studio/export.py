@@ -560,6 +560,7 @@ def bulk_export(
                         show_saccade_arrows=settings.get("show_saccade_arrows", False),
                         show_heatmap=settings.get("show_heatmap", False),
                         heatmap_style=settings.get("heatmap_style", "Word boxes"),
+                        fit_to_monitor=settings.get("fit_to_monitor", True),
                         color_by=settings.get("color_by", "duration_ms"),
                         heatmap_metric=settings.get("heatmap_metric"),
                         marker_size_range=tuple(

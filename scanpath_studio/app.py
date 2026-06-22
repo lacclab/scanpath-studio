@@ -119,6 +119,7 @@ from scanpath_studio.data import (
     validate_raw_gaze_schema,
     validate_word_schema,
 )
+from scanpath_studio.debug_log import install_log_capture, render_debug_panel
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _build_figure_settings,
@@ -405,6 +406,7 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "heatmap": "global_show_heatmap",
     "raw_gaze": "global_show_raw_gaze",
     "stimulus_image": "global_show_stimulus_image",
+    "full_monitor": "global_fit_to_monitor",
 }
 # Static widget bounds, mirrored from controls.sidebar_controls /
 # render_sidebar_canvas_controls, so a restored value is clamped to a range the
@@ -3634,6 +3636,9 @@ def main() -> None:
         - Handles missing raw gaze data gracefully
     """
     configure_page()
+    # Start capturing log records into the in-app debug buffer before any data
+    # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
+    install_log_capture()
     # The header holds the title + the Corpus Analysis ⇄ Scanpath view toggle.
     _render_about_panel()
 
@@ -4043,6 +4048,10 @@ def main() -> None:
     _sidebar_group("❓ Help")
     render_tour_replay_button()
     _render_about_sidebar()
+
+    # Developer debug panel — hidden unless the URL carries ?debug=1, which
+    # reveals a "🐛 Debug mode" toggle that opens the captured-log view.
+    render_debug_panel()
 
 
 if __name__ == "__main__":

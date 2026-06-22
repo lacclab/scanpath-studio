@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import json
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -1425,6 +1425,9 @@ def _build_and_render_animation(
     playback_speed: float,
     line_spacing: float,
     scale_text_to_boxes: bool,
+    background_image: Optional[str] = None,
+    background_image_size: Optional[Tuple[float, float]] = None,
+    background_image_origin: Optional[Tuple[float, float]] = None,
 ):
     """Build + render the animation figure (single or dual co-animation) in the
     main column. Returns ``(fig, playback_ms, save_slug, file_stem)``."""
@@ -1468,6 +1471,9 @@ def _build_and_render_animation(
         label_b=(f"{compare_participant} · {compare_trial}" if dual else "Scanpath B"),
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
+        background_image=background_image,
+        background_image_size=background_image_size,
+        background_image_origin=background_image_origin,
     )
     _render_true_scale_chart(fig, key="single_anim")
     if dual:
@@ -2014,6 +2020,13 @@ def render_single_trial_tab(
                         playback_speed=playback_speed,
                         line_spacing=line_spacing,
                         scale_text_to_boxes=scale_text_to_boxes,
+                        background_image=figure_settings.get("background_image"),
+                        background_image_size=figure_settings.get(
+                            "background_image_size"
+                        ),
+                        background_image_origin=figure_settings.get(
+                            "background_image_origin"
+                        ),
                     )
                 )
             if comparing and compare_fix.empty:

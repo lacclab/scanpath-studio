@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dividers so View modes, Visualization, and the layers sit close together.
 
 ### Fixed
+- **Stimulus image now shows in Animate mode.** The stimulus-page background layer
+  was only added to the static plot, so the **Stimulus image** toggle had no effect
+  during the animated replay. The single-scanpath animation now draws the page
+  image at its centered origin, below the traces, persisting across frames.
 - **Switching public datasets re-proposes the column mapping.** The auto-detected
   column mapping (`col_map_*`) persisted across a data-source change, so PoTeC's
   Trial → `text_id` mapping stuck when switching to MultiplEYE (which also has a

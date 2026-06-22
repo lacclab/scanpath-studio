@@ -1766,6 +1766,9 @@ def make_scanpath_animation(
     label_b: str = "Scanpath B",
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    background_image: Optional[str] = None,
+    background_image_size: Optional[Tuple[float, float]] = None,
+    background_image_origin: Optional[Tuple[float, float]] = None,
 ) -> go.Figure:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
@@ -2157,10 +2160,36 @@ def make_scanpath_animation(
     # (the dual-overlay legend overlays the plot, so it needs no reserve).
     anim_colorbar = bool(specs and specs[0].get("marker_extra", {}).get("showscale"))
     right_reserve = _COLORBAR_RESERVE_PX if anim_colorbar else 0
+    # Stimulus-page background image (MultiplEYE) — same layout image as
+    # make_scanpath_figure: placed at its (centered) origin, UNDER every trace,
+    # and persisting across frames (a layout image, not per-frame data). Lets the
+    # animated replay show the rendered page exactly like the static plot.
+    bg_images = []
+    if background_image and background_image_size:
+        uri = _image_to_data_uri(background_image)
+        if uri:
+            image_w, image_h = background_image_size
+            origin_x, origin_y = background_image_origin or (0.0, 0.0)
+            bg_images.append(
+                dict(
+                    source=uri,
+                    xref="x",
+                    yref="y",
+                    x=origin_x,
+                    y=origin_y,
+                    sizex=image_w,
+                    sizey=image_h,
+                    sizing="stretch",
+                    layer="below",
+                    xanchor="left",
+                    yanchor="top",
+                )
+            )
     layout = dict(
         height=fitted_h + _CONTROLS_MARGIN_PX + _CONTROLS_SAFETY_PX,
         width=fitted_w + right_reserve,
         autosize=False,
+        images=bg_images,
         margin=dict(l=0, r=right_reserve, t=0, b=_CONTROLS_MARGIN_PX),
         xaxis=dict(
             showticklabels=False,

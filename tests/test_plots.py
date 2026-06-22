@@ -439,6 +439,32 @@ class TestMakeScanpathAnimation:
         assert hasattr(fig, "frames")
         assert len(fig.frames) == len(normalized_fixations_df)
 
+    def test_make_scanpath_animation_background_image_layer(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        # The stimulus-image background (MultiplEYE) must show in the animated
+        # replay too — placed at its centered origin, below the traces, and
+        # persisting across frames (a layout image, not per-frame data).
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=1920,
+            canvas_height=1080,
+            base_font_size=12,
+            font_family="Arial",
+            background_image=str(p),
+            background_image_size=(1310, 991),
+            background_image_origin=(305.0, 44.5),
+        )
+        assert len(fig.layout.images) == 1
+        im = fig.layout.images[0]
+        assert (im.x, im.y, im.sizex, im.sizey) == (305.0, 44.5, 1310, 991)
+        assert im.layer == "below" and im.yanchor == "top"
+        assert str(im.source).startswith("data:image/png;base64,")
+        assert len(fig.frames) == len(normalized_fixations_df)
+
     def test_make_scanpath_animation_empty_fixations(self, normalized_words_df):
         empty_fixations = pd.DataFrame()
         fig = make_scanpath_animation(

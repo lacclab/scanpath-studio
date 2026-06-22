@@ -143,6 +143,20 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 # -----------------------------------------------------------------------------
 
 
+def _trial_display_label(trial_id) -> str:
+    """Human-readable label for a trial id in the pickers.
+
+    MultiplEYE per-page ids read cleanly — ``Lit_Alchemist_4__page_07`` →
+    ``Lit_Alchemist_4 · page 7`` (the id stays zero-padded so it sorts
+    numerically; only the display drops the padding). Any other id passes
+    through unchanged, so this is a no-op for every other corpus."""
+    text = str(trial_id)
+    stim, sep, page = text.rpartition("__page_")
+    if sep and page.isdigit():
+        return f"{stim} · page {int(page)}"
+    return text
+
+
 def _select_trial_none_mode(
     combos: pd.DataFrame,
     trial_field: str,
@@ -193,6 +207,7 @@ def _select_trial_none_mode(
         options=trial_options,
         key=trial_id_key,
         label_visibility="collapsed",
+        format_func=_trial_display_label,
     )
 
     if n_trials > 1:
@@ -212,6 +227,7 @@ def _select_trial_none_mode(
                 help=f"Scrub through the {n_trials} trials; the dropdown jumps to a "
                 "specific id.",
                 label_visibility="collapsed",
+                format_func=_trial_display_label,
             )
 
     if not selected_trial_label:
@@ -296,6 +312,7 @@ def _select_trial_text_mode(
             options=trial_options,
             key=f"{key_prefix}_reading_text" if key_prefix else None,
             help="This participant read this text multiple times.",
+            format_func=_trial_display_label,
         )
     else:
         selected_trial = candidate_trials.iloc[0]["trial_id"]

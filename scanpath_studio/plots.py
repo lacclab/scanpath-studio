@@ -702,6 +702,7 @@ def make_scanpath_figure(
     scale_text_to_boxes: bool = True,
     background_image: Optional[str] = None,
     background_image_size: Optional[Tuple[float, float]] = None,
+    background_image_origin: Optional[Tuple[float, float]] = None,
 ) -> go.Figure:
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
@@ -735,21 +736,23 @@ def make_scanpath_figure(
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
     # Stimulus-page background image (MultiplEYE): the rendered page sits at data
-    # coordinates (0,0)-(image_w, image_h) UNDER every other layer — the AOI /
-    # fixation coordinates are image-relative, so it aligns exactly and sidesteps
-    # CJK/RTL font rendering. The data extents still drive the axis range (the
-    # image clips); yanchor="top" + the reversed y-axis put its top-left at (0,0).
+    # coordinates (origin_x, origin_y)-(+image_w, +image_h) UNDER every other layer.
+    # The coords are placed where the centered stimulus appeared on the monitor, so
+    # the image — drawn at the same origin — aligns exactly and sidesteps CJK/RTL
+    # font rendering. ``background_image_origin`` defaults to (0,0); yanchor="top"
+    # + the reversed y-axis put the image's top-left at that origin.
     if spatial_axes and background_image and background_image_size:
         uri = _image_to_data_uri(background_image)
         if uri:
             image_w, image_h = background_image_size
+            origin_x, origin_y = background_image_origin or (0.0, 0.0)
             fig.add_layout_image(
                 dict(
                     source=uri,
                     xref="x",
                     yref="y",
-                    x=0,
-                    y=0,
+                    x=origin_x,
+                    y=origin_y,
                     sizex=image_w,
                     sizey=image_h,
                     sizing="stretch",

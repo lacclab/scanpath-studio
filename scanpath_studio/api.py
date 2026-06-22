@@ -95,6 +95,7 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     scale_text_to_boxes=True,
     background_image=None,
     background_image_size=None,
+    background_image_origin=None,
 )
 
 

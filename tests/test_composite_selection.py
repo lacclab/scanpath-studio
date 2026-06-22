@@ -173,3 +173,19 @@ class TestCompositeTrialPicker:
         assert not at.exception
         labels = [s.label for s in at.selectbox]
         assert "Unique trial id" in labels
+
+
+def test_trial_display_label_prettifies_multipleye_pages():
+    """MultiplEYE per-page ids read as 'stimulus · page N' (zero-pad dropped for
+    display); other ids pass through unchanged."""
+    from scanpath_studio.utils import _trial_display_label
+
+    assert (
+        _trial_display_label("Lit_Alchemist_4__page_01") == "Lit_Alchemist_4 · page 1"
+    )
+    assert (
+        _trial_display_label("Lit_Alchemist_4__page_13") == "Lit_Alchemist_4 · page 13"
+    )
+    # Non-page ids untouched (no-op for every other corpus).
+    assert _trial_display_label("reader0_b0") == "reader0_b0"
+    assert _trial_display_label("p1_3_Adv") == "p1_3_Adv"

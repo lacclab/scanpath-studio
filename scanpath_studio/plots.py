@@ -667,6 +667,103 @@ def _png_pixel_size(src: Optional[str]) -> Optional[Tuple[int, int]]:
     return None
 
 
+def _add_saccade_layer(
+    fig: go.Figure,
+    fixations: pd.DataFrame,
+    *,
+    x_field: str,
+    y_field: str,
+    color: str,
+    width: float,
+    style: str,
+    show_arrows: bool,
+) -> None:
+    """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
+
+    Connects consecutive fixations in time order. The arrowheads are a separate,
+    independently-toggled trace drawn before the fixation markers so the dots sit
+    on top. The caller gates this on spatial axes, ``show_saccades`` and at least
+    two fixations.
+    """
+    sx, sy = _saccade_segments(fixations, x_field, y_field)
+    if sx:
+        fig.add_trace(
+            go.Scatter(
+                x=sx,
+                y=sy,
+                mode="lines",
+                line=dict(color=color, width=width, dash=style),
+                hoverinfo="skip",
+                showlegend=False,
+                name="saccades",
+            )
+        )
+    if show_arrows:
+        amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field)
+        if amx:
+            fig.add_trace(
+                go.Scatter(
+                    x=amx,
+                    y=amy,
+                    mode="markers",
+                    marker=dict(
+                        symbol="arrow",
+                        size=12,
+                        angle=aang,
+                        angleref="up",
+                        color=color,
+                        line=dict(width=0),
+                    ),
+                    hoverinfo="skip",
+                    showlegend=False,
+                    name="saccade direction",
+                )
+            )
+
+
+def _add_raw_gaze_layer(
+    fig: go.Figure, raw_gaze: Optional[pd.DataFrame], *, show_raw_gaze: bool
+) -> bool:
+    """Add the raw-gaze sample-point scatter (time-coloured when available).
+
+    Returns ``True`` if a trace was added, so the caller can mark the legend
+    active (it reserves margin for the legend). Self-gates on ``show_raw_gaze``
+    and a non-empty frame.
+    """
+    if not (show_raw_gaze and raw_gaze is not None and not raw_gaze.empty):
+        return False
+    if "timestamp_ms" in raw_gaze.columns:
+        color_vals = raw_gaze["timestamp_ms"]
+        colorscale = "Viridis"
+    else:
+        color_vals = "#888888"
+        colorscale = None
+    fig.add_trace(
+        go.Scatter(
+            x=raw_gaze["x"],
+            y=raw_gaze["y"],
+            mode="markers",
+            marker=dict(
+                size=4,
+                color=color_vals,
+                colorscale=colorscale,
+                opacity=0.6,
+                showscale=False,
+            ),
+            hovertemplate=(
+                "Raw gaze<br>x: %{x:.1f}<br>y: %{y:.1f}"
+                "<br>t: %{customdata} ms<extra></extra>"
+            ),
+            customdata=raw_gaze["timestamp_ms"]
+            if "timestamp_ms" in raw_gaze.columns
+            else None,
+            name="Raw gaze",
+            showlegend=True,
+        )
+    )
+    return True
+
+
 def make_scanpath_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -830,36 +927,7 @@ def make_scanpath_figure(
                 highlight_text_color=highlight_text_color,
             )
 
-    if show_raw_gaze and raw_gaze is not None and not raw_gaze.empty:
-        if "timestamp_ms" in raw_gaze.columns:
-            color_vals = raw_gaze["timestamp_ms"]
-            colorscale = "Viridis"
-        else:
-            color_vals = "#888888"
-            colorscale = None
-        fig.add_trace(
-            go.Scatter(
-                x=raw_gaze["x"],
-                y=raw_gaze["y"],
-                mode="markers",
-                marker=dict(
-                    size=4,
-                    color=color_vals,
-                    colorscale=colorscale,
-                    opacity=0.6,
-                    showscale=False,
-                ),
-                hovertemplate=(
-                    "Raw gaze<br>x: %{x:.1f}<br>y: %{y:.1f}"
-                    "<br>t: %{customdata} ms<extra></extra>"
-                ),
-                customdata=raw_gaze["timestamp_ms"]
-                if "timestamp_ms" in raw_gaze.columns
-                else None,
-                name="Raw gaze",
-                showlegend=True,
-            )
-        )
+    if _add_raw_gaze_layer(fig, raw_gaze, show_raw_gaze=show_raw_gaze):
         legend_active = True
 
     if spatial_axes and show_heatmap and not fixations.empty:
@@ -942,47 +1010,19 @@ def make_scanpath_figure(
                 colorbar_style=cb_style,
             )
 
+    # Saccade lines + optional direction arrowheads (drawn before the fixation
+    # markers so the dots sit on top).
     if spatial_axes and show_saccades and len(fixations) > 1:
-        sx, sy = _saccade_segments(fixations, x_field, y_field)
-        if sx:
-            fig.add_trace(
-                go.Scatter(
-                    x=sx,
-                    y=sy,
-                    mode="lines",
-                    line=dict(
-                        color=saccade_color, width=saccade_width, dash=saccade_style
-                    ),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name="saccades",
-                )
-            )
-
-    # Directional arrowheads on each saccade (opt-in). Independent of the line
-    # above so it can be toggled separately; rendered before the fixation
-    # markers so the dots sit on top.
-    if spatial_axes and show_saccades and show_saccade_arrows and len(fixations) > 1:
-        amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field)
-        if amx:
-            fig.add_trace(
-                go.Scatter(
-                    x=amx,
-                    y=amy,
-                    mode="markers",
-                    marker=dict(
-                        symbol="arrow",
-                        size=12,
-                        angle=aang,
-                        angleref="up",
-                        color=saccade_color,
-                        line=dict(width=0),
-                    ),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name="saccade direction",
-                )
-            )
+        _add_saccade_layer(
+            fig,
+            fixations,
+            x_field=x_field,
+            y_field=y_field,
+            color=saccade_color,
+            width=saccade_width,
+            style=saccade_style,
+            show_arrows=show_saccade_arrows,
+        )
 
     if show_fixations and not fixations.empty:
         ordered = fixations.sort_values("timestamp_ms")

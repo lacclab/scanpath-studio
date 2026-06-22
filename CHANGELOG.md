@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (delimiter split or regex) and aggregate character AOIs into word boxes.
 
 ### Changed
+- _Internal:_ split `app.py` (4087 → ~1640 lines) into focused modules —
+  deep-link/share/config → `url_state.py`, the upload wizard → `wizard.py` — and
+  factored plot overlay layers into helpers. No behavior change.
 - **Navigation streamlined** — Corpus Analysis is a header toggle; Data Inspection
   and Share are Scanpath subtabs; the sidebar view-nav is gone.
 - **Trial selection reworked into Filter → Pick** — Text/Participant/condition

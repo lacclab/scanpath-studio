@@ -960,10 +960,15 @@ def sidebar_controls(
     # Values for off layers are read back from session_state by
     # `_collect_viz_settings`, so the returned dict always carries every key.
 
-    # --- Fixations --------------------------------------------------------
-    show_fix = viz.toggle("**Fixations**", key="global_show_fix")
+    # --- Fixations / Saccades (row 1) -------------------------------------
+    # Layer toggles sit in a two-column grid to keep the rail short; each
+    # layer's detailed-styling popover opens in-column directly under its own
+    # toggle, so turning a layer on only grows that column.
+    _row1 = viz.columns(2)
+    show_fix = _row1[0].toggle("**Fixations**", key="global_show_fix")
+    show_saccades = _row1[1].toggle("**Saccades**", key="global_show_saccades")
     if show_fix:
-        with viz.popover("⚙️ Fixation style", width="stretch"):
+        with _row1[0].popover("⚙️ Style", width="stretch"):
             color_by = st.selectbox(
                 "Color fixations by",
                 options=color_fields,
@@ -1051,10 +1056,9 @@ def sidebar_controls(
                 st.divider()
                 _render_compare_fix_styles()
 
-    # --- Saccades ---------------------------------------------------------
-    show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
+    # --- Saccades (popover for row 1) ------------------------------------
     if show_saccades:
-        with viz.popover("⚙️ Saccade style", width="stretch"):
+        with _row1[1].popover("⚙️ Style", width="stretch"):
             st.checkbox(
                 "Direction arrows",
                 key="global_show_saccade_arrows",
@@ -1079,10 +1083,12 @@ def sidebar_controls(
                 st.divider()
                 _render_compare_saccade_styles()
 
-    # --- Text -------------------------------------------------------------
-    show_labels = viz.toggle("**Text**", key="global_show_labels")
+    # --- Text / Heatmap (row 2) ------------------------------------------
+    _row2 = viz.columns(2)
+    show_labels = _row2[0].toggle("**Text**", key="global_show_labels")
+    show_heatmap = _row2[1].toggle("**Heatmap**", key="global_show_heatmap")
     if show_labels:
-        with viz.popover("⚙️ Text & highlight", width="stretch"):
+        with _row2[0].popover("⚙️ Style", width="stretch"):
             # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
             # choice appears only when it's on (no "None" option). The canonical
             # value stays in `global_critical_span_style` ("Mark text" |
@@ -1151,10 +1157,9 @@ def sidebar_controls(
                     help="Colour of the span outline (used with 'Mark border').",
                 )
 
-    # --- Heatmap ----------------------------------------------------------
-    show_heatmap = viz.toggle("**Heatmap**", key="global_show_heatmap")
+    # --- Heatmap (popover for row 2) -------------------------------------
     if show_heatmap:
-        with viz.popover("⚙️ Heatmap style", width="stretch"):
+        with _row2[1].popover("⚙️ Style", width="stretch"):
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
@@ -1214,19 +1219,27 @@ def sidebar_controls(
                     "Lower the max for more contrast; raise it to compress.",
                 )
 
-    # --- Bounding boxes / Stimulus image / Raw gaze (no extra styling) ----
-    viz.toggle("**Bounding boxes**", key="global_show_words")
-    viz.toggle(
-        "**Stimulus image**",
+    # --- Boxes / Stimulus / Raw gaze (rows 3-4) --------------------------
+    # These layers have no extra styling. Labels are kept short so they don't
+    # overflow the ~66px grid columns; the help tooltips carry the full meaning.
+    _row3 = viz.columns(2)
+    _row3[0].toggle(
+        "**Boxes**",
+        help="Word bounding boxes (AOIs) drawn over the text.",
+        key="global_show_words",
+    )
+    _row3[1].toggle(
+        "**Stimulus**",
         help="Show the rendered stimulus page as a background image (exact "
         "coordinates — sidesteps font issues for CJK / RTL scripts). "
         + ("" if has_stimulus_image else "(No stimulus image for this trial)"),
         disabled=not has_stimulus_image,
         key="global_show_stimulus_image",
     )
-    viz.toggle(
-        "**Raw gaze data**",
-        help="Display millisecond-level gaze positions as small dots. "
+    _row4 = viz.columns(2)
+    _row4[0].toggle(
+        "**Raw gaze**",
+        help="Millisecond-level gaze positions shown as small dots. "
         + ("" if has_raw_gaze else "(No raw gaze data loaded)"),
         disabled=not has_raw_gaze,
         key="global_show_raw_gaze",

@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and comparison plots (with a per-scanpath width for two-trial comparisons) and
   bulk export, is saved/restored with the plot config, deep-linkable
   (`?saccade_width=`), and exposed headless via `plot_scanpath(saccade_width=…)`.
+- **Headless saccade styling.** The `render` CLI gains `--saccade-color`,
+  `--saccade-style` (`solid`/`dash`/`dot`/`dashdot`), and `--saccade-width` so
+  saccade appearance — not just visibility — is reachable from the command line
+  (honored for `--animate` too). `saccade_style` is now listed explicitly in the
+  headless `CANONICAL_FIGURE_DEFAULTS` alongside `saccade_color`/`saccade_width`,
+  so the saccade-styling trio is consistent across app, API, and CLI.
 - **Show full monitor.** A new toggle (Visualization → *Axes & color bars*, on by
   default) frames the plot to the whole virtual presentation monitor so the
   scanpath sits where it actually appeared on screen, with the rest of the

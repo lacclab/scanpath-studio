@@ -89,6 +89,7 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     critical_span_style="Mark text",
     highlight_column="is_in_aspan",
     saccade_color=SACCADE_COLOR,
+    saccade_style="solid",
     saccade_width=DEFAULT_SACCADE_WIDTH,
     background_color=DEFAULT_BACKGROUND_COLOR,
     color_by_line=False,

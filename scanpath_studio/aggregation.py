@@ -212,23 +212,69 @@ class Measure:
 MEASURES: Dict[str, Measure] = {
     m.key: m
     for m in (
-        Measure("tfd", "Total fixation duration — TFD", "words",
-                "total_fixation_duration_ms", "ms", True),
-        Measure("ffd", "First fixation duration — FFD", "words",
-                "first_fixation_ms", "ms", True),
-        Measure("fprt", "First-pass gaze — FPRT", "words",
-                "first_pass_gaze_duration_ms", "ms", True),
-        Measure("rpd", "Regression-path — RPD", "words",
-                "regression_path_duration_ms", "ms", True),
+        Measure(
+            "tfd",
+            "Total fixation duration — TFD",
+            "words",
+            "total_fixation_duration_ms",
+            "ms",
+            True,
+        ),
+        Measure(
+            "ffd",
+            "First fixation duration — FFD",
+            "words",
+            "first_fixation_ms",
+            "ms",
+            True,
+        ),
+        Measure(
+            "fprt",
+            "First-pass gaze — FPRT",
+            "words",
+            "first_pass_gaze_duration_ms",
+            "ms",
+            True,
+        ),
+        Measure(
+            "rpd",
+            "Regression-path — RPD",
+            "words",
+            "regression_path_duration_ms",
+            "ms",
+            True,
+        ),
         Measure("nfix", "Fixations per word", "words", "n_fixations", "", True),
         Measure("skip", "Skip rate", "words", "skip_flag", "", True, is_rate=True),
-        Measure("reg_in", "Regression-in rate", "words", "regression_in_flag", "",
-                True, is_rate=True),
-        Measure("reg_out", "Regression-out rate", "words", "regression_out_flag", "",
-                True, is_rate=True),
-        Measure("fix_dur", "Fixation duration", "fixations", "duration_ms", "ms", False),
-        Measure("sacc_amp", "Saccade amplitude", "fixations", "saccade_amplitude",
-                "px", False),
+        Measure(
+            "reg_in",
+            "Regression-in rate",
+            "words",
+            "regression_in_flag",
+            "",
+            True,
+            is_rate=True,
+        ),
+        Measure(
+            "reg_out",
+            "Regression-out rate",
+            "words",
+            "regression_out_flag",
+            "",
+            True,
+            is_rate=True,
+        ),
+        Measure(
+            "fix_dur", "Fixation duration", "fixations", "duration_ms", "ms", False
+        ),
+        Measure(
+            "sacc_amp",
+            "Saccade amplitude",
+            "fixations",
+            "saccade_amplitude",
+            "px",
+            False,
+        ),
     )
 }
 
@@ -281,7 +327,11 @@ def aggregate_value(values: np.ndarray, agg: str = "mean") -> float:
 
 
 def bootstrap_ci(
-    values: np.ndarray, *, agg: str = "mean", n_boot: int = 1000, ci: float = 95.0,
+    values: np.ndarray,
+    *,
+    agg: str = "mean",
+    n_boot: int = 1000,
+    ci: float = 95.0,
     seed: int = 0,
 ) -> Tuple[float, float]:
     """Percentile bootstrap CI of the ``agg`` statistic (AN-24 spread option)."""
@@ -323,7 +373,10 @@ def spread_bounds(values: np.ndarray, center: float, spread: str, *, agg: str = 
 
 
 def add_normalized_column(
-    frame: pd.DataFrame, col: str, *, by: str = "participant_id",
+    frame: pd.DataFrame,
+    col: str,
+    *,
+    by: str = "participant_id",
     out_col: Optional[str] = None,
 ) -> pd.DataFrame:
     """Return ``frame`` with ``col`` z-scored within each ``by`` group (AN-25).
@@ -341,8 +394,10 @@ def add_normalized_column(
     else:
         mean = vals.mean()
         std = vals.std()
-    z = (vals - mean) / std.replace(0, np.nan) if hasattr(std, "replace") else (
-        (vals - mean) / (std or np.nan)
+    z = (
+        (vals - mean) / std.replace(0, np.nan)
+        if hasattr(std, "replace")
+        else ((vals - mean) / (std or np.nan))
     )
     out[out_col] = z.fillna(0.0)
     return out
@@ -370,8 +425,13 @@ def _measure_series(frame: pd.DataFrame, measure: Measure) -> pd.Series:
 
 
 def per_reader_word_measure(
-    words: pd.DataFrame, text_col: str, text_id, measure: Measure, *,
-    agg: str = "mean", normalize: bool = False,
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    measure: Measure,
+    *,
+    agg: str = "mean",
+    normalize: bool = False,
 ) -> pd.DataFrame:
     """Tidy ``[participant_id, word_id, value, word_text]`` for one text (AN-1/2).
 
@@ -400,8 +460,14 @@ def per_reader_word_measure(
 
 
 def cohort_word_profile(
-    words: pd.DataFrame, text_col: str, text_id, measure: Measure, *,
-    agg: str = "mean", spread: str = "SD", normalize: bool = False,
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    measure: Measure,
+    *,
+    agg: str = "mean",
+    spread: str = "SD",
+    normalize: bool = False,
     min_readers: int = 1,
 ) -> pd.DataFrame:
     """Per-word cohort centre + spread band across readers (AN-3 / AN-15).
@@ -438,11 +504,17 @@ def cohort_word_profile(
                 "word_text": texts.get(wid, "") if texts is not None else "",
             }
         )
-    return pd.DataFrame(rows, columns=cols).sort_values("word_id").reset_index(drop=True)
+    return (
+        pd.DataFrame(rows, columns=cols).sort_values("word_id").reset_index(drop=True)
+    )
 
 
 def word_box_aggregate(
-    words: pd.DataFrame, text_col: str, text_id, measure: Measure, *,
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    measure: Measure,
+    *,
     agg: str = "mean",
 ) -> pd.DataFrame:
     """One-row-per-word frame: word-box geometry + a ``value`` column = the
@@ -472,8 +544,14 @@ def word_box_aggregate(
 
 
 def word_measure_vs_feature(
-    words: pd.DataFrame, text_col: str, text_id, measure: Measure, feature_col: str, *,
-    agg: str = "mean", normalize: bool = False,
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    measure: Measure,
+    feature_col: str,
+    *,
+    agg: str = "mean",
+    normalize: bool = False,
 ) -> pd.DataFrame:
     """Per-word ``[word_id, value, feature, word_text]`` for a measure vs a
     bundled linguistic feature (AN-5). ``value`` is the cross-reader aggregate;
@@ -506,11 +584,15 @@ def word_rate_profile(
     if sub.empty or "word_id" not in sub.columns:
         return pd.DataFrame(columns=cols)
     work = sub[["word_id"]].copy()
-    for src, dst in (("skip_flag", "skip_rate"), ("regression_in_flag", "regression_in_rate")):
+    for src, dst in (
+        ("skip_flag", "skip_rate"),
+        ("regression_in_flag", "regression_in_rate"),
+    ):
         if src in sub.columns:
             s = sub[src]
             work[dst] = (
-                s.astype("float64") if pd.api.types.is_bool_dtype(s)
+                s.astype("float64")
+                if pd.api.types.is_bool_dtype(s)
                 else pd.to_numeric(s, errors="coerce")
             ).to_numpy()
         else:
@@ -550,7 +632,11 @@ def measure_values(
 
 
 def reader_vs_cohort_values(
-    frame: pd.DataFrame, participant_id, measure: Measure, *, normalize: bool = False,
+    frame: pd.DataFrame,
+    participant_id,
+    measure: Measure,
+    *,
+    normalize: bool = False,
 ) -> Dict[str, np.ndarray]:
     """``{"This reader": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
     if frame is None or frame.empty or "participant_id" not in frame.columns:
@@ -587,8 +673,10 @@ def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
         out = (grp["_end"].max() - grp["_start"].min()).rename("reading_time_ms")
     else:
         df["_d"] = dur
-        out = df.groupby(["participant_id", "trial_id"])["_d"].sum().rename(
-            "reading_time_ms"
+        out = (
+            df.groupby(["participant_id", "trial_id"])["_d"]
+            .sum()
+            .rename("reading_time_ms")
         )
     return out.reset_index()
 
@@ -617,9 +705,11 @@ def _summary_row(words, fixations, pid) -> Dict[str, float]:
         else pd.DataFrame()
     )
     if not fx.empty:
-        out["n_trials"] = int(fx.groupby(["participant_id", "trial_id"]).ngroups) if {
-            "participant_id", "trial_id"
-        } <= set(fx.columns) else 0
+        out["n_trials"] = (
+            int(fx.groupby(["participant_id", "trial_id"]).ngroups)
+            if {"participant_id", "trial_id"} <= set(fx.columns)
+            else 0
+        )
         out["n_fixations"] = int(len(fx))
         if "duration_ms" in fx.columns:
             out["mean_fixation_ms"] = float(
@@ -648,7 +738,9 @@ def _summary_row(words, fixations, pid) -> Dict[str, float]:
 
 
 def cohort_summary_table(
-    words: pd.DataFrame, fixations: pd.DataFrame, *,
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
     participants: Optional[Sequence] = None,
 ) -> pd.DataFrame:
     """One summary row per reader (AN-16 / AN-8 cohort percentiles)."""
@@ -667,7 +759,10 @@ def cohort_summary_table(
 
 
 def metric_over_time(
-    fixations: pd.DataFrame, measure: Measure, *, participant_id=None,
+    fixations: pd.DataFrame,
+    measure: Measure,
+    *,
+    participant_id=None,
     by: str = "order_in_trial",
 ) -> pd.DataFrame:
     """Mean of a per-fixation measure vs within-trial index (AN-9).
@@ -675,7 +770,11 @@ def metric_over_time(
     Returns ``[x, value, sem, n]``. ``by`` is ``order_in_trial`` (default) or
     ``timestamp_ms``. Filtered to ``participant_id`` when given.
     """
-    if fixations.empty or measure.column not in fixations.columns or by not in fixations:
+    if (
+        fixations.empty
+        or measure.column not in fixations.columns
+        or by not in fixations
+    ):
         return pd.DataFrame(columns=["x", "value", "sem", "n"])
     fx = fixations
     if participant_id is not None and "participant_id" in fx.columns:
@@ -707,7 +806,9 @@ def saccade_vs_duration(
     out = pd.DataFrame(
         {
             "duration_ms": pd.to_numeric(fx["duration_ms"], errors="coerce"),
-            "saccade_amplitude": pd.to_numeric(fx["saccade_amplitude"], errors="coerce"),
+            "saccade_amplitude": pd.to_numeric(
+                fx["saccade_amplitude"], errors="coerce"
+            ),
         }
     ).dropna()
     return out.reset_index(drop=True)
@@ -765,8 +866,11 @@ def ensure_fixation_enrichment(
 
 
 def landing_positions(
-    words: pd.DataFrame, fixations: Optional[pd.DataFrame] = None, *,
-    participant_id=None, as_fraction: bool = True,
+    words: pd.DataFrame,
+    fixations: Optional[pd.DataFrame] = None,
+    *,
+    participant_id=None,
+    as_fraction: bool = True,
 ) -> np.ndarray:
     """Within-word landing positions of the first fixation on each word (AN-12).
 
@@ -786,7 +890,9 @@ def landing_positions(
         dist = ffx - left
         mask = ffx.notna() & left.notna() & width.notna() & (width > 0)
         if "skip_flag" in wd.columns:
-            mask &= ~pd.to_numeric(wd["skip_flag"], errors="coerce").fillna(0).astype(bool)
+            mask &= ~pd.to_numeric(wd["skip_flag"], errors="coerce").fillna(0).astype(
+                bool
+            )
         dist = dist[mask]
         width = width[mask]
     elif (
@@ -801,7 +907,9 @@ def landing_positions(
             fx = fx[fx["participant_id"].astype(str) == str(participant_id)]
         if fx.empty:
             return np.array([], dtype="float64")
-        order_col = "order_in_trial" if "order_in_trial" in fx.columns else "timestamp_ms"
+        order_col = (
+            "order_in_trial" if "order_in_trial" in fx.columns else "timestamp_ms"
+        )
         keys = [k for k in ("participant_id", "trial_id", "word_id") if k in fx.columns]
         first = (
             fx.sort_values(order_col)
@@ -838,7 +946,8 @@ def per_participant_trend(
     df["_m"] = pd.to_numeric(frame[metric], errors="coerce")
     df = df.dropna(subset=["trial_index", "_m"])
     per_trial = (
-        df.groupby(["participant_id", "trial_id", "trial_index"])["_m"].agg(agg)
+        df.groupby(["participant_id", "trial_id", "trial_index"])["_m"]
+        .agg(agg)
         .reset_index()
     )
     out = (
@@ -877,8 +986,14 @@ def apply_group(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.DataFra
 
 
 def two_group_values(
-    frame: pd.DataFrame, measure: Measure, spec_a: Mapping, spec_b: Mapping, *,
-    label_a: str = "Group A", label_b: str = "Group B", normalize: bool = False,
+    frame: pd.DataFrame,
+    measure: Measure,
+    spec_a: Mapping,
+    spec_b: Mapping,
+    *,
+    label_a: str = "Group A",
+    label_b: str = "Group B",
+    normalize: bool = False,
 ) -> Dict[str, np.ndarray]:
     """``{label_a: values, label_b: values}`` for overlaid distributions (AN-18)."""
     out: Dict[str, np.ndarray] = {}
@@ -892,18 +1007,37 @@ def two_group_values(
 
 
 def group_word_difference(
-    words: pd.DataFrame, text_col: str, text_id, measure: Measure,
-    spec_a: Mapping, spec_b: Mapping, *, agg: str = "mean", min_readers: int = 1,
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    measure: Measure,
+    spec_a: Mapping,
+    spec_b: Mapping,
+    *,
+    agg: str = "mean",
+    min_readers: int = 1,
 ) -> pd.DataFrame:
     """Per-word A−B difference profile for one text (AN-19).
 
     Returns ``[word_id, a, b, diff, n_a, n_b, enough, word_text]``.
     """
     cols = ["word_id", "a", "b", "diff", "n_a", "n_b", "enough", "word_text"]
-    pa = cohort_word_profile(apply_group(words, spec_a), text_col, text_id, measure,
-                             agg=agg, min_readers=min_readers)
-    pb = cohort_word_profile(apply_group(words, spec_b), text_col, text_id, measure,
-                             agg=agg, min_readers=min_readers)
+    pa = cohort_word_profile(
+        apply_group(words, spec_a),
+        text_col,
+        text_id,
+        measure,
+        agg=agg,
+        min_readers=min_readers,
+    )
+    pb = cohort_word_profile(
+        apply_group(words, spec_b),
+        text_col,
+        text_id,
+        measure,
+        agg=agg,
+        min_readers=min_readers,
+    )
     if pa.empty and pb.empty:
         return pd.DataFrame(columns=cols)
     a = pa[["word_id", "value", "n", "word_text"]].rename(
@@ -922,15 +1056,23 @@ def group_word_difference(
 
 
 def two_group_word_profiles(
-    words: pd.DataFrame, text_col: str, text_id, measure: Measure,
-    spec_a: Mapping, spec_b: Mapping, *, agg: str = "mean",
-    label_a: str = "Group A", label_b: str = "Group B",
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    measure: Measure,
+    spec_a: Mapping,
+    spec_b: Mapping,
+    *,
+    agg: str = "mean",
+    label_a: str = "Group A",
+    label_b: str = "Group B",
 ) -> pd.DataFrame:
     """Long ``[group, word_id, value]`` for the stacked two-group heatmap (AN-22)."""
     frames = []
     for spec, label in ((spec_a, label_a), (spec_b, label_b)):
-        prof = cohort_word_profile(apply_group(words, spec), text_col, text_id, measure,
-                                   agg=agg)
+        prof = cohort_word_profile(
+            apply_group(words, spec), text_col, text_id, measure, agg=agg
+        )
         if not prof.empty:
             frames.append(prof[["word_id", "value"]].assign(group=label))
     if not frames:
@@ -939,10 +1081,18 @@ def two_group_word_profiles(
 
 
 def paired_group_summary(
-    frame: pd.DataFrame, measures: Sequence[Measure], spec_a: Mapping, spec_b: Mapping,
-    *, agg: str = "mean", spread: str = "SEM", label_a: str = "Group A",
-    label_b: str = "Group B", words: Optional[pd.DataFrame] = None,
-    fixations: Optional[pd.DataFrame] = None, normalize: bool = False,
+    frame: pd.DataFrame,
+    measures: Sequence[Measure],
+    spec_a: Mapping,
+    spec_b: Mapping,
+    *,
+    agg: str = "mean",
+    spread: str = "SEM",
+    label_a: str = "Group A",
+    label_b: str = "Group B",
+    words: Optional[pd.DataFrame] = None,
+    fixations: Optional[pd.DataFrame] = None,
+    normalize: bool = False,
 ) -> pd.DataFrame:
     """Per-measure group means + error for the paired bars (AN-20).
 
@@ -952,9 +1102,11 @@ def paired_group_summary(
     """
     rows = []
     for m in measures:
-        src = (words if m.frame == "words" else fixations) if (
-            words is not None or fixations is not None
-        ) else frame
+        src = (
+            (words if m.frame == "words" else fixations)
+            if (words is not None or fixations is not None)
+            else frame
+        )
         if src is None:
             continue
         for spec, label in ((spec_a, label_a), (spec_b, label_b)):
@@ -980,7 +1132,10 @@ def paired_group_summary(
 
 
 def group_effect_size(
-    values_a: np.ndarray, values_b: np.ndarray, *, test: str = "Mann–Whitney",
+    values_a: np.ndarray,
+    values_b: np.ndarray,
+    *,
+    test: str = "Mann–Whitney",
 ) -> Dict[str, object]:
     """Mean difference, Cohen's *d*, and a significance test (AN-21).
 

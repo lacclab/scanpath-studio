@@ -129,7 +129,9 @@ class TestPrimitives:
     def test_available_measures(self):
         keys = {m.key for m in available_measures(_words(), _fix())}
         assert {"tfd", "ffd", "skip", "fix_dur", "sacc_amp"} <= keys
-        per_word = {m.key for m in available_measures(_words(), _fix(), per_word_only=True)}
+        per_word = {
+            m.key for m in available_measures(_words(), _fix(), per_word_only=True)
+        }
         assert "fix_dur" not in per_word and "tfd" in per_word
 
 
@@ -142,20 +144,24 @@ class TestPerText:
         assert v == 500.0
 
     def test_cohort_word_profile_band_and_guard(self):
-        out = cohort_word_profile(_words(), "text_id", "A", MEASURES["tfd"], spread="SD")
+        out = cohort_word_profile(
+            _words(), "text_id", "A", MEASURES["tfd"], spread="SD"
+        )
         assert list(out["word_id"]) == [0, 1]
         w0 = out[out.word_id == 0].iloc[0]
         assert w0["value"] == 150.0  # mean(100, 200)
         assert w0["lo"] <= w0["value"] <= w0["hi"]
         assert (out["n"] == 2).all()
         # Min-readers guard.
-        guarded = cohort_word_profile(_words(), "text_id", "A", MEASURES["tfd"],
-                                      min_readers=3)
+        guarded = cohort_word_profile(
+            _words(), "text_id", "A", MEASURES["tfd"], min_readers=3
+        )
         assert (~guarded["enough"]).all()
 
     def test_normalize_within_reader(self):
-        out = per_reader_word_measure(_words(), "text_id", "A", MEASURES["tfd"],
-                                      normalize=True)
+        out = per_reader_word_measure(
+            _words(), "text_id", "A", MEASURES["tfd"], normalize=True
+        )
         # Each reader z-scored → mean ~0 within reader.
         for _, grp in out.groupby("participant_id"):
             assert abs(grp["value"].mean()) < 1e-9
@@ -167,8 +173,9 @@ class TestPerText:
         assert out[out.word_id == 0]["value"].iloc[0] == 0.5
 
     def test_word_measure_vs_feature(self):
-        out = word_measure_vs_feature(_words(), "text_id", "A", MEASURES["tfd"],
-                                      "gpt2_surprisal")
+        out = word_measure_vs_feature(
+            _words(), "text_id", "A", MEASURES["tfd"], "gpt2_surprisal"
+        )
         assert {"word_id", "value", "feature"} <= set(out.columns)
         assert len(out) == 2
 
@@ -227,15 +234,23 @@ class TestPerReader:
 class TestGroupComparison:
     def test_two_group_values(self):
         groups = two_group_values(
-            _fix(), MEASURES["fix_dur"], {"difficulty_level": ["Adv"]},
-            {"difficulty_level": ["Ele"]}, label_a="Adv", label_b="Ele",
+            _fix(),
+            MEASURES["fix_dur"],
+            {"difficulty_level": ["Adv"]},
+            {"difficulty_level": ["Ele"]},
+            label_a="Adv",
+            label_b="Ele",
         )
         assert set(groups) == {"Adv", "Ele"}
 
     def test_group_word_difference(self):
         out = group_word_difference(
-            _words(), "text_id", "A", MEASURES["tfd"],
-            {"participant_id": ["p1"]}, {"participant_id": ["p2"]},
+            _words(),
+            "text_id",
+            "A",
+            MEASURES["tfd"],
+            {"participant_id": ["p1"]},
+            {"participant_id": ["p2"]},
         )
         assert "diff" in out.columns
         # Word 1: p1=300, p2=500 → diff = -200.
@@ -243,17 +258,25 @@ class TestGroupComparison:
 
     def test_two_group_word_profiles(self):
         out = two_group_word_profiles(
-            _words(), "text_id", "A", MEASURES["tfd"],
-            {"participant_id": ["p1"]}, {"participant_id": ["p2"]},
-            label_a="P1", label_b="P2",
+            _words(),
+            "text_id",
+            "A",
+            MEASURES["tfd"],
+            {"participant_id": ["p1"]},
+            {"participant_id": ["p2"]},
+            label_a="P1",
+            label_b="P2",
         )
         assert set(out["group"].unique()) == {"P1", "P2"}
 
     def test_paired_group_summary(self):
         out = paired_group_summary(
-            _fix(), [MEASURES["fix_dur"], MEASURES["sacc_amp"]],
-            {"difficulty_level": ["Adv"]}, {"difficulty_level": ["Ele"]},
-            words=_words(), fixations=_fix(),
+            _fix(),
+            [MEASURES["fix_dur"], MEASURES["sacc_amp"]],
+            {"difficulty_level": ["Adv"]},
+            {"difficulty_level": ["Ele"]},
+            words=_words(),
+            fixations=_fix(),
         )
         assert set(out["measure"]) == {"Fixation duration", "Saccade amplitude"}
         assert {"value", "err_lo", "err_hi", "n"} <= set(out.columns)
@@ -290,8 +313,12 @@ class TestGroupComparison:
             }
         )
         out = paired_group_summary(
-            frame, [MEASURES["fix_dur"]], {"difficulty_level": ["Adv"]},
-            {"difficulty_level": ["Adv"]}, agg="mean", spread="IQR",
+            frame,
+            [MEASURES["fix_dur"]],
+            {"difficulty_level": ["Adv"]},
+            {"difficulty_level": ["Adv"]},
+            agg="mean",
+            spread="IQR",
         )
         assert (out["err_lo"] >= 0).all() and (out["err_hi"] >= 0).all()
 
@@ -308,8 +335,9 @@ class TestReviewRegressions:
         # Without a `text` column, word_text must not be backfilled with the
         # per-word reader count (review fix).
         w = _words().drop(columns=["text"])
-        out = word_measure_vs_feature(w, "text_id", "A", MEASURES["tfd"],
-                                      "gpt2_surprisal")
+        out = word_measure_vs_feature(
+            w, "text_id", "A", MEASURES["tfd"], "gpt2_surprisal"
+        )
         assert "word_text" not in out.columns or out["word_text"].eq("").all()
 
     def test_difference_word_text_backfilled_for_b_only_words(self):
@@ -324,7 +352,10 @@ class TestReviewRegressions:
                         "trial_id": ["t2"],
                         "text_id": ["A"],
                         "word_id": [2],
-                        "x": [20], "y": [0], "width": [10], "height": [10],
+                        "x": [20],
+                        "y": [0],
+                        "width": [10],
+                        "height": [10],
                         "text": ["sat"],
                         "total_fixation_duration_ms": [120],
                     }
@@ -333,8 +364,12 @@ class TestReviewRegressions:
             ignore_index=True,
         )
         out = group_word_difference(
-            w, "text_id", "A", MEASURES["tfd"],
-            {"participant_id": ["p1"]}, {"participant_id": ["p2"]},
+            w,
+            "text_id",
+            "A",
+            MEASURES["tfd"],
+            {"participant_id": ["p1"]},
+            {"participant_id": ["p2"]},
         )
         b_only = out[out.word_id == 2].iloc[0]
         assert b_only["word_text"] == ""
@@ -395,7 +430,11 @@ class TestAnalysisFigures:
         for label, (col, cat) in feats.items():
             df = word_measure_vs_feature(words, tc, tid, MEASURES["tfd"], col)
             fig = plots.make_feature_scatter_figure(
-                df, measure_label="TFD (ms)", feature_label=label, categorical=cat, **_FW
+                df,
+                measure_label="TFD (ms)",
+                feature_label=label,
+                categorical=cat,
+                **_FW,
             )
             assert len(fig.data) >= 1
 
@@ -417,8 +456,12 @@ class TestAnalysisFigures:
         _, fix, _, _, pid = sample
         df = saccade_vs_duration(fix, participant_id=pid)
         fig = plots.make_density_scatter_figure(
-            df, x_col="duration_ms", y_col="saccade_amplitude",
-            x_label="dur", y_label="amp", **_FW
+            df,
+            x_col="duration_ms",
+            y_col="saccade_amplitude",
+            x_label="dur",
+            y_label="amp",
+            **_FW,
         )
         assert len(fig.data) >= 1
 
@@ -437,9 +480,12 @@ class TestAnalysisFigures:
     def test_paired_bars(self, sample):
         words, fix, _, _, _ = sample
         df = paired_group_summary(
-            fix, [MEASURES["fix_dur"], MEASURES["sacc_amp"]],
-            {"difficulty_level": ["Adv"]}, {"difficulty_level": ["Ele"]},
-            words=words, fixations=fix,
+            fix,
+            [MEASURES["fix_dur"], MEASURES["sacc_amp"]],
+            {"difficulty_level": ["Adv"]},
+            {"difficulty_level": ["Ele"]},
+            words=words,
+            fixations=fix,
         )
         fig = plots.make_paired_bars_figure(df, **_FW)
         assert len(fig.data) >= 1
@@ -448,10 +494,16 @@ class TestAnalysisFigures:
         words, _, tc, tid, _ = sample
         pids = list(pd.unique(words["participant_id"].astype(str)))[:2]
         diff = group_word_difference(
-            words, tc, tid, MEASURES["tfd"],
-            {"participant_id": [pids[0]]}, {"participant_id": [pids[1]]},
+            words,
+            tc,
+            tid,
+            MEASURES["tfd"],
+            {"participant_id": [pids[0]]},
+            {"participant_id": [pids[1]]},
         )
-        fig = plots.make_difference_profile_figure(diff, measure_label="TFD (ms)", **_FW)
+        fig = plots.make_difference_profile_figure(
+            diff, measure_label="TFD (ms)", **_FW
+        )
         assert len(fig.data) >= 1
 
     def test_no_data_fallbacks(self):

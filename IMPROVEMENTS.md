@@ -525,8 +525,37 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-_No open items — BUG-1, BUG-2 signed off & archived; see
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `BUG-3`._
+_BUG-1, BUG-2 signed off & archived — see
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+
+**BUG-3 · MultiplEYE: stimulus text renders misaligned (fixations + image are fine)** — `Status: Backlog`
+
+On a MultiplEYE trial the fixations and the stimulus **image** background line up
+correctly, but the **true-to-scale word text** (the word labels drawn from the
+word boxes) does **not** sit where it should. So the box/fixation geometry is
+right (image origin shift via `_MULTIPLEYE_IMAGE_ORIGIN` and the offset word
+boxes from `_multipleye_word_boxes_from_frame`
+[`datasets.py`](scanpath_studio/datasets.py:422) agree with the page image), but
+the *rendered text layer* is off — likely a label-positioning / font-sizing
+mismatch in the true-to-scale text path, not a coordinate-offset problem.
+
+Investigate `plots.make_scanpath_figure`'s text layer
+([`plots.py`](scanpath_studio/plots.py)): `_word_label_font_px`
+(`box_height / line_spacing`, width-capped by `_width_fit_font`), `line_spacing`
+(default 3 = OneStop's blank-line-above-and-below convention — MultiplEYE's line
+geometry almost certainly differs, so this likely over/under-sizes and
+vertically mis-seats the glyphs), and the label anchor/position vs. the word-box
+edges. Check whether the per-`(page, word_idx)` aggregated boxes carry the right
+height for the slot the text should fill, and whether MultiplEYE needs a
+different `line_spacing` / vertical-centering than the OneStop assumption.
+
+Acceptance: with the stimulus image off, the rendered MultiplEYE word text falls
+within its word boxes and matches the page layout; with the image on, the labels
+sit on top of the corresponding image words. Related: **VIZ-4** (image-based
+stimuli support), **PRE-6** (RTL/multilingual rendering — MultiplEYE adds
+non-English scripts), **DATA-1**.
+
+_Next item: `BUG-4`._
 
 ---
 

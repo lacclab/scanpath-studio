@@ -320,6 +320,104 @@ def load_potec(
 
 
 # ---------------------------------------------------------------------------
+# OneStop Eye Movements — 360-participant English corpus (Berzak et al. 2025,
+# https://github.com/lacclab/OneStop-Eye-Movements). Distributed on OSF as
+# paragraph-level interest-area (word) + fixation reports, split by reading
+# regime. The reports share the bundled demo's schema (the demo is a 3-pid
+# subset of OneStop), so the generic auto-detect → normalize pipeline handles
+# them with no dataset-specific column mapping — this loader only fetches and
+# reads the two CSV.zips. Distinct from the env-var "OneStop server bundle"
+# source (``data.load_onestop_server_bundle``), which serves a local lacclab
+# export and its per-pid shards for review-app deep links.
+# ---------------------------------------------------------------------------
+
+# OSF file ids from the OneStop repo's download_data_files.py, per reading
+# regime: the paragraph-level interest-area and fixation reports (same columns
+# as the bundled OneStop demo). Keep the keys ("ia"/"fixations") aligned with
+# the report filename prefixes.
+_ONESTOP_OSF_URL = "https://osf.io/download/{resource}"
+_ONESTOP_REGIMES = {
+    "ordinary": dict(ia="xkgfz", fixations="ne4az"),
+    "information_seeking": dict(ia="yxzte", fixations="bznfk"),
+    "repeated": dict(ia="dwfk4", fixations="83ctd"),
+    "information_seeking_repeated": dict(ia="ygjup", fixations="paqn8"),
+}
+
+
+def _onestop_report_path(root: Path, kind: str, regime: str) -> Path:
+    """Local path of a OneStop report CSV.zip (matches the OSF filenames)."""
+    return root / f"{kind}_Paragraph_{regime}.csv.zip"
+
+
+def download_onestop(root, *, regime: str = "ordinary") -> Path:
+    """Download a OneStop regime's paragraph IA + fixation reports into ``root``.
+
+    Fetches the two CSV.zip reports for ``regime`` from OneStop's OSF release
+    into ``root``, skipping any already present, so it's safe to call
+    repeatedly. The reports are large (tens to hundreds of MB); caching them on
+    disk means only the first load pays the download.
+
+    ``regime`` is one of ``ordinary``, ``information_seeking``, ``repeated``,
+    ``information_seeking_repeated``.
+    """
+    if regime not in _ONESTOP_REGIMES:
+        raise ValueError(
+            f"regime must be one of {sorted(_ONESTOP_REGIMES)}, got {regime!r}"
+        )
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    for kind, resource in _ONESTOP_REGIMES[regime].items():
+        dest = _onestop_report_path(root, kind, regime)
+        if dest.is_file():
+            continue
+        url = _ONESTOP_OSF_URL.format(resource=resource)
+        print(f"Downloading OneStop {regime} {kind} report from {url} …")
+        with urllib.request.urlopen(url) as response:
+            dest.write_bytes(response.read())
+    return root
+
+
+def onestop_raw_frames(
+    root,
+    *,
+    regime: str = "ordinary",
+    download: bool = False,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Raw (pre-normalization) OneStop ``(words, fixations)`` frames for a regime.
+
+    Reads the paragraph-level interest-area + fixation reports for ``regime``
+    from ``root`` (fetching them from OSF first when ``download=True``). The
+    reports already match the bundled demo's schema, so the returned frames go
+    through the same auto-detect → normalize path as an upload — no
+    OneStop-specific column mapping is needed here.
+    """
+    if regime not in _ONESTOP_REGIMES:
+        raise ValueError(
+            f"regime must be one of {sorted(_ONESTOP_REGIMES)}, got {regime!r}"
+        )
+    root = Path(root)
+    if download:
+        download_onestop(root, regime=regime)
+    ia_path = _onestop_report_path(root, "ia", regime)
+    fix_path = _onestop_report_path(root, "fixations", regime)
+    for path, label in ((ia_path, "interest-area"), (fix_path, "fixation")):
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"OneStop {regime} {label} report not found: {path} — pass "
+                "download=True to fetch it from OSF."
+            )
+    # Read via data.read_table (not pd.read_csv directly): the OSF .csv.zip
+    # archives wrap the CSV alongside macOS __MACOSX resource-fork entries, which
+    # pandas' zip reader rejects ("Multiple files found in ZIP"). read_table's
+    # zip path filters that cruft and reads with low_memory=False.
+    from . import data
+
+    words = data.read_table(ia_path)
+    fixations = data.read_table(fix_path)
+    return words, fixations
+
+
+# ---------------------------------------------------------------------------
 # MultiplEYE — multilingual eye-tracking-while-reading corpus
 # (https://multipleye.eu). Tested against the read-only ZH/Chinese Zurich
 # sample under ``data/MultiplEYE_ZH_CH_Zurich_1_2025``.

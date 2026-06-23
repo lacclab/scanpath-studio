@@ -37,6 +37,7 @@ nav:
   - Python API: api.md
   - CLI reference: cli.md
   - Data format: data-format.md
+  - OneStop dataset: onestop.md
   - MultiplEYE dataset: multipleye.md
   - Export & troubleshooting: export-troubleshooting.md
   - Architecture: architecture.md

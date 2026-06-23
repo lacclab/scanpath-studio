@@ -128,6 +128,16 @@ POTEC_DEFAULT_DIR = "data/PoTeC"
 POTEC_TEXT_IDS = [f"{d}{i}" for d in ("b", "p") for i in range(6)]
 MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 ONESTOP_CHOICE = "OneStop server bundle"
+# Public OneStop (OSF download-on-demand) — distinct from the env-var
+# ONESTOP_CHOICE server bundle. Reading regimes map to the OSF reports the
+# loader fetches (see datasets._ONESTOP_REGIMES); labels are the picker text.
+ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
+ONESTOP_REGIME_LABELS = {
+    "ordinary": "Ordinary reading",
+    "information_seeking": "Information seeking",
+    "repeated": "Repeated reading",
+    "information_seeking_repeated": "Information seeking (repeated)",
+}
 _VIEW_SCANPATH = "Scanpath Visualization"
 _VIEW_CORPUS = "Corpus Analysis"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS]

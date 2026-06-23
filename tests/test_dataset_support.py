@@ -499,6 +499,107 @@ def test_load_potec_missing_data_message(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# OneStop public loader (OSF download-on-demand). Network is monkeypatched —
+# download_onestop is replaced with one that writes tiny OneStop-shaped reports,
+# each as a .csv.zip carrying the macOS __MACOSX cruft the real OSF archives do.
+# ---------------------------------------------------------------------------
+
+
+def _write_csv_zip_with_macosx(path, frame, member_name):
+    """Write ``frame`` as ``member_name`` inside a .csv.zip, plus a __MACOSX
+    resource-fork entry — mirroring the OneStop OSF archives."""
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr(member_name, frame.to_csv(index=False))
+        zf.writestr(f"__MACOSX/._{member_name}", b"\x00\x00")
+
+
+def _fake_onestop_reports(root, regime):
+    """Write minimal OneStop-shaped IA + fixation reports for ``regime``."""
+    ia = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "unique_paragraph_id": ["1_Adv_1", "1_Adv_1"],
+            "IA_ID": [1, 2],
+            "IA_LABEL": ["The", "cat"],
+            "IA_LEFT": [100.0, 140.0],
+            "IA_RIGHT": [138.0, 180.0],
+            "IA_TOP": [80.0, 80.0],
+            "IA_BOTTOM": [110.0, 110.0],
+            "difficulty_level": ["Adv", "Adv"],
+        }
+    )
+    fix = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "unique_paragraph_id": ["1_Adv_1", "1_Adv_1"],
+            "CURRENT_FIX_INDEX": [1, 2],
+            "CURRENT_FIX_X": [110.0, 150.0],
+            "CURRENT_FIX_Y": [95.0, 95.0],
+            "CURRENT_FIX_DURATION": [200.0, 180.0],
+        }
+    )
+    root = datasets_module.Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    _write_csv_zip_with_macosx(
+        datasets_module._onestop_report_path(root, "ia", regime),
+        ia,
+        f"ia_Paragraph_{regime}.csv",
+    )
+    _write_csv_zip_with_macosx(
+        datasets_module._onestop_report_path(root, "fixations", regime),
+        fix,
+        f"fixations_Paragraph_{regime}.csv",
+    )
+
+
+@pytest.fixture
+def onestop_offline(monkeypatch):
+    """Replace download_onestop with a network-free report writer."""
+
+    def fake_download(root, *, regime="ordinary"):
+        _fake_onestop_reports(root, regime)
+        return datasets_module.Path(root)
+
+    monkeypatch.setattr(datasets_module, "download_onestop", fake_download)
+
+
+def test_onestop_raw_frames_reads_macosx_zip(onestop_offline, tmp_path):
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", download=True
+    )
+    # The __MACOSX cruft member must be filtered out, leaving the real CSV only.
+    assert len(words) == 2
+    assert list(words["IA_LABEL"]) == ["The", "cat"]
+    assert len(fixations) == 2
+    assert "source_file" not in words.columns  # single member → no concat tag
+
+
+def test_onestop_raw_frames_auto_detect_and_plot(onestop_offline, tmp_path):
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path, regime="repeated", download=True
+    )
+    ws = data_module.propose_word_schema(words)
+    fs = data_module.propose_fix_schema(fixations)
+    assert data_module.validate_word_schema(ws) == []
+    assert data_module.validate_fix_schema(fs) == []
+    nw = data_module.normalize_words(words, ws)
+    nf = data_module.normalize_fixations(fixations, fs)
+    nw, nf = data_module.harmonize_frames(nw, nf)
+    fig = sps.plot_scanpath(nw, nf)
+    assert len(fig.data) > 0
+
+
+def test_onestop_bad_regime():
+    with pytest.raises(ValueError, match="regime must be one of"):
+        datasets_module.onestop_raw_frames("x", regime="bogus")
+
+
+def test_onestop_missing_report_message(tmp_path):
+    with pytest.raises(FileNotFoundError, match="download=True"):
+        datasets_module.onestop_raw_frames(tmp_path, regime="ordinary")
+
+
+# ---------------------------------------------------------------------------
 # MultiplEYE loader (against a tiny synthesized MultiplEYE-format tree)
 # ---------------------------------------------------------------------------
 

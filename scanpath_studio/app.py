@@ -58,6 +58,8 @@ from scanpath_studio.constants import (
     FONT_FAMILY,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
+    ONESTOP_PUBLIC_DEFAULT_DIR,
+    ONESTOP_REGIME_LABELS,
     POTEC_DEFAULT_DIR,
     POTEC_TEXT_IDS,
     PUBLIC_DATASETS_CHOICE,
@@ -449,6 +451,59 @@ def _load_multipleye_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
         return pd.DataFrame(), pd.DataFrame()
 
 
+@st.cache_data(show_spinner="Loading OneStop…")
+def _cached_onestop_raw_frames(
+    root: str, regime: str, download: bool
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached raw OneStop frames (pre-normalization) for the GUI data source.
+
+    Cached on (root, regime, download) so toggling viz controls doesn't re-read
+    (or re-download) the reports."""
+    from scanpath_studio.datasets import onestop_raw_frames
+
+    return onestop_raw_frames(root, regime=regime, download=download)
+
+
+def _load_onestop_public_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Sidebar controls + loader for the public OneStop corpus (OSF download).
+
+    OneStop's paragraph interest-area + fixation reports share the bundled
+    demo's schema, so this just fetches the chosen reading regime's two CSV.zips
+    from OSF (cached on disk) and hands the raw frames to the normal
+    normalization pipeline — the Column-mapping panels still appear and stay
+    overridable. Distinct from the env-var "OneStop server bundle" source, which
+    serves a local lacclab export (and per-pid shards for deep links).
+    """
+    cfg = st.sidebar.expander("OneStop options", expanded=True)
+    regime = cfg.selectbox(
+        "Reading regime",
+        options=list(ONESTOP_REGIME_LABELS),
+        format_func=lambda r: ONESTOP_REGIME_LABELS[r],
+        help="Which OneStop reading regime to load. Each is a separate OSF "
+        "download of paragraph-level interest-area + fixation reports.",
+    )
+    root = cfg.text_input(
+        "Data directory",
+        value=ONESTOP_PUBLIC_DEFAULT_DIR,
+        help="Folder to download the OneStop reports into (cached on disk, so "
+        "only the first load of a regime fetches them).",
+    )
+    download = cfg.checkbox(
+        "Download if missing",
+        value=True,
+        help="Fetch the regime's two CSV.zip reports from OSF on first use. "
+        "Unticked, the files must already be present in the folder.",
+    )
+    try:
+        return _cached_onestop_raw_frames(root, regime, download)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        st.sidebar.error(
+            f"Couldn't load OneStop from `{root}`: {exc} "
+            "Tick **Download if missing** to fetch it from OSF."
+        )
+        return pd.DataFrame(), pd.DataFrame()
+
+
 # Registry behind the "Public datasets" source: label → loader (renders its
 # own sidebar options and returns raw, pre-normalization frames) + the
 # corpus' presentation-monitor size (canvas default for true-to-scale
@@ -463,6 +518,10 @@ PUBLIC_DATASET_REGISTRY: dict = {
     "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
         loader=_load_multipleye_source,
         monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
+    ),
+    "OneStop — 360-participant English corpus": dict(
+        loader=_load_onestop_public_source,
+        monitor=None,  # reports carry full-screen pixel coords; auto-fit canvas
     ),
 }
 

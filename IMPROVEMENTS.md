@@ -29,6 +29,7 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
 **AN-1 … AN-28** (the whole *Analysis & corpus views* epic — the four
 question-oriented Corpus Analysis sections + the cross-cutting controls).
+**DATA-3** — OneStop exposed as a public dataset (OSF download-on-demand).
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -176,6 +177,18 @@ import (**PRE-7**), RTL/multilingual rendering (**PRE-6**), non-English validati
 Fold experimental-setup values (screen resolution, viewing distance, DPI, stimulus
 font pt, etc.) into the display/data settings so true-to-scale rendering and the
 px↔pt note (**VIZ-1**) can use them directly instead of being implicit.
+
+**DATA-3 · Expose OneStop as a public dataset (OSF download)** — `Status: Pending approval`
+
+OneStop now appears in the **Public datasets** picker alongside PoTeC / MultiplEYE,
+downloading the paragraph-level interest-area + fixation reports from
+[OSF](https://osf.io/2prdq/) on demand (regime-selectable: ordinary / information
+seeking / repeated / information-seeking-repeated). Loader
+`datasets.onestop_raw_frames` / `download_onestop` (reads via `data.read_table` to
+skip the OSF zips' `__MACOSX` cruft); sidebar source `_load_onestop_public_source`
++ registry entry in [`app.py`](scanpath_studio/app.py). Docs: [`onestop.md`](docs/onestop.md).
+Distinct from the env-var `$ONESTOP_DATA_DIR` "OneStop server bundle" source, which
+stays for local `lacclab` exports + per-pid shards.
 
 ---
 

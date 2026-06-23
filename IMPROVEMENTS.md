@@ -154,6 +154,69 @@ zip. Wire into `export.ExportOptions` / `render_export_options` / `bulk_export`
 PNG/SVG/PDF/HTML formats, and surface it in the **Export** subtab
 (`tabs._render_export_panel`).
 
+**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Backlog`
+
+Today fixation markers are either fully filled or fully hollow (outline-only), via
+the boolean `global_hollow_fixations` toggle (the `Hollow circles` checkbox in
+[`controls.py`](scanpath_studio/controls.py:1121)) and the per-scanpath
+`cmp{idx}_hollow` checkboxes in compare mode; `plots._make_hollow`
+([`plots.py`](scanpath_studio/plots.py:66)) swaps the fill onto the outline and
+makes the fill transparent. Replace the binary toggle with a marker **opacity /
+alpha** slider (e.g. `global_fixation_opacity`, default `1.0` for byte-identical
+output) so overlapping fixations show through — thread it through
+`make_scanpath_figure`, `make_scanpath_animation`, and the comparison
+`_add_comparison_fixation_trace` ([`plots.py`](scanpath_studio/plots.py)) in place
+of (or alongside) `hollow_fixations`, keeping the `global_*` / `cmp{idx}_*` key
+convention. CMP-4 already hides this control in compare mode. Related: **CMP-4**.
+
+**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Backlog`
+
+The Generations (WIP) tab already limits which fixations render via a
+fixation-index range slider (`multi_fix_range`, `tabs.render_multiple_comparison_tab`
+[`tabs.py`](scanpath_studio/tabs.py:2867)) backed by a `_slice_range` filter on
+`order_in_trial`. The main single-trial plot has no equivalent — the existing
+`Fixation index` checkbox ([`controls.py`](scanpath_studio/controls.py:1161)) only
+toggles the order **numbers**, not the visible **range**. Add a `single_fix_range`
+slider beside the Fixations-layer controls in `sidebar_controls`, seed it in
+`_VIZ_WIDGET_DEFAULTS`, read it in `_collect_viz_settings`, and apply the same
+`order_in_trial` slice to `trial_fixations` before the `_cached_scanpath_figure`
+build in `render_single_trial_tab` ([`tabs.py`](scanpath_studio/tabs.py)). Apply it
+consistently to the animation / compare builders. Related: **CMP-4**.
+
+**VIZ-8 · Color saccades by saccade type** — `Status: Backlog`
+
+Encode each saccade by its reading type — *forward saccade / skip / refixation /
+return sweep / regression* (the classic schematic). Saccades currently draw as one
+trace in a single global colour (`global_saccade_color` + style/width,
+[`controls.py`](scanpath_studio/controls.py:1188); `plots._add_saccade_layer`
+[`plots.py`](scanpath_studio/plots.py:671)). The app computes per-fixation
+`is_regression` and word-level `regression_in/out_flag`
+([`measures.py`](scanpath_studio/measures.py:161)) but never uses them for saccade
+encoding, and the forward/skip/refixation/return-sweep distinction isn't classified
+yet. Plan: derive a per-saccade `saccade_type` in `enrich_fixations` from
+consecutive fixations' `word_id` + line membership (`measures.cluster_word_lines`
+[`measures.py`](scanpath_studio/measures.py:257)) and `is_regression`; add an
+"Off / By type" mode + 5-swatch palette to the saccade popover
+(`global_saccade_type_*`, seeded in `_VIZ_WIDGET_DEFAULTS`); render one sub-trace
+per type in `_add_saccade_layer` with a small legend. Related: **CMP-4**, **VIZ-6**.
+
+**VIZ-9 · "Linear reading" view — saccades as arcs, fixations above the words** — `Status: Backlog`
+
+A stylized reading-diagram mode (cf. the schematic): draw saccades as curved
+**arcs/arches** instead of straight connectors, and snap each fixation directly
+**above the word** it lands on rather than at its raw gaze point. Straight
+connectors come from `plots._saccade_segments` → `_add_saccade_layer`
+([`plots.py`](scanpath_studio/plots.py:671)); fixations use raw x/y in the marker
+trace; word-box geometry comes from `build_word_boxes` and line membership from
+`measures.cluster_word_lines`. Plan: add viz-mode keys (e.g.
+`global_saccade_render_mode` = straight|arc, `global_fixation_snap_to_word`) in
+`_VIZ_WIDGET_DEFAULTS`, surface a Render-style selectbox + snap checkbox in the
+saccade popover, thread them through `_collect_viz_settings` →
+`make_scanpath_figure`, add a `_curved_saccade_segments` Bézier variant, and
+reposition fixation y to each word's top-center (reuse `assign_fixations_to_words`).
+Must stay on the true-scale path (`tabs._render_true_scale_chart`) and include the
+mode in the figure cache key. Related: **PRE-3** (`snap_to_lines`), **VIZ-5**.
+
 ---
 
 ## Datasets & ingestion
@@ -340,6 +403,23 @@ Gray out / warn when a per-word cell is backed by too few observations.
 **AN-27 · Download the underlying tidy table per view** — `Status: Backlog`
 
 Reuse the export plumbing so users can re-plot elsewhere.
+
+**AN-28 · Persist the active filter & visualization controls into Corpus Analysis** — `Status: Backlog`
+
+The Aggregated Views subtab (`tabs.render_aggregated_views_tab`
+[`tabs.py`](scanpath_studio/tabs.py:2528)) already receives
+`words_filtered`/`fixations_filtered`, so the **trial filters** (participants, text,
+metadata, favourites/tags via `controls.read_trial_filters`) **do** carry over
+(matching the section goal above). But it does **not** receive `viz_settings`, so
+its per-text heatmap (the `make_scanpath_figure` call around
+[`tabs.py`](scanpath_studio/tabs.py:2647)) **hard-codes** the display options —
+heatmap style/metric/colorscale, colorbar orientation/font, marker size, label &
+text styling, fixation-flag highlights, stimulus image — instead of reading the
+user's `global_*` choices, unlike `render_multiple_comparison_tab`, which threads
+`viz_settings` through. Pass `viz_settings` from `render_corpus_analysis_tab` into
+`render_aggregated_views_tab` and replace the hard-coded figure args with reads
+from it; audit the trend / distribution figures for the same gap. Related:
+**AN-23**, **AN-24**.
 
 ---
 

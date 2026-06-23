@@ -128,6 +128,7 @@ from scanpath_studio.url_state import (
     _go_scanpath,
     _render_share_body,
 )
+
 # NOTE: ``scanpath_studio.wizard`` is imported lazily inside the two functions
 # that use it (render_sidebar_data_source, main), not here. wizard does
 # ``from . import app`` at module top, so a top-level import here forms a cycle:

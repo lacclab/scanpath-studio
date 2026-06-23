@@ -14,6 +14,8 @@ working tracker focused on open work.
 
 ### Groups
 [UX & Interaction](#ux--interaction) ·
+[Compare mode](#compare-mode) ·
+[Visualization](#visualization) ·
 [Bugs](#bugs) ·
 [Engineering](#engineering)
 
@@ -21,7 +23,18 @@ working tracker focused on open work.
 
 ## UX & Interaction
 
-**UX-1a · Reorder chips in place** — `Status: Done` *(signed off 2026-06-23; sub-item of UX-1, which is still pending)*
+**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Done` *(signed off 2026-06-23)*
+
+The sidebar `🏷️ Trial chips` picker is gone; an inline **✏️ Edit chips** `st.popover`
+sits at the right end of the chip row (`tabs.render_single_trial_tab`), hosting
+`controls.render_trial_chip_picker`. Polish: the redundant `?` marker removed; the
+✏️ trigger shrunk to chip size and pulled next to **More**; the chip strip's
+**More** dropdown carries the full chip list (so any chip clipped at the line edge
+is reachable at any width / sidebar state) alongside the summary stats. (A
+client-side "move only the overflow" version was tried but Streamlit's plot-embed
+layout makes the strip width unstable to measure, so More just holds everything.)
+
+**UX-1a · Reorder chips in place** — `Status: Done` *(signed off 2026-06-23; sub-item of UX-1)*
 
 Built with `streamlit-sortables` (`sort_items`, new dependency): a two-bucket drag
 UI (*Shown · drag to reorder* / *Available*) handles membership **and** order in
@@ -46,6 +59,81 @@ markdown — `:green[✓ correct]` / `:red[✗ incorrect]` (and `✓ yes`/`✗ n
 
 ---
 
+## Compare mode
+
+**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Done` *(signed off 2026-06-23)*
+
+The **Compare** toggle stays in the rail's View modes; the second-trial selector
+(`tabs._render_compare_selector`) renders above the chips and mirrors the main
+picker — the selectbox shows the **trial id** + ★ (same text) / 👤 (same
+participant) markers (a `?` spells them out), the slider shows `index/N · <trial
+id>`, options ordered stars → same-participant → rest
+(`utils.build_comparison_options` returns `(participant, trial, label, markers)`
+4-tuples). The overlay/layout + show-A/B-legend **config moved into the rail's
+⚙️ Compare popover** (`single_compare_layout`, read via session_state). The
+`■ A … ■ B compared with:` legend line is gone — each chip strip's trial id is
+coloured to its scanpath (A = primary colour, B = compared) and "(compared)" dropped.
+
+**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Done` *(signed off 2026-06-23)*
+
+`global_show_compare_legend` (default off) threads `show_legend` into
+`make_comparison_figure` / the split figure **and** the animated dual overlay
+(`make_scanpath_animation`). The **"Overlay comparison" / "Stacked / Side-by-side
+comparison" figure titles were removed** and the top reserve fully reclaimed when
+the legend is hidden. Toggle lives in the rail ⚙️ Compare popover.
+
+**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Done` *(signed off 2026-06-23)*
+
+A single `constants.compare_palette_color(idx)` is the one source of truth for the
+per-scanpath style seeding/collection and `plots._comparison_scanpath_style`. Also
+**fixed the "fixations turn black when making changes" bug** — the per-scanpath
+colour pickers (rendered only when Compare is on) desynced to black
+(`st.color_picker` without an explicit `value=`) and committed that on the next
+interaction; they now pass `value=` (no pre-seed) and a falsy colour can't leak
+(`_collect_compare_styles` / `_comparison_scanpath_style` `or default`).
+
+**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Done` *(signed off 2026-06-23)*
+
+In compare mode the global Saccade colour/style/width controls stay hidden (dead
+for the overlay). Per user feedback, **"Color fixations by" (+ Colorscale + range)
+is restored in compare** — it sets the fixation *hue* by the chosen numeric metric
+for **both** scanpaths (shared scale, one colorbar), with the per-scanpath flat
+colour kept as a *separate* field used as the A/B marker outline. Global Size /
+Hollow stay hidden (the per-scanpath versions cover those).
+
+---
+
+## Visualization
+
+**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Done` *(signed off 2026-06-23)*
+
+The binary *Hollow circles* checkbox (global + per-scanpath) is replaced by a
+marker **opacity** slider — `global_fixation_opacity` and `cmp{idx}_opacity`,
+**default 0.7** so overlapping fixations show through (drag to 1.0 for fully
+opaque). Threaded through `make_scanpath_figure`, `make_scanpath_animation`, and
+the comparison `_add_comparison_fixation_trace` (via the per-scanpath style dict),
+plus `tabs._build_figure_settings`, `export.bulk_export`, and the save/restore +
+deep-link maps in `url_state.py`. The alpha is set **explicitly even at 1.0** so it
+overrides Plotly's ~0.7 default for variable-size scatter markers — without this,
+"opacity at 1" rendered translucent. `hollow_fixations` stays a plot-builder /
+headless-API param (and a restore/deep-link key) for backward compatibility; only
+the UI control changed.
+
+**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done` *(signed off 2026-06-23)*
+
+A `single_fix_range` slider in the ⚙️ Fixation-style popover (`controls.sidebar_controls`
+→ `_render_fix_range_slider`, seeded in `_VIZ_WIDGET_DEFAULTS`, read in
+`_collect_viz_settings` as `fix_index_range`) windows the main plot to a
+`(start, end)` `order_in_trial` range — drawing only those fixations and their
+saccades. `tabs._slice_fix_range` applies the window to the frames feeding the
+static, animation, and comparison builders (and thus the "This trial" export);
+the chips, panels, and bulk multi-trial export keep the full trial. The slider
+max is the selected trial's fixation count and clamps across trial switches
+(mirroring the Generations tab's `multi_fix_range`); a <2-fixation trial clears
+the window. Sized via a new `fix_range_fixations=` kwarg on `sidebar_controls`.
+
+---
+
 ## Bugs
 
 **BUG-1 · Trial filter persists (incorrectly) when switching datasets** — `Status: Done` *(signed off 2026-06-23)*
@@ -54,6 +142,29 @@ markdown — `:green[✓ correct]` / `:red[✗ incorrect]` (and `✓ yes`/`✗ n
 change (keyed on `(data_choice, public_dataset_choice)`, matching the col-map
 reset), and **stashes/restores** the per-dataset selections so switching back
 recovers them.
+
+**BUG-2 · Upload box appears twice during data upload** — `Status: Done` *(signed off 2026-06-23)*
+
+In the Upload / Add-dataset wizard the whole step-3 upload group (Raw gaze +
+**Fixations** + Words) rendered a second, greyed-out copy while a large file was
+being read — so the **Fixations** uploader ("Fixations table(s)") appeared
+**twice**, both showing the same file.
+
+_Root cause:_ a Streamlit layout-shift ghost. The "⬆️ Upload … to begin" call to
+action + the "large dataset" tip rendered at the top of step 3 only *before*
+anything was uploaded. The moment a file was added they vanished, shifting every
+following element up two delta-paths. Reading a large upload blocks the rerun
+(the `@st.cache_data(show_spinner="Reading uploaded data…")` reader in
+[`app.py`](scanpath_studio/app.py:784)), so Streamlit froze the half-reconciled
+DOM and left the pre-shift copy of the whole upload group on screen as a
+greyed ghost.
+
+_Fix:_ render that guidance into a **container that is always created** (even
+when empty) so the upload boxes keep a fixed position in the element tree and
+never shift ([`wizard.py`](scanpath_studio/wizard.py:1194)). Verified with
+Playwright + a 26 MB zip: before, two "Fixations table(s)" uploaders appeared
+during the read; after, exactly one throughout. `pytest` wizard/apptest/
+column-mapping suites green (89 passed).
 
 ---
 

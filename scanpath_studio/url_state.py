@@ -106,6 +106,7 @@ _SHARE_INT_PARAMS = {"order_font_size": "global_order_font_size"}
 _SHARE_FLOAT_PARAMS = {
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
+    "fixation_opacity": "global_fixation_opacity",
 }
 _SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
 _SHARE_FLOAT_RANGE_PARAMS = {
@@ -137,6 +138,7 @@ _URL_BOUNDED = {
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_order_font_size": (6, 72),
     "global_marker_size_range": (4, 40),
+    "global_fixation_opacity": (0.1, 1.0),
 }
 
 
@@ -504,6 +506,14 @@ def _restore_plot_config(
         )
     if "hollow_fixations" in coloring:
         put("global_hollow_fixations", bool(coloring["hollow_fixations"]))
+    if "fixation_opacity" in coloring:
+        put_float(
+            coloring["fixation_opacity"],
+            "global_fixation_opacity",
+            0.1,
+            1.0,
+            "fixation opacity",
+        )
     co = coloring.get("colorbar_orientation")
     if co is not None:
         put_valid(
@@ -698,6 +708,14 @@ def _restore_plot_config(
                     put(f"cmp{idx}_marker_size_range", (min(lo, hi), max(lo, hi)))
             if "hollow" in entry:
                 put(f"cmp{idx}_hollow", bool(entry["hollow"]))
+            if "opacity" in entry:
+                put_float(
+                    entry["opacity"],
+                    f"cmp{idx}_opacity",
+                    0.1,
+                    1.0,
+                    f"scanpath {idx + 1} opacity",
+                )
 
     selection = section("selection")
     if selection:

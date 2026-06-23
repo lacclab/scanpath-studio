@@ -802,6 +802,7 @@ def make_scanpath_figure(
     saccade_style: str = "solid",
     saccade_width: float = DEFAULT_SACCADE_WIDTH,
     hollow_fixations: bool = False,
+    fixation_opacity: float = 1.0,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
@@ -1109,6 +1110,11 @@ def make_scanpath_figure(
             cmax=fixation_color_range[1] if fixation_color_range else None,
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
         )
+        # Marker alpha (VIZ-6): lower it so overlapping fixations show through.
+        # Always set it (even at 1.0) so the slider is authoritative — Plotly's
+        # variable-size scatter markers otherwise render at a ~0.7 default, so an
+        # unset 1.0 looked translucent ("opacity at 1 wasn't really 1").
+        marker["opacity"] = float(fixation_opacity if fixation_opacity is not None else 1.0)
         if hollow_fixations:
             marker = _make_hollow(marker)
         fig.add_trace(
@@ -1884,6 +1890,7 @@ def make_scanpath_animation(
     saccade_style: str = "solid",
     saccade_width: float = DEFAULT_SACCADE_WIDTH,
     hollow_fixations: bool = False,
+    fixation_opacity: float = 1.0,
     background_color: Optional[str] = None,
     fixations_b: Optional[pd.DataFrame] = None,
     words_b: Optional[pd.DataFrame] = None,
@@ -2037,6 +2044,9 @@ def make_scanpath_animation(
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             **s["marker_extra"],
         )
+        # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
+        # default for variable-size scatter markers (VIZ-6).
+        marker["opacity"] = float(fixation_opacity if fixation_opacity is not None else 1.0)
         if hollow_fixations:
             marker = _make_hollow(marker)
         return marker
@@ -2414,9 +2424,12 @@ def _comparison_scanpath_style(
         "saccade_width": DEFAULT_SACCADE_WIDTH,
         "marker_size_range": default_marker_size_range,
         "hollow": False,
+        "opacity": 1.0,
     }
     if override:
-        base.update({k: v for k, v in override.items() if v is not None})
+        # Drop falsy values (None / "") so a blank colour can't override the
+        # palette default and reach Plotly as a dark/None marker colour.
+        base.update({k: v for k, v in override.items() if v})
     return base
 
 
@@ -2432,6 +2445,10 @@ def _add_comparison_fixation_trace(
     show_order: bool = True,
     order_font_size: Optional[int] = None,
     show_legend: bool = False,
+    color_by: Optional[str] = None,
+    colorscale: str = DEFAULT_FIXATION_COLORSCALE,
+    color_range: Optional[Tuple[float, float]] = None,
+    show_colorbar: bool = False,
     row: Optional[int] = None,
     col: Optional[int] = None,
 ) -> None:
@@ -2439,10 +2456,15 @@ def _add_comparison_fixation_trace(
 
     Saccades and markers are separate traces (mirroring the single-trial figure)
     so the per-scanpath saccade colour/line-style/line-width and hollow markers
-    all apply,
-    and the shared ``show_saccades`` / ``show_saccade_arrows`` / ``show_order``
-    toggles take effect. Fixation colour is a single per-scanpath colour so the
-    two readings stay distinguishable; order numbers are tinted to match.
+    all apply, and the shared ``show_saccades`` / ``show_saccade_arrows`` /
+    ``show_order`` toggles take effect.
+
+    Fixation colour: by default each scanpath uses its flat per-scanpath colour
+    (the A/B cue). When ``color_by`` names a numeric column, the marker **fill** is
+    coloured by that metric (shared ``colorscale`` / ``color_range`` across both
+    scanpaths) and the per-scanpath flat colour becomes the marker **outline**, so
+    the readings stay distinguishable while still showing the metric. Order numbers
+    are tinted to the per-scanpath colour either way.
     """
     if trial_fix.empty:
         return
@@ -2497,11 +2519,39 @@ def _add_comparison_fixation_trace(
             )
 
     sizes = _compute_marker_sizes(trial_fix["duration_ms"], style["marker_size_range"])
-    marker = dict(
-        size=sizes,
-        color=fix_color,
-        line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+    # Metric colouring ("Color fixations by") when a numeric column is chosen:
+    # colour the FILL by the metric (shared colorscale/range across both
+    # scanpaths) and keep the per-scanpath flat colour as the marker OUTLINE so
+    # A/B stay distinguishable. Otherwise the fill is the flat per-scanpath colour.
+    metric_color = bool(
+        color_by
+        and color_by != "line"
+        and color_by in trial_fix.columns
+        and pd.api.types.is_numeric_dtype(trial_fix[color_by])
     )
+    if metric_color:
+        marker = dict(
+            size=sizes,
+            color=trial_fix[color_by],
+            colorscale=colorscale,
+            cmin=color_range[0] if color_range else None,
+            cmax=color_range[1] if color_range else None,
+            showscale=bool(show_colorbar),
+            colorbar=dict(title=color_by.replace("_", " ").title())
+            if show_colorbar
+            else None,
+            line=dict(color=fix_color, width=1.4),
+        )
+    else:
+        marker = dict(
+            size=sizes,
+            color=fix_color,
+            line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
+        )
+    # Per-scanpath marker alpha (VIZ-6): always set it (even 1.0) so the control
+    # overrides Plotly's ~0.7 default for variable-size scatter markers.
+    opacity = style.get("opacity", 1.0)
+    marker["opacity"] = float(opacity if opacity is not None else 1.0)
     if style.get("hollow"):
         marker = _make_hollow(marker)
     order_font = dict(font_settings)
@@ -2551,6 +2601,10 @@ def _make_split_comparison_figure(
     show_order: bool = False,
     show_legend: bool = False,
     order_font_size: Optional[int] = None,
+    color_by: Optional[str] = None,
+    fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
+    fixation_color_range: Optional[Tuple[float, float]] = None,
+    show_colorbars: bool = False,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
@@ -2566,6 +2620,29 @@ def _make_split_comparison_figure(
     # Per-panel pixel size (approx; subplot spacing/titles shave a little) used to
     # size word labels true-to-scale within each panel.
     per_panel_w = canvas_width if is_stacked else canvas_width // 2
+
+    # Shared metric colour range across both panels (when colouring by a metric
+    # and no explicit range), so the two scanpaths use one comparable scale.
+    metric_range = fixation_color_range
+    if (
+        color_by
+        and color_by != "line"
+        and metric_range is None
+        and color_by in fixations.columns
+        and pd.api.types.is_numeric_dtype(fixations[color_by])
+    ):
+        both = fixations[
+            (
+                (fixations["participant_id"] == trial_a[0])
+                & (fixations["trial_id"] == trial_a[1])
+            )
+            | (
+                (fixations["participant_id"] == trial_b[0])
+                & (fixations["trial_id"] == trial_b[1])
+            )
+        ][color_by]
+        if len(both) and pd.notna(both.min()) and pd.notna(both.max()):
+            metric_range = (float(both.min()), float(both.max()))
 
     trial_specs = []
     for idx, trial in enumerate([trial_a, trial_b]):
@@ -2669,6 +2746,10 @@ def _make_split_comparison_figure(
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
+            color_by=color_by,
+            colorscale=fixation_colorscale,
+            color_range=metric_range,
+            show_colorbar=show_colorbars and idx == 0,
             row=row,
             col=col,
         )
@@ -2737,12 +2818,13 @@ def _make_split_comparison_figure(
         height=total_height,
         width=total_width,
         autosize=False,
-        margin=dict(l=0, r=0, t=40, b=0),
+        # The t=40 band was the (now-removed) title; keep a slim band only for the
+        # optional legend.
+        margin=dict(l=0, r=0, t=24 if show_legend else 0, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
         template="plotly_white",
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
-        title="Stacked comparison" if is_stacked else "Side-by-side comparison",
         font=font_settings,
         shapes=all_shapes,
     )
@@ -2771,6 +2853,10 @@ def make_comparison_figure(
     show_order: bool = False,
     show_legend: bool = False,
     order_font_size: Optional[int] = None,
+    color_by: Optional[str] = None,
+    fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
+    fixation_color_range: Optional[Tuple[float, float]] = None,
+    show_colorbars: bool = False,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
@@ -2799,6 +2885,10 @@ def make_comparison_figure(
             show_order=show_order,
             show_legend=show_legend,
             order_font_size=order_font_size,
+            color_by=color_by,
+            fixation_colorscale=fixation_colorscale,
+            fixation_color_range=fixation_color_range,
+            show_colorbars=show_colorbars,
             text_color=text_color,
             highlight_text_color=highlight_text_color,
             background_color=background_color,
@@ -2806,6 +2896,30 @@ def make_comparison_figure(
             scale_text_to_boxes=scale_text_to_boxes,
             fit_to_monitor=fit_to_monitor,
         )
+
+    # Shared metric colour range across BOTH trials (when colouring by a numeric
+    # metric and the user didn't pin a range), so the two scanpaths use one
+    # comparable scale.
+    metric_range = fixation_color_range
+    if (
+        color_by
+        and color_by != "line"
+        and metric_range is None
+        and color_by in fixations.columns
+        and pd.api.types.is_numeric_dtype(fixations[color_by])
+    ):
+        both = fixations[
+            (
+                (fixations["participant_id"] == trial_a[0])
+                & (fixations["trial_id"] == trial_a[1])
+            )
+            | (
+                (fixations["participant_id"] == trial_b[0])
+                & (fixations["trial_id"] == trial_b[1])
+            )
+        ][color_by]
+        if len(both) and pd.notna(both.min()) and pd.notna(both.max()):
+            metric_range = (float(both.min()), float(both.max()))
 
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
@@ -2854,7 +2968,7 @@ def make_comparison_figure(
     )
     overlay_scale = _display_scale(x_range, y_range, fitted_w, fitted_h)
 
-    for spec in trial_specs:
+    for _idx, spec in enumerate(trial_specs):
         _add_comparison_fixation_trace(
             fig,
             spec["trial_fix"],
@@ -2866,6 +2980,11 @@ def make_comparison_figure(
             show_order=show_order,
             order_font_size=order_font_size,
             show_legend=show_legend,
+            color_by=color_by,
+            colorscale=fixation_colorscale,
+            color_range=metric_range,
+            # One shared colorbar (on the first scanpath only) for the metric.
+            show_colorbar=show_colorbars and _idx == 0,
         )
         if show_words:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -2906,7 +3025,9 @@ def make_comparison_figure(
     # The title + top A/B legend get reserved space above the plot so they don't
     # shrink the equal-aspect plot region (same fix as make_scanpath_figure). With
     # the legend hidden (CMP-2 default) a slimmer band still fits the title.
-    top_px = _OVERLAY_TOP_PX if show_legend else _OVERLAY_TOP_PX // 2
+    # The top band is now only needed for the optional A/B legend (the "Overlay
+    # comparison" title was removed); reclaim it fully when the legend is hidden.
+    top_px = _OVERLAY_TOP_PX if show_legend else 0
     fig.update_layout(
         height=fitted_h + top_px,
         width=fitted_w,
@@ -2937,7 +3058,6 @@ def make_comparison_figure(
         template="plotly_white",
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
-        title="Overlay comparison",
         font=font_settings,
         shapes=shapes,
     )

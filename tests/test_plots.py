@@ -1097,6 +1097,40 @@ class TestMakeComparisonFigure:
         dashed = [t for t in sac_traces if t.line.dash == "dash"]
         assert dashed and dashed[0].line.color == "#abcdef"
 
+    def test_comparison_per_scanpath_opacity(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        """VIZ-6: a per-scanpath opacity < 1.0 sets that marker's alpha."""
+        words_multi = pd.concat(
+            [
+                normalized_words_df.assign(participant_id="p1", trial_id="t1"),
+                normalized_words_df.assign(participant_id="p2", trial_id="t1"),
+            ]
+        )
+        fixations_multi = pd.concat(
+            [
+                normalized_fixations_df.assign(participant_id="p1", trial_id="t1"),
+                normalized_fixations_df.assign(participant_id="p2", trial_id="t1"),
+            ]
+        )
+        fig = make_comparison_figure(
+            words_multi,
+            fixations_multi,
+            trial_a=("p1", "t1"),
+            trial_b=("p2", "t1"),
+            canvas_width=800,
+            canvas_height=600,
+            font_family="Arial",
+            base_font_size=12,
+            style_a={"opacity": 0.3},
+            style_b={"opacity": 1.0},
+        )
+        marker_traces = [t for t in fig.data if t.mode and "markers" in t.mode]
+        assert marker_traces[0].marker.opacity == 0.3
+        # The opacity is always set explicitly, so a fully-opaque scanpath is 1.0
+        # (overriding Plotly's ~0.7 variable-size-marker default).
+        assert marker_traces[1].marker.opacity == 1.0
+
 
 class TestPlotEnhancements:
     """Background color, out-of-text highlight, and color-by-line options."""
@@ -1194,6 +1228,19 @@ class TestPlotEnhancements:
         fix = next(t for t in fig.data if t.name == "Fixations")
         assert fix.marker.color == "rgba(0,0,0,0)"
         assert float(fix.marker.line.width) >= 1.0
+
+    def test_fixation_opacity(self, synthetic_words_df, synthetic_fixations_df):
+        # VIZ-6: the opacity is set explicitly (even at the 1.0 default) so the
+        # control overrides Plotly's ~0.7 default for variable-size markers — i.e.
+        # "opacity at 1" really renders fully opaque.
+        fig = self._figure(
+            synthetic_words_df, synthetic_fixations_df, fixation_opacity=0.4
+        )
+        fix = next(t for t in fig.data if t.name == "Fixations")
+        assert fix.marker.opacity == 0.4
+        default = self._figure(synthetic_words_df, synthetic_fixations_df)
+        fix_default = next(t for t in default.data if t.name == "Fixations")
+        assert fix_default.marker.opacity == 1.0
 
     def test_saccade_style_dash(self, synthetic_words_df, synthetic_fixations_df):
         fig = self._figure(

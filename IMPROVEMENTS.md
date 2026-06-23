@@ -27,9 +27,8 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
-**UX-1 · CMP-1 · CMP-2 · CMP-3 · CMP-4 · AN-1 … AN-28** (the whole *Analysis &
-corpus views* epic — the four question-oriented Corpus Analysis sections + the
-cross-cutting controls).
+**AN-1 … AN-28** (the whole *Analysis & corpus views* epic — the four
+question-oriented Corpus Analysis sections + the cross-cutting controls).
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -54,22 +53,7 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Pending approval`
-
-Implemented: the sidebar `🏷️ Trial chips` picker is gone; an inline **✏️ Edit chips**
-`st.popover` now sits at the right end of the chip row
-(`tabs.render_single_trial_tab`), hosting `controls.render_trial_chip_picker`.
-Polish: the redundant `?` marker removed; the ✏️ trigger shrunk to chip size with
-a little space before it; the chip strip's **More** dropdown now carries the full
-chip list (so any chip clipped at the line edge is reachable at any width / sidebar
-state) alongside the summary stats. (A client-side "move only the overflow" version
-was tried but Streamlit's plot-embed layout makes the strip width unstable to
-measure, so More just holds everything.)
-
-- _UX-1a (reorder chips in place) signed off & archived — see
-  [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-_UX-2 · UX-2a · UX-3 signed off & archived — see
+_UX-1 · UX-1a · UX-2 · UX-2a · UX-3 signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `UX-4`._
 
 ---
@@ -82,33 +66,12 @@ styling live in [`controls.py`](scanpath_studio/controls.py:622)
 `_render_compare_saccade_styles`, `_collect_compare_styles`); the overlay figure
 is built in [`plots.py`](scanpath_studio/plots.py).
 
-**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Pending approval`
-
-Implemented: the **Compare** toggle stays in the rail's View modes, but the
-second-trial selector (`tabs._render_compare_selector`) now renders above the
-chips, mirroring the main picker (selectbox + scrubbing slider + ◀ ▶) with an
-**A/B** colour-swatch label line.
-
-**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Pending approval`
-
-Implemented: `global_show_compare_legend` (default off) threads `show_legend` into
-`make_comparison_figure` / the split figure **and** the animated dual overlay
-(`make_scanpath_animation`); the static overlay reclaims the top reserve when
-hidden. Toggle lives in the compare selector's ⚙ popover.
-
-**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Pending approval`
-
-Implemented: a single `constants.compare_palette_color(idx)` is now the one source
-of truth for both the per-scanpath style seeding/collection and
-`plots._comparison_scanpath_style`, so the swatches can't drift from the figure —
-and CMP-1's A/B labels read those same resolved colours.
-
-**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Pending approval`
-
-Implemented: in compare mode the global Saccade colour/style/width **and** the
-global fixation colour-by/size/hollow/colorscale/range controls are hidden
-(they're dead for the overlay); only the per-scanpath controls + shared toggles
-(Direction arrows, Fixation index) show.
+**CMP-1 · CMP-2 · CMP-3 · CMP-4** — `Status: Done (signed off 2026-06-23)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Selector moved above
+the chips and made to mirror the main picker (trial id + ★/👤 markers, `index/N ·
+id` slider); config moved into the rail **⚙️ Compare** popover; optional A/B legend
++ figure titles removed; per-scanpath colours fixed (incl. the "fixations turn black"
+bug); and **Color fixations by** restored in compare mode.
 
 ---
 
@@ -156,34 +119,11 @@ zip. Wire into `export.ExportOptions` / `render_export_options` / `bulk_export`
 PNG/SVG/PDF/HTML formats, and surface it in the **Export** subtab
 (`tabs._render_export_panel`).
 
-**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Backlog`
+**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Done (signed off 2026-06-23)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-Today fixation markers are either fully filled or fully hollow (outline-only), via
-the boolean `global_hollow_fixations` toggle (the `Hollow circles` checkbox in
-[`controls.py`](scanpath_studio/controls.py:1121)) and the per-scanpath
-`cmp{idx}_hollow` checkboxes in compare mode; `plots._make_hollow`
-([`plots.py`](scanpath_studio/plots.py:66)) swaps the fill onto the outline and
-makes the fill transparent. Replace the binary toggle with a marker **opacity /
-alpha** slider (e.g. `global_fixation_opacity`, default `1.0` for byte-identical
-output) so overlapping fixations show through — thread it through
-`make_scanpath_figure`, `make_scanpath_animation`, and the comparison
-`_add_comparison_fixation_trace` ([`plots.py`](scanpath_studio/plots.py)) in place
-of (or alongside) `hollow_fixations`, keeping the `global_*` / `cmp{idx}_*` key
-convention. CMP-4 already hides this control in compare mode. Related: **CMP-4**.
-
-**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Backlog`
-
-The Generations (WIP) tab already limits which fixations render via a
-fixation-index range slider (`multi_fix_range`, `tabs.render_multiple_comparison_tab`
-[`tabs.py`](scanpath_studio/tabs.py:2867)) backed by a `_slice_range` filter on
-`order_in_trial`. The main single-trial plot has no equivalent — the existing
-`Fixation index` checkbox ([`controls.py`](scanpath_studio/controls.py:1161)) only
-toggles the order **numbers**, not the visible **range**. Add a `single_fix_range`
-slider beside the Fixations-layer controls in `sidebar_controls`, seed it in
-`_VIZ_WIDGET_DEFAULTS`, read it in `_collect_viz_settings`, and apply the same
-`order_in_trial` slice to `trial_fixations` before the `_cached_scanpath_figure`
-build in `render_single_trial_tab` ([`tabs.py`](scanpath_studio/tabs.py)). Apply it
-consistently to the animation / compare builders. Related: **CMP-4**.
+**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done (signed off 2026-06-23)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **VIZ-8 · Color saccades by saccade type** — `Status: Backlog`
 
@@ -585,18 +525,8 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-**BUG-2 · Upload box appears twice during data upload** — `Status: Backlog`
-
-In the Upload / Add-dataset wizard the **Fixations** uploader ("Fixations
-table(s)") renders **twice** — the active box plus a second, greyed duplicate
-lower down (below "Raw gaze (optional)"). Looks like the grouped upload section
-(`wizard._render_data_setup` → the `upload_box` helper for raw gaze / fixations /
-words, [`wizard.py`](scanpath_studio/wizard.py:1220)) gets emitted more than once
-(e.g. the active main-area flow *and* the collapsed "Data & mapping" panel both
-rendering it). Find the double render and emit each uploader once.
-
-_BUG-1 (trial filter persists across datasets) signed off & archived — see
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+_No open items — BUG-1, BUG-2 signed off & archived; see
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `BUG-3`._
 
 ---
 

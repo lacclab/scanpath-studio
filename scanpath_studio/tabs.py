@@ -50,6 +50,7 @@ from scanpath_studio.animation_export import (
 )
 from scanpath_studio.annotations import render_trial_annotations
 from scanpath_studio.constants import (
+    DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_SIZE_RANGE,
@@ -481,6 +482,28 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
         )
 
 
+def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
+    """Keep only fixations whose 1-based ``order_in_trial`` is within ``fix_range``.
+
+    ``fix_range`` is the single-trial fixation-index window (VIZ-7) — a
+    ``(start, end)`` tuple, or ``None`` for the full trial. Applied only to the
+    frame feeding the figure / animation / comparison builders (and thus the
+    "This trial" export, which round-trips the on-screen figure), so the chips,
+    panels and bulk multi-trial export keep the complete trial. A ``None`` window
+    or a frame without ``order_in_trial`` is returned unchanged (the default path
+    stays byte-identical)."""
+    if (
+        isinstance(fix_range, (tuple, list))
+        and len(fix_range) == 2
+        and fix is not None
+        and not fix.empty
+        and "order_in_trial" in fix.columns
+    ):
+        lo, hi = fix_range
+        return fix[(fix["order_in_trial"] >= lo) & (fix["order_in_trial"] <= hi)]
+    return fix
+
+
 def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) -> dict:
     """Convert viz_settings to figure-compatible settings dict."""
     return dict(
@@ -516,6 +539,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
+        fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
         highlight_text_color=viz_settings.get(
             "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
@@ -600,33 +624,24 @@ def _render_compare_selector(
     selected_trial: str,
     selected_text: Optional[str],
     animate: bool = False,
-) -> tuple[Optional[str], Optional[str], str]:
+) -> tuple[Optional[str], Optional[str]]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
-    Mirrors the main trial picker's format — an A/B legend line, then a
-    ``selectbox`` + scrubbing ``select_slider`` + ◀ ▶ step buttons — plus a ⚙
-    popover for the overlay/side-by-side/stacked layout and the show-A/B-legend
-    toggle (CMP-2). The A/B colour swatches read the same per-scanpath styles the
-    figure draws (CMP-3), so they always match. Returns
-    ``(participant, trial, layout)``; ``layout`` is forced to overlay when
-    animating (an animated comparison co-animates both on one clock)."""
+    Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ ★/👤
+    markers) and a scrubbing ``select_slider`` showing ``"index/TOTAL · <trial
+    id>"``, plus ◀ ▶ step buttons. The overlay layout + A/B-legend config now live
+    in the rail's **⚙️ Compare** popover (under the Compare toggle). Returns
+    ``(participant, trial)``."""
     options = build_comparison_options(
         combos, selection_mode, selected_participant, selected_trial, selected_text
     )
     if not options:
         st.info("No other trials available for comparison.")
-        return None, None, "overlay"
+        return None, None
 
     labels = [opt[2] for opt in options]
     label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in options}
-
-    # A/B colours from the same per-scanpath styles the figure uses (CMP-3).
-    style_a, style_b = _collect_compare_styles()
-    color_a = style_a.get("fix_color", compare_palette_color(0))
-    color_b = style_b.get("fix_color", compare_palette_color(1))
-    primary_label = friendly_trial_label(
-        selected_participant, selected_trial, selected_text, set()
-    )
+    label_to_id = {opt[2]: str(opt[1]) for opt in options}
 
     sel_key = "single_compare_trial"
     pos_key = "single_compare_pos"
@@ -635,13 +650,6 @@ def _render_compare_selector(
         current = labels[0]
         st.session_state[sel_key] = current
     n = len(labels)
-
-    st.markdown(
-        f'<span style="color:{color_a};font-weight:700">■ A</span> '
-        f"{html.escape(str(primary_label))} &nbsp;·&nbsp; "
-        f'<span style="color:{color_b};font-weight:700">■ B</span> compared with:',
-        unsafe_allow_html=True,
-    )
 
     if n > 1:
         idx_of = {lbl: i for i, lbl in enumerate(labels)}
@@ -658,22 +666,21 @@ def _render_compare_selector(
                 pos = 0
             st.session_state[sel_key] = labels[max(0, min(pos + delta, n - 1))]
 
-        sel_col, slider_col, prev_col, next_col, opts_col = st.columns(
-            [3, 4, 0.55, 0.55, 0.9], vertical_alignment="bottom"
+        sel_col, slider_col, prev_col, next_col = st.columns(
+            [3, 5, 0.55, 0.55], vertical_alignment="bottom"
         )
         current_idx = labels.index(current)
     else:
-        sel_col = opts_col = st
+        sel_col = st
 
     selected_compare_label = sel_col.selectbox(
         "Compare with trial (B)",
         options=labels,
         key=sel_key,
-        help="★ indicates same text as the primary trial."
+        help="★ = same text as the primary trial · 👤 = same participant."
         + (" Animated comparison overlays both on one clock." if animate else ""),
         label_visibility="collapsed",
     )
-    layout = "overlay"
     if n > 1:
         with slider_col:
             st.select_slider(
@@ -682,7 +689,9 @@ def _render_compare_selector(
                 key=pos_key,
                 on_change=_on_compare_slider,
                 label_visibility="collapsed",
-                format_func=lambda v: f"{idx_of.get(v, 0) + 1}/{n}",
+                format_func=lambda v: (
+                    f"{idx_of.get(v, 0) + 1}/{n} · {label_to_id.get(v, v)}"
+                ),
                 help=f"Scrub through the {n} candidate trials.",
             )
         prev_col.button(
@@ -703,33 +712,10 @@ def _render_compare_selector(
             help="Next candidate",
             width="stretch",
         )
-    with opts_col.popover("⚙️", width="content"):
-        if not animate:
-            layout_label = (
-                st.segmented_control(
-                    "View",
-                    options=["Overlay", "Side by side", "Stacked"],
-                    key="single_compare_layout",
-                    help="Stacked = trials shown one above the other.",
-                )
-                or "Overlay"
-            )
-            layout = {
-                "Overlay": "overlay",
-                "Side by side": "side_by_side",
-                "Stacked": "stacked",
-            }.get(layout_label, "overlay")
-        st.checkbox(
-            "Show A/B legend",
-            key="global_show_compare_legend",
-            help="Show a legend naming the two scanpaths on the overlay (off by "
-            "default — the colours already tell A and B apart).",
-        )
 
     if selected_compare_label:
-        participant, trial = label_to_trial[selected_compare_label]
-        return participant, trial, layout
-    return None, None, layout
+        return label_to_trial[selected_compare_label]
+    return None, None
 
 
 _CRITICAL_SPAN_BG = "#FCE7F3"  # light pink — critical-span words
@@ -1251,6 +1237,7 @@ def _build_studio_config(
                 viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
             ),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
+            "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
             "colorbar_orientation": figure_settings.get(
                 "colorbar_orientation", "Vertical"
             ),
@@ -1369,6 +1356,7 @@ def _render_save_restore_expander(
                 )
             ],
             "hollow": bool(st.session_state.get(f"cmp{idx}_hollow", False)),
+            "opacity": float(st.session_state.get(f"cmp{idx}_opacity", 1.0)),
         }
         for idx in range(2)
     ]
@@ -1590,6 +1578,7 @@ def _build_and_render_animation(
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
+        fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_legend=viz_settings.get("show_compare_legend", False),
@@ -2037,6 +2026,28 @@ def render_single_trial_tab(
                 else "Overlay another trial's scanpath or view them side by side."
             ),
         )
+        # Compare config in the rail (moved out of the inline selector): the
+        # overlay/side-by-side/stacked layout + the show-A/B-legend toggle. The
+        # layout reaches the figure via session_state (`single_compare_layout`),
+        # read into `compare_layout` below.
+        if compare_enabled:
+            with st.popover("⚙️ Compare options", width="stretch"):
+                if not animate:
+                    # Seed so the control shows "Overlay" selected by default
+                    # (the body reads this key to resolve compare_layout).
+                    st.session_state.setdefault("single_compare_layout", "Overlay")
+                    st.segmented_control(
+                        "View",
+                        options=["Overlay", "Side by side", "Stacked"],
+                        key="single_compare_layout",
+                        help="Stacked = trials shown one above the other.",
+                    )
+                st.checkbox(
+                    "Show A/B legend",
+                    key="global_show_compare_legend",
+                    help="Show a legend naming the two scanpaths on the overlay "
+                    "(off by default — the colours already tell A and B apart).",
+                )
         st.divider()
         st.markdown("## 🎨 Visualization")
         # The visualization controls moved out of the sidebar into this rail
@@ -2048,24 +2059,35 @@ def render_single_trial_tab(
             has_raw_gaze=has_raw_gaze,
             has_stimulus_image=has_stimulus_image,
             words=words_filtered,
+            # The selected trial's fixations size the VIZ-7 fixation-index window
+            # slider (its max is this trial's fixation count).
+            fix_range_fixations=trial_fixations,
         )
 
     # Second-trial selector + layout/legend options, rendered above the chips in
     # the plot column (CMP-1). Filled after the rail so the per-scanpath compare
     # styles (cmp*_ keys) are already seeded — the A/B swatches then match the
     # figure exactly (CMP-3). Only shown when Compare is on.
-    compare_participant, compare_trial, compare_layout = None, None, "overlay"
+    compare_participant, compare_trial = None, None
+    # Layout comes from the rail's Compare-config popover via session_state; an
+    # animated comparison always co-animates on one clock, so force overlay then.
+    if animate:
+        compare_layout = "overlay"
+    else:
+        compare_layout = {
+            "Overlay": "overlay",
+            "Side by side": "side_by_side",
+            "Stacked": "stacked",
+        }.get(st.session_state.get("single_compare_layout"), "overlay")
     if compare_enabled:
         with compare_slot:
-            compare_participant, compare_trial, compare_layout = (
-                _render_compare_selector(
-                    combos,
-                    selection_mode,
-                    selected_participant,
-                    selected_trial,
-                    selected_text,
-                    animate=animate,
-                )
+            compare_participant, compare_trial = _render_compare_selector(
+                combos,
+                selection_mode,
+                selected_participant,
+                selected_trial,
+                selected_text,
+                animate=animate,
             )
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
@@ -2102,6 +2124,13 @@ def render_single_trial_tab(
     comparing = compare_participant is not None and compare_trial is not None
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
 
+    # Fixation-index window (VIZ-7): the frames that feed the figure / animation
+    # are sliced to the chosen range; the full frames still drive the chips,
+    # panels and exports. A None range leaves the frames untouched.
+    fix_range = viz_settings.get("fix_index_range")
+    fig_fixations = _slice_fix_range(trial_fixations, fix_range)
+    fig_compare_fix = _slice_fix_range(compare_fix, fix_range)
+
     # Condition chips above the plot — configurable via the sidebar picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
     # a second labelled strip shows the compared trial too.
@@ -2123,13 +2152,28 @@ def render_single_trial_tab(
                 render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
         with strip_col:
+            # When comparing, label each chip strip with its trial id coloured to
+            # match the scanpath in the overlay (A = primary colour, B = compared
+            # colour) — replaces the old "■ A … ■ B compared with:" legend line.
+            color_a = color_b = None
             if comparing and compare_meta:
-                st.caption(f"**{compare_meta['label_primary']}**")
+                _ca, _cb = _collect_compare_styles()
+                color_a = _ca.get("fix_color") or compare_palette_color(0)
+                color_b = _cb.get("fix_color") or compare_palette_color(1)
+                st.markdown(
+                    f'<span style="color:{color_a};font-weight:700">'
+                    f"{html.escape(str(compare_meta['label_primary']))}</span>",
+                    unsafe_allow_html=True,
+                )
             _render_trial_condition_chips(
                 trial_words, trial_fixations, selected_participant, chip_fields
             )
             if comparing and compare_meta:
-                st.caption(f"**{compare_meta['label_compare']}** (compared)")
+                st.markdown(
+                    f'<span style="color:{color_b};font-weight:700">'
+                    f"{html.escape(str(compare_meta['label_compare']))}</span>",
+                    unsafe_allow_html=True,
+                )
                 _render_trial_condition_chips(
                     compare_meta["words"],
                     compare_meta["fixations"],
@@ -2141,16 +2185,18 @@ def render_single_trial_tab(
     save_slug = f"{selected_participant}__{selected_trial}"
     anim_playback_ms = None
     anim_file_stem = None
-    dual_anim = animate and comparing and not compare_fix.empty
+    # Use the windowed second scanpath: a window that empties B falls back to a
+    # single-trial animation (and info box).
+    dual_anim = animate and comparing and not fig_compare_fix.empty
 
     # Animation info box, in its slot inside the rail's Playback popover.
-    if animate and not trial_fixations.empty and anim_info_slot is not None:
+    if animate and not fig_fixations.empty and anim_info_slot is not None:
         with anim_info_slot:
             _render_anim_info_box(
                 trial_words,
-                trial_fixations,
+                fig_fixations,
                 compare_meta["words"] if dual_anim else None,
-                compare_fix if dual_anim else None,
+                fig_compare_fix if dual_anim else None,
                 selected_participant,
                 selected_trial,
                 compare_participant,
@@ -2173,9 +2219,9 @@ def render_single_trial_tab(
                 displayed_fig, anim_playback_ms, save_slug, anim_file_stem = (
                     _build_and_render_animation(
                         trial_words,
-                        trial_fixations,
+                        fig_fixations,
                         compare_meta["words"] if dual_anim else None,
-                        compare_fix if dual_anim else None,
+                        fig_compare_fix if dual_anim else None,
                         selected_participant,
                         selected_trial,
                         compare_participant,
@@ -2220,6 +2266,7 @@ def render_single_trial_tab(
                 layout=compare_layout,
                 line_spacing=line_spacing,
                 scale_text_to_boxes=scale_text_to_boxes,
+                fix_index_range=fix_range,
             )
             save_slug = (
                 f"{selected_participant}__{selected_trial}__vs__"
@@ -2237,9 +2284,9 @@ def render_single_trial_tab(
             )
             displayed_fig = _cached_scanpath_figure(
                 trial_words,
-                trial_fixations,
+                fig_fixations,
                 build_kwargs,
-                fig_key=_figure_input_key(trial_words, trial_fixations, build_kwargs),
+                fig_key=_figure_input_key(trial_words, fig_fixations, build_kwargs),
             )
             _render_true_scale_chart(displayed_fig, key="single")
 
@@ -2405,9 +2452,16 @@ def _render_comparison_figure(
     layout: str = "overlay",
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    fix_index_range=None,
 ):
-    """Render comparison figure for two trials."""
+    """Render comparison figure for two trials.
+
+    ``fix_index_range`` (VIZ-7) windows both scanpaths to a ``(start, end)``
+    ``order_in_trial`` range; ``None`` shows the full readings."""
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
+    # Window both compared trials to the chosen fixation-index range. Slicing the
+    # whole frame is fine — make_comparison_figure only extracts the two trials.
+    fixations_filtered = _slice_fix_range(fixations_filtered, fix_index_range)
 
     def _lookup_text_id(participant_id: str, trial_id: str) -> Optional[str]:
         match = combos[
@@ -2451,6 +2505,13 @@ def _render_comparison_figure(
         show_order=viz_settings.get("show_order", False),
         show_legend=viz_settings.get("show_compare_legend", False),
         order_font_size=viz_settings.get("order_font_size"),
+        # "Color fixations by" (the metric → hue) applies in compare too.
+        color_by=viz_settings.get("color_by"),
+        fixation_colorscale=viz_settings.get(
+            "fixation_colorscale", DEFAULT_FIXATION_COLORSCALE
+        ),
+        fixation_color_range=viz_settings.get("fixation_color_range"),
+        show_colorbars=viz_settings.get("show_colorbars", False),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
         highlight_text_color=viz_settings.get(
             "highlight_text_color", HIGHLIGHTED_TEXT_COLOR

@@ -6,6 +6,8 @@ import pytest
 
 from scanpath_studio.plots import (
     _image_to_data_uri,
+    _latin_advance,
+    _line_pitch,
     _png_pixel_size,
     _saccade_arrow_markers,
     _width_fit_font,
@@ -1401,6 +1403,78 @@ class TestTrueToScaleText:
             line_spacing=10.0,
         )
         assert self._label_size(a) == pytest.approx(self._label_size(b))
+
+
+class TestLinePitchAndScript:
+    """Line-pitch budget + script-aware width cap for true-to-scale text.
+
+    Word boxes that hug the glyph (MultiplEYE) have a height far smaller than the
+    line slot, so the font is budgeted from the line *pitch*; and CJK/full-width
+    corpora must not be width-capped as if their glyphs were narrow Latin.
+    """
+
+    def _two_line_boxes(self, *, height, pitch, n_chars=2, box_w=56, text="月球"):
+        """Two stacked lines of word boxes with a given box height + line pitch."""
+        rows = []
+        for line, top in enumerate((50.0, 50.0 + pitch)):
+            for w in range(2):
+                rows.append(
+                    {
+                        "x": 100.0 + w * box_w,
+                        "y": top,
+                        "width": box_w,
+                        "height": height,
+                        "text": text,
+                        "word_id": line * 2 + w,
+                        "line_idx": line,
+                    }
+                )
+        return pd.DataFrame(rows)
+
+    def test_line_pitch_uses_line_gap_not_box_height(self):
+        # Tight boxes (height 34) spaced 98.6 apart -> pitch is the line gap.
+        words = self._two_line_boxes(height=34, pitch=98.6)
+        assert _line_pitch(words) == pytest.approx(98.6)
+
+    def test_line_pitch_equals_box_height_when_tiling(self, normalized_words_df):
+        # OneStop-style tiling / single line -> pitch falls back to box height, so
+        # existing OneStop sizing is unchanged.
+        assert _line_pitch(normalized_words_df) == pytest.approx(50.0)
+
+    def test_tight_boxes_size_from_pitch_not_height(self):
+        # A glyph-tight box (34) would budget 34/3 ≈ 11px off its height; from the
+        # 98.6 pitch it's 98.6/3 ≈ 33 — much closer to the real font.
+        words = self._two_line_boxes(height=34, pitch=98.6)
+        font = _word_label_font_px(
+            words, scale=1.0, line_spacing=3.0, manual_font_px=0,
+            scale_text_to_boxes=True,
+        )
+        assert font > 34 / 3 + 1  # strictly bigger than the old box-height budget
+
+    def test_latin_advance_detects_cjk(self):
+        cjk = pd.DataFrame({"text": ["月球是地球", "唯一卫星"]})
+        latin = pd.DataFrame({"text": ["word", "another"]})
+        assert _latin_advance(cjk) == pytest.approx(0.5)
+        assert _latin_advance(latin) == pytest.approx(0.6)
+
+    def test_width_fit_handles_mixed_cjk_and_latin(self):
+        # A CJK-dominant page (so the font's Latin glyphs are half-width): a 12-glyph
+        # full-width CJK word in 336px -> 28 em, beside a 10-char half-width Latin URL
+        # in 140px -> also 28 em. Both recover ~28, so the line isn't sized down to
+        # the narrow Latin run.
+        words = pd.DataFrame(
+            {
+                "text": ["月球是地球唯一的天然卫星", "wikipedia."],
+                "width": [336.0, 140.0],
+            }
+        )
+        wf = _width_fit_font(words)
+        assert wf == pytest.approx(28 * 0.92, rel=0.02)
+
+    def test_width_fit_latin_only_unchanged(self, normalized_words_df):
+        # No CJK -> identical to the historical (box_width / n) / 0.6 formula.
+        wf = _width_fit_font(normalized_words_df)
+        assert wf == pytest.approx(10 / 0.6 * 0.92, rel=1e-6)
 
 
 class TestBackgroundImageLayer:

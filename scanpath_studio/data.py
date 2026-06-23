@@ -1199,6 +1199,10 @@ WORD_OPTIONAL_FIELDS = [
     ("image_path", "image_path", "passthrough", "meta"),
     ("image_x", "image_x", "numeric", "meta"),
     ("image_y", "image_y", "numeric", "meta"),
+    # Stimulus typeface (size in monitor px + CSS family) the images were rendered
+    # with — the app snaps its font controls to these so the reading text matches.
+    ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
+    ("stimulus_font_family", "stimulus_font_family", "passthrough", "meta"),
     ("genre", "genre", "string", "meta"),
 ]
 
@@ -1242,6 +1246,8 @@ FIX_OPTIONAL_FIELDS = [
     ("image_path", "image_path", "passthrough", "meta"),
     ("image_x", "image_x", "numeric", "meta"),
     ("image_y", "image_y", "numeric", "meta"),
+    ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
+    ("stimulus_font_family", "stimulus_font_family", "passthrough", "meta"),
     # Reader metadata merged from participant_data.csv (namespaced pp_*).
     ("pp_age", "pp_age", "numeric", "meta"),
     ("pp_gender", "pp_gender", "string", "meta"),

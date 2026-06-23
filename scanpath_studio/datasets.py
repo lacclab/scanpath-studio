@@ -419,6 +419,69 @@ def _multipleye_aoi_dir(root: Path) -> Path:
     )
 
 
+# The stimulus images were rendered by the MultiplEYE pipeline with the FONT_SIZE
+# (monitor px) + FONT declared in the stimulus config (``stimuli_*/config/
+# config_*.py``). Carrying these onto the data lets the app reproduce the exact
+# reading text true-to-scale instead of guessing the size from box geometry and
+# rendering CJK in a generic fallback font. Known font files → a CSS family stack
+# (the actual installed family name + sensible fallbacks); unknown ones get a
+# humanised name + a monospace (and CJK, when the name says so) fallback.
+_MULTIPLEYE_FONT_CSS = {
+    "notosansmonocjksc": "'Noto Sans Mono CJK SC', 'Noto Sans CJK SC', monospace",
+    "notosansmonocjktc": "'Noto Sans Mono CJK TC', 'Noto Sans CJK TC', monospace",
+    "notosansmonocjkjp": "'Noto Sans Mono CJK JP', 'Noto Sans CJK JP', monospace",
+    "notosansmonocjkkr": "'Noto Sans Mono CJK KR', 'Noto Sans CJK KR', monospace",
+    "notosansmono": "'Noto Sans Mono', monospace",
+}
+_FONT_NAME_DROP = ("vf", "variable", "regular", "bold", "italic", "medium")
+_FONT_SIZE_RE = re.compile(r"^\s*FONT_SIZE\s*=\s*([0-9]+(?:\.[0-9]+)?)", re.MULTILINE)
+_FONT_FILE_RE = re.compile(r"^\s*FONT\s*=\s*[\"']([^\"']+)[\"']", re.MULTILINE)
+
+
+def _multipleye_config_path(root: Path) -> Optional[Path]:
+    """The stimulus-generation config (``stimuli_*/config/config_*.py``), or None."""
+    return next(iter(sorted(root.glob("stimuli_*/config/config_*.py"))), None)
+
+
+def _multipleye_font_css(font_file: str) -> str:
+    """CSS font-family stack for a config ``FONT`` path (e.g. a ``.ttf`` filename)."""
+    stem = re.sub(r"[^a-z0-9]", "", Path(font_file).stem.lower())
+    for drop in _FONT_NAME_DROP:
+        if stem.endswith(drop):
+            stem = stem[: -len(drop)]
+    if stem in _MULTIPLEYE_FONT_CSS:
+        return _MULTIPLEYE_FONT_CSS[stem]
+    # Unknown font: humanise the file stem (spaces at case/digit boundaries) and
+    # append a monospace fallback, plus a CJK fallback when the name implies CJK.
+    raw = Path(font_file).stem
+    human = re.sub(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Za-z])(?=[0-9])", " ", raw).strip()
+    tail = "'Noto Sans CJK SC', monospace" if "cjk" in stem else "monospace"
+    return f"'{human}', {tail}" if human else tail
+
+
+def _multipleye_font_config(root: Path) -> Tuple[Optional[float], Optional[str]]:
+    """``(font_px, css_font_family)`` from the stimulus config, or ``(None, None)``.
+
+    Reads ``FONT_SIZE`` (monitor px the images were rendered at) and ``FONT`` (the
+    typeface) from ``config_*.py`` by regex — the file imports lab-specific paths,
+    so we never exec it. Returns ``(None, None)`` when no config / no FONT_SIZE.
+    """
+    path = _multipleye_config_path(root)
+    if path is None:
+        return None, None
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None, None
+    size_m = _FONT_SIZE_RE.search(text)
+    if size_m is None:
+        return None, None
+    font_px = float(size_m.group(1))
+    file_m = _FONT_FILE_RE.search(text)
+    family = _multipleye_font_css(file_m.group(1)) if file_m else None
+    return font_px, family
+
+
 def _multipleye_word_boxes_from_frame(
     chars: pd.DataFrame, stimulus: str
 ) -> pd.DataFrame:
@@ -822,6 +885,23 @@ def _multipleye_stamp_image_path(
     return df
 
 
+def _multipleye_stamp_font(
+    df: pd.DataFrame, font_px: Optional[float], family: Optional[str]
+) -> pd.DataFrame:
+    """Stamp the stimulus typeface (``stimulus_font_px`` / ``stimulus_font_family``).
+
+    The values are dataset-constant (read once from the stimulus config); the app
+    snaps its font controls to them so the reading text renders at the exact size
+    and typeface the stimulus images were drawn with."""
+    if df.empty or font_px is None:
+        return df
+    df = df.copy()
+    df["stimulus_font_px"] = float(font_px)
+    if family:
+        df["stimulus_font_family"] = family
+    return df
+
+
 def multipleye_inventory(
     root, *, fixation_source: str = "scanpaths"
 ) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
@@ -921,6 +1001,11 @@ def multipleye_raw_frames(
         image_dir, lang = image
         words = _multipleye_stamp_image_path(words, image_dir, lang)
         fixations = _multipleye_stamp_image_path(fixations, image_dir, lang)
+    # Reading typeface (size + family) from the stimulus config → the app renders
+    # the text true-to-scale at the exact font the images were drawn with.
+    font_px, font_family = _multipleye_font_config(root)
+    words = _multipleye_stamp_font(words, font_px, font_family)
+    fixations = _multipleye_stamp_font(fixations, font_px, font_family)
     return words, fixations
 
 

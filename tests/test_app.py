@@ -438,3 +438,27 @@ class TestApplyUrlTrialSelection:
         fake_st.session_state = {"_url_trial_applied": True, "single_trial_id": "t9"}
         _apply_url_trial_selection(self._combos())
         assert fake_st.session_state["single_trial_id"] == "t9"
+
+
+class TestDatasetFont:
+    """`_dataset_font` reads the stimulus typeface a dataset stamps on its words."""
+
+    def test_reads_stamped_font(self):
+        words = pd.DataFrame(
+            {
+                "stimulus_font_px": [28.0, 28.0],
+                "stimulus_font_family": ["'Noto Sans Mono CJK SC', monospace"] * 2,
+            }
+        )
+        assert app_module._dataset_font(words) == (
+            28.0,
+            "'Noto Sans Mono CJK SC', monospace",
+        )
+
+    def test_none_when_absent_or_empty(self):
+        assert app_module._dataset_font(pd.DataFrame()) == (None, None)
+        assert app_module._dataset_font(pd.DataFrame({"x": [1]})) == (None, None)
+
+    def test_px_without_family(self):
+        words = pd.DataFrame({"stimulus_font_px": [20.0]})
+        assert app_module._dataset_font(words) == (20.0, None)

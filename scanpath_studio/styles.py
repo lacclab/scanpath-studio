@@ -229,8 +229,12 @@ def get_app_css() -> str:
         font-weight: 600;
     }
     .sps-chip-more-summary::-webkit-details-marker { display: none; }
-    .sps-chip-more-summary::after { content: " ▾"; font-size: 0.7rem; }
-    .sps-chip-more[open] .sps-chip-more-summary::after { content: " ▴"; }
+    .sps-chip-more-summary::after {
+        content: "▾";
+        font-size: 0.7rem;
+        margin-left: 0.4rem;  /* breathing room between "More" and its arrow */
+    }
+    .sps-chip-more[open] .sps-chip-more-summary::after { content: "▴"; }
     /* The "More" panel: a tidy key→value list of the summary stats, opened as a
        floating card so it never reflows the chip row. */
     .sps-chip-more-body {
@@ -287,9 +291,9 @@ def get_app_css() -> str:
         color: #212529;
         border: 1px solid rgba(0, 0, 0, 0.06);
     }
-    /* Inline ✏️ Edit-chips popover trigger: shrink it to chip size and give it a
-       little space from the "More" disclosure to its left. */
-    .st-key-chip_edit_box { margin-left: 0.5rem; }
+    /* Inline ✏️ Edit-chips popover trigger: shrink it to chip size and pull it
+       closer to the "More" disclosure on its left (counter the column gap). */
+    .st-key-chip_edit_box { margin-left: -0.5rem; }
     .st-key-chip_edit_box button {
         min-height: 0 !important;
         padding: 0.1rem 0.5rem !important;

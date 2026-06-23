@@ -1184,9 +1184,17 @@ def _render_data_setup(active: bool) -> _UploadResult:
     already_uploaded = core_uploaded or bool(
         st.session_state.get("col_map_raw_gaze_upload")
     )
+    # Render the guidance into a container that is ALWAYS created (even when it
+    # ends up empty) so the upload boxes below keep a fixed position in the
+    # element tree. Otherwise the guidance vanishing the moment a file is added
+    # shifts every following element up by two delta-paths — and because reading
+    # a large upload blocks the rerun (the "Reading uploaded data…" cache spinner),
+    # Streamlit freezes the half-reconciled DOM and leaves the pre-shift copy of
+    # the whole upload group on screen as a greyed-out ghost (BUG-2).
+    intro = body.container()
     if active and not already_uploaded:
-        body.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
-        body.markdown(
+        intro.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
+        intro.markdown(
             "💡 **Working with a large dataset?** It's faster — and keeps your "
             "data on your own machine — to run Scanpath Studio locally:\n\n"
             "```bash\npip install scanpath-studio\nscanpath-studio\n```"

@@ -513,15 +513,28 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-**BUG-2 · Upload box appears twice during data upload** — `Status: Backlog`
+**BUG-2 · Upload box appears twice during data upload** — `Status: Pending approval`
 
-In the Upload / Add-dataset wizard the **Fixations** uploader ("Fixations
-table(s)") renders **twice** — the active box plus a second, greyed duplicate
-lower down (below "Raw gaze (optional)"). Looks like the grouped upload section
-(`wizard._render_data_setup` → the `upload_box` helper for raw gaze / fixations /
-words, [`wizard.py`](scanpath_studio/wizard.py:1220)) gets emitted more than once
-(e.g. the active main-area flow *and* the collapsed "Data & mapping" panel both
-rendering it). Find the double render and emit each uploader once.
+In the Upload / Add-dataset wizard the whole step-3 upload group (Raw gaze +
+**Fixations** + Words) renders a second, greyed-out copy while a large file is
+being read — so the **Fixations** uploader ("Fixations table(s)") appears
+**twice**, both showing the same file.
+
+_Root cause:_ a Streamlit layout-shift ghost. The "⬆️ Upload … to begin" call to
+action + the "large dataset" tip render at the top of step 3 only *before*
+anything is uploaded. The moment a file is added they vanish, shifting every
+following element up two delta-paths. Reading a large upload blocks the rerun
+(the `@st.cache_data(show_spinner="Reading uploaded data…")` reader in
+[`app.py`](scanpath_studio/app.py:784)), so Streamlit freezes the half-reconciled
+DOM and leaves the pre-shift copy of the whole upload group on screen as a
+greyed ghost.
+
+_Fix:_ render that guidance into a **container that is always created** (even
+when empty) so the upload boxes keep a fixed position in the element tree and
+never shift ([`wizard.py`](scanpath_studio/wizard.py:1194)). Verified with
+Playwright + a 26 MB zip: before, two "Fixations table(s)" uploaders appear
+during the read; after, exactly one throughout. `pytest` wizard/apptest/
+column-mapping suites green (89 passed).
 
 _BUG-1 (trial filter persists across datasets) signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._

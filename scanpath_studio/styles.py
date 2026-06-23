@@ -193,8 +193,9 @@ def get_app_css() -> str:
        the trial's key experiment conditions ride above the plot as a compact
        chip strip and the rail reads as a tidy inspector panel. */
     /* The chip strip stays on ONE line: it never wraps; the primary
-       identity/condition chips clip at the row edge while the "?" help marker and
-       the "More" disclosure are pinned and always visible. */
+       identity/condition chips clip at the row edge while the "More" disclosure
+       is pinned. "More" carries the full chip list so any clipped chip is still
+       reachable (tabs._render_trial_condition_chips). */
     .sps-trial-chips {
         display: flex;
         flex-wrap: nowrap;
@@ -212,43 +213,11 @@ def get_app_css() -> str:
         overflow: hidden;
     }
     .sps-chips-primary .sps-chip { flex: 0 0 auto; }
-    .sps-chip-help, .sps-chip-more { flex: 0 0 auto; }
-    /* "?" help marker → small round badge with a styled hover/focus tooltip
-       (a native title= is too easy to miss — slow, tiny, hover-only). */
-    .sps-chip-help {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1.05rem;
-        height: 1.05rem;
-        border-radius: 50%;
-        border: 1px solid rgba(0, 0, 0, 0.18);
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: #555;
-        cursor: help;
+    .sps-chip-more { flex: 0 0 auto; }
+    /* Auto-hide "More" when it would be empty — no summary stats AND no chips. */
+    .sps-chip-more:not(:has(.sps-stat)):not(:has(.sps-chip-more-all .sps-chip)) {
+        display: none;
     }
-    .sps-chip-help::after {
-        content: attr(data-tip);
-        position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        white-space: nowrap;
-        background: #212529;
-        color: #fff;
-        font-size: 0.72rem;
-        font-weight: 500;
-        padding: 0.3rem 0.5rem;
-        border-radius: 0.35rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
-        opacity: 0;
-        pointer-events: none;
-        z-index: 30;
-        transition: opacity 0.12s ease;
-    }
-    .sps-chip-help:hover::after,
-    .sps-chip-help:focus::after { opacity: 1; }
     /* Inline "More" disclosure: the chip-styled summary stays on the one-line
        strip; its body (the not-already-shown summary stats) opens as a floating
        dropdown so expanding it never reflows the chip row. */
@@ -260,8 +229,12 @@ def get_app_css() -> str:
         font-weight: 600;
     }
     .sps-chip-more-summary::-webkit-details-marker { display: none; }
-    .sps-chip-more-summary::after { content: " ▾"; font-size: 0.7rem; }
-    .sps-chip-more[open] .sps-chip-more-summary::after { content: " ▴"; }
+    .sps-chip-more-summary::after {
+        content: "▾";
+        font-size: 0.7rem;
+        margin-left: 0.4rem;  /* breathing room between "More" and its arrow */
+    }
+    .sps-chip-more[open] .sps-chip-more-summary::after { content: "▴"; }
     /* The "More" panel: a tidy key→value list of the summary stats, opened as a
        floating card so it never reflows the chip row. */
     .sps-chip-more-body {
@@ -277,6 +250,20 @@ def get_app_css() -> str:
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 0.6rem;
         box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+    }
+    /* The full chip list at the top of the dropdown, wrapping freely so every
+       chip is reachable even when the inline strip clipped some. Empty = hidden. */
+    .sps-chip-more-all {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
+    .sps-chip-more-all:empty { display: none; }
+    /* A divider between the chip list and the summary stats. */
+    .sps-chip-more-all:has(.sps-chip) + .sps-stat {
+        margin-top: 0.45rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.12);
     }
     .sps-stat {
         display: flex;
@@ -304,6 +291,16 @@ def get_app_css() -> str:
         color: #212529;
         border: 1px solid rgba(0, 0, 0, 0.06);
     }
+    /* Inline ✏️ Edit-chips popover trigger: shrink it to chip size and pull it
+       closer to the "More" disclosure on its left (counter the column gap). */
+    .st-key-chip_edit_box { margin-left: -0.5rem; }
+    .st-key-chip_edit_box button {
+        min-height: 0 !important;
+        padding: 0.1rem 0.5rem !important;
+        border-radius: 999px !important;
+        font-size: 0.82rem !important;
+        line-height: 1.55 !important;
+    }
     /* Control rail: a subtle card so it reads as a panel, with a hair more
        breathing room between the stacked toggles than the app-wide gap:0 rule. */
     .st-key-scanpath_rail {
@@ -326,40 +323,6 @@ def get_app_css() -> str:
     .st-key-scanpath_rail [data-testid="stPopover"] button {
         width: 100%;
         justify-content: flex-start;
-    }
-
-    /* === Sidebar navigation as menu buttons =================================
-       The primary nav is a keyed radio (`main_nav`) — restyle its options into
-       full-width menu buttons (the radio dot hidden, the active item a filled
-       brand pill) without changing the widget, so deep-links / AppTest still see
-       a radio. `:has(input:checked)` flags the active option. */
-    .st-key-tour_grp_nav div[role="radiogroup"] { gap: 0.35rem; }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label {
-        width: 100%;
-        margin: 0;
-        padding: 0.5rem 0.8rem;
-        border: 1px solid var(--sps-border);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: background 0.15s ease, border-color 0.15s ease;
-    }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label:hover {
-        background: var(--sps-accent-soft);
-        border-color: var(--sps-accent-border);
-    }
-    /* Hide the radio circle (first child of each option label). */
-    .st-key-tour_grp_nav div[role="radiogroup"] > label > div:first-child {
-        display: none;
-    }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label p { font-weight: 600; }
-    /* Active item → filled brand pill. */
-    .st-key-tour_grp_nav div[role="radiogroup"] > label:has(input:checked) {
-        background: var(--sps-accent-soft);
-        border-color: var(--sps-accent);
-    }
-    .st-key-tour_grp_nav div[role="radiogroup"] > label:has(input:checked) p {
-        color: var(--sps-accent);
-        font-weight: 700;
     }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────

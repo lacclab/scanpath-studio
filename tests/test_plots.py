@@ -781,9 +781,25 @@ class TestDualScanpathAnimation:
         assert hasattr(fig, "frames")
         # One frame per distinct fixation onset across both scanpaths.
         assert len(fig.frames) == 4
-        # Both trails appear in the legend so the two readers are tellable apart.
-        legend_names = [t.name for t in fig.data if t.showlegend]
-        assert len(legend_names) == 2
+        # A/B legend is off by default (CMP-2) — the flat colours already tell the
+        # two readers apart.
+        assert [t.name for t in fig.data if t.showlegend] == []
+
+    def test_dual_animation_legend_when_enabled(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        # With show_legend=True both trails appear in the legend (CMP-2).
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+            fixations_b=self._second_fixations(),
+            show_legend=True,
+        )
+        assert len([t.name for t in fig.data if t.showlegend]) == 2
 
     def test_dual_animation_ignores_color_by(
         self, normalized_words_df, normalized_fixations_df
@@ -1125,22 +1141,42 @@ class TestPlotEnhancements:
         fig = self._figure(synthetic_words_df, synthetic_fixations_df)
         assert fig.layout.plot_bgcolor is None
 
-    def test_out_of_text_overlay_trace(
+    def test_out_of_bounds_overlay_trace(
         self, synthetic_words_df, synthetic_fixations_df
     ):
-        # The synthetic trial has exactly one out-of-text fixation.
+        # The synthetic trial has exactly one out-of-bounds fixation (PRE-2).
         fig = self._figure(
-            synthetic_words_df, synthetic_fixations_df, highlight_out_of_text=True
+            synthetic_words_df,
+            synthetic_fixations_df,
+            fixation_flags={
+                "oob": {"mode": "Highlight", "symbol": "x", "color": "#d62728"}
+            },
         )
-        oot = [t for t in fig.data if t.name == "Out-of-text"]
-        assert len(oot) == 1
-        assert len(oot[0].x) == 1  # one off-text fixation
+        oob = [t for t in fig.data if t.name == "Out of bounds"]
+        assert len(oob) == 1
+        assert len(oob[0].x) == 1  # one off-text fixation
 
-    def test_out_of_text_overlay_absent_by_default(
+    def test_out_of_bounds_discard_drops_fixation(
+        self, synthetic_words_df, synthetic_fixations_df
+    ):
+        # Discarding out-of-bounds fixations removes them from the marker trace
+        # (viz-only) without adding a highlight overlay.
+        base = self._figure(synthetic_words_df, synthetic_fixations_df)
+        n_base = len([t for t in base.data if t.name == "Fixations"][0].x)
+        fig = self._figure(
+            synthetic_words_df,
+            synthetic_fixations_df,
+            fixation_flags={"oob": {"mode": "Discard"}},
+        )
+        n_kept = len([t for t in fig.data if t.name == "Fixations"][0].x)
+        assert n_kept == n_base - 1
+        assert not any(t.name == "Out of bounds" for t in fig.data)
+
+    def test_fixation_flags_absent_by_default(
         self, synthetic_words_df, synthetic_fixations_df
     ):
         fig = self._figure(synthetic_words_df, synthetic_fixations_df)
-        assert not any(t.name == "Out-of-text" for t in fig.data)
+        assert not any(t.name in ("Out of bounds", "Short", "Long") for t in fig.data)
 
     def test_color_by_line_legend(self, synthetic_words_df, synthetic_fixations_df):
         # Two lines in the layout -> two "line:" legend entries.

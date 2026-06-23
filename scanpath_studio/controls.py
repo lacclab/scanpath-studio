@@ -5,22 +5,24 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
+from streamlit_sortables import sort_items
 
 from .annotations import known_tags
 from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
-    COMPARISON_PALETTE,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
+    OUT_OF_TEXT_COLOR,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     WORD_LABEL_COLOR,
+    compare_palette_color,
 )
 from .data import frame_fingerprint
 
@@ -66,8 +68,25 @@ _VIZ_WIDGET_DEFAULTS = {
     # Session State API" warning when a restore pre-sets them.
     "global_critical_span_style": "Mark text",
     "global_span_border_color": "#000000",
-    "global_highlight_out_of_text": False,
-    "global_out_of_text_symbol": "x",
+    # Fixation classification (viz-only — PRE-2). SHORT / LONG / OUT-OF-BOUNDS
+    # each get a mode (Off | Highlight | Discard); Highlight overlays a marker in
+    # the chosen symbol+colour, Discard hides them from the plot only (reading
+    # measures and export tables are untouched). Short/long thresholds in ms
+    # follow eyekit's discard_short (~80) / discard_long (~800).
+    "global_fixclass_short_mode": "Off",
+    "global_fixclass_short_threshold_ms": 80,
+    "global_fixclass_short_symbol": "triangle-up-open",
+    "global_fixclass_short_color": "#ff7f0e",
+    "global_fixclass_long_mode": "Off",
+    "global_fixclass_long_threshold_ms": 800,
+    "global_fixclass_long_symbol": "square-open",
+    "global_fixclass_long_color": "#9467bd",
+    "global_fixclass_oob_mode": "Off",
+    "global_fixclass_oob_symbol": "x",
+    "global_fixclass_oob_color": OUT_OF_TEXT_COLOR,
+    # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
+    # default — the per-scanpath colours already tell the readings apart.
+    "global_show_compare_legend": False,
     # Colour-bar styling (Axes & color bars expander).
     "global_colorbar_orientation": "Vertical",
     "global_colorbar_tickangle": 0,
@@ -84,7 +103,88 @@ _OUT_OF_TEXT_MARKERS = {
     "square-open": "🟦 Square",
     "star": "⭐ Star",
     "triangle-up-open": "🔺 Triangle",
+    "triangle-down-open": "🔻 Triangle (down)",
 }
+
+# Fixation-classification modes (PRE-2): a category can be left alone, marked with
+# an overlay marker, or hidden from the plot (viz-only — never changes measures).
+_FIXCLASS_MODES = ("Off", "Highlight", "Discard")
+
+
+def _render_fixclass_category(
+    key_prefix: str, label: str, *, threshold_label: Optional[str] = None
+) -> None:
+    """Render one fixation-classification category (PRE-2) inside the Fixation popover.
+
+    A mode radio (Off / Highlight / Discard); when not Off and ``threshold_label``
+    is given, a ms threshold number input; when Highlight, a marker + colour picker.
+    All values ride ``global_fixclass_{key_prefix}_*`` keys (seeded in
+    ``_VIZ_WIDGET_DEFAULTS``)."""
+    mode = st.radio(
+        label,
+        options=_FIXCLASS_MODES,
+        horizontal=True,
+        key=f"global_fixclass_{key_prefix}_mode",
+        help="Highlight marks these fixations with an overlay marker; Discard hides "
+        "them from the plot only (reading measures and exported tables are "
+        "unchanged).",
+    )
+    if threshold_label is not None and mode != "Off":
+        st.number_input(
+            threshold_label,
+            min_value=1,
+            step=10,
+            key=f"global_fixclass_{key_prefix}_threshold_ms",
+        )
+    if mode == "Highlight":
+        st.selectbox(
+            "Marker",
+            options=list(_OUT_OF_TEXT_MARKERS),
+            format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
+            key=f"global_fixclass_{key_prefix}_symbol",
+        )
+        st.color_picker("Color", key=f"global_fixclass_{key_prefix}_color")
+
+
+def _render_fixation_cleaning() -> None:
+    """The PRE-2 'Classify fixations' block (short / long / out-of-bounds), rendered
+    inside the ⚙ Fixation style popover. Viz-only: highlight or discard, with
+    customizable short/long thresholds, all on the spot."""
+    st.divider()
+    st.caption("Classify fixations (visual only)")
+    _render_fixclass_category(
+        "short", "Short fixations", threshold_label="Short threshold (ms)"
+    )
+    _render_fixclass_category(
+        "long", "Long fixations", threshold_label="Long threshold (ms)"
+    )
+    _render_fixclass_category("oob", "Out-of-bounds fixations")
+
+
+def _collect_fixation_flags() -> Dict:
+    """Build the ``fixation_flags`` dict the figure builder consumes from the
+    ``global_fixclass_*`` session keys (PRE-2). One entry per category; ``oob`` has
+    no threshold."""
+    ss = st.session_state
+    return {
+        "short": {
+            "mode": ss.get("global_fixclass_short_mode", "Off"),
+            "threshold_ms": float(ss.get("global_fixclass_short_threshold_ms") or 80),
+            "symbol": ss.get("global_fixclass_short_symbol") or "triangle-up-open",
+            "color": ss.get("global_fixclass_short_color") or "#ff7f0e",
+        },
+        "long": {
+            "mode": ss.get("global_fixclass_long_mode", "Off"),
+            "threshold_ms": float(ss.get("global_fixclass_long_threshold_ms") or 800),
+            "symbol": ss.get("global_fixclass_long_symbol") or "square-open",
+            "color": ss.get("global_fixclass_long_color") or "#9467bd",
+        },
+        "oob": {
+            "mode": ss.get("global_fixclass_oob_mode", "Off"),
+            "symbol": ss.get("global_fixclass_oob_symbol") or "x",
+            "color": ss.get("global_fixclass_oob_color") or OUT_OF_TEXT_COLOR,
+        },
+    }
 
 
 # Quick-view presets: one click sets the *layer* toggles to a focused subset, so
@@ -362,6 +462,7 @@ def column_mapping_ui(
     use_expander: bool = True,
     only_keys: Optional[List[str]] = None,
     header: bool = True,
+    detected_label: str = "auto-detected",
 ) -> Dict[str, Optional[str]]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -390,6 +491,13 @@ def column_mapping_ui(
             key=f"{state_key_prefix}_{field_key}",
             help=help_text,
         )
+        # Surface what auto-detection found for this field (ENG-9) — and flag when
+        # the user has overridden it — so the mapping isn't silently inferred.
+        if default and default in df.columns:
+            if chosen != default and chosen != NONE_OPTION:
+                st.caption(f"✨ {detected_label} `{default}` · overridden")
+            else:
+                st.caption(f"✨ {detected_label} `{default}`")
         return None if chosen == NONE_OPTION else chosen
 
     host = container if container is not None else st.sidebar
@@ -469,6 +577,8 @@ def column_mapping_ui(
                     key=state_key,
                     help=spec.get("help"),
                 )
+                if default and default in df.columns:
+                    st.caption(f"✨ {detected_label} `{default}`")
                 if not chosen_cols:
                     mapping[key] = None
                 elif len(chosen_cols) == 1:
@@ -626,7 +736,7 @@ def _seed_compare_styles() -> None:
     """Seed the per-scanpath comparison styling keys (so the collected dicts have
     values even when the relevant layer popover isn't open this run)."""
     for idx, _ in _COMPARE_SCANPATHS:
-        default_color = COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
+        default_color = compare_palette_color(idx)
         st.session_state.setdefault(f"cmp{idx}_fix_color", default_color)
         st.session_state.setdefault(f"cmp{idx}_saccade_color", default_color)
         st.session_state.setdefault(f"cmp{idx}_saccade_style", "Solid")
@@ -673,7 +783,7 @@ def _collect_compare_styles() -> tuple[dict, dict]:
     the ``cmp{idx}_*`` session keys (rendered under each layer's popover)."""
     styles: list[dict] = []
     for idx, _ in _COMPARE_SCANPATHS:
-        default_color = COMPARISON_PALETTE[idx % len(COMPARISON_PALETTE)]
+        default_color = compare_palette_color(idx)
         styles.append(
             dict(
                 fix_color=st.session_state.get(f"cmp{idx}_fix_color", default_color),
@@ -874,8 +984,9 @@ def _collect_viz_settings(
         highlight_text_color=ss.get("global_highlight_text_color"),
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
         color_by_line=color_by == "line",
-        highlight_out_of_text=bool(ss.get("global_highlight_out_of_text")),
-        out_of_text_symbol=ss.get("global_out_of_text_symbol") or "x",
+        # Fixation classification (PRE-2) + compare-overlay legend (CMP-2).
+        fixation_flags=_collect_fixation_flags(),
+        show_compare_legend=bool(ss.get("global_show_compare_legend")),
         span_border_color=ss.get("global_span_border_color", "#000000"),
         colorbar_orientation=ss.get("global_colorbar_orientation") or "Vertical",
         colorbar_tickangle=int(ss.get("global_colorbar_tickangle") or 0),
@@ -982,62 +1093,71 @@ def sidebar_controls(
     # Values for off layers are read back from session_state by
     # `_collect_viz_settings`, so the returned dict always carries every key.
 
+    # In compare mode the overlay uses flat per-scanpath colours, so the global
+    # fixation/saccade appearance controls are dead — hide them and show only the
+    # per-scanpath controls (CMP-4). Shared toggles (Fixation index, Direction
+    # arrows) stay.
+    comparing = bool(st.session_state.get("single_compare_toggle"))
+
     # --- Fixations --------------------------------------------------------
     show_fix = viz.toggle("**Fixations**", key="global_show_fix")
     if show_fix:
         with viz.popover("⚙️ Fixation style", width="stretch"):
-            color_by = st.selectbox(
-                "Color fixations by",
-                options=color_fields,
-                key="global_color_by",
-                help="Fixation marker colour. Pick a column, or 'line' to tint each "
-                "fixation by the text line it lands on.",
-            )
-            st.slider(
-                "Size",
-                4,
-                40,
-                key="global_marker_size_range",
-                help="Fixation marker size (px).",
-            )
-            st.checkbox(
-                "Hollow circles",
-                key="global_hollow_fixations",
-                help="Draw fixation markers as outlines only (filled by default).",
-            )
-            st.selectbox(
-                "Colorscale",
-                options=COLORSCALES,
-                key="global_fixation_colorscale",
-                help="Colour palette for fixation markers when colouring by numeric "
-                "values.",
-            )
-            raw_cmin = (
-                trial_fixations[color_by].min()
-                if color_by in trial_fixations.columns
-                and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
-                else None
-            )
-            raw_cmax = trial_fixations[color_by].max() if raw_cmin is not None else None
-            if pd.notna(raw_cmin) and pd.notna(raw_cmax):
-                # Integer bounds + step so the range reads as whole numbers
-                # (durations, surprisal, … all read cleaner as ints); values stay
-                # floats so a restored config built on different data clamps in.
-                cmin = float(math.floor(raw_cmin))
-                cmax = float(math.ceil(raw_cmax))
-                cmax_eff = cmax if cmax > cmin else cmin + 1.0
-                _clamp_range("global_fixation_color_range", cmin, cmax_eff)
-                st.session_state.setdefault(
-                    "global_fixation_color_range", (cmin, cmax_eff)
+            if not comparing:
+                color_by = st.selectbox(
+                    "Color fixations by",
+                    options=color_fields,
+                    key="global_color_by",
+                    help="Fixation marker colour. Pick a column, or 'line' to tint "
+                    "each fixation by the text line it lands on.",
                 )
                 st.slider(
-                    "Fixation color range",
-                    min_value=cmin,
-                    max_value=cmax_eff,
-                    step=1.0,
-                    format="%d",
-                    key="global_fixation_color_range",
+                    "Size",
+                    4,
+                    40,
+                    key="global_marker_size_range",
+                    help="Fixation marker size (px).",
                 )
+                st.checkbox(
+                    "Hollow circles",
+                    key="global_hollow_fixations",
+                    help="Draw fixation markers as outlines only (filled by default).",
+                )
+                st.selectbox(
+                    "Colorscale",
+                    options=COLORSCALES,
+                    key="global_fixation_colorscale",
+                    help="Colour palette for fixation markers when colouring by "
+                    "numeric values.",
+                )
+                raw_cmin = (
+                    trial_fixations[color_by].min()
+                    if color_by in trial_fixations.columns
+                    and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
+                    else None
+                )
+                raw_cmax = (
+                    trial_fixations[color_by].max() if raw_cmin is not None else None
+                )
+                if pd.notna(raw_cmin) and pd.notna(raw_cmax):
+                    # Integer bounds + step so the range reads as whole numbers
+                    # (durations, surprisal, … all read cleaner as ints); values
+                    # stay floats so a restored config on different data clamps in.
+                    cmin = float(math.floor(raw_cmin))
+                    cmax = float(math.ceil(raw_cmax))
+                    cmax_eff = cmax if cmax > cmin else cmin + 1.0
+                    _clamp_range("global_fixation_color_range", cmin, cmax_eff)
+                    st.session_state.setdefault(
+                        "global_fixation_color_range", (cmin, cmax_eff)
+                    )
+                    st.slider(
+                        "Fixation color range",
+                        min_value=cmin,
+                        max_value=cmax_eff,
+                        step=1.0,
+                        format="%d",
+                        key="global_fixation_color_range",
+                    )
             show_order = st.checkbox("Fixation index", key="global_show_order")
             if show_order:
                 st.color_picker(
@@ -1054,23 +1174,14 @@ def sidebar_controls(
                     "then scaled to fit the column, so on-screen it is a touch "
                     "smaller). Default 10.",
                 )
-            out_of_text = st.checkbox(
-                "❌ Mark out-of-text fixations",
-                key="global_highlight_out_of_text",
-                help="Flag fixations that fall outside every word box.",
-            )
-            if out_of_text:
-                st.selectbox(
-                    "Out-of-text marker",
-                    options=list(_OUT_OF_TEXT_MARKERS),
-                    format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
-                    key="global_out_of_text_symbol",
-                    help="Symbol drawn on each out-of-text fixation.",
-                )
+            # Fixation classification (PRE-2): short / long / out-of-bounds, each
+            # highlight-or-discard with on-the-spot thresholds. Single-figure only,
+            # so hidden in compare mode.
+            if not comparing:
+                _render_fixation_cleaning()
             # When comparing two trials, the per-scanpath fixation styling lives
             # here (under the Fixation settings), not in a separate panel.
-            if st.session_state.get("single_compare_toggle"):
-                st.divider()
+            if comparing:
                 _render_compare_fix_styles()
 
     # --- Saccades ---------------------------------------------------------
@@ -1083,32 +1194,29 @@ def sidebar_controls(
                 help="Draw an arrowhead on each saccade pointing in the gaze "
                 "direction.",
             )
-            st.color_picker(
-                "Saccade color",
-                key="global_saccade_color",
-                help="Colour of the saccade lines and direction arrows (single "
-                "scanpath; two-trial comparisons use the per-scanpath controls "
-                "below).",
-            )
-            st.segmented_control(
-                "Saccade line style",
-                options=list(SACCADE_DASH_OPTIONS.keys()),
-                key="global_saccade_style",
-                help="Line style for the saccade traces.",
-            )
-            st.slider(
-                "Saccade line width",
-                min_value=SACCADE_WIDTH_BOUNDS[0],
-                max_value=SACCADE_WIDTH_BOUNDS[1],
-                step=0.5,
-                format="%.1f px",
-                key="global_saccade_width",
-                help="Thickness of the saccade lines (single scanpath; two-trial "
-                "comparisons use the per-scanpath controls below). Default 2.",
-            )
+            if not comparing:
+                st.color_picker(
+                    "Saccade color",
+                    key="global_saccade_color",
+                    help="Colour of the saccade lines and direction arrows.",
+                )
+                st.segmented_control(
+                    "Saccade line style",
+                    options=list(SACCADE_DASH_OPTIONS.keys()),
+                    key="global_saccade_style",
+                    help="Line style for the saccade traces.",
+                )
+                st.slider(
+                    "Saccade line width",
+                    min_value=SACCADE_WIDTH_BOUNDS[0],
+                    max_value=SACCADE_WIDTH_BOUNDS[1],
+                    step=0.5,
+                    format="%.1f px",
+                    key="global_saccade_width",
+                    help="Thickness of the saccade lines. Default 2.",
+                )
             # Per-scanpath saccade styling for the two-trial comparison.
-            if st.session_state.get("single_compare_toggle"):
-                st.divider()
+            if comparing:
                 _render_compare_saccade_styles()
 
     # --- Text -------------------------------------------------------------
@@ -1562,17 +1670,19 @@ def _default_chip_fields(available: List[str]) -> List[str]:
 def render_trial_chip_picker(
     words: pd.DataFrame, fixations: pd.DataFrame, host
 ) -> None:
-    """Render the sidebar multiselect that configures which fields appear as the
-    ``Field = Value`` chips above the scanpath (read by
-    ``tabs._render_trial_condition_chips`` via ``st.session_state['trial_chip_fields']``).
+    """Render the inline **Edit chips** control: choose which ``Field = Value``
+    chips appear above the scanpath and **drag to reorder** them (UX-1 / UX-1a).
+
+    Two drag buckets — *Shown* (in display order) and *Available* — via
+    ``streamlit_sortables.sort_items``: drag a field between buckets to show / hide
+    it, and within *Shown* to reorder. The resulting order is written to the plain
+    session key ``trial_chip_fields`` (read by ``tabs._render_trial_condition_chips``).
 
     Only *trial-level* fields are offered (constant within a trial) plus the
-    computed summary stats — so the chips never suggest a per-word column whose
-    single value would mislead. The trial-level set is computed once (sampling the
-    first trial) and cached per column-signature; a **Refresh** button recomputes
-    it on demand. Default seeded once (participant + text + common conditions +
-    summary); the user can change it any time. Stale picks are pruned so the
-    multiselect never raises on a missing option."""
+    computed summary stats, so a chip never shows a per-word column whose single
+    value would mislead. The trial-level set is computed once (sampling the first
+    trial) and cached per column-signature; a **Refresh** button recomputes it.
+    Default seeded once (participant + text + common conditions + summary)."""
     # Cache the trial-level field set per column-signature (stable across trials /
     # filters within a dataset), recomputed on a dataset/column change or Refresh.
     signature = (tuple(words.columns), tuple(fixations.columns))
@@ -1587,20 +1697,50 @@ def render_trial_chip_picker(
     available = _chip_field_options(words, fixations, cache["fields"])
     if not available:
         return
+
+    # Display labels must be unique to stay invertible: some fields humanize to the
+    # same text (e.g. two text-id columns both read "Text"), so disambiguate.
+    label_to_key: Dict[str, str] = {}
+    key_to_label: Dict[str, str] = {}
+    for key in available:
+        base = _chip_option_label(key)
+        label = base if base not in label_to_key else f"{base} ({key})"
+        label_to_key[label] = key
+        key_to_label[key] = label
+
+    # Current selection/order, pruned to what's available + seeded once.
     if "trial_chip_fields" in st.session_state:
         st.session_state["trial_chip_fields"] = [
             f for f in st.session_state["trial_chip_fields"] if f in available
         ]
     st.session_state.setdefault("trial_chip_fields", _default_chip_fields(available))
-    host.multiselect(
-        "Chips above the plot",
-        options=available,
-        format_func=_chip_option_label,
-        key="trial_chip_fields",
-        help="Trial-level fields shown as a `Field = Value` chip strip above the "
-        "scanpath. Only fields constant within a trial are offered (plus the "
-        "summary stats). Set it up here; change it any time.",
+    selected = list(st.session_state["trial_chip_fields"])
+    hidden = [k for k in available if k not in selected]
+
+    host.caption(
+        "Drag fields between **Shown** and **Available**, and reorder within "
+        "**Shown** — these chips appear above the scanpath."
     )
+    buckets = [
+        {
+            "header": "Shown · drag to reorder",
+            "items": [key_to_label[k] for k in selected],
+        },
+        {"header": "Available", "items": [key_to_label[k] for k in hidden]},
+    ]
+    with host:
+        # Key varies with the field universe so the component re-mounts (rather than
+        # keeping a stale drag order) when the dataset / columns change.
+        result = sort_items(
+            buckets,
+            multi_containers=True,
+            direction="vertical",
+            key=f"trial_chip_sort_{abs(hash(signature))}",
+        )
+    shown_labels = result[0]["items"] if result else []
+    st.session_state["trial_chip_fields"] = [
+        label_to_key[lbl] for lbl in shown_labels if lbl in label_to_key
+    ]
     host.button(
         "🔄 Refresh fields",
         key="trial_chip_refresh",

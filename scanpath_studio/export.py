@@ -580,9 +580,7 @@ def bulk_export(
                         ),
                         background_color=settings.get("background_color"),
                         color_by_line=settings.get("color_by_line", False),
-                        highlight_out_of_text=settings.get(
-                            "highlight_out_of_text", False
-                        ),
+                        fixation_flags=settings.get("fixation_flags"),
                         saccade_color=settings.get("saccade_color", SACCADE_COLOR),
                         saccade_style=settings.get("saccade_style", "solid"),
                         saccade_width=settings.get(

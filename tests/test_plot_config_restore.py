@@ -188,10 +188,23 @@ class TestPlotConfigRestore:
         }
         config["highlighting"] = {
             "critical_span_style": "Mark border",
-            "highlight_out_of_text": True,
+            "fixation_flags": {
+                "short": {
+                    "mode": "Discard",
+                    "threshold_ms": 70,
+                    "symbol": "triangle-up-open",
+                    "color": "#ff7f0e",
+                },
+                "long": {
+                    "mode": "Off",
+                    "threshold_ms": 900,
+                    "symbol": "square-open",
+                    "color": "#9467bd",
+                },
+                "oob": {"mode": "Highlight", "symbol": "star", "color": "#d62728"},
+            },
             "highlight_text_color": "#fedcba",
             "background_color": "#222222",
-            "out_of_text_symbol": "star",
             "span_border_color": "#0a0b0c",
         }
         config["compare"] = [
@@ -227,7 +240,9 @@ class TestPlotConfigRestore:
         assert ss["global_line_spacing"] == 2.5
         assert ss["global_font_family"] == "Courier New"
         assert ss["global_critical_span_style"] == "Mark border"
-        assert ss["global_highlight_out_of_text"] is True
+        assert ss["global_fixclass_oob_mode"] == "Highlight"
+        assert ss["global_fixclass_short_mode"] == "Discard"
+        assert ss["global_fixclass_short_threshold_ms"] == 70
         assert ss["global_saccade_style"] == "Dashed"
         assert ss["global_saccade_width"] == 4.0
         assert ss["global_hollow_fixations"] is True
@@ -239,7 +254,7 @@ class TestPlotConfigRestore:
         assert ss["global_colorbar_orientation"] == "Horizontal"
         assert ss["global_colorbar_tickangle"] == 45
         assert ss["global_colorbar_tickfont_size"] == 14
-        assert ss["global_out_of_text_symbol"] == "star"
+        assert ss["global_fixclass_oob_symbol"] == "star"
         assert ss["global_span_border_color"] == "#0a0b0c"
         # Per-scanpath comparison styling round-trips (raw widget values).
         assert ss["cmp0_fix_color"] == "#111111"
@@ -386,12 +401,15 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         "scale_text_to_boxes": True,
         "line_spacing": 3.0,
         "critical_span_style": "Mark border",
-        "highlight_out_of_text": True,
+        "fixation_flags": {
+            "short": {"mode": "Off", "threshold_ms": 80},
+            "long": {"mode": "Off", "threshold_ms": 800},
+            "oob": {"mode": "Highlight", "symbol": "star", "color": "#d62728"},
+        },
         "highlight_text_color": "#fedcba",
         "background_color": "#222222",
         "text_color": "#010203",
         "saccade_color": "#6f42c1",
-        "out_of_text_symbol": "star",
         "span_border_color": "#0a0b0c",
         "colorbar_orientation": "Horizontal",
         "colorbar_tickangle": 30,
@@ -463,7 +481,11 @@ def test_build_studio_config_includes_provenance_and_round_trips():
     assert cfg["coloring"]["colorbar_orientation"] == "Horizontal"
     assert cfg["coloring"]["colorbar_tickangle"] == 30
     assert cfg["coloring"]["colorbar_tickfont_size"] == 14
-    assert cfg["highlighting"]["out_of_text_symbol"] == "star"
+    assert cfg["highlighting"]["fixation_flags"]["oob"] == {
+        "mode": "Highlight",
+        "symbol": "star",
+        "color": "#d62728",
+    }
     assert cfg["highlighting"]["span_border_color"] == "#0a0b0c"
     assert cfg["compare"][0]["fix_color"] == "#111111"
     assert cfg["compare"][0]["hollow"] is True

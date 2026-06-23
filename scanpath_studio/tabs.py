@@ -19,7 +19,9 @@ from scanpath_studio.aggregation import (
     text_read_counts,
 )
 from scanpath_studio.animation_export import (
+    CHROME_INSTALL_HINT,
     AnimationExportError,
+    chrome_available,
     export_animation,
     mime_for,
 )
@@ -32,6 +34,19 @@ from scanpath_studio.constants import (
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     WORD_LABEL_COLOR,
+    compare_palette_color,
+)
+from scanpath_studio.controls import (
+    FIX_FIELD_SPECS,
+    RAW_GAZE_FIELD_SPECS,
+    SUMMARY_CHIP_FIELDS,
+    WORD_FIELD_SPECS,
+    _collect_compare_styles,
+    column_mapping_ui,
+    render_narrow_by,
+    render_trial_chip_picker,
+    render_trial_filters,
+    sidebar_controls,
 )
 from scanpath_studio.data import (
     compute_word_metrics,
@@ -43,16 +58,6 @@ from scanpath_studio.data import (
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
-)
-from scanpath_studio.controls import (
-    FIX_FIELD_SPECS,
-    RAW_GAZE_FIELD_SPECS,
-    SUMMARY_CHIP_FIELDS,
-    WORD_FIELD_SPECS,
-    column_mapping_ui,
-    render_narrow_by,
-    render_trial_filters,
-    sidebar_controls,
 )
 from scanpath_studio.export import (
     ExportProgress,
@@ -270,12 +275,13 @@ def _render_save_plot_button(
             scale=3 if fmt == "PNG" else 1,
         )
     except Exception as exc:
-        st.warning(
-            f"Could not render {fmt}: {exc}\n\n"
-            "Static image export (PNG/SVG/PDF) needs a Chrome/Chromium browser "
-            "for Kaleido. On Streamlit Cloud this is installed via `packages.txt`; "
-            "if it still fails, choose the **HTML** format above — it needs no browser."
+        hint = (
+            CHROME_INSTALL_HINT
+            if not chrome_available()
+            else "On Streamlit Cloud Chrome is installed via `packages.txt`; if it "
+            "still fails, choose the **HTML** format above — it needs no browser."
         )
+        st.warning(f"Could not render {fmt}: {exc}\n\n{hint}")
         return
     st.download_button(
         f"⬇ Download {fmt}",
@@ -337,6 +343,11 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     if n_frames == 0:
         st.info("Nothing to animate for this trial.")
         return
+
+    # Pre-flight (ENG-10): GIF/MP4 need Chrome — warn before the user waits on a
+    # render that can only fail, and point at the fix + the browser-free HTML.
+    if not chrome_available():
+        st.warning(f"{fmt} export can't run here. {CHROME_INSTALL_HINT}", icon="⚠️")
 
     frame_ms = playback_ms / n_frames if n_frames else 16.0
     clip_s = playback_ms / 1000.0
@@ -476,8 +487,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
         ),
         color_by_line=viz_settings.get("color_by_line", False),
-        highlight_out_of_text=viz_settings.get("highlight_out_of_text", False),
-        out_of_text_symbol=viz_settings.get("out_of_text_symbol", "x"),
+        fixation_flags=viz_settings.get("fixation_flags"),
         span_border_color=viz_settings.get("span_border_color", "#000000"),
         colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
         colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
@@ -549,7 +559,7 @@ def _cached_model_scanpaths(
     )
 
 
-def _render_comparison_controls(
+def _render_compare_selector(
     combos: pd.DataFrame,
     selection_mode: str,
     selected_participant: str,
@@ -557,49 +567,109 @@ def _render_comparison_controls(
     selected_text: Optional[str],
     animate: bool = False,
 ) -> tuple[Optional[str], Optional[str], str]:
-    """Render comparison toggle and trial selector, return (participant, trial, layout).
+    """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
-    When ``animate`` is on the layout is forced to "overlay" — an animated
-    comparison co-animates both scanpaths on one clock, so side-by-side /
-    stacked don't apply (TODO 1.17c) and the layout picker is hidden.
-
-    Styled like a layer: a **toggle** plus a ⚙ **popover** for the configuration
-    (the second-trial picker + the overlay/side-by-side/stacked layout).
-    """
-    compare_enabled = st.toggle(
-        "**Compare**",
-        value=False,
-        key="single_compare_toggle",
-        help=(
-            "Co-animate a second reading on one clock."
-            if animate
-            else "Overlay another trial's scanpath or view them side by side."
-        ),
-    )
-
-    if not compare_enabled:
-        return None, None, "overlay"
-
-    comparison_options = build_comparison_options(
+    Mirrors the main trial picker's format — an A/B legend line, then a
+    ``selectbox`` + scrubbing ``select_slider`` + ◀ ▶ step buttons — plus a ⚙
+    popover for the overlay/side-by-side/stacked layout and the show-A/B-legend
+    toggle (CMP-2). The A/B colour swatches read the same per-scanpath styles the
+    figure draws (CMP-3), so they always match. Returns
+    ``(participant, trial, layout)``; ``layout`` is forced to overlay when
+    animating (an animated comparison co-animates both on one clock)."""
+    options = build_comparison_options(
         combos, selection_mode, selected_participant, selected_trial, selected_text
     )
-
-    if not comparison_options:
+    if not options:
         st.info("No other trials available for comparison.")
         return None, None, "overlay"
 
-    option_labels = [opt[2] for opt in comparison_options]
-    label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in comparison_options}
+    labels = [opt[2] for opt in options]
+    label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in options}
 
-    layout = "overlay"
-    with st.popover("⚙️ Compare options", width="stretch"):
-        selected_compare_label = st.selectbox(
-            "Compare with trial",
-            options=option_labels,
-            key="single_compare_trial",
-            help="★ indicates same text as primary trial."
-            + (" Animated comparison overlays both on one clock." if animate else ""),
+    # A/B colours from the same per-scanpath styles the figure uses (CMP-3).
+    style_a, style_b = _collect_compare_styles()
+    color_a = style_a.get("fix_color", compare_palette_color(0))
+    color_b = style_b.get("fix_color", compare_palette_color(1))
+    primary_label = friendly_trial_label(
+        selected_participant, selected_trial, selected_text, set()
+    )
+
+    sel_key = "single_compare_trial"
+    pos_key = "single_compare_pos"
+    current = st.session_state.get(sel_key)
+    if current not in labels:
+        current = labels[0]
+        st.session_state[sel_key] = current
+    n = len(labels)
+
+    st.markdown(
+        f'<span style="color:{color_a};font-weight:700">■ A</span> '
+        f"{html.escape(str(primary_label))} &nbsp;·&nbsp; "
+        f'<span style="color:{color_b};font-weight:700">■ B</span> compared with:',
+        unsafe_allow_html=True,
+    )
+
+    if n > 1:
+        idx_of = {lbl: i for i, lbl in enumerate(labels)}
+        # Mirror the slider to the current selection before it renders.
+        st.session_state[pos_key] = current
+
+        def _on_compare_slider() -> None:
+            st.session_state[sel_key] = st.session_state[pos_key]
+
+        def _step_compare(delta: int) -> None:
+            try:
+                pos = labels.index(st.session_state.get(sel_key))
+            except ValueError:
+                pos = 0
+            st.session_state[sel_key] = labels[max(0, min(pos + delta, n - 1))]
+
+        sel_col, slider_col, prev_col, next_col, opts_col = st.columns(
+            [3, 4, 0.55, 0.55, 0.9], vertical_alignment="bottom"
         )
+        current_idx = labels.index(current)
+    else:
+        sel_col = opts_col = st
+
+    selected_compare_label = sel_col.selectbox(
+        "Compare with trial (B)",
+        options=labels,
+        key=sel_key,
+        help="★ indicates same text as the primary trial."
+        + (" Animated comparison overlays both on one clock." if animate else ""),
+        label_visibility="collapsed",
+    )
+    layout = "overlay"
+    if n > 1:
+        with slider_col:
+            st.select_slider(
+                "Compare position",
+                options=labels,
+                key=pos_key,
+                on_change=_on_compare_slider,
+                label_visibility="collapsed",
+                format_func=lambda v: f"{idx_of.get(v, 0) + 1}/{n}",
+                help=f"Scrub through the {n} candidate trials.",
+            )
+        prev_col.button(
+            "◀",
+            key="single_compare_prev",
+            on_click=_step_compare,
+            args=(-1,),
+            disabled=current_idx == 0,
+            help="Previous candidate",
+            width="stretch",
+        )
+        next_col.button(
+            "▶",
+            key="single_compare_next",
+            on_click=_step_compare,
+            args=(1,),
+            disabled=current_idx == n - 1,
+            help="Next candidate",
+            width="stretch",
+        )
+    with opts_col.popover("⚙️", width="content"):
         if not animate:
             layout_label = (
                 st.segmented_control(
@@ -615,6 +685,12 @@ def _render_comparison_controls(
                 "Side by side": "side_by_side",
                 "Stacked": "stacked",
             }.get(layout_label, "overlay")
+        st.checkbox(
+            "Show A/B legend",
+            key="global_show_compare_legend",
+            help="Show a legend naming the two scanpaths on the overlay (off by "
+            "default — the colours already tell A and B apart).",
+        )
 
     if selected_compare_label:
         participant, trial = label_to_trial[selected_compare_label]
@@ -982,7 +1058,7 @@ def _render_paragraph_panel(
                 if answer_val:
                     bits.append(f"selected **{answer_val}**")
                 if correct is not None:
-                    bits.append("✓ correct" if correct else "✗ incorrect")
+                    bits.append(":green[✓ correct]" if correct else ":red[✗ incorrect]")
                 st.markdown("**Answer:** " + " · ".join(bits))
             rendered.update({"selected_answer", "is_correct"})
 
@@ -992,9 +1068,8 @@ def _render_paragraph_panel(
                 continue
             bval = _first_bool(trial_words, col) if "correct" in col.lower() else None
             if bval is not None:
-                st.markdown(
-                    f"**{_humanize_field(col)}:** " + ("✓ yes" if bval else "✗ no")
-                )
+                mark = ":green[✓ yes]" if bval else ":red[✗ no]"
+                st.markdown(f"**{_humanize_field(col)}:** " + mark)
             else:
                 val = _first_str(trial_words, col)
                 if val:
@@ -1171,14 +1246,13 @@ def _build_studio_config(
                 "critical_span_style", "Mark text"
             ),
             "highlight_column": figure_settings.get("highlight_column", "is_in_aspan"),
-            "highlight_out_of_text": bool(
-                figure_settings.get("highlight_out_of_text", False)
-            ),
+            # Fixation classification (PRE-2): short/long/out-of-bounds highlight or
+            # discard, saved verbatim so it restores 1:1.
+            "fixation_flags": figure_settings.get("fixation_flags"),
             "highlight_text_color": figure_settings.get(
                 "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
             ),
             "background_color": figure_settings.get("background_color"),
-            "out_of_text_symbol": figure_settings.get("out_of_text_symbol", "x"),
             "span_border_color": figure_settings.get("span_border_color", "#000000"),
         },
         "raw_gaze": {
@@ -1484,6 +1558,7 @@ def _build_and_render_animation(
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+        show_legend=viz_settings.get("show_compare_legend", False),
         fixations_b=fixations_b if dual else None,
         words_b=words_b if dual else None,
         label_a=(
@@ -1666,12 +1741,13 @@ def _render_trial_condition_chips(
     key "what am I looking at" facts are visible at a glance (these chips replaced
     the Trial Info subtab).
 
-    ``fields`` is the configurable list of fields to surface (sidebar
-    ``trial_chip_fields``). The whole strip — identity/condition chips, a ``?``
-    help marker, and an inline **More** disclosure — stays on **one line**; the
-    computed summary stats live inside **More** (only fields not already shown), so
-    the plot stays tall. A data column that varies within the trial is shown (first
-    value) but flagged with ⚠️. Skips silently when nothing resolves."""
+    ``fields`` is the configurable list of fields to surface (the inline ✏️ Edit
+    chips popover). The strip — identity/condition chips + an inline **More**
+    disclosure — stays on **one line** (clipping at the edge); **More** is the
+    complete view: the full chip list (so chips clipped at any width are still
+    reachable) plus the computed summary stats. A data column that varies within
+    the trial is shown (first value) but flagged with ⚠️. Skips silently when
+    nothing resolves."""
     primary: list[tuple[str, str]] = []  # identity + conditions (inline)
     summary: list[tuple[str, str]] = []  # computed stats (inside "More")
     summary_lookup: Optional[dict] = None  # computed once, only if a summary chip
@@ -1722,27 +1798,26 @@ def _render_trial_condition_chips(
             for name, value in items
         )
 
-    # A "?" marker pointing to the sidebar picker (styled hover/focus tooltip via
-    # the .sps-chip-help::after bubble; tabindex+aria-label keep it accessible).
-    _chip_help_tip = "Change which fields show here in the sidebar → 🏷️ Trial chips"
-    help_span = (
-        f'<span class="sps-chip-help" tabindex="0" role="img" '
-        f'aria-label="{_chip_help_tip}" data-tip="{_chip_help_tip}">?</span>'
-    )
-    # The summary stats sit inside an inline <details> "More" — only fields not
-    # already shown inline — so the whole strip stays one line until expanded.
+    # The inline strip clips to one line; the **More** dropdown is the complete
+    # view — the FULL chip list (so any chip clipped at the edge is always
+    # reachable, at any width / sidebar state) plus the computed summary stats.
+    # Whether a given chip fits the line depends on the live width (and the
+    # sidebar), which Streamlit's layout makes unreliable to measure client-side,
+    # so More just always carries everything. Auto-hides via CSS (:has) when empty.
     more_html = ""
-    if summary:
+    if primary or summary:
         more_html = (
             '<details class="sps-chip-more">'
             '<summary class="sps-chip sps-chip-more-summary">More</summary>'
-            f'<div class="sps-chip-more-body">{_stat_rows(summary)}</div>'
+            '<div class="sps-chip-more-body">'
+            f'<div class="sps-chip-more-all">{_spans(primary)}</div>'
+            f"{_stat_rows(summary)}</div>"
             "</details>"
         )
     st.markdown(
         '<div class="sps-trial-chips">'
         f'<span class="sps-chips-primary">{_spans(primary)}</span>'
-        f"{help_span}{more_html}</div>",
+        f"{more_html}</div>",
         unsafe_allow_html=True,
     )
 
@@ -1809,22 +1884,29 @@ def render_single_trial_tab(
         # [More popover]. The Text/Participant multiselects narrow the trial pool;
         # "More" holds the condition + annotation filters. The specific trial is
         # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
-        nb_label, nb_text, nb_part, more_col = st.columns(
-            [1, 2.3, 2.3, 1.2], vertical_alignment="center"
-        )
-        nb_label.markdown("**Filter by**")
-        render_narrow_by(words_all, fixations_all, text_host=nb_text, part_host=nb_part)
-        with more_col:
-            more_pop = st.popover("More", width="content")
-            more_pop.caption("More ways to narrow — conditions & annotations.")
-            render_trial_filters(words_all, fixations_all, host=more_pop)
-        # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
-        selected_participant, selected_trial, selection_mode, selected_text = (
-            select_trial(combos, key_prefix="single")
-        )
-        # Slots filled once the selection is resolved (chips need the trial).
-        chips_slot = st.container()
-        plot_slot = st.container()
+        # Keyed wrapper so the welcome tour can spotlight the selection row.
+        with st.container(key="tour_grp_trial_select"):
+            nb_label, nb_text, nb_part, more_col = st.columns(
+                [1, 2.3, 2.3, 1.2], vertical_alignment="center"
+            )
+            nb_label.markdown("**Filter by**")
+            render_narrow_by(
+                words_all, fixations_all, text_host=nb_text, part_host=nb_part
+            )
+            with more_col:
+                more_pop = st.popover("More", width="content")
+                more_pop.caption("More ways to narrow — conditions & annotations.")
+                render_trial_filters(words_all, fixations_all, host=more_pop)
+            # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
+            selected_participant, selected_trial, selection_mode, selected_text = (
+                select_trial(combos, key_prefix="single")
+            )
+        # Slots filled once the selection is resolved (chips need the trial). The
+        # compare-trial selector (CMP-1) sits above the chips, below the picker.
+        # Keyed containers double as welcome-tour spotlight targets.
+        compare_slot = st.container()
+        chips_slot = st.container(key="tour_grp_chips")
+        plot_slot = st.container(key="tour_grp_plot")
 
     if not (selected_participant and selected_trial):
         return
@@ -1908,15 +1990,18 @@ def render_single_trial_tab(
                     key="single_playback_speed",
                 )
                 anim_info_slot = st.container()
-        compare_participant, compare_trial, compare_layout = (
-            _render_comparison_controls(
-                combos,
-                selection_mode,
-                selected_participant,
-                selected_trial,
-                selected_text,
-                animate=animate,
-            )
+        # Compare is a view mode (toggle here); the second-trial selector renders
+        # above the chips in the plot column (compare_slot below), mirroring the
+        # main trial picker (CMP-1).
+        compare_enabled = st.toggle(
+            "**Compare**",
+            value=False,
+            key="single_compare_toggle",
+            help=(
+                "Co-animate a second reading on one clock."
+                if animate
+                else "Overlay another trial's scanpath or view them side by side."
+            ),
         )
         st.divider()
         st.markdown("## 🎨 Visualization")
@@ -1930,6 +2015,24 @@ def render_single_trial_tab(
             has_stimulus_image=has_stimulus_image,
             words=words_filtered,
         )
+
+    # Second-trial selector + layout/legend options, rendered above the chips in
+    # the plot column (CMP-1). Filled after the rail so the per-scanpath compare
+    # styles (cmp*_ keys) are already seeded — the A/B swatches then match the
+    # figure exactly (CMP-3). Only shown when Compare is on.
+    compare_participant, compare_trial, compare_layout = None, None, "overlay"
+    if compare_enabled:
+        with compare_slot:
+            compare_participant, compare_trial, compare_layout = (
+                _render_compare_selector(
+                    combos,
+                    selection_mode,
+                    selected_participant,
+                    selected_trial,
+                    selected_text,
+                    animate=animate,
+                )
+            )
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
     effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
@@ -1968,21 +2071,37 @@ def render_single_trial_tab(
     # Condition chips above the plot — configurable via the sidebar picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
     # a second labelled strip shows the compared trial too.
-    chip_fields = st.session_state.get("trial_chip_fields") or []
     with chips_slot:
-        if comparing and compare_meta:
-            st.caption(f"**{compare_meta['label_primary']}**")
-        _render_trial_condition_chips(
-            trial_words, trial_fixations, selected_participant, chip_fields
-        )
-        if comparing and compare_meta:
-            st.caption(f"**{compare_meta['label_compare']}** (compared)")
+        # Inline "Edit chips" popover at the right end of the chip row (UX-1) —
+        # replaces the former sidebar 🏷️ Trial chips picker. Rendered before the
+        # strip reads `trial_chip_fields` so an edit/reorder applies the same run.
+        strip_col, edit_col = st.columns([13, 1], vertical_alignment="center")
+        with edit_col:
+            # Keyed container so styles.py can shrink the popover trigger to chip
+            # size and add a little space before it.
+            edit_box = st.container(key="chip_edit_box")
+            with edit_box.popover(
+                "✏️",
+                help="Edit which fields show as chips above the plot, and drag to "
+                "reorder them.",
+                width="content",
+            ):
+                render_trial_chip_picker(words_all, fixations_all, host=st.container())
+        chip_fields = st.session_state.get("trial_chip_fields") or []
+        with strip_col:
+            if comparing and compare_meta:
+                st.caption(f"**{compare_meta['label_primary']}**")
             _render_trial_condition_chips(
-                compare_meta["words"],
-                compare_meta["fixations"],
-                compare_participant,
-                chip_fields,
+                trial_words, trial_fixations, selected_participant, chip_fields
             )
+            if comparing and compare_meta:
+                st.caption(f"**{compare_meta['label_compare']}** (compared)")
+                _render_trial_condition_chips(
+                    compare_meta["words"],
+                    compare_meta["fixations"],
+                    compare_participant,
+                    chip_fields,
+                )
 
     displayed_fig = None
     save_slug = f"{selected_participant}__{selected_trial}"
@@ -2094,15 +2213,17 @@ def render_single_trial_tab(
     # must be created outside the columns to span the page width). Trial Info is
     # gone — the chip strip above the plot now carries the trial's identity,
     # conditions and summary stats (configurable via the sidebar 🏷️ Trial chips).
-    tab_annot, tab_stim, tab_export, tab_inspect, tab_share = st.tabs(
-        [
-            "📝 Annotations",
-            "Stimulus & questions",
-            "Export",
-            "🔎 Data Inspection",
-            "🔗 Share",
-        ]
-    )
+    # Keyed wrapper so the welcome tour can spotlight the per-trial subtab bar.
+    with st.container(key="tour_grp_subtabs"):
+        tab_annot, tab_stim, tab_export, tab_inspect, tab_share = st.tabs(
+            [
+                "📝 Annotations",
+                "Stimulus & questions",
+                "Export",
+                "🔎 Data Inspection",
+                "🔗 Share",
+            ]
+        )
     with tab_annot:
         render_trial_annotations(selected_participant, selected_trial, bare=True)
     with tab_stim:
@@ -2294,6 +2415,7 @@ def _render_comparison_figure(
         show_saccades=viz_settings.get("show_saccades", True),
         show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
         show_order=viz_settings.get("show_order", False),
+        show_legend=viz_settings.get("show_compare_legend", False),
         order_font_size=viz_settings.get("order_font_size"),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
         highlight_text_color=viz_settings.get(
@@ -2802,10 +2924,10 @@ def render_multiple_comparison_tab(
     #   - x/y axes + color_by: a real-only column (saccade_amplitude, surprisal…)
     #     KeyErrors / falls back to a flat colour → pin axes to x/y, colour by
     #     duration_ms (present in every frame);
-    #   - color_by_line / highlight_out_of_text: call measures helpers that group
+    #   - color_by_line / fixation_flags: call measures helpers that group
     #     by (participant_id, trial_id); the model frames' "Model N" id never
     #     matches trial_words, so every model fixation would land off-line /
-    #     out-of-text → pin both off.
+    #     out-of-bounds → pin both off.
     base_settings = _build_figure_settings(viz_settings, False)
     base_settings["raw_gaze"] = None
     base_settings["line_spacing"] = line_spacing
@@ -2816,7 +2938,7 @@ def render_multiple_comparison_tab(
         "show_raw_gaze": False,
         "color_by": "duration_ms",
         "color_by_line": False,
-        "highlight_out_of_text": False,
+        "fixation_flags": None,
     }
     panel_settings = {**real_settings, "show_word_labels": False, "show_order": False}
 
@@ -3550,6 +3672,9 @@ def _render_remap_editor(name: str, stored: dict) -> None:
             proposed,
             problems=problems.get(table_key),
             use_expander=True,
+            # Here `proposed` is the dataset's current saved mapping (the frame is
+            # already normalized), not a fresh auto-detect — label it truthfully.
+            detected_label="currently mapped",
         )
     st.session_state["_remap_pending_schemas"] = pending
 

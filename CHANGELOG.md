@@ -24,6 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to hide). Schema auto-detection now recognizes MultiplEYE columns.
 - **Upload-wizard helpers** — derive trial/participant ids from the filename
   (delimiter split or regex) and aggregate character AOIs into word boxes.
+- **Fixation classification (visual only)** — under the Fixation controls, flag
+  **short / long / out-of-bounds** fixations and either highlight them (chosen
+  marker + colour) or discard them from the plot, with editable short/long
+  duration thresholds. Affects only what's drawn — measures and exports are
+  unchanged. Replaces the old out-of-text marker toggle.
+- **Drag-to-reorder trial chips** — an inline **✏️ Edit chips** popover beside the
+  chip strip (replaces the sidebar picker): drag fields between *Shown* and
+  *Available* and reorder within *Shown*. The chip strip's **More** dropdown now
+  holds the full chip list (so any chip clipped at the line edge is always
+  reachable) alongside the summary stats.
+- **Column mapping surfaces auto-detected columns** per field (and flags when
+  you've overridden the detected default).
 
 ### Changed
 - _Internal:_ split `app.py` (4087 → ~1640 lines) into focused modules —
@@ -36,18 +48,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slider + ◀ ▶); Browse-by modes removed.
 - **Comparison styling moved into the per-layer Fixation/Saccade popovers**, beside
   the single-trial controls.
+- **Compare trial selector moved above the chips** — mirrors the main picker
+  (dropdown + slider + ◀ ▶) with A/B colour labels matching the overlay; the A/B
+  legend (static **and** animated overlay) is now optional and hidden by default;
+  the redundant global saccade / fixation controls are hidden in compare mode.
+- **Welcome tour walks the whole Scanpath screen in reading order** (plot →
+  selection → chips → rail → panels → sidebar); the redundant *Exit* button is
+  gone (the ✕ closes it).
 - **Styling & chrome polish** — saccade arrows off by default, span-border colour,
-  choosable out-of-text marker, horizontal/rotatable colour bars, tighter control
-  rail, less heading clutter, a dismiss ✕ on the welcome tour.
+  horizontal/rotatable colour bars, tighter control rail, less heading clutter,
+  a dismiss ✕ on the welcome tour.
 
 ### Fixed
+- **Trial filter resets on a dataset switch** (and is restored per-dataset when you
+  switch back), so a stale filter can't silently apply to a different corpus.
+- **Clearer image-export errors when Chrome is missing** — point to
+  `kaleido_get_chrome` / the browser-free HTML export, with a pre-flight check and
+  a warm→cold render fallback for the animation export.
 - **Stimulus image now shows in Animate mode** (was static-only).
 - **Switching public datasets re-detects the column mapping and snaps the canvas to
   that corpus' monitor** — fixes MultiplEYE pages collapsing into one trial and
   off-scale rendering.
 - **Heatmap colour matches the picker** (default now blue; style uses a radio).
 - **Save & restore captures every setting** — colour-bar orientation/ticks,
-  out-of-text marker, span-border colour, and per-scanpath comparison styling.
+  fixation classification, span-border colour, and per-scanpath comparison styling.
 - **Chips stay on one line** when space is tight.
 
 ## [0.22.0] - 2026-06-19

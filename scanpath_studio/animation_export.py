@@ -67,6 +67,34 @@ class AnimationExportError(RuntimeError):
     """
 
 
+# Actionable remediation when Kaleido can't find a Chrome/Chromium binary — the
+# usual cause of a failed GIF/MP4 (or static PNG/SVG/PDF) export (ENG-10).
+CHROME_INSTALL_HINT = (
+    "No Chrome/Chromium was found for image export. Install one with "
+    "`kaleido_get_chrome` (or `plotly_get_chrome -y`) in this environment, or from "
+    "Python run `import kaleido; kaleido.get_chrome_sync()`. The **HTML** export "
+    "needs no browser."
+)
+
+
+def chrome_available() -> bool:
+    """True if Kaleido can find a Chrome/Chromium binary, cheaply and without
+    launching it (ENG-10). Lets the UI pre-flight and gives a precise error
+    instead of a slow start-then-fail. Uses choreographer's resolver (honours the
+    ``BROWSER_PATH`` env override); returns ``False`` if it can't be probed."""
+    try:
+        from choreographer.browsers.chromium import (
+            chromium_based_browsers,
+            get_browser_path,
+        )
+    except Exception:
+        return False
+    try:
+        return get_browser_path(chromium_based_browsers) is not None
+    except Exception:
+        return False
+
+
 def mime_for(fmt: str) -> str:
     return _MIME[fmt.lower()]
 
@@ -160,14 +188,17 @@ def render_png_frames(
     height = int(base.layout.height)
     elapsed = _elapsed_labels(fig, len(frames)) if show_elapsed else None
 
+    # A single warm browser renders every frame fast; if it won't start, fall back
+    # to per-frame cold `to_image` (slow, ~10 s/frame) ONLY when Chrome is actually
+    # present (a transient/port/profile issue), mirroring export._figure_renderer.
+    # When Chrome is genuinely missing, abort early with the actionable hint.
+    cold_fallback = False
     try:
         kaleido.start_sync_server(silence_warnings=True)
     except Exception as exc:
-        raise AnimationExportError(
-            f"Could not start the Kaleido browser for image export: {exc}. "
-            "PNG/GIF/MP4 export needs a Chrome/Chromium binary; the HTML export "
-            "needs no browser."
-        ) from exc
+        if not chrome_available():
+            raise AnimationExportError(CHROME_INSTALL_HINT) from exc
+        cold_fallback = True
 
     pngs: List[bytes] = []
     try:
@@ -192,28 +223,35 @@ def render_png_frames(
                     ]
                 )
             try:
-                png = kaleido.calc_fig_sync(
-                    base,
-                    opts={
-                        "format": "png",
-                        "width": width,
-                        "height": height,
-                        "scale": scale,
-                    },
-                )
+                if cold_fallback:
+                    png = base.to_image(
+                        format="png", width=width, height=height, scale=scale
+                    )
+                else:
+                    png = kaleido.calc_fig_sync(
+                        base,
+                        opts={
+                            "format": "png",
+                            "width": width,
+                            "height": height,
+                            "scale": scale,
+                        },
+                    )
             except Exception as exc:
                 raise AnimationExportError(
-                    f"Rendering frame {k + 1}/{len(frames)} failed: {exc}. "
-                    "Static image export needs a Chrome/Chromium browser (Kaleido)."
+                    CHROME_INSTALL_HINT
+                    if not chrome_available()
+                    else f"Rendering frame {k + 1}/{len(frames)} failed: {exc}."
                 ) from exc
             pngs.append(bytes(png))
             if progress_callback is not None:
                 progress_callback(done, len(indices))
     finally:
-        try:
-            kaleido.stop_sync_server(silence_warnings=True)
-        except Exception:  # pragma: no cover - best-effort teardown
-            pass
+        if not cold_fallback:
+            try:
+                kaleido.stop_sync_server(silence_warnings=True)
+            except Exception:  # pragma: no cover - best-effort teardown
+                pass
 
     return pngs, (width, height)
 

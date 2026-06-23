@@ -15,12 +15,13 @@ through [Kaleido](https://github.com/plotly/Kaleido) v1, which drives a headless
 Chrome. `pip install` does **not** install Chrome — run this once:
 
 ```bash
-plotly_get_chrome -y
+kaleido_get_chrome        # or: plotly_get_chrome -y
 ```
 
-On **Streamlit Community Cloud** the repo-root `packages.txt` installs
-`chromium` automatically. If Chrome is unavailable, fall back to **HTML** export
-(it's browser-free).
+(From Python: `import kaleido; kaleido.get_chrome_sync()`.) On **Streamlit
+Community Cloud** the repo-root `packages.txt` installs `chromium` automatically.
+If Chrome is unavailable, fall back to **HTML** export (it's browser-free) — the
+in-app export buttons pre-flight for Chrome and point you here when it's missing.
 
 ## MP4 / GIF
 

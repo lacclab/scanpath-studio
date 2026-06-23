@@ -27,7 +27,7 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
-**UX-1 · CMP-1 · CMP-2 · CMP-3 · CMP-4**.
+_None — CMP-1…CMP-4 were signed off 2026-06-23 (see the archive)._
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -52,22 +52,7 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Pending approval`
-
-Implemented: the sidebar `🏷️ Trial chips` picker is gone; an inline **✏️ Edit chips**
-`st.popover` now sits at the right end of the chip row
-(`tabs.render_single_trial_tab`), hosting `controls.render_trial_chip_picker`.
-Polish: the redundant `?` marker removed; the ✏️ trigger shrunk to chip size with
-a little space before it; the chip strip's **More** dropdown now carries the full
-chip list (so any chip clipped at the line edge is reachable at any width / sidebar
-state) alongside the summary stats. (A client-side "move only the overflow" version
-was tried but Streamlit's plot-embed layout makes the strip width unstable to
-measure, so More just holds everything.)
-
-- _UX-1a (reorder chips in place) signed off & archived — see
-  [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-_UX-2 · UX-2a · UX-3 signed off & archived — see
+_UX-1 · UX-1a · UX-2 · UX-2a · UX-3 signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `UX-4`._
 
 ---
@@ -80,33 +65,12 @@ styling live in [`controls.py`](scanpath_studio/controls.py:622)
 `_render_compare_saccade_styles`, `_collect_compare_styles`); the overlay figure
 is built in [`plots.py`](scanpath_studio/plots.py).
 
-**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Pending approval`
-
-Implemented: the **Compare** toggle stays in the rail's View modes, but the
-second-trial selector (`tabs._render_compare_selector`) now renders above the
-chips, mirroring the main picker (selectbox + scrubbing slider + ◀ ▶) with an
-**A/B** colour-swatch label line.
-
-**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Pending approval`
-
-Implemented: `global_show_compare_legend` (default off) threads `show_legend` into
-`make_comparison_figure` / the split figure **and** the animated dual overlay
-(`make_scanpath_animation`); the static overlay reclaims the top reserve when
-hidden. Toggle lives in the compare selector's ⚙ popover.
-
-**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Pending approval`
-
-Implemented: a single `constants.compare_palette_color(idx)` is now the one source
-of truth for both the per-scanpath style seeding/collection and
-`plots._comparison_scanpath_style`, so the swatches can't drift from the figure —
-and CMP-1's A/B labels read those same resolved colours.
-
-**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Pending approval`
-
-Implemented: in compare mode the global Saccade colour/style/width **and** the
-global fixation colour-by/size/hollow/colorscale/range controls are hidden
-(they're dead for the overlay); only the per-scanpath controls + shared toggles
-(Direction arrows, Fixation index) show.
+**CMP-1 · CMP-2 · CMP-3 · CMP-4** — `Status: Done (signed off 2026-06-23)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Selector moved above
+the chips and made to mirror the main picker (trial id + ★/👤 markers, `index/N ·
+id` slider); config moved into the rail **⚙️ Compare** popover; optional A/B legend
++ figure titles removed; per-scanpath colours fixed (incl. the "fixations turn black"
+bug); and **Color fixations by** restored in compare mode.
 
 ---
 

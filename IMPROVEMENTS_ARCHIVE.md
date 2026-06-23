@@ -14,6 +14,7 @@ working tracker focused on open work.
 
 ### Groups
 [UX & Interaction](#ux--interaction) ·
+[Compare mode](#compare-mode) ·
 [Bugs](#bugs) ·
 [Engineering](#engineering)
 
@@ -21,7 +22,18 @@ working tracker focused on open work.
 
 ## UX & Interaction
 
-**UX-1a · Reorder chips in place** — `Status: Done` *(signed off 2026-06-23; sub-item of UX-1, which is still pending)*
+**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Done` *(signed off 2026-06-23)*
+
+The sidebar `🏷️ Trial chips` picker is gone; an inline **✏️ Edit chips** `st.popover`
+sits at the right end of the chip row (`tabs.render_single_trial_tab`), hosting
+`controls.render_trial_chip_picker`. Polish: the redundant `?` marker removed; the
+✏️ trigger shrunk to chip size and pulled next to **More**; the chip strip's
+**More** dropdown carries the full chip list (so any chip clipped at the line edge
+is reachable at any width / sidebar state) alongside the summary stats. (A
+client-side "move only the overflow" version was tried but Streamlit's plot-embed
+layout makes the strip width unstable to measure, so More just holds everything.)
+
+**UX-1a · Reorder chips in place** — `Status: Done` *(signed off 2026-06-23; sub-item of UX-1)*
 
 Built with `streamlit-sortables` (`sort_items`, new dependency): a two-bucket drag
 UI (*Shown · drag to reorder* / *Available*) handles membership **and** order in
@@ -43,6 +55,50 @@ only close affordance.
 
 The correctness line in `tabs._render_paragraph_panel` uses Streamlit colour
 markdown — `:green[✓ correct]` / `:red[✗ incorrect]` (and `✓ yes`/`✗ no`).
+
+---
+
+## Compare mode
+
+**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Done` *(signed off 2026-06-23)*
+
+The **Compare** toggle stays in the rail's View modes; the second-trial selector
+(`tabs._render_compare_selector`) renders above the chips and mirrors the main
+picker — the selectbox shows the **trial id** + ★ (same text) / 👤 (same
+participant) markers (a `?` spells them out), the slider shows `index/N · <trial
+id>`, options ordered stars → same-participant → rest
+(`utils.build_comparison_options` returns `(participant, trial, label, markers)`
+4-tuples). The overlay/layout + show-A/B-legend **config moved into the rail's
+⚙️ Compare popover** (`single_compare_layout`, read via session_state). The
+`■ A … ■ B compared with:` legend line is gone — each chip strip's trial id is
+coloured to its scanpath (A = primary colour, B = compared) and "(compared)" dropped.
+
+**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Done` *(signed off 2026-06-23)*
+
+`global_show_compare_legend` (default off) threads `show_legend` into
+`make_comparison_figure` / the split figure **and** the animated dual overlay
+(`make_scanpath_animation`). The **"Overlay comparison" / "Stacked / Side-by-side
+comparison" figure titles were removed** and the top reserve fully reclaimed when
+the legend is hidden. Toggle lives in the rail ⚙️ Compare popover.
+
+**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Done` *(signed off 2026-06-23)*
+
+A single `constants.compare_palette_color(idx)` is the one source of truth for the
+per-scanpath style seeding/collection and `plots._comparison_scanpath_style`. Also
+**fixed the "fixations turn black when making changes" bug** — the per-scanpath
+colour pickers (rendered only when Compare is on) desynced to black
+(`st.color_picker` without an explicit `value=`) and committed that on the next
+interaction; they now pass `value=` (no pre-seed) and a falsy colour can't leak
+(`_collect_compare_styles` / `_comparison_scanpath_style` `or default`).
+
+**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Done` *(signed off 2026-06-23)*
+
+In compare mode the global Saccade colour/style/width controls stay hidden (dead
+for the overlay). Per user feedback, **"Color fixations by" (+ Colorscale + range)
+is restored in compare** — it sets the fixation *hue* by the chosen numeric metric
+for **both** scanpaths (shared scale, one colorbar), with the per-scanpath flat
+colour kept as a *separate* field used as the A/B marker outline. Global Size /
+Hollow stay hidden (the per-scanpath versions cover those).
 
 ---
 

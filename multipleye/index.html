@@ -737,9 +737,12 @@ and <a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studi
 behind a feature flag:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">SCANPATH_PUBLIC_DATASETS</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>streamlit<span class="w"> </span>run<span class="w"> </span>streamlit_app.py
 </code></pre></div>
-<p>Then pick <strong>Public datasets → MultiplEYE</strong> and choose the session / stimulus /
-fixation source. A directory load surfaces all the rich side data (below); the
-browser-upload path supports a subset (see <em>Uploading</em> at the end).</p>
+<p>Then pick <strong>Public datasets → MultiplEYE</strong>, point <em>Data directory</em> at a session
+set (the <em>Expected files</em> panel lists the layout it looks for), and choose the
+<strong>fixation source</strong> (<code>scanpaths</code> or <code>fixations</code>). The whole session set loads —
+use the <strong>Narrow by</strong> trial filters to focus on specific readers or stimuli. A
+directory load surfaces all the rich side data (below); the browser-upload path
+supports a subset (see <em>Uploading</em> at the end).</p>
 <h2 id="how-the-corpus-is-laid-out">How the corpus is laid out<a class="headerlink" href="#how-the-corpus-is-laid-out" title="Permanent link">&para;</a></h2>
 <p>A MultiplEYE release has <strong>no identity columns</strong> — participant, session, trial,
 and stimulus are encoded only in the folder and file names.</p>

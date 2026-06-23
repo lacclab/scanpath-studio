@@ -9,12 +9,12 @@ the repo root (kept current as the code changes); this is the short version.
 | Module | Responsibility |
 |--------|----------------|
 | `app.py` | Streamlit entry point: page config, URL deep-link presets, sidebar, data load, filtering, and dispatch to the three tabs. |
-| `tabs.py` | Tab renderers: Scanpath Visualization (Annotations / Stimulus & questions / Export subtabs — Export folds in the former Bulk Export tab), Corpus Analysis (Generations + Aggregated Views subtabs), Data Inspection. |
+| `tabs.py` | Tab renderers: Scanpath Visualization (Annotations / Stimulus & questions / Export subtabs — Export folds in the former Bulk Export tab), Corpus Analysis (Per text · Per reader · Per group · Group comparison · Generations subtabs — the question-oriented analysis sections), Data Inspection. |
 | `controls.py` | Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel. |
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
 | `measures.py` | Canonical reading measures (FFD/FPRT/RPD/TFD, regressions) + geometry helpers. |
 | `plots.py` | Plotly figure builders (scanpath, animation, comparison, trends, histograms, heatmaps). |
-| `aggregation.py` | Pure corpus-level aggregation helpers for the Aggregated Views subtab. |
+| `aggregation.py` | Pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry, per-reader/cohort word profiles, distributions, group masks, difference + effect-size). |
 | `export.py` | Configurable bulk export (PNG/SVG/JSON/CSV/Parquet/mega-table). |
 | `animation_export.py` | Rasterize an animated figure to GIF/MP4. |
 | `api.py` | Headless public API (re-exported lazily from the package root). |

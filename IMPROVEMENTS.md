@@ -27,7 +27,8 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
-_None — CMP-1…CMP-4 were signed off 2026-06-23 (see the archive)._
+**AN-1 … AN-28** (the whole *Analysis & corpus views* epic — the four
+question-oriented Corpus Analysis sections + the cross-cutting controls).
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -207,145 +208,156 @@ DataFrame), build figures in [`plots.py`](scanpath_studio/plots.py) via the
 `make_*_figure` pattern, wire into [`tabs.py`](scanpath_studio/tabs.py). Add a
 smoke test per figure against the bundled sample (3 pid × 2 articles).
 
+**Status (`Pending approval`):** the whole epic is implemented. *Aggregated Views*
+is replaced by four question-oriented subtabs — **Per text · Per reader · Per
+group · Group comparison** (`render_per_text_tab` / `render_per_reader_tab` /
+`render_per_group_tab` / `render_group_comparison_tab`) — alongside *Generations
+(WIP)*. Pure helpers + a `Measure` registry live in `aggregation.py`, builders in
+`plots.py`, cross-cutting controls + cached wrappers in `tabs.py`; groups are
+defined by splitting a field **or** by two independent filter sets. Tests in
+[`tests/test_analysis_views.py`](tests/test_analysis_views.py) (unit per helper +
+smoke per figure on the bundled sample); `scipy` added for AN-21. Docs synced
+(CHANGELOG / AGENTS / `scanpath_studio/CLAUDE.md` / `docs/`).
+
 ### Per text — one `paragraph_id`/`trial_id`, many readers
 
-**AN-1 · Stacked per-reader word profiles (small multiples)** — `Status: Planned` *(primary request)*
+**AN-1 · Stacked per-reader word profiles (small multiples)** — `Status: Pending approval` *(primary request)*
 
 X = `word_id` (reading order), Y = chosen measure (TFD default; switch FFD/FPRT/
 RPD/`n_fixations`). One panel per `participant_id`, stacked with shared X
 (`make_subplots`, `shared_xaxes`). Optional faint cohort-mean overlay per panel.
 
-**AN-2 · Word × reader heatmap** — `Status: Backlog`
+**AN-2 · Word × reader heatmap** — `Status: Pending approval`
 
 Same data collapsed to one heatmap: rows = participants, cols = `word_id`, color =
 measure. Bright columns = universally hard words; bright rows = uniformly slow
 reader. Reuses word-level heatmap machinery.
 
-**AN-3 · Cohort word profile with spread band** — `Status: Backlog`
+**AN-3 · Cohort word profile with spread band** — `Status: Pending approval`
 
 Mean measure per word + shaded IQR/±1 SD band across readers — the "average
 reader of this text" with uncertainty.
 
-**AN-4 · Word difficulty annotated on the stimulus** — `Status: Backlog`
+**AN-4 · Word difficulty annotated on the stimulus** — `Status: Pending approval`
 
 The text laid out (true-to-scale renderer), each word tinted by aggregate measure
 or `skip_rate` / `regression_in_rate` — corpus-level scanpath, no fixations drawn.
 
-**AN-5 · Measure vs. linguistic feature scatter** — `Status: Backlog`
+**AN-5 · Measure vs. linguistic feature scatter** — `Status: Pending approval`
 
 Per-word mean measure vs. a bundled feature (`gpt2_surprisal`,
 `wordfreq_frequency`, `word_length`, `universal_pos`) with a trend line. OneStop
 sample ships these columns.
 
-**AN-6 · Skip / regression rate per word** — `Status: Backlog`
+**AN-6 · Skip / regression rate per word** — `Status: Pending approval`
 
 Bar/lollipop of `skip_flag` and `regression_in_flag` rates by `word_id`.
 
 ### Per participant — one `participant_id`, many trials
 
-**AN-7 · Measure distributions vs. cohort** — `Status: Backlog`
+**AN-7 · Measure distributions vs. cohort** — `Status: Pending approval`
 
 Histogram/violin/box of fixation `duration_ms`, `saccade_amplitude`, per-word
 TFD/FFD for the selected reader, with the cohort distribution behind. Optional KDE.
 
-**AN-8 · Reading speed & summary card** — `Status: Backlog`
+**AN-8 · Reading speed & summary card** — `Status: Pending approval`
 
 WPM, mean fixation duration, fixation count, regression rate, skip rate, mean
 saccade amplitude — compact stat strip + cohort percentiles.
 
-**AN-9 · Fixation duration over time** — `Status: Backlog`
+**AN-9 · Fixation duration over time** — `Status: Pending approval`
 
 X = `timestamp_ms` (or `order_in_trial`), Y = `duration_ms` — within-trial
 fatigue/settling. Faceted by trial or averaged.
 
-**AN-10 · Saccade amplitude vs. fixation duration** — `Status: Backlog`
+**AN-10 · Saccade amplitude vs. fixation duration** — `Status: Pending approval`
 
 2D density / hexbin — the classic oculomotor scatter (careful vs. skimming).
 
-**AN-11 · Progressive vs. regressive saccades** — `Status: Backlog`
+**AN-11 · Progressive vs. regressive saccades** — `Status: Pending approval`
 
 Counts/share of `is_regression` / `regression_out_flag` per trial.
 
-**AN-12 · Launch-site / landing-position curves** — `Status: Backlog`
+**AN-12 · Launch-site / landing-position curves** — `Status: Pending approval`
 
 Histogram of landing position within words (needs `first_fix_x` relative to word
 box) — the preferred-viewing-location curve. Overlaps **PRE-4**'s
 `initial_landing_position`.
 
-**AN-13 · Per-trial trend for this reader** — `Status: Backlog`
+**AN-13 · Per-trial trend for this reader** — `Status: Pending approval`
 
 The existing Trends line filtered to one participant — does this person slow down
 across the session?
 
 ### Per group — a cohort defined by the active filter
 
-**AN-14 · Group distribution summaries** — `Status: Backlog`
+**AN-14 · Group distribution summaries** — `Status: Pending approval`
 
 Per-participant distributions pooled across the group (violin/box of fixation
 duration, saccade amplitude, TFD, reading speed).
 
-**AN-15 · Group word profile** — `Status: Backlog`
+**AN-15 · Group word profile** — `Status: Pending approval`
 
 Cohort word profile (mean + band) computed within the group, for a selected text.
 
-**AN-16 · Per-reader summary table for the group** — `Status: Backlog`
+**AN-16 · Per-reader summary table for the group** — `Status: Pending approval`
 
 Sortable table, one row per participant, columns = summary stats — spot outliers.
 
-**AN-17 · Group trend** — `Status: Backlog`
+**AN-17 · Group trend** — `Status: Pending approval`
 
 Trends line averaged within the group (optionally per-participant faint behind).
 
 ### Group comparison — two groups side by side
 
-**AN-18 · Overlaid distributions** — `Status: Backlog`
+**AN-18 · Overlaid distributions** — `Status: Pending approval`
 
 Two groups' fixation-duration / saccade-amplitude / TFD distributions on shared
 axes (violin halves or overlaid KDE).
 
-**AN-19 · Difference word profile** — `Status: Backlog`
+**AN-19 · Difference word profile** — `Status: Pending approval`
 
 Per-word measure A − B along the text with a zero reference line and diverging
 colormap — *where* the groups diverge (Adv vs. Ele, L1 vs. L2).
 
-**AN-20 · Paired summary bars** — `Status: Backlog`
+**AN-20 · Paired summary bars** — `Status: Pending approval`
 
 Side-by-side group-mean bars per measure with error bars (SD / SEM / bootstrap CI).
 
-**AN-21 · Effect size + simple test** — `Status: Backlog`
+**AN-21 · Effect size + simple test** — `Status: Pending approval`
 
 Per measure: mean difference, Cohen's *d*, Mann–Whitney / t-test p-value, with a
 clear "exploratory, not pre-registered" caveat.
 
-**AN-22 · Two-group word heatmap, stacked** — `Status: Backlog`
+**AN-22 · Two-group word heatmap, stacked** — `Status: Pending approval`
 
 Group A heatmap above group B (shared word axis) for direct visual comparison.
 
 ### Cross-cutting controls for the analysis sections
 
-**AN-23 · Shared measure picker** — `Status: Backlog`
+**AN-23 · Shared measure picker** — `Status: Pending approval`
 
 One measure picker (TFD/FFD/FPRT/RPD/`n_fixations`/skip/regression) every section
 reads from.
 
-**AN-24 · Aggregation & spread choice** — `Status: Backlog`
+**AN-24 · Aggregation & spread choice** — `Status: Pending approval`
 
 Mean/median/sum aggregation and SD/IQR/SEM/bootstrap-CI spread where a band or
 error bar is drawn.
 
-**AN-25 · Normalization toggle (raw vs. z-scored within reader)** — `Status: Backlog`
+**AN-25 · Normalization toggle (raw vs. z-scored within reader)** — `Status: Pending approval`
 
 So slow and fast readers compare on shape, not absolute level.
 
-**AN-26 · Min-readers / min-trials guard** — `Status: Backlog`
+**AN-26 · Min-readers / min-trials guard** — `Status: Pending approval`
 
 Gray out / warn when a per-word cell is backed by too few observations.
 
-**AN-27 · Download the underlying tidy table per view** — `Status: Backlog`
+**AN-27 · Download the underlying tidy table per view** — `Status: Pending approval`
 
 Reuse the export plumbing so users can re-plot elsewhere.
 
-**AN-28 · Persist the active filter & visualization controls into Corpus Analysis** — `Status: Backlog`
+**AN-28 · Persist the active filter & visualization controls into Corpus Analysis** — `Status: Pending approval`
 
 The Aggregated Views subtab (`tabs.render_aggregated_views_tab`
 [`tabs.py`](scanpath_studio/tabs.py:2528)) already receives

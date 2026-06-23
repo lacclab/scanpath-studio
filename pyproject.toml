@@ -29,6 +29,10 @@ dependencies = [
     "pandas>=2.3.3",
     "plotly>=6.5.2",
     "numpy>=2.4.1",
+    # Effect-size + significance tests for the group-comparison analysis views
+    # (AN-21: Welch t-test, Mann–Whitney U). BSD-3, MIT-compatible — see the
+    # PRE-0 ADR, which also earmarks scipy for the PRE-3 drift-correction port.
+    "scipy>=1.13",
     "pyarrow>=23.0.0",
     "kaleido>=1.2.0",
     # Optional Streamlit runtime dep: enables fast event-based file-watching

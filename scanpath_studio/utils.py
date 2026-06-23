@@ -499,6 +499,31 @@ def safe_summary(series: pd.Series) -> dict:
 # -----------------------------------------------------------------------------
 
 
+# Markers shown beside comparison-trial options.
+SAME_TEXT_MARKER = "★"  # same stimulus text as the primary trial
+SAME_PARTICIPANT_MARKER = "👤"  # same participant as the primary trial
+
+
+def _compare_option_label(
+    participant_id: str,
+    trial_id: str,
+    markers: str,
+    used_labels: set[str],
+) -> str:
+    """Selectbox label for a comparison option: ``"<markers> <trial_id>"``.
+
+    De-duplicates on ``trial_id`` (two participants can share one) by appending
+    the participant in brackets, so the label stays a unique selectbox option /
+    dict key in ``tabs._render_compare_selector``."""
+    trial_str = str(trial_id) if trial_id is not None else ""
+    prefix = f"{markers} " if markers else ""
+    label = f"{prefix}{trial_str}"
+    if label in used_labels:
+        label = f"{prefix}{trial_str} [{participant_id}]"
+    used_labels.add(label)
+    return label
+
+
 def friendly_trial_label(
     participant_id: str,
     trial_id: str,
@@ -542,48 +567,50 @@ def build_comparison_options(
     primary_participant: str,
     primary_trial: str,
     primary_text: Optional[str],
-) -> list[Tuple[str, str, str]]:
-    """Build prioritized list of comparison trial options.
+) -> list[Tuple[str, str, str, str]]:
+    """Build a prioritized list of comparison-trial options.
 
-    Returns list of (participant_id, trial_id, label) tuples, prioritized by:
-    - Same text trials first (marked with ★)
-    - Other trials after
+    Returns ``(participant_id, trial_id, label, markers)`` tuples, where
+    ``markers`` is ``"★"`` / ``"👤"`` / ``"★👤"`` / ``""`` and ``label`` is
+    ``"<markers> <trial_id>"``. Ordered: same-text (★) first, then same-participant
+    (👤), then the rest. A trial that is BOTH same-text and same-participant sorts
+    with the ★ group (stars lead) and shows both markers.
     """
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
+    uniq = combos.drop_duplicates(subset=["participant_id", "trial_id"])
 
-    options: list[Tuple[str, str, str]] = []
-    added = set()
+    rows: list[dict] = []
+    for row in uniq.itertuples():
+        if (row.participant_id, row.trial_id) == (primary_participant, primary_trial):
+            continue
+        text_id = getattr(row, text_field, "")
+        same_text = bool(primary_text and str(text_id) == str(primary_text))
+        same_participant = bool(str(row.participant_id) == str(primary_participant))
+        markers = (SAME_TEXT_MARKER if same_text else "") + (
+            SAME_PARTICIPANT_MARKER if same_participant else ""
+        )
+        rows.append(
+            {
+                "participant_id": row.participant_id,
+                "trial_id": row.trial_id,
+                "same_text": same_text,
+                "same_participant": same_participant,
+                "markers": markers,
+            }
+        )
+
+    # ★ group first, then 👤 group, then the rest. same_text is the primary sort
+    # key so a both-★-👤 trial leads the ★ group. Stable sort preserves combos
+    # order within a group.
+    rows.sort(
+        key=lambda r: (0 if r["same_text"] else 1, 0 if r["same_participant"] else 1)
+    )
+
     used_labels: set[str] = set()
-
-    def add_options(df: pd.DataFrame, prefix: str = ""):
-        for row in df.itertuples():
-            key = (row.participant_id, row.trial_id)
-            if key not in added and key != (primary_participant, primary_trial):
-                text_id = getattr(row, text_field, "")
-                label = friendly_trial_label(
-                    row.participant_id,
-                    row.trial_id,
-                    text_id,
-                    used_labels,
-                    prefix=prefix,
-                )
-                options.append((row.participant_id, row.trial_id, label))
-                added.add(key)
-
-    if primary_text:
-        # Same text first
-        same_text_all = combos[
-            (combos[text_field].astype(str) == str(primary_text))
-        ].drop_duplicates(subset=["participant_id", "trial_id"])
-        add_options(same_text_all, "★ ")
-
-        # Then other texts
-        other_texts = combos[
-            (combos[text_field].astype(str) != str(primary_text))
-        ].drop_duplicates(subset=["participant_id", "trial_id"])
-        add_options(other_texts)
-    else:
-        all_others = combos.drop_duplicates(subset=["participant_id", "trial_id"])
-        add_options(all_others)
-
+    options: list[Tuple[str, str, str, str]] = []
+    for r in rows:
+        label = _compare_option_label(
+            r["participant_id"], r["trial_id"], r["markers"], used_labels
+        )
+        options.append((r["participant_id"], r["trial_id"], label, r["markers"]))
     return options

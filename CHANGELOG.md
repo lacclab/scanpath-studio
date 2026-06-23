@@ -48,10 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slider + ◀ ▶); Browse-by modes removed.
 - **Comparison styling moved into the per-layer Fixation/Saccade popovers**, beside
   the single-trial controls.
-- **Compare trial selector moved above the chips** — mirrors the main picker
-  (dropdown + slider + ◀ ▶) with A/B colour labels matching the overlay; the A/B
-  legend (static **and** animated overlay) is now optional and hidden by default;
-  the redundant global saccade / fixation controls are hidden in compare mode.
+- **Compare mode reworked.** The second-trial selector sits above the chips and
+  mirrors the main picker — trial id + **★ same-text** / **👤 same-participant**
+  markers in the dropdown (ordered stars → same-participant → rest), `index/N · id`
+  slider, ◀ ▶. The overlay/layout + show-A/B-legend config moved into a rail
+  **⚙️ Compare** popover; the A/B legend (static **and** animated overlay) is
+  optional and hidden by default; the figure title is removed; each chip strip's
+  trial id is coloured to its scanpath (replacing the A/B legend line). **Color
+  fixations by** now works in compare too — it colours both scanpaths by the metric
+  (shared scale), with the per-scanpath flat colour as the A/B marker outline; the
+  redundant global saccade controls stay hidden.
 - **Welcome tour walks the whole Scanpath screen in reading order** (plot →
   selection → chips → rail → panels → sidebar); the redundant *Exit* button is
   gone (the ✕ closes it).
@@ -60,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dismiss ✕ on the welcome tour.
 
 ### Fixed
+- **Compare-mode fixations no longer turn black.** The per-scanpath colour pickers
+  (rendered only when Compare is on) desynced to black and committed that on the
+  next interaction; they now pass an explicit value and a falsy colour can't leak.
 - **Trial filter resets on a dataset switch** (and is restored per-dataset when you
   switch back), so a stale filter can't silently apply to a different corpus.
 - **Clearer image-export errors when Chrome is missing** — point to

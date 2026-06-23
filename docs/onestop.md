@@ -30,10 +30,12 @@ regime** and (optionally) a download folder:
 
 Each regime is a separate OSF download of two paragraph-level reports —
 the **interest-area report** (one row per word, with bounding boxes and
-reading measures) and the **fixation report**. They are fetched into the data
-directory on first use and cached on disk, so only the first load of a regime
-pays the download (the reports range from tens to a few hundred MB). Untick
-**Download if missing** to load reports you have already placed in the folder.
+reading measures) and the **fixation report**. The *OneStop options* panel
+lists the **Expected files** for the folder and shows whether the chosen
+regime's reports are already present. If they are, the corpus loads with no
+network access; if not, click **⬇ Download** to fetch them into the folder
+(cached on disk, so only the first load of a regime pays the download — the
+reports range from tens to a few hundred MB).
 
 OneStop's reports use the same schema as the bundled demo, so they flow through
 the normal auto-detect → normalize pipeline — the sidebar **Column mapping**

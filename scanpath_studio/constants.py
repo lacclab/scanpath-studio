@@ -125,7 +125,6 @@ DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_DEFAULT_DIR = "data/PoTeC"
-POTEC_TEXT_IDS = [f"{d}{i}" for d in ("b", "p") for i in range(6)]
 MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -62,7 +62,6 @@ from scanpath_studio.constants import (
     ONESTOP_PUBLIC_DEFAULT_DIR,
     ONESTOP_REGIME_LABELS,
     POTEC_DEFAULT_DIR,
-    POTEC_TEXT_IDS,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
@@ -284,26 +283,123 @@ If you use the bundled demo data, also cite
         )
 
 
-@st.cache_data(show_spinner="Loading PoTeC…")
-def _cached_potec_raw_frames(
+# --- Public-dataset access UI (directory + expected files + download) --------
+# Shared by the per-corpus loaders below. Each corpus shows the on-disk layout
+# it expects (so a user who already downloaded the data knows what to drop
+# where) and a found-vs-missing status; downloadable corpora also get a Download
+# button. The per-source participant/text narrowing was removed — every loader
+# now reads the whole corpus and the global **Narrow by** trial filters scope it.
+
+_POTEC_STRUCTURE_MD = """\
+**Expected layout** — a clone of
+[DiLi-Lab/PoTeC](https://github.com/DiLi-Lab/PoTeC) with its data files, or any
+folder you let **Download** populate:
+```
+<dir>/
+├─ eyetracking_data/
+│  └─ scanpaths/              # per-trial fixation TSVs (or fixations/)
+│     └─ *.tsv
+└─ stimuli/
+   ├─ word_aoi_texts/         # word boxes, one file per text
+   │  └─ word_aoi_<text>.tsv   (texts b0–b5, p0–p5)
+   └─ aoi_texts/              # character AOIs, one file per text
+      └─ <text>.ias
+```
+"""
+
+_MULTIPLEYE_STRUCTURE_MD = """\
+**Expected layout** — a MultiplEYE session set (e.g. the read-only ZH-CH-Zurich
+sample). Identity is read from the folder + file names, so there are no id
+columns to map:
+```
+<dir>/
+├─ scanpaths/                 # or fixations/
+│  └─ <session>/              # one folder per reader session
+│     └─ *.csv                 (one per stimulus page)
+└─ stimuli_<lang>_<…>/
+   ├─ aoi_stimuli_<…>/        # character AOIs: <stimulus>_aoi.csv
+   ├─ config/config_*.py      # font size + family (optional)
+   ├─ stimuli_images_<lang>_* # page images (optional)
+   └─ …_comprehension_questions_*.xlsx   (optional)
+```
+`reading_measures/` and `participant_data.csv` (optional) enrich the load.
+"""
+
+
+def _onestop_structure_md(regime: str) -> str:
+    """Expected-files note for the OneStop public source (regime-specific)."""
+    return f"""\
+**Expected files** — the two OSF paragraph reports for the chosen regime, placed
+directly in the folder (or fetched by **Download**):
+```
+<dir>/
+├─ ia_Paragraph_{regime}.csv.zip          # word / interest-area report
+└─ fixations_Paragraph_{regime}.csv.zip   # fixation report
+```
+Switch **Reading regime** above to load a different one (each is a separate
+download).
+"""
+
+
+def _dataset_dir_input(
+    cfg, *, default_dir: str, dir_help: str, structure_md: str, key_prefix: str
+) -> str:
+    """Data-directory input + an "Expected files" expander listing the layout."""
+    root = cfg.text_input(
+        "Data directory", value=default_dir, help=dir_help, key=f"{key_prefix}_dir"
+    )
+    with cfg.expander("Expected files", expanded=False):
+        st.markdown(structure_md)
+    return root
+
+
+def _dataset_access_status(
+    cfg,
+    *,
     root: str,
-    readers: Optional[Tuple[int, ...]],
-    texts: Tuple[str, ...],
-    download: bool,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Cached raw PoTeC frames (pre-normalization) for the GUI data source.
+    present: bool,
+    download: Optional[Callable[[str], None]] = None,
+    size_hint: str = "",
+    key_prefix: str = "",
+) -> bool:
+    """Found / missing status + an optional **Download** button.
+
+    Returns ``True`` when the corpus is present on disk (ready to load). When
+    it's missing and ``download`` is given, renders a Download button that
+    fetches the files then reruns — the next run loads from disk with no
+    re-download (replaces the old always-on "Download if missing" checkbox, so
+    an already-downloaded corpus never re-checks the network)."""
+    if present:
+        cfg.success(f"Found in `{root}`")
+        return True
+    if download is None:
+        cfg.warning(
+            f"No data found in `{root}` — point at a folder with the files above."
+        )
+        return False
+    cfg.info(f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}.")
+    if cfg.button("⬇ Download", key=f"{key_prefix}_download", type="primary"):
+        try:
+            with st.spinner(f"Downloading into {root} …"):
+                download(root)
+        except (OSError, ValueError) as exc:
+            cfg.error(f"Download failed: {exc}")
+            return False
+        st.rerun()
+    return False
+
+
+@st.cache_data(show_spinner="Loading PoTeC…")
+def _cached_potec_raw_frames(root: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached raw PoTeC frames (pre-normalization) — the full corpus.
 
     Returns the same shape as an upload: raw frames the normal
     auto-detect → normalize → harmonize pipeline then handles. Cached on the
-    selection so re-runs (toggling viz controls) don't re-read the files."""
+    directory so re-runs (toggling viz controls) don't re-read the files. Loads
+    every reader × text (75 × 12); narrow the trial pool with **Narrow by**."""
     from scanpath_studio.datasets import potec_raw_frames
 
-    return potec_raw_frames(
-        root,
-        readers=list(readers) if readers else None,
-        texts=list(texts),
-        download=download,
-    )
+    return potec_raw_frames(root)
 
 
 def _load_potec_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -313,72 +409,50 @@ def _load_potec_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
     in filenames, fixation coordinates come from a separate character-AoI
     file), so this dedicated source wraps ``datasets.potec_raw_frames``. The
     returned raw frames go through the same normalization as an upload, so the
-    sidebar Column-mapping panels still appear and stay overridable.
+    sidebar Column-mapping panels still appear and stay overridable. The whole
+    corpus loads — narrow it with the **Narrow by** trial filters.
     """
+    from scanpath_studio import datasets
+
     cfg = st.sidebar.expander("PoTeC options", expanded=True)
-    root = cfg.text_input(
-        "Data directory",
-        value=POTEC_DEFAULT_DIR,
-        help="Folder holding (or to download) the PoTeC files. A clone of "
-        "github.com/DiLi-Lab/PoTeC works, or any empty folder with Download on.",
+    root = _dataset_dir_input(
+        cfg,
+        default_dir=POTEC_DEFAULT_DIR,
+        dir_help="Folder holding (or to download) the PoTeC files. A clone of "
+        "github.com/DiLi-Lab/PoTeC works, or any empty folder with Download.",
+        structure_md=_POTEC_STRUCTURE_MD,
+        key_prefix="potec",
     )
-    download = cfg.checkbox(
-        "Download if missing (~45 MB)",
-        value=True,
-        help="Fetch the PoTeC eye-tracking + AoI files into the directory on "
-        "first use. Unticked, the files must already be present.",
+    ready = _dataset_access_status(
+        cfg,
+        root=root,
+        present=datasets.potec_present(root),
+        download=datasets.download_potec,
+        size_hint="~45 MB",
+        key_prefix="potec",
     )
-    texts = cfg.multiselect(
-        "Texts",
-        options=POTEC_TEXT_IDS,
-        default=["b0"],
-        help="Stimulus texts to load (b0–b5 biology, p0–p5 physics). Fewer "
-        "texts load faster; the full corpus is 12 texts × 75 readers.",
-    )
-    readers_raw = cfg.text_input(
-        "Readers (optional)",
-        value="",
-        help="Comma-separated reader ids to limit to (e.g. 0, 1, 2). Leave "
-        "blank for all readers of the chosen texts.",
-    )
-    if not texts:
-        st.sidebar.info("Pick at least one PoTeC text to load.")
+    if not ready:
         return load_sample_data()
     try:
-        readers = tuple(int(part) for part in readers_raw.replace(",", " ").split())
-    except ValueError:
-        st.sidebar.error("Readers must be integers, e.g. `0, 1, 2`.")
-        return load_sample_data()
-    try:
-        return _cached_potec_raw_frames(root, readers or None, tuple(texts), download)
+        return _cached_potec_raw_frames(root)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        st.sidebar.error(
-            f"Couldn't load PoTeC from `{root}`: {exc} "
-            "Tick **Download if missing**, or point at a PoTeC folder."
-        )
+        st.sidebar.error(f"Couldn't load PoTeC from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
 
 
 @st.cache_data(show_spinner="Loading MultiplEYE…")
 def _cached_multipleye_raw_frames(
-    root: str,
-    sessions: Optional[Tuple[str, ...]],
-    stimuli: Optional[Tuple[str, ...]],
-    fixation_source: str,
+    root: str, fixation_source: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Cached raw MultiplEYE frames (pre-normalization) for the GUI data source.
+    """Cached raw MultiplEYE frames (pre-normalization) — the full session set.
 
     Same shape as an upload — the normal auto-detect → normalize → harmonize
     pipeline then handles them — cached on the selection so re-runs (toggling
-    viz controls) don't re-read the files."""
+    viz controls) don't re-read the files. Loads every session × stimulus;
+    narrow the trial pool with **Narrow by**."""
     from scanpath_studio.datasets import multipleye_raw_frames
 
-    return multipleye_raw_frames(
-        root,
-        sessions=list(sessions) if sessions else None,
-        stimuli=list(stimuli) if stimuli else None,
-        fixation_source=fixation_source,
-    )
+    return multipleye_raw_frames(root, fixation_source=fixation_source)
 
 
 @st.cache_data(show_spinner=False)
@@ -397,72 +471,55 @@ def _load_multipleye_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
     trial / stimulus live only in the folder + file names), so this dedicated
     source wraps ``datasets.multipleye_raw_frames``. The returned raw frames go
     through the same normalization as an upload, so the sidebar Column-mapping
-    panels still appear and stay overridable.
+    panels still appear and stay overridable. The whole session set loads —
+    narrow it with the **Narrow by** trial filters.
     """
     cfg = st.sidebar.expander("MultiplEYE options", expanded=True)
-    root = cfg.text_input(
-        "Data directory",
-        value=MULTIPLEYE_DEFAULT_DIR,
-        help="Folder holding a MultiplEYE session set, e.g. the read-only "
-        "ZH-CH-Zurich sample (per-session subfolders under fixations/ and "
-        "scanpaths/).",
+    root = _dataset_dir_input(
+        cfg,
+        default_dir=MULTIPLEYE_DEFAULT_DIR,
+        dir_help="Folder holding a MultiplEYE session set, e.g. the read-only "
+        "ZH-CH-Zurich sample.",
+        structure_md=_MULTIPLEYE_STRUCTURE_MD,
+        key_prefix="multipleye",
     )
     fixation_source = cfg.radio(
         "Fixation source",
         options=["scanpaths", "fixations"],
+        key="multipleye_fixation_source",
         help="scanpaths/ fixations are pre-tagged with page + word index "
         "(richer); fixations/ are raw onset/duration/x/y with no word linkage.",
     )
     try:
-        sessions_all, stimuli_all = _cached_multipleye_inventory(root, fixation_source)
+        sessions_all, _ = _cached_multipleye_inventory(root, fixation_source)
     except (FileNotFoundError, OSError):
-        sessions_all, stimuli_all = (), ()
-    if not sessions_all:
-        cfg.warning(
-            "No MultiplEYE sessions found here — point at a session set folder "
-            "(e.g. the ZH-CH-Zurich sample). Showing the demo meanwhile."
-        )
-        return load_sample_data()
-    sessions = cfg.multiselect(
-        "Sessions",
-        options=list(sessions_all),
-        default=list(sessions_all[:1]),
-        help="Reader sessions to load (ET1/ET2 are distinct readers — they read "
-        "different stimuli). Fewer sessions load faster.",
+        sessions_all = ()
+    # MultiplEYE ships no public download URL — present means the local folder
+    # holds a recognizable session set, otherwise fall back to the demo.
+    ready = _dataset_access_status(
+        cfg, root=root, present=bool(sessions_all), key_prefix="multipleye"
     )
-    stimuli = cfg.multiselect(
-        "Stimuli (optional)",
-        options=list(stimuli_all),
-        default=[],
-        help="Limit to specific stimuli; leave blank for all stimuli the chosen "
-        "sessions read.",
-    )
-    if not sessions:
-        st.sidebar.info("Pick at least one MultiplEYE session to load.")
+    if not ready:
         return load_sample_data()
     try:
-        return _cached_multipleye_raw_frames(
-            root, tuple(sessions), tuple(stimuli) or None, fixation_source
-        )
+        return _cached_multipleye_raw_frames(root, fixation_source)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        st.sidebar.error(
-            f"Couldn't load MultiplEYE from `{root}`: {exc} "
-            "Point at a MultiplEYE session set folder."
-        )
+        st.sidebar.error(f"Couldn't load MultiplEYE from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
 
 
 @st.cache_data(show_spinner="Loading OneStop…")
 def _cached_onestop_raw_frames(
-    root: str, regime: str, download: bool
+    root: str, regime: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Cached raw OneStop frames (pre-normalization) for the GUI data source.
+    """Cached raw OneStop frames (pre-normalization) for a regime.
 
-    Cached on (root, regime, download) so toggling viz controls doesn't re-read
-    (or re-download) the reports."""
+    Cached on (root, regime) so toggling viz controls doesn't re-read the
+    reports. The reports are present by the time this runs (the loader's
+    Download button fetched them), so it never touches the network."""
     from scanpath_studio.datasets import onestop_raw_frames
 
-    return onestop_raw_frames(root, regime=regime, download=download)
+    return onestop_raw_frames(root, regime=regime)
 
 
 def _load_onestop_public_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -475,68 +532,115 @@ def _load_onestop_public_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
     overridable. Distinct from the env-var "OneStop server bundle" source, which
     serves a local lacclab export (and per-pid shards for deep links).
     """
+    from scanpath_studio import datasets
+
     cfg = st.sidebar.expander("OneStop options", expanded=True)
     regime = cfg.selectbox(
         "Reading regime",
         options=list(ONESTOP_REGIME_LABELS),
         format_func=lambda r: ONESTOP_REGIME_LABELS[r],
+        key="onestop_regime",
         help="Which OneStop reading regime to load. Each is a separate OSF "
         "download of paragraph-level interest-area + fixation reports.",
     )
-    root = cfg.text_input(
-        "Data directory",
-        value=ONESTOP_PUBLIC_DEFAULT_DIR,
-        help="Folder to download the OneStop reports into (cached on disk, so "
-        "only the first load of a regime fetches them).",
+    root = _dataset_dir_input(
+        cfg,
+        default_dir=ONESTOP_PUBLIC_DEFAULT_DIR,
+        dir_help="Folder to download the OneStop reports into (cached on disk, "
+        "so only the first load of a regime fetches them).",
+        structure_md=_onestop_structure_md(regime),
+        key_prefix="onestop",
     )
-    download = cfg.checkbox(
-        "Download if missing",
-        value=True,
-        help="Fetch the regime's two CSV.zip reports from OSF on first use. "
-        "Unticked, the files must already be present in the folder.",
+    ready = _dataset_access_status(
+        cfg,
+        root=root,
+        present=datasets.onestop_present(root, regime=regime),
+        download=lambda r: datasets.download_onestop(r, regime=regime),
+        size_hint="OSF reports, tens–hundreds MB",
+        key_prefix="onestop",
     )
+    if not ready:
+        return load_sample_data()
     try:
-        return _cached_onestop_raw_frames(root, regime, download)
+        return _cached_onestop_raw_frames(root, regime)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        st.sidebar.error(
-            f"Couldn't load OneStop from `{root}`: {exc} "
-            "Tick **Download if missing** to fetch it from OSF."
-        )
+        st.sidebar.error(f"Couldn't load OneStop from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
 
 
-# Registry behind the "Public datasets" source: label → loader (renders its
-# own sidebar options and returns raw, pre-normalization frames) + the
-# corpus' presentation-monitor size (canvas default for true-to-scale
-# rendering; None to estimate from data extents). To add a corpus: write a
-# loader in datasets.py, wrap it in a `_load_*_source` sidebar function above,
-# and add one entry here.
+# Registry behind the "Public datasets" source: label → loader (renders its own
+# sidebar options and returns raw, pre-normalization frames), the corpus'
+# presentation-monitor size (canvas default for true-to-scale rendering; None to
+# estimate from data extents), and a little presentation metadata (a short name
+# for the picker, plus language / size / description / home link shown as a
+# caption). To add a corpus: write a loader in datasets.py, wrap it in a
+# `_load_*_source` sidebar function above, and add one entry here — the
+# searchable picker scales as the catalogue grows.
 PUBLIC_DATASET_REGISTRY: dict = {
     "PoTeC — Potsdam Textbook Corpus": dict(
         loader=_load_potec_source,
         monitor=(1680, 1050),  # DELL P2210
+        short="PoTeC",
+        language="German",
+        size="75 readers · 12 texts",
+        description="Potsdam Textbook Corpus — German reading of biology & "
+        "physics textbook passages (expert/novice readers).",
+        link="https://github.com/DiLi-Lab/PoTeC",
     ),
     "MultiplEYE — multilingual reading (ZH-CH sample)": dict(
         loader=_load_multipleye_source,
         monitor=(1920, 1080),  # MultiplEYE physical screen (coords offset to it)
+        short="MultiplEYE",
+        language="Multilingual (ZH-CH sample)",
+        size="local session set",
+        description="MultiplEYE multilingual eye-tracking-while-reading — the "
+        "read-only Zurich Chinese sample, loaded from a local folder.",
+        link="https://multipleye.eu/",
     ),
     "OneStop — 360-participant English corpus": dict(
         loader=_load_onestop_public_source,
         monitor=(2560, 1440),  # OneStop presentation monitor (full-screen px coords)
+        short="OneStop",
+        language="English",
+        size="360 participants",
+        description="OneStop Eye Movements — English L1 reading across ordinary "
+        "and information-seeking regimes, downloaded from OSF.",
+        link="https://github.com/lacclab/OneStop-Eye-Movements",
     ),
 }
 
 
+def _public_dataset_label(label: str) -> str:
+    """The picker display text for a registry entry (its short name, if any)."""
+    return PUBLIC_DATASET_REGISTRY.get(label, {}).get("short", label)
+
+
 def _load_public_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Dataset picker + dispatch for the "Public datasets" source."""
-    chosen = st.sidebar.radio(
+    """Dataset picker + dispatch for the "Public datasets" source.
+
+    A searchable selectbox (scales past a long radio as the catalogue grows
+    toward dozens of corpora) over ``PUBLIC_DATASET_REGISTRY``, with a compact
+    language · size caption, a one-line description, and a home link for the
+    selected corpus. The chosen corpus' loader then renders its own directory /
+    download controls and returns raw, pre-normalization frames.
+    """
+    chosen = st.sidebar.selectbox(
         "Dataset",
         options=list(PUBLIC_DATASET_REGISTRY),
+        format_func=_public_dataset_label,
         key="public_dataset_choice",
-        help="Public eye-tracking-while-reading corpora with ready-made "
-        "loaders (downloaded on demand). More datasets coming.",
+        help="Public eye-tracking-while-reading corpora with ready-made loaders "
+        "(downloaded on demand). Type to search; more datasets coming.",
     )
-    return PUBLIC_DATASET_REGISTRY[chosen]["loader"]()
+    spec = PUBLIC_DATASET_REGISTRY[chosen]
+    facts = " · ".join(f for f in (spec.get("language"), spec.get("size")) if f)
+    if facts:
+        st.sidebar.caption(facts)
+    if spec.get("description"):
+        st.sidebar.caption(spec["description"])
+    if spec.get("link"):
+        st.sidebar.markdown(f"[Dataset home ↗]({spec['link']})")
+    return spec["loader"]()
 
 
 def _public_dataset_monitor(data_choice: str) -> Optional[Tuple[int, int]]:
@@ -1113,6 +1217,7 @@ def render_sidebar_data_source() -> str:
         source.radio(
             "Public Datasets",
             options=list(PUBLIC_DATASET_REGISTRY),
+            format_func=_public_dataset_label,
             index=None,
             disabled=True,
             key="public_datasets_preview",

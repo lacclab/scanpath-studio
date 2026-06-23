@@ -127,9 +127,41 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
             dest.parent.mkdir(parents=True, exist_ok=True)
             url = _POTEC_RAW_URL.format(path=rel)
             print(f"Downloading {url} …")
+            # Write to a temp file and atomically rename into place, so an
+            # interrupted fetch never leaves a truncated AOI file that
+            # `dest.is_file()` / `potec_present` would then treat as complete —
+            # mirroring download_onestop.
+            tmp = dest.with_name(dest.name + ".part")
             with urllib.request.urlopen(url) as response:
-                dest.write_bytes(response.read())
+                tmp.write_bytes(response.read())
+            tmp.replace(dest)
     return root
+
+
+def potec_present(root) -> bool:
+    """True when ``root`` already holds the full PoTeC corpus a load needs.
+
+    The app loads *every* text, so this requires the per-text word + character
+    AOI files for **all** texts (exactly what :func:`download_potec` fetches),
+    plus a populated eye-tracking folder. A lenient "any AOI file" check would
+    pass a partial tree and then crash mid-load (`_potec_words` raises on the
+    first missing text) with no way to recover; requiring all of them instead
+    lets the app offer the Download button, which self-heals the gap. Cheap
+    (path stats only), so the status shows without reading any CSV."""
+    root = Path(root)
+    base = root / "eyetracking_data"
+    has_fixations = any(
+        (base / s).is_dir() and any((base / s).glob("*.tsv"))
+        for s in ("scanpaths", "fixations")
+    )
+    word_dir = root / "stimuli" / "word_aoi_texts"
+    char_dir = root / "stimuli" / "aoi_texts"
+    has_all_aoi = all(
+        (word_dir / f"word_aoi_{text_id}.tsv").is_file()
+        and (char_dir / f"{text_id}.ias").is_file()
+        for text_id in _POTEC_TEXTS
+    )
+    return has_fixations and has_all_aoi
 
 
 def _potec_words(root: Path, texts: Iterable[str]) -> pd.DataFrame:
@@ -347,6 +379,17 @@ _ONESTOP_REGIMES = {
 def _onestop_report_path(root: Path, kind: str, regime: str) -> Path:
     """Local path of a OneStop report CSV.zip (matches the OSF filenames)."""
     return root / f"{kind}_Paragraph_{regime}.csv.zip"
+
+
+def onestop_present(root, *, regime: str = "ordinary") -> bool:
+    """True when ``root`` already holds the two OneStop reports for ``regime``.
+
+    Lets the app show a *found vs. download* status before any (large) read."""
+    root = Path(root)
+    return (
+        _onestop_report_path(root, "ia", regime).is_file()
+        and _onestop_report_path(root, "fixations", regime).is_file()
+    )
 
 
 def download_onestop(root, *, regime: str = "ordinary") -> Path:

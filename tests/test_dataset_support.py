@@ -498,6 +498,27 @@ def test_load_potec_missing_data_message(tmp_path):
         datasets_module.load_potec(tmp_path, texts=["b0"])
 
 
+def test_potec_present(tmp_path):
+    # The app loads the whole corpus, so "present" requires every text's word +
+    # char AOI files (what download_potec fetches), not just one.
+    root = tmp_path / "potec"
+    word_dir = root / "stimuli" / "word_aoi_texts"
+    char_dir = root / "stimuli" / "aoi_texts"
+    scan_dir = root / "eyetracking_data" / "scanpaths"
+    for d in (word_dir, char_dir, scan_dir):
+        d.mkdir(parents=True)
+    (scan_dir / "reader0_b0_scanpath.tsv").write_text("x\n")
+    for text_id in datasets_module._POTEC_TEXTS:
+        (word_dir / f"word_aoi_{text_id}.tsv").write_text("x\n")
+        (char_dir / f"{text_id}.ias").write_text("x\n")
+
+    assert datasets_module.potec_present(root) is True
+    assert datasets_module.potec_present(tmp_path / "empty") is False
+    # Missing even one text's AOI → the full-corpus load can't run → not present.
+    (word_dir / "word_aoi_b0.tsv").unlink()
+    assert datasets_module.potec_present(root) is False
+
+
 # ---------------------------------------------------------------------------
 # OneStop public loader (OSF download-on-demand). Network is monkeypatched —
 # download_onestop is replaced with one that writes tiny OneStop-shaped reports,
@@ -587,6 +608,14 @@ def test_onestop_raw_frames_auto_detect_and_plot(onestop_offline, tmp_path):
     nw, nf = data_module.harmonize_frames(nw, nf)
     fig = sps.plot_scanpath(nw, nf)
     assert len(fig.data) > 0
+
+
+def test_onestop_present(onestop_offline, tmp_path):
+    assert datasets_module.onestop_present(tmp_path, regime="ordinary") is False
+    datasets_module.download_onestop(tmp_path, regime="ordinary")
+    assert datasets_module.onestop_present(tmp_path, regime="ordinary") is True
+    # A different regime's reports aren't there yet.
+    assert datasets_module.onestop_present(tmp_path, regime="repeated") is False
 
 
 def test_onestop_bad_regime():

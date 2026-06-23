@@ -16,9 +16,12 @@ behind a feature flag:
 SCANPATH_PUBLIC_DATASETS=1 streamlit run streamlit_app.py
 ```
 
-Then pick **Public datasets → MultiplEYE** and choose the session / stimulus /
-fixation source. A directory load surfaces all the rich side data (below); the
-browser-upload path supports a subset (see *Uploading* at the end).
+Then pick **Public datasets → MultiplEYE**, point *Data directory* at a session
+set (the *Expected files* panel lists the layout it looks for), and choose the
+**fixation source** (`scanpaths` or `fixations`). The whole session set loads —
+use the **Narrow by** trial filters to focus on specific readers or stimuli. A
+directory load surfaces all the rich side data (below); the browser-upload path
+supports a subset (see *Uploading* at the end).
 
 ## How the corpus is laid out
 

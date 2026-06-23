@@ -118,20 +118,8 @@ zip. Wire into `export.ExportOptions` / `render_export_options` / `bulk_export`
 PNG/SVG/PDF/HTML formats, and surface it in the **Export** subtab
 (`tabs._render_export_panel`).
 
-**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Pending approval`
-
-Today fixation markers are either fully filled or fully hollow (outline-only), via
-the boolean `global_hollow_fixations` toggle (the `Hollow circles` checkbox in
-[`controls.py`](scanpath_studio/controls.py:1121)) and the per-scanpath
-`cmp{idx}_hollow` checkboxes in compare mode; `plots._make_hollow`
-([`plots.py`](scanpath_studio/plots.py:66)) swaps the fill onto the outline and
-makes the fill transparent. Replace the binary toggle with a marker **opacity /
-alpha** slider (e.g. `global_fixation_opacity`, default `1.0` for byte-identical
-output) so overlapping fixations show through — thread it through
-`make_scanpath_figure`, `make_scanpath_animation`, and the comparison
-`_add_comparison_fixation_trace` ([`plots.py`](scanpath_studio/plots.py)) in place
-of (or alongside) `hollow_fixations`, keeping the `global_*` / `cmp{idx}_*` key
-convention. CMP-4 already hides this control in compare mode. Related: **CMP-4**.
+**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Done (signed off 2026-06-23)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done (signed off 2026-06-23)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).

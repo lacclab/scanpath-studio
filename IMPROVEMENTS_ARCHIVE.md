@@ -105,6 +105,20 @@ Hollow stay hidden (the per-scanpath versions cover those).
 
 ## Visualization
 
+**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Done` *(signed off 2026-06-23)*
+
+The binary *Hollow circles* checkbox (global + per-scanpath) is replaced by a
+marker **opacity** slider — `global_fixation_opacity` and `cmp{idx}_opacity`,
+**default 0.7** so overlapping fixations show through (drag to 1.0 for fully
+opaque). Threaded through `make_scanpath_figure`, `make_scanpath_animation`, and
+the comparison `_add_comparison_fixation_trace` (via the per-scanpath style dict),
+plus `tabs._build_figure_settings`, `export.bulk_export`, and the save/restore +
+deep-link maps in `url_state.py`. The alpha is set **explicitly even at 1.0** so it
+overrides Plotly's ~0.7 default for variable-size scatter markers — without this,
+"opacity at 1" rendered translucent. `hollow_fixations` stays a plot-builder /
+headless-API param (and a restore/deep-link key) for backward compatibility; only
+the UI control changed.
+
 **VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done` *(signed off 2026-06-23)*
 
 A `single_fix_range` slider in the ⚙️ Fixation-style popover (`controls.sidebar_controls`

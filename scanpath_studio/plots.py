@@ -1114,7 +1114,9 @@ def make_scanpath_figure(
         # Always set it (even at 1.0) so the slider is authoritative — Plotly's
         # variable-size scatter markers otherwise render at a ~0.7 default, so an
         # unset 1.0 looked translucent ("opacity at 1 wasn't really 1").
-        marker["opacity"] = float(fixation_opacity if fixation_opacity is not None else 1.0)
+        marker["opacity"] = float(
+            fixation_opacity if fixation_opacity is not None else 1.0
+        )
         if hollow_fixations:
             marker = _make_hollow(marker)
         fig.add_trace(
@@ -2046,7 +2048,9 @@ def make_scanpath_animation(
         )
         # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
         # default for variable-size scatter markers (VIZ-6).
-        marker["opacity"] = float(fixation_opacity if fixation_opacity is not None else 1.0)
+        marker["opacity"] = float(
+            fixation_opacity if fixation_opacity is not None else 1.0
+        )
         if hollow_fixations:
             marker = _make_hollow(marker)
         return marker
@@ -3486,7 +3490,8 @@ def make_small_multiples_figure(
 
     if per_reader is None or per_reader.empty:
         return _no_data_figure(
-            f"{measure_label} per reader", font_family=font_family,
+            f"{measure_label} per reader",
+            font_family=font_family,
             base_font_size=base_font_size,
         )
     readers = list(pd.unique(per_reader["participant_id"]))
@@ -3494,7 +3499,10 @@ def make_small_multiples_figure(
     readers = readers[:max_panels]
     n = len(readers)
     fig = make_subplots(
-        rows=n, cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 1.5 / max(n, 1)),
+        rows=n,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=min(0.06, 1.5 / max(n, 1)),
         subplot_titles=[str(r) for r in readers],
     )
     cohort_xy = None
@@ -3506,19 +3514,26 @@ def make_small_multiples_figure(
         if cohort_xy is not None:
             fig.add_trace(
                 go.Scatter(
-                    x=cohort_xy[0], y=cohort_xy[1], mode="lines",
+                    x=cohort_xy[0],
+                    y=cohort_xy[1],
+                    mode="lines",
                     line=dict(color="rgba(120,120,120,0.45)", width=1.2, dash="dot"),
-                    name="Cohort mean", showlegend=(i == 1), hoverinfo="skip",
+                    name="Cohort mean",
+                    showlegend=(i == 1),
+                    hoverinfo="skip",
                 ),
-                row=i, col=1,
+                row=i,
+                col=1,
             )
         fig.add_trace(
             go.Scatter(
-                x=sub["word_id"].to_numpy(), y=sub["value"].to_numpy(),
+                x=sub["word_id"].to_numpy(),
+                y=sub["value"].to_numpy(),
                 mode="lines+markers",
                 line=dict(color=COMPARISON_PALETTE[0], width=1.5),
                 marker=dict(size=3, color=COMPARISON_PALETTE[0]),
-                name=str(reader), showlegend=False,
+                name=str(reader),
+                showlegend=False,
                 customdata=sub["word_text"].to_numpy() if "word_text" in sub else None,
                 hovertemplate=(
                     "word %{x}"
@@ -3526,7 +3541,8 @@ def make_small_multiples_figure(
                     + f"<br>{measure_label}: %{{y:.1f}}<extra></extra>"
                 ),
             ),
-            row=i, col=1,
+            row=i,
+            col=1,
         )
     title = f"{measure_label} per reader (word profile)"
     if n_total > n:
@@ -3567,7 +3583,8 @@ def make_word_matrix_heatmap(
     """
     if df is None or df.empty:
         return _no_data_figure(
-            f"{measure_label} by {row_col} × word", font_family=font_family,
+            f"{measure_label} by {row_col} × word",
+            font_family=font_family,
             base_font_size=base_font_size,
         )
     matrix = df.pivot_table(
@@ -3583,7 +3600,8 @@ def make_word_matrix_heatmap(
             y=[str(r) for r in matrix.index],
             colorscale=colorscale,
             colorbar=dict(title=measure_label),
-            hovertemplate="word %{x}<br>%{y}<br>" + measure_label
+            hovertemplate="word %{x}<br>%{y}<br>"
+            + measure_label
             + ": %{z:.1f}<extra></extra>",
         )
     )
@@ -3618,11 +3636,17 @@ def make_word_profile_figure(
     ``aggregation.cohort_word_profile``). One entry draws the "average reader of
     this text" with uncertainty; several overlay (e.g. two groups).
     """
-    entries = [(str(k), v) for k, v in (profiles or {}).items() if v is not None and not v.empty]
+    entries = [
+        (str(k), v)
+        for k, v in (profiles or {}).items()
+        if v is not None and not v.empty
+    ]
     if not entries:
         return _no_data_figure(
-            f"{measure_label} word profile", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            f"{measure_label} word profile",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     fig = go.Figure()
     single = len(entries) == 1
@@ -3639,17 +3663,26 @@ def make_word_profile_figure(
                 go.Scatter(
                     x=np.concatenate([xs, xs[::-1]]),
                     y=np.concatenate([hi, lo[::-1]]),
-                    fill="toself", fillcolor=rgba, line=dict(width=0),
-                    hoverinfo="skip", showlegend=False,
+                    fill="toself",
+                    fillcolor=rgba,
+                    line=dict(width=0),
+                    hoverinfo="skip",
+                    showlegend=False,
                     name=f"{label} {spread_label}",
                 )
             )
         fig.add_trace(
             go.Scatter(
-                x=xs, y=ys, mode="lines+markers",
-                line=dict(color=color, width=2), marker=dict(size=4, color=color),
-                name=label, showlegend=not single,
-                customdata=prof["word_text"].to_numpy() if "word_text" in prof else None,
+                x=xs,
+                y=ys,
+                mode="lines+markers",
+                line=dict(color=color, width=2),
+                marker=dict(size=4, color=color),
+                name=label,
+                showlegend=not single,
+                customdata=prof["word_text"].to_numpy()
+                if "word_text" in prof
+                else None,
                 hovertemplate=(
                     "word %{x}"
                     + ("  %{customdata}" if "word_text" in prof else "")
@@ -3658,7 +3691,9 @@ def make_word_profile_figure(
             )
         )
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=60, r=10, t=45, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
@@ -3689,8 +3724,10 @@ def make_feature_scatter_figure(
     """
     if df is None or df.empty or "feature" not in df.columns:
         return _no_data_figure(
-            f"{measure_label} vs {feature_label}", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            f"{measure_label} vs {feature_label}",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     fig = go.Figure()
@@ -3701,12 +3738,17 @@ def make_feature_scatter_figure(
             if vals.size:
                 fig.add_trace(
                     go.Box(
-                        y=vals, name=cat, boxpoints="outliers",
-                        marker_color=_QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)],
+                        y=vals,
+                        name=cat,
+                        boxpoints="outliers",
+                        marker_color=_QUALITATIVE_PALETTE[
+                            i % len(_QUALITATIVE_PALETTE)
+                        ],
                     )
                 )
         fig.update_layout(
-            xaxis=dict(title=feature_label), yaxis=dict(title=measure_label),
+            xaxis=dict(title=feature_label),
+            yaxis=dict(title=measure_label),
             showlegend=False,
         )
         title = f"{measure_label} by {feature_label}"
@@ -3717,10 +3759,14 @@ def make_feature_scatter_figure(
         x, y = x[ok], y[ok]
         fig.add_trace(
             go.Scatter(
-                x=x, y=y, mode="markers",
+                x=x,
+                y=y,
+                mode="markers",
                 marker=dict(size=6, color=COMPARISON_PALETTE[0], opacity=0.6),
                 name="words",
-                customdata=df.loc[ok, "word_text"].to_numpy() if "word_text" in df else None,
+                customdata=df.loc[ok, "word_text"].to_numpy()
+                if "word_text" in df
+                else None,
                 hovertemplate=(
                     f"{feature_label}: %{{x:.2f}}<br>{measure_label}: %{{y:.1f}}"
                     + ("<br>%{customdata}" if "word_text" in df else "")
@@ -3734,22 +3780,30 @@ def make_feature_scatter_figure(
             xs = np.array([x.min(), x.max()])
             fig.add_trace(
                 go.Scatter(
-                    x=xs, y=slope * xs + intercept, mode="lines",
+                    x=xs,
+                    y=slope * xs + intercept,
+                    mode="lines",
                     line=dict(color=TRENDLINE_COLOR, width=2, dash="dash"),
-                    name="trend", hoverinfo="skip",
+                    name="trend",
+                    hoverinfo="skip",
                 )
             )
             r = float(np.corrcoef(x, y)[0, 1])
             r_txt = f"  (r = {r:.2f}, n = {x.size})"
         fig.update_layout(
-            xaxis=dict(title=feature_label), yaxis=dict(title=measure_label),
+            xaxis=dict(title=feature_label),
+            yaxis=dict(title=measure_label),
             showlegend=False,
         )
         title = f"{measure_label} vs {feature_label}{r_txt}"
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=60, r=10, t=45, b=50),
-        template="plotly_white", font=font_settings, title=title,
+        template="plotly_white",
+        font=font_settings,
+        title=title,
     )
     return fig
 
@@ -3765,8 +3819,10 @@ def make_word_rate_figure(
     """Skip / regression-in rate per word — lollipop bars (AN-6)."""
     if df is None or df.empty:
         return _no_data_figure(
-            "Skip / regression rate per word", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            "Skip / regression rate per word",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     df = df.sort_values("word_id")
     xs = df["word_id"].to_numpy()
@@ -3781,12 +3837,18 @@ def make_word_rate_figure(
         ys = pd.to_numeric(df[col], errors="coerce").to_numpy()
         fig.add_trace(
             go.Bar(
-                x=xs, y=ys, name=name, marker_color=color, opacity=0.8,
+                x=xs,
+                y=ys,
+                name=name,
+                marker_color=color,
+                opacity=0.8,
                 hovertemplate="word %{x}<br>" + name + ": %{y:.0%}<extra></extra>",
             )
         )
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=55, r=10, t=45, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
@@ -3817,26 +3879,40 @@ def make_distribution_figure(
     ]
     if not arrays:
         return _no_data_figure(
-            f"{metric_label} distribution", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            f"{metric_label} distribution",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     fig = go.Figure()
     for i, (name, arr) in enumerate(arrays):
         color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
         if kind == "box":
             fig.add_trace(
-                go.Box(y=arr, name=name, marker_color=color, boxmean=True,
-                       boxpoints="outliers")
+                go.Box(
+                    y=arr,
+                    name=name,
+                    marker_color=color,
+                    boxmean=True,
+                    boxpoints="outliers",
+                )
             )
         else:
             fig.add_trace(
                 go.Violin(
-                    y=arr, name=name, line_color=color, opacity=0.7,
-                    box_visible=True, meanline_visible=True, points=False,
+                    y=arr,
+                    name=name,
+                    line_color=color,
+                    opacity=0.7,
+                    box_visible=True,
+                    meanline_visible=True,
+                    points=False,
                 )
             )
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=60, r=10, t=45, b=40),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
@@ -3862,8 +3938,10 @@ def make_density_scatter_figure(
     """2D density of two per-fixation measures — the oculomotor scatter (AN-10)."""
     if df is None or df.empty or not {x_col, y_col} <= set(df.columns):
         return _no_data_figure(
-            f"{y_label} vs {x_label}", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            f"{y_label} vs {x_label}",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     x = pd.to_numeric(df[x_col], errors="coerce").to_numpy()
     y = pd.to_numeric(df[y_col], errors="coerce").to_numpy()
@@ -3871,18 +3949,25 @@ def make_density_scatter_figure(
     x, y = x[ok], y[ok]
     fig = go.Figure(
         go.Histogram2d(
-            x=x, y=y, colorscale=DEFAULT_HEATMAP_COLORSCALE, nbinsx=40, nbinsy=40,
+            x=x,
+            y=y,
+            colorscale=DEFAULT_HEATMAP_COLORSCALE,
+            nbinsx=40,
+            nbinsy=40,
             colorbar=dict(title="Fixations"),
             hovertemplate=f"{x_label}: %{{x}}<br>{y_label}: %{{y}}<br>count: %{{z}}<extra></extra>",
         )
     )
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=60, r=10, t=45, b=50),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
         title=f"{y_label} vs {x_label} (n = {x.size})",
-        xaxis=dict(title=x_label), yaxis=dict(title=y_label),
+        xaxis=dict(title=x_label),
+        yaxis=dict(title=y_label),
     )
     return fig
 
@@ -3900,33 +3985,48 @@ def make_progression_figure(
 
     if df is None or df.empty:
         return _no_data_figure(
-            "Progressive vs regressive saccades", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            "Progressive vs regressive saccades",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     df = df.copy()
     labels = [str(t) for t in df["trial_id"].to_numpy()]
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(
-        go.Bar(x=labels, y=df["progressive"].to_numpy(), name="Progressive",
-               marker_color=COMPARISON_PALETTE[0]),
+        go.Bar(
+            x=labels,
+            y=df["progressive"].to_numpy(),
+            name="Progressive",
+            marker_color=COMPARISON_PALETTE[0],
+        ),
         secondary_y=False,
     )
     fig.add_trace(
-        go.Bar(x=labels, y=df["regressive"].to_numpy(), name="Regressive",
-               marker_color=COMPARISON_PALETTE[1]),
+        go.Bar(
+            x=labels,
+            y=df["regressive"].to_numpy(),
+            name="Regressive",
+            marker_color=COMPARISON_PALETTE[1],
+        ),
         secondary_y=False,
     )
     if "regression_share" in df.columns:
         fig.add_trace(
             go.Scatter(
-                x=labels, y=df["regression_share"].to_numpy(), name="Regression share",
-                mode="lines+markers", line=dict(color="#555", width=2),
+                x=labels,
+                y=df["regression_share"].to_numpy(),
+                name="Regression share",
+                mode="lines+markers",
+                line=dict(color="#555", width=2),
                 marker=dict(size=5),
             ),
             secondary_y=True,
         )
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=55, r=55, t=45, b=80),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
@@ -3936,8 +4036,9 @@ def make_progression_figure(
     )
     fig.update_xaxes(title_text="Trial", tickangle=-40)
     fig.update_yaxes(title_text="Saccade count", secondary_y=False)
-    fig.update_yaxes(title_text="Regression share", tickformat=".0%", secondary_y=True,
-                     range=[0, 1])
+    fig.update_yaxes(
+        title_text="Regression share", tickformat=".0%", secondary_y=True, range=[0, 1]
+    )
     return fig
 
 
@@ -3959,7 +4060,9 @@ def make_paired_bars_figure(
 
     if df is None or df.empty:
         return _no_data_figure(
-            "Group means", font_family=font_family, base_font_size=base_font_size,
+            "Group means",
+            font_family=font_family,
+            base_font_size=base_font_size,
             height=height,
         )
     measures = list(dict.fromkeys(df["measure"]))
@@ -3976,18 +4079,27 @@ def make_paired_bars_figure(
             row = sub.iloc[0]
             fig.add_trace(
                 go.Bar(
-                    x=[group], y=[row["value"]], name=group, marker_color=color,
-                    legendgroup=group, showlegend=(mi == 1),
+                    x=[group],
+                    y=[row["value"]],
+                    name=group,
+                    marker_color=color,
+                    legendgroup=group,
+                    showlegend=(mi == 1),
                     error_y=dict(
-                        type="data", symmetric=False,
-                        array=[row.get("err_hi", 0)], arrayminus=[row.get("err_lo", 0)],
+                        type="data",
+                        symmetric=False,
+                        array=[row.get("err_hi", 0)],
+                        arrayminus=[row.get("err_lo", 0)],
                     ),
                     hovertemplate=f"{group}<br>{measure}: %{{y:.2f}}<extra></extra>",
                 ),
-                row=1, col=mi,
+                row=1,
+                col=mi,
             )
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=55, r=10, t=55, b=40),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
@@ -4012,28 +4124,36 @@ def make_landing_curve_figure(
     arr = arr[~np.isnan(arr)]
     if arr.size == 0:
         return _no_data_figure(
-            "Landing position within words", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            "Landing position within words",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     nbins = 20 if as_fraction else 30
     fig = go.Figure(
         go.Histogram(
-            x=arr, nbinsx=nbins, marker_color=COMPARISON_PALETTE[0],
+            x=arr,
+            nbinsx=nbins,
+            marker_color=COMPARISON_PALETTE[0],
             marker_line=dict(color="white", width=0.4),
             hovertemplate="landing %{x}<br>count: %{y}<extra></extra>",
         )
     )
     x_title = (
         "Landing position within word (0 = start, 1 = end)"
-        if as_fraction else "Landing distance from word start (px)"
+        if as_fraction
+        else "Landing distance from word start (px)"
     )
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=55, r=10, t=45, b=50),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
         title=f"Landing-position curve (n = {arr.size})",
-        xaxis=dict(title=x_title), yaxis=dict(title="Count"),
+        xaxis=dict(title=x_title),
+        yaxis=dict(title="Count"),
     )
     return fig
 
@@ -4052,8 +4172,10 @@ def make_difference_profile_figure(
     """Per-word A−B difference profile, diverging color + zero line (AN-19)."""
     if df is None or df.empty or "diff" not in df.columns:
         return _no_data_figure(
-            f"{measure_label} difference by word", font_family=font_family,
-            base_font_size=base_font_size, height=height,
+            f"{measure_label} difference by word",
+            font_family=font_family,
+            base_font_size=base_font_size,
+            height=height,
         )
     df = df.sort_values("word_id")
     xs = df["word_id"].to_numpy()
@@ -4062,9 +4184,13 @@ def make_difference_profile_figure(
     vmax = vmax if vmax > 0 else 1.0
     fig = go.Figure(
         go.Bar(
-            x=xs, y=diffs,
+            x=xs,
+            y=diffs,
             marker=dict(
-                color=diffs, colorscale=_DIVERGING_COLORSCALE, cmin=-vmax, cmax=vmax,
+                color=diffs,
+                colorscale=_DIVERGING_COLORSCALE,
+                cmin=-vmax,
+                cmax=vmax,
                 colorbar=dict(title=f"{label_a} − {label_b}"),
             ),
             customdata=df["word_text"].to_numpy() if "word_text" in df else None,
@@ -4077,7 +4203,9 @@ def make_difference_profile_figure(
     )
     fig.add_hline(y=0, line=dict(color="#333", width=1))
     fig.update_layout(
-        height=height, width=canvas_width, autosize=False,
+        height=height,
+        width=canvas_width,
+        autosize=False,
         margin=dict(l=60, r=10, t=50, b=45),
         template="plotly_white",
         font=dict(family=font_family or FONT_FAMILY, size=base_font_size),

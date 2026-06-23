@@ -1485,7 +1485,9 @@ class TestCorpusAnalysisTab:
         at.session_state[view_key] = view
         at.run(timeout=60)
         assert not at.exception, f"{view_key}={view!r}: {at.exception}"
-        assert at.error == [], f"{view_key}={view!r} st.error: {[e.value for e in at.error]}"
+        assert at.error == [], (
+            f"{view_key}={view!r} st.error: {[e.value for e in at.error]}"
+        )
 
     def test_group_filter_set_mode_renders(self):
         # The 'Independent filter sets' group-definition mode (the second of the

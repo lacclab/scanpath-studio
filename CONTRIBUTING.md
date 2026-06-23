@@ -16,6 +16,18 @@ streamlit run streamlit_app.py    # run the app locally
 
 Tested on Python 3.11–3.14.
 
+### If a code change doesn't show up
+
+Streamlit re-runs only the top-level script on rerun — it does **not** reload
+imported modules, and nearly all of this app's logic lives in imported modules
+(`app.py`, `plots.py`, `data.py`, …). `@st.cache_data` also doesn't hash
+transitively-called helpers, so a cached loader keeps serving stale results
+after you edit a helper it calls. **Restart the server process** to pick up a
+change — a browser rerun or "Clear cache" isn't enough. If a fresh launch still
+shows the old app, an old server is holding the port: find it with
+`lsof -nP -iTCP:8501 -sTCP:LISTEN` (it may run as `python -m scanpath_studio`,
+so grep `scanpath_studio`, not just `streamlit`).
+
 ## Before you open a PR
 
 ```bash
@@ -27,6 +39,14 @@ ruff format --exclude other_vis . # auto-format
 CI (`.github/workflows/ci.yml`) runs the same checks on every push and PR
 across Python 3.11/3.12/3.13/3.14. See [AGENTS.md](AGENTS.md) and the package
 [CLAUDE.md](scanpath_studio/CLAUDE.md) for an architectural overview.
+
+Add a concise entry to the `[Unreleased]` section of
+[`CHANGELOG.md`](CHANGELOG.md) — a line or two grouped under Added / Changed /
+Fixed, not a per-tweak log.
+
+If you add a user-facing feature, expose it on **every** surface — not just
+visually, but also the deep link / Share, the CLI, and the headless API. See
+*Exposing a feature on every surface* in [AGENTS.md](AGENTS.md).
 
 ## Versioning
 
@@ -45,12 +65,15 @@ The version lives in **one** place — `__version__` in
 
 ## Releasing
 
-1. Update [`CHANGELOG.md`](CHANGELOG.md) with the new version.
+1. Roll the `[Unreleased]` notes into a new version section in
+   [`CHANGELOG.md`](CHANGELOG.md).
 2. Bump `__version__` in `scanpath_studio/__init__.py`.
-3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. Bump `version` + `date-released` in [`CITATION.cff`](CITATION.cff) to match
+   (`tests/test_citation.py` enforces version parity, so a mismatch fails CI).
+4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
    `.github/workflows/publish.yml` builds and publishes to PyPI via trusted
    publishing.
-4. Optionally create a GitHub Release with the changelog notes.
+5. Optionally create a GitHub Release with the changelog notes.
 
 ## Regenerating the demo GIF
 

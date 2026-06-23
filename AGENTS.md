@@ -106,7 +106,7 @@ streamlit run streamlit_app.py
 uv run streamlit run streamlit_app.py
 
 # Tests
-pytest                              # all 114 tests
+pytest                              # run the full suite
 pytest tests/test_measures.py       # one file
 pytest --cov=scanpath_studio --cov-report=term
 
@@ -191,10 +191,35 @@ first existing column.
 3. Add a smoke test in `tests/test_smoke.py` that builds the figure against
    the bundled sample.
 
+## Exposing a feature on every surface
+
+Scanpath Studio has four parallel entry points. A user-facing feature (a new
+toggle, option, or parameter) is only "done" when it reaches **all** of them —
+not just the UI:
+
+1. **Visual UI** — the Streamlit control (`controls.py` widget + a `global_*` /
+   `single_*` / `filter_*` session key, read by `_collect_viz_settings`).
+2. **Deep link / Share** — wire it into the URL contract in `url_state.py`:
+   `_URL_PRESETS` + `_apply_url_preset` (read) and the inverse `_build_share_query`
+   (write), plus `_URL_BOUNDED` if it needs clamping. Without this the feature
+   can't be linked to or restored, and the Share widget won't round-trip it.
+3. **CLI** — a `render` flag in `cli.py` (follow the per-layer `--no-*` pattern).
+4. **Headless API** — a parameter on the relevant `api.py` builder
+   (`plot_scanpath` / `animate_scanpath`) plus a default in
+   `CANONICAL_FIGURE_DEFAULTS`, so headless output matches the app.
+
+Keep the four in sync: a feature added to the UI but missing from the deep
+link / CLI / API silently can't be shared, scripted, or rendered headlessly.
+
 ## Releasing
 
-1. Bump `version` in `pyproject.toml` and `scanpath_studio/__init__.py`.
-2. Commit; tag with `v<version>`; push the tag.
-3. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
+1. Roll the `[Unreleased]` `CHANGELOG.md` notes into a `v<version>` section
+   (keep them concise).
+2. Bump `__version__` in `scanpath_studio/__init__.py` — the single source of
+   truth; `pyproject.toml` reads it dynamically (`[tool.setuptools.dynamic]`).
+3. Bump `version` + `date-released` in `CITATION.cff` to match
+   (`tests/test_citation.py` enforces version parity).
+4. Commit; tag with `v<version>`; push the tag.
+5. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
    publishes via PyPI Trusted Publishing (requires `pypi` environment set up
    on GitHub with the project name `scanpath-studio`).

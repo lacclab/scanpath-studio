@@ -1476,6 +1476,17 @@ class TestLinePitchAndScript:
         wf = _width_fit_font(normalized_words_df)
         assert wf == pytest.approx(10 / 0.6 * 0.92, rel=1e-6)
 
+    def test_nan_label_does_not_crash(self):
+        # A missing word label (NaN) must not break sizing — with the Arrow `str`
+        # dtype `.astype(str)` keeps NaN a float, so a naive char scan would raise.
+        # The valid word is still measured; an all-NaN frame falls back cleanly.
+        mixed = pd.DataFrame({"text": [float("nan"), "月球"], "width": [56.0, 56.0]})
+        assert _latin_advance(mixed) == pytest.approx(0.5)
+        assert _width_fit_font(mixed) == pytest.approx(28 * 0.92, rel=0.02)
+        all_nan = pd.DataFrame({"text": [float("nan")], "width": [56.0]})
+        assert _width_fit_font(all_nan) is None
+        assert _latin_advance(all_nan) == pytest.approx(0.6)
+
 
 class TestBackgroundImageLayer:
     """The stimulus-page background image layer (MultiplEYE)."""

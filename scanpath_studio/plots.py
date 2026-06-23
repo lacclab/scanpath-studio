@@ -336,7 +336,9 @@ def _latin_advance(words: pd.DataFrame) -> float:
     """
     if "text" not in words.columns:
         return _MONO_ASPECT
-    text = "".join(words["text"].astype(str).tolist())
+    # dropna first: with the Arrow `str` dtype, `.astype(str)` leaves a NaN as a
+    # float (it doesn't stringify it), which would break the join + char scan.
+    text = "".join(words["text"].dropna().astype(str).tolist())
     if not text:
         return _MONO_ASPECT
     wide = sum(_is_fullwidth(ch) for ch in text)
@@ -385,9 +387,15 @@ def _width_fit_font(words: pd.DataFrame) -> Optional[float]:
     latin_adv = _latin_advance(words)
     widths = pd.to_numeric(words["width"], errors="coerce")
     ems = []
-    for text, width in zip(words["text"].astype(str), widths):
-        units = sum(_FULLWIDTH_ASPECT if _is_fullwidth(c) else latin_adv for c in text)
-        if units > 0 and np.isfinite(width):
+    for text, width in zip(words["text"], widths):
+        # Skip a NaN label (Arrow `str` keeps it a float, not "nan") or NaN width —
+        # matches the old vectorized path, where both dropped out before the quantile.
+        if pd.isna(text) or not np.isfinite(width):
+            continue
+        units = sum(
+            _FULLWIDTH_ASPECT if _is_fullwidth(c) else latin_adv for c in str(text)
+        )
+        if units > 0:
             ems.append(width / units)
     if not ems:
         return None

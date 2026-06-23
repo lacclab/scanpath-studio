@@ -73,13 +73,21 @@ the loaded frames so the app's existing panels render them:
   regression counts). The app prefers these pre-aggregated columns over recomputing.
 - **Stimulus page images** rendered as a background layer at exact coordinates —
   this sidesteps CJK/RTL font rendering entirely for the text underlay.
+- **Reading typeface** from the stimulus config (`config_*.py` — `FONT_SIZE` +
+  `FONT`) stamped as `stimulus_font_px` / `stimulus_font_family`. On a dataset
+  switch the app snaps its font controls to the exact size (e.g. 28 px) and CJK
+  font, so the overlaid word labels line up with the printed stimulus text
+  instead of being inferred from box geometry in a generic font.
 - **Session (ET1/ET2)** and **genre** (Lit / Arg / Ins / Enc / PopSci) as filter facets.
 
 ## Caveats
 
-- **Multilingual text.** CJK labels need a CJK-capable font; a future RTL sample
-  (Hebrew/Arabic) will need text-direction handling. The stimulus page-image
-  background is the reliable fallback for scripts the renderer can't lay out.
+- **Multilingual text.** CJK labels need a CJK-capable font — for the bundled
+  corpora this is taken from the stimulus config automatically (see above); the
+  font must also be installed/available to the browser to render the glyphs. A
+  future RTL sample (Hebrew/Arabic) will need text-direction handling. The
+  stimulus page-image background is the reliable fallback for scripts the
+  renderer can't lay out.
 - **Don't write into the dataset tree** — treat the corpus as read-only.
 
 ## Uploading via the browser

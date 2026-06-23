@@ -492,6 +492,26 @@ def _public_dataset_monitor(data_choice: str) -> Optional[Tuple[int, int]]:
     return spec.get("monitor") if spec else None
 
 
+def _dataset_font(words: pd.DataFrame) -> Tuple[Optional[float], Optional[str]]:
+    """The stimulus typeface ``(font_px, css_family)`` a dataset declares, or
+    ``(None, None)``.
+
+    MultiplEYE stamps ``stimulus_font_px`` / ``stimulus_font_family`` (the real
+    ``FONT_SIZE`` + font from its stimulus config) onto every word; the app snaps
+    its font controls to them so the reading text matches the stimulus exactly."""
+    if words is None or words.empty or "stimulus_font_px" not in words.columns:
+        return None, None
+    px = pd.to_numeric(words["stimulus_font_px"], errors="coerce").dropna()
+    if px.empty:
+        return None, None
+    family = None
+    if "stimulus_font_family" in words.columns:
+        fams = words["stimulus_font_family"].dropna().astype(str)
+        fams = fams[fams.str.strip() != ""]
+        family = fams.iloc[0] if not fams.empty else None
+    return float(px.iloc[0]), family
+
+
 def load_words_and_fixations(
     data_choice: str,
     participant: Optional[str] = None,
@@ -1097,6 +1117,21 @@ def render_sidebar_canvas_controls(
         st.session_state["_canvas_seeded_for"] = source_key
     st.session_state.setdefault("global_canvas_width", canvas_width)
     st.session_state.setdefault("global_canvas_height", canvas_height)
+
+    # Authoritative reading font: MultiplEYE stamps the stimulus FONT_SIZE + family
+    # from its config onto the words. Snap the font controls to it when the source
+    # changes (same gate as the canvas), so the reading text renders at the exact
+    # size and (CJK) typeface the stimulus images were drawn with. We also turn off
+    # "scale text to boxes" since the precise px is known — box geometry can only
+    # approximate it. Manual edits within a source stick (the key is unchanged, so
+    # the snap doesn't re-fire); a returning source re-snaps to the known font.
+    font_px, font_css = _dataset_font(words_filtered)
+    if font_px is not None and st.session_state.get("_font_seeded_for") != source_key:
+        st.session_state["global_base_font_size"] = int(min(max(round(font_px), 6), 72))
+        if font_css:
+            st.session_state["global_font_family"] = font_css
+        st.session_state["global_scale_text_to_boxes"] = False
+        st.session_state["_font_seeded_for"] = source_key
 
     # The display-setup panel (``title``, default "Experimental Setup") lives
     # under the 📂 Data group (TODO 5), rendered into a slot reserved there by

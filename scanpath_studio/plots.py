@@ -295,31 +295,112 @@ def _colorbar_dict(
 # into the figure's screen pixels using the same scale the boxes/fixations use.
 _MIN_LABEL_PX = 1.0
 
-# Advance-width / em of a typical monospaced font (DejaVu Sans Mono ≈ 0.6).
-# Reading experiments use monospaced fonts (OneStop included), so we can cap the
-# label size by the box *width* — stopping long words from colliding when the
-# on-screen font is a touch wider than the one the experiment was rendered in.
+# Advance-width / em of a monospaced glyph, used to back the box *width* cap that
+# stops long words from colliding when the on-screen font is a touch wider than
+# the one the experiment was rendered in. Latin monospace (DejaVu Sans Mono,
+# Courier, …) ≈ 0.6 em; in a full-width CJK monospace (Noto Sans Mono CJK) the CJK
+# glyphs are a full square (1.0 em) while Latin glyphs are half-width (0.5 em).
+# Reading stimuli are monospaced (OneStop, MultiplEYE), so summing per-character
+# advances recovers a per-word em (≈ the font size) even for mixed CJK+Latin runs
+# (a Chinese paragraph with an English URL), which a single global aspect can't.
 _MONO_ASPECT = 0.6
+_CJK_LATIN_ASPECT = 0.5
+_FULLWIDTH_ASPECT = 1.0
 _WIDTH_FIT_MARGIN = 0.92  # leave a sliver of horizontal padding inside each box
+
+
+def _is_fullwidth(ch: str) -> bool:
+    """Whether ``ch`` is an East-Asian wide / full-width glyph (≈ 1 em advance)."""
+    o = ord(ch)
+    return (
+        0x1100 <= o <= 0x115F  # Hangul Jamo
+        or 0x2E80 <= o <= 0x303E  # CJK radicals / Kangxi / CJK symbols & punct
+        or 0x3041 <= o <= 0x33FF  # Hiragana, Katakana, CJK symbols
+        or 0x3400 <= o <= 0x4DBF  # CJK Unified Ext A
+        or 0x4E00 <= o <= 0x9FFF  # CJK Unified
+        or 0xA000 <= o <= 0xA4CF  # Yi
+        or 0xAC00 <= o <= 0xD7A3  # Hangul syllables
+        or 0xF900 <= o <= 0xFAFF  # CJK compatibility
+        or 0xFF00 <= o <= 0xFF60  # full-width forms
+        or 0xFFE0 <= o <= 0xFFE6  # full-width signs
+    )
+
+
+def _latin_advance(words: pd.DataFrame) -> float:
+    """Per-em advance of *Latin* glyphs for this corpus' font.
+
+    In a full-width CJK monospace (Noto Sans Mono CJK — MultiplEYE) Latin glyphs
+    are half-width (0.5 em); in a plain Latin monospace (Courier/DejaVu — OneStop)
+    they're ≈ 0.6 em. Detected from whether the labels are CJK-heavy, so a Chinese
+    corpus' embedded English isn't measured with the wrong cell width.
+    """
+    if "text" not in words.columns:
+        return _MONO_ASPECT
+    # dropna first: with the Arrow `str` dtype, `.astype(str)` leaves a NaN as a
+    # float (it doesn't stringify it), which would break the join + char scan.
+    text = "".join(words["text"].dropna().astype(str).tolist())
+    if not text:
+        return _MONO_ASPECT
+    wide = sum(_is_fullwidth(ch) for ch in text)
+    return _CJK_LATIN_ASPECT if wide >= 0.3 * len(text) else _MONO_ASPECT
+
+
+def _line_pitch(words: pd.DataFrame) -> Optional[float]:
+    """Median line-to-line distance (data px) of the word boxes.
+
+    The true-to-scale font budget is a fraction of the *line pitch* (the gap
+    between consecutive baselines), not the box height: some corpora (MultiplEYE)
+    draw AOI boxes tight around the glyph (height ≈ font), while the line slot is
+    much taller. OneStop's boxes tile the lines (height == pitch), so this returns
+    the same value there and leaves OneStop sizing unchanged. Falls back to the
+    median box height when there's only one line or geometry is missing.
+    """
+    if words.empty or "y" not in words.columns or "height" not in words.columns:
+        return None
+    from .measures import cluster_word_lines
+
+    heights = pd.to_numeric(words["height"], errors="coerce")
+    y_center = pd.to_numeric(words["y"], errors="coerce") + heights.fillna(0) / 2.0
+    centers = y_center.groupby(cluster_word_lines(words)).median().sort_values()
+    if len(centers) >= 2:
+        pitch = float(centers.diff().dropna().median())
+        if pitch > 0:
+            return pitch
+    box_h = float(heights.median()) if heights.notna().any() else None
+    return box_h if box_h and box_h > 0 else None
 
 
 def _width_fit_font(words: pd.DataFrame) -> Optional[float]:
     """Largest font (data px) at which every word still fits its box width.
 
-    Word boxes are drawn around the rendered text, so ``box_width / n_chars`` is
-    the per-character advance; dividing by the monospace aspect recovers the em.
-    The tightest words bind, so we take a low quantile (robust to one odd box).
+    Word boxes hug the rendered text, so a word's box width equals the sum of its
+    glyph advances. Each glyph advances 1 em (full-width CJK) or ``_latin_advance``
+    em (Latin), so ``box_width / Σ advances`` recovers the em ≈ the font size — per
+    word, which is correct even for a CJK word boxed beside a half-width Latin URL
+    (a single global aspect would size the line from the narrowest run). The
+    tightest words bind, so we take a low quantile (robust to one odd box). For an
+    all-Latin corpus this reduces exactly to the old ``(box_width / n) / aspect``.
     Returns None when there's no text/width to measure.
     """
     if "width" not in words.columns or "text" not in words.columns:
         return None
-    w = pd.to_numeric(words["width"], errors="coerce")
-    n = words["text"].astype(str).str.len().clip(lower=1)
-    per_char = (w / n).replace([np.inf, -np.inf], np.nan).dropna()
-    if per_char.empty:
+    latin_adv = _latin_advance(words)
+    widths = pd.to_numeric(words["width"], errors="coerce")
+    ems = []
+    for text, width in zip(words["text"], widths):
+        # Skip a NaN label (Arrow `str` keeps it a float, not "nan") or NaN width —
+        # matches the old vectorized path, where both dropped out before the quantile.
+        if pd.isna(text) or not np.isfinite(width):
+            continue
+        units = sum(
+            _FULLWIDTH_ASPECT if _is_fullwidth(c) else latin_adv for c in str(text)
+        )
+        if units > 0:
+            ems.append(width / units)
+    if not ems:
         return None
-    tight = float(per_char.quantile(0.05))
-    return tight / _MONO_ASPECT * _WIDTH_FIT_MARGIN if tight > 0 else None
+    tight = float(pd.Series(ems).quantile(0.05))
+    return tight * _WIDTH_FIT_MARGIN if tight > 0 else None
 
 
 def _display_scale(x_range: list, y_range: list, fitted_w: int, fitted_h: int) -> float:
@@ -352,20 +433,22 @@ def _word_label_font_px(
     px per data unit):
 
     - ``scale_text_to_boxes`` (default): one line of text fills
-      ``1 / line_spacing`` of the line pitch, where the pitch is the median word
-      box height from the data. For OneStop the boxes tile the lines
-      (height == pitch) and ``line_spacing == 3`` (one blank line above + below),
-      so the height budget is box_height / 3. The size is *also* capped so the
-      longest words still fit their box width (see :func:`_width_fit_font`), which
-      keeps the default monospaced font from colliding; the smaller of the two
-      wins.
+      ``1 / line_spacing`` of the **line pitch** (the median line-to-line distance
+      from the data, see :func:`_line_pitch`) — *not* the raw box height, which is
+      only equal to the pitch when the boxes tile the lines. For OneStop the boxes
+      tile the lines (pitch == height) and ``line_spacing == 3`` (one blank line
+      above + below), so the budget is height / 3 as before; for corpora whose AOI
+      boxes hug the glyph (MultiplEYE), the pitch is the right, larger budget. The
+      size is *also* capped so the longest words still fit their box width (see
+      :func:`_width_fit_font`), which keeps the font from colliding; the smaller of
+      the two wins.
     - otherwise / no usable boxes: ``manual_font_px`` is treated as the real
       monitor font size and scaled the same way.
     """
     font_data_px = float(manual_font_px)
     if scale_text_to_boxes and not words.empty and "height" in words.columns:
-        box_h = float(pd.to_numeric(words["height"], errors="coerce").median())
-        height_fit = box_h / line_spacing if (box_h > 0 and line_spacing > 0) else None
+        pitch = _line_pitch(words)
+        height_fit = pitch / line_spacing if (pitch and line_spacing > 0) else None
         width_fit = _width_fit_font(words)
         candidates = [c for c in (height_fit, width_fit) if c and c > 0]
         if candidates:

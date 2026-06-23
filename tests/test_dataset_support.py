@@ -805,6 +805,54 @@ def test_load_multipleye_real_sample():
     assert len(fig.data) > 0
 
 
+@pytest.mark.skipif(
+    not _MULTIPLEYE_SAMPLE.is_dir(), reason="MultiplEYE sample not present"
+)
+def test_multipleye_real_sample_stamps_font():
+    # The stimulus FONT_SIZE (28) + CJK font are read from the config and stamped,
+    # surviving normalization so the app can snap its font controls to them.
+    words, fixations = datasets_module.load_multipleye(
+        _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"]
+    )
+    assert float(words["stimulus_font_px"].iloc[0]) == 28.0
+    fam = words["stimulus_font_family"].iloc[0]
+    assert "Noto Sans Mono CJK SC" in fam
+    assert float(fixations["stimulus_font_px"].iloc[0]) == 28.0
+
+
+def test_multipleye_font_config_and_css(tmp_path):
+    cfg = tmp_path / "stimuli_X" / "config"
+    cfg.mkdir(parents=True)
+    (cfg / "config_zh_ch_X.py").write_text(
+        "MAX_CHARS_PER_LINE = 82\n"
+        "FONT_SIZE = 28\n"
+        'FONT = "fonts/NotoSansMonoCJKsc-VF.ttf"\n',
+        encoding="utf-8",
+    )
+    px, family = datasets_module._multipleye_font_config(tmp_path)
+    assert px == 28.0
+    assert family == "'Noto Sans Mono CJK SC', 'Noto Sans CJK SC', monospace"
+    # Unknown font → humanised name + monospace; "cjk" in the name adds a CJK stack.
+    assert datasets_module._multipleye_font_css("CourierPrime.ttf").endswith(
+        ", monospace"
+    )
+    assert "Noto Sans CJK SC" in datasets_module._multipleye_font_css("MyCJKFont.otf")
+    # No config under the root → (None, None), no stamping.
+    assert datasets_module._multipleye_font_config(tmp_path / "empty") == (None, None)
+
+
+def test_multipleye_stamps_font_when_config_present(multipleye_root):
+    # Drop a config into the synthetic tree → the loader stamps the typeface.
+    cfg = multipleye_root / "stimuli_Demo" / "config"
+    cfg.mkdir(parents=True)
+    (cfg / "config_zh_ch_demo.py").write_text(
+        'FONT_SIZE = 22\nFONT = "fonts/NotoSansMonoCJKsc-VF.ttf"\n', encoding="utf-8"
+    )
+    words, fixations = datasets_module.load_multipleye(multipleye_root)
+    assert (words["stimulus_font_px"] == 22.0).all()
+    assert words["stimulus_font_family"].str.contains("CJK SC").all()
+
+
 # ---------------------------------------------------------------------------
 # MultiplEYE-flavoured auto-detect + filename derivation
 # ---------------------------------------------------------------------------

@@ -528,7 +528,24 @@ and feeds **DATA-1**.
 _BUG-1, BUG-2 signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**BUG-3 · MultiplEYE: stimulus text renders misaligned (fixations + image are fine)** — `Status: Backlog`
+**BUG-3 · MultiplEYE: stimulus text renders misaligned (fixations + image are fine)** — `Status: Pending approval`
+
+**Implemented (2026-06-24).** Both fixes landed and are verified (headless render
+shows the word boxes framing the printed stimulus text exactly; 580 tests pass).
+(a) The loader reads `FONT_SIZE` + `FONT` from the stimulus config and stamps
+`stimulus_font_px` / `stimulus_font_family` (a CSS stack, NotoSansMonoCJKsc →
+`'Noto Sans Mono CJK SC', …`) onto the frames (`datasets._multipleye_font_config`
+/ `_multipleye_font_css` / `_multipleye_stamp_font`; registered as meta
+passthrough fields in `data.py` so they survive normalization); the app snaps its
+font controls to them (exact 28 px + CJK family, scale-to-boxes off) on a source
+switch (`app._dataset_font` + the font snap in `render_sidebar_canvas_controls`,
+mirroring the canvas snap). (b) `scale_text_to_boxes` now budgets from the line
+**pitch** (`plots._line_pitch`) instead of the glyph-tight box height, and the
+width cap is script-aware (`_latin_advance` / `_is_fullwidth`, per-word em sum),
+so CJK + mixed CJK/Latin lines size sensibly; OneStop is byte-identical. Tests in
+`tests/test_plots.py` (TestLinePitchAndScript), `tests/test_dataset_support.py`
+(font config + stamping), `tests/test_app.py` (TestDatasetFont). Docs synced
+(CHANGELOG / `scanpath_studio/CLAUDE.md` / `docs/multipleye.md`).
 
 On a MultiplEYE trial the fixations and the stimulus **image** background line up
 correctly, but the **true-to-scale word text** (the word labels drawn from the
@@ -539,21 +556,45 @@ boxes from `_multipleye_word_boxes_from_frame`
 the *rendered text layer* is off — likely a label-positioning / font-sizing
 mismatch in the true-to-scale text path, not a coordinate-offset problem.
 
-Investigate `plots.make_scanpath_figure`'s text layer
-([`plots.py`](scanpath_studio/plots.py)): `_word_label_font_px`
-(`box_height / line_spacing`, width-capped by `_width_fit_font`), `line_spacing`
-(default 3 = OneStop's blank-line-above-and-below convention — MultiplEYE's line
-geometry almost certainly differs, so this likely over/under-sizes and
-vertically mis-seats the glyphs), and the label anchor/position vs. the word-box
-edges. Check whether the per-`(page, word_idx)` aggregated boxes carry the right
-height for the slot the text should fill, and whether MultiplEYE needs a
-different `line_spacing` / vertical-centering than the OneStop assumption.
+**Root cause (diagnosed 2026-06-23).** Two independent issues, both in the
+true-to-scale text path (`_word_label_font_px` [`plots.py`](scanpath_studio/plots.py:339)),
+**not** the coordinates (image-origin shift + offset boxes are correct):
+
+1. **Size under-budgeted ~3×.** `scale_text_to_boxes` sets font =
+   `box_height / line_spacing`. MultiplEYE AOI char boxes are **tight around the
+   glyph** (height 34 px), not line-pitch-tall like OneStop (where box height ==
+   line pitch, so `/3` leaves a blank line above+below). MultiplEYE's actual line
+   pitch is 98.6 px and the real font is **`FONT_SIZE = 28`** (from
+   `…/stimuli_…/config/config_zh_ch_Zurich_1_2025.py`). So `34/3 ≈ 11 px` is ~3×
+   too small → the user disables the toggle. Manual font **28** works because it's
+   literally the config's `FONT_SIZE` (image is drawn 1 img-px = 1 screen-px = 1
+   data-px: 1310×991 centered on 1920×1080), and the manual path still ×`scale`,
+   staying true-to-scale. Also `_width_fit_font`'s `_MONO_ASPECT = 0.6` is a
+   **Latin** assumption; the stimulus font is `NotoSansMonoCJKsc` (**full-width,
+   aspect ≈ 1.0**), so the width cap is wrong for CJK too.
+2. **"Almost" but not exact, even at 28.** (a) Font-family mismatch — labels
+   render in generic `"monospace"` ([`constants.py`](scanpath_studio/constants.py:10)),
+   not `NotoSansMonoCJKsc`, so a fallback CJK font's advance widths/cap-height
+   differ → horizontal drift along a line + small vertical offset. (b)
+   Nominal-vs-inked size + anchor: PIL drew glyphs top-left in a 34 px cell for a
+   28 px font; Plotly centers the label in the box and rasterizes "28" differently,
+   distributing the ~6 px slack differently.
+
+**Fix direction.** Stop *inferring* typography from box geometry for image-backed
+corpora; thread the real values through. (a) MultiplEYE loader reads `FONT_SIZE`
+(+ ideally the font file / a CJK-capable family) from the stimulus config and
+stamps it onto the dataset → feed as the true-to-scale font size + `font_family`.
+(b) Make `scale_text_to_boxes` budget from the **line pitch** (line-to-line
+distance) rather than the tight box height, and make the width-fit aspect
+**script-aware** (CJK full-width ≈ 1.0). OneStop is unaffected (box height ==
+pitch there).
 
 Acceptance: with the stimulus image off, the rendered MultiplEYE word text falls
-within its word boxes and matches the page layout; with the image on, the labels
-sit on top of the corresponding image words. Related: **VIZ-4** (image-based
-stimuli support), **PRE-6** (RTL/multilingual rendering — MultiplEYE adds
-non-English scripts), **DATA-1**.
+within its word boxes and matches the page layout *without* manual font tweaks;
+with the image on, the labels sit on top of the corresponding image words.
+Related: **VIZ-4** (image-based stimuli support), **VIZ-1**/**DATA-2** (px↔pt /
+experimental-setup params), **PRE-6** (RTL/multilingual rendering — MultiplEYE
+adds non-English scripts), **DATA-1**.
 
 _Next item: `BUG-4`._
 

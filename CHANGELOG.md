@@ -100,6 +100,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dismiss ✕ on the welcome tour.
 
 ### Fixed
+- **MultiplEYE reading text now aligns with the stimulus image** (BUG-3). The
+  loader reads the real `FONT_SIZE` + font from the stimulus config and stamps
+  them onto the data (`stimulus_font_px` / `stimulus_font_family`); on a dataset
+  switch the app snaps its font controls to the exact size and CJK typeface (and
+  off "scale text to boxes", since the precise px is known), so the word labels
+  land on the printed text instead of being inferred ~3× too small in a generic
+  font. The *scale-text-to-boxes* path also improved: the font is budgeted from
+  the **line pitch** (not the glyph-tight box height) and the box-width cap is
+  script-aware (full-width CJK vs half-width Latin, per word), so CJK corpora and
+  mixed CJK+Latin lines size sensibly. OneStop sizing is unchanged.
 - **Compare-mode fixations no longer turn black.** The per-scanpath colour pickers
   (rendered only when Compare is on) desynced to black and committed that on the
   next interaction; they now pass an explicit value and a falsy colour can't leak.

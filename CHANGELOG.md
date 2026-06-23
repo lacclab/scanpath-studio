@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Stimulus-font install hint** — when a dataset declares its typeface
+  (MultiplEYE), a note under **Text font** names the font, links a download, and
+  gives per-OS install steps. The overlaid labels only match the stimulus image
+  pixel-for-pixel when that exact font is installed (the browser otherwise falls
+  back per script, so a CJK font's half-width Latin — URLs/digits — drifts); the
+  note also points to the stimulus image as the reliable fallback.
 - **Corpus Analysis — question-oriented analysis sections (AN-1…28)** — the single
   *Aggregated Views* subtab is replaced by four sections, each answering one
   question, plus the WIP *Generations* tab:

@@ -82,12 +82,18 @@ the loaded frames so the app's existing panels render them:
 
 ## Caveats
 
-- **Multilingual text.** CJK labels need a CJK-capable font — for the bundled
-  corpora this is taken from the stimulus config automatically (see above); the
-  font must also be installed/available to the browser to render the glyphs. A
-  future RTL sample (Hebrew/Arabic) will need text-direction handling. The
-  stimulus page-image background is the reliable fallback for scripts the
-  renderer can't lay out.
+- **Install the stimulus font for exact text alignment.** The app reads the
+  experiment's font name from the stimulus config and snaps to it, but the font
+  file itself isn't bundled. If it isn't installed on the machine viewing the
+  app, the browser falls back **per script** — CJK glyphs land (every CJK font is
+  full-width-square), but a CJK font's **Latin** glyphs are half-width, so a
+  fallback Latin font renders wider and the overlaid labels drift (URLs/digits
+  are the worst offenders). Install the named font (the app shows which one and a
+  download link under **Text font**) and reload for a pixel match, or just turn
+  on the **stimulus image** to read the original text. A future RTL sample
+  (Hebrew/Arabic) will additionally need text-direction handling. The stimulus
+  page-image background is the reliable fallback for scripts the renderer can't
+  lay out.
 - **Don't write into the dataset tree** — treat the corpus as read-only.
 
 ## Uploading via the browser

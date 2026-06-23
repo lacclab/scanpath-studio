@@ -659,11 +659,12 @@
 <p>Static image export (PNG/SVG/PDF) and rasterized animation (GIF/MP4) render
 through <a href="https://github.com/plotly/Kaleido">Kaleido</a> v1, which drives a headless
 Chrome. <code>pip install</code> does <strong>not</strong> install Chrome — run this once:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>plotly_get_chrome<span class="w"> </span>-y
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kaleido_get_chrome<span class="w">        </span><span class="c1"># or: plotly_get_chrome -y</span>
 </code></pre></div>
-<p>On <strong>Streamlit Community Cloud</strong> the repo-root <code>packages.txt</code> installs
-<code>chromium</code> automatically. If Chrome is unavailable, fall back to <strong>HTML</strong> export
-(it's browser-free).</p>
+<p>(From Python: <code>import kaleido; kaleido.get_chrome_sync()</code>.) On <strong>Streamlit
+Community Cloud</strong> the repo-root <code>packages.txt</code> installs <code>chromium</code> automatically.
+If Chrome is unavailable, fall back to <strong>HTML</strong> export (it's browser-free) — the
+in-app export buttons pre-flight for Chrome and point you here when it's missing.</p>
 <h2 id="mp4-gif">MP4 / GIF<a class="headerlink" href="#mp4-gif" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>GIF</strong> is encoded by Pillow; <strong>MP4</strong> uses the ffmpeg binary bundled by the

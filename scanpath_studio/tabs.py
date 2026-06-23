@@ -448,6 +448,28 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
         )
 
 
+def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
+    """Keep only fixations whose 1-based ``order_in_trial`` is within ``fix_range``.
+
+    ``fix_range`` is the single-trial fixation-index window (VIZ-7) — a
+    ``(start, end)`` tuple, or ``None`` for the full trial. Applied only to the
+    frame feeding the figure / animation / comparison builders (and thus the
+    "This trial" export, which round-trips the on-screen figure), so the chips,
+    panels and bulk multi-trial export keep the complete trial. A ``None`` window
+    or a frame without ``order_in_trial`` is returned unchanged (the default path
+    stays byte-identical)."""
+    if (
+        isinstance(fix_range, (tuple, list))
+        and len(fix_range) == 2
+        and fix is not None
+        and not fix.empty
+        and "order_in_trial" in fix.columns
+    ):
+        lo, hi = fix_range
+        return fix[(fix["order_in_trial"] >= lo) & (fix["order_in_trial"] <= hi)]
+    return fix
+
+
 def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) -> dict:
     """Convert viz_settings to figure-compatible settings dict."""
     return dict(
@@ -483,6 +505,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
+        fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
         highlight_text_color=viz_settings.get(
             "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
@@ -1180,6 +1203,7 @@ def _build_studio_config(
                 viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
             ),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
+            "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
             "colorbar_orientation": figure_settings.get(
                 "colorbar_orientation", "Vertical"
             ),
@@ -1298,6 +1322,7 @@ def _render_save_restore_expander(
                 )
             ],
             "hollow": bool(st.session_state.get(f"cmp{idx}_hollow", False)),
+            "opacity": float(st.session_state.get(f"cmp{idx}_opacity", 1.0)),
         }
         for idx in range(2)
     ]
@@ -1519,6 +1544,7 @@ def _build_and_render_animation(
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
+        fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_legend=viz_settings.get("show_compare_legend", False),
@@ -1999,6 +2025,9 @@ def render_single_trial_tab(
             has_raw_gaze=has_raw_gaze,
             has_stimulus_image=has_stimulus_image,
             words=words_filtered,
+            # The selected trial's fixations size the VIZ-7 fixation-index window
+            # slider (its max is this trial's fixation count).
+            fix_range_fixations=trial_fixations,
         )
 
     # Second-trial selector + layout/legend options, rendered above the chips in
@@ -2061,6 +2090,13 @@ def render_single_trial_tab(
     comparing = compare_participant is not None and compare_trial is not None
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
 
+    # Fixation-index window (VIZ-7): the frames that feed the figure / animation
+    # are sliced to the chosen range; the full frames still drive the chips,
+    # panels and exports. A None range leaves the frames untouched.
+    fix_range = viz_settings.get("fix_index_range")
+    fig_fixations = _slice_fix_range(trial_fixations, fix_range)
+    fig_compare_fix = _slice_fix_range(compare_fix, fix_range)
+
     # Condition chips above the plot — configurable via the sidebar picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
     # a second labelled strip shows the compared trial too.
@@ -2115,16 +2151,18 @@ def render_single_trial_tab(
     save_slug = f"{selected_participant}__{selected_trial}"
     anim_playback_ms = None
     anim_file_stem = None
-    dual_anim = animate and comparing and not compare_fix.empty
+    # Use the windowed second scanpath: a window that empties B falls back to a
+    # single-trial animation (and info box).
+    dual_anim = animate and comparing and not fig_compare_fix.empty
 
     # Animation info box, in its slot inside the rail's Playback popover.
-    if animate and not trial_fixations.empty and anim_info_slot is not None:
+    if animate and not fig_fixations.empty and anim_info_slot is not None:
         with anim_info_slot:
             _render_anim_info_box(
                 trial_words,
-                trial_fixations,
+                fig_fixations,
                 compare_meta["words"] if dual_anim else None,
-                compare_fix if dual_anim else None,
+                fig_compare_fix if dual_anim else None,
                 selected_participant,
                 selected_trial,
                 compare_participant,
@@ -2147,9 +2185,9 @@ def render_single_trial_tab(
                 displayed_fig, anim_playback_ms, save_slug, anim_file_stem = (
                     _build_and_render_animation(
                         trial_words,
-                        trial_fixations,
+                        fig_fixations,
                         compare_meta["words"] if dual_anim else None,
-                        compare_fix if dual_anim else None,
+                        fig_compare_fix if dual_anim else None,
                         selected_participant,
                         selected_trial,
                         compare_participant,
@@ -2194,6 +2232,7 @@ def render_single_trial_tab(
                 layout=compare_layout,
                 line_spacing=line_spacing,
                 scale_text_to_boxes=scale_text_to_boxes,
+                fix_index_range=fix_range,
             )
             save_slug = (
                 f"{selected_participant}__{selected_trial}__vs__"
@@ -2211,9 +2250,9 @@ def render_single_trial_tab(
             )
             displayed_fig = _cached_scanpath_figure(
                 trial_words,
-                trial_fixations,
+                fig_fixations,
                 build_kwargs,
-                fig_key=_figure_input_key(trial_words, trial_fixations, build_kwargs),
+                fig_key=_figure_input_key(trial_words, fig_fixations, build_kwargs),
             )
             _render_true_scale_chart(displayed_fig, key="single")
 
@@ -2379,9 +2418,16 @@ def _render_comparison_figure(
     layout: str = "overlay",
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    fix_index_range=None,
 ):
-    """Render comparison figure for two trials."""
+    """Render comparison figure for two trials.
+
+    ``fix_index_range`` (VIZ-7) windows both scanpaths to a ``(start, end)``
+    ``order_in_trial`` range; ``None`` shows the full readings."""
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
+    # Window both compared trials to the chosen fixation-index range. Slicing the
+    # whole frame is fine — make_comparison_figure only extracts the two trials.
+    fixations_filtered = _slice_fix_range(fixations_filtered, fix_index_range)
 
     def _lookup_text_id(participant_id: str, trial_id: str) -> Optional[str]:
         match = combos[

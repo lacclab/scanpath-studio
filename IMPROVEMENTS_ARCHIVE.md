@@ -15,6 +15,7 @@ working tracker focused on open work.
 ### Groups
 [UX & Interaction](#ux--interaction) ·
 [Compare mode](#compare-mode) ·
+[Visualization](#visualization) ·
 [Bugs](#bugs) ·
 [Engineering](#engineering)
 
@@ -99,6 +100,23 @@ is restored in compare** — it sets the fixation *hue* by the chosen numeric me
 for **both** scanpaths (shared scale, one colorbar), with the per-scanpath flat
 colour kept as a *separate* field used as the A/B marker outline. Global Size /
 Hollow stay hidden (the per-scanpath versions cover those).
+
+---
+
+## Visualization
+
+**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done` *(signed off 2026-06-23)*
+
+A `single_fix_range` slider in the ⚙️ Fixation-style popover (`controls.sidebar_controls`
+→ `_render_fix_range_slider`, seeded in `_VIZ_WIDGET_DEFAULTS`, read in
+`_collect_viz_settings` as `fix_index_range`) windows the main plot to a
+`(start, end)` `order_in_trial` range — drawing only those fixations and their
+saccades. `tabs._slice_fix_range` applies the window to the frames feeding the
+static, animation, and comparison builders (and thus the "This trial" export);
+the chips, panels, and bulk multi-trial export keep the full trial. The slider
+max is the selected trial's fixation count and clamps across trial switches
+(mirroring the Generations tab's `multi_fix_range`); a <2-fixation trial clears
+the window. Sized via a new `fix_range_fixations=` kwarg on `sidebar_controls`.
 
 ---
 

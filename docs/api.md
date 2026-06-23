@@ -45,7 +45,7 @@ sps.save_figure(fig, "scanpath.png")
 
 Any keyword accepted by the underlying figure builder can be passed through
 `plot_scanpath` / `animate_scanpath` (e.g. `show_heatmap=False`,
-`color_by="pass_index"`, `saccade_color="#444"`, `hollow_fixations=True`,
+`color_by="pass_index"`, `saccade_color="#444"`, `fixation_opacity=0.5`,
 `x_field="order_in_trial"`).
 
 ::: scanpath_studio.api.plot_scanpath

@@ -118,7 +118,7 @@ zip. Wire into `export.ExportOptions` / `render_export_options` / `bulk_export`
 PNG/SVG/PDF/HTML formats, and surface it in the **Export** subtab
 (`tabs._render_export_panel`).
 
-**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Backlog`
+**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Pending approval`
 
 Today fixation markers are either fully filled or fully hollow (outline-only), via
 the boolean `global_hollow_fixations` toggle (the `Hollow circles` checkbox in
@@ -133,19 +133,8 @@ output) so overlapping fixations show through — thread it through
 of (or alongside) `hollow_fixations`, keeping the `global_*` / `cmp{idx}_*` key
 convention. CMP-4 already hides this control in compare mode. Related: **CMP-4**.
 
-**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Backlog`
-
-The Generations (WIP) tab already limits which fixations render via a
-fixation-index range slider (`multi_fix_range`, `tabs.render_multiple_comparison_tab`
-[`tabs.py`](scanpath_studio/tabs.py:2867)) backed by a `_slice_range` filter on
-`order_in_trial`. The main single-trial plot has no equivalent — the existing
-`Fixation index` checkbox ([`controls.py`](scanpath_studio/controls.py:1161)) only
-toggles the order **numbers**, not the visible **range**. Add a `single_fix_range`
-slider beside the Fixations-layer controls in `sidebar_controls`, seed it in
-`_VIZ_WIDGET_DEFAULTS`, read it in `_collect_viz_settings`, and apply the same
-`order_in_trial` slice to `trial_fixations` before the `_cached_scanpath_figure`
-build in `render_single_trial_tab` ([`tabs.py`](scanpath_studio/tabs.py)). Apply it
-consistently to the animation / compare builders. Related: **CMP-4**.
+**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done (signed off 2026-06-23)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **VIZ-8 · Color saccades by saccade type** — `Status: Backlog`
 

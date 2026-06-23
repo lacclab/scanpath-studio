@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reachable) alongside the summary stats.
 - **Column mapping surfaces auto-detected columns** per field (and flags when
   you've overridden the detected default).
+- **Fixation marker opacity** — an opacity slider (global + per-scanpath, default
+  0.7) replaces the *Hollow circles* toggle, so overlapping fixations show through;
+  threaded through every plot, animation, comparison, bulk export, save/restore and
+  deep links.
+- **Fixation-index window on the main plot** — a range slider in the Fixation popover
+  draws only fixations (and their saccades) within the chosen `order_in_trial` range,
+  applied to the single, animated and comparison views; chips/panels keep the full trial.
 
 ### Changed
 - _Internal:_ split `app.py` (4087 → ~1640 lines) into focused modules —

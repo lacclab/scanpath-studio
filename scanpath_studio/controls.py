@@ -48,6 +48,12 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_color": SACCADE_COLOR,
     "global_saccade_style": "Solid",
     "global_saccade_width": DEFAULT_SACCADE_WIDTH,
+    # VIZ-6: fixation marker alpha. Default 0.7 so overlapping fixations show
+    # through (the classic translucent scanpath look); drag to 1.0 for fully
+    # opaque markers. This replaced the old binary `Hollow circles` toggle in the
+    # UI — the `global_hollow_fixations` key is kept (no widget) so saved configs
+    # / deep links that carry it still render hollow.
+    "global_fixation_opacity": 0.7,
     "global_hollow_fixations": False,
     "global_highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
     "global_show_heatmap": False,
@@ -84,6 +90,11 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_fixclass_oob_mode": "Off",
     "global_fixclass_oob_symbol": "x",
     "global_fixclass_oob_color": OUT_OF_TEXT_COLOR,
+    # VIZ-7: single-trial fixation-index window (start, end over `order_in_trial`)
+    # for the main scanpath plot. `None` = full trial; the real bounds depend on
+    # the selected trial's fixation count, so `sidebar_controls` resolves/clamps
+    # the concrete (1, max_fix) range at render time (mirroring `multi_fix_range`).
+    "single_fix_range": None,
     # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
     # default — the per-scanpath colours already tell the readings apart.
     "global_show_compare_legend": False,
@@ -749,6 +760,11 @@ def _seed_compare_styles() -> None:
         st.session_state.setdefault(
             f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE
         )
+        # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath hollow
+        # checkbox). Default 0.7 matches the single-trial default so overlapping
+        # fixations show through. `cmp{idx}_hollow` kept seeded for saved-config /
+        # deep-link backward compatibility (no widget renders it anymore).
+        st.session_state.setdefault(f"cmp{idx}_opacity", 0.7)
         st.session_state.setdefault(f"cmp{idx}_hollow", False)
 
 
@@ -769,7 +785,15 @@ def _render_compare_fix_styles() -> None:
         st.slider(
             f"{name} — marker size range", 4, 40, key=f"cmp{idx}_marker_size_range"
         )
-        st.checkbox(f"{name} — hollow circles", key=f"cmp{idx}_hollow")
+        st.slider(
+            f"{name} — opacity",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.05,
+            format="%.2f",
+            key=f"cmp{idx}_opacity",
+            help="Marker opacity for this scanpath (1.0 = fully opaque).",
+        )
 
 
 def _render_compare_saccade_styles() -> None:
@@ -825,9 +849,58 @@ def _collect_compare_styles() -> tuple[dict, dict]:
                     )
                 ),
                 hollow=bool(st.session_state.get(f"cmp{idx}_hollow", False)),
+                opacity=float(st.session_state.get(f"cmp{idx}_opacity", 1.0)),
             )
         )
     return styles[0], styles[1]
+
+
+def _fix_range_max(fixations: Optional[pd.DataFrame]) -> int:
+    """Highest 1-based fixation index in ``fixations`` (0 when none)."""
+    if (
+        fixations is None
+        or fixations.empty
+        or "order_in_trial" not in fixations.columns
+    ):
+        return 0
+    top = pd.to_numeric(fixations["order_in_trial"], errors="coerce").max()
+    return int(top) if pd.notna(top) else 0
+
+
+def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
+    """Render the VIZ-7 fixation-index window slider (``single_fix_range``).
+
+    Mirrors the Generations tab's ``multi_fix_range``: the slider value persists
+    across trial changes (which shift ``max_fix``), so it is seeded/clamped via
+    session_state *only* (no ``value=`` arg) to stay inside ``[1, max_fix]`` — a
+    stored out-of-range value would otherwise raise. A trial with fewer than two
+    fixations can't host a range slider (a one-value slider throws in the
+    browser), so the window is cleared to ``None`` (the full, unsliced trial)."""
+    if fixations is None:
+        return
+    max_fix = _fix_range_max(fixations)
+    if max_fix < 2:
+        # Nothing meaningful to window — clear any stale stored range so the
+        # plot isn't filtered by a window the slider can no longer show.
+        if st.session_state.get("single_fix_range") is not None:
+            st.session_state["single_fix_range"] = None
+        return
+    stored = st.session_state.get("single_fix_range")
+    if isinstance(stored, (tuple, list)) and len(stored) == 2:
+        lo = max(1, min(int(stored[0]), max_fix))
+        hi = max(lo, min(int(stored[1]), max_fix))
+        st.session_state["single_fix_range"] = (lo, hi)
+    else:
+        st.session_state["single_fix_range"] = (1, max_fix)
+    st.slider(
+        "Fixation index range",
+        min_value=1,
+        max_value=max_fix,
+        key="single_fix_range",
+        help="Draw only fixations whose index falls in this range (their "
+        "saccades follow). The chips and panels still describe the full trial; "
+        "the bulk (multiple-trial) export is unaffected.",
+    )
 
 
 def _seed_viz_state(
@@ -948,6 +1021,15 @@ def _collect_viz_settings(
             hi = hi if hi > lo else lo + 1.0
             heatmap_range = _clamped_pair(ss.get("global_heatmap_color_range"), lo, hi)
 
+    # Fixation-index window (VIZ-7): a (start, end) tuple over `order_in_trial`,
+    # or None for the full trial. Read straight from the slider's session key;
+    # the rendering path clamps it to the trial's fixation count, and the
+    # non-rendering Corpus reader simply leaves it None (it never windows).
+    fix_index_range = None
+    _fr = ss.get("single_fix_range")
+    if isinstance(_fr, (tuple, list)) and len(_fr) == 2:
+        fix_index_range = (int(_fr[0]), int(_fr[1]))
+
     # Highlight column only applies when Text is shown and a span style is active.
     critical_span_style = ss.get("global_critical_span_style", "Mark text")
     highlight_column = None
@@ -1002,6 +1084,8 @@ def _collect_viz_settings(
         saccade_style=ss.get("global_saccade_style") or "Solid",
         saccade_width=float(ss.get("global_saccade_width") or DEFAULT_SACCADE_WIDTH),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
+        fixation_opacity=float(ss.get("global_fixation_opacity", 1.0)),
+        fix_index_range=fix_index_range,
         highlight_text_color=ss.get("global_highlight_text_color"),
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
         color_by_line=color_by == "line",
@@ -1049,6 +1133,7 @@ def sidebar_controls(
     has_raw_gaze: bool = False,
     has_stimulus_image: bool = False,
     words: Optional[pd.DataFrame] = None,
+    fix_range_fixations: Optional[pd.DataFrame] = None,
 ) -> Dict:
     """Render the visualization controls and return the resolved settings dict.
 
@@ -1065,6 +1150,11 @@ def sidebar_controls(
     (``tabs.render_single_trial_tab``). The returned dict is built by
     ``_collect_viz_settings`` (shared with ``viz_settings_from_state``) so the
     rendered controls and the non-rendering readers can't drift.
+
+    ``fix_range_fixations`` is the *selected trial's* fixations, used only to size
+    the VIZ-7 fixation-index window slider (its max is that trial's fixation
+    count). When omitted, the slider isn't rendered (e.g. the non-rendering
+    Corpus reader, which never windows).
     """
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
         trial_fixations, base_font_size, words
@@ -1136,6 +1226,11 @@ def sidebar_controls(
                 "'line' to tint each fixation by the text line it lands on. In "
                 "compare mode it colours both scanpaths by this metric.",
             )
+            # Fixation-index window (VIZ-7): restrict which fixations (and their
+            # saccades) are drawn on the main plot. Shared across single + compare
+            # (it's a data window, not appearance), so it sits above the
+            # appearance controls. The max is this trial's fixation count.
+            _render_fix_range_slider(fix_range_fixations)
             if not comparing:
                 st.slider(
                     "Size",
@@ -1144,10 +1239,15 @@ def sidebar_controls(
                     key="global_marker_size_range",
                     help="Fixation marker size (px).",
                 )
-                st.checkbox(
-                    "Hollow circles",
-                    key="global_hollow_fixations",
-                    help="Draw fixation markers as outlines only (filled by default).",
+                st.slider(
+                    "Opacity",
+                    min_value=0.1,
+                    max_value=1.0,
+                    step=0.05,
+                    format="%.2f",
+                    key="global_fixation_opacity",
+                    help="Fixation marker opacity. Lower it so overlapping "
+                    "fixations show through (1.0 = fully opaque).",
                 )
             st.selectbox(
                 "Colorscale",

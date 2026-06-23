@@ -149,6 +149,37 @@ class TestAppLaunches:
             "restored fixation-classification value was overridden by an inline default"
         )
 
+    def test_single_fixation_opacity_builds_without_error(self):
+        # VIZ-6: the fixation opacity slider replaced the "Hollow circles"
+        # checkbox. A restored opacity < 1.0 must survive and the figure build.
+        at = _make_apptest(synthetic=True)
+        at.session_state["global_fixation_opacity"] = 0.5
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        assert at.session_state["global_fixation_opacity"] == 0.5
+
+    def test_single_fixation_index_window(self):
+        # VIZ-7: narrow the main plot's fixation-index window and confirm the
+        # slice path rebuilds the figure without exceptions (bundled demo trials
+        # have enough fixations for the range slider to render).
+        at = _make_apptest()
+        at.session_state["single_fix_range"] = (2, 5)
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        lo, hi = at.session_state["single_fix_range"]
+        assert 1 <= lo <= hi
+
+    def test_single_fix_range_clamped_when_max_shrinks(self):
+        # A persisted window far past the trial's fixation count must clamp on
+        # boot rather than crash the range slider.
+        at = _make_apptest()
+        at.session_state["single_fix_range"] = (900, 1000)
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+
     def test_compare_styles_collected_from_popover_keys(self):
         # Per-scanpath comparison styling now lives inside the Fixation/Saccade
         # popovers. With Compare on, controls._collect_compare_styles reads the

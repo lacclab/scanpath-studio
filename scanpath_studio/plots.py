@@ -801,6 +801,7 @@ def make_scanpath_figure(
     saccade_style: str = "solid",
     saccade_width: float = DEFAULT_SACCADE_WIDTH,
     hollow_fixations: bool = False,
+    fixation_opacity: float = 1.0,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
@@ -1090,6 +1091,11 @@ def make_scanpath_figure(
             cmax=fixation_color_range[1] if fixation_color_range else None,
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
         )
+        # Marker alpha (VIZ-6): lower it so overlapping fixations show through.
+        # Always set it (even at 1.0) so the slider is authoritative — Plotly's
+        # variable-size scatter markers otherwise render at a ~0.7 default, so an
+        # unset 1.0 looked translucent ("opacity at 1 wasn't really 1").
+        marker["opacity"] = float(fixation_opacity if fixation_opacity is not None else 1.0)
         if hollow_fixations:
             marker = _make_hollow(marker)
         fig.add_trace(
@@ -1865,6 +1871,7 @@ def make_scanpath_animation(
     saccade_style: str = "solid",
     saccade_width: float = DEFAULT_SACCADE_WIDTH,
     hollow_fixations: bool = False,
+    fixation_opacity: float = 1.0,
     background_color: Optional[str] = None,
     fixations_b: Optional[pd.DataFrame] = None,
     words_b: Optional[pd.DataFrame] = None,
@@ -2018,6 +2025,9 @@ def make_scanpath_animation(
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             **s["marker_extra"],
         )
+        # Always set the alpha (even 1.0) so the control overrides Plotly's ~0.7
+        # default for variable-size scatter markers (VIZ-6).
+        marker["opacity"] = float(fixation_opacity if fixation_opacity is not None else 1.0)
         if hollow_fixations:
             marker = _make_hollow(marker)
         return marker
@@ -2395,6 +2405,7 @@ def _comparison_scanpath_style(
         "saccade_width": DEFAULT_SACCADE_WIDTH,
         "marker_size_range": default_marker_size_range,
         "hollow": False,
+        "opacity": 1.0,
     }
     if override:
         # Drop falsy values (None / "") so a blank colour can't override the
@@ -2518,6 +2529,10 @@ def _add_comparison_fixation_trace(
             color=fix_color,
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
         )
+    # Per-scanpath marker alpha (VIZ-6): always set it (even 1.0) so the control
+    # overrides Plotly's ~0.7 default for variable-size scatter markers.
+    opacity = style.get("opacity", 1.0)
+    marker["opacity"] = float(opacity if opacity is not None else 1.0)
     if style.get("hollow"):
         marker = _make_hollow(marker)
     order_font = dict(font_settings)

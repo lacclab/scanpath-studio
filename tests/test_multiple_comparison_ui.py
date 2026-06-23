@@ -13,6 +13,7 @@ import pandas as pd
 from scanpath_studio.similarity import METRICS
 from scanpath_studio.tabs import (
     _best_model_indices,
+    _slice_fix_range,
     _style_similarity_table,
 )
 
@@ -63,3 +64,22 @@ def test_style_table_headers_carry_direction_arrows():
     assert "NLD ↓" in html
     # The higher-is-better placeholders (ScanMatch, MultiMatch) get an up arrow.
     assert "↑" in html
+
+
+def _fix_frame(n: int) -> pd.DataFrame:
+    return pd.DataFrame({"order_in_trial": range(1, n + 1), "x": range(n)})
+
+
+def test_slice_fix_range_windows_by_order_index():
+    # VIZ-7: keep only fixations whose 1-based order index is in [start, end].
+    sliced = _slice_fix_range(_fix_frame(10), (3, 6))
+    assert list(sliced["order_in_trial"]) == [3, 4, 5, 6]
+
+
+def test_slice_fix_range_none_is_identity():
+    frame = _fix_frame(5)
+    # A None window (full trial) returns the frame untouched.
+    assert _slice_fix_range(frame, None) is frame
+    # A frame without the order column is also returned unchanged.
+    no_order = pd.DataFrame({"x": [1, 2, 3]})
+    assert _slice_fix_range(no_order, (1, 2)) is no_order

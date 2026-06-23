@@ -587,6 +587,7 @@ def bulk_export(
                             "saccade_width", DEFAULT_SACCADE_WIDTH
                         ),
                         hollow_fixations=settings.get("hollow_fixations", False),
+                        fixation_opacity=settings.get("fixation_opacity", 1.0),
                         critical_span_style=settings.get(
                             "critical_span_style", "Mark text"
                         ),

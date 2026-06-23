@@ -28,6 +28,7 @@ from .constants import (
     HOLLOW_OUTLINE_WIDTH,
     OUT_OF_TEXT_COLOR,
     SACCADE_COLOR,
+    TRENDLINE_COLOR,
     WORD_BOX_COLOR,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -816,6 +817,8 @@ def make_scanpath_figure(
     background_image_size: Optional[Tuple[float, float]] = None,
     background_image_origin: Optional[Tuple[float, float]] = None,
     fit_to_monitor: bool = False,
+    word_heatmap_col: Optional[str] = None,
+    word_heatmap_title: Optional[str] = None,
 ) -> go.Figure:
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
@@ -992,23 +995,39 @@ def make_scanpath_figure(
             )
     elif spatial_axes and show_heatmap and not words.empty:
         # Words-only dataset (no fixation report): fall back to the words
-        # frame's own pre-aggregated reading measures for the box heatmap.
-        measure = (
-            "total_fixation_duration_ms"
-            if heatmap_metric == "duration_ms"
-            else "n_fixations"
-        )
-        if measure in words.columns:
+        # frame's own pre-aggregated reading measures for the box heatmap. The
+        # corpus "word difficulty on the stimulus" view (AN-4) passes an explicit
+        # ``word_heatmap_col`` + title so it can tint by any aggregate or rate.
+        if word_heatmap_col is not None and word_heatmap_col in words.columns:
             heatmap_rendered = True
-            _add_word_measure_heatmap(
+            values = pd.to_numeric(words[word_heatmap_col], errors="coerce").fillna(0.0)
+            _draw_word_value_heatmap(
                 fig,
                 words,
-                measure,
+                [float(v) for v in values],
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
                 show_colorbars=show_colorbars,
+                colorbar_title=word_heatmap_title or "Value",
                 colorbar_style=cb_style,
             )
+        else:
+            measure = (
+                "total_fixation_duration_ms"
+                if heatmap_metric == "duration_ms"
+                else "n_fixations"
+            )
+            if measure in words.columns:
+                heatmap_rendered = True
+                _add_word_measure_heatmap(
+                    fig,
+                    words,
+                    measure,
+                    heatmap_colorscale=heatmap_colorscale,
+                    heatmap_range=heatmap_range,
+                    show_colorbars=show_colorbars,
+                    colorbar_style=cb_style,
+                )
 
     # Saccade lines + optional direction arrowheads (drawn before the fixation
     # markers so the dots sit on top).
@@ -3284,5 +3303,666 @@ def make_aggregated_histogram(
         title=f"{metric_label} distribution",
         showlegend=not single,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
+
+# =============================================================================
+# Analysis section figures (AN-1 … AN-22)
+# =============================================================================
+#
+# Builders for the question-oriented Corpus Analysis subtabs. Each takes a tidy
+# frame from ``aggregation.py`` plus the usual ``canvas_width`` / ``base_font_size``
+# / ``font_family`` and returns a ``go.Figure``. Empty input → a "(no data)"
+# placeholder, matching ``make_trend_figure`` / ``make_aggregated_histogram``.
+
+_DIVERGING_COLORSCALE = "RdBu"
+
+
+def _hex_to_rgba(color: str, alpha: float) -> str:
+    """``#rrggbb`` → ``rgba(r,g,b,alpha)`` for translucent spread bands. Passes
+    through non-hex colours (already ``rgb(...)`` / named) by wrapping opacity in
+    is impossible, so it returns a sensible grey fallback for those."""
+    c = str(color).lstrip("#")
+    if len(c) == 6:
+        try:
+            r, g, b = (int(c[i : i + 2], 16) for i in (0, 2, 4))
+            return f"rgba({r},{g},{b},{alpha})"
+        except ValueError:
+            pass
+    return f"rgba(120,120,120,{alpha})"
+
+
+def _no_data_figure(title: str, *, font_family: str, base_font_size: int, height=340):
+    fig = go.Figure()
+    fig.update_layout(
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=f"{title} (no data)",
+        height=height,
+    )
+    return fig
+
+
+def make_small_multiples_figure(
+    per_reader: pd.DataFrame,
+    *,
+    measure_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    cohort: Optional[pd.DataFrame] = None,
+    max_panels: int = 12,
+    panel_height: int = 110,
+) -> go.Figure:
+    """Stacked per-reader word profiles — one panel per participant (AN-1).
+
+    ``per_reader`` is tidy ``[participant_id, word_id, value]`` (see
+    ``aggregation.per_reader_word_measure``); panels share the X (reading order).
+    ``cohort`` (``[word_id, value]``) draws a faint cohort-mean overlay in each
+    panel. Caps at ``max_panels`` readers and titles the overflow (no silent cut).
+    """
+    from plotly.subplots import make_subplots
+
+    if per_reader is None or per_reader.empty:
+        return _no_data_figure(
+            f"{measure_label} per reader", font_family=font_family,
+            base_font_size=base_font_size,
+        )
+    readers = list(pd.unique(per_reader["participant_id"]))
+    n_total = len(readers)
+    readers = readers[:max_panels]
+    n = len(readers)
+    fig = make_subplots(
+        rows=n, cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 1.5 / max(n, 1)),
+        subplot_titles=[str(r) for r in readers],
+    )
+    cohort_xy = None
+    if cohort is not None and not cohort.empty:
+        c = cohort.sort_values("word_id")
+        cohort_xy = (c["word_id"].to_numpy(), c["value"].to_numpy())
+    for i, reader in enumerate(readers, start=1):
+        sub = per_reader[per_reader["participant_id"] == reader].sort_values("word_id")
+        if cohort_xy is not None:
+            fig.add_trace(
+                go.Scatter(
+                    x=cohort_xy[0], y=cohort_xy[1], mode="lines",
+                    line=dict(color="rgba(120,120,120,0.45)", width=1.2, dash="dot"),
+                    name="Cohort mean", showlegend=(i == 1), hoverinfo="skip",
+                ),
+                row=i, col=1,
+            )
+        fig.add_trace(
+            go.Scatter(
+                x=sub["word_id"].to_numpy(), y=sub["value"].to_numpy(),
+                mode="lines+markers",
+                line=dict(color=COMPARISON_PALETTE[0], width=1.5),
+                marker=dict(size=3, color=COMPARISON_PALETTE[0]),
+                name=str(reader), showlegend=False,
+                customdata=sub["word_text"].to_numpy() if "word_text" in sub else None,
+                hovertemplate=(
+                    "word %{x}"
+                    + ("  %{customdata}" if "word_text" in sub else "")
+                    + f"<br>{measure_label}: %{{y:.1f}}<extra></extra>"
+                ),
+            ),
+            row=i, col=1,
+        )
+    title = f"{measure_label} per reader (word profile)"
+    if n_total > n:
+        title += f" — showing {n} of {n_total} readers"
+    fig.update_layout(
+        height=panel_height * n + 80,
+        width=canvas_width,
+        autosize=False,
+        margin=dict(l=55, r=10, t=50, b=40),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=title,
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1),
+    )
+    fig.update_xaxes(title_text="Word (reading order)", row=n, col=1)
+    return fig
+
+
+def make_word_matrix_heatmap(
+    df: pd.DataFrame,
+    *,
+    row_col: str,
+    measure_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    value_col: str = "value",
+    colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
+    row_order: Optional[Iterable] = None,
+    height: Optional[int] = None,
+) -> go.Figure:
+    """Word × {reader|group} heatmap (AN-2, AN-22).
+
+    ``df`` is long ``[row_col, word_id, value_col]``; rows become Y, ``word_id``
+    X, ``value_col`` the color. ``row_order`` pins the row order (e.g. Group A
+    above Group B). Bright columns = universally hard words; bright rows = a
+    uniformly slow reader.
+    """
+    if df is None or df.empty:
+        return _no_data_figure(
+            f"{measure_label} by {row_col} × word", font_family=font_family,
+            base_font_size=base_font_size,
+        )
+    matrix = df.pivot_table(
+        index=row_col, columns="word_id", values=value_col, aggfunc="mean"
+    )
+    if row_order is not None:
+        keep = [r for r in row_order if r in matrix.index]
+        matrix = matrix.reindex(keep)
+    fig = go.Figure(
+        go.Heatmap(
+            z=matrix.to_numpy(),
+            x=[int(c) if float(c).is_integer() else c for c in matrix.columns],
+            y=[str(r) for r in matrix.index],
+            colorscale=colorscale,
+            colorbar=dict(title=measure_label),
+            hovertemplate="word %{x}<br>%{y}<br>" + measure_label
+            + ": %{z:.1f}<extra></extra>",
+        )
+    )
+    n_rows = max(len(matrix.index), 1)
+    fig.update_layout(
+        height=height or min(900, max(220, 26 * n_rows + 120)),
+        width=canvas_width,
+        autosize=False,
+        margin=dict(l=120, r=10, t=50, b=45),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=f"{measure_label} — {row_col.replace('_', ' ')} × word",
+        xaxis=dict(title="Word (reading order)"),
+        yaxis=dict(title=row_col.replace("_", " ").title(), autorange="reversed"),
+    )
+    return fig
+
+
+def make_word_profile_figure(
+    profiles: dict,
+    *,
+    measure_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    spread_label: str = "SD",
+    height: int = 380,
+) -> go.Figure:
+    """Cohort word profile(s): mean line + shaded spread band (AN-3 / AN-15).
+
+    ``profiles`` maps a label → ``[word_id, value, lo, hi]`` (see
+    ``aggregation.cohort_word_profile``). One entry draws the "average reader of
+    this text" with uncertainty; several overlay (e.g. two groups).
+    """
+    entries = [(str(k), v) for k, v in (profiles or {}).items() if v is not None and not v.empty]
+    if not entries:
+        return _no_data_figure(
+            f"{measure_label} word profile", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    fig = go.Figure()
+    single = len(entries) == 1
+    for i, (label, prof) in enumerate(entries):
+        prof = prof.sort_values("word_id")
+        xs = prof["word_id"].to_numpy()
+        ys = prof["value"].to_numpy()
+        color = COMPARISON_PALETTE[i % len(COMPARISON_PALETTE)]
+        rgba = _hex_to_rgba(color, 0.15)
+        if {"lo", "hi"} <= set(prof.columns):
+            lo = prof["lo"].to_numpy()
+            hi = prof["hi"].to_numpy()
+            fig.add_trace(
+                go.Scatter(
+                    x=np.concatenate([xs, xs[::-1]]),
+                    y=np.concatenate([hi, lo[::-1]]),
+                    fill="toself", fillcolor=rgba, line=dict(width=0),
+                    hoverinfo="skip", showlegend=False,
+                    name=f"{label} {spread_label}",
+                )
+            )
+        fig.add_trace(
+            go.Scatter(
+                x=xs, y=ys, mode="lines+markers",
+                line=dict(color=color, width=2), marker=dict(size=4, color=color),
+                name=label, showlegend=not single,
+                customdata=prof["word_text"].to_numpy() if "word_text" in prof else None,
+                hovertemplate=(
+                    "word %{x}"
+                    + ("  %{customdata}" if "word_text" in prof else "")
+                    + f"<br>{measure_label}: %{{y:.1f}}<extra></extra>"
+                ),
+            )
+        )
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=60, r=10, t=45, b=45),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=f"{measure_label} by word — cohort mean ± {spread_label}",
+        xaxis=dict(title="Word (reading order)"),
+        yaxis=dict(title=measure_label),
+        showlegend=not single,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
+
+def make_feature_scatter_figure(
+    df: pd.DataFrame,
+    *,
+    measure_label: str,
+    feature_label: str,
+    categorical: bool,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 400,
+) -> go.Figure:
+    """Per-word measure vs a bundled linguistic feature (AN-5).
+
+    Numeric feature → scatter + OLS trend line (with Pearson r in the title);
+    categorical feature (POS) → one box per category.
+    """
+    if df is None or df.empty or "feature" not in df.columns:
+        return _no_data_figure(
+            f"{measure_label} vs {feature_label}", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    fig = go.Figure()
+    if categorical:
+        cats = sorted(df["feature"].dropna().astype(str).unique())
+        for i, cat in enumerate(cats):
+            vals = df.loc[df["feature"].astype(str) == cat, "value"].dropna().to_numpy()
+            if vals.size:
+                fig.add_trace(
+                    go.Box(
+                        y=vals, name=cat, boxpoints="outliers",
+                        marker_color=_QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)],
+                    )
+                )
+        fig.update_layout(
+            xaxis=dict(title=feature_label), yaxis=dict(title=measure_label),
+            showlegend=False,
+        )
+        title = f"{measure_label} by {feature_label}"
+    else:
+        x = pd.to_numeric(df["feature"], errors="coerce").to_numpy()
+        y = pd.to_numeric(df["value"], errors="coerce").to_numpy()
+        ok = ~(np.isnan(x) | np.isnan(y))
+        x, y = x[ok], y[ok]
+        fig.add_trace(
+            go.Scatter(
+                x=x, y=y, mode="markers",
+                marker=dict(size=6, color=COMPARISON_PALETTE[0], opacity=0.6),
+                name="words",
+                customdata=df.loc[ok, "word_text"].to_numpy() if "word_text" in df else None,
+                hovertemplate=(
+                    f"{feature_label}: %{{x:.2f}}<br>{measure_label}: %{{y:.1f}}"
+                    + ("<br>%{customdata}" if "word_text" in df else "")
+                    + "<extra></extra>"
+                ),
+            )
+        )
+        r_txt = ""
+        if x.size >= 2 and np.std(x) > 0:
+            slope, intercept = np.polyfit(x, y, 1)
+            xs = np.array([x.min(), x.max()])
+            fig.add_trace(
+                go.Scatter(
+                    x=xs, y=slope * xs + intercept, mode="lines",
+                    line=dict(color=TRENDLINE_COLOR, width=2, dash="dash"),
+                    name="trend", hoverinfo="skip",
+                )
+            )
+            r = float(np.corrcoef(x, y)[0, 1])
+            r_txt = f"  (r = {r:.2f}, n = {x.size})"
+        fig.update_layout(
+            xaxis=dict(title=feature_label), yaxis=dict(title=measure_label),
+            showlegend=False,
+        )
+        title = f"{measure_label} vs {feature_label}{r_txt}"
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=60, r=10, t=45, b=50),
+        template="plotly_white", font=font_settings, title=title,
+    )
+    return fig
+
+
+def make_word_rate_figure(
+    df: pd.DataFrame,
+    *,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 360,
+) -> go.Figure:
+    """Skip / regression-in rate per word — lollipop bars (AN-6)."""
+    if df is None or df.empty:
+        return _no_data_figure(
+            "Skip / regression rate per word", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    df = df.sort_values("word_id")
+    xs = df["word_id"].to_numpy()
+    fig = go.Figure()
+    series = [
+        ("Skip rate", "skip_rate", COMPARISON_PALETTE[0]),
+        ("Regression-in rate", "regression_in_rate", COMPARISON_PALETTE[1]),
+    ]
+    for name, col, color in series:
+        if col not in df.columns:
+            continue
+        ys = pd.to_numeric(df[col], errors="coerce").to_numpy()
+        fig.add_trace(
+            go.Bar(
+                x=xs, y=ys, name=name, marker_color=color, opacity=0.8,
+                hovertemplate="word %{x}<br>" + name + ": %{y:.0%}<extra></extra>",
+            )
+        )
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=55, r=10, t=45, b=45),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title="Skip / regression-in rate per word",
+        xaxis=dict(title="Word (reading order)"),
+        yaxis=dict(title="Rate", tickformat=".0%"),
+        barmode="group",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
+
+def make_distribution_figure(
+    groups: dict,
+    *,
+    metric_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    kind: str = "violin",
+    height: int = 380,
+) -> go.Figure:
+    """Overlaid metric distributions — one violin/box per group (AN-7/14/18)."""
+    arrays = [
+        (str(name), np.asarray(arr, dtype="float64"))
+        for name, arr in (groups or {}).items()
+        if arr is not None and len(arr)
+    ]
+    if not arrays:
+        return _no_data_figure(
+            f"{metric_label} distribution", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    fig = go.Figure()
+    for i, (name, arr) in enumerate(arrays):
+        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
+        if kind == "box":
+            fig.add_trace(
+                go.Box(y=arr, name=name, marker_color=color, boxmean=True,
+                       boxpoints="outliers")
+            )
+        else:
+            fig.add_trace(
+                go.Violin(
+                    y=arr, name=name, line_color=color, opacity=0.7,
+                    box_visible=True, meanline_visible=True, points=False,
+                )
+            )
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=60, r=10, t=45, b=40),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=f"{metric_label} distribution",
+        yaxis=dict(title=metric_label),
+        showlegend=False,
+    )
+    return fig
+
+
+def make_density_scatter_figure(
+    df: pd.DataFrame,
+    *,
+    x_col: str,
+    y_col: str,
+    x_label: str,
+    y_label: str,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 420,
+) -> go.Figure:
+    """2D density of two per-fixation measures — the oculomotor scatter (AN-10)."""
+    if df is None or df.empty or not {x_col, y_col} <= set(df.columns):
+        return _no_data_figure(
+            f"{y_label} vs {x_label}", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    x = pd.to_numeric(df[x_col], errors="coerce").to_numpy()
+    y = pd.to_numeric(df[y_col], errors="coerce").to_numpy()
+    ok = ~(np.isnan(x) | np.isnan(y))
+    x, y = x[ok], y[ok]
+    fig = go.Figure(
+        go.Histogram2d(
+            x=x, y=y, colorscale=DEFAULT_HEATMAP_COLORSCALE, nbinsx=40, nbinsy=40,
+            colorbar=dict(title="Fixations"),
+            hovertemplate=f"{x_label}: %{{x}}<br>{y_label}: %{{y}}<br>count: %{{z}}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=60, r=10, t=45, b=50),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=f"{y_label} vs {x_label} (n = {x.size})",
+        xaxis=dict(title=x_label), yaxis=dict(title=y_label),
+    )
+    return fig
+
+
+def make_progression_figure(
+    df: pd.DataFrame,
+    *,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 380,
+) -> go.Figure:
+    """Progressive vs regressive saccade counts per trial + regression share (AN-11)."""
+    from plotly.subplots import make_subplots
+
+    if df is None or df.empty:
+        return _no_data_figure(
+            "Progressive vs regressive saccades", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    df = df.copy()
+    labels = [str(t) for t in df["trial_id"].to_numpy()]
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(
+        go.Bar(x=labels, y=df["progressive"].to_numpy(), name="Progressive",
+               marker_color=COMPARISON_PALETTE[0]),
+        secondary_y=False,
+    )
+    fig.add_trace(
+        go.Bar(x=labels, y=df["regressive"].to_numpy(), name="Regressive",
+               marker_color=COMPARISON_PALETTE[1]),
+        secondary_y=False,
+    )
+    if "regression_share" in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=labels, y=df["regression_share"].to_numpy(), name="Regression share",
+                mode="lines+markers", line=dict(color="#555", width=2),
+                marker=dict(size=5),
+            ),
+            secondary_y=True,
+        )
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=55, r=55, t=45, b=80),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title="Progressive vs regressive saccades per trial",
+        barmode="stack",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_xaxes(title_text="Trial", tickangle=-40)
+    fig.update_yaxes(title_text="Saccade count", secondary_y=False)
+    fig.update_yaxes(title_text="Regression share", tickformat=".0%", secondary_y=True,
+                     range=[0, 1])
+    return fig
+
+
+def make_paired_bars_figure(
+    df: pd.DataFrame,
+    *,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 380,
+) -> go.Figure:
+    """Side-by-side group-mean bars per measure with error bars (AN-20).
+
+    ``df`` is ``[measure, group, value, err_lo, err_hi]`` (see
+    ``aggregation.paired_group_summary``). One subplot per measure so differing
+    units keep their own scale.
+    """
+    from plotly.subplots import make_subplots
+
+    if df is None or df.empty:
+        return _no_data_figure(
+            "Group means", font_family=font_family, base_font_size=base_font_size,
+            height=height,
+        )
+    measures = list(dict.fromkeys(df["measure"]))
+    groups = list(dict.fromkeys(df["group"]))
+    fig = make_subplots(
+        rows=1, cols=len(measures), subplot_titles=measures, horizontal_spacing=0.08
+    )
+    for gi, group in enumerate(groups):
+        color = COMPARISON_PALETTE[gi % len(COMPARISON_PALETTE)]
+        for mi, measure in enumerate(measures, start=1):
+            sub = df[(df["measure"] == measure) & (df["group"] == group)]
+            if sub.empty:
+                continue
+            row = sub.iloc[0]
+            fig.add_trace(
+                go.Bar(
+                    x=[group], y=[row["value"]], name=group, marker_color=color,
+                    legendgroup=group, showlegend=(mi == 1),
+                    error_y=dict(
+                        type="data", symmetric=False,
+                        array=[row.get("err_hi", 0)], arrayminus=[row.get("err_lo", 0)],
+                    ),
+                    hovertemplate=f"{group}<br>{measure}: %{{y:.2f}}<extra></extra>",
+                ),
+                row=1, col=mi,
+            )
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=55, r=10, t=55, b=40),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title="Group means per measure",
+        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
+        barmode="group",
+    )
+    return fig
+
+
+def make_landing_curve_figure(
+    values: np.ndarray,
+    *,
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    as_fraction: bool = True,
+    height: int = 360,
+) -> go.Figure:
+    """Preferred-viewing-location curve — landing-position histogram (AN-12)."""
+    arr = np.asarray(values, dtype="float64")
+    arr = arr[~np.isnan(arr)]
+    if arr.size == 0:
+        return _no_data_figure(
+            "Landing position within words", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    nbins = 20 if as_fraction else 30
+    fig = go.Figure(
+        go.Histogram(
+            x=arr, nbinsx=nbins, marker_color=COMPARISON_PALETTE[0],
+            marker_line=dict(color="white", width=0.4),
+            hovertemplate="landing %{x}<br>count: %{y}<extra></extra>",
+        )
+    )
+    x_title = (
+        "Landing position within word (0 = start, 1 = end)"
+        if as_fraction else "Landing distance from word start (px)"
+    )
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=55, r=10, t=45, b=50),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=f"Landing-position curve (n = {arr.size})",
+        xaxis=dict(title=x_title), yaxis=dict(title="Count"),
+    )
+    return fig
+
+
+def make_difference_profile_figure(
+    df: pd.DataFrame,
+    *,
+    measure_label: str,
+    label_a: str = "Group A",
+    label_b: str = "Group B",
+    canvas_width: int,
+    base_font_size: int,
+    font_family: str,
+    height: int = 380,
+) -> go.Figure:
+    """Per-word A−B difference profile, diverging color + zero line (AN-19)."""
+    if df is None or df.empty or "diff" not in df.columns:
+        return _no_data_figure(
+            f"{measure_label} difference by word", font_family=font_family,
+            base_font_size=base_font_size, height=height,
+        )
+    df = df.sort_values("word_id")
+    xs = df["word_id"].to_numpy()
+    diffs = pd.to_numeric(df["diff"], errors="coerce").to_numpy()
+    vmax = np.nanmax(np.abs(diffs)) if np.isfinite(diffs).any() else 1.0
+    vmax = vmax if vmax > 0 else 1.0
+    fig = go.Figure(
+        go.Bar(
+            x=xs, y=diffs,
+            marker=dict(
+                color=diffs, colorscale=_DIVERGING_COLORSCALE, cmin=-vmax, cmax=vmax,
+                colorbar=dict(title=f"{label_a} − {label_b}"),
+            ),
+            customdata=df["word_text"].to_numpy() if "word_text" in df else None,
+            hovertemplate=(
+                "word %{x}"
+                + ("  %{customdata}" if "word_text" in df else "")
+                + f"<br>Δ {measure_label}: %{{y:.1f}}<extra></extra>"
+            ),
+        )
+    )
+    fig.add_hline(y=0, line=dict(color="#333", width=1))
+    fig.update_layout(
+        height=height, width=canvas_width, autosize=False,
+        margin=dict(l=60, r=10, t=50, b=45),
+        template="plotly_white",
+        font=dict(family=font_family or FONT_FAMILY, size=base_font_size),
+        title=f"{measure_label}: {label_a} − {label_b} by word",
+        xaxis=dict(title="Word (reading order)"),
+        yaxis=dict(title=f"Δ {measure_label}"),
     )
     return fig

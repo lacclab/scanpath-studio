@@ -1409,22 +1409,63 @@ class TestSetupWizard:
         assert at.session_state["global_canvas_width"] == 1999
 
 
-@pytest.mark.timeout(90)
+@pytest.mark.timeout(120)
 class TestCorpusAnalysisTab:
-    """The renamed 'Corpus Analysis' tab wraps Generations + Aggregated Views."""
+    """The 'Corpus Analysis' tab hosts the question-oriented analysis sections
+    (Per text / Per reader / Per group / Group comparison) + Generations."""
 
-    def test_aggregated_views_widgets_render(self):
-        # Demo source: several participants / trials / texts, so the trends,
-        # per-text heatmap, and grouped histogram all have data.
+    def test_analysis_sections_render(self):
+        # Demo source: several participants / trials / texts, so every section
+        # has data. AppTest renders all st.tabs bodies, so one run exercises the
+        # default view of each section.
         at = _make_apptest()
         at.session_state["main_nav"] = "Corpus Analysis"
-        at.run(timeout=40)
+        at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        metric = [s for s in at.selectbox if s.key == "agg_metric"]
-        assert metric, "Aggregated Views metric selectbox not found"
-        group = [s for s in at.selectbox if s.key == "agg_hist_group"]
-        assert group, "Aggregated Views grouping selectbox not found"
+        keys = {s.key for s in at.selectbox}
+        for view_key in ("ptext_view", "prdr_view", "pgrp_view", "cmp_view"):
+            assert view_key in keys, f"{view_key} view selector not found"
+
+    @pytest.mark.parametrize(
+        ("view_key", "view"),
+        [
+            ("ptext_view", "Word × reader heatmap"),
+            ("ptext_view", "Cohort profile"),
+            ("ptext_view", "Word difficulty on stimulus"),
+            ("ptext_view", "Measure vs feature"),
+            ("ptext_view", "Skip / regression rate"),
+            ("prdr_view", "Reading summary"),
+            ("prdr_view", "Progressive vs regressive"),
+            ("prdr_view", "Landing-position curve"),
+            ("prdr_view", "Per-trial trend"),
+            ("pgrp_view", "Word profile"),
+            ("pgrp_view", "Reader summary table"),
+            ("cmp_view", "Difference word profile"),
+            ("cmp_view", "Paired summary bars"),
+            ("cmp_view", "Effect size + test"),
+            ("cmp_view", "Two-group word heatmap"),
+        ],
+    )
+    def test_each_analysis_view_renders(self, view_key, view):
+        # Drive each non-default analysis view and confirm it renders cleanly.
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state[view_key] = view
+        at.run(timeout=60)
+        assert not at.exception, f"{view_key}={view!r}: {at.exception}"
+        assert at.error == [], f"{view_key}={view!r} st.error: {[e.value for e in at.error]}"
+
+    def test_group_filter_set_mode_renders(self):
+        # The 'Independent filter sets' group-definition mode (the second of the
+        # two modes the user asked for) must render for both group sections.
+        at = _make_apptest()
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.session_state["cmp_mode"] = "Independent filter sets"
+        at.session_state["pgrp_mode"] = "Independent filter sets"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
 
 @pytest.mark.timeout(90)

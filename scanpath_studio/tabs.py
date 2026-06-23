@@ -7,16 +7,39 @@ import json
 import os
 from typing import Callable, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
 from scanpath_studio.aggregation import (
-    aggregate_word_measures_by_text,
-    grouped_metric_values,
-    metric_by_fixation_index,
+    MEASURES,
+    Measure,
+    apply_group,
+    available_features,
+    available_measures,
+    cohort_summary_table,
+    cohort_word_profile,
+    ensure_fixation_enrichment,
+    group_effect_size,
+    group_word_difference,
+    landing_positions,
+    measure_values,
     metric_by_trial_index,
+    metric_over_time,
+    paired_group_summary,
+    per_participant_trend,
+    per_reader_word_measure,
+    progressive_regressive_counts,
+    reader_summary,
+    reader_vs_cohort_values,
+    saccade_vs_duration,
     text_read_counts,
+    two_group_values,
+    two_group_word_profiles,
+    word_box_aggregate,
+    word_measure_vs_feature,
+    word_rate_profile,
 )
 from scanpath_studio.animation_export import (
     CHROME_INSTALL_HINT,
@@ -27,6 +50,7 @@ from scanpath_studio.animation_export import (
 )
 from scanpath_studio.annotations import render_trial_annotations
 from scanpath_studio.constants import (
+    DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_SACCADE_WIDTH,
@@ -71,12 +95,22 @@ from scanpath_studio.model_scanpaths import (
 from scanpath_studio.plots import (
     _png_pixel_size,
     animation_playback_ms,
-    make_aggregated_histogram,
     make_comparison_figure,
+    make_density_scatter_figure,
+    make_difference_profile_figure,
+    make_distribution_figure,
+    make_feature_scatter_figure,
+    make_landing_curve_figure,
     make_metric_convergence_figure,
+    make_paired_bars_figure,
+    make_progression_figure,
     make_scanpath_animation,
     make_scanpath_figure,
+    make_small_multiples_figure,
     make_trend_figure,
+    make_word_matrix_heatmap,
+    make_word_profile_figure,
+    make_word_rate_figure,
 )
 from scanpath_studio.similarity import (
     METRICS,
@@ -2434,21 +2468,309 @@ def _render_comparison_figure(
 # Corpus Analysis Tab  (parent of Generations + Aggregated Views)
 # -----------------------------------------------------------------------------
 
-# Aggregated-views metric registry: label → (frame, column, supports_fixation_trend).
-# ``frame`` is "fixations" (per-fixation) or "words" (per-word reading measure).
-_AGG_METRICS = {
-    "Fixation duration (ms)": ("fixations", "duration_ms", True),
-    "Saccade amplitude (px)": ("fixations", "saccade_amplitude", True),
-    "First fixation duration — FFD (ms)": ("words", "first_fixation_ms", False),
-    "First-pass gaze — FPRT (ms)": ("words", "first_pass_gaze_duration_ms", False),
-    "Regression-path — RPD (ms)": ("words", "regression_path_duration_ms", False),
-    "Total fixation duration — TFD (ms)": (
-        "words",
-        "total_fixation_duration_ms",
-        False,
-    ),
-    "Fixations per word": ("words", "n_fixations", False),
+# --- Cached analysis wrappers ------------------------------------------------
+# Each wraps a pure ``aggregation`` helper with ``@st.cache_data`` keyed on a
+# cheap frame *fingerprint* (``fkey``) + hashable scalars (the measure key,
+# aggregation/spread, flags), mirroring the existing cached-aggregation pattern.
+# Frames pass
+# un-hashed (underscore args). Group views feed a pre-filtered frame, so its
+# fingerprint keys a separate cache entry automatically.
+
+
+@st.cache_data(show_spinner=False)
+def _c_per_reader_word(_words, text_col, text_id, mkey, agg, normalize, fkey):
+    return per_reader_word_measure(
+        _words, text_col, text_id, MEASURES[mkey], agg=agg, normalize=normalize
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _c_cohort_profile(
+    _words, text_col, text_id, mkey, agg, spread, normalize, min_readers, fkey
+):
+    return cohort_word_profile(
+        _words, text_col, text_id, MEASURES[mkey], agg=agg, spread=spread,
+        normalize=normalize, min_readers=min_readers,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _c_word_box_aggregate(_words, text_col, text_id, mkey, agg, fkey):
+    return word_box_aggregate(_words, text_col, text_id, MEASURES[mkey], agg=agg)
+
+
+@st.cache_data(show_spinner=False)
+def _c_word_feature(_words, text_col, text_id, mkey, feature_col, agg, normalize, fkey):
+    return word_measure_vs_feature(
+        _words, text_col, text_id, MEASURES[mkey], feature_col, agg=agg,
+        normalize=normalize,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _c_word_rate(_words, text_col, text_id, min_readers, fkey):
+    return word_rate_profile(_words, text_col, text_id, min_readers=min_readers)
+
+
+@st.cache_data(show_spinner=False)
+def _c_cohort_summary(_words, _fix, fwkey, ffkey):
+    return cohort_summary_table(_words, _fix)
+
+
+@st.cache_data(show_spinner=False)
+def _c_enrich_fix(_fix, _words, ffkey, fwkey):
+    return ensure_fixation_enrichment(_fix, _words)
+
+
+# --- Cross-cutting analysis controls (AN-23 … AN-27) -------------------------
+
+_AGG_OPTIONS = ["mean", "median", "sum"]
+_SPREAD_OPTIONS = ["SD", "SEM", "IQR", "Bootstrap CI"]
+
+# Friendly labels for the common condition columns the group pickers expose
+# (mirrors controls._FILTER_FIELD_LABELS without importing it).
+_GROUP_COL_LABELS = {
+    "difficulty_level": "Difficulty",
+    "question_preview": "Reading regime",
+    "repeated_reading_trial": "Reading number",
+    "is_correct": "Answer",
+    "participant_id": "Participant",
+    "genre": "Genre",
+    "session": "Session",
+    "pp_gender": "Gender",
 }
+
+
+def _pretty_col(col: str) -> str:
+    """Friendly label for a raw column id (group-definition pickers)."""
+    return _GROUP_COL_LABELS.get(col, str(col).replace("_", " ").strip().title())
+
+
+def _measure_picker(
+    words, fixations, *, key, host=None, per_word_only=False, label="Measure"
+) -> Optional["Measure"]:
+    """The shared measure picker (AN-23) — TFD default, only present columns."""
+    host = host or st
+    ms = available_measures(words, fixations, per_word_only=per_word_only)
+    if not ms:
+        host.info("No aggregatable measures found in this dataset.")
+        return None
+    labels = {m.label: m.key for m in ms}
+    options = list(labels)
+    default = "Total fixation duration — TFD"
+    index = options.index(default) if default in options else 0
+    chosen = host.selectbox(
+        label, options=options, index=index, key=key,
+        help="Eye-movement measure every view in this section reads (AN-23).",
+    )
+    return MEASURES[labels[chosen]]
+
+
+def _agg_spread_controls(host, *, key, with_spread=True):
+    """Aggregation (mean/median/sum) + spread (SD/SEM/IQR/bootstrap) (AN-24)."""
+    cols = host.columns(2 if with_spread else 1)
+    agg = cols[0].selectbox(
+        "Aggregate", _AGG_OPTIONS, key=f"{key}_agg",
+        help="How per-reader values are combined (AN-24).",
+    )
+    spread = "SD"
+    if with_spread:
+        spread = cols[1].selectbox(
+            "Spread", _SPREAD_OPTIONS, key=f"{key}_spread",
+            help="Band / error around the centre (AN-24).",
+        )
+    return agg, spread
+
+
+def _normalize_toggle(host, *, key, disabled=False):
+    """Z-score-within-reader toggle (AN-25)."""
+    return bool(
+        host.toggle(
+            "Z-score within reader", value=False, key=key, disabled=disabled,
+            help="Compare slow vs fast readers on shape, not absolute level (AN-25).",
+        )
+    )
+
+
+def _min_readers_input(host, *, key, label="Min readers per word", default=1):
+    """Min-observations guard (AN-26)."""
+    return int(
+        host.number_input(
+            label, min_value=1, max_value=999, value=default, step=1, key=key,
+            help="Words backed by fewer observations are dropped (AN-26).",
+        )
+    )
+
+
+def _download_tidy(host, df, *, name, key, label="⬇ Download this table (CSV)"):
+    """Per-view tidy-table download (AN-27)."""
+    if df is None or getattr(df, "empty", True):
+        return
+    host.download_button(
+        label, data=df.to_csv(index=False).encode("utf-8"), file_name=name,
+        mime="text/csv", key=key,
+    )
+
+
+def _apply_min_readers(host, df, min_readers, *, key):
+    """Drop under-supported word rows and caption the count (AN-26)."""
+    if df is None or df.empty or "enough" not in df.columns or min_readers <= 1:
+        return df
+    dropped = int((~df["enough"]).sum())
+    out = df[df["enough"]]
+    if dropped:
+        host.caption(f"⚠️ {dropped} word(s) backed by < {min_readers} readers hidden.")
+    return out
+
+
+# --- Group definition (AN-14 … AN-22) ----------------------------------------
+# Two modes (the user asked for both): *split a field* — pick one categorical
+# column and assign its values to A vs B — and *independent filter sets* — a full
+# participant/text/condition picker per group. Both reduce to a group ``spec``
+# (``{column: [allowed values]}``) consumed by ``aggregation.group_mask``.
+
+_GROUP_SPLIT_CANDIDATES = (
+    "difficulty_level", "question_preview", "repeated_reading_trial", "is_correct",
+    "genre", "session", "pp_gender", "participant_id",
+)
+_FILTER_SET_FIELDS = (
+    "difficulty_level", "question_preview", "repeated_reading_trial", "is_correct",
+    "genre", "session",
+)
+
+
+def _both_frame_values(words, fixations, col):
+    frames = [f for f in (fixations, words) if col in getattr(f, "columns", [])]
+    vals = set()
+    for f in frames:
+        vals |= set(f[col].astype(str).dropna().unique())
+    return sorted(vals)
+
+
+def _group_split_columns(words, fixations):
+    """Categorical columns present in BOTH frames with 2…60 values."""
+    out = []
+    text_col = _text_column(words) or _text_column(fixations)
+    candidates = list(_GROUP_SPLIT_CANDIDATES) + ([text_col] if text_col else [])
+    for col in dict.fromkeys(candidates):
+        if col in words.columns and col in fixations.columns:
+            n = words[col].astype(str).nunique()
+            if 2 <= n <= 60:
+                out.append(col)
+    return out
+
+
+def _join_label(values):
+    vals = [str(v) for v in (values or [])]
+    if not vals:
+        return ""
+    return vals[0] if len(vals) == 1 else f"{vals[0]} +{len(vals) - 1}"
+
+
+def _render_filter_set(words, fixations, *, key, default_label):
+    """One independent group's filter-set picker → ``(spec, label)``."""
+    spec = {}
+    label = st.text_input("Label", value=default_label, key=f"{key}_label")
+    text_col = _text_column(fixations) or _text_column(words)
+    for col, pretty in (
+        ("participant_id", "Participants"),
+        (text_col, "Texts"),
+        *[(c, _pretty_col(c)) for c in _FILTER_SET_FIELDS],
+    ):
+        if not col:
+            continue
+        opts = _both_frame_values(words, fixations, col)
+        if len(opts) < 2 or len(opts) > 400:
+            continue
+        sel = st.multiselect(pretty, opts, key=f"{key}_{col}", placeholder="All")
+        if sel:
+            spec[col] = sel
+    return spec, (label or default_label)
+
+
+def _render_group_definition(words, fixations, *, key, two_groups, host=None):
+    """Group-definition UI → one ``spec``/``(spec, label)`` or two ``(a, b, la, lb)``."""
+    host = host or st
+    mode = host.radio(
+        "Define group(s) by",
+        ["Split a field", "Independent filter sets"],
+        key=f"{key}_mode", horizontal=True,
+        help="Split one categorical column into groups, or build each group from "
+        "its own participant/text/condition filter.",
+    )
+    if mode == "Split a field":
+        cols = _group_split_columns(words, fixations)
+        if not cols:
+            host.info(
+                "No categorical field with ≥2 values shared by both tables — use "
+                "*Independent filter sets* instead."
+            )
+            return (None, None, "Group A", "Group B") if two_groups else (None, "Group")
+        col = host.selectbox(
+            "Field", cols, key=f"{key}_field", format_func=_pretty_col
+        )
+        vals = _both_frame_values(words, fixations, col)
+        if two_groups:
+            c = host.columns(2)
+            a = c[0].multiselect(
+                f"Group A — {_pretty_col(col)}", vals, default=vals[:1], key=f"{key}_a"
+            )
+            rest = [v for v in vals if v not in a]
+            b = c[1].multiselect(
+                f"Group B — {_pretty_col(col)}", vals, default=rest[:1], key=f"{key}_b"
+            )
+            return (
+                ({col: a} if a else {}),
+                ({col: b} if b else {}),
+                _join_label(a) or "Group A",
+                _join_label(b) or "Group B",
+            )
+        sel = host.multiselect(
+            f"{_pretty_col(col)} =", vals, default=vals[:1], key=f"{key}_g"
+        )
+        return ({col: sel} if sel else {}), (_join_label(sel) or "All")
+    # Independent filter sets.
+    if two_groups:
+        c = host.columns(2)
+        with c[0]:
+            st.markdown("**Group A**")
+            sa, la = _render_filter_set(words, fixations, key=f"{key}_setA",
+                                        default_label="Group A")
+        with c[1]:
+            st.markdown("**Group B**")
+            sb, lb = _render_filter_set(words, fixations, key=f"{key}_setB",
+                                        default_label="Group B")
+        return sa, sb, la, lb
+    spec, label = _render_filter_set(words, fixations, key=f"{key}_set0",
+                                     default_label="Group")
+    return spec, label
+
+
+def _warn_word_only_group_fields(host, fixations, *specs) -> None:
+    """Warn when a group is defined on a field absent from the fixation table.
+
+    ``group_mask`` filters per frame, so a word-only spec column leaves the
+    fixation frame unfiltered — the *fixation-level* views (distributions for a
+    per-fixation measure, paired bars, effect size) would then silently compare
+    all-vs-all. Surfacing it beats a misleading comparison.
+    """
+    missing = sorted(
+        {
+            col
+            for spec in specs
+            for col, vals in (spec or {}).items()
+            if vals and col not in getattr(fixations, "columns", [])
+        }
+    )
+    if missing:
+        host.warning(
+            "Group field(s) "
+            + ", ".join(_pretty_col(c) for c in missing)
+            + " aren't in the fixation table, so the fixation-level views "
+            "(distributions for a per-fixation measure, paired bars, effect "
+            "size) can't split on them. Use a field present in both tables for "
+            "those views."
+        )
 
 
 def _text_column(frame: pd.DataFrame) -> Optional[str]:
@@ -2457,26 +2779,6 @@ def _text_column(frame: pd.DataFrame) -> Optional[str]:
         if col in frame.columns:
             return col
     return None
-
-
-@st.cache_data(show_spinner=False)
-def _agg_with_trial_index(_frame: pd.DataFrame, metric: str, fkey) -> pd.DataFrame:
-    """Per-trial-index trend, cached on a frame fingerprint (``fkey``)."""
-    f = _frame.copy()
-    f["trial_index"] = derive_trial_index(f)
-    return metric_by_trial_index(f, metric)
-
-
-@st.cache_data(show_spinner=False)
-def _agg_by_fixation_index(_fixations: pd.DataFrame, metric: str, fkey) -> pd.DataFrame:
-    return metric_by_fixation_index(_fixations, metric)
-
-
-@st.cache_data(show_spinner=False)
-def _agg_word_heatmap(
-    _words: pd.DataFrame, text_col: str, text_id, fkey
-) -> pd.DataFrame:
-    return aggregate_word_measures_by_text(_words, text_col, text_id)
 
 
 def render_corpus_analysis_tab(
@@ -2492,13 +2794,36 @@ def render_corpus_analysis_tab(
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
 ) -> None:
-    """Corpus Analysis tab — corpus-level views beyond a single trial.
+    """Corpus Analysis tab — question-oriented analysis sections.
 
-    Two subtabs: **Generations (WIP)** (the real-vs-model scanpath comparison)
-    and **Aggregated Views** (trial-index / fixation-index trends, per-text
-    heatmaps, and grouped metric distributions across many trials).
+    Replaces the single *Aggregated Views* subtab with one subtab per question —
+    **Per text** (one text, many readers; AN-1…6), **Per reader** (one reader,
+    many trials; AN-7…13), **Per group** (a cohort; AN-14…17) and **Group
+    comparison** (two cohorts; AN-18…22) — plus the WIP **Generations** tab. Every
+    section obeys the active trial filters and reads the shared measure picker /
+    aggregation / spread / normalization controls (AN-23…27).
     """
-    gen_tab, agg_tab = st.tabs(["Generations (WIP)", "Aggregated Views"])
+    common = dict(
+        canvas_width=canvas_width,
+        canvas_height=canvas_height,
+        base_font_size=base_font_size,
+        font_family=font_family,
+        line_spacing=line_spacing,
+        scale_text_to_boxes=scale_text_to_boxes,
+    )
+    text_tab, reader_tab, group_tab, cmp_tab, gen_tab = st.tabs(
+        ["Per text", "Per reader", "Per group", "Group comparison", "Generations (WIP)"]
+    )
+    with text_tab:
+        render_per_text_tab(
+            words_filtered, fixations_filtered, viz_settings=viz_settings, **common
+        )
+    with reader_tab:
+        render_per_reader_tab(words_filtered, fixations_filtered, **common)
+    with group_tab:
+        render_per_group_tab(words_filtered, fixations_filtered, **common)
+    with cmp_tab:
+        render_group_comparison_tab(words_filtered, fixations_filtered, **common)
     with gen_tab:
         render_multiple_comparison_tab(
             words_filtered,
@@ -2512,20 +2837,219 @@ def render_corpus_analysis_tab(
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
         )
-    with agg_tab:
-        render_aggregated_views_tab(
-            words_filtered,
-            fixations_filtered,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
+
+
+# -----------------------------------------------------------------------------
+# Question-oriented analysis subtabs (AN-1 … AN-22)
+# -----------------------------------------------------------------------------
+
+
+def _chart(fig) -> None:
+    """Render a non-spatial Plotly figure stretched to the column width."""
+    st.plotly_chart(fig, width="stretch")
+
+
+def _text_picker(words: pd.DataFrame, *, key: str, host=None, label: str = "Text"):
+    """Pick one text/passage; returns ``(text_col, text_id)`` (``None`` if none)."""
+    host = host or st
+    text_col = _text_column(words)
+    if text_col is None or "word_id" not in words.columns:
+        return None, None
+    counts = text_read_counts(words, text_col)
+    if not counts.empty:
+        labels = {
+            f"{row.text}  ({row.n_participants} readers)": row.text
+            for row in counts.itertuples()
+        }
+        chosen = host.selectbox(label, list(labels), key=key)
+        return text_col, labels[chosen]
+    vals = sorted(words[text_col].astype(str).unique())
+    if not vals:
+        return text_col, None
+    return text_col, host.selectbox(label, vals, key=key)
+
+
+def _participant_picker(words, fixations, *, key, host=None, label="Reader"):
+    host = host or st
+    for frame in (fixations, words):
+        if frame is not None and not frame.empty and "participant_id" in frame.columns:
+            opts = sorted(frame["participant_id"].astype(str).unique())
+            if opts:
+                return host.selectbox(label, opts, key=key)
+    return None
+
+
+def _percentile(series: pd.Series, value) -> Optional[float]:
+    s = pd.to_numeric(series, errors="coerce").dropna()
+    if s.empty or value is None or pd.isna(value):
+        return None
+    return float((s < value).mean() * 100.0)
+
+
+def render_per_text_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    viz_settings: dict,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    scale_text_to_boxes: bool = True,
+) -> None:
+    """*What does this text look like?* — one text, many readers (AN-1…6)."""
+    st.caption(
+        "One **text**, all its readers. Pick a text, a measure, then a view: "
+        "per-reader word profiles, a word × reader heatmap, the cohort profile, "
+        "word difficulty on the stimulus, a linguistic-feature scatter, or skip / "
+        "regression rates. Obeys the active trial filters."
+    )
+    if words_filtered.empty or "word_id" not in words_filtered.columns:
+        st.info("Per-text views need a word-level table (word ids + reading measures).")
+        return
+    fkey = frame_fingerprint(words_filtered)
+    top = st.columns([3, 2])
+    text_col, text_id = _text_picker(words_filtered, key="ptext_text", host=top[0])
+    if text_col is None or text_id is None:
+        st.info("No text/passage column found.")
+        return
+    view = top[1].selectbox(
+        "View",
+        [
+            "Per-reader profiles",
+            "Word × reader heatmap",
+            "Cohort profile",
+            "Word difficulty on stimulus",
+            "Measure vs feature",
+            "Skip / regression rate",
+        ],
+        key="ptext_view",
+    )
+    fw = dict(canvas_width=canvas_width, base_font_size=base_font_size,
+              font_family=font_family)
+
+    if view == "Skip / regression rate":  # AN-6 — no measure picker
+        min_readers = _min_readers_input(st, key="ptext6_min")
+        rate = _c_word_rate(words_filtered, text_col, text_id, min_readers, fkey)
+        rate = _apply_min_readers(st, rate, min_readers, key="ptext6_min_note")
+        _chart(make_word_rate_figure(rate, **fw))
+        _download_tidy(st, rate, name=f"word_rates_{text_id}.csv", key="dl_ptext6")
+        return
+
+    c = st.columns([3, 1, 1, 1])
+    measure = _measure_picker(
+        words_filtered, fixations_filtered, key="ptext_measure", host=c[0],
+        per_word_only=True,
+    )
+    if measure is None:
+        return
+    agg = c[1].selectbox("Aggregate", _AGG_OPTIONS, key="ptext_agg")
+    # Normalization is per-reader; it doesn't apply to the single aggregate tint
+    # of the stimulus view (AN-4), so disable the toggle there rather than show an
+    # inert control.
+    normalize = _normalize_toggle(
+        c[3], key="ptext_norm",
+        disabled=measure.is_rate or view == "Word difficulty on stimulus",
+    )
+
+    if view == "Per-reader profiles":  # AN-1
+        overlay = c[2].checkbox("Cohort mean", value=True, key="ptext1_overlay")
+        per = _c_per_reader_word(
+            words_filtered, text_col, text_id, measure.key, agg, normalize, fkey
         )
+        cohort = None
+        if overlay:
+            coh = _c_cohort_profile(
+                words_filtered, text_col, text_id, measure.key, agg, "SD", normalize,
+                1, fkey,
+            )
+            cohort = coh[["word_id", "value"]] if not coh.empty else None
+        _chart(make_small_multiples_figure(
+            per, measure_label=measure.axis_label, cohort=cohort, **fw))
+        _download_tidy(st, per, name=f"per_reader_{measure.key}_{text_id}.csv",
+                       key="dl_ptext1")
+    elif view == "Word × reader heatmap":  # AN-2
+        per = _c_per_reader_word(
+            words_filtered, text_col, text_id, measure.key, agg, normalize, fkey
+        )
+        _chart(make_word_matrix_heatmap(
+            per, row_col="participant_id", measure_label=measure.axis_label,
+            colorscale=viz_settings.get("heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE),
+            **fw))
+        _download_tidy(st, per, name=f"word_reader_{measure.key}_{text_id}.csv",
+                       key="dl_ptext2")
+    elif view == "Cohort profile":  # AN-3
+        spread = c[2].selectbox("Spread", _SPREAD_OPTIONS, key="ptext3_spread")
+        min_readers = _min_readers_input(st, key="ptext3_min")
+        prof = _c_cohort_profile(
+            words_filtered, text_col, text_id, measure.key, agg, spread, normalize,
+            min_readers, fkey,
+        )
+        prof = _apply_min_readers(st, prof, min_readers, key="ptext3_min_note")
+        _chart(make_word_profile_figure(
+            {f"Cohort ({measure.label})": prof}, measure_label=measure.axis_label,
+            spread_label=spread, **fw))
+        _download_tidy(st, prof, name=f"cohort_profile_{measure.key}_{text_id}.csv",
+                       key="dl_ptext3")
+    elif view == "Word difficulty on stimulus":  # AN-4 (+ AN-28: reads viz_settings)
+        agg_words = _c_word_box_aggregate(
+            words_filtered, text_col, text_id, measure.key, agg, fkey
+        )
+        if agg_words.empty:
+            st.info("This text has no word geometry to tint.")
+            return
+        fig = make_scanpath_figure(
+            agg_words, pd.DataFrame(),
+            canvas_width=int(canvas_width), canvas_height=int(canvas_height),
+            base_font_size=int(base_font_size), font_family=font_family,
+            x_field="x", y_field="y",
+            show_words=True, show_word_labels=viz_settings.get("show_labels", True),
+            show_fixations=False, show_order=False, show_saccades=False,
+            show_heatmap=True, color_by="value", heatmap_metric=None,
+            heatmap_style="Word boxes",
+            marker_size_range=viz_settings.get("marker_size_range",
+                                               DEFAULT_MARKER_SIZE_RANGE),
+            order_font_size=viz_settings.get("order_font_size", 10),
+            order_font_color=viz_settings.get("order_font_color", "#111111"),
+            show_colorbars=viz_settings.get("show_colorbars", True),
+            fixation_color_range=None, heatmap_range=None,
+            heatmap_colorscale=viz_settings.get("heatmap_colorscale",
+                                                DEFAULT_HEATMAP_COLORSCALE),
+            text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
+            background_color=viz_settings.get("background_color"),
+            colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
+            colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
+            colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
+            line_spacing=line_spacing, scale_text_to_boxes=scale_text_to_boxes,
+            fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+            word_heatmap_col="value", word_heatmap_title=measure.axis_label,
+        )
+        _render_true_scale_chart(fig, key="ptext_stimulus")
+        _download_tidy(
+            st, agg_words[["word_id", "value"]],
+            name=f"stimulus_{measure.key}_{text_id}.csv", key="dl_ptext4",
+        )
+    elif view == "Measure vs feature":  # AN-5
+        feats = available_features(words_filtered)
+        if not feats:
+            st.info("No bundled linguistic features (surprisal / frequency / length / "
+                    "POS) in this dataset.")
+            return
+        feat_label = c[2].selectbox("Feature", list(feats), key="ptext5_feat")
+        feature_col, categorical = feats[feat_label]
+        df = _c_word_feature(
+            words_filtered, text_col, text_id, measure.key, feature_col, agg,
+            normalize, fkey,
+        )
+        _chart(make_feature_scatter_figure(
+            df, measure_label=measure.axis_label, feature_label=feat_label,
+            categorical=categorical, **fw))
+        _download_tidy(st, df, name=f"feature_{measure.key}_{feature_col}_{text_id}.csv",
+                       key="dl_ptext5")
 
 
-def render_aggregated_views_tab(
+def render_per_reader_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     *,
@@ -2536,178 +3060,401 @@ def render_aggregated_views_tab(
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
 ) -> None:
-    """Aggregated views over the (filtered) corpus: trends, per-text heatmaps,
-    and grouped metric distributions."""
+    """*What does this reader look like?* — one reader, many trials (AN-7…13)."""
     st.caption(
-        "Corpus-level summaries across the **filtered** trials — narrow the "
-        "sidebar *Filter trials* panel to scope these. Trends average a metric "
-        "over the session's trial order and the within-trial fixation index; the "
-        "heatmap pools a text's readers; the histogram pools a metric by group."
+        "One **reader**, all their trials, against the cohort behind. Distributions, "
+        "a reading-speed summary, within-trial dynamics, the oculomotor scatter, "
+        "progressive/regressive saccades, the landing-position curve, and this "
+        "reader's per-trial trend."
     )
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
         return
-
-    # Metric picker — only metrics whose column is actually present.
-    def _metric_available(spec) -> bool:
-        frame_name, col, _ = spec
-        frame = fixations_filtered if frame_name == "fixations" else words_filtered
-        return col in frame.columns
-
-    metric_options = [m for m, spec in _AGG_METRICS.items() if _metric_available(spec)]
-    if not metric_options:
-        st.info("No aggregatable metrics found in this dataset.")
+    top = st.columns([2, 3])
+    pid = _participant_picker(words_filtered, fixations_filtered, key="prdr_pid",
+                              host=top[0])
+    if pid is None:
+        st.info("No participant column found.")
         return
-    metric_label = st.selectbox(
-        "Metric",
-        options=metric_options,
-        key="agg_metric",
-        help="Eye-movement measure to summarise across trials.",
+    fix_e = _c_enrich_fix(
+        fixations_filtered, words_filtered,
+        frame_fingerprint(fixations_filtered), frame_fingerprint(words_filtered),
     )
-    frame_name, metric_col, supports_fix_trend = _AGG_METRICS[metric_label]
-    metric_frame = fixations_filtered if frame_name == "fixations" else words_filtered
-
-    # --- Trial-index + within-trial fixation-index trends --------------------
-    st.markdown("#### Trends")
-    if not has_explicit_trial_index(metric_frame):
-        st.caption(
-            "ℹ️ No `trial_index` column in the data — trial order is derived from "
-            "each participant's fixation timestamps."
-        )
-    trial_df = _agg_with_trial_index(
-        metric_frame, metric_col, frame_fingerprint(metric_frame)
+    view = top[1].selectbox(
+        "View",
+        [
+            "Distribution vs cohort",
+            "Reading summary",
+            "Fixation duration over time",
+            "Saccade vs fixation duration",
+            "Progressive vs regressive",
+            "Landing-position curve",
+            "Per-trial trend",
+        ],
+        key="prdr_view",
     )
-    cols = st.columns(2) if supports_fix_trend else [st.container()]
-    with cols[0]:
-        fig_trial = make_trend_figure(
-            trial_df,
-            x_col="trial_index",
-            y_label=metric_label,
-            title=f"Average {metric_label} by trial index",
-            canvas_width=int(canvas_width * 0.46)
-            if supports_fix_trend
-            else canvas_width,
-            base_font_size=base_font_size,
-            font_family=font_family,
-        )
-        st.plotly_chart(fig_trial, width="stretch")
-    if supports_fix_trend:
-        fix_df = _agg_by_fixation_index(
-            fixations_filtered, metric_col, frame_fingerprint(fixations_filtered)
-        )
-        with cols[1]:
-            fig_fix = make_trend_figure(
-                fix_df,
-                x_col="fixation_index",
-                y_label=metric_label,
-                title=f"Average {metric_label} by fixation index",
-                canvas_width=int(canvas_width * 0.46),
-                base_font_size=base_font_size,
-                font_family=font_family,
-            )
-            st.plotly_chart(fig_fix, width="stretch")
+    fw = dict(canvas_width=canvas_width, base_font_size=base_font_size,
+              font_family=font_family)
 
-    # --- Per-text aggregated heatmap -----------------------------------------
-    text_col = _text_column(words_filtered)
-    if text_col is not None and "word_id" in words_filtered.columns:
-        st.markdown("#### Per-text heatmap")
-        counts = text_read_counts(words_filtered, text_col)
-        if not counts.empty:
-            labels = {
-                f"{row.text}  ({row.n_participants} readers)": row.text
-                for row in counts.itertuples()
-            }
-            chosen = st.selectbox(
-                "Text",
-                options=list(labels),
-                key="agg_heatmap_text",
-                help="Aggregate a word-level measure over everyone who read this text.",
+    if view == "Distribution vs cohort":  # AN-7
+        c = st.columns([3, 1, 1])
+        measure = _measure_picker(words_filtered, fixations_filtered,
+                                  key="prdr_measure", host=c[0])
+        if measure is None:
+            return
+        kind = c[1].selectbox("Plot", ["violin", "box"], key="prdr7_kind")
+        normalize = _normalize_toggle(c[2], key="prdr7_norm", disabled=measure.is_rate)
+        frame = fix_e if measure.frame == "fixations" else words_filtered
+        groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
+        _chart(make_distribution_figure(
+            groups, metric_label=measure.axis_label, kind=kind, **fw))
+    elif view == "Reading summary":  # AN-8
+        summary = reader_summary(words_filtered, fix_e, pid)
+        cohort = _c_cohort_summary(
+            words_filtered, fix_e, frame_fingerprint(words_filtered),
+            frame_fingerprint(fix_e),
+        )
+        specs = [
+            ("wpm", "Reading speed", "{:.0f} wpm"),
+            ("mean_fixation_ms", "Mean fixation", "{:.0f} ms"),
+            ("n_fixations", "Fixations", "{:.0f}"),
+            ("regression_rate", "Regression rate", "{:.0%}"),
+            ("skip_rate", "Skip rate", "{:.0%}"),
+            ("mean_saccade_px", "Mean saccade", "{:.1f} px"),
+        ]
+        present = [s for s in specs if s[0] in summary]
+        cols = st.columns(len(present)) if present else []
+        for col, (skey, label, fmt) in zip(cols, present):
+            value = summary.get(skey)
+            pct = (
+                _percentile(cohort[skey], value)
+                if skey in getattr(cohort, "columns", []) else None
             )
-            weight = st.radio(
-                "Heatmap weight",
-                options=["Total fixation duration", "Fixation count"],
-                horizontal=True,
-                key="agg_heatmap_weight",
+            col.metric(
+                label, fmt.format(value) if value is not None else "—",
+                delta=(f"{pct:.0f}th pct" if pct is not None else None),
+                delta_color="off",
             )
-            agg_words = _agg_word_heatmap(
-                words_filtered,
-                text_col,
-                labels[chosen],
-                frame_fingerprint(words_filtered),
-            )
-            heatmap_metric = (
-                "duration_ms" if weight == "Total fixation duration" else None
-            )
-            measure_col = (
-                "total_fixation_duration_ms"
-                if heatmap_metric == "duration_ms"
-                else "n_fixations"
-            )
-            if not agg_words.empty and measure_col in agg_words.columns:
-                fig_heat = make_scanpath_figure(
-                    agg_words,
-                    pd.DataFrame(),
-                    canvas_width=int(canvas_width),
-                    canvas_height=int(canvas_height),
-                    base_font_size=int(base_font_size),
-                    font_family=font_family,
-                    x_field="x",
-                    y_field="y",
-                    show_words=True,
-                    show_word_labels=True,
-                    show_fixations=False,
-                    show_order=False,
-                    show_saccades=False,
-                    show_heatmap=True,
-                    # No fixations here (words-only heatmap), so color_by is never
-                    # read; point it at a real column anyway for defensiveness.
-                    color_by=measure_col,
-                    heatmap_metric=heatmap_metric,
-                    heatmap_style="Word boxes",
-                    marker_size_range=(8, 24),
-                    order_font_size=10,
-                    order_font_color="#111111",
-                    show_colorbars=True,
-                    fixation_color_range=None,
-                    heatmap_range=None,
-                    line_spacing=line_spacing,
-                    scale_text_to_boxes=scale_text_to_boxes,
+        st.caption(f"Reader **{pid}** vs the {max(len(cohort) - 1, 0)} other readers "
+                   "in scope (percentiles).")
+        _download_tidy(st, cohort, name="reader_summaries.csv", key="dl_prdr8")
+    elif view == "Fixation duration over time":  # AN-9
+        c = st.columns([3, 2])
+        measure = _measure_picker(words_filtered, fix_e, key="prdr_measure", host=c[0])
+        if measure is None or measure.frame != "fixations":
+            c[0].info("Pick a per-fixation measure (duration / saccade amplitude).")
+            return
+        by = c[1].selectbox("X axis", ["order_in_trial", "timestamp_ms"],
+                            key="prdr9_x", format_func=lambda s: s.replace("_", " "))
+        df = metric_over_time(fix_e, measure, participant_id=pid, by=by)
+        _chart(make_trend_figure(
+            df, x_col="x", y_label=measure.axis_label,
+            title=f"{measure.label} over {by.replace('_', ' ')} — {pid}", **fw))
+        _download_tidy(st, df, name=f"over_time_{measure.key}_{pid}.csv", key="dl_prdr9")
+    elif view == "Saccade vs fixation duration":  # AN-10
+        df = saccade_vs_duration(fix_e, participant_id=pid)
+        _chart(make_density_scatter_figure(
+            df, x_col="duration_ms", y_col="saccade_amplitude",
+            x_label="Fixation duration (ms)", y_label="Saccade amplitude (px)", **fw))
+    elif view == "Progressive vs regressive":  # AN-11
+        df = progressive_regressive_counts(fix_e, participant_id=pid)
+        if df.empty:
+            st.info("Needs fixation→word assignment to classify regressions.")
+            return
+        _chart(make_progression_figure(df, **fw))
+        _download_tidy(st, df, name=f"progression_{pid}.csv", key="dl_prdr11")
+    elif view == "Landing-position curve":  # AN-12
+        vals = landing_positions(words_filtered, fix_e, participant_id=pid)
+        if vals.size == 0:
+            st.info("Needs first-fixation landing positions (first_fix_x or fixation "
+                    "x + word boxes).")
+            return
+        _chart(make_landing_curve_figure(vals, **fw))
+    elif view == "Per-trial trend":  # AN-13
+        c = st.columns([3, 1])
+        measure = _measure_picker(words_filtered, fix_e, key="prdr_measure", host=c[0])
+        if measure is None:
+            return
+        agg = c[1].selectbox("Aggregate", _AGG_OPTIONS, key="prdr13_agg")
+        frame = fix_e if measure.frame == "fixations" else words_filtered
+        sub = frame[frame["participant_id"].astype(str) == str(pid)].copy()
+        if not has_explicit_trial_index(sub):
+            st.caption("ℹ️ Trial order derived from fixation timestamps.")
+        sub["trial_index"] = derive_trial_index(sub)
+        df = metric_by_trial_index(sub, measure.column, agg=agg)
+        _chart(make_trend_figure(
+            df, x_col="trial_index", y_label=measure.axis_label,
+            title=f"{measure.label} by trial index — {pid}", **fw))
+        _download_tidy(st, df, name=f"trend_{measure.key}_{pid}.csv", key="dl_prdr13")
+
+
+def render_per_group_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    scale_text_to_boxes: bool = True,
+) -> None:
+    """*What does this group look like?* — a cohort by the active filter (AN-14…17)."""
+    st.caption(
+        "Define a **group** (split a field or build a filter set), then pool its "
+        "readers: distribution summaries, the cohort word profile, a per-reader "
+        "summary table, and the group's trend."
+    )
+    if fixations_filtered.empty and words_filtered.empty:
+        st.info("No data after filtering.")
+        return
+    with st.expander("Group", expanded=True):
+        spec, label = _render_group_definition(
+            words_filtered, fixations_filtered, key="pgrp", two_groups=False
+        )
+    _warn_word_only_group_fields(st, fixations_filtered, spec)
+    words_g = apply_group(words_filtered, spec or {})
+    fix_g = _c_enrich_fix(
+        apply_group(fixations_filtered, spec or {}), words_g,
+        frame_fingerprint(apply_group(fixations_filtered, spec or {})),
+        frame_fingerprint(words_g),
+    )
+    n_readers = (
+        fix_g["participant_id"].nunique()
+        if "participant_id" in getattr(fix_g, "columns", []) else 0
+    )
+    st.caption(f"**{label}** — {n_readers} reader(s), {len(fix_g)} fixations in scope.")
+    if (words_g is None or words_g.empty) and (fix_g is None or fix_g.empty):
+        st.info("This group is empty — widen the definition.")
+        return
+    view = st.selectbox(
+        "View",
+        ["Distributions", "Word profile", "Reader summary table", "Group trend"],
+        key="pgrp_view",
+    )
+    fw = dict(canvas_width=canvas_width, base_font_size=base_font_size,
+              font_family=font_family)
+
+    if view == "Distributions":  # AN-14
+        c = st.columns([3, 1, 1])
+        measure = _measure_picker(words_g, fix_g, key="pgrp_measure", host=c[0])
+        if measure is None:
+            return
+        kind = c[1].selectbox("Plot", ["violin", "box"], key="pgrp14_kind")
+        normalize = _normalize_toggle(c[2], key="pgrp14_norm", disabled=measure.is_rate)
+        frame = fix_g if measure.frame == "fixations" else words_g
+        vals = measure_values(frame, measure, normalize=normalize)
+        _chart(make_distribution_figure(
+            {label: vals}, metric_label=measure.axis_label, kind=kind, **fw))
+    elif view == "Word profile":  # AN-15
+        c = st.columns([3, 1, 1, 1])
+        text_col, text_id = _text_picker(words_g, key="pgrp_text", host=c[0])
+        if text_col is None or text_id is None:
+            st.info("No word-level data for this group.")
+            return
+        measure = _measure_picker(words_g, fix_g, key="pgrp_measure", host=c[1],
+                                  per_word_only=True)
+        if measure is None:
+            return
+        agg = c[2].selectbox("Aggregate", _AGG_OPTIONS, key="pgrp15_agg")
+        spread = c[3].selectbox("Spread", _SPREAD_OPTIONS, key="pgrp15_spread")
+        min_readers = _min_readers_input(st, key="pgrp15_min")
+        prof = _c_cohort_profile(
+            words_g, text_col, text_id, measure.key, agg, spread, False, min_readers,
+            frame_fingerprint(words_g),
+        )
+        prof = _apply_min_readers(st, prof, min_readers, key="pgrp15_note")
+        _chart(make_word_profile_figure(
+            {label: prof}, measure_label=measure.axis_label, spread_label=spread, **fw))
+        _download_tidy(st, prof, name=f"group_profile_{measure.key}_{text_id}.csv",
+                       key="dl_pgrp15")
+    elif view == "Reader summary table":  # AN-16
+        table = _c_cohort_summary(
+            words_g, fix_g, frame_fingerprint(words_g), frame_fingerprint(fix_g)
+        )
+        if table.empty:
+            st.info("No per-reader summaries for this group.")
+            return
+        st.dataframe(table, width="stretch", hide_index=True)
+        _download_tidy(st, table, name="group_reader_summaries.csv", key="dl_pgrp16")
+    elif view == "Group trend":  # AN-17
+        c = st.columns([3, 1, 1])
+        measure = _measure_picker(words_g, fix_g, key="pgrp_measure", host=c[0])
+        if measure is None:
+            return
+        agg = c[1].selectbox("Aggregate", _AGG_OPTIONS, key="pgrp17_agg")
+        show_readers = c[2].checkbox("Per-reader behind", value=False,
+                                     key="pgrp17_readers")
+        frame = fix_g if measure.frame == "fixations" else words_g
+        sub = frame.copy()
+        sub["trial_index"] = derive_trial_index(sub)
+        df = metric_by_trial_index(sub, measure.column, agg=agg)
+        fig = make_trend_figure(
+            df, x_col="trial_index", y_label=measure.axis_label,
+            title=f"{measure.label} by trial index — {label}", **fw)
+        if show_readers:
+            per = per_participant_trend(sub, measure.column, agg=agg)
+            for rdr, grp in per.groupby("participant_id"):
+                grp = grp.sort_values("trial_index")
+                fig.add_scatter(
+                    x=grp["trial_index"], y=grp["value"], mode="lines",
+                    line=dict(color="rgba(150,150,150,0.35)", width=1),
+                    name=str(rdr), showlegend=False, hoverinfo="skip",
                 )
-                _render_true_scale_chart(fig_heat, key="agg_heatmap")
-            else:
-                st.info(
-                    "This text has no aggregatable word-level measures "
-                    "(needs total fixation duration / fixation counts per word)."
-                )
+        _chart(fig)
+        _download_tidy(st, df, name=f"group_trend_{measure.key}.csv", key="dl_pgrp17")
 
-    # --- Grouped metric distribution -----------------------------------------
-    st.markdown("#### Distribution")
-    group_specs = {"All data": None}
-    if text_col is not None:
-        group_specs["By text"] = text_col
-    if "participant_id" in metric_frame.columns:
-        group_specs["By participant"] = "participant_id"
-    for field in ("question_preview", "repeated_reading_trial", "difficulty_level"):
-        if field in metric_frame.columns:
-            group_specs[f"By {field}"] = field
-    grouping = st.selectbox(
-        "Group by",
-        options=list(group_specs),
-        key="agg_hist_group",
-        help="Split the distribution into one histogram per group.",
+
+def render_group_comparison_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    scale_text_to_boxes: bool = True,
+) -> None:
+    """*How do two groups differ?* — two cohorts side by side (AN-18…22)."""
+    st.caption(
+        "Define **two groups** and compare them: overlaid distributions, the "
+        "per-word difference profile, paired summary bars, an effect size + test, "
+        "and a stacked two-group word heatmap. Exploratory — not pre-registered."
     )
-    group_col = group_specs[grouping]
-    groups, dropped = grouped_metric_values(metric_frame, metric_col, group_col)
-    if dropped:
-        st.caption(f"Showing the 12 largest groups; {dropped} smaller group(s) hidden.")
-    fig_hist = make_aggregated_histogram(
-        groups,
-        metric_label=metric_label,
-        canvas_width=canvas_width,
-        base_font_size=base_font_size,
-        font_family=font_family,
+    if fixations_filtered.empty and words_filtered.empty:
+        st.info("No data after filtering.")
+        return
+    with st.expander("Groups A & B", expanded=True):
+        spec_a, spec_b, label_a, label_b = _render_group_definition(
+            words_filtered, fixations_filtered, key="cmp", two_groups=True
+        )
+    spec_a = spec_a or {}
+    spec_b = spec_b or {}
+    _warn_word_only_group_fields(st, fixations_filtered, spec_a, spec_b)
+    na = apply_group(fixations_filtered, spec_a)
+    nb = apply_group(fixations_filtered, spec_b)
+    st.caption(
+        f"**{label_a}**: {na['participant_id'].nunique() if 'participant_id' in na else 0}"
+        f" reader(s) · **{label_b}**: "
+        f"{nb['participant_id'].nunique() if 'participant_id' in nb else 0} reader(s)."
     )
-    st.plotly_chart(fig_hist, width="stretch")
+    view = st.selectbox(
+        "View",
+        [
+            "Overlaid distributions",
+            "Difference word profile",
+            "Paired summary bars",
+            "Effect size + test",
+            "Two-group word heatmap",
+        ],
+        key="cmp_view",
+    )
+    fw = dict(canvas_width=canvas_width, base_font_size=base_font_size,
+              font_family=font_family)
+
+    if view == "Overlaid distributions":  # AN-18
+        c = st.columns([3, 1, 1])
+        measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure",
+                                  host=c[0])
+        if measure is None:
+            return
+        kind = c[1].selectbox("Plot", ["violin", "box"], key="cmp18_kind")
+        normalize = _normalize_toggle(c[2], key="cmp18_norm", disabled=measure.is_rate)
+        frame = fixations_filtered if measure.frame == "fixations" else words_filtered
+        groups = two_group_values(
+            frame, measure, spec_a, spec_b, label_a=label_a, label_b=label_b,
+            normalize=normalize,
+        )
+        _chart(make_distribution_figure(
+            groups, metric_label=measure.axis_label, kind=kind, **fw))
+    elif view == "Difference word profile":  # AN-19
+        c = st.columns([3, 1, 1, 1])
+        text_col, text_id = _text_picker(words_filtered, key="cmp_text", host=c[0])
+        if text_col is None or text_id is None:
+            st.info("No word-level data.")
+            return
+        measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure",
+                                  host=c[1], per_word_only=True)
+        if measure is None:
+            return
+        agg = c[2].selectbox("Aggregate", _AGG_OPTIONS, key="cmp19_agg")
+        min_readers = _min_readers_input(c[3], key="cmp19_min", label="Min/grp")
+        diff = group_word_difference(
+            words_filtered, text_col, text_id, measure, spec_a, spec_b, agg=agg,
+            min_readers=min_readers,
+        )
+        diff = _apply_min_readers(st, diff, min_readers, key="cmp19_note")
+        _chart(make_difference_profile_figure(
+            diff, measure_label=measure.axis_label, label_a=label_a, label_b=label_b,
+            **fw))
+        _download_tidy(st, diff, name=f"difference_{measure.key}_{text_id}.csv",
+                       key="dl_cmp19")
+    elif view == "Paired summary bars":  # AN-20
+        all_measures = available_measures(words_filtered, fixations_filtered)
+        labels = {m.label: m.key for m in all_measures}
+        default = [m.label for m in all_measures if m.key in ("fix_dur", "sacc_amp", "tfd")]
+        chosen = st.multiselect("Measures", list(labels), default=default or list(labels)[:3],
+                                key="cmp20_measures")
+        c = st.columns(2)
+        agg = c[0].selectbox("Aggregate", _AGG_OPTIONS, key="cmp20_agg")
+        spread = c[1].selectbox("Error bars", _SPREAD_OPTIONS, index=1, key="cmp20_spread")
+        measures = [MEASURES[labels[m]] for m in chosen]
+        if not measures:
+            st.info("Pick at least one measure.")
+            return
+        df = paired_group_summary(
+            fixations_filtered, measures, spec_a, spec_b, agg=agg, spread=spread,
+            label_a=label_a, label_b=label_b, words=words_filtered,
+            fixations=fixations_filtered,
+        )
+        _chart(make_paired_bars_figure(df, **fw))
+        _download_tidy(st, df, name="paired_group_means.csv", key="dl_cmp20")
+    elif view == "Effect size + test":  # AN-21
+        c = st.columns([3, 2])
+        measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure",
+                                  host=c[0])
+        if measure is None:
+            return
+        test = c[1].selectbox("Test", ["Mann–Whitney", "t-test"], key="cmp21_test")
+        frame = fixations_filtered if measure.frame == "fixations" else words_filtered
+        a = measure_values(apply_group(frame, spec_a), measure)
+        b = measure_values(apply_group(frame, spec_b), measure)
+        res = group_effect_size(a, b, test=test)
+        cols = st.columns(4)
+        cols[0].metric(f"{label_a} mean", f"{res['mean_a']:.2f}",
+                       delta=f"n={res['n_a']}", delta_color="off")
+        cols[1].metric(f"{label_b} mean", f"{res['mean_b']:.2f}",
+                       delta=f"n={res['n_b']}", delta_color="off")
+        cols[2].metric("Mean difference", f"{res['mean_diff']:.2f}")
+        cols[3].metric("Cohen's d", f"{res['cohen_d']:.3f}")
+        p = res.get("p_value")
+        p_txt = "—" if p is None or (isinstance(p, float) and np.isnan(p)) else (
+            "< 0.001" if p < 0.001 else f"{p:.3f}")
+        st.markdown(
+            f"**{test}** — statistic = {res['statistic']:.3g}, p = {p_txt}. "
+            f"_Exploratory, not pre-registered._"
+        )
+    elif view == "Two-group word heatmap":  # AN-22
+        c = st.columns([3, 1, 1])
+        text_col, text_id = _text_picker(words_filtered, key="cmp_text", host=c[0])
+        if text_col is None or text_id is None:
+            st.info("No word-level data.")
+            return
+        measure = _measure_picker(words_filtered, fixations_filtered, key="cmp_measure",
+                                  host=c[1], per_word_only=True)
+        if measure is None:
+            return
+        agg = c[2].selectbox("Aggregate", _AGG_OPTIONS, key="cmp22_agg")
+        long = two_group_word_profiles(
+            words_filtered, text_col, text_id, measure, spec_a, spec_b, agg=agg,
+            label_a=label_a, label_b=label_b,
+        )
+        _chart(make_word_matrix_heatmap(
+            long, row_col="group", measure_label=measure.axis_label,
+            row_order=[label_a, label_b], **fw))
+        _download_tidy(st, long, name=f"two_group_{measure.key}_{text_id}.csv",
+                       key="dl_cmp22")
 
 
 # -----------------------------------------------------------------------------

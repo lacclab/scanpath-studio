@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Corpus Analysis — question-oriented analysis sections (AN-1…28)** — the single
+  *Aggregated Views* subtab is replaced by four sections, each answering one
+  question, plus the WIP *Generations* tab:
+  - **Per text** (one text, many readers): stacked per-reader word profiles with an
+    optional cohort-mean overlay, a word × reader heatmap, the cohort word profile
+    with a spread band, word difficulty tinted on the true-to-scale stimulus, a
+    per-word measure-vs-linguistic-feature scatter (surprisal / frequency / length /
+    POS) with a trend line, and skip / regression-in rates per word.
+  - **Per reader** (one reader, many trials): measure distribution vs the cohort
+    (violin/box), a reading-speed summary card with cohort percentiles, fixation
+    duration over time, the saccade-amplitude × fixation-duration density scatter,
+    progressive vs regressive saccades per trial, the landing-position (PVL) curve,
+    and this reader's per-trial trend.
+  - **Per group** (a cohort): pooled distributions, the group word profile, a
+    per-reader summary table, and the group trend (optionally with per-reader lines).
+  - **Group comparison** (two cohorts): overlaid distributions, the per-word A−B
+    difference profile (diverging colormap + zero line), paired summary bars with
+    error bars, an effect size + significance test (Cohen's *d*, Welch t-test /
+    Mann–Whitney; exploratory), and a stacked two-group word heatmap.
+  - **Cross-cutting controls** every section reads: a shared measure picker
+    (TFD/FFD/FPRT/RPD/n_fixations/skip/regression-in/out + fixation duration /
+    saccade amplitude), mean/median/sum aggregation and SD/SEM/IQR/bootstrap-CI
+    spread, a *z-score within reader* normalization toggle, a min-readers/min-trials
+    guard, and a per-view tidy-table CSV download. Groups are defined either by
+    splitting a categorical field or by two independent filter sets. The per-text
+    stimulus view now honours the active `global_*` visualization settings instead
+    of hard-coded display options (AN-28). Adds `scipy` for the group tests.
 - **Saccade line width** — a width slider (0.5–10 px, default 2) in the Saccade-style
   popover, threaded through every plot, bulk export, save/restore, and deep links
   (per-scanpath in comparisons); plus headless `--saccade-color`/`--saccade-style`/

@@ -24,8 +24,8 @@ scanpath_studio/
 ├─ app.py            entry point: page config, data load, trial filters, dispatch to tabs
 ├─ url_state.py      deep links + plot-config save/restore + Share link + Corpus⇄Scanpath view toggle (split from app.py)
 ├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
-├─ tabs.py           tab implementations (Scanpath Visualization [Annotations + Stimulus & questions + Export subtabs; Export folds in single-trial + bulk export], Corpus Analysis [Generations + Aggregated Views subtabs], Data Inspection)
-├─ aggregation.py    pure corpus-level aggregation helpers for the Aggregated Views subtab (trial-index/fixation-index trends, per-text word aggregates, grouped metric distributions)
+├─ tabs.py           tab implementations (Scanpath Visualization [Annotations + Stimulus & questions + Export subtabs; Export folds in single-trial + bulk export], Corpus Analysis [Per text · Per reader · Per group · Group comparison · Generations subtabs — the question-oriented analysis sections, AN-1..28], Data Inspection)
+├─ aggregation.py    pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry + per-reader/cohort word profiles, word-vs-feature, rates, reader distributions/summary/landing, group masks + difference/effect-size; plus the legacy trial-index/fixation-index trends)
 ├─ controls.py       sidebar viz controls + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions) + geometry helpers (line clustering, in-text test)

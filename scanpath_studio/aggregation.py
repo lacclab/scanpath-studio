@@ -1,15 +1,24 @@
-"""Pure aggregation helpers for the Corpus Analysis → Aggregated Views subtab.
+"""Pure aggregation helpers for the Corpus Analysis subtabs.
 
 Headless (no Streamlit), so they're unit-testable. They turn the filtered
 words / fixations frames into the small summary tables the plot builders draw:
 per-trial-index trends, per-fixation-index trends, grouped metric distributions,
 and per-text word-level aggregates for heatmaps. The heavy work is plain pandas
-groupby; the tab caches the results with ``@st.cache_data``.
+groupby; the tabs cache the results with ``@st.cache_data``.
+
+The lower block (from :data:`MEASURES` onward) backs the question-oriented
+analysis sections — *per text* (one text, many readers), *per reader* (one
+reader, many trials), *per group* (a cohort), and *group comparison* (two
+cohorts). Every section reads a single :class:`Measure` (the shared measure
+picker), an aggregation (mean/median/sum) and a spread (SD/IQR/SEM/bootstrap
+CI), and may z-score within reader — see :data:`MEASURES`,
+:func:`aggregate_value`, :func:`spread_bounds`, :func:`add_normalized_column`.
 """
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -163,3 +172,857 @@ def text_read_counts(words: pd.DataFrame, text_col: str) -> pd.DataFrame:
     counts = words.groupby(text_col)["participant_id"].nunique().reset_index()
     counts.columns = ["text", "n_participants"]
     return counts.sort_values("n_participants", ascending=False).reset_index(drop=True)
+
+
+# =============================================================================
+# Question-oriented analysis sections (AN-1 … AN-28)
+# =============================================================================
+#
+# Everything below is pure pandas/numpy feeding ``plots.make_*`` builders, one
+# tidy DataFrame per view. The shared cross-cutting controls — measure picker
+# (AN-23), aggregation/spread (AN-24), within-reader normalization (AN-25), and
+# the min-observations guard (AN-26) — are expressed here so the figures and the
+# CSV downloads (AN-27) all read the same numbers.
+
+
+@dataclass(frozen=True)
+class Measure:
+    """One selectable eye-movement measure (the shared measure picker, AN-23).
+
+    ``frame`` is ``"words"`` (a per-word reading measure, keyed by ``word_id``)
+    or ``"fixations"`` (a per-fixation measure). ``per_word`` marks the
+    word-level measures that support the per-word *profile* views (AN-1/2/3/…);
+    ``is_rate`` marks boolean flags aggregated as a 0–1 rate (skip / regression).
+    """
+
+    key: str
+    label: str
+    frame: str  # "words" | "fixations"
+    column: str
+    unit: str  # axis-label unit, e.g. "ms", "px", "" (rates)
+    per_word: bool
+    is_rate: bool = False
+
+    @property
+    def axis_label(self) -> str:
+        return f"{self.label} ({self.unit})" if self.unit else self.label
+
+
+# Registry — insertion order is the picker order. TFD is the default.
+MEASURES: Dict[str, Measure] = {
+    m.key: m
+    for m in (
+        Measure("tfd", "Total fixation duration — TFD", "words",
+                "total_fixation_duration_ms", "ms", True),
+        Measure("ffd", "First fixation duration — FFD", "words",
+                "first_fixation_ms", "ms", True),
+        Measure("fprt", "First-pass gaze — FPRT", "words",
+                "first_pass_gaze_duration_ms", "ms", True),
+        Measure("rpd", "Regression-path — RPD", "words",
+                "regression_path_duration_ms", "ms", True),
+        Measure("nfix", "Fixations per word", "words", "n_fixations", "", True),
+        Measure("skip", "Skip rate", "words", "skip_flag", "", True, is_rate=True),
+        Measure("reg_in", "Regression-in rate", "words", "regression_in_flag", "",
+                True, is_rate=True),
+        Measure("reg_out", "Regression-out rate", "words", "regression_out_flag", "",
+                True, is_rate=True),
+        Measure("fix_dur", "Fixation duration", "fixations", "duration_ms", "ms", False),
+        Measure("sacc_amp", "Saccade amplitude", "fixations", "saccade_amplitude",
+                "px", False),
+    )
+}
+
+# Bundled per-word linguistic features (AN-5). label → (column, is_categorical).
+LINGUISTIC_FEATURES: Dict[str, Tuple[str, bool]] = {
+    "GPT-2 surprisal": ("gpt2_surprisal", False),
+    "Word frequency (wordfreq)": ("wordfreq_frequency", False),
+    "Word length": ("word_length", False),
+    "Part of speech": ("universal_pos", True),
+}
+
+
+def available_measures(
+    words: pd.DataFrame, fixations: pd.DataFrame, *, per_word_only: bool = False
+) -> List[Measure]:
+    """The measures whose backing column is actually present in the data."""
+    out: List[Measure] = []
+    for m in MEASURES.values():
+        if per_word_only and not m.per_word:
+            continue
+        frame = words if m.frame == "words" else fixations
+        if frame is not None and m.column in getattr(frame, "columns", []):
+            out.append(m)
+    return out
+
+
+def available_features(words: pd.DataFrame) -> Dict[str, Tuple[str, bool]]:
+    """Linguistic features present in this words frame (AN-5)."""
+    if words is None or words.empty:
+        return {}
+    return {
+        label: spec
+        for label, spec in LINGUISTIC_FEATURES.items()
+        if spec[0] in words.columns
+    }
+
+
+# --- Aggregation + spread primitives (AN-24) ---------------------------------
+
+_AGG_FUNCS = {"mean": np.nanmean, "median": np.nanmedian, "sum": np.nansum}
+
+
+def aggregate_value(values: np.ndarray, agg: str = "mean") -> float:
+    """Collapse ``values`` to a single number under ``agg`` (mean/median/sum)."""
+    arr = np.asarray(values, dtype="float64")
+    arr = arr[~np.isnan(arr)]
+    if arr.size == 0:
+        return float("nan")
+    return float(_AGG_FUNCS.get(agg, np.nanmean)(arr))
+
+
+def bootstrap_ci(
+    values: np.ndarray, *, agg: str = "mean", n_boot: int = 1000, ci: float = 95.0,
+    seed: int = 0,
+) -> Tuple[float, float]:
+    """Percentile bootstrap CI of the ``agg`` statistic (AN-24 spread option)."""
+    arr = np.asarray(values, dtype="float64")
+    arr = arr[~np.isnan(arr)]
+    if arr.size < 2:
+        v = aggregate_value(arr, agg)
+        return (v, v)
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, arr.size, size=(n_boot, arr.size))
+    stats = _AGG_FUNCS.get(agg, np.nanmean)(arr[idx], axis=1)
+    lo = float(np.percentile(stats, (100.0 - ci) / 2.0))
+    hi = float(np.percentile(stats, 100.0 - (100.0 - ci) / 2.0))
+    return (lo, hi)
+
+
+def spread_bounds(values: np.ndarray, center: float, spread: str, *, agg: str = "mean"):
+    """``(lo, hi)`` band for ``values`` around ``center`` under ``spread``.
+
+    ``SD`` → ±1 std · ``SEM`` → ±std/√n · ``IQR`` → 25th/75th percentiles ·
+    ``Bootstrap CI`` → 95 % percentile bootstrap of the aggregate.
+    """
+    arr = np.asarray(values, dtype="float64")
+    arr = arr[~np.isnan(arr)]
+    if arr.size == 0 or np.isnan(center):
+        return (center, center)
+    if spread == "IQR":
+        return (float(np.percentile(arr, 25)), float(np.percentile(arr, 75)))
+    if spread == "Bootstrap CI":
+        return bootstrap_ci(arr, agg=agg)
+    if agg == "sum":
+        # SD/SEM describe the spread of individual observations, which is
+        # meaningless around a *total*; bootstrap the aggregate so the band
+        # actually brackets the plotted sum.
+        return bootstrap_ci(arr, agg=agg)
+    sd = float(np.std(arr, ddof=1)) if arr.size > 1 else 0.0
+    half = sd / np.sqrt(arr.size) if spread == "SEM" else sd
+    return (center - half, center + half)
+
+
+def add_normalized_column(
+    frame: pd.DataFrame, col: str, *, by: str = "participant_id",
+    out_col: Optional[str] = None,
+) -> pd.DataFrame:
+    """Return ``frame`` with ``col`` z-scored within each ``by`` group (AN-25).
+
+    Slow and fast readers then compare on *shape*, not absolute level. Groups of
+    one (or zero variance) map to 0. ``out_col`` defaults to overwriting ``col``.
+    """
+    out = frame.copy()
+    out_col = out_col or col
+    vals = pd.to_numeric(out[col], errors="coerce")
+    if by in out.columns:
+        grp = vals.groupby(out[by])
+        mean = grp.transform("mean")
+        std = grp.transform("std")
+    else:
+        mean = vals.mean()
+        std = vals.std()
+    z = (vals - mean) / std.replace(0, np.nan) if hasattr(std, "replace") else (
+        (vals - mean) / (std or np.nan)
+    )
+    out[out_col] = z.fillna(0.0)
+    return out
+
+
+def _text_subset(frame: pd.DataFrame, text_col: str, text_id) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return pd.DataFrame()
+    if text_col and text_col in frame.columns:
+        return frame[frame[text_col].astype(str) == str(text_id)]
+    return frame
+
+
+def _measure_series(frame: pd.DataFrame, measure: Measure) -> pd.Series:
+    """Numeric series for ``measure``; booleans/rates coerced to 0/1 floats."""
+    s = frame[measure.column]
+    if measure.is_rate:
+        if pd.api.types.is_bool_dtype(s):
+            return s.astype("float64")
+        return pd.to_numeric(s, errors="coerce").astype("float64")
+    return pd.to_numeric(s, errors="coerce")
+
+
+# --- Per text: one text, many readers (AN-1 … AN-6) --------------------------
+
+
+def per_reader_word_measure(
+    words: pd.DataFrame, text_col: str, text_id, measure: Measure, *,
+    agg: str = "mean", normalize: bool = False,
+) -> pd.DataFrame:
+    """Tidy ``[participant_id, word_id, value, word_text]`` for one text (AN-1/2).
+
+    One row per (reader, word). ``agg`` collapses any repeated readings; values
+    are optionally z-scored within reader first (AN-25).
+    """
+    cols = {"participant_id", "word_id", measure.column}
+    sub = _text_subset(words, text_col, text_id)
+    if sub.empty or not cols <= set(sub.columns):
+        return pd.DataFrame(columns=["participant_id", "word_id", "value", "word_text"])
+    df = sub[["participant_id", "word_id"]].copy()
+    df["value"] = _measure_series(sub, measure).to_numpy()
+    if "text" in sub.columns:
+        df["word_text"] = sub["text"].to_numpy()
+    df = df.dropna(subset=["word_id", "value"])
+    if df.empty:
+        return pd.DataFrame(columns=["participant_id", "word_id", "value", "word_text"])
+    if normalize and not measure.is_rate:
+        df = add_normalized_column(df, "value")
+    keys = ["participant_id", "word_id"]
+    agg_map = {"value": agg}
+    if "word_text" in df.columns:
+        agg_map["word_text"] = "first"
+    out = df.groupby(keys, as_index=False).agg(agg_map)
+    return out.sort_values(["participant_id", "word_id"]).reset_index(drop=True)
+
+
+def cohort_word_profile(
+    words: pd.DataFrame, text_col: str, text_id, measure: Measure, *,
+    agg: str = "mean", spread: str = "SD", normalize: bool = False,
+    min_readers: int = 1,
+) -> pd.DataFrame:
+    """Per-word cohort centre + spread band across readers (AN-3 / AN-15).
+
+    Returns ``[word_id, value, lo, hi, n, enough, word_text]`` where ``value`` is
+    the ``agg`` across readers of each reader's per-word value, ``lo``/``hi`` the
+    ``spread`` band, ``n`` the contributing reader count and ``enough`` the
+    min-readers guard (AN-26).
+    """
+    per = per_reader_word_measure(
+        words, text_col, text_id, measure, agg=agg, normalize=normalize
+    )
+    cols = ["word_id", "value", "lo", "hi", "n", "enough", "word_text"]
+    if per.empty:
+        return pd.DataFrame(columns=cols)
+    rows = []
+    texts = (
+        per.groupby("word_id")["word_text"].first()
+        if "word_text" in per.columns
+        else None
+    )
+    for wid, grp in per.groupby("word_id"):
+        vals = grp["value"].to_numpy()
+        center = aggregate_value(vals, agg)
+        lo, hi = spread_bounds(vals, center, spread, agg=agg)
+        rows.append(
+            {
+                "word_id": wid,
+                "value": center,
+                "lo": lo,
+                "hi": hi,
+                "n": int(np.sum(~np.isnan(vals))),
+                "enough": int(np.sum(~np.isnan(vals))) >= min_readers,
+                "word_text": texts.get(wid, "") if texts is not None else "",
+            }
+        )
+    return pd.DataFrame(rows, columns=cols).sort_values("word_id").reset_index(drop=True)
+
+
+def word_box_aggregate(
+    words: pd.DataFrame, text_col: str, text_id, measure: Measure, *,
+    agg: str = "mean",
+) -> pd.DataFrame:
+    """One-row-per-word frame: word-box geometry + a ``value`` column = the
+    ``measure`` aggregated across readers (AN-4 stimulus tint).
+
+    Carries the canonical geometry (x/y/width/height/text/line_idx) + a synthetic
+    participant/trial so it feeds straight into ``plots.make_scanpath_figure``'s
+    words-only path.
+    """
+    sub = _text_subset(words, text_col, text_id)
+    if sub.empty or "word_id" not in sub.columns or measure.column not in sub.columns:
+        return pd.DataFrame()
+    geom_cols = [
+        c for c in ("x", "y", "width", "height", "text", "line_idx") if c in sub.columns
+    ]
+    if not geom_cols:
+        return pd.DataFrame()
+    work = sub[["word_id"] + geom_cols].copy()
+    work["_m"] = _measure_series(sub, measure).to_numpy()
+    grouped = work.groupby("word_id")
+    out = grouped[geom_cols].first()
+    out["value"] = grouped["_m"].agg(lambda s: aggregate_value(s.to_numpy(), agg))
+    out = out.reset_index()
+    out["participant_id"] = "aggregate"
+    out["trial_id"] = str(text_id)
+    return out
+
+
+def word_measure_vs_feature(
+    words: pd.DataFrame, text_col: str, text_id, measure: Measure, feature_col: str, *,
+    agg: str = "mean", normalize: bool = False,
+) -> pd.DataFrame:
+    """Per-word ``[word_id, value, feature, word_text]`` for a measure vs a
+    bundled linguistic feature (AN-5). ``value`` is the cross-reader aggregate;
+    ``feature`` is the per-word feature (constant across readers)."""
+    per = per_reader_word_measure(
+        words, text_col, text_id, measure, agg=agg, normalize=normalize
+    )
+    sub = _text_subset(words, text_col, text_id)
+    if per.empty or feature_col not in sub.columns:
+        return pd.DataFrame(columns=["word_id", "value", "feature", "word_text"])
+    center_agg = {"value": ("value", lambda s: aggregate_value(s.to_numpy(), agg))}
+    if "word_text" in per.columns:
+        # Gate on column presence — never synthesize a count under this name.
+        center_agg["word_text"] = ("word_text", "first")
+    center = per.groupby("word_id").agg(**center_agg).reset_index()
+    feat = sub.groupby("word_id")[feature_col].first().rename("feature").reset_index()
+    out = center.merge(feat, on="word_id", how="left")
+    return out.dropna(subset=["value"]).reset_index(drop=True)
+
+
+def word_rate_profile(
+    words: pd.DataFrame, text_col: str, text_id, *, min_readers: int = 1
+) -> pd.DataFrame:
+    """Per-word skip / regression-in rates across readers (AN-6).
+
+    Returns ``[word_id, skip_rate, regression_in_rate, n, enough, word_text]``.
+    """
+    sub = _text_subset(words, text_col, text_id)
+    cols = ["word_id", "skip_rate", "regression_in_rate", "n", "enough", "word_text"]
+    if sub.empty or "word_id" not in sub.columns:
+        return pd.DataFrame(columns=cols)
+    work = sub[["word_id"]].copy()
+    for src, dst in (("skip_flag", "skip_rate"), ("regression_in_flag", "regression_in_rate")):
+        if src in sub.columns:
+            s = sub[src]
+            work[dst] = (
+                s.astype("float64") if pd.api.types.is_bool_dtype(s)
+                else pd.to_numeric(s, errors="coerce")
+            ).to_numpy()
+        else:
+            work[dst] = np.nan
+    if "text" in sub.columns:
+        work["word_text"] = sub["text"].to_numpy()
+    grouped = work.groupby("word_id")
+    out = grouped.agg(
+        skip_rate=("skip_rate", "mean"),
+        regression_in_rate=("regression_in_rate", "mean"),
+        n=("skip_rate", "size"),
+    ).reset_index()
+    if "word_text" in work.columns:
+        out = out.merge(
+            grouped["word_text"].first().reset_index(), on="word_id", how="left"
+        )
+    else:
+        out["word_text"] = ""
+    out["enough"] = out["n"] >= min_readers
+    return out[cols].sort_values("word_id").reset_index(drop=True)
+
+
+# --- Per reader: one reader, many trials (AN-7 … AN-13) ----------------------
+
+
+def measure_values(
+    frame: pd.DataFrame, measure: Measure, *, normalize: bool = False
+) -> np.ndarray:
+    """Flat array of a measure's values (for distribution plots)."""
+    if frame is None or frame.empty or measure.column not in frame.columns:
+        return np.array([], dtype="float64")
+    work = frame.copy()
+    work["_m"] = _measure_series(work, measure).to_numpy()
+    if normalize and not measure.is_rate:
+        work = add_normalized_column(work, "_m")
+    return work["_m"].dropna().to_numpy()
+
+
+def reader_vs_cohort_values(
+    frame: pd.DataFrame, participant_id, measure: Measure, *, normalize: bool = False,
+) -> Dict[str, np.ndarray]:
+    """``{"This reader": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
+    if frame is None or frame.empty or "participant_id" not in frame.columns:
+        return {}
+    work = frame.copy()
+    work["_m"] = _measure_series(work, measure).to_numpy()
+    if normalize and not measure.is_rate:
+        work = add_normalized_column(work, "_m")
+    is_target = work["participant_id"].astype(str) == str(participant_id)
+    out: Dict[str, np.ndarray] = {}
+    me = work.loc[is_target, "_m"].dropna().to_numpy()
+    others = work.loc[~is_target, "_m"].dropna().to_numpy()
+    if me.size:
+        out["This reader"] = me
+    if others.size:
+        out["Cohort"] = others
+    return out
+
+
+def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
+    """Per-(participant, trial) reading time in ms from the fixation span.
+
+    Span = last fixation end − first fixation start (falls back to the sum of
+    fixation durations when timestamps are missing)."""
+    if fixations.empty or not {"participant_id", "trial_id"} <= set(fixations.columns):
+        return pd.DataFrame(columns=["participant_id", "trial_id", "reading_time_ms"])
+    df = fixations[["participant_id", "trial_id"]].copy()
+    dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
+    if "timestamp_ms" in fixations.columns:
+        ts = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
+        df["_start"] = ts
+        df["_end"] = ts + dur.fillna(0)
+        grp = df.groupby(["participant_id", "trial_id"])
+        out = (grp["_end"].max() - grp["_start"].min()).rename("reading_time_ms")
+    else:
+        df["_d"] = dur
+        out = df.groupby(["participant_id", "trial_id"])["_d"].sum().rename(
+            "reading_time_ms"
+        )
+    return out.reset_index()
+
+
+def reader_summary(
+    words: pd.DataFrame, fixations: pd.DataFrame, participant_id
+) -> Dict[str, float]:
+    """Compact reading-profile stats for one reader (AN-8).
+
+    WPM, mean fixation duration, fixation count, regression rate, skip rate,
+    mean saccade amplitude, trial count — computed from whatever columns exist.
+    """
+    return _summary_row(words, fixations, participant_id)
+
+
+def _summary_row(words, fixations, pid) -> Dict[str, float]:
+    out: Dict[str, float] = {"participant_id": str(pid)}
+    fx = (
+        fixations[fixations["participant_id"].astype(str) == str(pid)]
+        if not fixations.empty and "participant_id" in fixations.columns
+        else pd.DataFrame()
+    )
+    wd = (
+        words[words["participant_id"].astype(str) == str(pid)]
+        if not words.empty and "participant_id" in words.columns
+        else pd.DataFrame()
+    )
+    if not fx.empty:
+        out["n_trials"] = int(fx.groupby(["participant_id", "trial_id"]).ngroups) if {
+            "participant_id", "trial_id"
+        } <= set(fx.columns) else 0
+        out["n_fixations"] = int(len(fx))
+        if "duration_ms" in fx.columns:
+            out["mean_fixation_ms"] = float(
+                pd.to_numeric(fx["duration_ms"], errors="coerce").mean()
+            )
+        if "saccade_amplitude" in fx.columns:
+            out["mean_saccade_px"] = float(
+                pd.to_numeric(fx["saccade_amplitude"], errors="coerce").mean()
+            )
+        if "is_regression" in fx.columns:
+            out["regression_rate"] = float(
+                pd.to_numeric(fx["is_regression"], errors="coerce").mean()
+            )
+        rt = _trial_reading_time_ms(fx)
+        total_ms = float(pd.to_numeric(rt["reading_time_ms"], errors="coerce").sum())
+        n_words = (
+            int(wd.groupby(["trial_id", "word_id"]).ngroups)
+            if not wd.empty and {"trial_id", "word_id"} <= set(wd.columns)
+            else 0
+        )
+        if total_ms > 0 and n_words:
+            out["wpm"] = float(n_words / (total_ms / 60000.0))
+    if not wd.empty and "skip_flag" in wd.columns:
+        out["skip_rate"] = float(pd.to_numeric(wd["skip_flag"], errors="coerce").mean())
+    return out
+
+
+def cohort_summary_table(
+    words: pd.DataFrame, fixations: pd.DataFrame, *,
+    participants: Optional[Sequence] = None,
+) -> pd.DataFrame:
+    """One summary row per reader (AN-16 / AN-8 cohort percentiles)."""
+    pids: List = []
+    for frame in (fixations, words):
+        if frame is not None and not frame.empty and "participant_id" in frame.columns:
+            pids = list(pd.unique(frame["participant_id"].astype(str)))
+            break
+    if participants is not None:
+        keep = {str(p) for p in participants}
+        pids = [p for p in pids if p in keep]
+    if not pids:
+        return pd.DataFrame()
+    rows = [_summary_row(words, fixations, p) for p in pids]
+    return pd.DataFrame(rows)
+
+
+def metric_over_time(
+    fixations: pd.DataFrame, measure: Measure, *, participant_id=None,
+    by: str = "order_in_trial",
+) -> pd.DataFrame:
+    """Mean of a per-fixation measure vs within-trial index (AN-9).
+
+    Returns ``[x, value, sem, n]``. ``by`` is ``order_in_trial`` (default) or
+    ``timestamp_ms``. Filtered to ``participant_id`` when given.
+    """
+    if fixations.empty or measure.column not in fixations.columns or by not in fixations:
+        return pd.DataFrame(columns=["x", "value", "sem", "n"])
+    fx = fixations
+    if participant_id is not None and "participant_id" in fx.columns:
+        fx = fx[fx["participant_id"].astype(str) == str(participant_id)]
+    df = pd.DataFrame(
+        {
+            "x": pd.to_numeric(fx[by], errors="coerce"),
+            "_m": _measure_series(fx, measure).to_numpy(),
+        }
+    ).dropna()
+    if df.empty:
+        return pd.DataFrame(columns=["x", "value", "sem", "n"])
+    out = df.groupby("x")["_m"].agg(["mean", "sem", "count"]).reset_index()
+    out.columns = ["x", "value", "sem", "n"]
+    out["sem"] = out["sem"].fillna(0.0)
+    return out.sort_values("x").reset_index(drop=True)
+
+
+def saccade_vs_duration(
+    fixations: pd.DataFrame, *, participant_id=None
+) -> pd.DataFrame:
+    """``[duration_ms, saccade_amplitude]`` rows for the oculomotor scatter (AN-10)."""
+    need = {"duration_ms", "saccade_amplitude"}
+    if fixations.empty or not need <= set(fixations.columns):
+        return pd.DataFrame(columns=["duration_ms", "saccade_amplitude"])
+    fx = fixations
+    if participant_id is not None and "participant_id" in fx.columns:
+        fx = fx[fx["participant_id"].astype(str) == str(participant_id)]
+    out = pd.DataFrame(
+        {
+            "duration_ms": pd.to_numeric(fx["duration_ms"], errors="coerce"),
+            "saccade_amplitude": pd.to_numeric(fx["saccade_amplitude"], errors="coerce"),
+        }
+    ).dropna()
+    return out.reset_index(drop=True)
+
+
+def progressive_regressive_counts(
+    fixations: pd.DataFrame, *, participant_id=None
+) -> pd.DataFrame:
+    """Per-trial progressive / regressive saccade counts + share (AN-11).
+
+    Returns ``[trial_id, progressive, regressive, regression_share]``.
+    """
+    cols = ["trial_id", "progressive", "regressive", "regression_share"]
+    if (
+        fixations.empty
+        or "is_regression" not in fixations.columns
+        or "trial_id" not in fixations.columns
+    ):
+        return pd.DataFrame(columns=cols)
+    fx = fixations
+    if participant_id is not None and "participant_id" in fx.columns:
+        fx = fx[fx["participant_id"].astype(str) == str(participant_id)]
+    if fx.empty:
+        return pd.DataFrame(columns=cols)
+    reg = pd.to_numeric(fx["is_regression"], errors="coerce").fillna(0).astype(bool)
+    df = pd.DataFrame({"trial_id": fx["trial_id"].to_numpy(), "_reg": reg.to_numpy()})
+    out = df.groupby("trial_id")["_reg"].agg(["sum", "size"]).reset_index()
+    out.columns = ["trial_id", "regressive", "_total"]
+    out["progressive"] = out["_total"] - out["regressive"]
+    out["regression_share"] = out["regressive"] / out["_total"].replace(0, np.nan)
+    return out[cols].sort_values("trial_id").reset_index(drop=True)
+
+
+def ensure_fixation_enrichment(
+    fixations: pd.DataFrame, words: pd.DataFrame
+) -> pd.DataFrame:
+    """Add ``is_regression`` / ``saccade_amplitude`` to ``fixations`` if missing.
+
+    The pre-aggregated OneStop path keeps the EyeLink IA measures on *words* and
+    never enriches the fixation stream, so derived per-fixation columns (AN-11)
+    aren't there. When ``word_id`` is present we run the same native enrichment
+    (``measures.enrich_fixations``) the computed path uses; otherwise the frame
+    is returned unchanged. Cheap and idempotent.
+    """
+    if fixations is None or fixations.empty:
+        return fixations
+    if "is_regression" in fixations.columns or "word_id" not in fixations.columns:
+        return fixations
+    try:
+        from .measures import enrich_fixations
+
+        return enrich_fixations(fixations, words)
+    except Exception:  # pragma: no cover - defensive
+        return fixations
+
+
+def landing_positions(
+    words: pd.DataFrame, fixations: Optional[pd.DataFrame] = None, *,
+    participant_id=None, as_fraction: bool = True,
+) -> np.ndarray:
+    """Within-word landing positions of the first fixation on each word (AN-12).
+
+    Prefers the pre-computed ``first_fix_x`` on ``words`` (relative to the word
+    box ``x``/``width``). When that's absent — the pre-aggregated OneStop path —
+    it derives the landing from ``fixations``: the earliest fixation on each
+    ``(participant, trial, word)``, joined to the word box. Returns the landing
+    *fraction* (0 = word start, 1 = word end) by default, else the px distance.
+    """
+    if words is not None and not words.empty and "first_fix_x" in words.columns:
+        wd = words
+        if participant_id is not None and "participant_id" in wd.columns:
+            wd = wd[wd["participant_id"].astype(str) == str(participant_id)]
+        ffx = pd.to_numeric(wd.get("first_fix_x"), errors="coerce")
+        left = pd.to_numeric(wd.get("x"), errors="coerce")
+        width = pd.to_numeric(wd.get("width"), errors="coerce")
+        dist = ffx - left
+        mask = ffx.notna() & left.notna() & width.notna() & (width > 0)
+        if "skip_flag" in wd.columns:
+            mask &= ~pd.to_numeric(wd["skip_flag"], errors="coerce").fillna(0).astype(bool)
+        dist = dist[mask]
+        width = width[mask]
+    elif (
+        fixations is not None
+        and not fixations.empty
+        and {"word_id", "x"} <= set(fixations.columns)
+        and words is not None
+        and {"word_id", "x", "width"} <= set(words.columns)
+    ):
+        fx = fixations
+        if participant_id is not None and "participant_id" in fx.columns:
+            fx = fx[fx["participant_id"].astype(str) == str(participant_id)]
+        if fx.empty:
+            return np.array([], dtype="float64")
+        order_col = "order_in_trial" if "order_in_trial" in fx.columns else "timestamp_ms"
+        keys = [k for k in ("participant_id", "trial_id", "word_id") if k in fx.columns]
+        first = (
+            fx.sort_values(order_col)
+            .dropna(subset=["word_id"])
+            .drop_duplicates(keys, keep="first")[keys + ["x"]]
+            .rename(columns={"x": "_fx"})
+        )
+        box_keys = [k for k in keys if k in words.columns]
+        box = words[box_keys + ["x", "width"]].drop_duplicates(box_keys)
+        merged = first.merge(box, on=box_keys, how="inner")
+        left = pd.to_numeric(merged["x"], errors="coerce")
+        width = pd.to_numeric(merged["width"], errors="coerce")
+        dist = pd.to_numeric(merged["_fx"], errors="coerce") - left
+        ok = dist.notna() & width.notna() & (width > 0)
+        dist, width = dist[ok], width[ok]
+    else:
+        return np.array([], dtype="float64")
+    if as_fraction:
+        return (dist / width).clip(lower=0.0, upper=1.0).dropna().to_numpy()
+    return dist.dropna().to_numpy()
+
+
+def per_participant_trend(
+    frame: pd.DataFrame, metric: str, *, agg: str = "mean"
+) -> pd.DataFrame:
+    """Per-participant per-trial-index trend (faint lines behind AN-17).
+
+    Returns ``[participant_id, trial_index, value]``.
+    """
+    cols = {"participant_id", "trial_id", "trial_index", metric}
+    if frame.empty or not cols <= set(frame.columns):
+        return pd.DataFrame(columns=["participant_id", "trial_index", "value"])
+    df = frame[["participant_id", "trial_id", "trial_index"]].copy()
+    df["_m"] = pd.to_numeric(frame[metric], errors="coerce")
+    df = df.dropna(subset=["trial_index", "_m"])
+    per_trial = (
+        df.groupby(["participant_id", "trial_id", "trial_index"])["_m"].agg(agg)
+        .reset_index()
+    )
+    out = (
+        per_trial.groupby(["participant_id", "trial_index"])["_m"].mean().reset_index()
+    )
+    out.columns = ["participant_id", "trial_index", "value"]
+    return out.sort_values(["participant_id", "trial_index"]).reset_index(drop=True)
+
+
+# --- Groups + group comparison (AN-14 … AN-22) -------------------------------
+
+
+def group_mask(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.Series:
+    """Boolean row mask for a group ``spec`` = ``{column: [allowed values]}``.
+
+    Columns are AND-ed; within a column the row matches any listed value
+    (compared as strings). Unifies both group-definition modes: a *field split*
+    is two specs over the same column with disjoint values, while *independent
+    filter sets* are specs with several columns. An empty spec selects all rows.
+    """
+    if frame is None or frame.empty:
+        return pd.Series([], dtype=bool)
+    mask = pd.Series(True, index=frame.index)
+    for col, vals in (spec or {}).items():
+        if col in frame.columns and vals:
+            allowed = {str(v) for v in vals}
+            mask &= frame[col].astype(str).isin(allowed)
+    return mask
+
+
+def apply_group(frame: pd.DataFrame, spec: Mapping[str, Sequence]) -> pd.DataFrame:
+    """``frame`` rows selected by ``spec`` (see :func:`group_mask`)."""
+    if frame is None or frame.empty:
+        return frame
+    return frame[group_mask(frame, spec)]
+
+
+def two_group_values(
+    frame: pd.DataFrame, measure: Measure, spec_a: Mapping, spec_b: Mapping, *,
+    label_a: str = "Group A", label_b: str = "Group B", normalize: bool = False,
+) -> Dict[str, np.ndarray]:
+    """``{label_a: values, label_b: values}`` for overlaid distributions (AN-18)."""
+    out: Dict[str, np.ndarray] = {}
+    a = measure_values(apply_group(frame, spec_a), measure, normalize=normalize)
+    b = measure_values(apply_group(frame, spec_b), measure, normalize=normalize)
+    if a.size:
+        out[label_a] = a
+    if b.size:
+        out[label_b] = b
+    return out
+
+
+def group_word_difference(
+    words: pd.DataFrame, text_col: str, text_id, measure: Measure,
+    spec_a: Mapping, spec_b: Mapping, *, agg: str = "mean", min_readers: int = 1,
+) -> pd.DataFrame:
+    """Per-word A−B difference profile for one text (AN-19).
+
+    Returns ``[word_id, a, b, diff, n_a, n_b, enough, word_text]``.
+    """
+    cols = ["word_id", "a", "b", "diff", "n_a", "n_b", "enough", "word_text"]
+    pa = cohort_word_profile(apply_group(words, spec_a), text_col, text_id, measure,
+                             agg=agg, min_readers=min_readers)
+    pb = cohort_word_profile(apply_group(words, spec_b), text_col, text_id, measure,
+                             agg=agg, min_readers=min_readers)
+    if pa.empty and pb.empty:
+        return pd.DataFrame(columns=cols)
+    a = pa[["word_id", "value", "n", "word_text"]].rename(
+        columns={"value": "a", "n": "n_a"}
+    )
+    b = pb[["word_id", "value", "n"]].rename(columns={"value": "b", "n": "n_b"})
+    out = a.merge(b, on="word_id", how="outer")
+    out["diff"] = out["a"] - out["b"]
+    # `a` always carries word_text (cohort_word_profile always returns it), so the
+    # outer merge leaves NaN word_text on B-only words — backfill, don't no-op.
+    out["word_text"] = out["word_text"].fillna("")
+    out["n_a"] = out["n_a"].fillna(0).astype(int)
+    out["n_b"] = out["n_b"].fillna(0).astype(int)
+    out["enough"] = (out["n_a"] >= min_readers) & (out["n_b"] >= min_readers)
+    return out[cols].sort_values("word_id").reset_index(drop=True)
+
+
+def two_group_word_profiles(
+    words: pd.DataFrame, text_col: str, text_id, measure: Measure,
+    spec_a: Mapping, spec_b: Mapping, *, agg: str = "mean",
+    label_a: str = "Group A", label_b: str = "Group B",
+) -> pd.DataFrame:
+    """Long ``[group, word_id, value]`` for the stacked two-group heatmap (AN-22)."""
+    frames = []
+    for spec, label in ((spec_a, label_a), (spec_b, label_b)):
+        prof = cohort_word_profile(apply_group(words, spec), text_col, text_id, measure,
+                                   agg=agg)
+        if not prof.empty:
+            frames.append(prof[["word_id", "value"]].assign(group=label))
+    if not frames:
+        return pd.DataFrame(columns=["group", "word_id", "value"])
+    return pd.concat(frames, ignore_index=True)[["group", "word_id", "value"]]
+
+
+def paired_group_summary(
+    frame: pd.DataFrame, measures: Sequence[Measure], spec_a: Mapping, spec_b: Mapping,
+    *, agg: str = "mean", spread: str = "SEM", label_a: str = "Group A",
+    label_b: str = "Group B", words: Optional[pd.DataFrame] = None,
+    fixations: Optional[pd.DataFrame] = None, normalize: bool = False,
+) -> pd.DataFrame:
+    """Per-measure group means + error for the paired bars (AN-20).
+
+    Returns ``[measure, group, value, err_lo, err_hi, n]``. ``measures`` may mix
+    word- and fixation-level measures; pass ``words``/``fixations`` so each reads
+    its backing frame (``frame`` is the fallback).
+    """
+    rows = []
+    for m in measures:
+        src = (words if m.frame == "words" else fixations) if (
+            words is not None or fixations is not None
+        ) else frame
+        if src is None:
+            continue
+        for spec, label in ((spec_a, label_a), (spec_b, label_b)):
+            vals = measure_values(apply_group(src, spec), m, normalize=normalize)
+            center = aggregate_value(vals, agg)
+            lo, hi = spread_bounds(vals, center, spread, agg=agg)
+            rows.append(
+                {
+                    "measure": m.label,
+                    "group": label,
+                    # Clamp to ≥0: an asymmetric band (e.g. mean + IQR on skewed
+                    # data) can put the centre outside [lo, hi], and a negative
+                    # Plotly error-bar length renders in the wrong direction.
+                    "value": center,
+                    "err_lo": max(center - lo, 0.0),
+                    "err_hi": max(hi - center, 0.0),
+                    "n": int(vals.size),
+                }
+            )
+    return pd.DataFrame(
+        rows, columns=["measure", "group", "value", "err_lo", "err_hi", "n"]
+    )
+
+
+def group_effect_size(
+    values_a: np.ndarray, values_b: np.ndarray, *, test: str = "Mann–Whitney",
+) -> Dict[str, object]:
+    """Mean difference, Cohen's *d*, and a significance test (AN-21).
+
+    ``test`` is ``"Mann–Whitney"`` (rank-sum) or ``"t-test"`` (Welch). Returns a
+    dict with the means, ``mean_diff``, ``cohen_d``, ``test``, ``statistic``,
+    ``p_value`` and the group sizes. Exploratory — *not* pre-registered.
+    """
+    a = np.asarray(values_a, dtype="float64")
+    a = a[~np.isnan(a)]
+    b = np.asarray(values_b, dtype="float64")
+    b = b[~np.isnan(b)]
+    out: Dict[str, object] = {
+        "mean_a": float(np.mean(a)) if a.size else float("nan"),
+        "mean_b": float(np.mean(b)) if b.size else float("nan"),
+        "n_a": int(a.size),
+        "n_b": int(b.size),
+        "test": test,
+        "statistic": float("nan"),
+        "p_value": float("nan"),
+        "cohen_d": float("nan"),
+    }
+    out["mean_diff"] = out["mean_a"] - out["mean_b"]
+    if a.size < 2 or b.size < 2:
+        return out
+    # Pooled-SD Cohen's d.
+    va, vb = np.var(a, ddof=1), np.var(b, ddof=1)
+    pooled = np.sqrt(((a.size - 1) * va + (b.size - 1) * vb) / (a.size + b.size - 2))
+    # NaN (not 0.0) when pooled SD is 0 but the means differ — 0.0 would falsely
+    # read as "no effect" next to a non-zero mean difference. Matches the n<2 /
+    # empty-input sentinels above.
+    out["cohen_d"] = (
+        float((np.mean(a) - np.mean(b)) / pooled) if pooled > 0 else float("nan")
+    )
+    try:
+        from scipy import stats  # BSD-3; added for AN-21 (see PRE-0 ADR).
+
+        if test == "t-test":
+            res = stats.ttest_ind(a, b, equal_var=False)
+        else:
+            res = stats.mannwhitneyu(a, b, alternative="two-sided")
+        out["statistic"] = float(res.statistic)
+        out["p_value"] = float(res.pvalue)
+    except Exception:  # pragma: no cover - scipy always present once added
+        pass
+    return out

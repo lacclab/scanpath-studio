@@ -495,6 +495,9 @@ class TestUnmappedRawDataView:
         monkeypatch.setattr(
             datasets, "potec_raw_frames", lambda *a, **k: (words, fixations)
         )
+        # Pretend the corpus is already on disk so the loader takes the real load
+        # path (no Download button) instead of falling back to the demo.
+        monkeypatch.setattr(datasets, "potec_present", lambda *a, **k: True)
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
@@ -502,10 +505,46 @@ class TestUnmappedRawDataView:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        # The dataset picker renders the registry entries (PoTeC today) as a radio.
-        pickers = [r for r in at.radio if r.label == "Dataset"]
-        assert pickers, "expected a Dataset radio under Public datasets"
-        assert list(pickers[0].options) == list(app.PUBLIC_DATASET_REGISTRY)
+        # The dataset picker renders the registry entries (PoTeC today) as a
+        # searchable selectbox; it displays each corpus' short name, while the
+        # selected value stays the full registry label.
+        pickers = [s for s in at.selectbox if s.label == "Dataset"]
+        assert pickers, "expected a Dataset selectbox under Public datasets"
+        assert list(pickers[0].options) == [
+            app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
+        ]
+        assert pickers[0].value == next(iter(app.PUBLIC_DATASET_REGISTRY))
+
+    def test_each_public_dataset_loader_ui_renders(self, monkeypatch):
+        """Every corpus loader's access UI renders without error when its data
+        directory is absent: a Data-directory input, an Expected-files expander,
+        and a found/missing status (Download for the downloadable corpora), then
+        a graceful fall back to the demo. Exercises the real loaders (not the
+        monkeypatched ones the other tests use)."""
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        for label in app.PUBLIC_DATASET_REGISTRY:
+            at = _make_apptest()
+            at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+            at.session_state["public_dataset_choice"] = label
+            at.run(timeout=60)
+
+            assert not at.exception, f"{label}: {at.exception}"
+            assert at.error == [], f"{label}: {[e.value for e in at.error]}"
+            dir_inputs = [t for t in at.text_input if t.label == "Data directory"]
+            assert dir_inputs, f"{label}: expected a Data directory input"
+        # PoTeC + OneStop are downloadable → a Download button is offered when the
+        # files are absent; MultiplEYE (no public URL) shows a missing-data note.
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = next(
+            k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k
+        )
+        at.run(timeout=60)
+        assert any("Download" in b.label for b in at.button), (
+            "expected a Download button"
+        )
 
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
         """Selecting a public dataset snaps the canvas to its registered monitor,

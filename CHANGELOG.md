@@ -85,6 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   applied to the single, animated and comparison views; chips/panels keep the full trial.
 
 ### Changed
+- **Public-datasets picker reworked** (DATA-4…7) — the corpus list is now a
+  searchable selectbox (shows each corpus' short name + a *language · size*
+  caption, one-line description, and home link) that scales as more datasets are
+  added; **local/private upload stays the primary path**. Each loader now shows
+  an **Expected files** layout for its data directory and a **found vs. Download**
+  status — a one-click ⬇ Download (PoTeC, OneStop) replaces the always-on
+  *Download if missing* checkbox, so an already-downloaded corpus never re-checks
+  the network. The per-source participant/text narrowing (PoTeC *Texts/Readers*,
+  MultiplEYE *Sessions/Stimuli*) is gone — each source loads the whole corpus and
+  the global **Narrow by** trial filters scope it. (The headless `load_potec` /
+  `load_multipleye` keep their `readers`/`texts`/`sessions`/`stimuli` args.)
 - _Internal:_ split `app.py` (4087 → ~1640 lines) into focused modules —
   deep-link/share/config → `url_state.py`, the upload wizard → `wizard.py` — and
   factored plot overlay layers into helpers. No behavior change.

@@ -498,6 +498,17 @@ def test_load_potec_missing_data_message(tmp_path):
         datasets_module.load_potec(tmp_path, texts=["b0"])
 
 
+def test_potec_present(potec_root, tmp_path):
+    # A populated PoTeC tree is detected; an empty folder is not.
+    assert datasets_module.potec_present(potec_root) is True
+    assert datasets_module.potec_present(tmp_path / "empty") is False
+    # Missing any one piece (here the char AOIs) → not present.
+    import shutil
+
+    shutil.rmtree(potec_root / "stimuli" / "aoi_texts")
+    assert datasets_module.potec_present(potec_root) is False
+
+
 # ---------------------------------------------------------------------------
 # OneStop public loader (OSF download-on-demand). Network is monkeypatched —
 # download_onestop is replaced with one that writes tiny OneStop-shaped reports,
@@ -587,6 +598,14 @@ def test_onestop_raw_frames_auto_detect_and_plot(onestop_offline, tmp_path):
     nw, nf = data_module.harmonize_frames(nw, nf)
     fig = sps.plot_scanpath(nw, nf)
     assert len(fig.data) > 0
+
+
+def test_onestop_present(onestop_offline, tmp_path):
+    assert datasets_module.onestop_present(tmp_path, regime="ordinary") is False
+    datasets_module.download_onestop(tmp_path, regime="ordinary")
+    assert datasets_module.onestop_present(tmp_path, regime="ordinary") is True
+    # A different regime's reports aren't there yet.
+    assert datasets_module.onestop_present(tmp_path, regime="repeated") is False
 
 
 def test_onestop_bad_regime():

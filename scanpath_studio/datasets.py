@@ -132,6 +132,26 @@ def download_potec(root, *, fixation_source: str = "scanpaths") -> Path:
     return root
 
 
+def potec_present(root) -> bool:
+    """True when ``root`` already holds the PoTeC files :func:`load_potec` needs.
+
+    Checks for a populated eye-tracking folder (``scanpaths`` or ``fixations``)
+    plus the per-text word + character AOI files — i.e. a load won't need to
+    download. Cheap (directory globs only), so the app can show a
+    *found vs. download* status without reading any CSV."""
+    root = Path(root)
+    base = root / "eyetracking_data"
+    has_fixations = any(
+        (base / s).is_dir() and any((base / s).glob("*.tsv"))
+        for s in ("scanpaths", "fixations")
+    )
+    word_aoi = root / "stimuli" / "word_aoi_texts"
+    char_aoi = root / "stimuli" / "aoi_texts"
+    has_word_aoi = word_aoi.is_dir() and any(word_aoi.glob("word_aoi_*.tsv"))
+    has_char_aoi = char_aoi.is_dir() and any(char_aoi.glob("*.ias"))
+    return has_fixations and has_word_aoi and has_char_aoi
+
+
 def _potec_words(root: Path, texts: Iterable[str]) -> pd.DataFrame:
     """Stimulus-level word table: one row per word per text, with boxes.
 
@@ -347,6 +367,17 @@ _ONESTOP_REGIMES = {
 def _onestop_report_path(root: Path, kind: str, regime: str) -> Path:
     """Local path of a OneStop report CSV.zip (matches the OSF filenames)."""
     return root / f"{kind}_Paragraph_{regime}.csv.zip"
+
+
+def onestop_present(root, *, regime: str = "ordinary") -> bool:
+    """True when ``root`` already holds the two OneStop reports for ``regime``.
+
+    Lets the app show a *found vs. download* status before any (large) read."""
+    root = Path(root)
+    return (
+        _onestop_report_path(root, "ia", regime).is_file()
+        and _onestop_report_path(root, "fixations", regime).is_file()
+    )
 
 
 def download_onestop(root, *, regime: str = "ordinary") -> Path:

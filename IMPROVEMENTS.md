@@ -28,8 +28,10 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ### Awaiting your approval
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
 **AN-1 … AN-28** (the whole *Analysis & corpus views* epic — the four
-question-oriented Corpus Analysis sections + the cross-cutting controls).
-**DATA-3** — OneStop exposed as a public dataset (OSF download-on-demand).
+question-oriented Corpus Analysis sections + the cross-cutting controls);
+**DATA-3** (OneStop public dataset); **DATA-4 … DATA-7** (the data-source UI
+overhaul — searchable public-datasets picker, no per-source filtering, expected
+files, Download button).
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -189,6 +191,69 @@ skip the OSF zips' `__MACOSX` cruft); sidebar source `_load_onestop_public_sourc
 + registry entry in [`app.py`](scanpath_studio/app.py). Docs: [`onestop.md`](docs/onestop.md).
 Distinct from the env-var `$ONESTOP_DATA_DIR` "OneStop server bundle" source, which
 stays for local `lacclab` exports + per-pid shards.
+
+### Data-source UI overhaul (DATA-4 … DATA-7)
+
+Cross-cutting goal: make the **data-source picker** clear and pretty as the public
+corpus list grows toward ~40, while keeping **load a local private dataset** the
+primary, most prominent path. All four touch the sidebar source UI
+(`app.render_sidebar_data_source` [`app.py`](scanpath_studio/app.py:995), the
+`PUBLIC_DATASET_REGISTRY` + `_load_public_dataset`
+[`app.py`](scanpath_studio/app.py:513), and the per-corpus loaders
+`_load_potec_source` / `_load_multipleye_source` / `_load_onestop_public_source`).
+
+**DATA-4 · Public-datasets browser that scales to ~40 corpora** — `Status: Pending approval`
+
+**Implemented (2026-06-24).** The flat dataset radio is now a **searchable
+`st.selectbox`** (`_load_public_dataset` [`app.py`](scanpath_studio/app.py)) that
+displays each corpus' **short name** + a compact *language · size* caption,
+one-line description, and **Dataset home ↗** link. `PUBLIC_DATASET_REGISTRY` was
+promoted from `{label: {loader, monitor}}` to a structured entry (adds `short` /
+`language` / `size` / `description` / `link`; `loader` + `monitor` preserved so
+`_public_dataset_monitor` and the canvas-snap tests keep working). The picker
+scales as the catalogue grows; **local/private upload stays the primary path**
+(top of `render_sidebar_data_source`, ➕ Add data). Selection still rides
+`public_dataset_choice` (the full label, so deep-link/session round-trips).
+Feature flag `public_datasets_enabled()` unchanged. Related: **DATA-1**.
+
+**DATA-5 · Drop the per-source participant/text filtering from the loaders** — `Status: Pending approval`
+
+**Implemented (2026-06-24).** Removed PoTeC's **Texts** + **Readers** controls and
+MultiplEYE's **Sessions** + **Stimuli** multiselects; each loader now reads the
+**whole corpus** (`potec_raw_frames(root)` / `multipleye_raw_frames(root, …)` —
+per the user's "default = all the data") and the global **Narrow by** trial
+filters scope it. The app-side cached wrappers (`_cached_potec_raw_frames` /
+`_cached_multipleye_raw_frames` / `_cached_onestop_raw_frames`) lost their
+`readers`/`texts`/`sessions`/`stimuli`/`download` args; the headless
+`load_potec`/`load_multipleye` keep theirs. MultiplEYE's **Fixation source**
+radio stays (a load variant, not filtering). Demo-fallback paths still behave.
+
+**DATA-6 · Surface the expected file names / directory structure per corpus** — `Status: Pending approval`
+
+**Implemented (2026-06-24).** Each loader shows an **"Expected files"** expander
+(shared `_dataset_dir_input`) next to its *Data directory* input, listing the
+file-name patterns + sub-directory tree it looks for (`_POTEC_STRUCTURE_MD` /
+`_MULTIPLEYE_STRUCTURE_MD` / `_onestop_structure_md(regime)`) — so a user who
+*already has* the data knows exactly what to drop where. Pairs with **DATA-7**.
+
+**DATA-7 · Rework the download + mapping flow (button, not a checkbox)** — `Status: Pending approval`
+
+**Implemented (2026-06-24).** The always-on *Download if missing* checkbox is
+replaced by a shared **found-vs-Download** status (`_dataset_access_status`): it
+detects the corpus on disk (`datasets.potec_present` / `onestop_present` /
+`multipleye_inventory`) and either shows **"Found in `<dir>`"** (loads with **no
+network**) or a one-click **⬇ Download** button (PoTeC / OneStop;
+`download_potec` / `download_onestop` behind a spinner, then rerun → load).
+MultiplEYE (no public URL) shows a missing-data note. The two use cases —
+*already downloaded* vs *need to download* — are now first-class; public-corpus
+frames still flow through the generic auto-detect → **Column-mapping** panels
+unchanged. Tests: `potec_present` / `onestop_present` in
+[`tests/test_dataset_support.py`](tests/test_dataset_support.py); the picker +
+per-loader access UI in [`tests/test_apptest.py`](tests/test_apptest.py)
+(`test_potec_source_renders`, `test_each_public_dataset_loader_ui_renders`).
+Pairs with **DATA-6**.
+
+_Next item: `DATA-8`._
 
 ---
 

@@ -799,12 +799,18 @@ the loaded frames so the app's existing panels render them:</p>
 </ul>
 <h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Multilingual text.</strong> CJK labels need a CJK-capable font — for the bundled
-  corpora this is taken from the stimulus config automatically (see above); the
-  font must also be installed/available to the browser to render the glyphs. A
-  future RTL sample (Hebrew/Arabic) will need text-direction handling. The
-  stimulus page-image background is the reliable fallback for scripts the
-  renderer can't lay out.</li>
+<li><strong>Install the stimulus font for exact text alignment.</strong> The app reads the
+  experiment's font name from the stimulus config and snaps to it, but the font
+  file itself isn't bundled. If it isn't installed on the machine viewing the
+  app, the browser falls back <strong>per script</strong> — CJK glyphs land (every CJK font is
+  full-width-square), but a CJK font's <strong>Latin</strong> glyphs are half-width, so a
+  fallback Latin font renders wider and the overlaid labels drift (URLs/digits
+  are the worst offenders). Install the named font (the app shows which one and a
+  download link under <strong>Text font</strong>) and reload for a pixel match, or just turn
+  on the <strong>stimulus image</strong> to read the original text. A future RTL sample
+  (Hebrew/Arabic) will additionally need text-direction handling. The stimulus
+  page-image background is the reliable fallback for scripts the renderer can't
+  lay out.</li>
 <li><strong>Don't write into the dataset tree</strong> — treat the corpus as read-only.</li>
 </ul>
 <h2 id="uploading-via-the-browser">Uploading via the browser<a class="headerlink" href="#uploading-via-the-browser" title="Permanent link">&para;</a></h2>

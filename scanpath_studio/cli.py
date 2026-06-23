@@ -75,6 +75,22 @@ def _render_parser() -> argparse.ArgumentParser:
         "the needed files (~45 MB) on first use. Participants are reader ids "
         "(0–105), trials are text ids (b0–b5, p0–p5).",
     )
+    src.add_argument(
+        "--source",
+        metavar="NAME",
+        choices=["multipleye"],
+        help="Load a native server-bundle corpus from its RAW export instead of "
+        "raw words/fixations tables. Currently only 'multipleye' — pair with "
+        "--export DIR. Renders through the same native loader (correct word "
+        "boxes/text/page layout, 1920x1080 monitor) as the interactive viewer.",
+    )
+    src.add_argument(
+        "--export",
+        metavar="DIR",
+        help="Raw export root for --source (e.g. a MultiplEYE_*_* export dir with "
+        "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
+        "for --source multipleye.",
+    )
 
     parser.add_argument(
         "-p", "--participant", help="Participant id (default: first available)."
@@ -252,15 +268,125 @@ def _parse_canvas(value: Optional[str]) -> Optional[tuple]:
     return (w, h)
 
 
+def _load_multipleye_render(
+    export: Optional[str],
+    participant: Optional[str],
+    trial: Optional[str],
+    *,
+    list_only: bool = False,
+):
+    """Native MultiplEYE load for `render --source multipleye`.
+
+    Loads the same normalized frames as the interactive viewer's MultiplEYE
+    server-bundle source (correct word boxes/text + image-origin coordinate
+    offsets), straight from the RAW export — never the review app's reshaped
+    per-pid parquet.
+
+    ``export`` is the raw export root (defaults to ``$MULTIPLEYE_DATA_DIR``).
+    ``participant`` is the session label, resolved case-insensitively (the review
+    app passes it lowercased, e.g. ``001_zh_ch_1_et2``; export ids are uppercase).
+
+    ``trial`` selection (so a thumbnail matches the viewer's per-page view):
+      * a literal per-page trial id (``Lit_Alchemist_4__page_01``) is used as-is;
+      * an integer N (the review app's trial number) selects the stimulus whose
+        ``trial_num == N`` and renders its **first reading page** — the single
+        representative page a thumbnail shows.
+
+    Returns ``(words, fixations, participant_id, trial_id)`` — the resolved ids
+    are passed straight to ``api.plot_scanpath``. With ``list_only`` the trial is
+    left unresolved (the caller just prints the combos).
+    """
+    import os
+
+    from .datasets import multipleye_inventory
+    from . import api
+
+    root = (export or os.environ.get("MULTIPLEYE_DATA_DIR", "")).strip()
+    if not root:
+        raise SystemExit(
+            "--source multipleye needs --export DIR (or $MULTIPLEYE_DATA_DIR) "
+            "pointing at a MultiplEYE raw export root."
+        )
+
+    # Resolve the (possibly lowercased) pid to the export's canonical session id.
+    sessions, _ = multipleye_inventory(root, fixation_source="scanpaths")
+    if not sessions:
+        raise FileNotFoundError(
+            f"No MultiplEYE sessions under {root} — expected a raw export root "
+            "with per-session subfolders under scanpaths/."
+        )
+    session = None
+    if participant is not None:
+        want = str(participant).strip().lower()
+        session = next((s for s in sessions if s.lower() == want), None)
+        if session is None:
+            raise ValueError(
+                f"No MultiplEYE session matching participant {participant!r} "
+                f"(available: {', '.join(sessions)})."
+            )
+
+    from .datasets import load_multipleye
+
+    # Load only the requested session (sub-second); all sessions for --list-trials
+    # without a -p. Normalized frames, exactly like the viewer.
+    words, fixations = load_multipleye(
+        root,
+        sessions=[session] if session else None,
+        fixation_source="scanpaths",
+    )
+    if list_only:
+        return words, fixations, session, None
+
+    pid = session
+    tid = trial
+    if trial is not None and "__page_" not in str(trial):
+        # An integer trial number (the review app's id): map trial_num → stimulus
+        # → its first reading page (the page a single thumbnail represents).
+        try:
+            trial_num = int(str(trial))
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"--trial {trial!r} is neither a per-page trial id "
+                "(e.g. Lit_Alchemist_4__page_01) nor an integer trial number."
+            )
+        if "trial_num" not in fixations.columns:
+            raise ValueError(
+                "MultiplEYE fixations carry no 'trial_num' column — pass a "
+                "per-page trial id to --trial instead."
+            )
+        match = fixations[fixations["trial_num"].astype("Int64") == trial_num]
+        if match.empty:
+            avail = sorted(
+                fixations["trial_num"].dropna().astype(int).unique().tolist()
+            )
+            raise ValueError(
+                f"No MultiplEYE trial_num={trial_num} for session {session!r} "
+                f"(available: {avail})."
+            )
+        tid = sorted(match["trial_id"].astype(str).unique())[0]
+
+    return words, fixations, pid, tid
+
+
 def render(argv: List[str]) -> None:
     args = _render_parser().parse_args(argv)
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
-    if sum([args.sample, bool(args.words or args.fixations), bool(args.potec)]) != 1:
+    if (
+        sum(
+            [
+                args.sample,
+                bool(args.words or args.fixations),
+                bool(args.potec),
+                bool(args.source),
+            ]
+        )
+        != 1
+    ):
         raise SystemExit(
-            "Provide exactly one input: --sample, --potec DIR, or your own "
-            "tables (--words and/or --fixations; one of them is enough for "
-            "single-report datasets)."
+            "Provide exactly one input: --sample, --potec DIR, "
+            "--source NAME [--export DIR], or your own tables (--words and/or "
+            "--fixations; one of them is enough for single-report datasets)."
         )
     if not args.list_trials and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials).")
@@ -293,6 +419,18 @@ def render(argv: List[str]) -> None:
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
         canvas = canvas or (1680, 1050)  # PoTeC monitor (DELL P2210)
+    elif args.source == "multipleye":
+        from .datasets import MULTIPLEYE_MONITOR
+
+        try:
+            words, fixations, args.participant, args.trial = _load_multipleye_render(
+                args.export, args.participant, args.trial, list_only=args.list_trials
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        # Same authoritative monitor the viewer's MultiplEYE bundle source snaps
+        # to — coords are offset onto the centered stimulus on the real screen.
+        canvas = canvas or MULTIPLEYE_MONITOR
     else:
         words, fixations = api.load_scanpath_data(args.words, args.fixations)
 

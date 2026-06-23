@@ -218,6 +218,131 @@ def load_onestop_server_bundle(
     return words, fixations
 
 
+# ---------------------------------------------------------------------------
+# Server-side MultiplEYE data source.
+#
+# When the env var `MULTIPLEYE_DATA_DIR` points at a MultiplEYE **raw export
+# root** (e.g. `MultiplEYE_ZH_CH_Zurich_1_2025`, with per-session subfolders
+# under `scanpaths/` and `fixations/`), `load_multipleye_server_bundle()`
+# returns the (words, fixations) raw frames the rest of the pipeline expects.
+#
+# It reuses the *exact same* native loader as the "MultiplEYE — multilingual
+# reading (ZH-CH sample)" public dataset (`datasets.multipleye_raw_frames` on
+# the raw export), so it renders identically — proper word boxes / page layout /
+# image-origin coordinate offsets. We do NOT read any reshaped per-pid parquet:
+# those mangle the page/coordinate layout. The MultiplEYE column schema is then
+# applied the same way the public source applies it — via `prepare_data`
+# auto-detection in app.py, plus the authoritative 1920x1080 monitor snap (the
+# image-origin offsets are baked into the frames' coordinate columns here).
+#
+# Mirrors the OneStop server bundle above: drives the "MultiplEYE server bundle"
+# data source option in app.py, used by an external review-app deep-link
+# integration (single pid+trial into this UI). Distinct from — but shares the
+# loader with — the MultiplEYE *public corpus* source (`app._load_multipleye_source`).
+# ---------------------------------------------------------------------------
+
+MULTIPLEYE_DATA_DIR_ENV = "MULTIPLEYE_DATA_DIR"
+# scanpaths/ fixations are pre-tagged with page + word index (richer than the
+# raw fixations/ source) — the same default the public MultiplEYE source uses.
+MULTIPLEYE_BUNDLE_FIXATION_SOURCE = "scanpaths"
+
+
+def multipleye_bundle_dir() -> Optional[Path]:
+    """Resolved MultiplEYE raw-export root from `$MULTIPLEYE_DATA_DIR`, or `None`.
+
+    Points at the raw export root (the dir holding `scanpaths/`/`fixations/`
+    per-session subfolders), NOT a reshaped per-pid parquet dir."""
+    raw = os.environ.get(MULTIPLEYE_DATA_DIR_ENV, "").strip()
+    if not raw:
+        from .constants import MULTIPLEYE_BUNDLE_DEFAULT_DIR
+
+        raw = MULTIPLEYE_BUNDLE_DEFAULT_DIR.strip()
+    return Path(raw) if raw else None
+
+
+def _resolve_multipleye_session(
+    root: Path, participant: str, fixation_source: str
+) -> Optional[str]:
+    """Match a (possibly lowercased) deep-link pid to a real export session id.
+
+    The review app passes the session label lowercased (e.g. `001_zh_ch_1_et2`),
+    while the export's folder/inventory ids are uppercase (`001_ZH_CH_1_ET2`).
+    Resolve case-insensitively to the canonical id `multipleye_raw_frames`
+    expects; `None` if no session matches."""
+    from .datasets import multipleye_inventory
+
+    sessions, _ = multipleye_inventory(root, fixation_source=fixation_source)
+    want = participant.strip().lower()
+    for sess in sessions:
+        if sess.lower() == want:
+            return sess
+    return None
+
+
+@st.cache_data(show_spinner="Loading MultiplEYE server bundle…")
+def load_multipleye_server_bundle(
+    participant: Optional[str] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load MultiplEYE raw (words, fixations) frames from the `$MULTIPLEYE_DATA_DIR`
+    raw export, via the same native loader as the public MultiplEYE source.
+
+    Fast path — when `participant` is given (the deep-link case), resolve the
+    session id case-insensitively from the export inventory and load only that
+    one session.
+
+    Slow path — when no participant is given, load every session in the export.
+
+    Returns raw (pre-normalization) frames exactly like
+    `app._load_multipleye_source` does; the app auto-detects the MultiplEYE
+    schema and snaps the canvas to the 1920x1080 monitor. Returns empty frames
+    when the dir / sessions are missing — the caller falls back to demo data.
+    """
+    base = multipleye_bundle_dir()
+    if base is None or not base.is_dir():
+        return pd.DataFrame(), pd.DataFrame()
+
+    from .datasets import multipleye_raw_frames
+
+    fixation_source = MULTIPLEYE_BUNDLE_FIXATION_SOURCE
+
+    # Fast path: one session, resolved from the deep-link pid.
+    if participant:
+        session = _resolve_multipleye_session(base, participant, fixation_source)
+        if session is None:
+            # A named participant means a one-session deep link — surface a clear
+            # error rather than silently loading the whole corpus.
+            st.error(
+                f"No MultiplEYE session matching participant {participant!r} "
+                f"under {base / fixation_source}."
+            )
+            st.stop()
+        try:
+            return multipleye_raw_frames(
+                base,
+                sessions=[session],
+                stimuli=None,
+                fixation_source=fixation_source,
+            )
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            st.error(f"Couldn't load MultiplEYE session {session!r}: {exc}")
+            st.stop()
+
+    # Slow path: every session in the export.
+    try:
+        return multipleye_raw_frames(
+            base,
+            sessions=None,
+            stimuli=None,
+            fixation_source=fixation_source,
+        )
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        st.error(
+            f"MultiplEYE export not found under {base}: {exc} Expected a raw "
+            f"export root with `scanpaths/` / `fixations/` per-session subfolders."
+        )
+        return pd.DataFrame(), pd.DataFrame()
+
+
 def _norm_col(name) -> str:
     """Fold a column name to its case- and separator-insensitive key.
 

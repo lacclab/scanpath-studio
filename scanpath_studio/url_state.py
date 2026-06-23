@@ -24,6 +24,7 @@ from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
     DEMO_CHOICE,
+    MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
@@ -161,6 +162,7 @@ def _clamp_url_value(state_key: str, value):
 _SHAREABLE_SOURCES = {
     DEMO_CHOICE: "demo",
     ONESTOP_CHOICE: "onestop",
+    MULTIPLEYE_BUNDLE_CHOICE: "multipleye",
     SYNTHETIC_CHOICE: "synthetic",
 }
 

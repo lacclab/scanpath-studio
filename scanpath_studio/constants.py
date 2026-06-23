@@ -137,6 +137,13 @@ ONESTOP_REGIME_LABELS = {
     "repeated": "Repeated reading",
     "information_seeking_repeated": "Information seeking (repeated)",
 }
+MULTIPLEYE_BUNDLE_CHOICE = "MultiplEYE server bundle"
+# Default dir for the MultiplEYE *server bundle* (per-session parquet shards
+# under `<dir>/scanpath/`), overridable via the `MULTIPLEYE_DATA_DIR` env var.
+# Empty default so the source only appears when the env var is set (like the
+# OneStop server bundle). Distinct from MULTIPLEYE_DEFAULT_DIR above, which is
+# the public-corpus loader's tree.
+MULTIPLEYE_BUNDLE_DEFAULT_DIR = ""
 _VIEW_SCANPATH = "Scanpath Visualization"
 _VIEW_CORPUS = "Corpus Analysis"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS]

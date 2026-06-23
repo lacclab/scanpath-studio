@@ -57,6 +57,7 @@ from scanpath_studio.constants import (
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
     FONT_FAMILY,
+    MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
     ONESTOP_PUBLIC_DEFAULT_DIR,
@@ -88,12 +89,14 @@ from scanpath_studio.data import (
     frame_fingerprint,
     harmonize_frames,
     infer_raw_gaze_schema,
+    load_multipleye_server_bundle,
     load_onestop_server_bundle,
     load_sample_data,
     load_sample_raw_gaze,
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
+    multipleye_bundle_dir,
     onestop_data_dir,
     onestop_full_bundle_exists,
     propose_fix_schema,
@@ -740,6 +743,14 @@ def load_words_and_fixations(
             )
             return load_sample_data()
         return words, fixations
+    if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        words, fixations = load_multipleye_server_bundle(participant=participant)
+        if words.empty or fixations.empty:
+            st.sidebar.warning(
+                "MultiplEYE bundle unavailable — falling back to demo data."
+            )
+            return load_sample_data()
+        return words, fixations
     return load_sample_data()
 
 
@@ -1175,6 +1186,8 @@ def render_sidebar_data_source() -> str:
     options = []
     if onestop_data_dir() is not None:
         options.append(ONESTOP_CHOICE)
+    if multipleye_bundle_dir() is not None:
+        options.append(MULTIPLEYE_BUNDLE_CHOICE)
     options.append(DEMO_CHOICE)
     # Datasets the user has uploaded become first-class, switchable sources.
     options.extend(st.session_state.get("_datasets", {}).keys())
@@ -1274,6 +1287,15 @@ def render_sidebar_canvas_controls(
         monitor_is_authoritative = True
     elif (monitor := _public_dataset_monitor(data_choice)) is not None:
         default_canvas_w, default_canvas_h = monitor
+        monitor_is_authoritative = True
+    elif data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        # MultiplEYE server bundle = the same native MultiplEYE export as the
+        # public source; coordinates are offset onto the centered stimulus on
+        # the real 1920x1080 monitor, so snap the canvas to it (true-to-scale),
+        # exactly like the public MultiplEYE registry entry's monitor.
+        from scanpath_studio.datasets import MULTIPLEYE_MONITOR
+
+        default_canvas_w, default_canvas_h = MULTIPLEYE_MONITOR
         monitor_is_authoritative = True
     elif data_choice is None or data_choice == UPLOAD_CHOICE:
         # Uploaded data (the setup wizard passes data_choice=None) defaults to a
@@ -1488,6 +1510,8 @@ def main() -> None:
     url_source = _apply_url_preset()
     if url_source == "onestop" and onestop_data_dir() is not None:
         st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
+    elif url_source == "multipleye" and multipleye_bundle_dir() is not None:
+        st.session_state.setdefault("data_source_choice", MULTIPLEYE_BUNDLE_CHOICE)
     elif url_source == "demo":
         st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
     elif url_source == "synthetic":
@@ -1574,6 +1598,10 @@ def main() -> None:
     if deeplink_pid:
         deep_link_pid = deeplink_pid
     elif data_choice == ONESTOP_CHOICE and not onestop_full_bundle_exists():
+        deep_link_pid = st.session_state.get("single_participant")
+    elif data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        # MultiplEYE has no full-corpus bundle: each session is its own shard, so
+        # the live participant selector fast-paths to one session's shards too.
         deep_link_pid = st.session_state.get("single_participant")
     else:
         deep_link_pid = None

@@ -889,8 +889,17 @@ def _multipleye_questions_from_frame(qs: pd.DataFrame) -> dict:
 
 
 def _multipleye_questions_by_stimulus(xlsx_path: Path) -> dict:
-    """Read the comprehension workbook and return ``{stimulus -> questions JSON}``."""
-    return _multipleye_questions_from_frame(pd.read_excel(xlsx_path, sheet_name=0))
+    """Read the comprehension workbook and return ``{stimulus -> questions JSON}``.
+
+    Comprehension questions are optional enrichment (a per-stimulus JSON column);
+    reading the ``.xlsx`` needs the optional ``openpyxl`` dependency. If it isn't
+    installed, skip the enrichment (empty map) rather than failing the whole load
+    — the scanpaths/word-boxes don't depend on it."""
+    try:
+        frame = pd.read_excel(xlsx_path, sheet_name=0)
+    except ImportError:
+        return {}
+    return _multipleye_questions_from_frame(frame)
 
 
 def _normalize_multipleye_participant_meta(

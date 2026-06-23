@@ -131,11 +131,13 @@ from scanpath_studio.url_state import (
     _go_scanpath,
     _render_share_body,
 )
-from scanpath_studio.wizard import (
-    _enter_add_data_wizard,
-    _remove_dataset,
-    _render_data_setup,
-)
+# NOTE: ``scanpath_studio.wizard`` is imported lazily inside the two functions
+# that use it (render_sidebar_data_source, main), not here. wizard does
+# ``from . import app`` at module top, so a top-level import here forms a cycle:
+# under ``streamlit run app.py`` the script isn't registered as
+# ``scanpath_studio.app``, so wizard's ``from . import app`` re-imports app fresh,
+# re-entering this import while wizard is still half-loaded → ImportError.
+# Deferring it lets app finish loading before wizard is ever imported.
 from scanpath_studio.utils import build_combo_options
 
 # Re-exported under a private alias so tests can import them from `app`; keep the
@@ -146,6 +148,21 @@ from scanpath_studio.utils import (  # noqa: F401
 from scanpath_studio.utils import (  # noqa: F401
     friendly_trial_label as _friendly_trial_label,
 )
+
+
+def __getattr__(name):
+    """Lazily re-export the wizard helpers from ``app`` for back-compat.
+
+    ``scanpath_studio.wizard`` can't be imported at module load (it imports
+    ``app`` back, forming a cycle — see the note above the utils import), but
+    ``from scanpath_studio.app import _render_data_setup`` (and the other wizard
+    helpers) was a supported entry point used by tests. Resolving it here, on
+    attribute access, defers the wizard import until app is fully loaded."""
+    if name in ("_enter_add_data_wizard", "_remove_dataset", "_render_data_setup"):
+        from scanpath_studio import wizard
+
+        return getattr(wizard, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def public_datasets_enabled() -> bool:
@@ -908,6 +925,9 @@ def render_sidebar_data_source() -> str:
     it from session (no re-upload); the synthetic source is no longer offered
     fresh and "Public Datasets" shows grayed-out until the feature flag is on.
     """
+    # Imported lazily (not at module top) to avoid the app⇄wizard import cycle.
+    from scanpath_studio.wizard import _enter_add_data_wizard, _remove_dataset
+
     # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
     source = st.sidebar.container(key="tour_grp_data_source").expander(
         "Data source", expanded=True
@@ -1300,6 +1320,9 @@ def main() -> None:
         # compact collapsed "Data & mapping" panel. While the wizard is active
         # (setup not finalized) it owns the page — return before rendering tabs.
         wizard_active = not st.session_state.get("setup_complete", False)
+        # Imported lazily (not at module top) to avoid the app⇄wizard import cycle.
+        from scanpath_studio.wizard import _render_data_setup
+
         setup = _render_data_setup(active=wizard_active)
         words_df, fixations_df = setup.words, setup.fixations
         raw_gaze_df = setup.raw_gaze

@@ -143,6 +143,29 @@ change (keyed on `(data_choice, public_dataset_choice)`, matching the col-map
 reset), and **stashes/restores** the per-dataset selections so switching back
 recovers them.
 
+**BUG-2 · Upload box appears twice during data upload** — `Status: Done` *(signed off 2026-06-23)*
+
+In the Upload / Add-dataset wizard the whole step-3 upload group (Raw gaze +
+**Fixations** + Words) rendered a second, greyed-out copy while a large file was
+being read — so the **Fixations** uploader ("Fixations table(s)") appeared
+**twice**, both showing the same file.
+
+_Root cause:_ a Streamlit layout-shift ghost. The "⬆️ Upload … to begin" call to
+action + the "large dataset" tip rendered at the top of step 3 only *before*
+anything was uploaded. The moment a file was added they vanished, shifting every
+following element up two delta-paths. Reading a large upload blocks the rerun
+(the `@st.cache_data(show_spinner="Reading uploaded data…")` reader in
+[`app.py`](scanpath_studio/app.py:784)), so Streamlit froze the half-reconciled
+DOM and left the pre-shift copy of the whole upload group on screen as a
+greyed ghost.
+
+_Fix:_ render that guidance into a **container that is always created** (even
+when empty) so the upload boxes keep a fixed position in the element tree and
+never shift ([`wizard.py`](scanpath_studio/wizard.py:1194)). Verified with
+Playwright + a 26 MB zip: before, two "Fixations table(s)" uploaders appeared
+during the read; after, exactly one throughout. `pytest` wizard/apptest/
+column-mapping suites green (89 passed).
+
 ---
 
 ## Engineering

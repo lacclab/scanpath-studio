@@ -462,3 +462,25 @@ class TestDatasetFont:
     def test_px_without_family(self):
         words = pd.DataFrame({"stimulus_font_px": [20.0]})
         assert app_module._dataset_font(words) == (20.0, None)
+
+
+class TestStimulusFontInstallHint:
+    """`_stimulus_font_install_hint` names the font to install + a download link."""
+
+    def test_cjk_font_points_at_noto(self):
+        name, url = app_module._stimulus_font_install_hint(
+            "'Noto Sans Mono CJK SC', 'Noto Sans CJK SC', monospace"
+        )
+        assert name == "Noto Sans Mono CJK SC"
+        assert "noto-cjk" in url
+
+    def test_other_named_font_links_to_google_fonts(self):
+        name, url = app_module._stimulus_font_install_hint("'Courier Prime', monospace")
+        assert name == "Courier Prime"
+        assert "fonts.google.com" in url and "Courier+Prime" in url
+
+    def test_no_hint_for_generic_or_missing(self):
+        # A bare CSS generic has nothing to install; None stays None.
+        assert app_module._stimulus_font_install_hint("monospace") is None
+        assert app_module._stimulus_font_install_hint(None) is None
+        assert app_module._stimulus_font_install_hint("") is None

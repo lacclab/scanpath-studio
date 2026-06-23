@@ -498,15 +498,25 @@ def test_load_potec_missing_data_message(tmp_path):
         datasets_module.load_potec(tmp_path, texts=["b0"])
 
 
-def test_potec_present(potec_root, tmp_path):
-    # A populated PoTeC tree is detected; an empty folder is not.
-    assert datasets_module.potec_present(potec_root) is True
-    assert datasets_module.potec_present(tmp_path / "empty") is False
-    # Missing any one piece (here the char AOIs) → not present.
-    import shutil
+def test_potec_present(tmp_path):
+    # The app loads the whole corpus, so "present" requires every text's word +
+    # char AOI files (what download_potec fetches), not just one.
+    root = tmp_path / "potec"
+    word_dir = root / "stimuli" / "word_aoi_texts"
+    char_dir = root / "stimuli" / "aoi_texts"
+    scan_dir = root / "eyetracking_data" / "scanpaths"
+    for d in (word_dir, char_dir, scan_dir):
+        d.mkdir(parents=True)
+    (scan_dir / "reader0_b0_scanpath.tsv").write_text("x\n")
+    for text_id in datasets_module._POTEC_TEXTS:
+        (word_dir / f"word_aoi_{text_id}.tsv").write_text("x\n")
+        (char_dir / f"{text_id}.ias").write_text("x\n")
 
-    shutil.rmtree(potec_root / "stimuli" / "aoi_texts")
-    assert datasets_module.potec_present(potec_root) is False
+    assert datasets_module.potec_present(root) is True
+    assert datasets_module.potec_present(tmp_path / "empty") is False
+    # Missing even one text's AOI → the full-corpus load can't run → not present.
+    (word_dir / "word_aoi_b0.tsv").unlink()
+    assert datasets_module.potec_present(root) is False
 
 
 # ---------------------------------------------------------------------------

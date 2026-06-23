@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -358,7 +358,7 @@ def _dataset_access_status(
     *,
     root: str,
     present: bool,
-    download=None,
+    download: Optional[Callable[[str], None]] = None,
     size_hint: str = "",
     key_prefix: str = "",
 ) -> bool:

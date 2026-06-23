@@ -1741,12 +1741,12 @@ def _render_trial_condition_chips(
     key "what am I looking at" facts are visible at a glance (these chips replaced
     the Trial Info subtab).
 
-    ``fields`` is the configurable list of fields to surface (sidebar
-    ``trial_chip_fields``). The whole strip — identity/condition chips, a ``?``
-    help marker, and an inline **More** disclosure — stays on **one line**; the
-    computed summary stats live inside **More** (only fields not already shown), so
-    the plot stays tall. A data column that varies within the trial is shown (first
-    value) but flagged with ⚠️. Skips silently when nothing resolves."""
+    ``fields`` is the configurable list of fields to surface (the inline ✏️ Edit
+    chips popover). The strip — identity/condition chips + an inline **More**
+    disclosure — stays on **one line**; the computed summary stats *and* any chips
+    that overflow the line live inside **More** (see ``_render_chip_overflow_script``),
+    so the plot stays tall. A data column that varies within the trial is shown
+    (first value) but flagged with ⚠️. Skips silently when nothing resolves."""
     primary: list[tuple[str, str]] = []  # identity + conditions (inline)
     summary: list[tuple[str, str]] = []  # computed stats (inside "More")
     summary_lookup: Optional[dict] = None  # computed once, only if a summary chip
@@ -1797,30 +1797,66 @@ def _render_trial_condition_chips(
             for name, value in items
         )
 
-    # A "?" marker pointing to the sidebar picker (styled hover/focus tooltip via
-    # the .sps-chip-help::after bubble; tabindex+aria-label keep it accessible).
-    _chip_help_tip = (
-        "Change which fields show here with ✏️ Edit chips (top-right of this strip)"
-    )
-    help_span = (
-        f'<span class="sps-chip-help" tabindex="0" role="img" '
-        f'aria-label="{_chip_help_tip}" data-tip="{_chip_help_tip}">?</span>'
-    )
-    # The summary stats sit inside an inline <details> "More" — only fields not
-    # already shown inline — so the whole strip stays one line until expanded.
+    # The "More" disclosure holds (a) chips that overflow the one-line strip —
+    # moved in client-side by _render_chip_overflow_script when the row is too
+    # narrow — and (b) the computed summary stats. It auto-hides via CSS (:has)
+    # when it would be empty (everything fits and there are no stats).
     more_html = ""
-    if summary:
+    if primary or summary:
         more_html = (
             '<details class="sps-chip-more">'
             '<summary class="sps-chip sps-chip-more-summary">More</summary>'
-            f'<div class="sps-chip-more-body">{_stat_rows(summary)}</div>'
+            '<div class="sps-chip-more-body">'
+            '<div class="sps-chip-more-overflow"></div>'
+            f"{_stat_rows(summary)}</div>"
             "</details>"
         )
     st.markdown(
         '<div class="sps-trial-chips">'
         f'<span class="sps-chips-primary">{_spans(primary)}</span>'
-        f"{help_span}{more_html}</div>",
+        f"{more_html}</div>",
         unsafe_allow_html=True,
+    )
+
+
+def _render_chip_overflow_script() -> None:
+    """Move chips that don't fit the one-line strip into the **More** dropdown.
+
+    Which chips fit depends on the rendered width, so this is decided client-side:
+    a same-origin ``components.html`` script (like the tour) walks every
+    ``.sps-trial-chips`` block and appends any chip overflowing ``.sps-chips-primary``
+    into that block's ``.sps-chip-more-overflow`` slot. The strip is
+    ``overflow:hidden``, so overflowing chips are clipped (invisible) until moved —
+    no flicker — and they land in the closed ``More``. Re-runs on each rerender
+    (Streamlit rebuilds the markup fresh, so the chips reflow each time)."""
+    components.html(
+        """<script>
+        (function () {
+            const doc = window.parent.document;
+            function reflow() {
+                doc.querySelectorAll('.sps-trial-chips').forEach((block) => {
+                    const primary = block.querySelector('.sps-chips-primary');
+                    const overflow = block.querySelector('.sps-chip-more-overflow');
+                    if (!primary || !overflow) return;
+                    const pr = primary.getBoundingClientRect();
+                    if (pr.width === 0) return;  // not laid out yet — retry
+                    let moving = false;
+                    primary.querySelectorAll(':scope > .sps-chip').forEach((chip) => {
+                        if (!moving && chip.getBoundingClientRect().right > pr.right + 1) {
+                            moving = true;  // nowrap: this chip + all after it overflow
+                        }
+                        if (moving) overflow.appendChild(chip);
+                    });
+                });
+            }
+            let tries = 0;
+            (function attempt() {
+                reflow();
+                if (++tries < 4) requestAnimationFrame(attempt);
+            })();
+        })();
+        </script>""",
+        height=0,
     )
 
 
@@ -2079,7 +2115,10 @@ def render_single_trial_tab(
         # strip reads `trial_chip_fields` so an edit/reorder applies the same run.
         strip_col, edit_col = st.columns([13, 1], vertical_alignment="center")
         with edit_col:
-            with st.popover(
+            # Keyed container so styles.py can shrink the popover trigger to chip
+            # size and add a little space before it.
+            edit_box = st.container(key="chip_edit_box")
+            with edit_box.popover(
                 "✏️",
                 help="Edit which fields show as chips above the plot, and drag to "
                 "reorder them.",
@@ -2101,6 +2140,9 @@ def render_single_trial_tab(
                     compare_participant,
                     chip_fields,
                 )
+            # Move overflowing chips into the "More" dropdown (client-side; runs
+            # after both strips render).
+            _render_chip_overflow_script()
 
     displayed_fig = None
     save_slug = f"{selected_participant}__{selected_trial}"

@@ -7,16 +7,28 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ## How to use this file
 
 - **Status:** `Backlog` (captured, not scheduled) · `Planned` (next-ish, scoped)
-  · `In progress` · `Blocked` · `Done`.
-- **IDs are stable.** Don't renumber when an item is finished; mark it `Done` (or
-  cut it once it has shipped and is in `CHANGELOG.md`). New items get the next
-  free number in their group.
+  · `In progress` · `Blocked` · `Pending approval` (implemented, awaiting the
+  user's final sign-off) · `Done` (signed off — moved to the archive) ·
+  `Skipped` (closed without implementing — stays here for the rationale, **not**
+  archived).
+- **Approval gate.** When an item's implementation is finished, mark it
+  `Pending approval` — **never** jump straight to `Done`. Only after the user
+  gives the final confirmation does it become `Done` **and move to**
+  [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md), so this file stays scoped
+  to open and recently-finished work. `Skipped` items are **not** archived.
+- **IDs are stable.** Don't renumber when an item is finished. New items get the
+  next free number in their group; archived items keep their ID over there.
 - **Composite asks are split** into sub-items so they can land independently.
 - When implementing an item, ask for clarification as needed before starting.
 
 ### Currently in progress
 - **PERF-1** — Plotly → matplotlib migration ([PR #83](https://github.com/lacclab/scanpath-studio/pull/83), `matplotlib-migration` branch).
 - **DATA-1** — Broaden dataset support (ongoing epic).
+
+### Awaiting your approval
+Implemented, not yet signed off (→ `Done` + archive on your confirmation):
+**UX-1 · UX-1a · UX-2 · UX-2a · UX-3 · CMP-1 · CMP-2 · CMP-3 · CMP-4 · BUG-1 ·
+ENG-5 · ENG-7 · ENG-9 · ENG-10**.
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -41,30 +53,34 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Done`
+**UX-1 · Move the trial-chip field picker into the main plot chip row** — `Status: Pending approval`
 
-Done: the sidebar `🏷️ Trial chips` picker is gone; an inline **✏️ Edit chips**
+Implemented: the sidebar `🏷️ Trial chips` picker is gone; an inline **✏️ Edit chips**
 `st.popover` now sits at the right end of the chip row
 (`tabs.render_single_trial_tab`), hosting `controls.render_trial_chip_picker`.
+Polish: the redundant `?` marker removed; the ✏️ trigger shrunk to chip size with
+a little space before it; chips that overflow the one line spill into **More**
+(client-side via `_render_chip_overflow_script`) alongside the summary stats.
 
-- **UX-1a · Reorder chips in place** — `Status: Done`. Built with
+- **UX-1a · Reorder chips in place** — `Status: Pending approval`. Built with
   `streamlit-sortables` (`sort_items`, new dependency): a two-bucket drag UI
   (*Shown · drag to reorder* / *Available*) handles membership **and** order in one
   widget, written back to `trial_chip_fields`.
 
-**UX-2 · Welcome tour covers all major components, in reading order** — `Status: Done`
+**UX-2 · Welcome tour covers all major components, in reading order** — `Status: Pending approval`
 
-Done: `tour._SPOTLIGHT_STEPS` is a 9-step reading-order walk (plot → trial
+Implemented: `tour._SPOTLIGHT_STEPS` is a 9-step reading-order walk (plot → trial
 selection → chips → rail view-modes/controls → bottom subtabs → sidebar data +
 save/restore), targeting new keyed wrappers (`tour_grp_plot` / `_trial_select` /
 `_chips` / `_subtabs`) added in `tabs.py`.
 
-- **UX-2a · Drop the separate Exit button** — `Status: Done`. The card footer is
-  now Back / Next (or Done); the ✕ (`tour_sp_close`) is the only close affordance.
+- **UX-2a · Drop the separate Exit button** — `Status: Pending approval`. The card
+  footer is now Back / Next (or Done); the ✕ (`tour_sp_close`) is the only close
+  affordance.
 
-**UX-3 · Green/red check & cross in Stimulus & questions** — `Status: Done`
+**UX-3 · Green/red check & cross in Stimulus & questions** — `Status: Pending approval`
 
-Done: the correctness line in `tabs._render_paragraph_panel` uses Streamlit
+Implemented: the correctness line in `tabs._render_paragraph_panel` uses Streamlit
 colour markdown — `:green[✓ correct]` / `:red[✗ incorrect]` (and `✓ yes`/`✗ no`).
 
 ---
@@ -77,33 +93,33 @@ styling live in [`controls.py`](scanpath_studio/controls.py:622)
 `_render_compare_saccade_styles`, `_collect_compare_styles`); the overlay figure
 is built in [`plots.py`](scanpath_studio/plots.py).
 
-**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Done`
+**CMP-1 · Move the trial comparison selector into the main plot area** — `Status: Pending approval`
 
-Done: the **Compare** toggle stays in the rail's View modes, but the second-trial
-selector (`tabs._render_compare_selector`) now renders above the chips, mirroring
-the main picker (selectbox + scrubbing slider + ◀ ▶) with an **A/B** colour-swatch
-label line.
+Implemented: the **Compare** toggle stays in the rail's View modes, but the
+second-trial selector (`tabs._render_compare_selector`) now renders above the
+chips, mirroring the main picker (selectbox + scrubbing slider + ◀ ▶) with an
+**A/B** colour-swatch label line.
 
-**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Done`
+**CMP-2 · Optionally hide the compared-trial legend, hidden by default** — `Status: Pending approval`
 
-Done: `global_show_compare_legend` (default off) threads `show_legend` into
+Implemented: `global_show_compare_legend` (default off) threads `show_legend` into
 `make_comparison_figure` / the split figure **and** the animated dual overlay
 (`make_scanpath_animation`); the static overlay reclaims the top reserve when
 hidden. Toggle lives in the compare selector's ⚙ popover.
 
-**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Done`
+**CMP-3 · Fix compare default colors not matching the actual rendered values** — `Status: Pending approval`
 
-Done: a single `constants.compare_palette_color(idx)` is now the one source of
-truth for both the per-scanpath style seeding/collection and
+Implemented: a single `constants.compare_palette_color(idx)` is now the one source
+of truth for both the per-scanpath style seeding/collection and
 `plots._comparison_scanpath_style`, so the swatches can't drift from the figure —
 and CMP-1's A/B labels read those same resolved colours.
 
-**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Done`
+**CMP-4 · Remove redundant saccade-color control in compare mode** — `Status: Pending approval`
 
-Done: in compare mode the global Saccade colour/style/width **and** the global
-fixation colour-by/size/hollow/colorscale/range controls are hidden (they're dead
-for the overlay); only the per-scanpath controls + shared toggles (Direction
-arrows, Fixation index) show.
+Implemented: in compare mode the global Saccade colour/style/width **and** the
+global fixation colour-by/size/hollow/colorscale/range controls are hidden
+(they're dead for the overlay); only the per-scanpath controls + shared toggles
+(Direction arrows, Fixation index) show.
 
 ---
 
@@ -135,6 +151,21 @@ max, log scaling, per-word-area density). Related but distinct from the new
 Better handling/rendering when the stimulus is an image rather than laid-out text
 (scaling, alignment to fixation space, AOIs over images). Ties into the
 stimulus-image fallback used for unsupported scripts in **PRE-6**.
+
+**VIZ-5 · Export the plot as separable layers** — `Status: Backlog`
+
+Add an export mode that keeps the figure's layers **separable** in the output
+file instead of one flattened image — so a *word boxes / fixations / saccades /
+heatmap / labels / stimulus image* split can be toggled and restyled in
+Illustrator / Inkscape for publication figures. Options to explore: vector
+(SVG/PDF) with one named `<g>` group per layer (Plotly traces already map cleanly
+to the per-layer helpers in [`plots.py`](scanpath_studio/plots.py) —
+`_add_saccade_layer`, `_add_raw_gaze_layer`, the `_add_*_heatmap` family, and the
+words/fixations cores), and/or a set of per-layer files dropped into the export
+zip. Wire into `export.ExportOptions` / `render_export_options` / `bulk_export`
+([`export.py`](scanpath_studio/export.py:47)) alongside the existing
+PNG/SVG/PDF/HTML formats, and surface it in the **Export** subtab
+(`tabs._render_export_panel`).
 
 ---
 
@@ -474,9 +505,9 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-**BUG-1 · Trial filter persists (incorrectly) when switching datasets** — `Status: Done`
+**BUG-1 · Trial filter persists (incorrectly) when switching datasets** — `Status: Pending approval`
 
-Done: `app.main` resets the `filter_*` keys + derived `_trial_filters` on a
+Implemented: `app.main` resets the `filter_*` keys + derived `_trial_filters` on a
 data-source change (keyed on `(data_choice, public_dataset_choice)`, matching the
 col-map reset), and **stashes/restores** the per-dataset selections so switching
 back recovers them.
@@ -507,13 +538,14 @@ Column-mapping UI, trial filters, bulk-export zip.
 
 ### Code quality
 
-**ENG-5 · Decompose `app.py`** — `Status: Done`
+**ENG-5 · Decompose `app.py`** — `Status: Pending approval`
 
-Done earlier: `url_state.py` (deep-link/share/config), `wizard.py` (upload wizard),
-and `constants.py` (source/view labels) were split out (app.py 4087 → ~1640 lines);
-view dispatch is `url_state._active_view` + a 2-branch `if/else` in `main`, and the
-data-source strategy is `PUBLIC_DATASET_REGISTRY` + `load_words_and_fixations`.
-Column mapping always lived in `controls.py`. Verified 2026-06-23.
+Implemented earlier: `url_state.py` (deep-link/share/config), `wizard.py` (upload
+wizard), and `constants.py` (source/view labels) were split out (app.py 4087 →
+~1640 lines); view dispatch is `url_state._active_view` + a 2-branch `if/else` in
+`main`, and the data-source strategy is `PUBLIC_DATASET_REGISTRY` +
+`load_words_and_fixations`. Column mapping always lived in `controls.py`. Verified
+2026-06-23.
 
 **ENG-6 · Centralize `st.session_state` keys** — `Status: Skipped`
 
@@ -521,10 +553,10 @@ Skipped at the user's request (2026-06-23): the app has hundreds of keys and
 deep-links seed many pre-widget, so a full typed migration is high-risk for low
 payoff right now.
 
-**ENG-7 · Confirm `watchdog` is actually used; drop if not** — `Status: Done`
+**ENG-7 · Confirm `watchdog` is actually used; drop if not** — `Status: Pending approval`
 
-Done: **keep** — `watchdog` is an optional Streamlit runtime file-watcher (faster
-hot reload; not imported by app code). Added a clarifying comment in
+Implemented: **keep** — `watchdog` is an optional Streamlit runtime file-watcher
+(faster hot reload; not imported by app code). Added a clarifying comment in
 `pyproject.toml` + `requirements.txt`.
 
 **ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Backlog`
@@ -533,15 +565,15 @@ Finish it or hide it (`model_scanpaths.py` / `similarity.py` / `synthetic.py`).
 
 ### UX / robustness
 
-**ENG-9 · Surface auto-detected columns in the Column Mapping panel** — `Status: Done`
+**ENG-9 · Surface auto-detected columns in the Column Mapping panel** — `Status: Pending approval`
 
-Done: `controls.column_mapping_ui` now shows a `✨ auto-detected \`col\`` caption per
-field (flagging overrides); the remap editor labels it `currently mapped` instead
-(its proposal is the saved mapping, not a fresh detect).
+Implemented: `controls.column_mapping_ui` now shows a `✨ auto-detected \`col\``
+caption per field (flagging overrides); the remap editor labels it `currently
+mapped` instead (its proposal is the saved mapping, not a fresh detect).
 
-**ENG-10 · Better animation-export errors when Chrome/Chromium is missing** — `Status: Done`
+**ENG-10 · Better animation-export errors when Chrome/Chromium is missing** — `Status: Pending approval`
 
-Done: `animation_export.chrome_available()` + a shared `CHROME_INSTALL_HINT`
+Implemented: `animation_export.chrome_available()` + a shared `CHROME_INSTALL_HINT`
 (pointing to `kaleido_get_chrome` / the HTML export); a UI pre-flight before a
 GIF/MP4 render; a warm→cold `to_image` fallback when the warm Kaleido server won't
 start but Chrome exists; and the static PNG/SVG/PDF export reuses the same hint.

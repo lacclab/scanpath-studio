@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import re
 from typing import Dict, Optional, Tuple
 
 import pandas as pd
@@ -569,6 +570,31 @@ def _dataset_font(words: pd.DataFrame) -> Tuple[Optional[float], Optional[str]]:
         fams = fams[fams.str.strip() != ""]
         family = fams.iloc[0] if not fams.empty else None
     return float(px.iloc[0]), family
+
+
+def _stimulus_font_install_hint(css_family: Optional[str]) -> Optional[Tuple[str, str]]:
+    """``(primary font name, download URL)`` for a stimulus font's CSS stack.
+
+    The overlaid reading text only matches the stimulus image when the exact
+    experiment font is installed (we don't bundle it) — the browser otherwise
+    falls back per-script, so CJK lands but the half-width Latin in a CJK font
+    drifts (URLs/digits render too wide). Returns the human-readable family name
+    (first quoted entry of the stack) + a best-effort download link, or None when
+    the stack names no specific (quoted) family — a bare CSS generic like
+    ``monospace`` has nothing to install."""
+    if not css_family:
+        return None
+    match = re.search(r"'([^']+)'", css_family)
+    if match is None:
+        return None
+    name = match.group(1)
+    # Best-effort source: the experiment fonts are from Google's Noto project.
+    url = (
+        "https://github.com/notofonts/noto-cjk"
+        if "cjk" in name.lower() or "noto" in name.lower()
+        else f"https://fonts.google.com/?query={name.replace(' ', '+')}"
+    )
+    return name, url
 
 
 def load_words_and_fixations(
@@ -1257,6 +1283,25 @@ def render_sidebar_canvas_controls(
         help="Font for the word labels. Use the exact font from your experiment "
         "(e.g. 'Courier New') or a CSS fallback stack.",
     )
+    # When the dataset declares its stimulus typeface (MultiplEYE), the overlaid
+    # text only lines up with the stimulus image if that exact font is installed
+    # on the viewer's machine — we don't bundle it, and the browser otherwise
+    # falls back per-script (CJK lands, but half-width Latin in a CJK font drifts,
+    # e.g. URLs render too wide). Tell the user the font + how to get it.
+    hint = _stimulus_font_install_hint(font_css)
+    if hint is not None:
+        font_name, font_url = hint
+        display.caption(
+            f"ℹ️ This corpus was rendered in **{font_name}**. For the overlaid text "
+            "to match the stimulus image exactly, install that font on this "
+            "computer (it isn't bundled), then reload — otherwise the browser "
+            "substitutes a fallback and labels (especially URLs / Latin) can "
+            f"drift. [Download]({font_url}); install via Font Book (macOS), "
+            "right-click → Install (Windows), or `~/.local/share/fonts` + "
+            "`fc-cache -f` (Linux). Or just turn on the **stimulus image** to read "
+            "the original text."
+        )
+
     # Base reading-text colour (highlighted-text colour lives in Visualization
     # controls). Read back into viz_settings by controls.sidebar_controls.
     st.session_state.setdefault("global_text_color", WORD_LABEL_COLOR)

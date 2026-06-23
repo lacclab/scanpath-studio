@@ -372,8 +372,14 @@ def download_onestop(root, *, regime: str = "ordinary") -> Path:
             continue
         url = _ONESTOP_OSF_URL.format(resource=resource)
         print(f"Downloading OneStop {regime} {kind} report from {url} …")
+        # Write to a temp file and atomically rename into place, so an
+        # interrupted write (killed process / full disk) never leaves a
+        # truncated .csv.zip that `dest.is_file()` would then skip forever —
+        # forcing a manual delete. The reports are large, so that window is real.
+        tmp = dest.with_name(dest.name + ".part")
         with urllib.request.urlopen(url) as response:
-            dest.write_bytes(response.read())
+            tmp.write_bytes(response.read())
+        tmp.replace(dest)
     return root
 
 

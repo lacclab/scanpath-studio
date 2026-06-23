@@ -599,6 +599,42 @@ def test_onestop_missing_report_message(tmp_path):
         datasets_module.onestop_raw_frames(tmp_path, regime="ordinary")
 
 
+def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
+    """download_onestop writes via a temp file (no leftover .part) and skips
+    reports already on disk on a re-run."""
+    calls = []
+
+    class _FakeResp:
+        def __init__(self, data):
+            self._data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self._data
+
+    def fake_urlopen(url):
+        calls.append(url)
+        return _FakeResp(_zip_bytes("x.csv", b"a\n1\n"))
+
+    monkeypatch.setattr(datasets_module.urllib.request, "urlopen", fake_urlopen)
+    datasets_module.download_onestop(tmp_path, regime="ordinary")
+
+    ia = datasets_module._onestop_report_path(tmp_path, "ia", "ordinary")
+    fix = datasets_module._onestop_report_path(tmp_path, "fixations", "ordinary")
+    assert ia.is_file() and fix.is_file()
+    assert not list(tmp_path.glob("*.part"))  # temp artifact renamed, not left
+    assert len(calls) == 2
+
+    # Re-run skips the reports already present (no new downloads).
+    datasets_module.download_onestop(tmp_path, regime="ordinary")
+    assert len(calls) == 2
+
+
 # ---------------------------------------------------------------------------
 # MultiplEYE loader (against a tiny synthesized MultiplEYE-format tree)
 # ---------------------------------------------------------------------------

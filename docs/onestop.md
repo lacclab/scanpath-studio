@@ -38,7 +38,8 @@ pays the download (the reports range from tens to a few hundred MB). Untick
 OneStop's reports use the same schema as the bundled demo, so they flow through
 the normal auto-detect → normalize pipeline — the sidebar **Column mapping**
 panels still appear and stay overridable. Fixation and interest-area
-coordinates are full-screen pixels, so the canvas auto-fits to the data extents.
+coordinates are full-screen pixels on OneStop's 2560×1440 presentation monitor,
+so the canvas renders true-to-scale to that monitor.
 
 ## From the Python API
 

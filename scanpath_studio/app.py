@@ -521,7 +521,7 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     "OneStop — 360-participant English corpus": dict(
         loader=_load_onestop_public_source,
-        monitor=None,  # reports carry full-screen pixel coords; auto-fit canvas
+        monitor=(2560, 1440),  # OneStop presentation monitor (full-screen px coords)
     ),
 }
 

@@ -47,6 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page, character AOIs aggregated to word boxes), with its comprehension questions,
   pre-aggregated reading measures (`IA_*`), reader metadata, and a true-to-scale
   stimulus-page background image.
+- **OneStop public dataset** — the *Public datasets* picker now offers the
+  [OneStop](https://github.com/lacclab/OneStop-Eye-Movements) 360-participant
+  English corpus, downloading the paragraph-level interest-area + fixation
+  reports from [OSF](https://osf.io/2prdq/) on demand (regime-selectable:
+  ordinary / information seeking / repeated / information-seeking-repeated),
+  rendered true-to-scale on OneStop's 2560×1440 monitor. Distinct from the
+  env-var `$ONESTOP_DATA_DIR` server bundle. See [docs](docs/onestop.md).
 - **Public datasets (PoTeC + MultiplEYE) shown by default** (`SCANPATH_PUBLIC_DATASETS=0`
   to hide). Schema auto-detection now recognizes MultiplEYE columns.
 - **Upload-wizard helpers** — derive trial/participant ids from the filename

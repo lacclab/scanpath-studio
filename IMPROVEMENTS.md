@@ -27,8 +27,7 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
-**UX-1 · UX-1a · UX-2 · UX-2a · UX-3 · CMP-1 · CMP-2 · CMP-3 · CMP-4 · BUG-1 ·
-ENG-5 · ENG-7 · ENG-9 · ENG-10**.
+**UX-1 · CMP-1 · CMP-2 · CMP-3 · CMP-4**.
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -59,29 +58,17 @@ Implemented: the sidebar `🏷️ Trial chips` picker is gone; an inline **✏�
 `st.popover` now sits at the right end of the chip row
 (`tabs.render_single_trial_tab`), hosting `controls.render_trial_chip_picker`.
 Polish: the redundant `?` marker removed; the ✏️ trigger shrunk to chip size with
-a little space before it; chips that overflow the one line spill into **More**
-(client-side via `_render_chip_overflow_script`) alongside the summary stats.
+a little space before it; the chip strip's **More** dropdown now carries the full
+chip list (so any chip clipped at the line edge is reachable at any width / sidebar
+state) alongside the summary stats. (A client-side "move only the overflow" version
+was tried but Streamlit's plot-embed layout makes the strip width unstable to
+measure, so More just holds everything.)
 
-- **UX-1a · Reorder chips in place** — `Status: Pending approval`. Built with
-  `streamlit-sortables` (`sort_items`, new dependency): a two-bucket drag UI
-  (*Shown · drag to reorder* / *Available*) handles membership **and** order in one
-  widget, written back to `trial_chip_fields`.
+- _UX-1a (reorder chips in place) signed off & archived — see
+  [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**UX-2 · Welcome tour covers all major components, in reading order** — `Status: Pending approval`
-
-Implemented: `tour._SPOTLIGHT_STEPS` is a 9-step reading-order walk (plot → trial
-selection → chips → rail view-modes/controls → bottom subtabs → sidebar data +
-save/restore), targeting new keyed wrappers (`tour_grp_plot` / `_trial_select` /
-`_chips` / `_subtabs`) added in `tabs.py`.
-
-- **UX-2a · Drop the separate Exit button** — `Status: Pending approval`. The card
-  footer is now Back / Next (or Done); the ✕ (`tour_sp_close`) is the only close
-  affordance.
-
-**UX-3 · Green/red check & cross in Stimulus & questions** — `Status: Pending approval`
-
-Implemented: the correctness line in `tabs._render_paragraph_panel` uses Streamlit
-colour markdown — `:green[✓ correct]` / `:red[✗ incorrect]` (and `✓ yes`/`✗ no`).
+_UX-2 · UX-2a · UX-3 signed off & archived — see
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `UX-4`._
 
 ---
 
@@ -505,12 +492,18 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-**BUG-1 · Trial filter persists (incorrectly) when switching datasets** — `Status: Pending approval`
+**BUG-2 · Upload box appears twice during data upload** — `Status: Backlog`
 
-Implemented: `app.main` resets the `filter_*` keys + derived `_trial_filters` on a
-data-source change (keyed on `(data_choice, public_dataset_choice)`, matching the
-col-map reset), and **stashes/restores** the per-dataset selections so switching
-back recovers them.
+In the Upload / Add-dataset wizard the **Fixations** uploader ("Fixations
+table(s)") renders **twice** — the active box plus a second, greyed duplicate
+lower down (below "Raw gaze (optional)"). Looks like the grouped upload section
+(`wizard._render_data_setup` → the `upload_box` helper for raw gaze / fixations /
+words, [`wizard.py`](scanpath_studio/wizard.py:1220)) gets emitted more than once
+(e.g. the active main-area flow *and* the collapsed "Data & mapping" panel both
+rendering it). Find the double render and emit each uploader once.
+
+_BUG-1 (trial filter persists across datasets) signed off & archived — see
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 ---
 
@@ -538,14 +531,8 @@ Column-mapping UI, trial filters, bulk-export zip.
 
 ### Code quality
 
-**ENG-5 · Decompose `app.py`** — `Status: Pending approval`
-
-Implemented earlier: `url_state.py` (deep-link/share/config), `wizard.py` (upload
-wizard), and `constants.py` (source/view labels) were split out (app.py 4087 →
-~1640 lines); view dispatch is `url_state._active_view` + a 2-branch `if/else` in
-`main`, and the data-source strategy is `PUBLIC_DATASET_REGISTRY` +
-`load_words_and_fixations`. Column mapping always lived in `controls.py`. Verified
-2026-06-23.
+_ENG-5 (decompose `app.py`) · ENG-7 (`watchdog`) signed off & archived — see
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **ENG-6 · Centralize `st.session_state` keys** — `Status: Skipped`
 
@@ -553,30 +540,15 @@ Skipped at the user's request (2026-06-23): the app has hundreds of keys and
 deep-links seed many pre-widget, so a full typed migration is high-risk for low
 payoff right now.
 
-**ENG-7 · Confirm `watchdog` is actually used; drop if not** — `Status: Pending approval`
-
-Implemented: **keep** — `watchdog` is an optional Streamlit runtime file-watcher
-(faster hot reload; not imported by app code). Added a clarifying comment in
-`pyproject.toml` + `requirements.txt`.
-
 **ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Backlog`
 
 Finish it or hide it (`model_scanpaths.py` / `similarity.py` / `synthetic.py`).
 
 ### UX / robustness
 
-**ENG-9 · Surface auto-detected columns in the Column Mapping panel** — `Status: Pending approval`
-
-Implemented: `controls.column_mapping_ui` now shows a `✨ auto-detected \`col\``
-caption per field (flagging overrides); the remap editor labels it `currently
-mapped` instead (its proposal is the saved mapping, not a fresh detect).
-
-**ENG-10 · Better animation-export errors when Chrome/Chromium is missing** — `Status: Pending approval`
-
-Implemented: `animation_export.chrome_available()` + a shared `CHROME_INSTALL_HINT`
-(pointing to `kaleido_get_chrome` / the HTML export); a UI pre-flight before a
-GIF/MP4 render; a warm→cold `to_image` fallback when the warm Kaleido server won't
-start but Chrome exists; and the static PNG/SVG/PDF export reuses the same hint.
+_ENG-9 (surface auto-detected columns) · ENG-10 (animation-export errors when
+Chrome is missing) signed off & archived — see
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **ENG-11 · Version saved plot-config JSON + migration path** — `Status: Backlog`
 

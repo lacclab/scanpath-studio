@@ -194,8 +194,8 @@ def get_app_css() -> str:
        chip strip and the rail reads as a tidy inspector panel. */
     /* The chip strip stays on ONE line: it never wraps; the primary
        identity/condition chips clip at the row edge while the "More" disclosure
-       is pinned. Chips clipped at the edge are moved into "More" client-side
-       (tabs._render_chip_overflow_script). */
+       is pinned. "More" carries the full chip list so any clipped chip is still
+       reachable (tabs._render_trial_condition_chips). */
     .sps-trial-chips {
         display: flex;
         flex-wrap: nowrap;
@@ -214,9 +214,8 @@ def get_app_css() -> str:
     }
     .sps-chips-primary .sps-chip { flex: 0 0 auto; }
     .sps-chip-more { flex: 0 0 auto; }
-    /* Auto-hide "More" when it would be empty — no summary stats AND no chips
-       were pushed into the overflow slot (everything fit on the line). */
-    .sps-chip-more:not(:has(.sps-stat)):not(:has(.sps-chip-more-overflow .sps-chip)) {
+    /* Auto-hide "More" when it would be empty — no summary stats AND no chips. */
+    .sps-chip-more:not(:has(.sps-stat)):not(:has(.sps-chip-more-all .sps-chip)) {
         display: none;
     }
     /* Inline "More" disclosure: the chip-styled summary stays on the one-line
@@ -248,16 +247,16 @@ def get_app_css() -> str:
         border-radius: 0.6rem;
         box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
     }
-    /* Overflow chips (those that didn't fit the line) sit at the top of the
-       dropdown, wrapping freely. The slot collapses to nothing when empty. */
-    .sps-chip-more-overflow {
+    /* The full chip list at the top of the dropdown, wrapping freely so every
+       chip is reachable even when the inline strip clipped some. Empty = hidden. */
+    .sps-chip-more-all {
         display: flex;
         flex-wrap: wrap;
         gap: 0.35rem;
     }
-    .sps-chip-more-overflow:empty { display: none; }
-    /* A divider when both overflow chips and summary stats are present. */
-    .sps-chip-more-overflow:has(.sps-chip) + .sps-stat {
+    .sps-chip-more-all:empty { display: none; }
+    /* A divider between the chip list and the summary stats. */
+    .sps-chip-more-all:has(.sps-chip) + .sps-stat {
         margin-top: 0.45rem;
         padding-top: 0.55rem;
         border-top: 1px solid rgba(0, 0, 0, 0.12);

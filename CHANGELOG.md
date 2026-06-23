@@ -31,9 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged. Replaces the old out-of-text marker toggle.
 - **Drag-to-reorder trial chips** — an inline **✏️ Edit chips** popover beside the
   chip strip (replaces the sidebar picker): drag fields between *Shown* and
-  *Available* and reorder within *Shown*. Chips that don't fit the one line now
-  spill into the **More** dropdown (alongside the summary stats) instead of being
-  clipped.
+  *Available* and reorder within *Shown*. The chip strip's **More** dropdown now
+  holds the full chip list (so any chip clipped at the line edge is always
+  reachable) alongside the summary stats.
 - **Column mapping surfaces auto-detected columns** per field (and flags when
   you've overridden the detected default).
 

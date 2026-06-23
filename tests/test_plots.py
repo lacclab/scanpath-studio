@@ -1446,7 +1446,10 @@ class TestLinePitchAndScript:
         # 98.6 pitch it's 98.6/3 ≈ 33 — much closer to the real font.
         words = self._two_line_boxes(height=34, pitch=98.6)
         font = _word_label_font_px(
-            words, scale=1.0, line_spacing=3.0, manual_font_px=0,
+            words,
+            scale=1.0,
+            line_spacing=3.0,
+            manual_font_px=0,
             scale_text_to_boxes=True,
         )
         assert font > 34 / 3 + 1  # strictly bigger than the old box-height budget

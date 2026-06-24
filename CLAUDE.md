@@ -17,6 +17,8 @@ you work under `scanpath_studio/`); contributor setup is in
   missed format fails the build. Don't skip it, even for "docs-only" changes.
 - **Update `CHANGELOG.md` as you go** — a concise line or two under the
   `[Unreleased]` section (grouped Added / Changed / Fixed), not a per-tweak log.
+- **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
+  to commit messages.
 
 ## Building features
 

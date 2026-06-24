@@ -756,7 +756,25 @@ Related: **VIZ-4** (image-based stimuli support), **VIZ-1**/**DATA-2** (px↔pt 
 experimental-setup params), **PRE-6** (RTL/multilingual rendering — MultiplEYE
 adds non-English scripts), **DATA-1**.
 
-_Next item: `BUG-4`._
+**BUG-4 · MultiplEYE: residual small text-vs-image mismatch** — `Status: Backlog`
+
+Follow-up to **BUG-3** (now `Pending approval`). After the BUG-3 fixes (real
+`FONT_SIZE`/`FONT` threaded through, line-pitch-based `scale_text_to_boxes`,
+script-aware width cap) the MultiplEYE true-to-scale word text lines up *much*
+better, but a **small** residual offset between the rendered text layer and the
+stimulus image remains — the labels are close but not pixel-exact on top of the
+image words. Likely the leftover slack noted in BUG-3's root cause (2): the
+nominal-vs-inked glyph size + anchor difference between how PIL drew the image
+glyphs (top-left in a glyph-tight cell) and how Plotly centers/rasterizes the
+label in the box, and/or remaining font-metric differences between the CJK
+fallback font and the exact stimulus font. Quantify the residual (by how much,
+and whether it's a constant shift vs. per-line/per-word drift) before fixing.
+Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
+([`plots.py`](scanpath_studio/plots.py:339)), MultiplEYE font stamping
+(`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
+in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
+
+_Next item: `BUG-5`._
 
 ---
 

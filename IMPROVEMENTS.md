@@ -866,7 +866,24 @@ between local and the Cloud image. Code anchors: the wizard flow in
 config in `streamlit_app.py` / any `.streamlit/config.toml`. Confirm whether it's
 size-, memory-, or import-related before fixing.
 
-_Next item: `BUG-6`._
+**BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Backlog`
+
+The app's accent/primary color renders **blue when run locally** (`streamlit
+run`) but **red on the deployed Streamlit Community Cloud version** (e.g. the
+selected data-source radio and the filter chips show red online). The theme
+should be consistent across environments. Likely cause: a theme `primaryColor`
+mismatch between a local `~/.streamlit/config.toml` (or a personal theme) and
+what the deployed app actually uses — the repo may not pin a theme, so local
+picks up a user/default theme while Cloud falls back to its own default. Fix by
+pinning an explicit theme in the repo (`.streamlit/config.toml` `[theme]
+primaryColor = …`, or via `st.set_page_config` / injected CSS) so both
+environments match; decide the intended accent. Code anchors: any
+`.streamlit/config.toml`, `streamlit_app.py`, page config in
+[`app.py`](scanpath_studio/app.py), and injected CSS in
+[`styles.py`](scanpath_studio/styles.py). Related: **BUG-5** (also
+local-vs-deployed).
+
+_Next item: `BUG-7`._
 
 ---
 

@@ -299,7 +299,6 @@ def _load_multipleye_render(
     import os
 
     from .datasets import multipleye_inventory
-    from . import api
 
     root = (export or os.environ.get("MULTIPLEYE_DATA_DIR", "")).strip()
     if not root:

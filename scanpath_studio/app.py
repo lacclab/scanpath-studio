@@ -93,10 +93,10 @@ from scanpath_studio.data import (
     load_onestop_server_bundle,
     load_sample_data,
     load_sample_raw_gaze,
+    multipleye_bundle_dir,
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
-    multipleye_bundle_dir,
     onestop_data_dir,
     onestop_full_bundle_exists,
     propose_fix_schema,
@@ -717,12 +717,13 @@ def load_words_and_fixations(
 
     Args:
         data_choice: ``DEMO_CHOICE`` ("Bundled Demo") / ``SYNTHETIC_CHOICE`` /
-            ``PUBLIC_DATASETS_CHOICE`` / ``ONESTOP_CHOICE``. The Upload source and
-            stored uploaded datasets are handled by ``main`` directly, not here.
+            ``PUBLIC_DATASETS_CHOICE`` / ``ONESTOP_CHOICE`` /
+            ``MULTIPLEYE_BUNDLE_CHOICE``. The Upload source and stored uploaded
+            datasets are handled by ``main`` directly, not here.
         participant: Lowercased participant_id from the URL deep link. When set
-            AND `data_choice == ONESTOP_CHOICE`, the OneStop loader fast-paths
-            to just that pid's Parquet shard — sub-second instead of ~3 min.
-            Ignored for the other data sources.
+            AND `data_choice` is ``ONESTOP_CHOICE`` / ``MULTIPLEYE_BUNDLE_CHOICE``,
+            the loader fast-paths to just that pid's shard/session — sub-second
+            instead of loading the whole corpus. Ignored for the other sources.
 
     Returns:
         Tuple of (words_df, fixations_df) as raw DataFrames before normalization.

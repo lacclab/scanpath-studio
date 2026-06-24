@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-06-24
+
 ### Added
 - **Stimulus-font install hint** — when a dataset declares its typeface
   (MultiplEYE), a note under **Text font** names the font, links a download, and
@@ -62,6 +64,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   env-var `$ONESTOP_DATA_DIR` server bundle. See [docs](docs/onestop.md).
 - **Public datasets (PoTeC + MultiplEYE) shown by default** (`SCANPATH_PUBLIC_DATASETS=0`
   to hide). Schema auto-detection now recognizes MultiplEYE columns.
+- **MultiplEYE server-bundle source** — a URL-addressable `multipleye` data
+  source (`?source=multipleye`) for deep-linking a review app straight into the
+  viewer at a given participant + trial. Gated on `$MULTIPLEYE_DATA_DIR` pointing
+  at a raw export root, it reuses the native MultiplEYE loader (same raw frames,
+  schema auto-detection, and authoritative 1920×1080 monitor) as the public
+  source — so it renders identically — and fast-paths to a single session for
+  `?participant` (resolved case-insensitively). Exposed on every surface: the
+  sidebar source list, the Share/deep-link round-trip, and headless
+  `render --source multipleye [--export DIR]`. Mirrors the OneStop server
+  bundle.
 - **Upload-wizard helpers** — derive trial/participant ids from the filename
   (delimiter split or regex) and aggregate character AOIs into word boxes.
 - **Fixation classification (visual only)** — under the Fixation controls, flag

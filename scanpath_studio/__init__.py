@@ -15,7 +15,7 @@ __all__ = [
     "load_potec",
     "load_multipleye",
 ]
-__version__ = "0.22.0"
+__version__ = "0.23.0"
 
 # Public headless API (see api.py / datasets.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/

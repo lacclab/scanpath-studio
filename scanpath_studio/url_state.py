@@ -102,6 +102,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "bg_choice": "global_bg_choice",
     "bg_custom": "global_bg_custom",
     "font_family": "global_font_family",
+    "word_hover_measure": "global_word_hover_measure",
 }
 _SHARE_INT_PARAMS = {"order_font_size": "global_order_font_size"}
 _SHARE_FLOAT_PARAMS = {

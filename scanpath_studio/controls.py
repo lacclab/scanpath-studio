@@ -98,6 +98,9 @@ _VIZ_WIDGET_DEFAULTS = {
     # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
     # default — the per-scanpath colours already tell the readings apart.
     "global_show_compare_legend": False,
+    # VIZ-13: reading measure shown in the word hover tooltip. "Off" (None) hides
+    # the measure line; any canonical measure column name shows it.
+    "global_word_hover_measure": "total_fixation_duration_ms",
     # Colour-bar styling (Axes & color bars expander).
     "global_colorbar_orientation": "Vertical",
     "global_colorbar_tickangle": 0,
@@ -254,6 +257,16 @@ def _apply_view_preset(name: str) -> None:
     here is picked up cleanly (no "set after widget instantiated" warning)."""
     for key, value in _VIEW_PRESETS[name].items():
         st.session_state[key] = value
+
+
+def _active_quick_view() -> Optional[str]:
+    """Return which quick-view preset (scanpath/heatmap) the current layer toggles
+    match, or None if the user has customized away from both presets."""
+    ss = st.session_state
+    for name in ("scanpath", "heatmap"):
+        if all(ss.get(k) == v for k, v in _VIEW_PRESETS[name].items()):
+            return name
+    return None
 
 
 # Help text for the (multi-capable) Trial ID mapping, shared by all tables.
@@ -1099,6 +1112,9 @@ def _collect_viz_settings(
         background_color=background_color,
         compare_style_a=None,
         compare_style_b=None,
+        word_hover_measure=ss.get(
+            "global_word_hover_measure", "total_fixation_duration_ms"
+        ),
     )
 
 
@@ -1176,11 +1192,16 @@ def sidebar_controls(
     # presets are still reachable by toggling layers. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
     viz.caption("Quick views")
-    # Side by side to keep the rail short.
+    # Side by side to keep the rail short. The active preset (whichever Quick-view
+    # preset the current layer toggles match) renders as "primary" so the user can
+    # see which view is active at a glance. When neither preset matches (the user
+    # has customized layers manually) both buttons render without highlight.
+    _active = _active_quick_view()
     _qv = viz.columns(2)
     _qv[0].button(
         "👁️ Scanpath",
         key="viz_view_scanpath",
+        type="primary" if _active == "scanpath" else "secondary",
         width="stretch",
         help="Fixations + saccades over the text — the core scanpath.",
         on_click=_apply_view_preset,
@@ -1189,6 +1210,7 @@ def sidebar_controls(
     _qv[1].button(
         "🔥 Heatmap",
         key="viz_view_heatmap",
+        type="primary" if _active == "heatmap" else "secondary",
         width="stretch",
         help="Fixation-density heatmap over the text, nothing else.",
         on_click=_apply_view_preset,
@@ -1414,6 +1436,23 @@ def sidebar_controls(
                     key="global_span_border_color",
                     help="Colour of the span outline (used with 'Mark border').",
                 )
+
+            st.divider()
+            _HOVER_MEASURE_OPTIONS = {
+                "total_fixation_duration_ms": "Total fixation duration",
+                "first_fixation_ms": "FFD",
+                "first_pass_gaze_duration_ms": "FPRT",
+                "regression_path_duration_ms": "RPD",
+                "n_fixations": "Fixation count",
+                None: "Off",
+            }
+            st.selectbox(
+                "Hover: show measure",
+                options=list(_HOVER_MEASURE_OPTIONS),
+                format_func=lambda k: _HOVER_MEASURE_OPTIONS[k],
+                key="global_word_hover_measure",
+                help="Reading measure shown when hovering over a word on the plot.",
+            )
 
     # --- Heatmap ----------------------------------------------------------
     show_heatmap = viz.toggle("**Heatmap**", key="global_show_heatmap")

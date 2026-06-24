@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **VIZ-12 — Quick-view active preset indicator** — the active Quick-view button
+  (👁️ Scanpath / 🔥 Heatmap) now renders highlighted (`type="primary"`) when the
+  current layer toggles match that preset exactly; both appear unselected when the
+  user has customized layers away from either preset.
+- **VIZ-13 — Word hover: improved labels + configurable reading measure** — the
+  word-label tooltip now reads `Word: …`, `Word #N`, `Line #N` (clearer formatting)
+  and shows a reading measure (default: total fixation duration in ms). The measure
+  is configurable via a new **Hover: show measure** selectbox in the
+  ⚙️ Text & highlight popover (TFD / FFD / FPRT / RPD / Fixation count / Off);
+  the choice is preserved in Share links.
+
 ## [0.23.0] - 2026-06-24
 
 ### Added

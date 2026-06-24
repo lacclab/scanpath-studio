@@ -551,6 +551,9 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
         colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
         background_color=viz_settings.get("background_color"),
+        word_hover_measure=viz_settings.get(
+            "word_hover_measure", "total_fixation_duration_ms"
+        ),
     )
 
 

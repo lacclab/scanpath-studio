@@ -654,6 +654,15 @@ def build_critical_span_overlay(
     return shapes
 
 
+_HOVER_MEASURE_LABELS: dict[str, str] = {
+    "total_fixation_duration_ms": "Total fixation",
+    "first_fixation_ms": "FFD",
+    "first_pass_gaze_duration_ms": "FPRT",
+    "regression_path_duration_ms": "RPD",
+    "n_fixations": "Fixations",
+}
+
+
 def _add_word_label_trace(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -664,11 +673,12 @@ def _add_word_label_trace(
     highlight_column: Optional[str] = None,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = _CRITICAL_TEXT_COLOR,
+    word_hover_measure: Optional[str] = None,
 ) -> None:
     if words.empty or "text" not in words.columns:
         return
     customdata = None
-    hover = "Word %{text}<extra></extra>"
+    hover = "Word: %{text}<extra></extra>"
     if "word_id" in words.columns:
         from .measures import cluster_word_lines
 
@@ -677,11 +687,15 @@ def _add_word_label_trace(
         # word-box geometry — same clustering the by-line coloring uses — and
         # show it 1-based.
         line_display = (cluster_word_lines(words) + 1).rename("line")
-        customdata = pd.concat([words["word_id"], line_display], axis=1)
-        hover = (
-            "Word %{text}<br>Word ID %{customdata[0]}"
-            "<br>Line %{customdata[1]}<extra></extra>"
-        )
+        customdata_parts: list[pd.Series] = [words["word_id"], line_display]
+        hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
+        if word_hover_measure and word_hover_measure in words.columns:
+            label = _HOVER_MEASURE_LABELS.get(word_hover_measure, word_hover_measure)
+            suffix = " ms" if word_hover_measure.endswith("_ms") else ""
+            hover += f"<br>{label}: %{{customdata[2]:.0f}}{suffix}"
+            customdata_parts.append(words[word_hover_measure])
+        hover += "<extra></extra>"
+        customdata = pd.concat(customdata_parts, axis=1)
     # Per-word text color: the highlight colour for highlighted words when the
     # caller asks for "Mark text" (``highlight_column`` set), the base text
     # colour otherwise. Both are configurable from the sidebar.
@@ -903,6 +917,7 @@ def make_scanpath_figure(
     fit_to_monitor: bool = False,
     word_heatmap_col: Optional[str] = None,
     word_heatmap_title: Optional[str] = None,
+    word_hover_measure: Optional[str] = "total_fixation_duration_ms",
 ) -> go.Figure:
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
@@ -1012,6 +1027,7 @@ def make_scanpath_figure(
                 highlight_column=highlight_column if highlight_text else None,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
+                word_hover_measure=word_hover_measure,
             )
 
     if _add_raw_gaze_layer(fig, raw_gaze, show_raw_gaze=show_raw_gaze):

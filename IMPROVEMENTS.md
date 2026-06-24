@@ -266,7 +266,7 @@ set each step `label` to `f"{t / 1000:.1f} / {total / 1000:.1f}s"`.
 
 Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-10**, **CMP-4**.
 
-**VIZ-12 · Quick views: show which preset is active (Scanpath selected by default)** — `Status: Backlog`
+**VIZ-12 · Quick views: show which preset is active (Scanpath selected by default)** — `Status: Pending approval`
 
 The **Quick views** row (👁️ Scanpath · 🔥 Heatmap) gives no visual cue that
 **Scanpath** is the default/active view — both render as identical, unselected
@@ -290,7 +290,7 @@ controls already use) or give the active button `type="primary"`.
   `_VIEW_PRESETS` set, else show none selected.
 Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-6**.
 
-**VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Backlog`
+**VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Pending approval`
 
 The word-box / word-label hover tooltip currently reads `Word Shopping` /
 `Word ID 16` / `Line 2`. Reword it for clarity and add a reading-measure line:

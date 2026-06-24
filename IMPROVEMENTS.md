@@ -290,6 +290,33 @@ controls already use) or give the active button `type="primary"`.
   `_VIEW_PRESETS` set, else show none selected.
 Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-6**.
 
+**VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Backlog`
+
+The word-box / word-label hover tooltip currently reads `Word Shopping` /
+`Word ID 16` / `Line 2`. Reword it for clarity and add a reading-measure line:
+- `Word: Shopping` — add the colon
+- `Word #16` — change "ID" to `#`
+- `Line #2` — add `#`
+- **+ a measure line**, defaulting to **total fixation duration** (TFD,
+  `total_fixation_duration_ms`), e.g. `Total fixation duration: 312 ms`
+
+Make the **measure shown in the hover configurable from the visualization rail**
+(a selectbox over the canonical measures — TFD/FFD/FPRT/RPD/`n_fixations`/…),
+defaulting to TFD. The hover template is built in `_add_word_label_trace`
+([`plots.py`](scanpath_studio/plots.py:671)) — `hover = "Word %{text}…"` and the
+`customdata` assembled at `plots.py:680-683`; add the chosen measure as a new
+`customdata` column (per-word values from `measures.compute_per_word_measures`)
+and a `%{customdata[N]}` field. New control: a `global_word_hover_measure` key in
+`_VIZ_WIDGET_DEFAULTS` + a selectbox in the relevant viz popover
+([`controls.py`](scanpath_studio/controls.py)), threaded via
+`_collect_viz_settings` → `make_scanpath_figure`. Primarily display/interactivity
+(hover doesn't apply to static CLI/API renders), but thread the measure choice
+into the deep-link/Share contract ([`url_state.py`](scanpath_studio/url_state.py))
+so a shared view restores it; CLI/API exposure optional. Related: **VIZ-1**,
+**AN-23** (shared measure picker).
+
+_Next item: `VIZ-14`._
+
 ---
 
 ## Datasets & ingestion

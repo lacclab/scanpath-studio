@@ -57,7 +57,53 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 ## UX & Interaction
 
 _UX-1 · UX-1a · UX-2 · UX-2a · UX-3 signed off & archived — see
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `UX-4`._
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+
+**UX-4 · Replace the same-text ★ marker in trial selectors with a text-like icon** — `Status: Backlog`
+
+In the trial / participant pickers (and the compare-trial selector) the **★**
+marker actually means "same stimulus **text** as the primary trial" and **👤**
+means "same **participant**" (`SAME_TEXT_MARKER` / `SAME_PARTICIPANT_MARKER`,
+[`utils.py`](scanpath_studio/utils.py:503)). The ★ reads like "favorite", which is
+misleading. Swap the same-text ★ for a clearly text-related icon (e.g. 📄 / 📝 /
+"T") so its meaning is obvious — and so the star can be freed for favorites (see
+**UX-6**). Keep (or revisit) 👤 for same-participant. Update any marker
+legend/help text. Code anchors: `SAME_TEXT_MARKER` / `SAME_PARTICIPANT_MARKER` +
+the option-label builder and sort in
+[`utils.py`](scanpath_studio/utils.py:503). Related: **UX-6**, **UX-5**.
+
+**UX-5 · Keep the main Filter-by + trial selectors stable; move extra filter columns under "More"** — `Status: Backlog`
+
+The top **Filter by** row and the **Composite trial id** selectors should be the
+**same regardless of which filter-by columns the loaded dataset has**. Today the
+main row + the composite trial selector vary with the dataset's columns (e.g.
+`repeated_reading_trial` shows up as a third composite selector for OneStop). Pin
+the main visible Filter-by controls and the composite trial selectors to a fixed,
+canonical set; any **additional** dataset-specific filter columns belong in the
+**More** popover (alongside Difficulty / Answer / Selected Answer / annotations),
+not in the always-visible row or the composite trial id. Code anchors:
+`controls.sidebar_trial_filters` + the trial-filter panel
+([`controls.py`](scanpath_studio/controls.py)), the composite trial selector in
+[`utils.py`](scanpath_studio/utils.py) (`build_combo_options` / trial-selection
+UI), and the dispatch in [`app.py`](scanpath_studio/app.py). Related: **UX-4**.
+
+**UX-6 · Mark annotation state (favorites ★ / tags / notes) in the trial selector** — `Status: Backlog`
+
+New feature: surface each trial's annotation state directly in the trial /
+compare selectors. Mark **favorite** trials with a ★ star; also show **tags**
+(e.g. a 🏷️ chip or the tag name/count) and **notes** (e.g. a 📝 marker). These
+markers are independent of the same-text/same-participant icons (**UX-4**) **and
+of each other**: a trial can carry **zero, one, two, or all three** of favorite /
+tagged / noted, in any combination, so the markers must **compose (stack)**, not
+be mutually exclusive. Decide ordering/spacing relative to the
+same-text/same-participant icons. Annotation state lives in
+[`annotations.py`](scanpath_studio/annotations.py) (per
+`(participant_id, trial_id)` favorites / tags / notes); the option-label builder
+is `build_combo_options` + the marker assembly in
+[`utils.py`](scanpath_studio/utils.py:574). Ties into the annotation filters
+already in the **More** popover. Related: **UX-4**, **UX-5**.
+
+_Next item: `UX-7`._
 
 ---
 
@@ -335,7 +381,39 @@ per-loader access UI in [`tests/test_apptest.py`](tests/test_apptest.py)
 (`test_potec_source_renders`, `test_each_public_dataset_loader_ui_renders`).
 Pairs with **DATA-6**.
 
-_Next item: `DATA-8`._
+**DATA-8 · Show the column-mapping override for the Bundled Demo too** — `Status: Backlog`
+
+The **Column mapping — Words/IA** and **Column mapping — Fixations** override
+panels are surfaced for uploaded / public datasets but not for the **Bundled
+Demo**, so a first-time user never sees that re-mapping columns is even possible.
+Show the column-mapping expanders for the bundled demo as well (read-only or
+pre-filled with the demo's inferred mapping is fine) **so all capabilities are
+discoverable**. Code anchors: the column-mapping override UI in
+[`controls.py`](scanpath_studio/controls.py) and the gating in
+`app.render_sidebar_data_source` ([`app.py`](scanpath_studio/app.py)). Related:
+**DATA-9**.
+
+**DATA-9 · Reorganize the Data sidebar to be intuitive (merge source + selection, nest setup/mapping)** — `Status: Backlog`
+
+The **Data** sidebar has grown organically and is now confusing. Redesign it for
+clarity (layout at the implementer's discretion). Concrete pointers from the user:
+- **Merge "Data source" and the dataset selection** — today there's duplication
+  between the radio (Bundled Demo / OneStop / Public datasets) and the separate
+  **Dataset** picker (e.g. PoTeC). Combine into one selection, tagging each entry
+  with its kind (**demo / private / public**).
+- **Nest "Experimental Setup" and the two "Column mapping" panels under the active
+  `<dataset>` options** (e.g. under "PoTeC options") instead of as sibling
+  top-level expanders, so per-dataset config lives with its dataset.
+
+Code anchors: `app.render_sidebar_data_source`
+([`app.py`](scanpath_studio/app.py:995)), the `PUBLIC_DATASET_REGISTRY` /
+`_load_public_dataset` picker, the per-corpus loaders
+(`_load_potec_source` / `_load_multipleye_source` / `_load_onestop_public_source`),
+the Experimental Setup + column-mapping sections in
+[`controls.py`](scanpath_studio/controls.py). Keep `public_dataset_choice` /
+deep-link round-tripping intact. Related: **DATA-4** (picker overhaul), **DATA-8**.
+
+_Next item: `DATA-10`._
 
 ---
 
@@ -774,7 +852,21 @@ Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
 (`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
 in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
 
-_Next item: `BUG-5`._
+**BUG-5 · Upload crashes on Streamlit Community Cloud (works locally)** — `Status: Backlog`
+
+Uploading a dataset through the Upload / Add-dataset wizard works on a local
+`streamlit run` but **crashes on the deployed Streamlit Community Cloud app**.
+Repro + capture the actual traceback from the Cloud logs first — the local-vs-deployed
+split points at an environment difference rather than wizard logic: likely the
+Cloud upload-size limit (`server.maxUploadSize`), a memory cap on large
+CSV/Parquet, a missing/locked writable temp dir, or a dependency/version skew
+between local and the Cloud image. Code anchors: the wizard flow in
+[`wizard.py`](scanpath_studio/wizard.py) and the upload source handling in
+`app.render_sidebar_data_source` ([`app.py`](scanpath_studio/app.py)); deployment
+config in `streamlit_app.py` / any `.streamlit/config.toml`. Confirm whether it's
+size-, memory-, or import-related before fixing.
+
+_Next item: `BUG-6`._
 
 ---
 

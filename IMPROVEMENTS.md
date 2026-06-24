@@ -220,6 +220,30 @@ set each step `label` to `f"{t / 1000:.1f} / {total / 1000:.1f}s"`.
 
 Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-10**, **CMP-4**.
 
+**VIZ-12 · Quick views: show which preset is active (Scanpath selected by default)** — `Status: Backlog`
+
+The **Quick views** row (👁️ Scanpath · 🔥 Heatmap) gives no visual cue that
+**Scanpath** is the default/active view — both render as identical, unselected
+buttons. Surface the active preset so the user can see the current quick view at
+a glance, with Scanpath shown as selected on first load. The two presets are
+plain stateless `st.button`s side-by-side in `controls.sidebar_controls`
+([`controls.py`](scanpath_studio/controls.py:1178)), wired to `_apply_view_preset`
+([`controls.py`](scanpath_studio/controls.py:249)) which sets the `_VIEW_PRESETS`
+layer toggles ([`controls.py`](scanpath_studio/controls.py:201)).
+Plan: track the active preset in session state (e.g. `global_quick_view`, default
+`"scanpath"`, seeded in `_seed_viz_state`), set it in `_apply_view_preset`, and
+render the active one as selected — either swap the two buttons for an
+`st.segmented_control` (single-select, like the heatmap-style / saccade-style
+controls already use) or give the active button `type="primary"`.
+- **Caveat — drift:** a preset only sets *layer* toggles; the user can then toggle
+  an individual layer and no longer exactly match the preset. Decide whether the
+  highlight is "last preset clicked" (simple, can be stale) or derived from
+  whether the current toggles still match a preset's layer set (clears the
+  highlight once the user customizes — arguably clearer). Recommend the latter:
+  show a preset as selected only while the live toggle state equals its
+  `_VIEW_PRESETS` set, else show none selected.
+Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-6**.
+
 ---
 
 ## Datasets & ingestion

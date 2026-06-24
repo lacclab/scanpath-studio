@@ -162,6 +162,64 @@ reposition fixation y to each word's top-center (reuse `assign_fixations_to_word
 Must stay on the true-scale path (`tabs._render_true_scale_chart`) and include the
 mode in the figure cache key. Related: **PRE-3** (`snap_to_lines`), **VIZ-5**.
 
+**VIZ-10 · Animate: autoplay on by default + a start/stop autoplay control** — `Status: Backlog`
+
+Make the animated scanpath **autoplay on load** by default, and add a user option
+to turn autoplay on/off (start/stop). Today the true-scale embed forces the
+animation to start paused — `tabs._render_true_scale_chart` passes `auto_play=False`
+to `fig.to_html` ([`tabs.py`](scanpath_studio/tabs.py:178)) so the figure only plays
+at the configured speed when the user presses ▶ Play (`plots._animation_play_buttons`
+[`plots.py`](scanpath_studio/plots.py:1827)). Note the original reason for
+`auto_play=False`: Plotly's default autoplay ignores the configured playback speed
+and runs at its own default frame duration — so flipping the default isn't a
+one-liner; autoplay needs to honor `frame_duration`/playback speed (likely by
+emitting a small client-side `Plotly.animate(...)` kickoff after mount using the
+computed `avg_frame_duration`, rather than relying on `to_html(auto_play=True)`).
+Plan: add an `global_anim_autoplay` viz key (default **on**) to `_VIZ_WIDGET_DEFAULTS`
++ a toggle in the Animate ⚙ popover (`controls.py` / the Animate view-mode controls
+in `tabs.render_single_trial_tab`), thread it through `_collect_viz_settings` into
+the animation render so the embed kicks off (or skips) playback at the right speed.
+Expose on **every surface** per *AGENTS.md → Exposing a feature on every surface*:
+the deep link / Share contract in `url_state.py` (`_URL_PRESETS` / `_build_share_query`),
+a `--no-autoplay` (or `--autoplay`) flag on `cli.py render --animate`, and an
+`autoplay` parameter on `api.animate_scanpath` + `CANONICAL_FIGURE_DEFAULTS`.
+Related: **VIZ-9**, **CMP-4**.
+
+**VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Backlog`
+
+Improve the animation time slider so its readout and stepping are **time-based**
+rather than fixation-onset-based, and the readout shows elapsed **out of total**
+seconds — e.g. **"1.2 / 30.0s"** instead of the current bare **"Elapsed: X.Xs"**.
+
+**Why not fixation index:** the obvious "Fixation N / TOTAL" readout breaks for a
+**comparison** animation (two overlaid scanpaths). In Plotly the slider's stops
+*are* the frames, and frames are currently emitted at every distinct fixation
+*onset across all scanpaths* (`_anim_timeline`
+[`plots.py`](scanpath_studio/plots.py:1745)), so with two readers the steps are
+the *union* of both onset sets — no single fixation index is meaningful, and the
+slider steps bunch wherever fixations cluster instead of scrubbing linearly.
+
+**Plan — switch the frame grid from onsets to uniform time.** Generate one frame
+every fixed interval (≈100 ms) instead of one per onset; the per-frame *content*
+logic already works unchanged (`searchsorted(onsets, t)` shows every fixation
+whose onset ≤ t — `make_scanpath_animation` [`plots.py`](scanpath_studio/plots.py:2283)).
+This makes the slider a linear time scrubber, makes the readout naturally
+time-based for **any** number of scanpaths (the two-scanpath problem disappears),
+and simplifies playback (uniform per-frame duration — the variable-duration
+bookkeeping in `_anim_timeline` mostly goes away). In `_animation_time_slider`
+([`plots.py`](scanpath_studio/plots.py:1896)) drop the `prefix="Elapsed: "` and
+set each step `label` to `f"{t / 1000:.1f} / {total / 1000:.1f}s"`.
+- **Bound the frame count:** an adaptive grid `step = max(100ms, span / MAX_FRAMES)`
+  (cap ~300–400 frames) so a long reading gets a coarser grid instead of thousands
+  of frames — otherwise the GIF/MP4 export (`animation_export.export_animation`)
+  balloons. Quantization is ≤ one grid-step (a 0.13 s onset shows at the 0.2 s
+  frame); negligible at 100 ms.
+- **Single-scanpath bonus:** when exactly one scanpath is animated the fixation
+  index *is* unambiguous, so optionally append it there only —
+  `Fixation 5 / 42 · 1.2 / 30.0s` — and omit it in comparison mode.
+
+Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-10**, **CMP-4**.
+
 ---
 
 ## Datasets & ingestion

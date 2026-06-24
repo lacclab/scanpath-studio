@@ -818,6 +818,33 @@ VIZ-1 px↔pt and DATA-2.)
 
 Add to `docs/` after AN-* land.
 
+**ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Backlog`
+
+The author/citation metadata is still provisional. Add the confirmed co-authors
+in place of the `TBD` / "and others" placeholders:
+- **Ella Lion** — LACC Lab, Technion (our lab).
+- **Deborah Jacobi**, **David Reiche**, **Lena Jäger** — DiLi Lab (Lena Jäger's
+  Digital Linguistics group).
+
+Update every surface that carries the author list (keep them in sync):
+- [`CITATION.cff`](CITATION.cff:10) — the `authors:` block (currently Shubi /
+  Gruteke Klein / Berzak with a "provisional" note at line 20); add the new
+  `given-names` / `family-names` / `affiliation` entries and drop the note once
+  final.
+- [`README.md`](README.md:19) — "Omer Shubi, Keren Gruteke Klein, and others
+  (TBD) — LACC Lab, Technion."
+- [`scanpath_studio/constants.py`](scanpath_studio/constants.py:106) —
+  `CITATION["authors"]` (`"Omer Shubi, LACC Lab (Technion)"`), surfaced in-app.
+- [`scanpath_studio/app.py`](scanpath_studio/app.py:263) — the "… and TBD at the
+  LaCC Lab" About text.
+
+**The paper and app author lists must match** — keep the in-prep paper's authors
+(the "citation TBD" note at [`README.md`](README.md:145)) and the software author
+list above as the same set, in the same order.
+
+Confirm exact name spelling/diacritics (Jäger), affiliation wording, and author
+order with the user before editing.
+
 ---
 
 > When any view, measure, severity, or path here lands, update `AGENTS.md`,

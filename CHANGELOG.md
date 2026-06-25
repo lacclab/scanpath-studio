@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **UX-4 — Same-text marker changed from ★ to 📄** in the compare-trial selector
+  and the comparison option labels. The ★ glyph read as "favorite"; 📄 clearly
+  signals "same stimulus text". The 👤 same-participant marker is unchanged. ★ is
+  now reserved for the upcoming favorites indicator (UX-6).
 - **VIZ-12 — Quick-view active preset indicator** — the active Quick-view button
   (👁️ Scanpath / 🔥 Heatmap) now renders highlighted (`type="primary"`) when the
   current layer toggles match that preset exactly; both appear unselected when the

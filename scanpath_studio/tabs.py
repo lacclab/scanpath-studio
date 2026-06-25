@@ -630,7 +630,7 @@ def _render_compare_selector(
 ) -> tuple[Optional[str], Optional[str]]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
-    Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ ★/👤
+    Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ 📄/👤
     markers) and a scrubbing ``select_slider`` showing ``"index/TOTAL · <trial
     id>"``, plus ◀ ▶ step buttons. The overlay layout + A/B-legend config now live
     in the rail's **⚙️ Compare** popover (under the Compare toggle). Returns
@@ -680,7 +680,7 @@ def _render_compare_selector(
         "Compare with trial (B)",
         options=labels,
         key=sel_key,
-        help="★ = same text as the primary trial · 👤 = same participant."
+        help="📄 = same text as the primary trial · 👤 = same participant."
         + (" Animated comparison overlays both on one clock." if animate else ""),
         label_visibility="collapsed",
     )

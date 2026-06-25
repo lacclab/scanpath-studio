@@ -500,7 +500,9 @@ def safe_summary(series: pd.Series) -> dict:
 
 
 # Markers shown beside comparison-trial options.
-SAME_TEXT_MARKER = "★"  # same stimulus text as the primary trial
+SAME_TEXT_MARKER = (
+    "📄"  # same stimulus text as the primary trial (★ reserved for favorites, UX-6)
+)
 SAME_PARTICIPANT_MARKER = "👤"  # same participant as the primary trial
 
 
@@ -571,10 +573,10 @@ def build_comparison_options(
     """Build a prioritized list of comparison-trial options.
 
     Returns ``(participant_id, trial_id, label, markers)`` tuples, where
-    ``markers`` is ``"★"`` / ``"👤"`` / ``"★👤"`` / ``""`` and ``label`` is
-    ``"<markers> <trial_id>"``. Ordered: same-text (★) first, then same-participant
+    ``markers`` is ``"📄"`` / ``"👤"`` / ``"📄👤"`` / ``""`` and ``label`` is
+    ``"<markers> <trial_id>"``. Ordered: same-text (📄) first, then same-participant
     (👤), then the rest. A trial that is BOTH same-text and same-participant sorts
-    with the ★ group (stars lead) and shows both markers.
+    with the 📄 group (text-matches lead) and shows both markers.
     """
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     uniq = combos.drop_duplicates(subset=["participant_id", "trial_id"])

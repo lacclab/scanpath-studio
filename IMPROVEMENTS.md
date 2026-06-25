@@ -59,7 +59,7 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 _UX-1 · UX-1a · UX-2 · UX-2a · UX-3 signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**UX-4 · Replace the same-text ★ marker in trial selectors with a text-like icon** — `Status: Backlog`
+**UX-4 · Replace the same-text ★ marker in trial selectors with a text-like icon** — `Status: Pending approval`
 
 In the trial / participant pickers (and the compare-trial selector) the **★**
 marker actually means "same stimulus **text** as the primary trial" and **👤**

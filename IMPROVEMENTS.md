@@ -59,18 +59,8 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 _UX-1 · UX-1a · UX-2 · UX-2a · UX-3 signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**UX-4 · Replace the same-text ★ marker in trial selectors with a text-like icon** — `Status: Pending approval`
-
-In the trial / participant pickers (and the compare-trial selector) the **★**
-marker actually means "same stimulus **text** as the primary trial" and **👤**
-means "same **participant**" (`SAME_TEXT_MARKER` / `SAME_PARTICIPANT_MARKER`,
-[`utils.py`](scanpath_studio/utils.py:503)). The ★ reads like "favorite", which is
-misleading. Swap the same-text ★ for a clearly text-related icon (e.g. 📄 / 📝 /
-"T") so its meaning is obvious — and so the star can be freed for favorites (see
-**UX-6**). Keep (or revisit) 👤 for same-participant. Update any marker
-legend/help text. Code anchors: `SAME_TEXT_MARKER` / `SAME_PARTICIPANT_MARKER` +
-the option-label builder and sort in
-[`utils.py`](scanpath_studio/utils.py:503). Related: **UX-6**, **UX-5**.
+**UX-4 · Replace the same-text ★ marker in trial selectors with a text-like icon** — `Status: Done (signed off 2026-06-25)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **UX-5 · Keep the main Filter-by + trial selectors stable; move extra filter columns under "More"** — `Status: Backlog`
 
@@ -266,54 +256,11 @@ set each step `label` to `f"{t / 1000:.1f} / {total / 1000:.1f}s"`.
 
 Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-10**, **CMP-4**.
 
-**VIZ-12 · Quick views: show which preset is active (Scanpath selected by default)** — `Status: Pending approval`
+**VIZ-12 · Quick views: show which preset is active (Scanpath selected by default)** — `Status: Done (signed off 2026-06-25)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-The **Quick views** row (👁️ Scanpath · 🔥 Heatmap) gives no visual cue that
-**Scanpath** is the default/active view — both render as identical, unselected
-buttons. Surface the active preset so the user can see the current quick view at
-a glance, with Scanpath shown as selected on first load. The two presets are
-plain stateless `st.button`s side-by-side in `controls.sidebar_controls`
-([`controls.py`](scanpath_studio/controls.py:1178)), wired to `_apply_view_preset`
-([`controls.py`](scanpath_studio/controls.py:249)) which sets the `_VIEW_PRESETS`
-layer toggles ([`controls.py`](scanpath_studio/controls.py:201)).
-Plan: track the active preset in session state (e.g. `global_quick_view`, default
-`"scanpath"`, seeded in `_seed_viz_state`), set it in `_apply_view_preset`, and
-render the active one as selected — either swap the two buttons for an
-`st.segmented_control` (single-select, like the heatmap-style / saccade-style
-controls already use) or give the active button `type="primary"`.
-- **Caveat — drift:** a preset only sets *layer* toggles; the user can then toggle
-  an individual layer and no longer exactly match the preset. Decide whether the
-  highlight is "last preset clicked" (simple, can be stale) or derived from
-  whether the current toggles still match a preset's layer set (clears the
-  highlight once the user customizes — arguably clearer). Recommend the latter:
-  show a preset as selected only while the live toggle state equals its
-  `_VIEW_PRESETS` set, else show none selected.
-Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-6**.
-
-**VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Pending approval`
-
-The word-box / word-label hover tooltip currently reads `Word Shopping` /
-`Word ID 16` / `Line 2`. Reword it for clarity and add a reading-measure line:
-- `Word: Shopping` — add the colon
-- `Word #16` — change "ID" to `#`
-- `Line #2` — add `#`
-- **+ a measure line**, defaulting to **total fixation duration** (TFD,
-  `total_fixation_duration_ms`), e.g. `Total fixation duration: 312 ms`
-
-Make the **measure shown in the hover configurable from the visualization rail**
-(a selectbox over the canonical measures — TFD/FFD/FPRT/RPD/`n_fixations`/…),
-defaulting to TFD. The hover template is built in `_add_word_label_trace`
-([`plots.py`](scanpath_studio/plots.py:671)) — `hover = "Word %{text}…"` and the
-`customdata` assembled at `plots.py:680-683`; add the chosen measure as a new
-`customdata` column (per-word values from `measures.compute_per_word_measures`)
-and a `%{customdata[N]}` field. New control: a `global_word_hover_measure` key in
-`_VIZ_WIDGET_DEFAULTS` + a selectbox in the relevant viz popover
-([`controls.py`](scanpath_studio/controls.py)), threaded via
-`_collect_viz_settings` → `make_scanpath_figure`. Primarily display/interactivity
-(hover doesn't apply to static CLI/API renders), but thread the measure choice
-into the deep-link/Share contract ([`url_state.py`](scanpath_studio/url_state.py))
-so a shared view restores it; CLI/API exposure optional. Related: **VIZ-1**,
-**AN-23** (shared measure picker).
+**VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Done (signed off 2026-06-25)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 _Next item: `VIZ-14`._
 

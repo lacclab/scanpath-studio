@@ -57,6 +57,15 @@ only close affordance.
 The correctness line in `tabs._render_paragraph_panel` uses Streamlit colour
 markdown — `:green[✓ correct]` / `:red[✗ incorrect]` (and `✓ yes`/`✗ no`).
 
+**UX-4 · Replace the same-text ★ marker in trial selectors with a text-like icon** — `Status: Done` *(signed off 2026-06-25)*
+
+`SAME_TEXT_MARKER` changed from `"★"` to `"📄"` in
+[`utils.py`](scanpath_studio/utils.py:503). The ★ glyph read as "favorite" when
+it actually means "same stimulus text as the primary trial"; 📄 makes the meaning
+immediately obvious. The 👤 same-participant marker is unchanged. ★ is now free
+for the upcoming favorites indicator (**UX-6**). Help text in the compare selector
+(`tabs.py`) updated to match; docstrings in `build_comparison_options` updated.
+
 ---
 
 ## Compare mode
@@ -131,6 +140,31 @@ the chips, panels, and bulk multi-trial export keep the full trial. The slider
 max is the selected trial's fixation count and clamps across trial switches
 (mirroring the Generations tab's `multi_fix_range`); a <2-fixation trial clears
 the window. Sized via a new `fix_range_fixations=` kwarg on `sidebar_controls`.
+
+**VIZ-12 · Quick views: show which preset is active (Scanpath selected by default)** — `Status: Done` *(signed off 2026-06-25)*
+
+The active Quick-view button (👁️ Scanpath / 🔥 Heatmap) now renders as
+`type="primary"` when the current layer toggles exactly match that preset's
+`_VIEW_PRESETS` layer set; both buttons render as secondary when the user has
+customized layers away from either preset. Implemented via a new
+`_active_quick_view()` helper in [`controls.py`](scanpath_studio/controls.py)
+that derives the active preset from live session state (no extra stored key).
+Scanpath is highlighted on first load since the widget defaults match that preset.
+
+**VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Done` *(signed off 2026-06-25)*
+
+Word-label hover now reads `Word: <text>` / `Word #N` / `Line #N` (added colon,
+changed "ID" → `#`, added `#` on line). A configurable reading-measure line is
+appended (default: `Total fixation: N ms`). New **Hover: show measure** selectbox
+in the ⚙️ Text & highlight popover — options: Total fixation (TFD), FFD, FPRT,
+RPD, Fixation count, Off. Implemented via `_HOVER_MEASURE_LABELS` + a new
+`word_hover_measure` parameter on `_add_word_label_trace` and `make_scanpath_figure`
+([`plots.py`](scanpath_studio/plots.py)); `global_word_hover_measure` seeded in
+`_VIZ_WIDGET_DEFAULTS` and collected by `_collect_viz_settings`
+([`controls.py`](scanpath_studio/controls.py)); threaded through
+`_build_figure_settings` ([`tabs.py`](scanpath_studio/tabs.py)); added to
+`_SHARE_VALUE_PARAMS` ([`url_state.py`](scanpath_studio/url_state.py)) so Share
+links preserve the choice.
 
 ---
 

@@ -16,6 +16,7 @@ working tracker focused on open work.
 [UX & Interaction](#ux--interaction) ·
 [Compare mode](#compare-mode) ·
 [Visualization](#visualization) ·
+[Datasets & ingestion](#datasets--ingestion) ·
 [Bugs](#bugs) ·
 [Engineering](#engineering)
 
@@ -65,6 +66,32 @@ it actually means "same stimulus text as the primary trial"; 📄 makes the mean
 immediately obvious. The 👤 same-participant marker is unchanged. ★ is now free
 for the upcoming favorites indicator (**UX-6**). Help text in the compare selector
 (`tabs.py`) updated to match; docstrings in `build_comparison_options` updated.
+
+**UX-5 · Keep the main Filter-by + trial selectors stable; move extra filter columns under "More"** — `Status: Done` *(signed off 2026-06-26)*
+
+Composite-trial-id components that are also **More**-popover condition columns
+(e.g. `repeated_reading_trial`) no longer get their own cascading trial selector.
+`utils.select_trial` gained a `filter_cols` argument; `tabs.py` passes
+`controls._filter_fields_for(...)` so those components are dropped from the
+cascade — the picker shows the same canonical **Participant / Text** selectors
+regardless of which condition columns a dataset carries. Residual ambiguity (e.g.
+first vs. repeated reading sharing participant+text) falls to the existing
+"Reading" selector; the dropped columns narrow via **More** (guaranteed present,
+since `filter_cols` *is* the More field list). Test:
+`test_filter_col_component_dropped_from_cascade`
+([`tests/test_composite_selection.py`](tests/test_composite_selection.py)).
+
+**UX-6 · Mark annotation state (favorites ★ / tags / notes) in the trial selector** — `Status: Done` *(signed off 2026-06-26)*
+
+New `utils.annotation_markers(participant, trial)` returns composable markers —
+`★` favorite · `🏷️` tagged · `📝` noted — read from the session annotation store
+(`annotations.get_entry`). Applied via `format_func` in the main trial picker
+(selectbox + scrubbing slider, `_select_trial_none_mode`) and the composite
+"Reading" selector (`_select_trial_composite_mode`), and appended to the
+`build_comparison_options` marker string so they sit alongside the 📄/👤 relation
+icons in the compare selector. Markers are independent and stack (zero → all
+three). Test: `test_annotation_markers_compose`
+([`tests/test_composite_selection.py`](tests/test_composite_selection.py)).
 
 ---
 
@@ -199,6 +226,55 @@ never shift ([`wizard.py`](scanpath_studio/wizard.py:1194)). Verified with
 Playwright + a 26 MB zip: before, two "Fixations table(s)" uploaders appeared
 during the read; after, exactly one throughout. `pytest` wizard/apptest/
 column-mapping suites green (89 passed).
+
+---
+
+## Datasets & ingestion
+
+The data-source UI overhaul (**DATA-4 … DATA-7**), signed off 2026-06-26. All four
+touched the sidebar source UI — `app.render_sidebar_data_source`, the
+`PUBLIC_DATASET_REGISTRY` + `_load_public_dataset`, and the per-corpus loaders
+`_load_potec_source` / `_load_multipleye_source` / `_load_onestop_public_source`.
+
+**DATA-4 · Public-datasets browser that scales to ~40 corpora** — `Status: Done` *(signed off 2026-06-26)*
+
+The flat dataset radio became a **searchable `st.selectbox`** (`_load_public_dataset`)
+showing each corpus' **short name** + a *language · size* caption, one-line
+description, and **Dataset home ↗** link. `PUBLIC_DATASET_REGISTRY` was promoted
+from `{label: {loader, monitor}}` to a structured entry (adds `short` / `language`
+/ `size` / `description` / `link`; `loader` + `monitor` preserved). Local/private
+upload stays the primary path; selection still rides `public_dataset_choice` (full
+label, so deep-link/session round-trips). Feature flag `public_datasets_enabled()`
+unchanged.
+
+**DATA-5 · Drop the per-source participant/text filtering from the loaders** — `Status: Done` *(signed off 2026-06-26)*
+
+Removed PoTeC's **Texts** + **Readers** controls and MultiplEYE's **Sessions** +
+**Stimuli** multiselects; each loader now reads the **whole corpus**
+(`potec_raw_frames(root)` / `multipleye_raw_frames(root, …)`) and the global
+**Narrow by** trial filters scope it. The app-side cached wrappers lost their
+`readers`/`texts`/`sessions`/`stimuli`/`download` args; the headless
+`load_potec`/`load_multipleye` keep theirs. MultiplEYE's **Fixation source** radio
+stays (a load variant, not filtering).
+
+**DATA-6 · Surface the expected file names / directory structure per corpus** — `Status: Done` *(signed off 2026-06-26)*
+
+Each loader shows an **"Expected files"** expander (shared `_dataset_dir_input`)
+next to its *Data directory* input, listing the file-name patterns + sub-directory
+tree it looks for (`_POTEC_STRUCTURE_MD` / `_MULTIPLEYE_STRUCTURE_MD` /
+`_onestop_structure_md(regime)`).
+
+**DATA-7 · Rework the download + mapping flow (button, not a checkbox)** — `Status: Done` *(signed off 2026-06-26)*
+
+The always-on *Download if missing* checkbox was replaced by a shared
+**found-vs-Download** status (`_dataset_access_status`): it detects the corpus on
+disk (`datasets.potec_present` / `onestop_present` / `multipleye_inventory`) and
+either shows **"Found in `<dir>`"** (no network) or a one-click **⬇ Download**
+button (PoTeC / OneStop; `download_potec` / `download_onestop`). MultiplEYE (no
+public URL) shows a missing-data note. Public-corpus frames still flow through the
+generic auto-detect → **Column-mapping** panels. Tests: `potec_present` /
+`onestop_present` ([`tests/test_dataset_support.py`](tests/test_dataset_support.py));
+picker + per-loader access UI ([`tests/test_apptest.py`](tests/test_apptest.py)).
 
 ---
 

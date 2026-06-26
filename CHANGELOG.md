@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the comparison option labels. The ★ glyph read as "favorite"; 📄 clearly
   signals "same stimulus text". The 👤 same-participant marker is unchanged. ★ is
   now reserved for the upcoming favorites indicator (UX-6).
+- **UX-6 — Annotation markers in the trial selectors** — favorited (★), tagged
+  (🏷️), and noted (📝) trials are now flagged directly in the trial picker and the
+  compare-trial selector. The markers compose: a trial can show any combination of
+  the three (plus the 📄/👤 relation icons in the compare selector). Reads the
+  session annotation store (`utils.annotation_markers`).
+- **UX-5 — Stable trial selectors across datasets** — composite-trial-id
+  components that are also **More**-popover filter columns (e.g.
+  `repeated_reading_trial`) no longer get their own cascading trial selector; they
+  narrow via the More filters instead, so the trial picker shows the same canonical
+  Participant/Text selectors regardless of which condition columns a dataset
+  carries. Residual ambiguity falls to the existing "Reading" selector.
 - **VIZ-12 — Quick-view active preset indicator** — the active Quick-view button
   (👁️ Scanpath / 🔥 Heatmap) now renders highlighted (`type="primary"`) when the
   current layer toggles match that preset exactly; both appear unselected when the

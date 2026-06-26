@@ -65,6 +65,53 @@ class TestCompositeTrialPicker:
         labels = [s.label for s in at.selectbox]
         assert "Trial id" not in labels
 
+    def test_filter_col_component_dropped_from_cascade(self):
+        # UX-5: a composite component that is also a More-popover filter column
+        # (repeated_reading_trial) is NOT given a dedicated trial selector — it
+        # narrows via More instead, keeping the picker stable across datasets.
+        def _filtered_picker_app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.utils import build_combo_options, select_trial
+
+            fixations = pd.DataFrame(
+                {
+                    "participant_id": ["p1", "p1", "p2", "p1"],
+                    "unique_paragraph_id": ["A", "B", "A", "A"],
+                    "repeated_reading_trial": [False, False, False, True],
+                }
+            )
+            fixations["trial_id"] = (
+                fixations[
+                    ["unique_paragraph_id", "participant_id", "repeated_reading_trial"]
+                ]
+                .astype(str)
+                .agg("_".join, axis=1)
+            )
+            fixations["unique_trial_id"] = fixations["trial_id"]
+            fixations["paragraph_id"] = fixations["unique_paragraph_id"]
+            st.session_state["_composite_trial_columns"] = [
+                "unique_paragraph_id",
+                "participant_id",
+                "repeated_reading_trial",
+            ]
+            combos, _, _ = build_combo_options(fixations)
+            select_trial(
+                combos,
+                key_prefix="single",
+                filter_cols=["repeated_reading_trial"],
+            )
+
+        at = AppTest.from_function(_filtered_picker_app)
+        at.run(timeout=15)
+        assert not at.exception
+        labels = [s.label for s in at.selectbox]
+        assert "repeated_reading_trial" not in labels
+        # The canonical identity selectors stay.
+        assert "Text" in labels
+        assert "Participant" in labels
+
     def test_cascading_selection_resolves_a_trial(self):
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
@@ -173,6 +220,40 @@ class TestCompositeTrialPicker:
         assert not at.exception
         labels = [s.label for s in at.selectbox]
         assert "Trial id" in labels
+
+
+@pytest.mark.timeout(60)
+def test_annotation_markers_compose():
+    """UX-6: ★ favorite · 🏷️ tagged · 📝 noted compose independently (zero, one,
+    two, or all three), and an un-annotated trial gets no markers."""
+
+    def _markers_app():
+        import streamlit as st
+
+        from scanpath_studio.annotations import set_entry
+        from scanpath_studio.utils import annotation_markers
+
+        set_entry("p1", "t_star", star=True, tags=[], note="")
+        set_entry("p1", "t_tag", star=False, tags=["Review"], note="")
+        set_entry("p1", "t_note", star=False, tags=[], note="hi")
+        set_entry("p1", "t_all", star=True, tags=["Review"], note="hi")
+        st.session_state["_marks"] = {
+            "none": annotation_markers("p1", "t_none"),
+            "star": annotation_markers("p1", "t_star"),
+            "tag": annotation_markers("p1", "t_tag"),
+            "note": annotation_markers("p1", "t_note"),
+            "all": annotation_markers("p1", "t_all"),
+        }
+
+    at = AppTest.from_function(_markers_app)
+    at.run(timeout=15)
+    assert not at.exception
+    marks = at.session_state["_marks"]
+    assert marks["none"] == ""
+    assert marks["star"] == "★"
+    assert marks["tag"] == "🏷️"
+    assert marks["note"] == "📝"
+    assert marks["all"] == "★🏷️📝"
 
 
 def test_trial_display_label_prettifies_multipleye_pages():

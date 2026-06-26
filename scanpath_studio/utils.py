@@ -7,7 +7,32 @@ from typing import Dict, Iterable, Optional, Tuple
 import pandas as pd
 import streamlit as st
 
+from .annotations import get_entry
 from .data import frame_fingerprint
+
+# Annotation markers shown beside a trial in the pickers (UX-6). Independent of
+# the same-text/same-participant markers (UX-4) and of each other — a trial can
+# carry any combination, so they compose. ★ favorite · 🏷️ tagged · 📝 noted.
+FAVORITE_MARKER = "★"
+TAGGED_MARKER = "🏷️"
+NOTE_MARKER = "📝"
+
+
+def annotation_markers(participant_id, trial_id) -> str:
+    """Composable annotation markers (★ favorite · 🏷️ tagged · 📝 noted) for a
+    trial, or ``""`` when it carries no annotations. Reads the session store."""
+    if participant_id is None or trial_id is None:
+        return ""
+    entry = get_entry(str(participant_id), str(trial_id))
+    marks = ""
+    if entry.get("star"):
+        marks += FAVORITE_MARKER
+    if entry.get("tags"):
+        marks += TAGGED_MARKER
+    if str(entry.get("note") or "").strip():
+        marks += NOTE_MARKER
+    return marks
+
 
 # -----------------------------------------------------------------------------
 # Trial combo building
@@ -179,6 +204,19 @@ def _select_trial_none_mode(
         st.warning("No trials available after filtering.")
         st.stop()
 
+    # Trial id → participant, so the annotation markers (UX-6) can be looked up per
+    # option (annotations are keyed by (participant, trial)). Mirrors the selection
+    # below, which resolves the participant the same way (first matching row).
+    trial_to_pid = {
+        str(r[trial_field]): r["participant_id"]
+        for r in available_trials.to_dict("records")
+    }
+
+    def _option_label(value: str) -> str:
+        marks = annotation_markers(trial_to_pid.get(value), value)
+        base = _trial_display_label(value)
+        return f"{marks} {base}" if marks else base
+
     n_trials = len(trial_options)
     trial_id_key = f"{key_prefix}_trial_id" if key_prefix else None
     slider_key = f"{key_prefix}_trial_pos" if key_prefix else "trial_pos"
@@ -219,7 +257,7 @@ def _select_trial_none_mode(
         def _slider_label(value: str) -> str:
             # index/TOTAL first, then the id — the slider doubles as the counter,
             # so a separate "Trial X / N" caption is redundant.
-            return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_trial_display_label(value)}"
+            return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_option_label(value)}"
 
         # One row: [selectbox] [slider] [◀][▶] — arrows adjacent at the end.
         sel_col, slider_col, prev_col, next_col = host.columns(
@@ -235,8 +273,9 @@ def _select_trial_none_mode(
         "Trial id",
         options=trial_options,
         key=trial_id_key,
-        format_func=_trial_display_label,
-        help="💡 Click, then start typing to narrow down the trial list.",
+        format_func=_option_label,
+        help="💡 Click, then start typing to narrow down the trial list. "
+        "★ favorite · 🏷️ tagged · 📝 has notes.",
     )
 
     if n_trials > 1:
@@ -313,7 +352,13 @@ def _select_trial_composite_mode(
     Renders one cascading selector per component (each narrowed by the previous
     picks), mirroring the Text / Participant modes instead of a single opaque
     ``a_b_c`` dropdown. Selectors render into ``picker_host`` (the column between
-    Browse-by and Filter), defaulting to the current container."""
+    Browse-by and Filter), defaulting to the current container.
+
+    ``component_cols`` is already pruned (in ``select_trial``) to the canonical
+    identity components — dataset-specific condition columns (e.g.
+    ``repeated_reading_trial``) are dropped so the trial selectors stay the same
+    across datasets; those narrow via the **More** filters instead (UX-5). Any
+    residual ambiguity falls to the "Reading" selector below."""
     host = picker_host if picker_host is not None else st
     host.caption("Composite trial id — pick each part to narrow to a trial.")
     filtered = combos
@@ -343,13 +388,25 @@ def _select_trial_composite_mode(
         # The components didn't fully determine a single trial — offer the
         # remaining ones, like the other modes' "Reading" selector.
         trial_options = candidates["trial_id"].astype(str).tolist()
+        trial_to_pid = {
+            str(r["trial_id"]): r["participant_id"]
+            for r in candidates.to_dict("records")
+        }
+
+        def _reading_label(value: str) -> str:
+            marks = annotation_markers(trial_to_pid.get(value), value)
+            base = _trial_display_label(value)
+            return f"{marks} {base}" if marks else base
+
         selected_trial = host.selectbox(
             "Reading (multiple trials available)",
             options=trial_options,
             key=f"{key_prefix}_composite_reading"
             if key_prefix
             else "composite_reading",
-            help="More than one trial shares these values.",
+            format_func=_reading_label,
+            help="More than one trial shares these values. "
+            "★ favorite · 🏷️ tagged · 📝 has notes.",
         )
         row = candidates[
             candidates["trial_id"].astype(str) == str(selected_trial)
@@ -363,7 +420,10 @@ def _select_trial_composite_mode(
 
 
 def select_trial(
-    combos: pd.DataFrame, key_prefix: str = "", picker_host=None
+    combos: pd.DataFrame,
+    key_prefix: str = "",
+    picker_host=None,
+    filter_cols: Optional[Iterable[str]] = None,
 ) -> Tuple[Optional[str], Optional[str], str, Optional[str]]:
     """Pick a specific trial from the (already-narrowed) pool.
 
@@ -375,6 +435,11 @@ def select_trial(
 
     ``picker_host`` is the container to render into (defaults to the current one);
     the picker builds its own row of columns, so call it where columns are allowed.
+
+    ``filter_cols`` lists the dataset's condition-filter columns (those offered in
+    the **More** popover). Composite components that are also filter columns are
+    dropped from the cascading selectors so the trial picker stays identical across
+    datasets — those columns narrow via **More** instead (UX-5).
 
     Returns:
         Tuple of (participant_id, trial_id, selection_mode, selected_text).
@@ -391,9 +456,14 @@ def select_trial(
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
 
     composite_cols = _composite_columns_for(combos)
-    if len(composite_cols) >= 2:
+    # Drop condition-filter components (e.g. repeated_reading_trial) — they narrow
+    # via the More popover, not a dedicated trial selector, so the picker is the
+    # same across datasets (UX-5). What's left is the canonical identity cascade.
+    filter_set = set(filter_cols or [])
+    display_cols = [c for c in composite_cols if c not in filter_set]
+    if len(display_cols) >= 2:
         participant, trial, text = _select_trial_composite_mode(
-            combos, composite_cols, text_field, key_prefix, picker_host=picker_host
+            combos, display_cols, text_field, key_prefix, picker_host=picker_host
         )
     else:
         participant, trial, text = _select_trial_none_mode(
@@ -573,7 +643,9 @@ def build_comparison_options(
     """Build a prioritized list of comparison-trial options.
 
     Returns ``(participant_id, trial_id, label, markers)`` tuples, where
-    ``markers`` is ``"📄"`` / ``"👤"`` / ``"📄👤"`` / ``""`` and ``label`` is
+    ``markers`` leads with the relation icons ``"📄"`` (same text) / ``"👤"`` (same
+    participant) and then the trial's annotation markers ``★`` (favorite) / ``🏷️``
+    (tagged) / ``📝`` (noted) when present (UX-6), and ``label`` is
     ``"<markers> <trial_id>"``. Ordered: same-text (📄) first, then same-participant
     (👤), then the rest. A trial that is BOTH same-text and same-participant sorts
     with the 📄 group (text-matches lead) and shows both markers.
@@ -588,8 +660,10 @@ def build_comparison_options(
         text_id = getattr(row, text_field, "")
         same_text = bool(primary_text and str(text_id) == str(primary_text))
         same_participant = bool(str(row.participant_id) == str(primary_participant))
-        markers = (SAME_TEXT_MARKER if same_text else "") + (
-            SAME_PARTICIPANT_MARKER if same_participant else ""
+        markers = (
+            (SAME_TEXT_MARKER if same_text else "")
+            + (SAME_PARTICIPANT_MARKER if same_participant else "")
+            + annotation_markers(row.participant_id, row.trial_id)
         )
         rows.append(
             {

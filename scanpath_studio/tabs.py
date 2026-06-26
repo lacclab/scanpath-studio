@@ -67,6 +67,7 @@ from scanpath_studio.controls import (
     SUMMARY_CHIP_FIELDS,
     WORD_FIELD_SPECS,
     _collect_compare_styles,
+    _filter_fields_for,
     column_mapping_ui,
     render_narrow_by,
     render_trial_chip_picker,
@@ -1924,8 +1925,15 @@ def render_single_trial_tab(
                 more_pop.caption("More ways to narrow — conditions & annotations.")
                 render_trial_filters(words_all, fixations_all, host=more_pop)
             # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
+            # Pass the More-popover filter columns so composite components that are
+            # also conditions (e.g. repeated_reading_trial) narrow there, not as a
+            # dedicated trial selector — keeping the picker stable across datasets.
             selected_participant, selected_trial, selection_mode, selected_text = (
-                select_trial(combos, key_prefix="single")
+                select_trial(
+                    combos,
+                    key_prefix="single",
+                    filter_cols=_filter_fields_for(words_all, fixations_all),
+                )
             )
         # Slots filled once the selection is resolved (chips need the trial). The
         # compare-trial selector (CMP-1) sits above the chips, below the picker.
@@ -3892,7 +3900,9 @@ def render_multiple_comparison_tab(
 
     with col_side:
         selected_participant, selected_trial, _mode, _text = select_trial(
-            combos, key_prefix="multi"
+            combos,
+            key_prefix="multi",
+            filter_cols=_filter_fields_for(words_filtered, fixations_filtered),
         )
     if not (selected_participant and selected_trial):
         return

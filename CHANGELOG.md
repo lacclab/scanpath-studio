@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **DATA-8 — Column-mapping override shown for the Bundled Demo** — the **Column
+  mapping — Words/IA** and **Column mapping — Fixations** sidebar panels now render
+  on the default Bundled Demo source (pre-filled with auto-detection), so the
+  re-mapping capability is discoverable on first load instead of only for uploaded
+  / public datasets.
 - **UX-4 — Same-text marker changed from ★ to 📄** in the compare-trial selector
   and the comparison option labels. The ★ glyph read as "favorite"; 📄 clearly
   signals "same stimulus text". The 👤 same-participant marker is unchanged. ★ is

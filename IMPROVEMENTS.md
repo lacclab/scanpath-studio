@@ -290,17 +290,15 @@ moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 **DATA-7 · Rework the download + mapping flow (button, not a checkbox)** — `Status: Done (signed off 2026-06-26)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**DATA-8 · Show the column-mapping override for the Bundled Demo too** — `Status: Backlog`
+**DATA-8 · Show the column-mapping override for the Bundled Demo too** — `Status: Pending approval`
 
-The **Column mapping — Words/IA** and **Column mapping — Fixations** override
-panels are surfaced for uploaded / public datasets but not for the **Bundled
-Demo**, so a first-time user never sees that re-mapping columns is even possible.
-Show the column-mapping expanders for the bundled demo as well (read-only or
-pre-filled with the demo's inferred mapping is fine) **so all capabilities are
-discoverable**. Code anchors: the column-mapping override UI in
-[`controls.py`](scanpath_studio/controls.py) and the gating in
-`app.render_sidebar_data_source` ([`app.py`](scanpath_studio/app.py)). Related:
-**DATA-9**.
+**Implemented (2026-06-26).** `prepare_data`'s `allow_override` gate now also
+fires for the **Bundled Demo** (`data_choice in (PUBLIC_DATASETS_CHOICE,
+DEMO_CHOICE)`, [`app.py`](scanpath_studio/app.py)), so the **Column mapping —
+Words/IA** and **Column mapping — Fixations** expanders render in the sidebar on
+the default first-load source — pre-filled with auto-detection, so an untouched
+mapping normalizes identically. Makes the re-mapping capability discoverable.
+Verified via `AppTest` (both expanders present, no errors). Related: **DATA-9**.
 
 **DATA-9 · Reorganize the Data sidebar to be intuitive (merge source + selection, nest setup/mapping)** — `Status: Backlog`
 

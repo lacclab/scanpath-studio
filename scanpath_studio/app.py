@@ -1678,7 +1678,11 @@ def main() -> None:
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
             raw_fixations_df,
-            allow_override=(data_choice == PUBLIC_DATASETS_CHOICE),
+            # Show the Column-mapping panels for public datasets AND the Bundled
+            # Demo (DATA-8) so the re-mapping capability is discoverable on the
+            # default first-load source; pre-filled with auto-detection, so an
+            # untouched mapping normalizes identically.
+            allow_override=(data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)),
         )
     if mapping_problems:
         # A required column is still unmapped. Rather than halt the whole app

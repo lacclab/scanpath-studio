@@ -8,42 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **DATA-9 — Data sidebar reorganized** — the *Data source* radio and the separate
-  *Public datasets → Dataset* selectbox are merged into **one flat picker** where
-  every source is a single entry tagged by kind (**🧪 demo · 🔒 private · 🌐
-  public**), and the per-dataset **Experimental Setup** + **Column mapping** panels
-  are grouped under one **"⚙️ <dataset> options"** section beside the source they
-  configure (instead of three sibling top-level expanders).
-- **DATA-8 — Column-mapping override shown for the Bundled Demo** — the **Column
-  mapping — Words/IA** and **Column mapping — Fixations** sidebar panels now render
-  on the default Bundled Demo source (pre-filled with auto-detection), so the
-  re-mapping capability is discoverable on first load instead of only for uploaded
-  / public datasets.
-- **UX-4 — Same-text marker changed from ★ to 📄** in the compare-trial selector
-  and the comparison option labels. The ★ glyph read as "favorite"; 📄 clearly
-  signals "same stimulus text". The 👤 same-participant marker is unchanged. ★ is
-  now reserved for the upcoming favorites indicator (UX-6).
-- **UX-6 — Annotation markers in the trial selectors** — favorited (★), tagged
-  (🏷️), and noted (📝) trials are now flagged directly in the trial picker and the
-  compare-trial selector. The markers compose: a trial can show any combination of
-  the three (plus the 📄/👤 relation icons in the compare selector). Reads the
-  session annotation store (`utils.annotation_markers`).
-- **UX-5 — Stable trial selectors across datasets** — composite-trial-id
-  components that are also **More**-popover filter columns (e.g.
-  `repeated_reading_trial`) no longer get their own cascading trial selector; they
-  narrow via the More filters instead, so the trial picker shows the same canonical
-  Participant/Text selectors regardless of which condition columns a dataset
-  carries. Residual ambiguity falls to the existing "Reading" selector.
-- **VIZ-12 — Quick-view active preset indicator** — the active Quick-view button
-  (👁️ Scanpath / 🔥 Heatmap) now renders highlighted (`type="primary"`) when the
-  current layer toggles match that preset exactly; both appear unselected when the
-  user has customized layers away from either preset.
-- **VIZ-13 — Word hover: improved labels + configurable reading measure** — the
-  word-label tooltip now reads `Word: …`, `Word #N`, `Line #N` (clearer formatting)
-  and shows a reading measure (default: total fixation duration in ms). The measure
-  is configurable via a new **Hover: show measure** selectbox in the
-  ⚙️ Text & highlight popover (TFD / FFD / FPRT / RPD / Fixation count / Off);
-  the choice is preserved in Share links.
+- **Data sidebar reorganized** (DATA-8/9) — one flat source picker tagged by kind
+  (🧪 demo · 🔒 private · 🌐 public), with each source's Experimental Setup +
+  Column mapping grouped under one **⚙️ options** section; column-mapping override
+  now also shows on the Bundled Demo.
+- **Annotation markers in the trial selectors** (UX-6) — favorited (★), tagged
+  (🏷️), and noted (📝) trials are flagged in the trial and compare-trial pickers
+  (composable, alongside the 📄 same-text / 👤 same-participant relation icons; UX-4
+  switched same-text from ★ to 📄).
+- **Stable trial selectors across datasets** (UX-5) — condition columns that are
+  also More-filter columns narrow via the More filters instead of spawning their own
+  cascading selector, so the picker shows the same Participant/Text selectors
+  regardless of dataset.
+- **Quick-view active preset indicator** (VIZ-12) — the active 👁️ Scanpath / 🔥
+  Heatmap button highlights when the current layers match that preset.
+- **Word hover: clearer labels + configurable measure** (VIZ-13) — tooltip shows
+  Word/Word #N/Line #N plus a reading measure, picked via a new **Hover: show
+  measure** selectbox (TFD/FFD/FPRT/RPD/count/Off; preserved in Share links).
 
 ## [0.23.0] - 2026-06-24
 

@@ -438,26 +438,34 @@ class TestUnmappedRawDataView:
         )
 
     def test_public_datasets_shown_by_default(self, monkeypatch):
-        """The Public datasets source is offered by default (PoTeC, MultiplEYE)."""
+        """The Public datasets corpora are offered by default in the flat source
+        picker (DATA-9: each corpus is its own tagged entry, not a category)."""
         from scanpath_studio import app
 
         monkeypatch.delenv("SCANPATH_PUBLIC_DATASETS", raising=False)
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
-        source_radio = [r for r in at.radio if r.key == "data_source_choice"]
-        assert source_radio, "data source radio not found"
-        assert app.PUBLIC_DATASETS_CHOICE in source_radio[0].options
+        source = [s for s in at.selectbox if s.key == "data_source_choice"]
+        assert source, "data source picker not found"
+        shorts = [
+            app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
+        ]
+        # Options are formatted labels like "🌐 PoTeC".
+        assert any(any(s in o for s in shorts) for o in source[0].options)
 
     def test_public_datasets_hidden_when_disabled(self, monkeypatch):
-        """Setting SCANPATH_PUBLIC_DATASETS=0 hides the source."""
+        """Setting SCANPATH_PUBLIC_DATASETS=0 hides the public corpora."""
         from scanpath_studio import app
 
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "0")
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
-        source_radio = [r for r in at.radio if r.key == "data_source_choice"]
-        assert source_radio, "data source radio not found"
-        assert app.PUBLIC_DATASETS_CHOICE not in source_radio[0].options
+        source = [s for s in at.selectbox if s.key == "data_source_choice"]
+        assert source, "data source picker not found"
+        shorts = [
+            app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
+        ]
+        assert not any(any(s in o for s in shorts) for o in source[0].options)
 
     def test_potec_source_renders(self, monkeypatch):
         """Public datasets → PoTeC loads through the same pipeline as an upload.
@@ -500,20 +508,19 @@ class TestUnmappedRawDataView:
         monkeypatch.setattr(datasets, "potec_present", lambda *a, **k: True)
 
         at = _make_apptest()
-        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        # DATA-9: each public corpus is a first-class entry in the flat source
+        # picker — select PoTeC by its registry label (the option token).
+        potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
+        at.session_state["data_source_choice"] = potec_key
         at.run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        # The dataset picker renders the registry entries (PoTeC today) as a
-        # searchable selectbox; it displays each corpus' short name, while the
-        # selected value stays the full registry label.
-        pickers = [s for s in at.selectbox if s.label == "Dataset"]
-        assert pickers, "expected a Dataset selectbox under Public datasets"
-        assert list(pickers[0].options) == [
-            app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
-        ]
-        assert pickers[0].value == next(iter(app.PUBLIC_DATASET_REGISTRY))
+        # The flat picker carries the corpus token; selecting it resolves to the
+        # public source with the corpus on public_dataset_choice.
+        source = [s for s in at.selectbox if s.key == "data_source_choice"][0]
+        assert source.value == potec_key
+        assert at.session_state["public_dataset_choice"] == potec_key
 
     def test_each_public_dataset_loader_ui_renders(self, monkeypatch):
         """Every corpus loader's access UI renders without error when its data
@@ -677,9 +684,11 @@ class TestUnmappedRawDataView:
 
         at = _make_apptest()
         at.run(timeout=120)  # bundled demo
-        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
-        at.run(timeout=120)  # Public datasets → PoTeC (first entry) maps Trial→text_id
-        at.session_state["public_dataset_choice"] = mpe_key
+        # DATA-9: each corpus is a first-class entry in the flat picker — switch by
+        # setting the corpus token directly (no separate Public/Dataset two-step).
+        at.session_state["data_source_choice"] = potec_key
+        at.run(timeout=120)  # PoTeC maps Trial → text_id
+        at.session_state["data_source_choice"] = mpe_key
         at.run(timeout=120)  # switch to MultiplEYE
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -1226,13 +1235,13 @@ class TestSetupWizard:
 
     def test_finalize_selects_new_dataset_in_sidebar(self, monkeypatch):
         """Regression: after '➕ Add data' → 'Use this dataset', the new dataset
-        must appear in the sidebar Data-source radio AND be the selected value.
-        The real flow renders the radio first (on a built-in source), so the
-        finalize switch must not be lost to the radio's frontend reconciliation."""
+        must appear in the sidebar Data-source picker AND be the selected value.
+        The real flow renders the picker first (on a built-in source), so the
+        finalize switch must not be lost to the widget's frontend reconciliation."""
         self._inject(monkeypatch)
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
-        # Real flow: enter the wizard via the button (radio already rendered).
+        # Real flow: enter the wizard via the button (picker already rendered).
         [b for b in at.button if b.key == "add_data_btn"][0].click()
         at.run(timeout=60)
         [b for b in at.button if b.key == "wizard_finalize"][0].click()
@@ -1240,10 +1249,15 @@ class TestSetupWizard:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         name = at.session_state["data_source_choice"]
         assert name in at.session_state["_datasets"]
-        radios = [r for r in at.radio if r.key == "data_source_choice"]
-        assert radios, "data-source radio not rendered after finalize"
-        assert name in list(radios[0].options), (name, list(radios[0].options))
-        assert radios[0].value == name
+        # DATA-9: flat source selectbox; an uploaded dataset is tagged private
+        # ("🔒 <name> (yours)") but its option token (and the value) is the name.
+        pickers = [s for s in at.selectbox if s.key == "data_source_choice"]
+        assert pickers, "data-source picker not rendered after finalize"
+        assert pickers[0].value == name
+        assert any(name in o for o in pickers[0].options), (
+            name,
+            list(pickers[0].options),
+        )
 
     def test_stored_dataset_loads_full_app_without_wizard(self, monkeypatch):
         """Group B.4: selecting a stored dataset reloads the whole app from the

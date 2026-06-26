@@ -300,25 +300,30 @@ the default first-load source — pre-filled with auto-detection, so an untouche
 mapping normalizes identically. Makes the re-mapping capability discoverable.
 Verified via `AppTest` (both expanders present, no errors). Related: **DATA-9**.
 
-**DATA-9 · Reorganize the Data sidebar to be intuitive (merge source + selection, nest setup/mapping)** — `Status: Backlog`
+**DATA-9 · Reorganize the Data sidebar to be intuitive (merge source + selection, nest setup/mapping)** — `Status: Pending approval`
 
-The **Data** sidebar has grown organically and is now confusing. Redesign it for
-clarity (layout at the implementer's discretion). Concrete pointers from the user:
-- **Merge "Data source" and the dataset selection** — today there's duplication
-  between the radio (Bundled Demo / OneStop / Public datasets) and the separate
-  **Dataset** picker (e.g. PoTeC). Combine into one selection, tagging each entry
-  with its kind (**demo / private / public**).
-- **Nest "Experimental Setup" and the two "Column mapping" panels under the active
-  `<dataset>` options** (e.g. under "PoTeC options") instead of as sibling
-  top-level expanders, so per-dataset config lives with its dataset.
+**Implemented (2026-06-26).** Per the user's chosen design (a single **flat**
+picker):
+- **Source picker merged** — the *Data source* radio + the separate *Public
+  datasets → Dataset* selectbox are now **one flat `st.selectbox`**, each entry
+  tagged by kind: **🧪 demo · 🔒 private** (your uploads + local env bundles, shown
+  "name (yours)") **· 🌐 public** (each corpus listed individually, by short name).
+  `data_source_choice` stays the canonical key; a public-corpus token resolves back
+  to `PUBLIC_DATASETS_CHOICE` (+ `public_dataset_choice`) on return so the load /
+  deep-link / monitor / reset paths are unchanged. A legacy `PUBLIC_DATASETS_CHOICE`
+  value migrates to the concrete corpus token (first public corpus when none
+  remembered). `_load_public_dataset` dropped its now-redundant corpus selectbox.
+- **Per-dataset config nested** — **Experimental Setup** + **Column mapping —
+  Words/IA / Fixations** render under one **"⚙️ <dataset> options"** group beside
+  the source (was three sibling top-level expanders). A `dataset_options_slot`
+  container holds an Experimental-Setup sub-slot + a column-mapping sub-slot
+  (`_source_display_name` for the header); `prepare_data` gained a `mapping_host`
+  arg threaded to `column_mapping_ui`.
 
-Code anchors: `app.render_sidebar_data_source`
-([`app.py`](scanpath_studio/app.py:995)), the `PUBLIC_DATASET_REGISTRY` /
-`_load_public_dataset` picker, the per-corpus loaders
-(`_load_potec_source` / `_load_multipleye_source` / `_load_onestop_public_source`),
-the Experimental Setup + column-mapping sections in
-[`controls.py`](scanpath_studio/controls.py). Keep `public_dataset_choice` /
-deep-link round-tripping intact. Related: **DATA-4** (picker overhaul), **DATA-8**.
+Code anchors: `app.render_sidebar_data_source`, `_load_public_dataset`,
+`_source_display_name`, `prepare_data(mapping_host=…)` ([`app.py`](scanpath_studio/app.py)).
+Tests updated in [`tests/test_apptest.py`](tests/test_apptest.py) (flat picker
+options, corpus switching, finalize selection). Related: **DATA-4**, **DATA-8**.
 
 _Next item: `DATA-10`._
 

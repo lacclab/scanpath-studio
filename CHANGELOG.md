@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **DATA-9 — Data sidebar reorganized** — the *Data source* radio and the separate
+  *Public datasets → Dataset* selectbox are merged into **one flat picker** where
+  every source is a single entry tagged by kind (**🧪 demo · 🔒 private · 🌐
+  public**), and the per-dataset **Experimental Setup** + **Column mapping** panels
+  are grouped under one **"⚙️ <dataset> options"** section beside the source they
+  configure (instead of three sibling top-level expanders).
 - **DATA-8 — Column-mapping override shown for the Bundled Demo** — the **Column
   mapping — Words/IA** and **Column mapping — Fixations** sidebar panels now render
   on the default Bundled Demo source (pre-filled with auto-detection), so the

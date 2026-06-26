@@ -618,23 +618,28 @@ def _public_dataset_label(label: str) -> str:
     return PUBLIC_DATASET_REGISTRY.get(label, {}).get("short", label)
 
 
-def _load_public_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Dataset picker + dispatch for the "Public datasets" source.
+def _source_display_name(data_choice: str) -> str:
+    """Short, friendly name for the active source — used as the "<name> options"
+    section header (DATA-9). For a public corpus it's the selected corpus' short
+    name; otherwise the data_choice itself (demo / uploaded name / env bundle)."""
+    if data_choice == PUBLIC_DATASETS_CHOICE:
+        return _public_dataset_label(st.session_state.get("public_dataset_choice", ""))
+    return data_choice
 
-    A searchable selectbox (scales past a long radio as the catalogue grows
-    toward dozens of corpora) over ``PUBLIC_DATASET_REGISTRY``, with a compact
-    language · size caption, a one-line description, and a home link for the
-    selected corpus. The chosen corpus' loader then renders its own directory /
-    download controls and returns raw, pre-normalization frames.
+
+def _load_public_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Dispatch for a "Public datasets" source.
+
+    The corpus is now chosen in the flat source picker (DATA-9) and rides
+    ``public_dataset_choice``; here we show the selected corpus' compact
+    language · size caption, one-line description, and home link, then call its
+    loader (which renders its own directory / download controls) and returns raw,
+    pre-normalization frames.
     """
-    chosen = st.sidebar.selectbox(
-        "Dataset",
-        options=list(PUBLIC_DATASET_REGISTRY),
-        format_func=_public_dataset_label,
-        key="public_dataset_choice",
-        help="Public eye-tracking-while-reading corpora with ready-made loaders "
-        "(downloaded on demand). Type to search; more datasets coming.",
-    )
+    chosen = st.session_state.get("public_dataset_choice")
+    if chosen not in PUBLIC_DATASET_REGISTRY:
+        chosen = next(iter(PUBLIC_DATASET_REGISTRY))
+        st.session_state["public_dataset_choice"] = chosen
     spec = PUBLIC_DATASET_REGISTRY[chosen]
     facts = " · ".join(f for f in (spec.get("language"), spec.get("size")) if f)
     if facts:
@@ -862,6 +867,7 @@ def prepare_data(
     words_df: pd.DataFrame,
     fixations_df: pd.DataFrame,
     allow_override: bool,
+    mapping_host=None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
@@ -898,6 +904,7 @@ def prepare_data(
                 field_specs=WORD_FIELD_SPECS,
                 proposed=word_proposed,
                 problems=validate_word_schema(word_proposed),
+                container=mapping_host,
             )
         else:
             word_schema = word_proposed
@@ -915,6 +922,7 @@ def prepare_data(
                 field_specs=FIX_FIELD_SPECS,
                 proposed=fix_proposed,
                 problems=validate_fix_schema(fix_proposed),
+                container=mapping_host,
             )
         else:
             fix_schema = fix_proposed
@@ -1184,40 +1192,78 @@ def render_sidebar_data_source() -> str:
             st.rerun()
         return UPLOAD_CHOICE
 
-    options = []
+    # DATA-9: one **flat** source picker. Every source is a single entry tagged by
+    # kind — 🧪 demo · 🔒 private (your uploads + local env bundles) · 🌐 public —
+    # instead of a "Public datasets" category that then needed a second selectbox.
+    # `data_source_choice` stays the canonical widget key, but for a public corpus
+    # the entry's token IS the registry label; the return value resolves it back to
+    # PUBLIC_DATASETS_CHOICE (+ public_dataset_choice) so the load path is unchanged.
+    uploaded = list(st.session_state.get("_datasets", {}).keys())
+    entries: list[str] = []
+    kinds: Dict[str, str] = {}
     if onestop_data_dir() is not None:
-        options.append(ONESTOP_CHOICE)
+        entries.append(ONESTOP_CHOICE)
+        kinds[ONESTOP_CHOICE] = "🔒"
     if multipleye_bundle_dir() is not None:
-        options.append(MULTIPLEYE_BUNDLE_CHOICE)
-    options.append(DEMO_CHOICE)
-    # Datasets the user has uploaded become first-class, switchable sources.
-    options.extend(st.session_state.get("_datasets", {}).keys())
+        entries.append(MULTIPLEYE_BUNDLE_CHOICE)
+        kinds[MULTIPLEYE_BUNDLE_CHOICE] = "🔒"
+    entries.append(DEMO_CHOICE)
+    kinds[DEMO_CHOICE] = "🧪"
+    for name in uploaded:
+        entries.append(name)
+        kinds[name] = "🔒"
     if public_datasets_enabled():
-        options.append(PUBLIC_DATASETS_CHOICE)
-    # The synthetic trial is no longer offered fresh (it's a tiny demo variant),
-    # but stays selectable when something already chose it (e.g. tests).
-    cur = st.session_state.get("data_source_choice")
-    if cur == SYNTHETIC_CHOICE and SYNTHETIC_CHOICE not in options:
-        options.append(SYNTHETIC_CHOICE)
+        for label in PUBLIC_DATASET_REGISTRY:
+            entries.append(label)
+            kinds[label] = "🌐"
+    # The synthetic trial is no longer offered fresh (a tiny demo variant) but
+    # stays selectable when something already chose it (e.g. tests).
+    if st.session_state.get("data_source_choice") == SYNTHETIC_CHOICE:
+        entries.append(SYNTHETIC_CHOICE)
+        kinds[SYNTHETIC_CHOICE] = "🧪"
 
-    # Heal a stale/invalid selection (e.g. a removed dataset) so the radio never
+    # Migrate a legacy `PUBLIC_DATASETS_CHOICE` selection (old saved state / deep
+    # link / the former category radio) to the concrete corpus token so it lands on
+    # the right entry. Falls back to the first public corpus (not the demo) when no
+    # corpus was remembered, preserving the old "Public datasets → first corpus".
+    if st.session_state.get("data_source_choice") == PUBLIC_DATASETS_CHOICE:
+        corpus = st.session_state.get("public_dataset_choice")
+        if corpus not in PUBLIC_DATASET_REGISTRY:
+            corpus = (
+                next(iter(PUBLIC_DATASET_REGISTRY), None)
+                if public_datasets_enabled()
+                else None
+            )
+        st.session_state["data_source_choice"] = corpus or entries[0]
+
+    def _entry_label(token: str) -> str:
+        tag = kinds.get(token, "")
+        if token in PUBLIC_DATASET_REGISTRY:
+            name = _public_dataset_label(token)
+        elif token in uploaded:
+            name = f"{token} (yours)"
+        else:
+            name = token
+        return f"{tag} {name}".strip()
+
+    # Heal a stale/invalid selection (e.g. a removed dataset) so the widget never
     # errors, then let the session value drive it — no `index=`, which would clash
     # with the Session-State-backed key and can ignore a programmatic switch.
-    if st.session_state.get("data_source_choice") not in options:
-        st.session_state["data_source_choice"] = options[0]
-    choice = source.radio(
+    if st.session_state.get("data_source_choice") not in entries:
+        st.session_state["data_source_choice"] = entries[0]
+    choice = source.selectbox(
         "Data source",
-        options,
+        entries,
+        format_func=_entry_label,
         help=data_dictionary_help_text(),
         key="data_source_choice",
         label_visibility="collapsed",
     )
     # Let the user remove datasets they added earlier (✕ next to each). Selecting
     # the removed one falls back to the demo (see _remove_dataset).
-    added = list(st.session_state.get("_datasets", {}).keys())
-    if added:
+    if uploaded:
         source.caption("Remove an added dataset")
-        for name in added:
+        for name in uploaded:
             name_col, x_col = source.columns([5, 1])
             name_col.write(name)
             x_col.button(
@@ -1227,26 +1273,21 @@ def render_sidebar_data_source() -> str:
                 args=(name,),
                 help=f"Remove '{name}'",
             )
-    if not public_datasets_enabled():
-        source.radio(
-            "Public Datasets",
-            options=list(PUBLIC_DATASET_REGISTRY),
-            format_func=_public_dataset_label,
-            index=None,
-            disabled=True,
-            key="public_datasets_preview",
-            help="Curated public corpora — coming soon.",
-        )
     # The state change runs in an on_click callback (before widgets instantiate)
-    # so it can reassign the data_source_choice radio key — see
-    # _enter_add_data_wizard. The callback fires, then Streamlit reruns into the
-    # wizard branch above.
+    # so it can reassign the data_source_choice key — see _enter_add_data_wizard.
+    # The callback fires, then Streamlit reruns into the wizard branch above.
     source.button(
         "➕ Add data",
         key="add_data_btn",
         on_click=_enter_add_data_wizard,
         help="Upload your own eye-tracking tables.",
     )
+    # Resolve a public-corpus token back to the canonical PUBLIC_DATASETS_CHOICE so
+    # every downstream consumer (load dispatch, monitor, filter/col-map reset keys)
+    # is unchanged; the chosen corpus rides public_dataset_choice as before.
+    if public_datasets_enabled() and choice in PUBLIC_DATASET_REGISTRY:
+        st.session_state["public_dataset_choice"] = choice
+        return PUBLIC_DATASETS_CHOICE
     return choice
 
 
@@ -1575,10 +1616,21 @@ def main() -> None:
     if st.session_state.pop("_wizard_finalizing", False):
         _finalizing_bridge = st.empty()
         _finalizing_bridge.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
-    # Reserve the "Experimental Setup" slot under the 📂 Data group (TODO 5);
-    # the canvas/monitor/font controls fill it later (they need the filtered
-    # data), but it renders here — beside the data source it describes.
-    experimental_setup_slot = st.sidebar.container()
+    # DATA-9: group the per-dataset config — **Experimental Setup** + **Column
+    # mapping** — under one "<dataset> options" section, right beside the source
+    # that owns it (instead of three sibling top-level sidebar expanders). The
+    # sub-slots fix the order (Experimental Setup above Column mapping) regardless
+    # of which renders first downstream; both fill later (they need the loaded /
+    # filtered data). The slot is a plain container, so the panels keep their own
+    # expanders (container → expander is fine; only expander-in-expander is not).
+    dataset_options_slot = st.sidebar.container()
+    # The Upload wizard owns the page (and its own mapping) — no options header.
+    if data_choice != UPLOAD_CHOICE:
+        dataset_options_slot.markdown(
+            f"**⚙️ {_source_display_name(data_choice)} options**"
+        )
+    experimental_setup_slot = dataset_options_slot.container()
+    column_mapping_slot = dataset_options_slot.container()
 
     # Load + map core data. The **Upload** source renders each table as an
     # [upload box → mapping] group in the sidebar (words, fixations, raw gaze) and
@@ -1683,6 +1735,8 @@ def main() -> None:
             # default first-load source; pre-filled with auto-detection, so an
             # untouched mapping normalizes identically.
             allow_override=(data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)),
+            # Nest the panels under the "<dataset> options" group (DATA-9).
+            mapping_host=column_mapping_slot,
         )
     if mapping_problems:
         # A required column is still unmapped. Rather than halt the whole app

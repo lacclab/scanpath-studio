@@ -183,10 +183,10 @@ class TestBuildComparisonOptions:
         )
         options = _build_comparison_options(combos, "Text", "p1", "t1", "para1")
         # (participant, trial, label, markers). p1/t2 is same participant AND same
-        # text → both markers, sorts first; p2/t1 is same text only → ★.
+        # text → both markers, sorts first; p2/t1 is same text only → 📄.
         assert [(o[0], o[1]) for o in options] == [("p1", "t2"), ("p2", "t1")]
-        assert "★" in options[0][3] and "👤" in options[0][3]
-        assert options[1][3] == "★"
+        assert "📄" in options[0][3] and "👤" in options[0][3]
+        assert options[1][3] == "📄"
         assert options[0][2].endswith("t2")  # label shows the trial id
 
     def test_build_comparison_options_participant_mode(self):
@@ -198,9 +198,9 @@ class TestBuildComparisonOptions:
             }
         )
         options = _build_comparison_options(combos, "Participant", "p1", "t1", "para1")
-        # Same-text (★) trial leads, then the different-text one (no marker).
+        # Same-text (📄) trial leads, then the different-text one (no marker).
         assert [(o[0], o[1]) for o in options] == [("p2", "t1"), ("p3", "t1")]
-        assert options[0][3] == "★"
+        assert options[0][3] == "📄"
         assert options[1][3] == ""
 
     def test_build_comparison_options_none_mode(self):

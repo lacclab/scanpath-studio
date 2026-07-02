@@ -180,3 +180,10 @@ data/
 
 # MkDocs build output
 site/
+
+# uv lockfile — generated locally by `uv sync`/`uv run`; not used by CI
+# (which installs via `uv pip install`), and the project doesn't pin deps.
+uv.lock
+
+# Stray OneStop CSV exports dropped at the repo root (raw source data)
+/*.csv.zip

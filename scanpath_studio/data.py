@@ -937,11 +937,42 @@ def _load_bundled(name: str) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def _resolve_sample_image_paths(df: pd.DataFrame) -> pd.DataFrame:
+    """Expand the bundled demo's relative ``image_path`` (e.g.
+    ``images/2_2_1_Adv__paragraph.png``) into an absolute path under the
+    packaged ``sample_data`` directory, so the stimulus-image background layer
+    (``tabs._render_single_trial`` → ``plots.make_scanpath_figure``) can load it
+    via ``os.path.exists``. The CSVs ship a *relative* reference (stable across
+    installs); this resolves it at load time against wherever the wheel landed.
+    No-op when the column is absent or a value is already absolute."""
+    if "image_path" not in df.columns:
+        return df
+    try:
+        root = Path(str(resources.files(PACKAGE_NAME).joinpath("sample_data")))
+    except (ModuleNotFoundError, FileNotFoundError, TypeError):
+        return df
+
+    def _abs(value: object) -> object:
+        if isinstance(value, str) and value and not os.path.isabs(value):
+            return str(root.joinpath(*value.split("/")))
+        return value
+
+    df = df.copy()
+    df["image_path"] = df["image_path"].map(_abs)
+    return df
+
+
 @st.cache_data
 def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Load bundled demo IA and fixation tables (prefer Parquet)."""
-    words = _load_bundled("ia")
-    fixations = _load_bundled("fixations")
+    """Load bundled demo IA and fixation tables (prefer Parquet).
+
+    The tables ship per-trial stimulus-image references (``image_path`` +
+    ``image_x``/``image_y`` origin) pointing at the rendered paragraph PNGs
+    under ``sample_data/images/``; the relative paths are resolved to absolute
+    here so the optional stimulus-image background layer renders the page
+    behind the scanpath (aligned to the 2560x1440 OneStop monitor)."""
+    words = _resolve_sample_image_paths(_load_bundled("ia"))
+    fixations = _resolve_sample_image_paths(_load_bundled("fixations"))
     if words.empty or fixations.empty:
         st.error(
             "Bundled sample data not found. Expected ia.{parquet,csv} and "

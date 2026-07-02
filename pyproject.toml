@@ -89,4 +89,6 @@ include = ["scanpath_studio"]
     "sample_data/*.csv",
     "sample_data/*.parquet",
     "sample_data/*.feather",
+    "sample_data/images/*.png",
+    "sample_data/images/*.csv",
 ]

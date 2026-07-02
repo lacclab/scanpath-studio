@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Bundled demo ships stimulus images** — the bundled OneStop demo now carries
+  per-trial rendered paragraph PNGs (under `sample_data/images/`) plus
+  `image_path`/`image_x`/`image_y`, so the **stimulus-image background** layer
+  works on the demo, not just MultiplEYE.
+
+### Changed
+- **Word labels are left-aligned in their AOI box** (was centered) — the word
+  text is left-aligned within its box, so a centered label drifted ~half a
+  character right of the real glyph; centering only looked right because there
+  was nothing to compare against until the stimulus image landed. Left-aligning
+  makes the labels coincide with the stimulus image and the fixations.
+
+### Fixed
+- **Bundled-demo stimulus image vertical origin** — the demo shipped
+  `image_y=148`, placing the page image ~36px too high (the text sat above the
+  word boxes / fixations). Corrected to `184` so the rendered page aligns with
+  the AOI boxes (matches the OneStop paragraph top at y≈186).
 - **Data sidebar reorganized** (DATA-8/9) — one flat source picker tagged by kind
   (🧪 demo · 🔒 private · 🌐 public), with each source's Experimental Setup +
   Column mapping grouped under one **⚙️ options** section; column-mapping override

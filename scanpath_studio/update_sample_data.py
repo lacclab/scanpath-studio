@@ -4,6 +4,17 @@ The bundled sample data ships with the wheel and powers the "Bundled Demo"
 mode. We aim for a corpus that lets users actually exercise every feature
 without uploading their own data: a handful of participants reading the same
 paragraphs at both Adv and Ele difficulty levels.
+
+Stimulus images are NOT produced here. The per-trial paragraph PNGs under
+``sample_data/images/`` plus the ``image_path`` / ``image_x`` / ``image_y``
+columns are stamped by a separate, external rendering step. When regenerating
+those, place each page at data origin ``(image_x=358, image_y=184)`` — the top
+left of the OneStop text area in the IA/fixation coordinate frame (text is
+left-aligned at the box left edge; ``image_y=184`` centers the line on the AOI
+box, ≈ the paper's paragraph top at y≈186). ``image_y=148`` was wrong — it sat
+the page ~36 px too high. ``tests/test_smoke.py::TestStimulusImageAlignment``
+asserts the shipped origin keeps every PNG line on its word boxes, so a bad
+origin fails CI regardless of which script emitted it.
 """
 
 from __future__ import annotations

@@ -8,23 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Vertical drift correction** (PRE-3) — the ten line-assignment algorithms of
+  Carr et al. (2021) — *attach, chain, cluster, compare, merge, regress, segment,
+  split, stretch, warp* — natively ported in a new `alignment.py`. Apply one
+  in place from **Fixations ⚙️ → Drift correction** (snaps each fixation to its
+  assigned text line, colours by line, optional original→corrected connectors),
+  or compare all ten side by side in the new **📐 Line assignment** subtab.
+- **Font-size unit note** (VIZ-1) — a note under the Experimental Setup font
+  controls explains that sizes are in pixels (not the points stimuli are usually
+  specified in) and gives the `px = pt × DPI ÷ 72` conversion.
 - **Bundled demo ships stimulus images** — the bundled OneStop demo now carries
   per-trial rendered paragraph PNGs (under `sample_data/images/`) plus
   `image_path`/`image_x`/`image_y`, so the **stimulus-image background** layer
   works on the demo, not just MultiplEYE.
-
-### Changed
-- **Word labels are left-aligned in their AOI box** (was centered) — the word
-  text is left-aligned within its box, so a centered label drifted ~half a
-  character right of the real glyph; centering only looked right because there
-  was nothing to compare against until the stimulus image landed. Left-aligning
-  makes the labels coincide with the stimulus image and the fixations.
-
-### Fixed
-- **Bundled-demo stimulus image vertical origin** — the demo shipped
-  `image_y=148`, placing the page image ~36px too high (the text sat above the
-  word boxes / fixations). Corrected to `184` so the rendered page aligns with
-  the AOI boxes (matches the OneStop paragraph top at y≈186).
 - **Data sidebar reorganized** (DATA-8/9) — one flat source picker tagged by kind
   (🧪 demo · 🔒 private · 🌐 public), with each source's Experimental Setup +
   Column mapping grouped under one **⚙️ options** section; column-mapping override
@@ -42,6 +38,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Word hover: clearer labels + configurable measure** (VIZ-13) — tooltip shows
   Word/Word #N/Line #N plus a reading measure, picked via a new **Hover: show
   measure** selectbox (TFD/FFD/FPRT/RPD/count/Off; preserved in Share links).
+
+### Changed
+- **Word labels are left-aligned in their AOI box** (was centered) — the word
+  text is left-aligned within its box, so a centered label drifted ~half a
+  character right of the real glyph; centering only looked right because there
+  was nothing to compare against until the stimulus image landed. Left-aligning
+  makes the labels coincide with the stimulus image and the fixations.
+
+### Fixed
+- **Bundled-demo stimulus image vertical origin** — the demo shipped
+  `image_y=148`, placing the page image ~36px too high (the text sat above the
+  word boxes / fixations). Corrected to `184` so the rendered page aligns with
+  the AOI boxes (matches the OneStop paragraph top at y≈186).
 
 ## [0.23.0] - 2026-06-24
 

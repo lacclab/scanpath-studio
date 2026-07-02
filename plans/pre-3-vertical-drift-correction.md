@@ -1,6 +1,6 @@
 # PRE-3 · Visualize vertical alignment (drift-correction) algorithms
 
-> **Status: Deferred — design approved 2026-06-23, implementation not started.**
+> **Status: Implemented 2026-06-28** (design approved 2026-06-23). Pending sign-off.
 > Design doc for [`IMPROVEMENTS.md`](../IMPROVEMENTS.md) → **PRE-3** ("Vertical drift correction (`snap_to_lines`) + before/after viz"). It also settles the **PRE-0 ADR** (eyekit vs. reimplement) in favor of a **native port**: eyekit is **GPL-3.0** (incompatible with this MIT project distributed on PyPI), while the canonical `jwcarr/drift` code is **CC BY 4.0** (port with attribution) + `scipy` (BSD-3). This doc serves as the PRE-0 ADR.
 
 ## Context

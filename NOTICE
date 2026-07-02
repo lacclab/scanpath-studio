@@ -1,0 +1,24 @@
+Scanpath Studio
+Copyright (c) the Scanpath Studio authors.
+
+This product is licensed under the MIT License (see LICENSE).
+
+-------------------------------------------------------------------------------
+Third-party attributions
+-------------------------------------------------------------------------------
+
+Vertical drift-correction algorithms (scanpath_studio/alignment.py)
+
+  The ten vertical drift-correction / line-assignment algorithms (attach, chain,
+  cluster, compare, merge, regress, segment, split, stretch, warp) are a native
+  port — adapted and modified — of the reference implementations accompanying:
+
+    Carr, J. W., Pescuma, V. N., Furlan, M., Ktori, M., & Crepaldi, D. (2021).
+    Algorithms for the automated correction of vertical drift in eye-tracking
+    data. Behavior Research Methods, 54, 287-310.
+    https://doi.org/10.3758/s13428-021-01554-0
+
+  Reference code: https://github.com/jwcarr/drift  (licensed CC BY 4.0,
+  https://creativecommons.org/licenses/by/4.0/). The code here is adapted and
+  modified (returning line assignments and adding DataFrame plumbing) and is
+  distributed under that license's attribution terms.

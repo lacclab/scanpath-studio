@@ -100,6 +100,38 @@ class TestDecorationDoesNotShrinkPlot:
         assert on.layout.height > off.layout.height
 
 
+class TestDriftConnectors:
+    """PRE-3: the drift-connector overlay adds exactly one extra Scatter trace."""
+
+    def test_connectors_add_one_trace(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        off = make_scanpath_figure(
+            normalized_words_df, normalized_fixations_df, **_scanpath_kwargs()
+        )
+        connector_y = [float(y) + 25 for y in normalized_fixations_df["y"]]
+        on = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(show_connectors=True, connector_y=connector_y),
+        )
+        assert len(on.data) == len(off.data) + 1
+
+    def test_connectors_noop_without_connector_y(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        off = make_scanpath_figure(
+            normalized_words_df, normalized_fixations_df, **_scanpath_kwargs()
+        )
+        # show_connectors on but no connector_y → nothing drawn.
+        on = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(show_connectors=True),
+        )
+        assert len(on.data) == len(off.data)
+
+
 class TestSaccadeColor:
     def test_saccade_color_threads_to_line_and_arrows(
         self, normalized_words_df, normalized_fixations_df

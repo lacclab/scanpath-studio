@@ -29,8 +29,10 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
 **AN-1 … AN-28** (the whole *Analysis & corpus views* epic — the four
 question-oriented Corpus Analysis sections + the cross-cutting controls);
-**DATA-3** (OneStop public dataset). *(DATA-4 … DATA-7 — the data-source UI
-overhaul — signed off 2026-06-26 and archived.)*
+**DATA-3** (OneStop public dataset); **VIZ-1** (font-size px-vs-pt note);
+**PRE-3** (vertical drift correction — 10 algorithms + comparison grid +
+in-place correction). *(DATA-4 … DATA-7 — the data-source UI overhaul — signed
+off 2026-06-26 and archived.)*
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -90,7 +92,7 @@ bug); and **Color fixations by** restored in compare mode.
 
 ## Visualization & display
 
-**VIZ-1 · Warn that font sizes are px, not pt** — `Status: Planned`
+**VIZ-1 · Warn that font sizes are px, not pt** — `Status: Pending approval`
 
 All font-size controls are in **pixels** (e.g. `format="%.1f px"`,
 `global_order_font_size`, `global_colorbar_tickfont_size` in
@@ -595,7 +597,7 @@ Still **Backlog** (the eyekit preprocessing version): a real `excluded` soft-fla
 the pipeline (depends PRE-1), an "N excluded" count, and `purge` (hard-drop +
 reindex) that propagates to measures + export.
 
-**PRE-3 · Vertical drift correction (`snap_to_lines`) + before/after viz** — `Status: Backlog` *(depends PRE-1, PRE-0)*
+**PRE-3 · Vertical drift correction (`snap_to_lines`) + before/after viz** — `Status: Pending approval` *(implemented 2026-06-28)*
 
 The headline gap (today only a 50px nearest-word fallback exists in
 [`measures.py`](scanpath_studio/measures.py)). **This is the "support fixation
@@ -606,7 +608,7 @@ stretch / warp`. Adapter: word boxes → line y-centers (reuse
 picker + per-algorithm params in the Preprocessing panel. Before/after toggle on
 the true-scale plot (ghost originals, arrows to corrected, optional color-by line).
 
-▶ **Detailed plan:** [`plans/pre-3-vertical-drift-correction.md`](plans/pre-3-vertical-drift-correction.md) *(approved 2026-06-23; implementation deferred)*. Revises the approach above per the **PRE-0** decision (**port natively, not eyekit**): a new `alignment.py`, a comparison-grid subtab, and an in-place main-plot correction. The set is the Carr et al. (2021) **10** — `attach / chain / cluster / compare / merge / regress / segment / split / stretch / warp` — which adds `attach`/`compare` and **drops `slice`** (a post-2021 eyekit addition) versus the list above.
+▶ **Detailed plan:** [`plans/pre-3-vertical-drift-correction.md`](plans/pre-3-vertical-drift-correction.md) *(approved 2026-06-23; **implemented 2026-06-28**)*. Per the **PRE-0** decision (**port natively, not eyekit**): a new [`alignment.py`](scanpath_studio/alignment.py) (native CC BY 4.0 port, see [`NOTICE`](NOTICE)), a **📐 Line assignment** comparison-grid subtab, and an in-place main-plot correction (**Fixations ⚙️ → Drift correction** + optional connectors). The set is the Carr et al. (2021) **10** — `attach / chain / cluster / compare / merge / regress / segment / split / stretch / warp` — which adds `attach`/`compare` and **drops `slice`** (a post-2021 eyekit addition) versus the original list above. *Note:* not yet exposed on the CLI/headless-API surfaces (drift correction is a viz-time transform applied in `tabs.py`, not a `make_scanpath_figure` parameter); `alignment.correct` is importable for scripting.
 
 **PRE-4 · Reading-measure parity** — `Status: Backlog`
 
@@ -651,6 +653,22 @@ word/density/interpolated): spread each fixation's duration across nearby
 characters via a Gaussian (sigma in chars) instead of hard word assignment. New
 style + sigma param in the existing heatmap control; render through the existing
 heatmap path in [`plots.py`](scanpath_studio/plots.py). Related to **VIZ-3**.
+
+**PRE-9 · Expose drift correction on the deep-link / CLI / headless API surfaces** — `Status: Backlog`
+
+PRE-3 shipped vertical drift correction as a viz-time transform applied in
+[`tabs.py`](scanpath_studio/tabs.py) (the `global_align_algorithm` /
+`global_align_connectors` viz keys → `alignment.correct`), so it's live in the
+UI but **not yet on the other three surfaces** (see *AGENTS.md → Exposing a
+feature on every surface*): (1) **deep link / Share** — add `align_algorithm` /
+`align_connectors` to `url_state._URL_PRESETS` + `_apply_url_preset` (read) and
+`_build_share_query` (write) so a shared link round-trips the applied algorithm;
+(2) **CLI** — a `render` flag on [`cli.py`](scanpath_studio/cli.py) (e.g.
+`--drift-correct <algo>` / `--drift-connectors`); (3) **headless API** — since
+correction happens outside `make_scanpath_figure`, either add an
+`align`/`drift_correct` parameter to `api.plot_scanpath` that calls
+`alignment.correct` before building, or document `alignment.correct` as the
+scripting entry point. Keep the four in sync. Follows **PRE-3**.
 
 ---
 

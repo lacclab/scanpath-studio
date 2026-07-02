@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from scanpath_studio import alignment
 from scanpath_studio.aggregation import (
     MEASURES,
     Measure,
@@ -2284,6 +2285,29 @@ def render_single_trial_tab(
                 f"{compare_participant}__{compare_trial}"
             )
         else:
+            # PRE-3: in-place vertical drift correction. When an algorithm is
+            # picked, snap each fixation to its assigned text line, colour by line,
+            # and (optionally) draw original→corrected connectors. The corrected
+            # frame's snapped y already busts the figure cache; the extra kwargs
+            # keep the key varying when only the algorithm/connectors change.
+            plot_fixations = fig_fixations
+            extra_settings: dict = {}
+            align_algo = viz_settings.get("align_algorithm", "Off")
+            if (
+                align_algo != "Off"
+                and not fig_fixations.empty
+                and not trial_words.empty
+            ):
+                corrected, _ = alignment.correct(
+                    fig_fixations, trial_words, method=align_algo.lower()
+                )
+                plot_fixations = corrected
+                extra_settings["color_by_line"] = True
+                if viz_settings.get("align_connectors"):
+                    extra_settings["show_connectors"] = True
+                    extra_settings["connector_y"] = tuple(
+                        pd.to_numeric(fig_fixations["y"], errors="coerce")
+                    )
             build_kwargs = dict(
                 canvas_width=int(canvas_width),
                 canvas_height=int(canvas_height),
@@ -2293,11 +2317,14 @@ def render_single_trial_tab(
                 y_field=y_field,
                 **figure_settings,
             )
+            # Drift-correction overrides (color_by_line / connectors) win over the
+            # base figure settings.
+            build_kwargs.update(extra_settings)
             displayed_fig = _cached_scanpath_figure(
                 trial_words,
-                fig_fixations,
+                plot_fixations,
                 build_kwargs,
-                fig_key=_figure_input_key(trial_words, fig_fixations, build_kwargs),
+                fig_key=_figure_input_key(trial_words, plot_fixations, build_kwargs),
             )
             _render_true_scale_chart(displayed_fig, key="single")
 
@@ -2307,10 +2334,11 @@ def render_single_trial_tab(
     # conditions and summary stats (configurable via the sidebar 🏷️ Trial chips).
     # Keyed wrapper so the welcome tour can spotlight the per-trial subtab bar.
     with st.container(key="tour_grp_subtabs"):
-        tab_annot, tab_stim, tab_export, tab_inspect, tab_share = st.tabs(
+        tab_annot, tab_stim, tab_align, tab_export, tab_inspect, tab_share = st.tabs(
             [
                 "📝 Annotations",
                 "Stimulus & questions",
+                "📐 Line assignment",
                 "Export",
                 "🔎 Data Inspection",
                 "🔗 Share",
@@ -2320,6 +2348,20 @@ def render_single_trial_tab(
         render_trial_annotations(selected_participant, selected_trial, bare=True)
     with tab_stim:
         _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
+    with tab_align:
+        render_alignment_comparison_tab(
+            trial_words,
+            trial_fixations,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            viz_settings=viz_settings,
+            line_spacing=line_spacing,
+            scale_text_to_boxes=scale_text_to_boxes,
+            selected_participant=selected_participant,
+            selected_trial=selected_trial,
+        )
     with tab_export:
         _render_export_panel(
             displayed_fig,
@@ -3865,6 +3907,170 @@ def _style_similarity_table(table: pd.DataFrame):
         return styles
 
     return display.style.apply(_highlight, axis=1)
+
+
+def render_alignment_comparison_tab(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    viz_settings: dict,
+    line_spacing: float,
+    scale_text_to_boxes: bool,
+    selected_participant,
+    selected_trial,
+) -> None:
+    """PRE-3 · Side-by-side grid comparing the vertical drift-correction algorithms.
+
+    One panel per algorithm (plus the uncorrected original), each snapping
+    fixations to their assigned text line and colouring by line, so a researcher
+    can see how the ten Carr et al. (2021) algorithms assign fixations for this
+    trial. The in-place version (a single algorithm applied on the main plot)
+    lives in the Fixations popover; this subtab is the all-at-once comparison.
+    """
+    from scanpath_studio.measures import assign_fixation_lines
+
+    st.caption(
+        "Each panel snaps fixations to the text line assigned by a vertical "
+        "drift-correction algorithm "
+        "([Carr et al., 2021](https://doi.org/10.3758/s13428-021-01554-0)) and "
+        "colours them by line. Pick one to apply on the main plot via "
+        "**Fixations ⚙️ → Drift correction**."
+    )
+
+    if trial_fixations.empty or trial_words.empty:
+        st.info("No fixations / word boxes for this trial to align.")
+        return
+
+    # Building the 11-panel grid (each a true-scale Plotly figure) is expensive,
+    # and Streamlit renders every subtab on each rerun — so gate it behind a
+    # toggle the user opts into. The toggle state persists, so it stays on while
+    # browsing trials once enabled.
+    if not st.toggle(
+        "Show comparison grid",
+        key="align_grid_show",
+        help="Build a side-by-side grid comparing all ten algorithms for this "
+        "trial. Off by default — building eleven figures is slow.",
+    ):
+        st.caption(
+            "Turn on **Show comparison grid** to compare all ten algorithms side "
+            "by side, or apply one directly via **Fixations ⚙️ → Drift "
+            "correction** on the main plot."
+        )
+        return
+
+    # The text lines we snap to (shared with the per-algorithm panels). Fewer than
+    # two lines → nothing to correct, so just show the original.
+    line_centers = alignment._line_centers(trial_words)
+    single_line = len(line_centers) < 2
+    if single_line:
+        st.info(
+            "This trial has only one text line — there is no vertical drift to "
+            "correct. Showing the original scanpath."
+        )
+
+    ctrl_cols = st.columns([1, 1])
+    with ctrl_cols[0]:
+        n_cols = st.slider(
+            "Panels per row",
+            min_value=2,
+            max_value=4,
+            value=3,
+            key="align_grid_ncols",
+        )
+    with ctrl_cols[1]:
+        show_connectors = st.checkbox(
+            "Show drift connectors",
+            key="align_grid_connectors",
+            help="Draw a faint line from each fixation's original position to its "
+            "corrected (snapped) position in every panel.",
+        )
+
+    # Clean, comparable spatial view: pin axes to x/y, drop the heatmap / raw gaze
+    # / labels / order numbers (illegible at grid scale), colour by line.
+    base_settings = _build_figure_settings(viz_settings, False)
+    base_settings["raw_gaze"] = None
+    base_settings["line_spacing"] = line_spacing
+    base_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    panel_settings = {
+        **base_settings,
+        "show_heatmap": False,
+        "show_raw_gaze": False,
+        "show_word_labels": False,
+        "show_order": False,
+        "fixation_flags": None,
+        "color_by_line": True,
+    }
+
+    def _make_fig(fix: pd.DataFrame, *, connectors=None):
+        kwargs = dict(panel_settings)
+        if connectors is not None:
+            kwargs["show_connectors"] = True
+            kwargs["connector_y"] = tuple(pd.to_numeric(connectors, errors="coerce"))
+        return make_scanpath_figure(
+            trial_words,
+            fix,
+            canvas_width=int(canvas_width),
+            canvas_height=int(canvas_height),
+            base_font_size=int(base_font_size),
+            font_family=font_family,
+            x_field="x",
+            y_field="y",
+            **kwargs,
+        )
+
+    # Naive baseline (nearest-line) to count how many fixations each algorithm
+    # moves relative to the current "color by line" behaviour.
+    baseline = assign_fixation_lines(trial_fixations, trial_words)
+
+    # Build the panel list: original first, then the 10 algorithms (skipped when
+    # there is only a single line, where they would all be no-ops).
+    panels = [("Original (uncorrected)", None)]
+    if not single_line:
+        panels += [(a.title(), a) for a in alignment.ALGORITHMS]
+
+    # Estimate a uniform cell height so panels line up (mirrors the multiple-
+    # comparison grid).
+    probe = _make_fig(trial_fixations)
+    fig_w = float(probe.layout.width or 900)
+    fig_h = float(probe.layout.height or 600)
+    aspect = fig_h / fig_w if fig_w else 0.5
+    assumed_col_px = max(200, int(780 / max(1, n_cols)))
+    cell_h = max(150, int(assumed_col_px * aspect) + 16)
+
+    for start in range(0, len(panels), n_cols):
+        row = panels[start : start + n_cols]
+        grid_cols = st.columns(n_cols)
+        for cell, (label, method) in zip(grid_cols, row):
+            with cell:
+                if method is None:
+                    st.caption(f"**{label}** · {len(trial_fixations)} fix")
+                    fig = _make_fig(trial_fixations)
+                else:
+                    corrected, line = alignment.correct(
+                        trial_fixations, trial_words, method=method
+                    )
+                    n_lines_used = int(line.dropna().nunique())
+                    moved = (
+                        (line.fillna(-1) != baseline.fillna(-1)).sum()
+                        if len(baseline) == len(line)
+                        else 0
+                    )
+                    st.caption(
+                        f"**{label}** · {n_lines_used} lines · {int(moved)} moved"
+                    )
+                    fig = _make_fig(
+                        corrected,
+                        connectors=trial_fixations["y"] if show_connectors else None,
+                    )
+                _render_true_scale_chart(
+                    fig,
+                    key=f"align_{label.replace(' ', '_').replace('(', '').replace(')', '')}",
+                    max_height=cell_h,
+                )
 
 
 def render_multiple_comparison_tab(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import struct
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -924,6 +924,8 @@ def make_scanpath_figure(
     word_heatmap_col: Optional[str] = None,
     word_heatmap_title: Optional[str] = None,
     word_hover_measure: Optional[str] = "total_fixation_duration_ms",
+    show_connectors: bool = False,
+    connector_y: Optional[Sequence[float]] = None,
 ) -> go.Figure:
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
@@ -1148,6 +1150,42 @@ def make_scanpath_figure(
             style=saccade_style,
             show_arrows=show_saccade_arrows,
         )
+
+    # Drift connectors (PRE-3): one faint grey vertical segment per fixation from
+    # its original y (`connector_y`) to its drift-corrected y (the already-snapped
+    # `fixations["y"]`). A SINGLE Scatter with None separators (scales with the
+    # true-scale embed), drawn before the fixation markers so the dots sit on top.
+    if (
+        spatial_axes
+        and show_connectors
+        and connector_y is not None
+        and not fixations.empty
+    ):
+        xs = pd.to_numeric(fixations[x_field], errors="coerce").to_numpy(dtype=float)
+        y_corr = pd.to_numeric(fixations[y_field], errors="coerce").to_numpy(
+            dtype=float
+        )
+        y_orig = np.asarray(connector_y, dtype=float)
+        seg_x: list = []
+        seg_y: list = []
+        for xi, yo, yc in zip(xs, y_orig, y_corr):
+            if not (np.isfinite(xi) and np.isfinite(yo) and np.isfinite(yc)):
+                continue
+            seg_x += [xi, xi, None]
+            seg_y += [yo, yc, None]
+        if seg_x:
+            fig.add_trace(
+                go.Scatter(
+                    x=seg_x,
+                    y=seg_y,
+                    mode="lines",
+                    line=dict(color="rgba(110,110,110,0.9)", width=1),
+                    opacity=0.3,
+                    hoverinfo="skip",
+                    showlegend=False,
+                    name="drift",
+                )
+            )
 
     if show_fixations and not fixations.empty:
         ordered = fixations.sort_values("timestamp_ms")

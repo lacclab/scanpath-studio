@@ -1445,6 +1445,15 @@ def render_sidebar_canvas_controls(
         "the data has no word boxes, and always for axis/legend chrome.",
         key="global_base_font_size",
     )
+    # VIZ-1: every font-size control here is in pixels, but stimulus typography
+    # is usually specified in points. Spell out the difference + the conversion.
+    display.caption(
+        "ℹ️ Font sizes here are in **pixels (px)**, but stimuli are usually "
+        "specified in **points (pt)**. To match the original, convert via the "
+        "experiment's DPI: `px = pt × DPI ÷ 72` (e.g. 12 pt ≈ 16 px at 96 DPI). "
+        "Prefer **Scale text to boxes** when the data ships word boxes — it sizes "
+        "the text from the real geometry and sidesteps the conversion."
+    )
     st.session_state.setdefault("global_font_family", FONT_FAMILY)
     font_family = display.text_input(
         "Text font",

@@ -24,9 +24,13 @@ from .constants import (
     WORD_LABEL_COLOR,
     compare_palette_color,
 )
+from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .data import frame_fingerprint
 
 NONE_OPTION = "(none)"
+
+# PRE-3: drift-correction picker options — "Off" + each algorithm title-cased.
+_ALIGN_OPTIONS = ["Off", *(a.title() for a in ALIGN_ALGORITHMS)]
 
 # Static defaults for the keyed visualization widgets that the plot-config
 # restore (app._restore_plot_config) can set. Seeded into session_state so those
@@ -55,6 +59,12 @@ _VIZ_WIDGET_DEFAULTS = {
     # / deep links that carry it still render hollow.
     "global_fixation_opacity": 0.7,
     "global_hollow_fixations": False,
+    # PRE-3: in-place vertical drift-correction. "Off" = raw fixations; otherwise
+    # one of alignment.ALGORITHMS (title-cased in the UI) snaps each fixation to
+    # its assigned text line. `align_connectors` draws faint original→corrected
+    # connector lines.
+    "global_align_algorithm": "Off",
+    "global_align_connectors": False,
     "global_highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
     "global_show_heatmap": False,
     "global_show_raw_gaze": False,
@@ -1115,6 +1125,10 @@ def _collect_viz_settings(
         word_hover_measure=ss.get(
             "global_word_hover_measure", "total_fixation_duration_ms"
         ),
+        # PRE-3: in-place drift correction (applied in tabs.py on the static plot).
+        align_algorithm=ss.get("global_align_algorithm") or "Off",
+        align_connectors=bool(ss.get("global_align_connectors"))
+        and (ss.get("global_align_algorithm") or "Off") != "Off",
     )
 
 
@@ -1248,6 +1262,27 @@ def sidebar_controls(
                 "'line' to tint each fixation by the text line it lands on. In "
                 "compare mode it colours both scanpaths by this metric.",
             )
+            # PRE-3: vertical drift correction. Snap each fixation to its assigned
+            # text line using one of the Carr et al. (2021) algorithms; "Off"
+            # leaves the raw coordinates. Single-figure only (mirrors color-by-line,
+            # which is honoured on the static plot, not the animation/compare).
+            if not comparing:
+                align_algo = st.selectbox(
+                    "Drift correction",
+                    options=_ALIGN_OPTIONS,
+                    key="global_align_algorithm",
+                    help="Snap fixations to their assigned text line using a "
+                    "vertical drift-correction algorithm (Carr et al., 2021). "
+                    "'Off' shows the raw fixations. See also the 📐 Line "
+                    "assignment subtab to compare all algorithms side by side.",
+                )
+                if align_algo != "Off":
+                    st.checkbox(
+                        "Show drift connectors",
+                        key="global_align_connectors",
+                        help="Draw a faint line from each fixation's original "
+                        "position to its corrected (snapped) position.",
+                    )
             # Fixation-index window (VIZ-7): restrict which fixations (and their
             # saccades) are drawn on the main plot. Shared across single + compare
             # (it's a data window, not appearance), so it sits above the

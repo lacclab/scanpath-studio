@@ -149,6 +149,27 @@ class TestAppLaunches:
             "restored fixation-classification value was overridden by an inline default"
         )
 
+    def test_drift_correction_in_place_builds(self):
+        # PRE-3: picking a drift-correction algorithm snaps fixations to their
+        # assigned line on the main plot. Pre-seed the picker (mimics a restore)
+        # and confirm the corrected figure builds and the setting is collected.
+        at = _make_apptest(synthetic=True)
+        at.session_state["global_align_algorithm"] = "Attach"
+        at.session_state["global_align_connectors"] = True
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        assert at.session_state["global_align_algorithm"] == "Attach"
+
+    def test_line_assignment_comparison_grid_builds(self):
+        # PRE-3: the "📐 Line assignment" subtab builds its 11-panel comparison
+        # grid (original + 10 algorithms) once the toggle is on, without error.
+        at = _make_apptest(synthetic=True)
+        at.session_state["align_grid_show"] = True
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+
     def test_single_fixation_opacity_builds_without_error(self):
         # VIZ-6: the fixation opacity slider replaced the "Hollow circles"
         # checkbox. A restored opacity < 1.0 must survive and the figure build.

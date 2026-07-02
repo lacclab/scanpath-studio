@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
+
+import numpy as np
 import plotly.graph_objects as go
 import pytest
+from PIL import Image
 
 from scanpath_studio.data import (
     compute_word_metrics,
@@ -13,6 +17,7 @@ from scanpath_studio.data import (
     normalize_fixations,
     normalize_words,
 )
+from scanpath_studio.measures import cluster_word_lines
 from scanpath_studio.plots import (
     make_comparison_figure,
     make_fixation_duration_histogram,
@@ -325,3 +330,87 @@ class TestPerWordMetricsOnSample:
             ]
         )
         assert canonical_present
+
+
+def _png_text_lines(path: str) -> list[tuple[int, int]]:
+    """Vertical (top, bottom) pixel bands of each text line in a paragraph PNG —
+    runs of rows that carry ink (dark pixels)."""
+    gray = np.asarray(Image.open(path).convert("L"))
+    has_ink = (gray < 128).sum(axis=1) > 1
+    bands: list[tuple[int, int]] = []
+    start: int | None = None
+    for row, inked in enumerate(has_ink):
+        if inked and start is None:
+            start = row
+        elif not inked and start is not None:
+            bands.append((start, row - 1))
+            start = None
+    if start is not None:
+        bands.append((start, len(has_ink) - 1))
+    return bands
+
+
+def _png_first_ink_col(path: str) -> int:
+    """Leftmost column carrying ink (the left edge of the rendered text)."""
+    gray = np.asarray(Image.open(path).convert("L"))
+    return int(np.argmax((gray < 128).sum(axis=0) > 0))
+
+
+class TestStimulusImageAlignment:
+    """The bundled demo ships per-trial stimulus PNGs placed at data
+    (``image_x``, ``image_y``). Those origins are *external* metadata (rendered by
+    a separate script, not by ``update_sample_data.py``), so this guards against a
+    regenerated origin drifting the page off the AOI boxes / fixations — the
+    ``image_y=148`` (~36 px too high) bug. Aligns the PNG's own text lines to the
+    word boxes; a wrong origin fails here regardless of which script produced it.
+
+    Correct origin for the OneStop demo is ``(image_x=358, image_y=184)``: the
+    text is left-aligned at the box left edge, and the line centers coincide.
+    """
+
+    def test_image_origin_aligns_page_to_word_boxes(self, normalized_demo):
+        words, _ = normalized_demo
+        assert "image_path" in words.columns, "demo lost its stimulus-image columns"
+
+        checked = 0
+        for image_path, group in words.groupby("image_path", sort=True):
+            if not isinstance(image_path, str) or not os.path.exists(image_path):
+                continue
+            # One set of boxes per paragraph (identical across readers) → dedupe.
+            boxes = group.drop_duplicates(subset=["x", "y", "width", "height"]).copy()
+            image_x = float(boxes["image_x"].iloc[0])
+            image_y = float(boxes["image_y"].iloc[0])
+
+            # Box line centers (visual lines inferred from box-y clustering).
+            boxes["_line"] = cluster_word_lines(boxes)
+            box_centers = sorted(
+                boxes.groupby("_line")
+                .apply(lambda g: float((g["y"] + g["height"] / 2).mean()))
+                .tolist()
+            )
+            # PNG line centers mapped into data coords via the image origin.
+            bands = _png_text_lines(image_path)
+            png_centers = sorted(image_y + (top + bot) / 2 for top, bot in bands)
+
+            assert len(png_centers) == len(box_centers), (
+                f"{os.path.basename(image_path)}: PNG has {len(png_centers)} text "
+                f"lines but the boxes cluster into {len(box_centers)}"
+            )
+            diffs = [abs(p - b) for p, b in zip(png_centers, box_centers)]
+            # A correct origin lands every line within a few px; the historical
+            # 36 px misplacement (or any future regen drift) blows past this.
+            assert max(diffs) < 12.0, (
+                f"{os.path.basename(image_path)}: stimulus image misaligned "
+                f"vertically (max line-center diff {max(diffs):.1f}px, image_y={image_y})"
+            )
+
+            # Horizontal: the page's left ink edge sits at the leftmost box edge
+            # (text is left-aligned), so image_x + first-ink-col ≈ min box x.
+            left_edge = image_x + _png_first_ink_col(image_path)
+            assert abs(left_edge - float(boxes["x"].min())) < 8.0, (
+                f"{os.path.basename(image_path)}: stimulus image misaligned "
+                f"horizontally (left edge {left_edge:.1f} vs box {boxes['x'].min():.1f})"
+            )
+            checked += 1
+
+        assert checked >= 1, "no bundled stimulus images were available to check"

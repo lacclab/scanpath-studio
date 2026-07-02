@@ -3,3 +3,4 @@ include LICENSE
 recursive-include scanpath_studio/sample_data *.csv
 recursive-include scanpath_studio/sample_data *.parquet
 recursive-include scanpath_studio/sample_data *.feather
+recursive-include scanpath_studio/sample_data *.png

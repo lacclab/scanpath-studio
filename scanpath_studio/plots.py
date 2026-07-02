@@ -706,11 +706,17 @@ def _add_word_label_trace(
         ]
     else:
         label_color = text_color
+    # Anchor the label at the box's LEFT edge (textposition "middle right" draws
+    # the text rightward from the point), not the center. The word text is
+    # left-aligned within its AOI box — OneStop boxes tile the line including a
+    # trailing space, so a *centered* label drifts ~half a character right of the
+    # real glyph, visibly offset from the stimulus image and the fixations.
     trace = go.Scatter(
-        x=words["x"] + words["width"] / 2,
+        x=words["x"],
         y=words["y"] + words["height"] / 2,
         text=words["text"],
         mode="text",
+        textposition="middle right",
         showlegend=False,
         textfont=dict(color=label_color, size=base_font_size, family=font_family),
         hovertemplate=hover,

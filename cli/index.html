@@ -507,6 +507,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    True-to-scale rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../onestop/" class="md-nav__link">
         
   
@@ -834,12 +861,36 @@ a Chrome/Chromium binary (<code>plotly_get_chrome -y</code>).</p>
 <td>Draw saccade direction arrowheads.</td>
 </tr>
 <tr>
+<td><code>--saccade-color-by-type</code></td>
+<td>Colour each saccade by its reading type (forward / skip / refixation / return sweep / regression).</td>
+</tr>
+<tr>
+<td><code>--saccade-type-color CLASS=COLOR</code></td>
+<td>Override one reading-type colour, e.g. <code>regression=#000000</code> (repeatable; implies <code>--saccade-color-by-type</code>).</td>
+</tr>
+<tr>
+<td><code>--no-saccade-type-legend</code></td>
+<td>With <code>--saccade-color-by-type</code>: hide the saccade-type colour key (the coloured lines still draw).</td>
+</tr>
+<tr>
+<td><code>--saccade-arcs</code></td>
+<td>Draw saccades as upward arcs (the linear-reading diagram) instead of straight connectors.</td>
+</tr>
+<tr>
+<td><code>--snap-fixations</code></td>
+<td>Snap each fixation above the word it lands on instead of its raw gaze point.</td>
+</tr>
+<tr>
 <td><code>--color-by FIELD</code></td>
 <td>Fixation color field (default: <code>duration_ms</code>).</td>
 </tr>
 <tr>
 <td><code>--heatmap-metric {duration_ms,counts}</code></td>
 <td>Heatmap weighting (default: <code>duration_ms</code>).</td>
+</tr>
+<tr>
+<td><code>--heatmap-norm {linear,log}</code></td>
+<td>Heatmap colour scaling (default: <code>linear</code>); <code>log</code> compresses heavy-tailed dwell times.</td>
 </tr>
 <tr>
 <td><code>--canvas WxH</code></td>
@@ -856,6 +907,30 @@ a Chrome/Chromium binary (<code>plotly_get_chrome -y</code>).</p>
 <tr>
 <td><code>--playback-speed X</code></td>
 <td>Animation speed multiplier for <code>--animate</code> (default: 1.0 = real time).</td>
+</tr>
+<tr>
+<td><code>--no-autoplay</code></td>
+<td>With <code>--animate</code>: save the replay paused (default: it autoplays on load at the playback speed).</td>
+</tr>
+<tr>
+<td><code>--stimulus-image PATH</code></td>
+<td>Draw an image (PNG/JPG) as the stimulus background under the scanpath. Works with <code>--animate</code>.</td>
+</tr>
+<tr>
+<td><code>--stimulus-image-size WxH</code></td>
+<td>Stimulus-image size in px (default: the PNG's own size, else the canvas).</td>
+</tr>
+<tr>
+<td><code>--stimulus-image-origin X,Y</code></td>
+<td>Top-left of the stimulus image in monitor px (default: <code>0,0</code>).</td>
+</tr>
+<tr>
+<td><code>--stimulus-image-opacity O</code></td>
+<td>Stimulus-image opacity 0.1–1.0 (default: 1.0); lower it to dim a busy image.</td>
+</tr>
+<tr>
+<td><code>--separable-layers</code></td>
+<td>Also write the figure split into one file per layer in <code>&lt;output&gt;_layers/</code> (static <code>.svg</code>/<code>.pdf</code>/<code>.png</code> output).</td>
 </tr>
 </tbody>
 </table>

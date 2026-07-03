@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/onestop/">
       
       
-        <link rel="prev" href="../data-format/">
+        <link rel="prev" href="../rendering/">
       
       
         <link rel="next" href="../multipleye/">
@@ -396,6 +396,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    True-to-scale rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -474,6 +501,17 @@
     <span class="md-ellipsis">
       
         From the Python API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the command line
       
     </span>
   </a>
@@ -617,6 +655,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#from-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the command line
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -647,18 +696,43 @@ the <strong>full public corpus</strong> from <a href="https://osf.io/2prdq/">OSF
 <div class="admonition note">
 <p class="admonition-title">Two ways to load OneStop</p>
 <ul>
-<li><strong>Public dataset (this page)</strong> — downloads paragraph-level reports from OSF
-  on demand, no setup. Pick the reading regime in the sidebar.</li>
+<li><strong>Public dataset (this page)</strong> — the OneStop reports as a public dataset:
+  the <strong>Public</strong> variant downloads from OSF on demand (no setup); the <strong>LaCC
+  lab</strong> variant reads a local lab-processed export. Pick the variant, reading
+  regime, and trial parts in the sidebar.</li>
 <li><strong>OneStop server bundle</strong> — points at a local <code>lacclab</code> export via the
   <code>$ONESTOP_DATA_DIR</code> environment variable, with per-pid Parquet shards for
   review-app deep links. See
   <a href="../export-troubleshooting/">Export &amp; troubleshooting</a>.</li>
 </ul>
 </div>
+<p>The corpus is 360 L1-English readers reading 30 Guardian articles (162
+paragraphs, each in an Advanced and an Elementary version) — ~19.4k regular
+trials.</p>
 <h2 id="loading-it">Loading it<a class="headerlink" href="#loading-it" title="Permanent link">&para;</a></h2>
 <p>OneStop is exposed as a <strong>Public dataset</strong>. In the app, choose
-<strong>Public datasets → OneStop</strong>, then in <em>OneStop options</em> pick a <strong>reading
-regime</strong> and (optionally) a download folder:</p>
+<strong>Public datasets → OneStop</strong>, then in the ⚙️ <strong>Configure → Options</strong> group pick a
+<strong>Variant</strong>, a <strong>Reading regime</strong>, and one or more <strong>Parts</strong>:</p>
+<p><strong>Variant</strong></p>
+<table>
+<thead>
+<tr>
+<th>Variant</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Public (OSF download)</td>
+<td>Reports fetched from <a href="https://osf.io/2prdq/">OSF</a> on demand, cached on disk.</td>
+</tr>
+<tr>
+<td>LaCC lab (local export)</td>
+<td>A lab-processed export with extra derived columns (<code>unique_paragraph_id</code>, span indices, normalized dwell, …). No download — point at your local folder (default is the lab OneDrive path, editable / <code>ONESTOP_LACCLAB_DIR</code>).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reading regime</strong></p>
 <table>
 <thead>
 <tr>
@@ -685,39 +759,90 @@ regime</strong> and (optionally) a download folder:</p>
 </tr>
 </tbody>
 </table>
-<p>Each regime is a separate OSF download of two paragraph-level reports —
-the <strong>interest-area report</strong> (one row per word, with bounding boxes and
-reading measures) and the <strong>fixation report</strong>. The <em>OneStop options</em> panel
-lists the <strong>Expected files</strong> for the folder and shows whether the chosen
-regime's reports are already present. If they are, the corpus loads with no
-network access; if not, click <strong>⬇ Download</strong> to fetch them into the folder
-(cached on disk, so only the first load of a regime pays the download — the
-reports range from tens to a few hundred MB).</p>
+<p><strong>Parts</strong> — which <em>screen</em> of a trial to load (default <strong>Paragraph</strong>):</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Title</td>
+<td>The article title screen.</td>
+</tr>
+<tr>
+<td>Question preview</td>
+<td>The question shown before reading (information-seeking regimes).</td>
+</tr>
+<tr>
+<td>Paragraph</td>
+<td>The reading passage (the default).</td>
+</tr>
+<tr>
+<td>Question</td>
+<td>The question re-shown after reading.</td>
+</tr>
+<tr>
+<td>Answers</td>
+<td>The four answer choices.</td>
+</tr>
+<tr>
+<td>Question + answers (QA)</td>
+<td>The combined question-and-answers screen.</td>
+</tr>
+<tr>
+<td>Feedback</td>
+<td>The one-second correctness notification.</td>
+</tr>
+</tbody>
+</table>
+<p>Every part ships an <strong>interest-area report</strong> (one row per word, with bounding
+boxes and reading measures) and a <strong>fixation report</strong>, all in the same schema —
+so each part renders as a scanpath. Selecting <strong>several parts</strong> makes each part
+its own trial (the part is folded into the trial id, e.g. <code>Paragraph::1</code> vs
+<code>Title::1</code>, so their word boxes don't collide). On OSF only <em>Paragraph</em> is
+regime-split; the other parts come from the all-regimes full release, so they
+load regardless of the chosen regime.</p>
+<p>The ⚙️ <strong>Configure → Data location</strong> section lists the <strong>Expected files</strong> and
+shows whether they're already present. For the Public variant, if they're
+present the corpus loads with no network access; if not, click <strong>⬇ Download</strong> to
+fetch them into the folder (cached on disk, so only the first load pays the
+download — reports range from tens to a few hundred MB each).</p>
 <p>OneStop's reports use the same schema as the bundled demo, so they flow through
-the normal auto-detect → normalize pipeline — the sidebar <strong>Column mapping</strong>
-panels still appear and stay overridable. Fixation and interest-area
-coordinates are full-screen pixels on OneStop's 2560×1440 presentation monitor,
-so the canvas renders true-to-scale to that monitor.</p>
+the normal auto-detect → normalize pipeline — the <strong>Column mapping</strong> panels still
+appear and stay overridable. Fixation and interest-area coordinates are
+full-screen pixels on OneStop's 2560×1440 presentation monitor, so the canvas
+renders true-to-scale to that monitor.</p>
 <h2 id="from-the-python-api">From the Python API<a class="headerlink" href="#from-the-python-api" title="Permanent link">&para;</a></h2>
-<p>The same loader is available headlessly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">onestop_raw_frames</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="kn">import</span> <span class="n">data</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Fetch + read the chosen regime&#39;s OSF reports (cached under `root`).</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">onestop_raw_frames</span><span class="p">(</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="s2">&quot;data/OneStop&quot;</span><span class="p">,</span> <span class="n">regime</span><span class="o">=</span><span class="s2">&quot;ordinary&quot;</span><span class="p">,</span> <span class="n">download</span><span class="o">=</span><span class="kc">True</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Normalize like an upload, then plot.</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">ws</span><span class="p">,</span> <span class="n">fs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">propose_word_schema</span><span class="p">(</span><span class="n">words</span><span class="p">),</span> <span class="n">data</span><span class="o">.</span><span class="n">propose_fix_schema</span><span class="p">(</span><span class="n">fixations</span><span class="p">)</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">words</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">normalize_words</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">ws</span><span class="p">)</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">fixations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">normalize_fixations</span><span class="p">(</span><span class="n">fixations</span><span class="p">,</span> <span class="n">fs</span><span class="p">)</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">harmonize_frames</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">)</span>
+<p>The same loader is available headlessly — <code>load_onestop</code> returns normalized,
+plot-ready frames:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Fetch (public variant) + normalize the chosen regime + parts (cached under root).</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_onestop</span><span class="p">(</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="s2">&quot;data/OneStop&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">regime</span><span class="o">=</span><span class="s2">&quot;ordinary&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">parts</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Paragraph&quot;</span><span class="p">],</span>          <span class="c1"># any subset of the seven parts</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">variant</span><span class="o">=</span><span class="s2">&quot;public&quot;</span><span class="p">,</span>              <span class="c1"># or &quot;lacclab&quot; for a local export</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">download</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>                 <span class="c1"># public variant only</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="n">canvas_size</span><span class="o">=</span><span class="p">(</span><span class="mi">2560</span><span class="p">,</span> <span class="mi">1440</span><span class="p">))</span>
 </code></pre></div>
+<p>For the raw (pre-normalization) frames, use
+<code>scanpath_studio.datasets.onestop_raw_frames(...)</code> with the same arguments.</p>
+<h2 id="from-the-command-line">From the command line<a class="headerlink" href="#from-the-command-line" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--onestop<span class="w"> </span>data/OneStop<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span>--onestop-regime<span class="w"> </span>ordinary<span class="w"> </span>--onestop-part<span class="w"> </span>Paragraph<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>-p<span class="w"> </span>&lt;participant&gt;<span class="w"> </span>-t<span class="w"> </span>&lt;trial&gt;<span class="w"> </span>-o<span class="w"> </span>out.html
+</code></pre></div>
+<p><code>--onestop-part</code> is repeatable; <code>--onestop-variant</code> is <code>public</code> (default) or
+<code>lacclab</code>.</p>
 <p>The implementation lives in
 <a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/datasets.py"><code>datasets.py</code></a>
-(<code>onestop_raw_frames</code> / <code>download_onestop</code>); the OSF file ids per regime come
-from the OneStop repo's <code>download_data_files.py</code>.</p>
+(<code>onestop_raw_frames</code> / <code>load_onestop</code> / <code>download_onestop</code>); the OSF file ids per
+regime + part come from the OneStop repo's <code>download_data_files.py</code>.</p>
 
 
 

@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/data-format/">
+        <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/rendering/">
       
       
-        <link rel="prev" href="../cli/">
+        <link rel="prev" href="../data-format/">
       
       
-        <link rel="next" href="../rendering/">
+        <link rel="next" href="../onestop/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Data format - Scanpath Studio</title>
+        <title>True-to-scale rendering - Scanpath Studio</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#data-format" class="md-skip">
+        <a href="#true-to-scale-rendering" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Data format
+              True-to-scale rendering
             
           </span>
         </div>
@@ -369,6 +369,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -388,7 +415,7 @@
   <span class="md-ellipsis">
     
   
-    Data format
+    True-to-scale rendering
   
 
     
@@ -406,7 +433,7 @@
   <span class="md-ellipsis">
     
   
-    Data format
+    True-to-scale rendering
   
 
     
@@ -432,10 +459,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tables" class="md-nav__link">
+  <a href="#data-space-vs-screen-space" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Tables
+        Data space vs. screen space
       
     </span>
   </a>
@@ -443,10 +470,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#flexible-loading" class="md-nav__link">
+  <a href="#sizing-the-reading-text" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Flexible loading
+        Sizing the reading text
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sizing the reading text">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#script-aware-width-fitting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script-aware width fitting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#datasets-that-ship-their-real-typeface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Datasets that ship their real typeface
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pixels-not-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pixels, not points
       
     </span>
   </a>
@@ -454,21 +520,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-measures" class="md-nav__link">
+  <a href="#why-the-spatial-plot-needs-a-special-render-path" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reading measures
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#setup-wizard-saved-setups" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Setup wizard &amp; saved setups
+        Why the spatial plot needs a special render path
       
     </span>
   </a>
@@ -479,33 +534,6 @@
   
 </nav>
       
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../rendering/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    True-to-scale rendering
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -645,10 +673,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#tables" class="md-nav__link">
+  <a href="#data-space-vs-screen-space" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Tables
+        Data space vs. screen space
       
     </span>
   </a>
@@ -656,10 +684,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#flexible-loading" class="md-nav__link">
+  <a href="#sizing-the-reading-text" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Flexible loading
+        Sizing the reading text
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sizing the reading text">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#script-aware-width-fitting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Script-aware width fitting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#datasets-that-ship-their-real-typeface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Datasets that ship their real typeface
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pixels-not-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pixels, not points
       
     </span>
   </a>
@@ -667,21 +734,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-measures" class="md-nav__link">
+  <a href="#why-the-spatial-plot-needs-a-special-render-path" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reading measures
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#setup-wizard-saved-setups" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Setup wizard &amp; saved setups
+        Why the spatial plot needs a special render path
       
     </span>
   </a>
@@ -708,71 +764,97 @@
   
 
 
-<h1 id="data-format">Data format<a class="headerlink" href="#data-format" title="Permanent link">&para;</a></h1>
-<p>Scanpath Studio reads up to three tables — <strong>words / areas-of-interest</strong>,
-<strong>fixations</strong>, and (optionally) <strong>raw gaze</strong> — as <strong>CSV, TSV, Parquet, or
-Feather</strong>. Columns are auto-detected from common EyeLink, Gazepoint, and
-snake-case conventions; the app's <strong>Column mapping</strong> panel (and the
-<code>word_schema</code> / <code>fix_schema</code> arguments of
-<a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>) override
-any guess.</p>
-<h2 id="tables">Tables<a class="headerlink" href="#tables" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Table</th>
-<th>Holds</th>
-<th>Key columns (auto-detected)</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Words / IA</strong></td>
-<td>one row per word / interest area, with its on-screen box</td>
-<td>participant id, trial id, word id, word text, and the box as <strong>edges</strong> (<code>IA_LEFT/RIGHT/TOP/BOTTOM</code>) <strong>or</strong> origin+size (<code>x/y/width/height</code>)</td>
-</tr>
-<tr>
-<td><strong>Fixations</strong></td>
-<td>one row per fixation</td>
-<td>participant id, trial id, duration (ms); optionally x/y, timestamp, fixation id, word/IA id</td>
-</tr>
-<tr>
-<td><strong>Raw gaze</strong> <em>(optional)</em></td>
-<td>one row per gaze sample</td>
-<td>participant id, trial id, x, y, timestamp</td>
-</tr>
-</tbody>
-</table>
-<p>Either main table may be omitted for single-report datasets — the missing layer
-is simply skipped. A words-only table still draws a heatmap from its
-pre-aggregated reading measures.</p>
-<h2 id="flexible-loading">Flexible loading<a class="headerlink" href="#flexible-loading" title="Permanent link">&para;</a></h2>
-<p>The loader bends to fit real corpora:</p>
+<h1 id="true-to-scale-rendering">True-to-scale rendering<a class="headerlink" href="#true-to-scale-rendering" title="Permanent link">&para;</a></h1>
+<p>Scanpath Studio reproduces the experiment's stimulus <strong>true to scale</strong> — the word
+boxes, fixations, and reading text keep the same physical proportions the reader
+actually saw, at any display size. This page explains the model so you can reason
+about font sizes, the px-vs-pt question, and why the spatial plot takes a special
+render path. It's a reference for contributors and power users; nothing here is
+required for day-to-day use.</p>
+<h2 id="data-space-vs-screen-space">Data space vs. screen space<a class="headerlink" href="#data-space-vs-screen-space" title="Permanent link">&para;</a></h2>
+<p>Everything the eye-tracker recorded lives in <strong>monitor pixels</strong> — the <em>data
+space</em>. A word's bounding box, a fixation's <code>(x, y)</code>, the stimulus image: all are
+positioned in the same coordinate system the experiment screen used (e.g. a
+1920×1080 monitor).</p>
+<p>The on-screen plot is a separate <strong>screen space</strong>. The figure is drawn at a fixed,
+equal-aspect size (Plotly <code>scaleratio=1</code>, so one data unit is the same number of
+screen pixels on both axes), capped to a research-display-friendly box
+(<code>plots._DISPLAY_MAX_WIDTH</code> / <code>_DISPLAY_MAX_HEIGHT</code>), then the whole block is
+CSS-scaled uniformly to fill the column. The bridge between the two spaces is a
+single number:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>display_scale = screen pixels per data unit
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>              = min(fitted_w / x_span, fitted_h / y_span)   # plots._display_scale
+</code></pre></div>
+<p>Because the aspect ratio is locked, <code>x</code> and <code>y</code> share this scale; the <code>min</code> keeps
+rounding from ever pushing text or markers past their boxes.</p>
+<h2 id="sizing-the-reading-text">Sizing the reading text<a class="headerlink" href="#sizing-the-reading-text" title="Permanent link">&para;</a></h2>
+<p>The experiment's font is a fixed size in monitor pixels, so to stay true-to-scale
+the label font is computed in <strong>data pixels</strong> and multiplied by <code>display_scale</code>
+into screen pixels (<code>plots._word_label_font_px</code>). Two modes feed the data-pixel
+size:</p>
 <ul>
-<li><strong>Many files per table</strong> — pass several paths or a glob; they're concatenated,
-  each row tagged with its <code>source_file</code> (e.g. one file per participant or text).</li>
-<li><strong>Stimulus-level word boxes</strong> — a words table with no participant column is
-  broadcast across every participant found in the fixations.</li>
-<li><strong>AoI-only fixations</strong> — fixations with a word/IA id but no x/y are placed at
-  the matching word-box centers.</li>
-<li><strong>Composite trial ids</strong> — when no single column identifies a trial, map <em>Trial
-  ID</em> to several columns (e.g. participant + paragraph + repeated-reading) and a
-  combined unique id is built on the fly.</li>
+<li>
+<p><strong>Scale text to boxes</strong> (default). One line of text is budgeted to fill
+  <code>1 / line_spacing</code> of the <strong>line pitch</strong> — the median line-to-line distance
+  measured from the data (<code>plots._line_pitch</code>), <em>not</em> the raw box height. The two
+  differ for corpora whose AOI boxes hug the glyph (e.g. MultiplEYE): there the
+  line slot is much taller than a box, and the pitch is the right budget. For
+  OneStop the boxes tile the lines (pitch == height) and the default
+  <code>line_spacing = 3</code> (one blank line above and below) reduces to the familiar
+  <code>height / 3</code>. The size is then <strong>capped so the longest word still fits its box
+  width</strong> (<code>plots._width_fit_font</code>); the smaller of the height- and width-fits
+  wins, so text never collides or overflows.</p>
+</li>
+<li>
+<p><strong>Manual font</strong>. When box geometry is missing or you turn scaling off, the font
+  control's value is treated as the real monitor font size and scaled the same
+  way.</p>
+</li>
 </ul>
-<h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
-<p>If your data carries only raw fixations, the app computes the canonical per-word
-measures itself — <strong>FFD</strong>, <strong>FPRT</strong> (gaze duration), <strong>RPD</strong> (go-past),
-<strong>TFD</strong> (dwell), plus skips and regressions, following Rayner (1998) and
-Inhoff &amp; Radach (1998). Pre-aggregated EyeLink <code>IA_*</code> columns, when present, take
-precedence. Areas of interest come <strong>directly from your word boxes</strong> — they are
-not computed; only the fixation→word assignment is derived (bounding-box
-containment with a small nearest-word fallback).</p>
-<h2 id="setup-wizard-saved-setups">Setup wizard &amp; saved setups<a class="headerlink" href="#setup-wizard-saved-setups" title="Permanent link">&para;</a></h2>
-<p>Uploading through the app's <strong>➕ Add data</strong> wizard walks you through naming the
-dataset, the experimental setup (monitor resolution keeps everything
-true-to-scale), upload, and column mapping. You can <strong>download a setup</strong> (the
-column mapping as JSON) and <strong>restore</strong> it later on similar data to skip the
-manual mapping. Finished uploads become first-class, switchable data sources.</p>
+<h3 id="script-aware-width-fitting">Script-aware width fitting<a class="headerlink" href="#script-aware-width-fitting" title="Permanent link">&para;</a></h3>
+<p>Word boxes hug their text, so a box's width equals the sum of its glyph advances.
+<code>plots._width_fit_font</code> recovers the em (≈ the font size) as <code>box_width / Σ
+advances</code>, where each glyph advances <strong>1 em</strong> for full-width CJK and a smaller
+<code>latin_advance</code> em for half-width Latin. Doing this per word — not with one global
+aspect — keeps a CJK word boxed next to a half-width Latin URL from being shrunk
+to the narrow run. For an all-Latin corpus it reduces exactly to
+<code>(box_width / n_chars) / aspect</code>.</p>
+<h3 id="datasets-that-ship-their-real-typeface">Datasets that ship their real typeface<a class="headerlink" href="#datasets-that-ship-their-real-typeface" title="Permanent link">&para;</a></h3>
+<p>Inferring the font from geometry is a good default, but a dataset that knows its
+own typography can hand it over directly. MultiplEYE reads <code>FONT_SIZE</code> + <code>FONT</code>
+from the stimulus config and stamps <code>stimulus_font_px</code> / <code>stimulus_font_family</code>
+onto the frames; the app then snaps the font controls to the exact size and a
+CJK-capable family (and turns scale-to-boxes off) on a source switch, so the
+labels match the stimulus precisely rather than relying on inference.</p>
+<h2 id="pixels-not-points">Pixels, not points<a class="headerlink" href="#pixels-not-points" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Font-size controls are in pixels (px), not points (pt)</p>
+<p>Every font-size control in the app — the base label size, order-number size,
+colour-bar tick size — is in <strong>pixels</strong>. Stimulus typography, however, is
+usually specified in <strong>points</strong>. The two are not interchangeable: a point is a
+physical unit (1 pt = 1/72 inch), a pixel is a screen unit, and the conversion
+depends on the display's DPI:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>px = pt × DPI / 72          pt = px × 72 / DPI
+</code></pre></div>
+<p>So "18 pt" is only "18 px" on a 72-DPI display; on a 96-DPI monitor it is
+24 px. If you're trying to reproduce an original stimulus font exactly, convert
+through the experiment's DPI — or, better, use a dataset that stamps its real
+<code>stimulus_font_px</code> (see above) and let the app snap to it. Folding the
+experimental-setup values (screen resolution, viewing distance, DPI, stimulus
+font pt) into the display settings so this conversion is automatic is tracked
+as a roadmap item.</p>
+</div>
+<h2 id="why-the-spatial-plot-needs-a-special-render-path">Why the spatial plot needs a special render path<a class="headerlink" href="#why-the-spatial-plot-needs-a-special-render-path" title="Permanent link">&para;</a></h2>
+<p>The true-to-scale text only holds if the figure is embedded at its <strong>exact pixel
+size</strong>. Rendering the spatial plots with <code>st.plotly_chart</code> pins the chart <em>width</em>
+to the column while keeping the layout <em>height</em>, which re-lays-out Plotly to an
+unknown scale and leaves the px-sized word labels mismatched to the boxes. So the
+single-trial, animation, and comparison plots all go through
+<code>tabs._render_true_scale_chart</code>, which embeds the figure's own HTML at its exact
+size and CSS-scales the whole block uniformly to the column width. Static image
+export bumps the raster <code>scale</code> to stay crisp; SVG/PDF are vector and need no bump.</p>
+<p>If you add a new spatial figure, keep it on <code>_render_true_scale_chart</code> — never
+<code>st.plotly_chart</code> — or the reading text will drift from the boxes.</p>
 
 
 

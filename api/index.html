@@ -528,6 +528,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.save_figure_layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_figure_layers
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -583,6 +594,33 @@
     
   
     Data format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    True-to-scale rendering
   
 
     
@@ -880,6 +918,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.save_figure_layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save_figure_layers
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1069,7 +1118,16 @@ the normalized frames from :func:<code>load_scanpath_data</code>.</p>
 <p>Any keyword accepted by the underlying figure builder can be passed through
 <code>plot_scanpath</code> / <code>animate_scanpath</code> (e.g. <code>show_heatmap=False</code>,
 <code>color_by="pass_index"</code>, <code>saccade_color="#444"</code>, <code>fixation_opacity=0.5</code>,
-<code>x_field="order_in_trial"</code>).</p>
+<code>x_field="order_in_trial"</code>). To colour saccades by reading type instead of one
+uniform colour, pass <code>saccade_color_mode="By type"</code> (optionally with a
+<code>saccade_class_colors={"regression": "#000", …}</code> palette). For the heatmap,
+<code>heatmap_norm="Log"</code> compresses heavy-tailed dwell times. For the linear-reading
+schematic, <code>saccade_render_mode="Arc"</code> arches the saccades and
+<code>fixation_snap_to_word=True</code> places each fixation above its word. To overlay an
+image stimulus (a screenshot of the reading screen) behind the scanpath, pass
+<code>background_image="stim.png"</code> with <code>background_image_size=(w, h)</code> (and
+<code>background_image_origin=(x0, y0)</code> for a centered crop); <code>background_image_opacity</code>
+dims a busy image so the AOIs / fixations read over it.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -1110,7 +1168,7 @@ Remaining keywords override the app's defaults and are forwarded to
 
 
 <a href="#scanpath_studio.api.animate_scanpath" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">playback_speed</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="o">**</span><span class="n">animation_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">playback_speed</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">autoplay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">animation_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1120,6 +1178,12 @@ Remaining keywords override the app's defaults and are forwarded to
 returned Plotly figure plays in real reading time scaled by
 <code>playback_speed</code>; save it as interactive HTML with :func:<code>save_figure</code>,
 or rasterize to GIF/MP4 with :func:<code>animation_export.export_animation</code>.</p>
+<p>With <code>autoplay</code> (default <code>True</code>, VIZ-10) the saved interactive HTML
+auto-starts the replay on load <em>at <code>playback_speed</code></em> — :func:<code>save_figure</code>
+honors the marker the builder stamps on the figure. Pass <code>autoplay=False</code>
+to save a figure that opens paused (press ▶ Play to run it). Autoplay only
+affects the interactive HTML; GIF/MP4 rasterization renders every frame
+regardless.</p>
 <p>The animation builder accepts a subset of the static figure's options
 (<code>show_words</code>, <code>show_word_labels</code>, <code>show_saccades</code>, <code>show_order</code>,
 styling, and second-scanpath overlays) — an unsupported key raises a
@@ -1153,11 +1217,54 @@ both ignored for <code>.html</code>. Returns the written path.</p>
 
     </div>
 
-</div><p>For rasterized animation (GIF / MP4) use the animation exporter:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">anim</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">&quot;p1&quot;</span><span class="p">,</span> <span class="s2">&quot;t3&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">export_animation</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="s2">&quot;replay.mp4&quot;</span><span class="p">)</span>   <span class="c1"># or replay.gif — needs Kaleido + Chrome</span>
+</div><p>To keep the layers <strong>separable</strong> for publication editing, <code>save_figure_layers</code>
+writes one file per layer (word boxes / fixations / saccades / heatmap / labels /
+stimulus image) — each the full figure with only that layer and a transparent
+background, at the same size and axis ranges, so they register when stacked in
+Illustrator / Inkscape:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">fig</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">&quot;p1&quot;</span><span class="p">,</span> <span class="s2">&quot;t3&quot;</span><span class="p">,</span> <span class="n">show_heatmap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">paths</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">save_figure_layers</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="s2">&quot;fig_layers&quot;</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;svg&quot;</span><span class="p">)</span>   <span class="c1"># {layer: Path}</span>
+</code></pre></div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.save_figure_layers" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.save_figure_layers</span>
+
+
+<a href="#scanpath_studio.api.save_figure_layers" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">save_figure_layers</span><span class="p">(</span><span class="n">fig</span><span class="p">:</span> <span class="n">Figure</span><span class="p">,</span> <span class="n">directory</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;svg&#39;</span><span class="p">,</span> <span class="n">scale</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">width</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">height</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Split a scanpath figure into its layers and save one file per layer (VIZ-5).</p>
+<p>Writes <code>&lt;directory&gt;/&lt;layer&gt;.&lt;fmt&gt;</code> for each <em>visible</em> layer (word boxes /
+fixations / saccades / heatmap / labels / stimulus image / frame) and returns
+<code>{layer: Path}</code>. Each layer is the full figure with only that layer's
+elements and a transparent background, at the same size and axis ranges — so
+the files register perfectly when stacked in Illustrator / Inkscape. <code>fmt</code>
+is any :func:<code>save_figure</code> extension without the dot (<code>svg</code> / <code>pdf</code> are
+vector and best for editing; <code>png</code> / <code>html</code> also work). <code>scale</code> /
+<code>width</code> / <code>height</code> are forwarded to :func:<code>save_figure</code>.</p>
+
+
+    </div>
+
+</div><p>Saved interactive HTML <strong>autoplays on load</strong> at the playback speed by default;
+pass <code>autoplay=False</code> to save a replay that opens paused:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">anim</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">&quot;p1&quot;</span><span class="p">,</span> <span class="s2">&quot;t3&quot;</span><span class="p">,</span> <span class="n">playback_speed</span><span class="o">=</span><span class="mf">4.0</span><span class="p">)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="s2">&quot;replay.html&quot;</span><span class="p">)</span>                       <span class="c1"># autoplays on load</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">paused</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">&quot;p1&quot;</span><span class="p">,</span> <span class="s2">&quot;t3&quot;</span><span class="p">,</span> <span class="n">autoplay</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">paused</span><span class="p">,</span> <span class="s2">&quot;replay_paused.html&quot;</span><span class="p">)</span>              <span class="c1"># opens paused</span>
+</code></pre></div>
+<p>For rasterized animation (GIF / MP4) use the animation exporter:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio.animation_export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_animation</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">anim</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span><span class="p">,</span> <span class="s2">&quot;p1&quot;</span><span class="p">,</span> <span class="s2">&quot;t3&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">export_animation</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="s2">&quot;replay.mp4&quot;</span><span class="p">)</span>   <span class="c1"># or replay.gif — needs Kaleido + Chrome</span>
 </code></pre></div>
 <p>See <a href="../export-troubleshooting/">Export &amp; troubleshooting</a> for the Chrome /
 ffmpeg requirements.</p>

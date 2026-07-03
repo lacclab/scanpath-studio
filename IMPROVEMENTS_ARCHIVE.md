@@ -193,6 +193,25 @@ RPD, Fixation count, Off. Implemented via `_HOVER_MEASURE_LABELS` + a new
 `_SHARE_VALUE_PARAMS` ([`url_state.py`](scanpath_studio/url_state.py)) so Share
 links preserve the choice.
 
+**VIZ-1 · Warn that font sizes are px, not pt** — `Status: Done` *(signed off 2026-07-03)*
+
+A note near the font-size controls explains px vs pt (+ the DPI conversion); also
+documented in [`docs/rendering.md`](docs/rendering.md) (ENG-12).
+
+**VIZ-2 · Increase font size across the app where possible** — `Status: Done` *(signed off 2026-07-03)*
+
+A gentle, targeted bump on the smallest native text (captions, widget labels,
+radio/checkbox options, help tooltips → 0.92rem) + the custom chip/stat classes,
+all in [`styles.py`](scanpath_studio/styles.py); no global root-font change, so
+dense layouts don't reflow.
+
+**VIZ-3 · Alternative heatmap normalization (Linear/Log)** — `Status: Done` *(signed off 2026-07-03)*
+
+A **Color scaling** control (`Linear` | `Log`) in the ⚙️ Heatmap-style popover; Log
+maps colour to `log1p(value)` across all three heatmap styles (`_apply_heatmap_norm`).
+Every surface (UI / Share `heatmap_norm` / Save & restore / CLI `--heatmap-norm` /
+API).
+
 ---
 
 ## Bugs
@@ -226,6 +245,15 @@ never shift ([`wizard.py`](scanpath_studio/wizard.py:1194)). Verified with
 Playwright + a 26 MB zip: before, two "Fixations table(s)" uploaders appeared
 during the read; after, exactly one throughout. `pytest` wizard/apptest/
 column-mapping suites green (89 passed).
+
+**BUG-3 · MultiplEYE: stimulus text renders misaligned** — `Status: Done` *(signed off 2026-07-03)*
+
+The loader reads the stimulus config's `FONT_SIZE`/`FONT` and stamps
+`stimulus_font_px`/`stimulus_font_family`; the app snaps its font controls to them
+on a source switch; `scale_text_to_boxes` now budgets from the line **pitch** (not
+the glyph-tight box height) with a script-aware width cap. MultiplEYE word text
+sits in its boxes without manual font tweaks; OneStop byte-identical. *(Residual
+sub-pixel offset tracked separately as BUG-4.)*
 
 ---
 
@@ -276,6 +304,34 @@ generic auto-detect → **Column-mapping** panels. Tests: `potec_present` /
 `onestop_present` ([`tests/test_dataset_support.py`](tests/test_dataset_support.py));
 picker + per-loader access UI ([`tests/test_apptest.py`](tests/test_apptest.py)).
 
+**DATA-8 · Show the column-mapping override for the Bundled Demo too** — `Status: Done` *(signed off 2026-07-02)*
+
+`prepare_data`'s `allow_override` gate also fires for the **Bundled Demo**
+(`data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)`,
+[`app.py`](scanpath_studio/app.py)), so the **Column mapping — Words/IA** and
+**Column mapping — Fixations** panels render on the default first-load source —
+pre-filled with auto-detection, so an untouched mapping normalizes identically.
+Makes the re-mapping capability discoverable. Verified via `AppTest` (both panels
+present, no errors).
+
+**DATA-3 · Broaden OneStop public-dataset support (all regimes · all parts · public + LaCC lab)** — `Status: Done` *(signed off 2026-07-03)*
+
+OneStop in the Public-datasets picker across the whole corpus surface: all four
+regimes × seven parts × two variants (public OSF download-on-demand / lacclab local
+export). Loader `datasets.onestop_raw_frames` / `load_onestop`; sidebar
+`_load_onestop_public_source`; CLI `render --onestop …`; docs
+[`onestop.md`](docs/onestop.md). The public source **and** its variant/regime/parts
+are shareable via deep link (`?source=onestop_public&onestop_regime=…`, DATA-3
+follow-up signed off 2026-07-03).
+
+**DATA-9 · Reorganize the Data sidebar (merge source + selection, nest setup/mapping)** — `Status: Done` *(signed off 2026-07-03)*
+
+Flat tagged source picker (🧪 demo · 🔒 private · 🌐 public) + one ordered config
+group (Description → Options → Data location → Experimental Setup → Column mapping);
+native 📁 Browse folder picker (`_pick_directory_dialog`); relative-path anchoring
+to the project root (`_resolve_data_dir`); Save & restore split to its own
+top-level section.
+
 ---
 
 ## Engineering
@@ -313,3 +369,19 @@ field (flagging overrides); the remap editor labels it `currently mapped` instea
 `kaleido_get_chrome` / the HTML export); a UI pre-flight before a GIF/MP4 render; a
 warm→cold `to_image` fallback when the warm Kaleido server won't start but Chrome
 exists; and the static PNG/SVG/PDF export reuses the same hint.
+
+**ENG-11 · Version saved plot-config JSON + migration path** — `Status: Done` *(signed off 2026-07-03)*
+
+`url_state.PLOT_CONFIG_SCHEMA` (single source of truth, stamped by both writers —
+`tabs._build_studio_config` + `wizard._wizard_setup_config`) +
+`_migrate_plot_config`/`_detect_config_schema`/`_PLOT_CONFIG_MIGRATIONS`: an older
+config upgrades forward on load; a newer one restores best-effort with a warning
+toast. Scoped to the Save & restore surface. An adversarial review fixed an
+`Infinity`-schema `OverflowError` that aborted the whole restore.
+
+**ENG-12 · Document the true-to-scale text rendering model** — `Status: Done` *(signed off 2026-07-03)*
+
+New [`docs/rendering.md`](docs/rendering.md) (in the MkDocs nav): the
+data-space→screen-px model, line-pitch font budgeting, script-aware width fitting,
+the pixels-vs-points distinction (folds in VIZ-1), and why the spatial plot uses
+the true-scale embed instead of `st.plotly_chart`.

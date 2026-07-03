@@ -870,6 +870,35 @@ def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
     return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
 
 
+# BUG-5: guard the memory-constrained hosted demo against a too-large upload.
+# The bytes upload fine; the OOM comes later, when a big (often zipped) table
+# decompresses and pandas holds several copies through parse + normalization —
+# on Streamlit Community Cloud (~1 GB RAM) that silently kills the process with
+# no traceback. Above this raw-upload size the wizard warns and asks for an
+# explicit opt-in before parsing (a one-click confirm locally, real protection on
+# the host). Tuned to sit below the OneStop repeated-reading export
+# (~29–37 MB per zipped table) that first surfaced this.
+UPLOAD_SIZE_WARN_BYTES = 25 * 1024 * 1024
+
+
+def uploaded_files_total_bytes(uploaded) -> int:
+    """Total byte size of a Streamlit upload — one ``UploadedFile`` or a list.
+
+    Reads the ``.size`` each file already carries (no data copy). ``None`` /
+    empty → 0, so an absent upload is trivially under any threshold."""
+    if not uploaded:
+        return 0
+    files = uploaded if isinstance(uploaded, (list, tuple)) else [uploaded]
+    return sum(int(getattr(f, "size", 0) or 0) for f in files)
+
+
+def upload_exceeds_limit(
+    uploaded, threshold_bytes: int = UPLOAD_SIZE_WARN_BYTES
+) -> bool:
+    """Whether a Streamlit upload's total size is over the guard threshold (BUG-5)."""
+    return uploaded_files_total_bytes(uploaded) > threshold_bytes
+
+
 def read_table(file_like_or_path) -> pd.DataFrame:
     """Read a tabular file by extension: csv, tsv, parquet, feather, or a
     ``.zip`` wrapping one or more of those (e.g. ``data.csv.zip``). A

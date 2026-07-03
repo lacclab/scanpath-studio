@@ -253,3 +253,166 @@ class TestBulkExport:
             progress_callback=cb,
         )
         assert seen == [1, 2]
+
+
+class TestSeparableLayers:
+    """VIZ-5: the per-layer figure breakdown dropped under `layers/`."""
+
+    def test_layer_formats_defaults_to_svg(self):
+        # Separable layers with no vector/raster figure format picked → SVG (the
+        # publication default); off → no layer formats.
+        no_fmts = dict(include_png=False, include_svg=False, include_pdf=False)
+        assert ExportOptions(separable_layers=True, **no_fmts).layer_formats() == [
+            "svg"
+        ]
+        assert ExportOptions(separable_layers=False, **no_fmts).layer_formats() == []
+        # When a raster/vector figure format IS picked, layers follow it.
+        opts = ExportOptions(
+            separable_layers=True,
+            include_png=True,
+            include_svg=False,
+            include_pdf=False,
+        )
+        assert opts.layer_formats() == ["png"]
+        assert opts.needs_kaleido() is True
+
+    def _fake_renderer(self):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake(enabled):  # avoids Kaleido/Chrome in tests
+            def render(fig, fmt, width, height, scale):
+                return f"{fmt}:{len(fig.data)}".encode()
+
+            yield render
+
+        return fake
+
+    def test_writes_one_file_per_layer(
+        self,
+        monkeypatch,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+    ):
+        import scanpath_studio.export as export_mod
+
+        monkeypatch.setattr(export_mod, "_figure_renderer", self._fake_renderer())
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_pdf=False,
+            include_html=False,
+            include_plot_config=False,
+            separable_layers=True,
+        )
+        zip_bytes, progress = bulk_export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=opts,
+        )
+        assert progress.errors == []
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = set(zf.namelist())
+        # base_settings draws boxes + saccades + fixations (labels off, heatmap
+        # off), so those layers + the frame land under layers/ for each trial.
+        for layer in ("word_boxes", "saccades", "fixations", "frame"):
+            assert f"per_trial/p1__t1/layers/{layer}.svg" in names
+        # No combined figure was requested, so only the layer files are figures.
+        assert not any(n.endswith("figure.svg") for n in names)
+        # Labels/heatmap layers are absent (those layers weren't drawn).
+        assert not any(n.endswith("layers/labels.svg") for n in names)
+        assert not any(n.endswith("layers/heatmap.svg") for n in names)
+
+    def test_layers_alongside_combined_figure(
+        self,
+        monkeypatch,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+    ):
+        import scanpath_studio.export as export_mod
+
+        monkeypatch.setattr(export_mod, "_figure_renderer", self._fake_renderer())
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=True,  # combined SVG + per-layer SVGs
+            include_pdf=False,
+            include_html=False,
+            include_plot_config=False,
+            separable_layers=True,
+        )
+        zip_bytes, _ = bulk_export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=opts,
+        )
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = set(zf.namelist())
+        assert "per_trial/p1__t1/figure.svg" in names  # the combined figure
+        assert "per_trial/p1__t1/layers/word_boxes.svg" in names  # + its layers
+
+    def test_layer_failure_reported_distinctly(
+        self,
+        monkeypatch,
+        minimal_combos,
+        minimal_words,
+        minimal_fixations,
+        base_settings,
+    ):
+        # A layer-split failure must be reported as a *layer* error and must NOT
+        # drop the combined figure (they're in separate try blocks now).
+        import scanpath_studio.export as export_mod
+
+        monkeypatch.setattr(export_mod, "_figure_renderer", self._fake_renderer())
+
+        def boom(fig):
+            raise RuntimeError("split kaboom")
+
+        monkeypatch.setattr(export_mod, "split_scanpath_layers", boom)
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=True,  # combined SVG succeeds…
+            include_pdf=False,
+            include_html=False,
+            include_plot_config=False,
+            separable_layers=True,  # …but the layer split blows up
+        )
+        zip_bytes, progress = bulk_export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=opts,
+        )
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = set(zf.namelist())
+        # Combined figures survived; errors name the LAYER step, not "figure".
+        assert "per_trial/p1__t1/figure.svg" in names
+        assert not any("/layers/" in n for n in names)
+        assert any("layer export failed" in e for e in progress.errors)
+        assert not any("figure export failed" in e for e in progress.errors)

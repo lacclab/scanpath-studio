@@ -83,6 +83,41 @@ SACCADE_DASH_OPTIONS = {
 DEFAULT_SACCADE_WIDTH = 2.0
 SACCADE_WIDTH_BOUNDS = (0.5, 10.0)
 
+# VIZ-8 · colour saccades by reading type. Each saccade (the segment from one
+# fixation to the next) is classified into one of these reading-schematic
+# classes by ``measures.classify_saccades`` and — in the "By type" colour mode —
+# drawn as its own sub-trace with a small legend. ``other`` is the catch-all for
+# saccades that can't be classified (an endpoint fell outside every word box); it
+# isn't user-editable, so the palette UI exposes only the five reading classes.
+# Order controls the legend order.
+SACCADE_CLASS_ORDER = [
+    "forward",
+    "skip",
+    "refixation",
+    "return_sweep",
+    "regression",
+    "other",
+]
+SACCADE_CLASS_LABELS = {
+    "forward": "Forward",
+    "skip": "Skip",
+    "refixation": "Refixation",
+    "return_sweep": "Return sweep",
+    "regression": "Regression",
+    "other": "Other",
+}
+SACCADE_CLASS_COLORS = {
+    "forward": "#2ca02c",  # green — normal left-to-right progression
+    "skip": "#1f77b4",  # blue — jumps over one or more words
+    "refixation": "#9467bd",  # purple — lands back on the same word
+    "return_sweep": "#ff7f0e",  # orange — long sweep to the next line
+    "regression": "#d62728",  # red — moves backward
+    "other": "#7f7f7f",  # grey — unclassifiable (off-text endpoint)
+}
+# The five reading classes the palette UI lets the user recolour (``other`` is
+# fixed grey).
+SACCADE_CLASS_EDITABLE = SACCADE_CLASS_ORDER[:-1]
+
 # Outline width (px) for hollow (outline-only) fixation markers.
 HOLLOW_OUTLINE_WIDTH = 2.0
 
@@ -102,8 +137,37 @@ BACKGROUND_PRESETS = {
 CANVAS_PAD_MIN_PX = 20.0
 CANVAS_PAD_FRACTION = 0.05
 
+# --- App theme (BUG-6) -------------------------------------------------------
+# The branded look. Streamlit only auto-loads ``.streamlit/config.toml`` relative
+# to the *launch* directory, so ``streamlit run streamlit_app.py`` from ``app/``
+# (Streamlit Cloud) picks it up but ``python -m scanpath_studio`` from anywhere
+# else — or a ``pip``-installed console script, which never ships that file —
+# falls back to Streamlit's default red accent. ``cli.launch_app`` injects these
+# as ``--theme.*`` flags so every launch path renders the same theme regardless
+# of the working directory. Kept in sync with ``app/.streamlit/config.toml`` —
+# ``tests/test_theme.py`` asserts parity so the two can't drift.
+APP_THEME = {
+    "base": "light",
+    "primaryColor": "#1f77b4",
+    "backgroundColor": "#ffffff",
+    "secondaryBackgroundColor": "#f5f7fa",
+    "textColor": "#212529",
+    "font": "sans-serif",
+}
+# Dark-variant overrides ([theme.dark] in config.toml). Users switch via the ☰
+# menu → Settings → Appearance, or follow their OS.
+APP_THEME_DARK = {
+    "primaryColor": "#5aa9e6",
+    "backgroundColor": "#0e1117",
+    "secondaryBackgroundColor": "#1c2030",
+    "textColor": "#e8eaed",
+}
+
 CITATION = {
-    "authors": "Omer Shubi, LACC Lab (Technion)",
+    "authors": (
+        "Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jacobi, "
+        "David Reiche, Lena Jäger, Yevgeni Berzak"
+    ),
     "title": "Scanpath Studio",
     "url": "https://github.com/lacclab/scanpath-studio",
     "lab_url": "https://lacclab.github.io/",
@@ -130,12 +194,42 @@ ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var
 # ONESTOP_CHOICE server bundle. Reading regimes map to the OSF reports the
 # loader fetches (see datasets._ONESTOP_REGIMES); labels are the picker text.
+# The registry label for the public OneStop corpus in the flat data-source picker.
+# A named constant (not an inline string) so the deep-link/Share contract in
+# url_state.py can reference it without importing app.py's PUBLIC_DATASET_REGISTRY
+# (DATA-3: the public source + its variant/regime/parts are shareable).
+ONESTOP_PUBLIC_CHOICE = "OneStop — 360-participant English corpus"
 ONESTOP_PUBLIC_DEFAULT_DIR = "data/OneStop"
+# Default folder for the lacclab OneStop variant (a lab-processed local export;
+# superset schema, no download). Path-editable in the sidebar and overridable via
+# the `ONESTOP_LACCLAB_DIR` env var — never the *only* option, just the default.
+ONESTOP_LACCLAB_DEFAULT_DIR = (
+    "/Users/shubi/Library/CloudStorage/OneDrive-Technion/In-lab Experiments/"
+    "OneStopGaze L1 English/Reports/lacclab"
+)
 ONESTOP_REGIME_LABELS = {
     "ordinary": "Ordinary reading",
     "information_seeking": "Information seeking",
     "repeated": "Repeated reading",
     "information_seeking_repeated": "Information seeking (repeated)",
+}
+# OneStop trial parts (screens) → display label, in presentation order. Mirrors
+# datasets._ONESTOP_PARTS; the sidebar multiselect + the parts URL/CLI contract
+# use these keys. Paragraph is the reading passage (the default).
+ONESTOP_PART_LABELS = {
+    "Title": "Title",
+    "Question_Preview": "Question preview",
+    "Paragraph": "Paragraph",
+    "Questions": "Question",
+    "Answers": "Answers",
+    "QA": "Question + answers (QA)",
+    "Feedback": "Feedback",
+}
+# OneStop source variants → display label. `public` downloads from OSF on demand;
+# `lacclab` reads a lab-processed local export (superset schema, no download).
+ONESTOP_VARIANT_LABELS = {
+    "public": "Public (OSF download)",
+    "lacclab": "LaCC lab (local export)",
 }
 MULTIPLEYE_BUNDLE_CHOICE = "MultiplEYE server bundle"
 # Default dir for the MultiplEYE *server bundle* (per-session parquet shards

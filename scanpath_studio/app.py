@@ -6,8 +6,8 @@ eye-tracking scanpaths over text.
 Architecture:
     - Entry point: main() function configures Streamlit and orchestrates the UI
     - Data flow: CSV upload → schema inference → normalization → filtering → plotting
-    - UI structure: Sidebar controls + tabbed views (Visualization, Generations,
-      Data Inspection, Bulk Export)
+    - UI structure: Sidebar controls + views (Scanpath Visualization [with
+      Comparisons + Line assignment subtabs], Corpus Analysis, Data Inspection)
 
 Data Pipeline:
     1. Load raw CSVs (words + fixations + optional raw gaze)
@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple
 
 import pandas as pd
@@ -60,8 +61,12 @@ from scanpath_studio.constants import (
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_CHOICE,
+    ONESTOP_LACCLAB_DEFAULT_DIR,
+    ONESTOP_PART_LABELS,
+    ONESTOP_PUBLIC_CHOICE,
     ONESTOP_PUBLIC_DEFAULT_DIR,
     ONESTOP_REGIME_LABELS,
+    ONESTOP_VARIANT_LABELS,
     POTEC_DEFAULT_DIR,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
@@ -105,6 +110,8 @@ from scanpath_studio.data import (
     read_table,
     read_tables,
     trial_mapping_columns,
+    upload_exceeds_limit,
+    uploaded_files_total_bytes,
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
@@ -245,7 +252,9 @@ def _render_about_sidebar() -> None:
 
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
-        "author = {Shubi, Omer and Gruteke Klein, Keren and Berzak, Yevgeni},\n"
+        "author = {Shubi, Omer and Gruteke Klein, Keren and Lion, Ella and "
+        'Jacobi, Deborah and Reiche, David and J{\\"a}ger, Lena and '
+        "Berzak, Yevgeni},\n"
         "license = {MIT},\n"
         "month = jun,\n"
         "title = {{Scanpath Studio}},\n"
@@ -260,10 +269,14 @@ def _render_about_sidebar() -> None:
 **Scanpath Studio** v{__version__} — interactive visualization of eye
 movements in reading.
 
-Developed by [Omer Shubi](https://omershubi.github.io/),
-[Keren Gruteke Klein](https://kerengruteke.github.io/),
-[Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/),
-and TBD at the [LaCC Lab]({CITATION["lab_url"]}), Technion.
+Developed by [Omer Shubi](https://omershubi.github.io/)¹,
+[Keren Gruteke Klein](https://kerengruteke.github.io/)¹, Ella Lion¹,
+Deborah Jacobi², David Reiche²ʼ³, Lena Jäger², and
+[Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/)¹.
+
+¹ [LaCC Lab]({CITATION["lab_url"]}), Technion ·
+² [DiLi Lab](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html),
+University of Zurich · ³ University of Potsdam
 
 💻 **Code** — [github.com/lacclab/scanpath-studio]({CITATION["url"]})
 (MIT). Issues and contributions are welcome.
@@ -329,31 +342,125 @@ columns to map:
 """
 
 
-def _onestop_structure_md(regime: str) -> str:
-    """Expected-files note for the OneStop public source (regime-specific)."""
-    return f"""\
-**Expected files** — the two OSF paragraph reports for the chosen regime, placed
-directly in the folder (or fetched by **Download**):
+def _onestop_structure_md(regime: str, parts: list, variant: str) -> str:
+    """Expected-files note for the OneStop public source (regime/parts/variant)."""
+    from scanpath_studio import datasets
+
+    lines = []
+    for part in parts or ["Paragraph"]:
+        for kind in ("ia", "fixations"):
+            path = datasets._onestop_part_paths(
+                Path("<dir>"), kind, regime, part, variant
+            )
+            lines.append(f"├─ {path.name}")
+    listing = "\n".join(lines)
+    if variant == "lacclab":
+        return f"""\
+**Expected files** — a LaCC lab OneStop export folder holding the chosen parts'
+reports (per-part `ia_*` / `fixations_*` CSV.zip, no regime suffix). No download —
+point at your local export:
 ```
 <dir>/
-├─ ia_Paragraph_{regime}.csv.zip          # word / interest-area report
-└─ fixations_Paragraph_{regime}.csv.zip   # fixation report
+{listing}
 ```
-Switch **Reading regime** above to load a different one (each is a separate
-download).
 """
+    return f"""\
+**Expected files** — the OSF reports for the chosen regime + parts, placed
+directly in the folder (or fetched by **Download**). Only *Paragraph* is
+regime-split on OSF; the other parts come from the all-regimes full release:
+```
+<dir>/
+{listing}
+```
+Switch **Reading regime** / **Parts** above to load different ones (each is a
+separate download).
+"""
+
+
+def _project_root() -> Path:
+    """Repo/install root — the parent of the ``scanpath_studio`` package.
+
+    Used to anchor the *relative* default data dirs (``data/OneStop`` etc.) and
+    relative user-entered paths, so the "found vs. download" status resolves
+    regardless of the process cwd (the server may run from anywhere). Computed
+    from this module's location, not ``os.getcwd()``."""
+    return Path(__file__).resolve().parent.parent
+
+
+def _resolve_data_dir(root: str) -> str:
+    """Resolve a possibly-relative data dir against the project root.
+
+    Absolute paths (and ``~``) are used verbatim; a relative path is joined to
+    the project root so it resolves no matter where the server was launched from
+    (fixes the "No data found" false-negative when cwd != repo root). A blank
+    stays blank (the loader then shows its missing-data note)."""
+    text = (root or "").strip()
+    if not text:
+        return text
+    expanded = Path(text).expanduser()
+    if expanded.is_absolute():
+        return str(expanded)
+    return str((_project_root() / expanded).resolve())
+
+
+def _pick_directory_dialog() -> Optional[str]:
+    """Open a native folder picker and return the chosen path, or None.
+
+    Only works when the app runs on a machine with a display + tkinter (a
+    locally-run app). Returns None — and never raises — on a headless host
+    (Streamlit Cloud), a missing tkinter, or a cancelled dialog, so the text
+    input stays the portable fallback."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception:
+        return None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes("-topmost", 1)
+        chosen = filedialog.askdirectory()
+        root.destroy()
+    except Exception:
+        return None
+    return chosen or None
 
 
 def _dataset_dir_input(
     cfg, *, default_dir: str, dir_help: str, structure_md: str, key_prefix: str
 ) -> str:
-    """Data-directory input + an "Expected files" expander listing the layout."""
-    root = cfg.text_input(
-        "Data directory", value=default_dir, help=dir_help, key=f"{key_prefix}_dir"
+    """Data-location input + a native **Browse…** button + an Expected-files note.
+
+    Returns the *resolved* directory (relative paths anchored to the project
+    root, so the found/download status is correct regardless of cwd). A
+    "📁 Browse…" button opens a native folder dialog when available (local app)
+    and writes the pick back into the text input; it's silently skipped on a
+    headless host, where the text box is the only control."""
+    dir_key = f"{key_prefix}_dir"
+    # A prior Browse pick is applied before the widget instantiates (assigning a
+    # widget-backed key inline after render is unreliable — see the source picker).
+    picked = st.session_state.pop(f"{dir_key}_picked", None)
+    if picked:
+        st.session_state[dir_key] = picked
+    text_col, browse_col = cfg.columns([4, 1])
+    raw = text_col.text_input(
+        "Data directory",
+        value=st.session_state.get(dir_key, default_dir),
+        help=dir_help,
+        key=dir_key,
     )
+    # Vertical-align the button with the input (past its label).
+    browse_col.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
+    if browse_col.button("📁", key=f"{key_prefix}_browse", help="Browse for a folder"):
+        chosen = _pick_directory_dialog()
+        if chosen:
+            st.session_state[f"{dir_key}_picked"] = chosen
+            st.rerun()
+        else:
+            cfg.caption("Folder picker unavailable here — type or paste the path.")
     with cfg.expander("Expected files", expanded=False):
         st.markdown(structure_md)
-    return root
+    return _resolve_data_dir(raw)
 
 
 def _dataset_access_status(
@@ -405,7 +512,9 @@ def _cached_potec_raw_frames(root: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     return potec_raw_frames(root)
 
 
-def _load_potec_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _load_potec_source(
+    options_host=None, location_host=None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Sidebar controls + loader for the PoTeC corpus data source.
 
     PoTeC can't be loaded through the generic Upload flow (trial/word ids live
@@ -414,12 +523,16 @@ def _load_potec_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
     returned raw frames go through the same normalization as an upload, so the
     sidebar Column-mapping panels still appear and stay overridable. The whole
     corpus loads — narrow it with the **Narrow by** trial filters.
+
+    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots; PoTeC
+    has no source options, so only the data-location slot is used (defaults to a
+    standalone expander when called without slots).
     """
     from scanpath_studio import datasets
 
-    cfg = st.sidebar.expander("PoTeC options", expanded=True)
+    loc = location_host if location_host is not None else st.sidebar
     root = _dataset_dir_input(
-        cfg,
+        loc,
         default_dir=POTEC_DEFAULT_DIR,
         dir_help="Folder holding (or to download) the PoTeC files. A clone of "
         "github.com/DiLi-Lab/PoTeC works, or any empty folder with Download.",
@@ -427,7 +540,7 @@ def _load_potec_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
         key_prefix="potec",
     )
     ready = _dataset_access_status(
-        cfg,
+        loc,
         root=root,
         present=datasets.potec_present(root),
         download=datasets.download_potec,
@@ -439,7 +552,7 @@ def _load_potec_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
     try:
         return _cached_potec_raw_frames(root)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        st.sidebar.error(f"Couldn't load PoTeC from `{root}`: {exc}")
+        loc.error(f"Couldn't load PoTeC from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
 
 
@@ -467,7 +580,9 @@ def _cached_multipleye_inventory(
     return multipleye_inventory(root, fixation_source=fixation_source)
 
 
-def _load_multipleye_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _load_multipleye_source(
+    options_host=None, location_host=None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Sidebar controls + loader for the MultiplEYE corpus data source.
 
     MultiplEYE can't be loaded through the generic Upload flow (participant /
@@ -476,22 +591,27 @@ def _load_multipleye_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
     through the same normalization as an upload, so the sidebar Column-mapping
     panels still appear and stay overridable. The whole session set loads —
     narrow it with the **Narrow by** trial filters.
+
+    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots (the
+    fixation-source radio above, the data location below); default to their own
+    expanders when called standalone.
     """
-    cfg = st.sidebar.expander("MultiplEYE options", expanded=True)
-    root = _dataset_dir_input(
-        cfg,
-        default_dir=MULTIPLEYE_DEFAULT_DIR,
-        dir_help="Folder holding a MultiplEYE session set, e.g. the read-only "
-        "ZH-CH-Zurich sample.",
-        structure_md=_MULTIPLEYE_STRUCTURE_MD,
-        key_prefix="multipleye",
-    )
-    fixation_source = cfg.radio(
+    opt = options_host if options_host is not None else st.sidebar
+    loc = location_host if location_host is not None else st.sidebar
+    fixation_source = opt.radio(
         "Fixation source",
         options=["scanpaths", "fixations"],
         key="multipleye_fixation_source",
         help="scanpaths/ fixations are pre-tagged with page + word index "
         "(richer); fixations/ are raw onset/duration/x/y with no word linkage.",
+    )
+    root = _dataset_dir_input(
+        loc,
+        default_dir=MULTIPLEYE_DEFAULT_DIR,
+        dir_help="Folder holding a MultiplEYE session set, e.g. the read-only "
+        "ZH-CH-Zurich sample.",
+        structure_md=_MULTIPLEYE_STRUCTURE_MD,
+        key_prefix="multipleye",
     )
     try:
         sessions_all, _ = _cached_multipleye_inventory(root, fixation_source)
@@ -500,74 +620,123 @@ def _load_multipleye_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
     # MultiplEYE ships no public download URL — present means the local folder
     # holds a recognizable session set, otherwise fall back to the demo.
     ready = _dataset_access_status(
-        cfg, root=root, present=bool(sessions_all), key_prefix="multipleye"
+        loc, root=root, present=bool(sessions_all), key_prefix="multipleye"
     )
     if not ready:
         return load_sample_data()
     try:
         return _cached_multipleye_raw_frames(root, fixation_source)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        st.sidebar.error(f"Couldn't load MultiplEYE from `{root}`: {exc}")
+        loc.error(f"Couldn't load MultiplEYE from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
 
 
 @st.cache_data(show_spinner="Loading OneStop…")
 def _cached_onestop_raw_frames(
-    root: str, regime: str
+    root: str, regime: str, parts: Tuple[str, ...], variant: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Cached raw OneStop frames (pre-normalization) for a regime.
+    """Cached raw OneStop frames (pre-normalization) for a regime + parts + variant.
 
-    Cached on (root, regime) so toggling viz controls doesn't re-read the
-    reports. The reports are present by the time this runs (the loader's
-    Download button fetched them), so it never touches the network."""
+    Cached on (root, regime, parts, variant) so toggling viz controls doesn't
+    re-read the reports. The reports are present by the time this runs (the
+    loader's Download button fetched them, or the lacclab export is local), so
+    it never touches the network."""
     from scanpath_studio.datasets import onestop_raw_frames
 
-    return onestop_raw_frames(root, regime=regime)
+    return onestop_raw_frames(root, regime=regime, parts=list(parts), variant=variant)
 
 
-def _load_onestop_public_source() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Sidebar controls + loader for the public OneStop corpus (OSF download).
+def _onestop_env_default_dir(variant: str) -> str:
+    """Default OneStop data dir for a variant (env-overridable for the lacclab one)."""
+    if variant == "lacclab":
+        return os.environ.get("ONESTOP_LACCLAB_DIR", "").strip() or (
+            ONESTOP_LACCLAB_DEFAULT_DIR
+        )
+    return ONESTOP_PUBLIC_DEFAULT_DIR
 
-    OneStop's paragraph interest-area + fixation reports share the bundled
-    demo's schema, so this just fetches the chosen reading regime's two CSV.zips
-    from OSF (cached on disk) and hands the raw frames to the normal
-    normalization pipeline — the Column-mapping panels still appear and stay
-    overridable. Distinct from the env-var "OneStop server bundle" source, which
-    serves a local lacclab export (and per-pid shards for deep links).
+
+def _load_onestop_public_source(
+    options_host=None, location_host=None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Sidebar controls + loader for the OneStop corpus (OSF or LaCC lab).
+
+    OneStop's interest-area + fixation reports share the bundled demo's schema
+    across every trial part, so this fetches (public variant) or reads (lacclab
+    variant) the chosen reading regime + parts and hands the raw frames to the
+    normal normalization pipeline — the Column-mapping panels still appear and
+    stay overridable. Distinct from the env-var "OneStop server bundle" source,
+    which serves a lacclab export (and per-pid shards for deep links).
+
+    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots (source
+    options above, data location below); default to their own expanders so the
+    loader still works standalone.
     """
     from scanpath_studio import datasets
 
-    cfg = st.sidebar.expander("OneStop options", expanded=True)
-    regime = cfg.selectbox(
+    opt = options_host if options_host is not None else st.sidebar
+    loc = location_host if location_host is not None else st.sidebar
+    variant = opt.selectbox(
+        "Variant",
+        options=list(ONESTOP_VARIANT_LABELS),
+        format_func=lambda v: ONESTOP_VARIANT_LABELS[v],
+        key="onestop_variant",
+        help="Public downloads the reports from OSF on demand; LaCC lab reads a "
+        "local lab-processed export (extra derived columns, no download).",
+    )
+    regime = opt.selectbox(
         "Reading regime",
         options=list(ONESTOP_REGIME_LABELS),
         format_func=lambda r: ONESTOP_REGIME_LABELS[r],
         key="onestop_regime",
-        help="Which OneStop reading regime to load. Each is a separate OSF "
-        "download of paragraph-level interest-area + fixation reports.",
+        help="Which OneStop reading regime to load. For the public variant each "
+        "is a separate OSF download of the paragraph reports.",
     )
+    parts = opt.multiselect(
+        "Parts",
+        options=list(ONESTOP_PART_LABELS),
+        format_func=lambda p: ONESTOP_PART_LABELS[p],
+        default=list(datasets.ONESTOP_DEFAULT_PARTS),
+        key="onestop_parts",
+        help="Which trial screens to load. Paragraph is the reading passage; the "
+        "others are the surrounding screens (title / question / answers / "
+        "feedback). Loading several makes each part its own trial.",
+    )
+    parts = parts or list(datasets.ONESTOP_DEFAULT_PARTS)
+    default_dir = _onestop_env_default_dir(variant)
     root = _dataset_dir_input(
-        cfg,
-        default_dir=ONESTOP_PUBLIC_DEFAULT_DIR,
-        dir_help="Folder to download the OneStop reports into (cached on disk, "
-        "so only the first load of a regime fetches them).",
-        structure_md=_onestop_structure_md(regime),
-        key_prefix="onestop",
+        loc,
+        default_dir=default_dir,
+        dir_help=(
+            "Folder holding a LaCC lab OneStop export."
+            if variant == "lacclab"
+            else "Folder to download the OneStop reports into (cached on disk, "
+            "so only the first load fetches them)."
+        ),
+        structure_md=_onestop_structure_md(regime, parts, variant),
+        key_prefix=f"onestop_{variant}",
+    )
+    present = datasets.onestop_present(
+        root, regime=regime, parts=parts, variant=variant
     )
     ready = _dataset_access_status(
-        cfg,
+        loc,
         root=root,
-        present=datasets.onestop_present(root, regime=regime),
-        download=lambda r: datasets.download_onestop(r, regime=regime),
-        size_hint="OSF reports, tens–hundreds MB",
-        key_prefix="onestop",
+        present=present,
+        # Only the public variant can download; the lacclab export is local.
+        download=(
+            (lambda r: datasets.download_onestop(r, regime=regime, parts=parts))
+            if variant == "public"
+            else None
+        ),
+        size_hint="OSF reports, tens–hundreds MB per part",
+        key_prefix=f"onestop_{variant}",
     )
     if not ready:
         return load_sample_data()
     try:
-        return _cached_onestop_raw_frames(root, regime)
+        return _cached_onestop_raw_frames(root, regime, tuple(parts), variant)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        st.sidebar.error(f"Couldn't load OneStop from `{root}`: {exc}")
+        loc.error(f"Couldn't load OneStop from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
 
 
@@ -600,14 +769,19 @@ PUBLIC_DATASET_REGISTRY: dict = {
         "read-only Zurich Chinese sample, loaded from a local folder.",
         link="https://multipleye.eu/",
     ),
-    "OneStop — 360-participant English corpus": dict(
+    ONESTOP_PUBLIC_CHOICE: dict(
         loader=_load_onestop_public_source,
         monitor=(2560, 1440),  # OneStop presentation monitor (full-screen px coords)
         short="OneStop",
-        language="English",
-        size="360 participants",
-        description="OneStop Eye Movements — English L1 reading across ordinary "
-        "and information-seeking regimes, downloaded from OSF.",
+        language="English (L1)",
+        # Verified against the OneStop docs (lacclab.github.io/OneStop-Eye-Movements
+        # / Berzak et al. 2025): 360 participants, 30 Guardian articles = 162
+        # paragraphs (each in Advanced + Elementary), ~19.4k regular trials.
+        size="360 readers · 30 articles (162 paragraphs) · ~19.4k trials",
+        description="OneStop Eye Movements — English L1 reading of Guardian "
+        "articles across four regimes (ordinary / information-seeking, each also "
+        "repeated) and seven trial parts (title / question / paragraph / answers "
+        "/ feedback). Downloaded from OSF, or read from a LaCC lab export.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
     ),
 }
@@ -618,37 +792,32 @@ def _public_dataset_label(label: str) -> str:
     return PUBLIC_DATASET_REGISTRY.get(label, {}).get("short", label)
 
 
-def _source_display_name(data_choice: str) -> str:
-    """Short, friendly name for the active source — used as the "<name> options"
-    section header (DATA-9). For a public corpus it's the selected corpus' short
-    name; otherwise the data_choice itself (demo / uploaded name / env bundle)."""
-    if data_choice == PUBLIC_DATASETS_CHOICE:
-        return _public_dataset_label(st.session_state.get("public_dataset_choice", ""))
-    return data_choice
-
-
-def _load_public_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _load_public_dataset(
+    description_host=None, options_host=None, location_host=None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Dispatch for a "Public datasets" source.
 
-    The corpus is now chosen in the flat source picker (DATA-9) and rides
-    ``public_dataset_choice``; here we show the selected corpus' compact
-    language · size caption, one-line description, and home link, then call its
-    loader (which renders its own directory / download controls) and returns raw,
-    pre-normalization frames.
+    The corpus is chosen in the flat source picker (DATA-9) and rides
+    ``public_dataset_choice``. The selected corpus' compact language · size
+    caption, one-line description, and home link render into
+    ``description_host``; the loader's source options + data-location controls
+    render into ``options_host`` / ``location_host`` (the DATA-9 ordered group).
+    Returns raw, pre-normalization frames.
     """
     chosen = st.session_state.get("public_dataset_choice")
     if chosen not in PUBLIC_DATASET_REGISTRY:
         chosen = next(iter(PUBLIC_DATASET_REGISTRY))
         st.session_state["public_dataset_choice"] = chosen
     spec = PUBLIC_DATASET_REGISTRY[chosen]
+    desc = description_host if description_host is not None else st.sidebar
     facts = " · ".join(f for f in (spec.get("language"), spec.get("size")) if f)
     if facts:
-        st.sidebar.caption(facts)
+        desc.caption(facts)
     if spec.get("description"):
-        st.sidebar.caption(spec["description"])
+        desc.caption(spec["description"])
     if spec.get("link"):
-        st.sidebar.markdown(f"[Dataset home ↗]({spec['link']})")
-    return spec["loader"]()
+        desc.markdown(f"[Dataset home ↗]({spec['link']})")
+    return spec["loader"](options_host, location_host)
 
 
 def _public_dataset_monitor(data_choice: str) -> Optional[Tuple[int, int]]:
@@ -712,6 +881,10 @@ def _stimulus_font_install_hint(css_family: Optional[str]) -> Optional[Tuple[str
 def load_words_and_fixations(
     data_choice: str,
     participant: Optional[str] = None,
+    *,
+    description_host=None,
+    options_host=None,
+    location_host=None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Load raw word + fixation frames for the **non-upload** data sources.
 
@@ -719,6 +892,10 @@ def load_words_and_fixations(
     (``_render_data_setup``), which groups each table's upload box with its
     mapping; this covers the bundled demo, synthetic trial, public datasets, and
     the OneStop server bundle.
+
+    ``description_host`` / ``options_host`` / ``location_host`` are the DATA-9
+    sidebar sub-slots a public dataset's caption / source options / data-location
+    controls render into (ignored by the other sources).
 
     Args:
         data_choice: ``DEMO_CHOICE`` ("Bundled Demo") / ``SYNTHETIC_CHOICE`` /
@@ -738,7 +915,7 @@ def load_words_and_fixations(
 
         return load_synthetic_data()
     if data_choice == PUBLIC_DATASETS_CHOICE:
-        return _load_public_dataset()
+        return _load_public_dataset(description_host, options_host, location_host)
     # The Upload source is handled separately by the setup wizard
     # (`_render_data_setup`), which renders each table's upload + mapping; see main().
     if data_choice == ONESTOP_CHOICE:
@@ -1055,6 +1232,24 @@ def _read_uploaded_frame(
     )
     if not uploaded:
         return pd.DataFrame()
+    # BUG-5: a large upload parses/normalizes into several in-memory copies that
+    # can OOM-kill the ~1 GB hosted demo (no traceback). Warn and require an
+    # explicit opt-in before parsing; local installs confirm in one click.
+    if upload_exceeds_limit(uploaded):
+        mb = uploaded_files_total_bytes(uploaded) / (1024 * 1024)
+        host.warning(
+            f"This upload is **{mb:.0f} MB**. On the hosted demo (~1 GB RAM), "
+            "parsing a corpus this large can exhaust memory and crash the app. "
+            "For big corpora, run locally (`pip install scanpath-studio`) or "
+            "upload a subset (e.g. a few participants)."
+        )
+        if not host.checkbox(
+            "Load it anyway",
+            key=f"{state_prefix}_load_large",
+            help="Parse this large upload regardless. Safe on a local machine "
+            "with enough RAM; may crash the memory-limited hosted demo.",
+        ):
+            return pd.DataFrame()
     if multi:
         return _read_uploaded_tables_cached(
             uploaded, tuple(_uploaded_file_key(f) for f in uploaded)
@@ -1532,7 +1727,7 @@ def main() -> None:
         3. Load and normalize data (words, fixations, optional raw gaze)
         4. Apply user-selected filters (participants, trials, texts)
         5. Render sidebar controls (canvas, fonts, visualization settings)
-        6. Render tabbed UI (Visualization, Generations, Data Inspection, Bulk Export)
+        6. Render the active view (Scanpath Visualization / Corpus Analysis / Data Inspection)
 
     Data Flow:
         CSV upload → schema inference → normalization → filtering →
@@ -1567,6 +1762,10 @@ def main() -> None:
         st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
     elif url_source == "synthetic":
         st.session_state.setdefault("data_source_choice", SYNTHETIC_CHOICE)
+    elif url_source == "onestop_public" and public_datasets_enabled():
+        # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
+        # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
+        st.session_state.setdefault("data_source_choice", ONESTOP_PUBLIC_CHOICE)
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
 
@@ -1625,19 +1824,27 @@ def main() -> None:
     if st.session_state.pop("_wizard_finalizing", False):
         _finalizing_bridge = st.empty()
         _finalizing_bridge.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
-    # DATA-9: group the per-dataset config — **Experimental Setup** + **Column
-    # mapping** — under one "<dataset> options" section, right beside the source
-    # that owns it (instead of three sibling top-level sidebar expanders). The
-    # sub-slots fix the order (Experimental Setup above Column mapping) regardless
-    # of which renders first downstream; both fill later (they need the loaded /
-    # filtered data). The slot is a plain container, so the panels keep their own
-    # expanders (container → expander is fine; only expander-in-expander is not).
+    # DATA-9: render ALL of a source's config in ONE clean group, in a fixed
+    # order, right below the source picker (instead of scattered sibling
+    # expanders + a duplicative "<name> options" label). The order — set here by
+    # reserving a sub-slot per section, since each fills at a different point
+    # downstream — is:
+    #     Description      (public-dataset caption / home link)
+    #     Options          (source-specific: OneStop regime + parts + variant, …)
+    #     Data location    (path input + Expected files + found/download status)
+    #     Experimental Setup
+    #     Column mapping
+    # A neutral "Configure" header replaces the old "<name> options" (the source
+    # name is already shown in the picker above). The slot is a plain container so
+    # the Experimental Setup / Column mapping panels keep their own expanders
+    # (container → expander is fine; only expander-in-expander is not).
     dataset_options_slot = st.sidebar.container()
-    # The Upload wizard owns the page (and its own mapping) — no options header.
+    # The Upload wizard owns the page (and its own mapping) — no config group.
     if data_choice != UPLOAD_CHOICE:
-        dataset_options_slot.markdown(
-            f"**⚙️ {_source_display_name(data_choice)} options**"
-        )
+        dataset_options_slot.markdown("**⚙️ Configure**")
+    description_slot = dataset_options_slot.container()
+    source_options_slot = dataset_options_slot.container()
+    data_location_slot = dataset_options_slot.container()
     experimental_setup_slot = dataset_options_slot.container()
     column_mapping_slot = dataset_options_slot.container()
 
@@ -1734,7 +1941,13 @@ def main() -> None:
                 del st.session_state[stale]
             st.session_state["_colmap_seeded_for"] = source_key
         raw_words_df, raw_fixations_df = load_words_and_fixations(
-            data_choice, participant=deep_link_pid
+            data_choice,
+            participant=deep_link_pid,
+            # DATA-9 ordered group: a public dataset renders its caption / source
+            # options / data-location controls into these reserved sub-slots.
+            description_host=description_slot,
+            options_host=source_options_slot,
+            location_host=data_location_slot,
         )
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
@@ -1892,7 +2105,11 @@ def main() -> None:
     # spotlight tour can target it); the active view fills it later (it needs the
     # live selection + figure settings for the download). See
     # tabs._render_save_restore_expander. This single panel merges the former
-    # Plot-configuration and Annotations sidebar panels (TODO 1.19).
+    # Plot-configuration and Annotations sidebar panels (TODO 1.19). DATA-9: it's
+    # its own top-level section (a divider separates it from the data-source
+    # config above), since saving/restoring plot config + annotations is a global
+    # session feature, not part of any one source's setup.
+    st.sidebar.divider()
     save_restore_slot = st.sidebar.container(key="tour_grp_save_restore")
 
     # Whole-dataset combos for the Bulk Export tab's "Export the whole dataset"
@@ -1921,7 +2138,6 @@ def main() -> None:
         render_corpus_analysis_tab(
             words_filtered,
             fixations_filtered,
-            combos,
             canvas_width=canvas_width,
             canvas_height=canvas_height,
             base_font_size=base_font_size,

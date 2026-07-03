@@ -8,18 +8,33 @@ The app's bundled demo is a 3-participant subset of it; this page covers loading
 the **full public corpus** from [OSF](https://osf.io/2prdq/) as a public dataset.
 
 !!! note "Two ways to load OneStop"
-    - **Public dataset (this page)** — downloads paragraph-level reports from OSF
-      on demand, no setup. Pick the reading regime in the sidebar.
+    - **Public dataset (this page)** — the OneStop reports as a public dataset:
+      the **Public** variant downloads from OSF on demand (no setup); the **LaCC
+      lab** variant reads a local lab-processed export. Pick the variant, reading
+      regime, and trial parts in the sidebar.
     - **OneStop server bundle** — points at a local `lacclab` export via the
       `$ONESTOP_DATA_DIR` environment variable, with per-pid Parquet shards for
       review-app deep links. See
       [Export & troubleshooting](export-troubleshooting.md).
 
+The corpus is 360 L1-English readers reading 30 Guardian articles (162
+paragraphs, each in an Advanced and an Elementary version) — ~19.4k regular
+trials.
+
 ## Loading it
 
 OneStop is exposed as a **Public dataset**. In the app, choose
-**Public datasets → OneStop**, then in *OneStop options* pick a **reading
-regime** and (optionally) a download folder:
+**Public datasets → OneStop**, then in the ⚙️ **Configure → Options** group pick a
+**Variant**, a **Reading regime**, and one or more **Parts**:
+
+**Variant**
+
+| Variant | What it is |
+| --- | --- |
+| Public (OSF download) | Reports fetched from [OSF](https://osf.io/2prdq/) on demand, cached on disk. |
+| LaCC lab (local export) | A lab-processed export with extra derived columns (`unique_paragraph_id`, span indices, normalized dwell, …). No download — point at your local folder (default is the lab OneDrive path, editable / `ONESTOP_LACCLAB_DIR`). |
+
+**Reading regime**
 
 | Regime | What it is |
 | --- | --- |
@@ -28,42 +43,72 @@ regime** and (optionally) a download folder:
 | Repeated reading | Re-reading the same paragraphs. |
 | Information seeking (repeated) | Information seeking during repeated reading. |
 
-Each regime is a separate OSF download of two paragraph-level reports —
-the **interest-area report** (one row per word, with bounding boxes and
-reading measures) and the **fixation report**. The *OneStop options* panel
-lists the **Expected files** for the folder and shows whether the chosen
-regime's reports are already present. If they are, the corpus loads with no
-network access; if not, click **⬇ Download** to fetch them into the folder
-(cached on disk, so only the first load of a regime pays the download — the
-reports range from tens to a few hundred MB).
+**Parts** — which *screen* of a trial to load (default **Paragraph**):
+
+| Part | What it is |
+| --- | --- |
+| Title | The article title screen. |
+| Question preview | The question shown before reading (information-seeking regimes). |
+| Paragraph | The reading passage (the default). |
+| Question | The question re-shown after reading. |
+| Answers | The four answer choices. |
+| Question + answers (QA) | The combined question-and-answers screen. |
+| Feedback | The one-second correctness notification. |
+
+Every part ships an **interest-area report** (one row per word, with bounding
+boxes and reading measures) and a **fixation report**, all in the same schema —
+so each part renders as a scanpath. Selecting **several parts** makes each part
+its own trial (the part is folded into the trial id, e.g. `Paragraph::1` vs
+`Title::1`, so their word boxes don't collide). On OSF only *Paragraph* is
+regime-split; the other parts come from the all-regimes full release, so they
+load regardless of the chosen regime.
+
+The ⚙️ **Configure → Data location** section lists the **Expected files** and
+shows whether they're already present. For the Public variant, if they're
+present the corpus loads with no network access; if not, click **⬇ Download** to
+fetch them into the folder (cached on disk, so only the first load pays the
+download — reports range from tens to a few hundred MB each).
 
 OneStop's reports use the same schema as the bundled demo, so they flow through
-the normal auto-detect → normalize pipeline — the sidebar **Column mapping**
-panels still appear and stay overridable. Fixation and interest-area
-coordinates are full-screen pixels on OneStop's 2560×1440 presentation monitor,
-so the canvas renders true-to-scale to that monitor.
+the normal auto-detect → normalize pipeline — the **Column mapping** panels still
+appear and stay overridable. Fixation and interest-area coordinates are
+full-screen pixels on OneStop's 2560×1440 presentation monitor, so the canvas
+renders true-to-scale to that monitor.
 
 ## From the Python API
 
-The same loader is available headlessly:
+The same loader is available headlessly — `load_onestop` returns normalized,
+plot-ready frames:
 
 ```python
-from scanpath_studio.datasets import onestop_raw_frames
-from scanpath_studio import data
+import scanpath_studio as sps
 
-# Fetch + read the chosen regime's OSF reports (cached under `root`).
-words, fixations = onestop_raw_frames(
-    "data/OneStop", regime="ordinary", download=True
+# Fetch (public variant) + normalize the chosen regime + parts (cached under root).
+words, fixations = sps.load_onestop(
+    "data/OneStop",
+    regime="ordinary",
+    parts=["Paragraph"],          # any subset of the seven parts
+    variant="public",              # or "lacclab" for a local export
+    download=True,                 # public variant only
 )
-
-# Normalize like an upload, then plot.
-ws, fs = data.propose_word_schema(words), data.propose_fix_schema(fixations)
-words = data.normalize_words(words, ws)
-fixations = data.normalize_fixations(fixations, fs)
-words, fixations = data.harmonize_frames(words, fixations)
+fig = sps.plot_scanpath(words, fixations, canvas_size=(2560, 1440))
 ```
+
+For the raw (pre-normalization) frames, use
+`scanpath_studio.datasets.onestop_raw_frames(...)` with the same arguments.
+
+## From the command line
+
+```bash
+scanpath-studio render --onestop data/OneStop \
+    --onestop-regime ordinary --onestop-part Paragraph \
+    -p <participant> -t <trial> -o out.html
+```
+
+`--onestop-part` is repeatable; `--onestop-variant` is `public` (default) or
+`lacclab`.
 
 The implementation lives in
 [`datasets.py`](https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/datasets.py)
-(`onestop_raw_frames` / `download_onestop`); the OSF file ids per regime come
-from the OneStop repo's `download_data_files.py`.
+(`onestop_raw_frames` / `load_onestop` / `download_onestop`); the OSF file ids per
+regime + part come from the OneStop repo's `download_data_files.py`.

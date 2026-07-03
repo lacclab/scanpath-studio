@@ -183,6 +183,92 @@ def enrich_fixations(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.DataFra
     return out
 
 
+def classify_saccades(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.Series:
+    """Classify each *outgoing* saccade by its reading type (VIZ-8).
+
+    A saccade is the segment from one fixation to the next in reading order; its
+    class is stored on the *departing* fixation, so the last fixation of every
+    trial (which has no outgoing saccade) is ``None``. Classes follow the classic
+    reading schematic:
+
+    - ``refixation`` — lands back on the same word (``word_id`` unchanged),
+    - ``regression`` — moves to an earlier line, or backward within a line,
+    - ``return_sweep`` — sweeps down to a later line (forward reading),
+    - ``forward`` — advances to the next word on the same line,
+    - ``skip`` — advances past one or more words on the same line,
+    - ``other`` — a real saccade whose endpoints can't be classified (an
+      out-of-text fixation with no assigned word).
+
+    Line membership comes from :func:`assign_fixation_lines` (word-box geometry),
+    word order from the fixation ``word_id`` assignment. Returns an object Series
+    aligned to ``fixations.index`` (pure — no plotting), so both the render path
+    (``plots._add_saccade_layer``) and any future analysis can reuse it. Works on
+    a single already-sliced trial or a multi-trial frame (grouped by
+    participant/trial).
+    """
+    if fixations.empty:
+        return pd.Series([], dtype=object, index=fixations.index)
+
+    keys = [k for k in ("participant_id", "trial_id") if k in fixations.columns]
+    sort_cols = keys + (["timestamp_ms"] if "timestamp_ms" in fixations.columns else [])
+    order = fixations.sort_values(sort_cols).index if sort_cols else fixations.index
+
+    if "word_id" in fixations.columns:
+        word = pd.to_numeric(fixations["word_id"], errors="coerce").reindex(order)
+    else:
+        word = pd.Series(np.nan, index=order, dtype=float)
+    if words is not None and not words.empty:
+        line = assign_fixation_lines(fixations, words).reindex(order)
+    else:
+        line = pd.Series(np.nan, index=order, dtype=float)
+
+    if keys:
+        grp = [fixations[k].reindex(order) for k in keys]
+        next_word = word.groupby(grp).shift(-1)
+        next_line = line.groupby(grp).shift(-1)
+        next_pos = pd.Series(np.arange(len(order)), index=order).groupby(grp).shift(-1)
+    else:
+        next_word = word.shift(-1)
+        next_line = line.shift(-1)
+        next_pos = pd.Series(np.arange(len(order)), index=order).shift(-1)
+
+    word_arr = word.to_numpy(dtype=float)
+    next_word_arr = next_word.to_numpy(dtype=float)
+    dw = next_word_arr - word_arr
+    dl = (next_line - line).to_numpy(dtype=float)
+    has_next = next_pos.notna().to_numpy()
+    # A saccade is classifiable only when BOTH endpoints have an assigned word;
+    # otherwise the word/line deltas are meaningless (an off-text fixation still
+    # gets a *nearest* line, which would spuriously read as a line change).
+    both_words = ~np.isnan(word_arr) & ~np.isnan(next_word_arr)
+    same_line = np.isnan(dl) | (dl == 0)
+
+    # Priority order: same word first, then line moves, then within-line word moves.
+    conds = [
+        dw == 0,  # refixation
+        dl < 0,  # regression — up to an earlier line
+        dl > 0,  # return sweep — down to a later line
+        same_line & (dw < 0),  # regression — backward within the line
+        same_line & (dw == 1),  # forward
+        same_line & (dw >= 2),  # skip
+    ]
+    choices = [
+        "refixation",
+        "regression",
+        "return_sweep",
+        "regression",
+        "forward",
+        "skip",
+    ]
+    classed = np.select(conds, choices, default="other").astype(object)
+    classed[~both_words] = "other"  # a real saccade, but an endpoint is off-text
+    classed[~has_next] = None  # last fixation of a trial: no outgoing saccade
+    # dtype=object is load-bearing: pandas 3.0 infers a dedicated `str` dtype for
+    # an all-string+None array and coerces the None sentinel to NaN, breaking the
+    # "None for the last fixation" contract. Pin object so None survives.
+    return pd.Series(classed, index=order, dtype=object).reindex(fixations.index)
+
+
 def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
     """Fixation onset times (ms), rebased so the first fixation is t=0.
 

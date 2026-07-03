@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import base64
+import copy
 import struct
 from pathlib import Path
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -27,6 +28,9 @@ from .constants import (
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
     OUT_OF_TEXT_COLOR,
+    SACCADE_CLASS_COLORS,
+    SACCADE_CLASS_LABELS,
+    SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     TRENDLINE_COLOR,
     WORD_BOX_COLOR,
@@ -508,10 +512,55 @@ def _compute_marker_sizes(
     return np.full(len(durations), (min_size + max_size) / 2)
 
 
-def _saccade_segments(
-    fix_df: pd.DataFrame, x_col: str, y_col: str
+# VIZ-9 "linear reading" mode: draw saccades as upward arcs instead of straight
+# connectors. The apex rises by _ARCH_FRAC of the saccade's horizontal span; each
+# arc is sampled into _ARCH_SAMPLES points so it stays smooth in the true-scale
+# embed. `arch_frac=None` (the default everywhere) keeps the straight connectors.
+_ARCH_FRAC = 0.28
+_ARCH_SAMPLES = 20
+
+
+def _arch_points(
+    x0: float, y0: float, x1: float, y1: float, frac: float, n: int = _ARCH_SAMPLES
 ) -> Tuple[list, list]:
-    """Return concatenated x/y arrays separated by None for a single saccade trace."""
+    """Sample a quadratic Bézier arch from (x0,y0) to (x1,y1), bulging upward.
+
+    Screen y grows downward, so the control point is *above* the chord (smaller
+    y). Returns (xs, ys) of length ``n`` including both endpoints. A NaN endpoint
+    propagates to NaN samples, which Plotly simply skips."""
+    rise = frac * abs(x1 - x0)
+    cx = (x0 + x1) / 2.0
+    cy = min(y0, y1) - rise
+    ts = np.linspace(0.0, 1.0, n)
+    xs = ((1 - ts) ** 2) * x0 + 2 * (1 - ts) * ts * cx + (ts**2) * x1
+    ys = ((1 - ts) ** 2) * y0 + 2 * (1 - ts) * ts * cy + (ts**2) * y1
+    return xs.tolist(), ys.tolist()
+
+
+def _extend_segment(
+    xs: list, ys: list, x0, y0, x1, y1, arch_frac: Optional[float]
+) -> None:
+    """Append one saccade segment (straight, or an arch when ``arch_frac``) to the
+    None-separated ``xs``/``ys`` accumulators."""
+    if arch_frac is None:
+        xs.extend([x0, x1, None])
+        ys.extend([y0, y1, None])
+    else:
+        ax, ay = _arch_points(x0, y0, x1, y1, arch_frac)
+        xs.extend(ax + [None])
+        ys.extend(ay + [None])
+
+
+def _saccade_segments(
+    fix_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    arch_frac: Optional[float] = None,
+) -> Tuple[list, list]:
+    """Return concatenated x/y arrays separated by None for a single saccade trace.
+
+    ``arch_frac`` (VIZ-9) draws each segment as an upward arc instead of a straight
+    line."""
     if len(fix_df) < 2:
         return [], []
     ordered = fix_df.sort_values("timestamp_ms")
@@ -520,9 +569,77 @@ def _saccade_segments(
     x_vals = ordered[x_col].tolist()
     y_vals = ordered[y_col].tolist()
     for i in range(len(ordered) - 1):
-        xs.extend([x_vals[i], x_vals[i + 1], None])
-        ys.extend([y_vals[i], y_vals[i + 1], None])
+        _extend_segment(
+            xs, ys, x_vals[i], y_vals[i], x_vals[i + 1], y_vals[i + 1], arch_frac
+        )
     return xs, ys
+
+
+def _saccade_segments_by_class(
+    fix_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    classes: pd.Series,
+    arch_frac: Optional[float] = None,
+) -> dict:
+    """Group saccade segments by reading class → ``{class: (xs, ys)}`` (VIZ-8).
+
+    Each segment (fixation i → i+1) takes the class of its *departing* fixation
+    (``classes[i]``), so it matches ``measures.classify_saccades``. Segments with
+    no class (``None``/NaN — the last fixation, or an unclassifiable one) fall
+    into ``"other"`` so they still draw. Each class's arrays are None-separated,
+    ready for one Scatter trace per class. ``arch_frac`` (VIZ-9) arcs each
+    segment."""
+    if len(fix_df) < 2:
+        return {}
+    ordered = fix_df.sort_values("timestamp_ms")
+    cls = classes.reindex(ordered.index).tolist()
+    x_vals = ordered[x_col].tolist()
+    y_vals = ordered[y_col].tolist()
+    out: dict = {}
+    for i in range(len(ordered) - 1):
+        c = cls[i]
+        if pd.isna(c):
+            c = "other"
+        xs, ys = out.setdefault(c, ([], []))
+        _extend_segment(
+            xs, ys, x_vals[i], y_vals[i], x_vals[i + 1], y_vals[i + 1], arch_frac
+        )
+    return out
+
+
+def _snap_fixations_to_words(
+    fixations: pd.DataFrame, words: pd.DataFrame, x_field: str, y_field: str
+) -> pd.DataFrame:
+    """Return a copy of ``fixations`` with each fixation moved to the top-centre of
+    the word it lands on (VIZ-9 "linear reading" mode).
+
+    Fixations with no assigned word keep their raw position. Uses a precomputed
+    ``word_id`` column when present, else assigns via bounding-box containment."""
+    out = fixations.copy()
+    if "word_id" not in words.columns:
+        return out
+    if (
+        "word_id" in out.columns
+        and pd.to_numeric(out["word_id"], errors="coerce").notna().any()
+    ):
+        wid = pd.to_numeric(out["word_id"], errors="coerce")
+    else:
+        from .measures import assign_fixations_to_words
+
+        wid = pd.to_numeric(
+            assign_fixations_to_words(out, words)["word_id"], errors="coerce"
+        )
+    wx = pd.to_numeric(words["x"], errors="coerce")
+    ww = pd.to_numeric(words["width"], errors="coerce")
+    wy = pd.to_numeric(words["y"], errors="coerce")
+    cx_by_id = dict(zip(words["word_id"], (wx + ww / 2.0)))
+    top_by_id = dict(zip(words["word_id"], wy))
+    snap_x = wid.map(cx_by_id)
+    snap_y = wid.map(top_by_id)
+    out[x_field] = snap_x.where(snap_x.notna(), out[x_field])
+    out[y_field] = snap_y.where(snap_y.notna(), out[y_field])
+    return out
 
 
 # Saccades shorter than this fraction of the fixation-extent diagonal get no
@@ -590,6 +707,9 @@ def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
                 y1=y1,
                 line=dict(color=color, width=1),
                 fillcolor="rgba(100,100,100,0.05)",
+                # VIZ-5: tag the layer so split_scanpath_layers can separate the
+                # word boxes from the (visually similar) heatmap rects.
+                name=_shape_layer_tag("word_boxes"),
             )
         )
     return shapes
@@ -649,9 +769,104 @@ def build_critical_span_overlay(
                 line=dict(color=color, width=_CRITICAL_FRAME_WIDTH),
                 fillcolor="rgba(0,0,0,0)",
                 layer="above",
+                # VIZ-5: the critical-span outline rides the word-boxes layer.
+                name=_shape_layer_tag("word_boxes"),
             )
         )
     return shapes
+
+
+# --- VIZ-5: separable-layer export ------------------------------------------
+# The scanpath figure is a single flattened image, but publication workflows want
+# to restyle each layer in Illustrator / Inkscape. `split_scanpath_layers` returns
+# one figure per layer, each a copy of the full figure with only that layer's
+# elements kept and everything else removed — so the layouts (axis ranges, size,
+# equal-aspect scaleanchor) stay byte-identical and the exported files register
+# perfectly when stacked. Every element is tagged with its layer: shapes carry a
+# `_LAYER_SHAPE_TAG`-prefixed `name`, traces are classified by their (stable) name,
+# and the single `layout.image` is the stimulus.
+_LAYER_SHAPE_TAG = "__sps_layer:"
+# Draw order (bottom → top), matching how make_scanpath_figure stacks them.
+SCANPATH_LAYER_ORDER = (
+    "stimulus_image",
+    "heatmap",
+    "word_boxes",
+    "saccades",
+    "fixations",
+    "raw_gaze",
+    "labels",
+    "frame",
+)
+_TRANSPARENT = "rgba(0,0,0,0)"
+
+
+def _shape_layer_tag(layer: str) -> str:
+    """The `name` marker stamped on a shape so its layer survives into the figure."""
+    return f"{_LAYER_SHAPE_TAG}{layer}"
+
+
+def _shape_layer(shape) -> Optional[str]:
+    """Layer of a tagged shape, or None for an untagged one."""
+    name = getattr(shape, "name", None) or ""
+    if name.startswith(_LAYER_SHAPE_TAG):
+        return name[len(_LAYER_SHAPE_TAG) :]
+    return None
+
+
+def _trace_layer(trace) -> str:
+    """Classify a scanpath trace into its layer by its (stable) name.
+
+    Only a handful of names are fixed — ``words`` (labels), the saccade traces,
+    ``Raw gaze``, and any heatmap trace (``… heatmap …``). Every *other* trace the
+    scanpath figure draws is a fixation-marker variant with a data-dependent name
+    (``Fixations``, per-line ``line: …``, categorical colour-legend entries, the
+    PRE-2 flag overlays, the PRE-3 ``drift`` connectors), so they all fall through
+    to ``fixations`` — robust to those names changing."""
+    name = trace.name or ""
+    low = name.lower()
+    if name == "words":
+        return "labels"
+    if "heatmap" in low:
+        return "heatmap"
+    if name == "Raw gaze":
+        return "raw_gaze"
+    if name in ("saccades", "saccade direction") or name in set(
+        SACCADE_CLASS_LABELS.values()
+    ):
+        return "saccades"
+    return "fixations"
+
+
+def split_scanpath_layers(fig: go.Figure) -> Dict[str, go.Figure]:
+    """Split a `make_scanpath_figure` result into one figure per visible layer.
+
+    Returns ``{layer_name: figure}`` in bottom-to-top draw order, keeping only the
+    layers that actually have elements. Each returned figure is a copy of ``fig``
+    with (a) only that layer's traces/shapes/images kept and (b) a transparent
+    paper/plot background, so stacking the exported files in a vector editor
+    reproduces the combined figure exactly (identical axis ranges + size ⇒ perfect
+    registration). See VIZ-5."""
+    # Which layers are present, and each trace's layer (computed once).
+    trace_layers = [_trace_layer(tr) for tr in fig.data]
+    shape_layers = [_shape_layer(sh) for sh in (fig.layout.shapes or ())]
+    present = set(trace_layers) | {s for s in shape_layers if s}
+    if fig.layout.images:
+        present.add("stimulus_image")
+
+    out: Dict[str, go.Figure] = {}
+    for layer in SCANPATH_LAYER_ORDER:
+        if layer not in present:
+            continue
+        g = copy.deepcopy(fig)
+        g.data = tuple(tr for tr, tl in zip(g.data, trace_layers) if tl == layer)
+        g.layout.shapes = tuple(
+            sh for sh, sl in zip(g.layout.shapes or (), shape_layers) if sl == layer
+        )
+        g.layout.images = fig.layout.images if layer == "stimulus_image" else ()
+        # Transparent background so the layers overlay cleanly when re-stacked.
+        g.update_layout(paper_bgcolor=_TRANSPARENT, plot_bgcolor=_TRANSPARENT)
+        out[layer] = g
+    return out
 
 
 _HOVER_MEASURE_LABELS: dict[str, str] = {
@@ -782,27 +997,76 @@ def _add_saccade_layer(
     width: float,
     style: str,
     show_arrows: bool,
-) -> None:
+    saccade_classes: Optional[pd.Series] = None,
+    class_colors: Optional[dict] = None,
+    class_legend: bool = True,
+    render_mode: str = "Straight",
+) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
 
-    Connects consecutive fixations in time order. The arrowheads are a separate,
-    independently-toggled trace drawn before the fixation markers so the dots sit
-    on top. The caller gates this on spatial axes, ``show_saccades`` and at least
-    two fixations.
+    Connects consecutive fixations in time order. When ``saccade_classes`` is
+    given (VIZ-8 "By type" mode) the lines are split into one sub-trace per
+    reading class, each in its own colour from ``class_colors`` and shown in a
+    small legend; otherwise a single uniform-``color`` trace is drawn.
+    ``render_mode="Arc"`` (VIZ-9) draws each saccade as an upward arch instead of
+    a straight connector. The arrowheads are a separate, independently-toggled
+    trace drawn before the fixation markers so the dots sit on top (uniform
+    ``color`` either way — they encode direction, the line colour encodes type).
+    The caller gates this on spatial axes, ``show_saccades`` and at least two
+    fixations.
+
+    Returns ``True`` when legend entries were added (by-type mode), so the caller
+    reserves margin for the legend (mirrors ``_add_raw_gaze_layer``).
     """
-    sx, sy = _saccade_segments(fixations, x_field, y_field)
-    if sx:
-        fig.add_trace(
-            go.Scatter(
-                x=sx,
-                y=sy,
-                mode="lines",
-                line=dict(color=color, width=width, dash=style),
-                hoverinfo="skip",
-                showlegend=False,
-                name="saccades",
-            )
+    legend_added = False
+    arch_frac = _ARCH_FRAC if render_mode == "Arc" else None
+    if saccade_classes is not None:
+        # Merge over the full defaults so classes the caller omits (notably the
+        # non-editable "other" catch-all — the UI palette only carries the five
+        # reading classes) still get their intended colour instead of falling
+        # back to the uniform line colour.
+        palette = {**SACCADE_CLASS_COLORS, **(class_colors or {})}
+        segs = _saccade_segments_by_class(
+            fixations, x_field, y_field, saccade_classes, arch_frac
         )
+        for cls_name in SACCADE_CLASS_ORDER:
+            seg = segs.get(cls_name)
+            if not seg or not seg[0]:
+                continue
+            sx, sy = seg
+            fig.add_trace(
+                go.Scatter(
+                    x=sx,
+                    y=sy,
+                    mode="lines",
+                    line=dict(
+                        color=palette.get(cls_name, color), width=width, dash=style
+                    ),
+                    hoverinfo="skip",
+                    # VIZ-8: the colour key is optional — hide it (but keep the
+                    # coloured sub-traces) when class_legend is off.
+                    showlegend=class_legend,
+                    legendgroup="saccade_type",
+                    legendgrouptitle_text="Saccade type",
+                    name=SACCADE_CLASS_LABELS.get(cls_name, cls_name),
+                )
+            )
+            # Reserve legend margin only when the key is actually shown.
+            legend_added = class_legend
+    else:
+        sx, sy = _saccade_segments(fixations, x_field, y_field, arch_frac)
+        if sx:
+            fig.add_trace(
+                go.Scatter(
+                    x=sx,
+                    y=sy,
+                    mode="lines",
+                    line=dict(color=color, width=width, dash=style),
+                    hoverinfo="skip",
+                    showlegend=False,
+                    name="saccades",
+                )
+            )
     if show_arrows:
         amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field)
         if amx:
@@ -824,6 +1088,7 @@ def _add_saccade_layer(
                     name="saccade direction",
                 )
             )
+    return legend_added
 
 
 def _add_raw_gaze_layer(
@@ -889,6 +1154,7 @@ def make_scanpath_figure(
     heatmap_metric: Optional[str],
     show_saccade_arrows: bool = False,
     heatmap_style: str = "Word boxes",
+    heatmap_norm: str = "Linear",
     marker_size_range: Tuple[int, int],
     order_font_size: int,
     order_font_color: str,
@@ -904,6 +1170,11 @@ def make_scanpath_figure(
     saccade_color: str = SACCADE_COLOR,
     saccade_style: str = "solid",
     saccade_width: float = DEFAULT_SACCADE_WIDTH,
+    saccade_color_mode: str = "Uniform",
+    saccade_class_colors: Optional[dict] = None,
+    saccade_type_legend: bool = True,
+    saccade_render_mode: str = "Straight",
+    fixation_snap_to_word: bool = False,
     hollow_fixations: bool = False,
     fixation_opacity: float = 1.0,
     text_color: str = WORD_LABEL_COLOR,
@@ -920,6 +1191,7 @@ def make_scanpath_figure(
     background_image: Optional[str] = None,
     background_image_size: Optional[Tuple[float, float]] = None,
     background_image_origin: Optional[Tuple[float, float]] = None,
+    background_image_opacity: float = 1.0,
     fit_to_monitor: bool = False,
     word_heatmap_col: Optional[str] = None,
     word_heatmap_title: Optional[str] = None,
@@ -959,6 +1231,34 @@ def make_scanpath_figure(
         y_range = [canvas_height, 0]
         x_min_data = x_max_data = y_min_data = y_max_data = None
 
+    # VIZ-9 arc mode: the saccade arches rise ABOVE the fixations, so reserve
+    # headroom at the top of the view (smaller y — the axis is inverted) or a wide
+    # top-line saccade's apex gets clipped. Computed from the exact Bézier apex of
+    # each segment so it's tight; only in Arc mode, so the default view is
+    # unchanged.
+    if (
+        spatial_axes
+        and saccade_render_mode == "Arc"
+        and show_saccades
+        and len(fixations) > 1
+    ):
+        fo = fixations.sort_values("timestamp_ms")
+        fxv = pd.to_numeric(fo[x_field], errors="coerce").to_numpy(dtype=float)
+        fyv = pd.to_numeric(fo[y_field], errors="coerce").to_numpy(dtype=float)
+        apex = np.inf
+        for i in range(len(fo) - 1):
+            x0, y0, x1, y1 = fxv[i], fyv[i], fxv[i + 1], fyv[i + 1]
+            if not np.isfinite((x0, y0, x1, y1)).all():
+                continue
+            # Bézier value at t=0.5 for a control point raised by the arch rise.
+            apex = min(
+                apex,
+                0.25 * (y0 + y1) + 0.5 * (min(y0, y1) - _ARCH_FRAC * abs(x1 - x0)),
+            )
+        if np.isfinite(apex):
+            margin = 0.02 * abs(y_range[0] - y_range[1])
+            y_range = [y_range[0], min(y_range[1], apex - margin)]
+
     # Stimulus-page background image (MultiplEYE): the rendered page sits at data
     # coordinates (origin_x, origin_y)-(+image_w, +image_h) UNDER every other layer.
     # The coords are placed where the centered stimulus appeared on the monitor, so
@@ -983,6 +1283,9 @@ def make_scanpath_figure(
                     layer="below",
                     xanchor="left",
                     yanchor="top",
+                    # VIZ-4: dim a busy stimulus image so the AOIs / scanpath read
+                    # over it (1.0 = opaque, the default).
+                    opacity=float(background_image_opacity),
                 )
             )
 
@@ -1070,6 +1373,7 @@ def make_scanpath_figure(
                 weights=weights,
                 heatmap_colorscale=heatmap_colorscale,
                 show_colorbars=show_colorbars,
+                heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
             )
         elif not words.empty:
@@ -1083,6 +1387,7 @@ def make_scanpath_figure(
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
                 show_colorbars=show_colorbars,
+                heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
             )
         else:
@@ -1099,6 +1404,7 @@ def make_scanpath_figure(
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
                 show_colorbars=show_colorbars,
+                heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
             )
     elif spatial_axes and show_heatmap and not words.empty:
@@ -1116,6 +1422,7 @@ def make_scanpath_figure(
                 heatmap_colorscale=heatmap_colorscale,
                 heatmap_range=heatmap_range,
                 show_colorbars=show_colorbars,
+                heatmap_norm=heatmap_norm,
                 colorbar_title=word_heatmap_title or "Value",
                 colorbar_style=cb_style,
             )
@@ -1134,22 +1441,54 @@ def make_scanpath_figure(
                     heatmap_colorscale=heatmap_colorscale,
                     heatmap_range=heatmap_range,
                     show_colorbars=show_colorbars,
+                    heatmap_norm=heatmap_norm,
                     colorbar_style=cb_style,
                 )
+
+    # VIZ-9 "linear reading" mode: snap each fixation above the word it lands on,
+    # so the saccade layer AND the fixation markers below draw from the snapped
+    # positions (the heatmap above keeps the raw gaze density). Off by default.
+    render_fix = fixations
+    if (
+        fixation_snap_to_word
+        and spatial_axes
+        and not fixations.empty
+        and not words.empty
+    ):
+        render_fix = _snap_fixations_to_words(fixations, words, x_field, y_field)
 
     # Saccade lines + optional direction arrowheads (drawn before the fixation
     # markers so the dots sit on top).
     if spatial_axes and show_saccades and len(fixations) > 1:
-        _add_saccade_layer(
+        # VIZ-8: "By type" colours each saccade by its reading class. The class is
+        # geometry-derived per trial (like color-by-line above), so compute it
+        # here from the trial's fixations + words — reuse a precomputed
+        # `saccade_class` column if the pipeline already added one. Classify on the
+        # RAW fixations (word_id is unchanged by the snap).
+        saccade_classes = None
+        if saccade_color_mode == "By type":
+            existing = fixations.get("saccade_class")
+            if existing is not None:
+                saccade_classes = existing
+            else:
+                from .measures import classify_saccades
+
+                saccade_classes = classify_saccades(fixations, words)
+        if _add_saccade_layer(
             fig,
-            fixations,
+            render_fix,
             x_field=x_field,
             y_field=y_field,
             color=saccade_color,
             width=saccade_width,
             style=saccade_style,
             show_arrows=show_saccade_arrows,
-        )
+            saccade_classes=saccade_classes,
+            class_colors=saccade_class_colors,
+            class_legend=saccade_type_legend,
+            render_mode=saccade_render_mode,
+        ):
+            legend_active = True
 
     # Drift connectors (PRE-3): one faint grey vertical segment per fixation from
     # its original y (`connector_y`) to its drift-corrected y (the already-snapped
@@ -1188,7 +1527,9 @@ def make_scanpath_figure(
             )
 
     if show_fixations and not fixations.empty:
-        ordered = fixations.sort_values("timestamp_ms")
+        # ``render_fix`` == fixations unless VIZ-9 snap-to-word is on, in which
+        # case the markers, order labels and colour-by-line use the snapped x/y.
+        ordered = render_fix.sort_values("timestamp_ms")
         # Fixation classification (PRE-2, viz-only): SHORT / LONG / OUT-OF-BOUNDS,
         # each Off / Highlight / Discard. Apply Discard here — drop those rows from
         # `ordered` so they vanish from the markers, fixation-index labels and
@@ -1409,6 +1750,8 @@ def make_scanpath_figure(
                 y1=y_range[0],
                 line=dict(color="#000000", width=1),
                 fillcolor="rgba(0,0,0,0)",
+                # VIZ-5: the plot border is its own layer (a registration guide).
+                name=_shape_layer_tag("frame"),
             )
         )
 
@@ -1446,6 +1789,31 @@ def make_scanpath_figure(
     return fig
 
 
+# VIZ-3: alternative heatmap normalization. The colour of a heatmap cell maps
+# LINEARLY between its z-range endpoints, so a few very-hot words (dwell times are
+# heavy-tailed) can wash out the rest. "Log" instead maps colour to log1p(value),
+# compressing the top of the range so mid-range words stay distinguishable. The
+# transform is applied to the *values and the range endpoints together*, so the
+# raw-unit `heatmap_range` slider keeps its meaning; only the colour curve changes.
+_HEATMAP_NORMS = ("Linear", "Log")
+
+
+def _apply_heatmap_norm(values, norm: str):
+    """Transform heatmap values for the chosen normalization (VIZ-3).
+
+    ``Log`` returns ``log1p(max(value, 0))`` (heavy-tail compression); anything
+    else is the identity. Accepts a scalar or an array; returns the same shape."""
+    arr = np.asarray(values, dtype=float)
+    if norm == "Log":
+        return np.log1p(np.clip(arr, 0.0, None))
+    return arr
+
+
+def _heatmap_title(base: str, norm: str) -> str:
+    """Colour-bar title, marked ``(log)`` when the log normalization is active."""
+    return f"{base} (log)" if norm == "Log" else base
+
+
 def _add_word_level_heatmap(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -1457,6 +1825,7 @@ def _add_word_level_heatmap(
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
+    heatmap_norm: str = "Linear",
     colorbar_style: Optional[dict] = None,
 ) -> None:
     # Pull the fixation coordinates (and optional weights) into numpy arrays once,
@@ -1489,6 +1858,7 @@ def _add_word_level_heatmap(
         heatmap_colorscale=heatmap_colorscale,
         heatmap_range=heatmap_range,
         show_colorbars=show_colorbars,
+        heatmap_norm=heatmap_norm,
         colorbar_title="Fixation count" if weights is None else "Duration (ms)",
         colorbar_style=colorbar_style,
     )
@@ -1502,6 +1872,7 @@ def _add_word_measure_heatmap(
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
+    heatmap_norm: str = "Linear",
     colorbar_style: Optional[dict] = None,
 ) -> None:
     """Word-box heatmap from a pre-aggregated per-word measure column.
@@ -1518,6 +1889,7 @@ def _add_word_measure_heatmap(
         heatmap_colorscale=heatmap_colorscale,
         heatmap_range=heatmap_range,
         show_colorbars=show_colorbars,
+        heatmap_norm=heatmap_norm,
         colorbar_title="Fixation count"
         if measure == "n_fixations"
         else "Duration (ms)",
@@ -1533,22 +1905,28 @@ def _draw_word_value_heatmap(
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
+    heatmap_norm: str = "Linear",
     colorbar_title: str,
     colorbar_style: Optional[dict] = None,
 ) -> None:
     from plotly.colors import sample_colorscale
 
+    # Nonzero test on the RAW values (a word with no dwell stays uncoloured); the
+    # colour position then maps through the chosen normalization (VIZ-3).
     nonzero_rows = [(wr, v) for wr, v in zip(words.itertuples(), word_values) if v > 0]
     if not nonzero_rows:
         return
     vals = [v for _, v in nonzero_rows]
-    z_min = heatmap_range[0] if heatmap_range else float(min(vals))
-    z_max = heatmap_range[1] if heatmap_range else float(max(vals))
+    z_min_raw = heatmap_range[0] if heatmap_range else float(min(vals))
+    z_max_raw = heatmap_range[1] if heatmap_range else float(max(vals))
+    z_min = float(_apply_heatmap_norm(z_min_raw, heatmap_norm))
+    z_max = float(_apply_heatmap_norm(z_max_raw, heatmap_norm))
     z_span = max(z_max - z_min, 1e-9)
 
     heatmap_shapes = []
     for wr, v in nonzero_rows:
-        norm = max(0.0, min(1.0, (v - z_min) / z_span))
+        tv = float(_apply_heatmap_norm(v, heatmap_norm))
+        norm = max(0.0, min(1.0, (tv - z_min) / z_span))
         color = sample_colorscale(heatmap_colorscale, [norm])[0]
         heatmap_shapes.append(
             dict(
@@ -1561,6 +1939,8 @@ def _draw_word_value_heatmap(
                 fillcolor=color,
                 opacity=0.5,
                 layer="below",
+                # VIZ-5: word-box heatmap rects belong to the heatmap layer.
+                name=_shape_layer_tag("heatmap"),
             )
         )
     existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -1576,10 +1956,16 @@ def _draw_word_value_heatmap(
                     showscale=True,
                     cmin=z_min,
                     cmax=z_max,
-                    colorbar=_colorbar_dict(colorbar_title, **(colorbar_style or {})),
+                    colorbar=_colorbar_dict(
+                        _heatmap_title(colorbar_title, heatmap_norm),
+                        **(colorbar_style or {}),
+                    ),
                 ),
                 showlegend=False,
                 hoverinfo="skip",
+                # VIZ-5: the word-box heatmap's colorbar-carrier rides the heatmap
+                # layer (name contains "heatmap" → classified there).
+                name="heatmap colorbar",
             )
         )
 
@@ -1598,27 +1984,57 @@ def _add_density_heatmap(
     heatmap_colorscale: str,
     heatmap_range: Optional[Tuple[float, float]],
     show_colorbars: bool,
+    heatmap_norm: str = "Linear",
     colorbar_style: Optional[dict] = None,
 ) -> None:
-    x_span = max(x_max - x_min, 1.0)
-    y_span = max(y_max - y_min, 1.0)
+    # A 40×40 count/duration grid drawn as a go.Heatmap (rather than
+    # go.Histogram2d) so the colour mapping can go through _apply_heatmap_norm
+    # (VIZ-3) — Plotly's Histogram2d bins internally and can't be log-scaled.
+    xs = pd.to_numeric(fixations[x_field], errors="coerce")
+    ys = pd.to_numeric(fixations[y_field], errors="coerce")
+    valid = xs.notna() & ys.notna()
+    if not valid.any():
+        return
+    if weights is not None:
+        w = (
+            pd.to_numeric(weights, errors="coerce")
+            .reindex(fixations.index)
+            .fillna(0.0)[valid]
+            .to_numpy()
+        )
+    else:
+        w = np.ones(int(valid.sum()))
+    xv = xs[valid].to_numpy()
+    yv = ys[valid].to_numpy()
+
+    x_edges = np.linspace(x_min, x_max, 41)
+    y_edges = np.linspace(y_min, y_max, 41)
+    hist, _, _ = np.histogram2d(xv, yv, bins=[x_edges, y_edges], weights=w)
+    grid = hist.T  # rows index y, cols index x — the orientation go.Heatmap wants
+    if grid.max() <= 0:
+        return
+    z = np.where(grid > 0, _apply_heatmap_norm(grid, heatmap_norm), np.nan)
+    z_range = (
+        _apply_heatmap_norm(np.asarray(heatmap_range, dtype=float), heatmap_norm)
+        if heatmap_range
+        else (None, None)
+    )
+    base_title = "Fixation density" if weights is None else "Duration (ms)"
     fig.add_trace(
-        go.Histogram2d(
-            x=fixations[x_field],
-            y=fixations[y_field],
-            xbins=dict(start=x_min, end=x_max, size=x_span / 40.0),
-            ybins=dict(start=y_min, end=y_max, size=y_span / 40.0),
+        go.Heatmap(
+            x=(x_edges[:-1] + x_edges[1:]) / 2.0,
+            y=(y_edges[:-1] + y_edges[1:]) / 2.0,
+            z=z,
             colorscale=heatmap_colorscale,
             opacity=0.35,
             showscale=show_colorbars,
             colorbar=_colorbar_dict(
-                "Fixation density" if weights is None else "Duration (ms)",
-                **(colorbar_style or {}),
+                _heatmap_title(base_title, heatmap_norm), **(colorbar_style or {})
             ),
-            histfunc="sum" if weights is not None else "count",
-            z=weights,
-            zmin=heatmap_range[0] if heatmap_range else None,
-            zmax=heatmap_range[1] if heatmap_range else None,
+            zmin=z_range[0],
+            zmax=z_range[1],
+            hoverinfo="skip",
+            name="Fixation heatmap",
         )
     )
 
@@ -1668,6 +2084,7 @@ def _add_interpolated_heatmap(
     weights: Optional[pd.Series],
     heatmap_colorscale: str,
     show_colorbars: bool,
+    heatmap_norm: str = "Linear",
     colorbar_style: Optional[dict] = None,
 ) -> None:
     """Smooth, word-box-independent fixation heatmap (Gaussian-interpolated).
@@ -1713,9 +2130,12 @@ def _add_interpolated_heatmap(
     if peak <= 0:
         return
     # Near-zero cells -> NaN so Plotly renders them transparent (only populated
-    # regions get tinted, keeping the text readable).
+    # regions get tinted, keeping the text readable). The remaining density maps
+    # through the chosen normalization (VIZ-3; log1p(0)=0 keeps the floor at 0).
     z = np.where(blurred < peak * _INTERP_FLOOR_FRAC, np.nan, blurred)
+    z = _apply_heatmap_norm(z, heatmap_norm)
 
+    base_title = "Dwell-time density" if weights is not None else "Fixation density"
     fig.add_trace(
         go.Heatmap(
             x=(x_edges[:-1] + x_edges[1:]) / 2.0,
@@ -1729,8 +2149,7 @@ def _add_interpolated_heatmap(
             # so it autoscales from 0 rather than borrowing that range.
             zmin=0.0,
             colorbar=_colorbar_dict(
-                "Dwell-time density" if weights is not None else "Fixation density",
-                **(colorbar_style or {}),
+                _heatmap_title(base_title, heatmap_norm), **(colorbar_style or {})
             ),
             hoverinfo="skip",
             name="Fixation heatmap",
@@ -1747,6 +2166,14 @@ def _add_interpolated_heatmap(
 # (n_frames * avg) still matches the observed runtime — going lower would just
 # make the quote understate reality. Also keeps the briefest gaps perceptible.
 _ANIM_MIN_FRAME_MS = 16
+# VIZ-11: animation frames sit on a UNIFORM time grid (one every
+# _ANIM_GRID_STEP_MS of reading) rather than one per fixation onset, so the
+# slider scrubs linearly through seconds regardless of how fixations cluster or
+# how many scanpaths overlay. The grid coarsens past _ANIM_MAX_FRAMES so a long
+# reading doesn't emit thousands of frames (which would balloon the GIF/MP4
+# export); quantization is then at most one grid step.
+_ANIM_GRID_STEP_MS = 100.0
+_ANIM_MAX_FRAMES = 360
 
 # Vertical space (px) reserved BELOW the animation plot for the transport
 # controls (play / pause / restart buttons + the time slider with its "Elapsed"
@@ -1805,29 +2232,32 @@ def _scanpath_anim_specs(entries, marker_size_range):
 
 
 def _anim_timeline(specs, playback_speed):
-    """Merged frame timeline across all scanpaths.
+    """Uniform time-grid frame timeline across all scanpaths (VIZ-11).
 
-    Returns ``(onset_times, frame_durations_ms, avg_frame_duration,
-    reading_span_ms)``. A frame is emitted at every distinct fixation onset
-    across all scanpaths; each frame lasts the gap to the next onset divided by
-    ``playback_speed``, floored at ``_ANIM_MIN_FRAME_MS``. ``reading_span_ms`` is
-    the longest reading's real span (all readings are rebased to t=0).
+    Returns ``(frame_times, frame_duration_ms, reading_span_ms)``. Frames are
+    emitted on a **uniform time grid** — one every ``step`` ms, where ``step`` is
+    ``_ANIM_GRID_STEP_MS`` unless that would exceed ``_ANIM_MAX_FRAMES`` frames
+    (then it coarsens) — so the slider scrubs linearly through reading time no
+    matter how fixations cluster or how many scanpaths overlay (the union of
+    onset sets is meaningless for >1 reader). Each frame lasts a uniform
+    ``step / playback_speed`` (floored at ``_ANIM_MIN_FRAME_MS``), so the Play
+    button's runtime is ``≈ reading_span_ms / playback_speed``. Frame *content* is
+    unchanged — every fixation whose onset ≤ t shows at time t. All readings are
+    rebased to t=0; ``reading_span_ms`` is the longest reading's span. Returns an
+    empty grid when there is nothing to animate.
     """
-    onset_times = sorted({float(t) for s in specs for t in s["onsets"]})
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
-    frame_durations_ms = []
-    for k, t in enumerate(onset_times):
-        nxt = onset_times[k + 1] if k + 1 < len(onset_times) else reading_span_ms
-        gap = max(nxt - t, 0.0)
-        frame_durations_ms.append(
-            int(max(gap / max(playback_speed, 1e-6), _ANIM_MIN_FRAME_MS))
-        )
-    avg = (
-        max(int(np.mean(frame_durations_ms)), _ANIM_MIN_FRAME_MS)
-        if frame_durations_ms
-        else _ANIM_MIN_FRAME_MS
-    )
-    return onset_times, frame_durations_ms, avg, reading_span_ms
+    if not specs or reading_span_ms <= 0:
+        return [], _ANIM_MIN_FRAME_MS, reading_span_ms
+    step = max(_ANIM_GRID_STEP_MS, reading_span_ms / _ANIM_MAX_FRAMES)
+    frame_times = [
+        min(k * step, reading_span_ms) for k in range(int(reading_span_ms // step) + 1)
+    ]
+    # Land the final frame exactly on the reading end so it reveals everything.
+    if frame_times[-1] < reading_span_ms:
+        frame_times.append(reading_span_ms)
+    frame_duration_ms = int(max(step / max(playback_speed, 1e-6), _ANIM_MIN_FRAME_MS))
+    return frame_times, frame_duration_ms, reading_span_ms
 
 
 def _revealed_xy(all_x, all_y, kk):
@@ -1878,10 +2308,84 @@ def animation_playback_ms(fixations_list, playback_speed):
     )
     if not specs:
         return 0.0, 0.0
-    onset_times, _frame_durations, avg, reading_span_ms = _anim_timeline(
+    frame_times, frame_duration_ms, reading_span_ms = _anim_timeline(
         specs, playback_speed
     )
-    return reading_span_ms, float(len(onset_times) * avg)
+    return reading_span_ms, float(len(frame_times) * frame_duration_ms)
+
+
+# VIZ-10 — autoplay. The animation is built with the Play button paused (so it can
+# start at the *configured* speed rather than Plotly's default frame duration). To
+# autoplay on load we emit a tiny client-side kick-off that calls `Plotly.animate`
+# with the SAME per-frame duration as the Play button. The autoplay intent + that
+# duration ride on `fig.layout.meta` so every HTML-embedding surface
+# (`tabs._render_true_scale_chart`, `api.save_figure`) can honor it uniformly.
+_AUTOPLAY_META_FLAG = "scanpath_autoplay"
+_AUTOPLAY_META_DURATION = "scanpath_frame_duration_ms"
+
+
+def animation_autoplay_frame_duration(fig) -> Optional[int]:
+    """The per-frame duration (ms) for an autoplay kickoff, or ``None``.
+
+    Returns ``None`` for a static figure, an animation built with
+    ``autoplay=False``, or one with no frames — i.e. whenever nothing should
+    auto-start. Reads the marker :func:`make_scanpath_animation` stamps on
+    ``fig.layout.meta``."""
+    meta = getattr(fig.layout, "meta", None)
+    if not isinstance(meta, dict) or not meta.get(_AUTOPLAY_META_FLAG):
+        return None
+    try:
+        return int(meta.get(_AUTOPLAY_META_DURATION))
+    except (TypeError, ValueError):
+        return None
+
+
+def animation_autoplay_post_script(frame_duration_ms: int) -> str:
+    """A Plotly ``post_script`` snippet that auto-starts the replay on load.
+
+    Passed to ``fig.to_html(post_script=…)`` / ``write_html(post_script=…)``,
+    which substitutes ``{plot_id}`` with the real graph-div id. Uses the same
+    ``redraw=False`` + zero-transition options as the Play button
+    (:func:`_animation_play_buttons`) so the auto-started replay runs at the
+    configured playback speed, not Plotly's default.
+
+    The kickoff **polls** until the plot is genuinely ready, then plays from the
+    first frame. Two things made the old one-shot version silently never start
+    (VIZ-10), both confirmed against a live Plotly build:
+
+    * Frames live on ``gd._transitionData._frames``, **not** ``gd.frames`` (which
+      is ``undefined``). The old guard tested ``gd.frames.length`` and so always
+      bailed before it ever called ``animate``.
+    * The Plotly library loads from the CDN and attaches its frames
+      asynchronously (an ``addFrames`` in a ``.then()`` after ``newPlot``
+      resolves), so any fixed delay races the mount.
+
+    Polling every 50 ms (capped ~10 s) for ``Plotly`` **and** the real frame list
+    handles CDN latency, the async attach, and the true-scale iframe/transform
+    mount, on the live embed and saved HTML alike. ``fromcurrent:false`` starts a
+    clean 0→end run — a freshly loaded ``auto_play=False`` plot has no "current"
+    frame, so a ``fromcurrent:true`` kick can no-op — at the same ``redraw:false``
+    / zero-transition speed as the ▶ Play button."""
+    dur = int(max(frame_duration_ms, _ANIM_MIN_FRAME_MS))
+    # `{plot_id}` is left literal for Plotly to replace; the duration is spliced
+    # in via concatenation so the surrounding JS braces need no escaping.
+    return (
+        "(function(){"
+        "var gd=document.getElementById('{plot_id}');"
+        "if(!gd){return;}"
+        "var n=0;"
+        "(function kick(){"
+        "var td=gd._transitionData;"
+        "var frames=(td&&td._frames)||gd.frames;"
+        "if(typeof Plotly!=='undefined'&&frames&&frames.length){"
+        "Plotly.animate(gd,null,{frame:{duration:"
+        + str(dur)
+        + ",redraw:false},fromcurrent:false,transition:{duration:0}});"
+        "return;}"
+        "if(++n<200){setTimeout(kick,50);}"
+        "})();"
+        "})();"
+    )
 
 
 def _animation_play_buttons(frame_duration):
@@ -1953,21 +2457,18 @@ def _animation_play_buttons(frame_duration):
     ]
 
 
-def _animation_time_slider(onset_times):
-    """Slider whose handle position maps to elapsed reading time (not fixation
-    index), so scrubbing moves through seconds into the reading. Steps jump
-    instantly (duration 0).
+def _animation_time_slider(frame_times, total_ms):
+    """Linear time-scrubber slider (VIZ-11).
 
-    A long reading has hundreds of fixations. Drawing a tick + time label under
-    *every* step renders an illegible wall of overlapping numbers — but the
-    per-step ``label`` is also what the single "Elapsed" readout shows, so we
-    can't simply blank most of them (the readout would go empty between the few
-    kept labels). Instead every step keeps its real time label — so the readout
-    updates smoothly on every frame and the handle stays frame-accurate — while
-    the per-step tick ruler (``ticklen``/``minorticklen=0``) and the per-step
-    labels (transparent ``font``) are hidden. The "Elapsed: X.Xs" readout is then
-    the one, uncluttered time display.
+    Frame times sit on a uniform grid, so the handle moves linearly through
+    reading time. Each step's label is **"elapsed / total s"** (e.g. "1.2 /
+    30.0s"), surfaced in the single ``currentvalue`` readout — meaningful for any
+    number of overlaid scanpaths, unlike a fixation index. A long reading would
+    render a wall of overlapping numbers if every step drew a tick + label, so the
+    per-step tick ruler (``ticklen``/``minorticklen`` = 0) and per-step labels
+    (transparent ``font``) are hidden; the readout is the one time display.
     """
+    total_s = total_ms / 1000.0
     return [
         dict(
             active=0,
@@ -1977,12 +2478,11 @@ def _animation_time_slider(onset_times):
             xanchor="left",
             ticklen=0,
             minorticklen=0,
-            # Per-step labels feed the "Elapsed" readout but must not pile up
-            # under the track, so draw them fully transparent.
+            # Per-step labels feed the readout but must not pile up under the
+            # track, so draw them fully transparent.
             font=dict(color="rgba(0,0,0,0)"),
             currentvalue=dict(
                 font=dict(size=14, color="#444"),
-                prefix="Elapsed: ",
                 visible=True,
                 xanchor="right",
             ),
@@ -2001,10 +2501,10 @@ def _animation_time_slider(onset_times):
                             transition=dict(duration=0),
                         ),
                     ],
-                    label=f"{onset_times[k] / 1000:.1f}s",
+                    label=f"{frame_times[k] / 1000:.1f} / {total_s:.1f}s",
                     method="animate",
                 )
-                for k in range(len(onset_times))
+                for k in range(len(frame_times))
             ],
         )
     ]
@@ -2047,7 +2547,9 @@ def make_scanpath_animation(
     background_image: Optional[str] = None,
     background_image_size: Optional[Tuple[float, float]] = None,
     background_image_origin: Optional[Tuple[float, float]] = None,
+    background_image_opacity: float = 1.0,
     fit_to_monitor: bool = False,
+    autoplay: bool = True,
 ) -> go.Figure:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
@@ -2074,6 +2576,12 @@ def make_scanpath_animation(
     categorical → discrete palette + legend), ``color_by_line``, and an optional
     colorbar. The dual overlay ignores them — there the flat A/B colours are
     what tells the two readings apart.
+
+    With ``autoplay`` (default on, VIZ-10) the returned figure is stamped so any
+    HTML-embedding surface auto-starts the replay on load *at the configured
+    playback speed* — see :func:`animation_autoplay_frame_duration` /
+    :func:`animation_autoplay_post_script`. The figure itself is always built
+    paused; autoplay is a kick-off layered on top by the embedder.
     """
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
@@ -2340,12 +2848,10 @@ def make_scanpath_animation(
             )
         )
 
-    onset_times, _frame_durations, avg_frame_duration, _span = _anim_timeline(
-        specs, playback_speed
-    )
+    frame_times, frame_duration, reading_span_ms = _anim_timeline(specs, playback_speed)
 
     frames = []
-    for k, t in enumerate(onset_times):
+    for k, t in enumerate(frame_times):
         traces_in_frame = []
         traces_idx_in_frame = []
         for s in specs:
@@ -2440,8 +2946,10 @@ def make_scanpath_animation(
         )
     )
 
-    sliders = _animation_time_slider(onset_times) if onset_times else []
-    updatemenus = _animation_play_buttons(avg_frame_duration) if onset_times else []
+    sliders = (
+        _animation_time_slider(frame_times, reading_span_ms) if frame_times else []
+    )
+    updatemenus = _animation_play_buttons(frame_duration) if frame_times else []
 
     # fitted_w / fitted_h were computed up front (so the label scale matched).
     # ALL transport controls (play/pause/restart buttons + the time slider with
@@ -2478,6 +2986,8 @@ def make_scanpath_animation(
                     layer="below",
                     xanchor="left",
                     yanchor="top",
+                    # VIZ-4: dim a busy stimulus image (1.0 = opaque, the default).
+                    opacity=float(background_image_opacity),
                 )
             )
     layout = dict(
@@ -2526,6 +3036,14 @@ def make_scanpath_animation(
             borderwidth=1,
         )
     fig.update_layout(**layout)
+    # VIZ-10: carry the autoplay intent + the resolved per-frame duration so any
+    # HTML-embedding surface can kick off `Plotly.animate` at the CONFIGURED speed
+    # on load (Plotly's own `auto_play` ignores frame_duration). No frames → the
+    # marker stays off, so `animation_autoplay_frame_duration` returns None.
+    fig.layout.meta = {
+        _AUTOPLAY_META_FLAG: bool(autoplay and frame_times),
+        _AUTOPLAY_META_DURATION: int(frame_duration),
+    }
     return fig
 
 

@@ -18,6 +18,9 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
     OUT_OF_TEXT_COLOR,
+    SACCADE_CLASS_COLORS,
+    SACCADE_CLASS_EDITABLE,
+    SACCADE_CLASS_LABELS,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
@@ -28,6 +31,40 @@ from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .data import frame_fingerprint
 
 NONE_OPTION = "(none)"
+
+# VIZ-4: MIME by extension for a user-uploaded stimulus image → a `data:` URI the
+# figure builders accept as `background_image` (plots._image_to_data_uri passes a
+# `data:` URI straight through).
+_UPLOAD_IMAGE_MIME = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
+
+
+def _uploaded_image_data_uri(uploaded) -> Optional[str]:
+    """Base64 ``data:`` URI for a Streamlit ``UploadedFile`` image, or ``None``.
+
+    Cached in session state keyed by the file's id so a multi-MB screenshot is
+    encoded once, not on every rerun (VIZ-4)."""
+    if uploaded is None:
+        return None
+    import base64
+
+    cache = st.session_state.get("_stimulus_image_upload_cache")
+    if isinstance(cache, dict) and cache.get("id") == uploaded.file_id:
+        return cache.get("uri")
+    ext = (uploaded.name.rsplit(".", 1)[-1] if "." in uploaded.name else "").lower()
+    mime = _UPLOAD_IMAGE_MIME.get(ext, "image/png")
+    uri = f"data:{mime};base64," + base64.b64encode(uploaded.getvalue()).decode("ascii")
+    st.session_state["_stimulus_image_upload_cache"] = {
+        "id": uploaded.file_id,
+        "uri": uri,
+    }
+    return uri
+
 
 # PRE-3: drift-correction picker options — "Off" + each algorithm title-cased.
 _ALIGN_OPTIONS = ["Off", *(a.title() for a in ALIGN_ALGORITHMS)]
@@ -52,6 +89,27 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_color": SACCADE_COLOR,
     "global_saccade_style": "Solid",
     "global_saccade_width": DEFAULT_SACCADE_WIDTH,
+    # VIZ-8: colour saccades uniformly, or by reading type (forward / skip /
+    # refixation / return sweep / regression). "By type" splits the saccade trace
+    # into one colour per class with a small legend; the five class colours are
+    # each restorable, so seed them here.
+    "global_saccade_color_mode": "Uniform",
+    # VIZ-8: show the saccade-type colour key on the plot (default on). Optional,
+    # like the other legends.
+    "global_saccade_type_legend": True,
+    "global_saccade_class_color_forward": SACCADE_CLASS_COLORS["forward"],
+    "global_saccade_class_color_skip": SACCADE_CLASS_COLORS["skip"],
+    "global_saccade_class_color_refixation": SACCADE_CLASS_COLORS["refixation"],
+    "global_saccade_class_color_return_sweep": SACCADE_CLASS_COLORS["return_sweep"],
+    "global_saccade_class_color_regression": SACCADE_CLASS_COLORS["regression"],
+    # VIZ-9 "linear reading" mode: draw saccades as upward arcs (`Arc`) instead of
+    # straight connectors, and/or snap each fixation above the word it lands on.
+    "global_saccade_render_mode": "Straight",
+    "global_fixation_snap_to_word": False,
+    # VIZ-10: autoplay the animated replay on load (default on). The toggle lives
+    # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the kickoff
+    # runs at the configured playback speed (plots.animation_autoplay_post_script).
+    "global_anim_autoplay": True,
     # VIZ-6: fixation marker alpha. Default 0.7 so overlapping fixations show
     # through (the classic translucent scanpath look); drag to 1.0 for fully
     # opaque markers. This replaced the old binary `Hollow circles` toggle in the
@@ -69,8 +127,24 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_show_heatmap": False,
     "global_show_raw_gaze": False,
     "global_show_stimulus_image": False,
+    # VIZ-4: image-based stimuli. Opacity dims a busy stimulus image so the AOIs /
+    # scanpath read over it (round-trips in Share / Save & restore, since it also
+    # applies to dataset images). A user-uploaded image (session-only — an uploaded
+    # image can't ride a deep link) is stretched to fill the monitor; precise
+    # crop placement is available via the CLI / headless API (background_image_*).
+    "global_stimulus_image_opacity": 1.0,
+    # VIZ-4: manual image alignment — nudge the image origin (px) and scale its
+    # size so it lines up with the text boxes / fixations when the data's frame
+    # doesn't match the image. Applies to dataset + uploaded images alike.
+    "global_stimulus_image_offset_x": 0.0,
+    "global_stimulus_image_offset_y": 0.0,
+    "global_stimulus_image_scale": 1.0,
     "global_heatmap_style": "Word boxes",
     "global_heatmap_metric": "duration_ms",
+    # VIZ-3: heatmap colour-scaling. "Linear" maps colour straight to the value;
+    # "Log" maps to log1p(value), compressing heavy-tailed dwell times so a few
+    # very-hot words don't wash out the rest.
+    "global_heatmap_norm": "Linear",
     "global_show_colorbars": False,
     # Frame the view to the whole presentation monitor (scanpath sits at its true
     # on-screen position) rather than cropping to the data extent. Default on.
@@ -893,10 +967,11 @@ def _fix_range_max(fixations: Optional[pd.DataFrame]) -> int:
 def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
     """Render the VIZ-7 fixation-index window slider (``single_fix_range``).
 
-    Mirrors the Generations tab's ``multi_fix_range``: the slider value persists
-    across trial changes (which shift ``max_fix``), so it is seeded/clamped via
-    session_state *only* (no ``value=`` arg) to stay inside ``[1, max_fix]`` — a
-    stored out-of-range value would otherwise raise. A trial with fewer than two
+    The slider value persists across trial changes (which shift ``max_fix``), so
+    it is seeded/clamped via session_state *only* (no ``value=`` arg) to stay
+    inside ``[1, max_fix]`` — a stored out-of-range value would otherwise raise.
+    This is the single fixation-index control for the app; the Comparisons subtab
+    deliberately has none of its own (ENG-8). A trial with fewer than two
     fixations can't host a range slider (a one-value slider throws in the
     browser), so the window is cleared to ``None`` (the full, unsliced trial)."""
     if fixations is None:
@@ -1084,8 +1159,17 @@ def _collect_viz_settings(
         # `or default` (not get-default) so a segmented_control deselect → None
         # falls back instead of propagating None into the figure builders.
         heatmap_style=ss.get("global_heatmap_style") or "Word boxes",
+        heatmap_norm=ss.get("global_heatmap_norm") or "Linear",
         show_raw_gaze=bool(ss.get("global_show_raw_gaze")),
         show_stimulus_image=bool(ss.get("global_show_stimulus_image")),
+        # VIZ-4: image-stimulus opacity (applies to dataset + uploaded images) and
+        # the uploaded image's data URI (session-only; set by sidebar_controls).
+        stimulus_image_opacity=float(ss.get("global_stimulus_image_opacity", 1.0)),
+        stimulus_image_upload_uri=ss.get("_stimulus_image_upload_uri"),
+        # VIZ-4: manual image alignment (origin nudge + size scale).
+        stimulus_image_offset_x=float(ss.get("global_stimulus_image_offset_x", 0.0)),
+        stimulus_image_offset_y=float(ss.get("global_stimulus_image_offset_y", 0.0)),
+        stimulus_image_scale=float(ss.get("global_stimulus_image_scale", 1.0)),
         color_by=color_by,
         heatmap_metric=ss.get("global_heatmap_metric") or "duration_ms",
         x_field=ss.get("global_x_field"),
@@ -1106,6 +1190,21 @@ def _collect_viz_settings(
         saccade_color=ss.get("global_saccade_color", SACCADE_COLOR),
         saccade_style=ss.get("global_saccade_style") or "Solid",
         saccade_width=float(ss.get("global_saccade_width") or DEFAULT_SACCADE_WIDTH),
+        # VIZ-8: colour-by-reading-type mode + the per-class palette + optional
+        # colour-key legend.
+        saccade_color_mode=ss.get("global_saccade_color_mode") or "Uniform",
+        saccade_type_legend=bool(ss.get("global_saccade_type_legend", True)),
+        saccade_class_colors={
+            cls_name: ss.get(
+                f"global_saccade_class_color_{cls_name}", SACCADE_CLASS_COLORS[cls_name]
+            )
+            for cls_name in SACCADE_CLASS_EDITABLE
+        },
+        # VIZ-9: linear-reading mode (arced saccades + snap fixations above words).
+        saccade_render_mode=ss.get("global_saccade_render_mode") or "Straight",
+        fixation_snap_to_word=bool(ss.get("global_fixation_snap_to_word")),
+        # VIZ-10: autoplay the animated replay on load (default on).
+        anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
         fixation_opacity=float(ss.get("global_fixation_opacity", 1.0)),
         fix_index_range=fix_index_range,
@@ -1283,6 +1382,16 @@ def sidebar_controls(
                         help="Draw a faint line from each fixation's original "
                         "position to its corrected (snapped) position.",
                     )
+                # VIZ-9: snap each fixation above the word it lands on (the
+                # "linear reading" schematic; pairs with the Saccade → Line
+                # shape → Arc control). A fixation-position control, so it lives
+                # here under Fixations, not Saccades.
+                st.checkbox(
+                    "Snap fixations above words",
+                    key="global_fixation_snap_to_word",
+                    help="Place each fixation at the top-centre of the word it "
+                    "lands on instead of its raw gaze point (VIZ-9).",
+                )
             # Fixation-index window (VIZ-7): restrict which fixations (and their
             # saccades) are drawn on the main plot. Shared across single + compare
             # (it's a data window, not appearance), so it sits above the
@@ -1376,11 +1485,51 @@ def sidebar_controls(
                 "direction.",
             )
             if not comparing:
-                st.color_picker(
+                # VIZ-8: uniform colour vs. colour-by-reading-type.
+                color_mode = st.segmented_control(
                     "Saccade color",
-                    key="global_saccade_color",
-                    help="Colour of the saccade lines and direction arrows.",
+                    options=["Uniform", "By type"],
+                    key="global_saccade_color_mode",
+                    help="**Uniform** — one colour for every saccade. **By "
+                    "type** — colour each saccade by its reading class (forward, "
+                    "skip, refixation, return sweep, regression), with a legend.",
                 )
+                if color_mode == "By type":
+                    st.caption(
+                        "Each saccade is classed by where it lands relative to "
+                        "the departing fixation."
+                    )
+                    swatches = st.columns(len(SACCADE_CLASS_EDITABLE))
+                    for col, cls_name in zip(swatches, SACCADE_CLASS_EDITABLE):
+                        # VIZ-8: pass an explicit ``value=`` seeded from session
+                        # state and write the pick back, rather than a bare
+                        # ``key=``. A keyed color_picker first painted inside a
+                        # (closed-until-clicked) popover shows its intrinsic
+                        # default #000000 instead of the seeded class colour — the
+                        # same popover-first-open quirk noted for the colorscale
+                        # selectbox. Seeding ``value=`` makes the first paint the
+                        # real colour; the write-back keeps deep-link / restore
+                        # (which set the session key pre-render) round-tripping.
+                        state_key = f"global_saccade_class_color_{cls_name}"
+                        picked = col.color_picker(
+                            SACCADE_CLASS_LABELS[cls_name],
+                            value=st.session_state.get(
+                                state_key, SACCADE_CLASS_COLORS[cls_name]
+                            ),
+                        )
+                        st.session_state[state_key] = picked
+                    st.checkbox(
+                        "Show legend",
+                        key="global_saccade_type_legend",
+                        help="Show the saccade-type colour key on the plot. Turn "
+                        "it off for a cleaner figure once the colours are learned.",
+                    )
+                else:
+                    st.color_picker(
+                        "Line color",
+                        key="global_saccade_color",
+                        help="Colour of the saccade lines and direction arrows.",
+                    )
                 st.segmented_control(
                     "Saccade line style",
                     options=list(SACCADE_DASH_OPTIONS.keys()),
@@ -1395,6 +1544,15 @@ def sidebar_controls(
                     format="%.1f px",
                     key="global_saccade_width",
                     help="Thickness of the saccade lines. Default 2.",
+                )
+                # VIZ-9: "linear reading" schematic — arched saccades (the paired
+                # "Snap fixations above words" control lives under Fixations).
+                st.segmented_control(
+                    "Line shape",
+                    options=["Straight", "Arc"],
+                    key="global_saccade_render_mode",
+                    help="Straight connectors, or upward **arcs** over the text "
+                    "(the classic linear-reading diagram).",
                 )
             # Per-scanpath saccade styling for the two-trial comparison.
             if comparing:
@@ -1514,6 +1672,15 @@ def sidebar_controls(
                 help="Colour palette for the density heatmap overlay.",
                 key="global_heatmap_colorscale",
             )
+            st.radio(
+                "Color scaling",
+                options=["Linear", "Log"],
+                horizontal=True,
+                key="global_heatmap_norm",
+                help="Linear maps colour straight to the value. Log maps to "
+                "log(1+value) — compresses heavy-tailed dwell times so a few very "
+                "hot words don't wash out the rest (VIZ-3).",
+            )
             heatmap_metric = st.selectbox(
                 "Heatmap metric",
                 options=["duration_ms", "counts"],
@@ -1552,16 +1719,77 @@ def sidebar_controls(
                     "Lower the max for more contrast; raise it to compress.",
                 )
 
-    # --- Bounding boxes / Stimulus image / Raw gaze (no extra styling) ----
+    # --- Bounding boxes / Stimulus image / Raw gaze -----------------------
     viz.toggle("**Bounding boxes**", key="global_show_words")
+    # VIZ-4: a stimulus image can come from the dataset (MultiplEYE stamps a
+    # per-trial `image_path`) OR be uploaded here for any dataset (a full-monitor
+    # screenshot of the reading screen). The upload's `data:` URI is stashed in
+    # session for the tab to place + the (pure) collector to read; the toggle is
+    # enabled whenever either source exists.
+    uploaded_img = st.session_state.get("global_stimulus_image_upload")
+    upload_uri = _uploaded_image_data_uri(uploaded_img)
+    st.session_state["_stimulus_image_upload_uri"] = upload_uri
+    can_show_image = has_stimulus_image or upload_uri is not None
     viz.toggle(
         "**Stimulus image**",
-        help="Show the rendered stimulus page as a background image (exact "
-        "coordinates — sidesteps font issues for CJK / RTL scripts). "
-        + ("" if has_stimulus_image else "(No stimulus image for this trial)"),
-        disabled=not has_stimulus_image,
+        help="Show a stimulus page behind the scanpath — the dataset's rendered "
+        "page (exact coordinates; sidesteps CJK / RTL font issues) or an image you "
+        "upload below (stretched to fill the monitor). "
+        + (
+            ""
+            if can_show_image
+            else "(Upload one below, or load a dataset with images)"
+        ),
+        disabled=not can_show_image,
         key="global_show_stimulus_image",
     )
+    with viz.popover("⚙️ Stimulus image", width="stretch"):
+        st.file_uploader(
+            "Upload a stimulus image",
+            type=["png", "jpg", "jpeg", "gif", "webp"],
+            key="global_stimulus_image_upload",
+            help="Use a screenshot of the reading screen as the background for "
+            "any dataset. An upload **overrides** a dataset's built-in image and "
+            "is stretched to fill the monitor; use the **Align to text** controls "
+            "below to position/scale it. Not carried by Share links (upload it on "
+            "the other end).",
+        )
+        st.slider(
+            "Image opacity",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.05,
+            key="global_stimulus_image_opacity",
+            help="Dim the stimulus image so the fixations, saccades and word "
+            "boxes stand out over it (1.0 = fully opaque).",
+        )
+        # VIZ-4: manual alignment. The text was shown at some position on the
+        # screen; when the data's coordinates don't match the image exactly, nudge
+        # the image (X/Y px) and scale it to line it up with the word boxes and
+        # fixations. Applies to dataset and uploaded images alike.
+        st.caption("**Align to text** — nudge/scale the image to fit the boxes.")
+        off_cols = st.columns(2)
+        off_cols[0].number_input(
+            "Image X offset (px)",
+            step=5.0,
+            key="global_stimulus_image_offset_x",
+            help="Shift the image horizontally to line it up with the text.",
+        )
+        off_cols[1].number_input(
+            "Image Y offset (px)",
+            step=5.0,
+            key="global_stimulus_image_offset_y",
+            help="Shift the image vertically to line it up with the text.",
+        )
+        st.slider(
+            "Image scale",
+            min_value=0.25,
+            max_value=3.0,
+            step=0.05,
+            key="global_stimulus_image_scale",
+            help="Scale the image up/down so its text matches the word boxes "
+            "(1.0 = the image's native / dataset size).",
+        )
     viz.toggle(
         "**Raw gaze data**",
         help="Display millisecond-level gaze positions as small dots. "

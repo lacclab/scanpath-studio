@@ -11,6 +11,11 @@ clean folder structure:
     │  ├─ <participant>__<trial>/
     │  │  ├─ figure.png
     │  │  ├─ figure.svg
+    │  │  ├─ layers/                 (VIZ-5, optional)
+    │  │  │  ├─ word_boxes.svg
+    │  │  │  ├─ fixations.svg
+    │  │  │  ├─ saccades.svg
+    │  │  │  └─ …                    (one per visible layer)
     │  │  ├─ plot_config.json
     │  │  ├─ fixations.csv (and/or .parquet)
     │  │  └─ measures.csv (and/or .parquet)
@@ -41,7 +46,8 @@ from .constants import (
     WORD_LABEL_COLOR,
 )
 from .data import compute_word_metrics
-from .plots import make_scanpath_figure
+from .plots import make_scanpath_figure, split_scanpath_layers
+from .utils import extract_trial
 
 
 @dataclass
@@ -62,6 +68,11 @@ class ExportOptions:
     include_fixations: bool = False
     include_measures: bool = False
     include_mega_table: bool = False
+    # VIZ-5: also drop a per-layer breakdown of the figure (word boxes / fixations
+    # / saccades / heatmap / labels / stimulus image) into `layers/` so each can be
+    # restyled independently in Illustrator / Inkscape. Uses the selected vector /
+    # raster formats (SVG when none was picked — the publication default).
+    separable_layers: bool = False
     table_format: str = "csv"  # "csv" | "parquet" | "both"
     png_scale: int = 2
     # When True, export operates on the whole loaded dataset, ignoring the
@@ -97,6 +108,24 @@ class ExportOptions:
     def raster_formats(self) -> List[str]:
         """Figure formats that need Kaleido/Chrome (everything but HTML)."""
         return [f for f in self.figure_formats() if f != "html"]
+
+    def layer_formats(self) -> List[str]:
+        """Formats for the per-layer breakdown (VIZ-5) — the selected non-HTML
+        figure formats, or SVG when none was picked (vectors suit Illustrator).
+        Empty when separable layers are off."""
+        if not self.separable_layers:
+            return []
+        return self.raster_formats() or ["svg"]
+
+    def needs_figure(self) -> bool:
+        """Whether the export builds each trial's figure at all (combined figure
+        formats, or the per-layer breakdown)."""
+        return bool(self.figure_formats()) or self.separable_layers
+
+    def needs_kaleido(self) -> bool:
+        """Whether any figure render goes through Kaleido/Chrome (combined raster
+        formats, or per-layer non-HTML formats)."""
+        return bool(self.raster_formats()) or bool(self.layer_formats())
 
 
 @dataclass
@@ -368,6 +397,27 @@ def render_export_options(
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
 
         st.markdown("### Also include")
+        # VIZ-5: per-layer figure breakdown for publication editing.
+        separable_layers = st.toggle(
+            "Separable layers",
+            value=False,
+            key=f"{key_prefix}_layers",
+            help="Also export the figure split into one file per layer (word boxes "
+            "/ fixations / saccades / heatmap / labels / stimulus image) under "
+            "`layers/`, so you can restyle each independently in Illustrator / "
+            "Inkscape. Uses the vector/raster figure formats above (SVG if only "
+            "HTML or nothing is picked); the layers register perfectly when "
+            "stacked.",
+        )
+        # Layers are static vectors/rasters — HTML can't be split. When no
+        # vector/raster format is picked, they fall back to SVG (which needs
+        # Kaleido/Chrome, unlike the browser-free HTML the user chose), so warn.
+        if separable_layers and not (include_png or include_svg or include_pdf):
+            st.caption(
+                "⚠️ Separable layers export as **SVG** (a static vector needing "
+                "Chrome/Kaleido) — HTML figures can't be split. Pick SVG/PDF/PNG "
+                "above to choose the layer format."
+            )
         include_plot_config = st.toggle(
             "Plot config (JSON)",
             value=True,
@@ -415,6 +465,7 @@ def render_export_options(
         include_fixations=include_fixations,
         include_measures=include_measures,
         include_mega_table=include_mega_table,
+        separable_layers=separable_layers,
         table_format=table_format,
         png_scale=int(png_scale),
         export_unfiltered=export_unfiltered,
@@ -518,31 +569,38 @@ def bulk_export(
 
     # One warm Kaleido browser for every trial's figure (see _figure_renderer)
     # instead of cold-starting Chrome on each render. HTML needs no browser, so
-    # only spin Kaleido up when a raster/vector format was requested.
+    # only spin Kaleido up when a raster/vector format was requested (combined
+    # figure or the per-layer breakdown).
     figure_formats = options.figure_formats()
-    with _figure_renderer(bool(options.raster_formats())) as render_figure:
+    layer_formats = options.layer_formats()
+    with _figure_renderer(options.needs_kaleido()) as render_figure:
         for combo in combos.itertuples(index=False):
             participant = getattr(combo, "participant_id")
             trial = getattr(combo, "trial_id")
             slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
             prefix = f"per_trial/{slug}/"
 
-            trial_words = words[
-                (words["participant_id"] == participant) & (words["trial_id"] == trial)
-            ]
-            trial_fix = fixations[
-                (fixations["participant_id"] == participant)
-                & (fixations["trial_id"] == trial)
-            ]
+            # Slice via the same str-normalized position index the live view uses
+            # (utils.extract_trial), so the export selects *exactly* what the trial
+            # picker shows — not a raw dtype-sensitive boolean mask that can silently
+            # miss rows the view finds.
+            trial_words = extract_trial(words, participant, trial)
+            trial_fix = extract_trial(fixations, participant, trial)
 
-            if trial_words.empty or trial_fix.empty:
+            # Skip only a genuinely empty trial (nothing to draw). The figure
+            # builder renders from fixations alone (words optional — boxes/labels)
+            # or from words alone (AOI layout), and the live view does too; so a
+            # words-that-don't-join / fixations-only trial must still export
+            # instead of being skipped with "empty data" (VIZ-5).
+            if trial_words.empty and trial_fix.empty:
                 progress.finished_trials += 1
                 progress.errors.append(f"{slug}: empty data, skipped")
                 if progress_callback:
                     progress_callback(progress)
                 continue
 
-            if figure_formats:
+            if options.needs_figure():
+                fig = None
                 try:
                     fig = make_scanpath_figure(
                         trial_words,
@@ -620,6 +678,27 @@ def bulk_export(
                 except Exception as exc:
                     progress.errors.append(f"{slug}: figure export failed ({exc})")
 
+                # VIZ-5: per-layer breakdown into `layers/<layer>.<fmt>` — each a
+                # copy of the figure with only one layer's elements, same
+                # size/ranges so they register when stacked in Illustrator. Kept in
+                # its own try so a layer-render failure is reported as such and
+                # doesn't get misattributed to the combined figure (which may have
+                # already been written above).
+                if layer_formats and fig is not None:
+                    try:
+                        out_w = int(fig.layout.width or canvas_width)
+                        out_h = int(fig.layout.height or canvas_height)
+                        for layer_name, layer_fig in split_scanpath_layers(fig).items():
+                            for fmt in layer_formats:
+                                scale = options.png_scale if fmt == "png" else 1
+                                data = render_figure(
+                                    layer_fig, fmt, out_w, out_h, scale
+                                )
+                                zf.writestr(f"{prefix}layers/{layer_name}.{fmt}", data)
+                                progress.bytes_written += len(data)
+                    except Exception as exc:
+                        progress.errors.append(f"{slug}: layer export failed ({exc})")
+
             if options.include_plot_config:
                 cfg = _plot_config_dict(
                     participant,
@@ -634,9 +713,12 @@ def bulk_export(
                 zf.writestr(f"{prefix}plot_config.json", data)
                 progress.bytes_written += len(data)
 
+            # Per-word measures need the word table; a fixations-only trial has no
+            # words to measure, so skip (an empty measures file adds nothing).
             per_trial_measures = (
                 compute_word_metrics(trial_words, trial_fix)
-                if options.include_measures or options.include_mega_table
+                if (options.include_measures or options.include_mega_table)
+                and not trial_words.empty
                 else None
             )
 

@@ -52,31 +52,26 @@ class TestAppLaunches:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
     def test_multiple_comparison_tab_renders(self):
-        # Exercise the Multiple Comparison tab: change the grid columns and
-        # bump the regenerate nonce, then confirm no exceptions / errors.
-        at = _make_apptest(synthetic=True)
+        # Exercise the Comparisons subtab (ENG-8). The bundled demo has several
+        # readers of each paragraph, so grouping the same text by participant_id
+        # yields real comparison scanpaths to score against the selected trial.
+        # Change the grid columns; confirm no exceptions / errors.
+        at = _make_apptest()
         at.session_state["multi_n_cols"] = 2
-        at.session_state["multi_nonce"] = 1
-        at.run(timeout=30)
+        at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
-    def test_multiple_comparison_fixation_range(self):
-        # Narrow the fixation-index window and confirm the slice path (figures +
-        # snapshot table + convergence plots) rebuilds without exceptions.
-        at = _make_apptest(synthetic=True)
-        at.session_state["multi_fix_range"] = (3, 10)
-        at.run(timeout=30)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-
-    def test_multiple_comparison_range_clamped_when_max_shrinks(self):
-        # A persisted fixation window must not crash when max_fix shrinks (e.g.
-        # a much shorter trial / fewer models): the stored value is clamped.
-        # A deliberately huge window; clamp must pull it into range on boot.
-        at = _make_apptest(synthetic=True)
-        at.session_state["multi_fix_range"] = (900, 1000)
-        at.run(timeout=30)
+    def test_stimulus_image_with_manual_alignment_renders(self):
+        # VIZ-4: the bundled demo ships a per-trial stimulus image. Turning it on
+        # and applying a manual origin nudge + scale (the "Align to text"
+        # controls) must render without exceptions / errors.
+        at = _make_apptest()
+        at.session_state["global_show_stimulus_image"] = True
+        at.session_state["global_stimulus_image_offset_x"] = 30.0
+        at.session_state["global_stimulus_image_offset_y"] = -20.0
+        at.session_state["global_stimulus_image_scale"] = 1.25
+        at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
@@ -543,7 +538,7 @@ class TestUnmappedRawDataView:
         assert source.value == potec_key
         assert at.session_state["public_dataset_choice"] == potec_key
 
-    def test_each_public_dataset_loader_ui_renders(self, monkeypatch):
+    def test_each_public_dataset_loader_ui_renders(self, monkeypatch, tmp_path):
         """Every corpus loader's access UI renders without error when its data
         directory is absent: a Data-directory input, an Expected-files expander,
         and a found/missing status (Download for the downloadable corpora), then
@@ -552,6 +547,17 @@ class TestUnmappedRawDataView:
         from scanpath_studio import app
 
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        # Point every corpus' default data directory at an empty tmp path so the
+        # "directory is absent" premise holds regardless of local cache. Without
+        # this, a dev machine that has already downloaded a corpus (e.g. OneStop
+        # to data/OneStop) would load the full report — tens–hundreds of MB — and
+        # blow the class timeout, since the loader reads the real default dir.
+        for const in (
+            "ONESTOP_PUBLIC_DEFAULT_DIR",
+            "POTEC_DEFAULT_DIR",
+            "MULTIPLEYE_DEFAULT_DIR",
+        ):
+            monkeypatch.setattr(app, const, str(tmp_path / const.lower()))
         for label in app.PUBLIC_DATASET_REGISTRY:
             at = _make_apptest()
             at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
@@ -613,7 +619,8 @@ class TestUnmappedRawDataView:
         monkeypatch.setitem(
             app.PUBLIC_DATASET_REGISTRY[mpe_key],
             "loader",
-            lambda: (words, fixations),
+            # Loaders take (options_host, location_host) DATA-9 sub-slots now.
+            lambda *_slots: (words, fixations),
         )
         monitor = app.PUBLIC_DATASET_REGISTRY[mpe_key]["monitor"]
 
@@ -697,10 +704,14 @@ class TestUnmappedRawDataView:
         potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
         mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
         monkeypatch.setitem(
-            app.PUBLIC_DATASET_REGISTRY[potec_key], "loader", lambda: (potec_w, potec_f)
+            app.PUBLIC_DATASET_REGISTRY[potec_key],
+            "loader",
+            lambda *_slots: (potec_w, potec_f),
         )
         monkeypatch.setitem(
-            app.PUBLIC_DATASET_REGISTRY[mpe_key], "loader", lambda: (mpe_w, mpe_f)
+            app.PUBLIC_DATASET_REGISTRY[mpe_key],
+            "loader",
+            lambda *_slots: (mpe_w, mpe_f),
         )
 
         at = _make_apptest()
@@ -1517,7 +1528,8 @@ class TestSetupWizard:
 @pytest.mark.timeout(120)
 class TestCorpusAnalysisTab:
     """The 'Corpus Analysis' tab hosts the question-oriented analysis sections
-    (Per text / Per reader / Per group / Group comparison) + Generations."""
+    (Per text / Per reader / Groups). Generations moved to the Scanpath view's
+    Comparisons subtab (ENG-8)."""
 
     def test_analysis_sections_render(self):
         # Demo source: several participants / trials / texts, so every section
@@ -1529,7 +1541,10 @@ class TestCorpusAnalysisTab:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         keys = {s.key for s in at.selectbox}
-        for view_key in ("ptext_view", "prdr_view", "pgrp_view", "cmp_view"):
+        # The Groups tab defaults to a single group (compare toggle off), so its
+        # single-group view selector (pgrp_view) is present; cmp_view appears only
+        # when 'Compare a second group' is on (see test_each_analysis_view_renders).
+        for view_key in ("ptext_view", "prdr_view", "pgrp_view"):
             assert view_key in keys, f"{view_key} view selector not found"
 
     @pytest.mark.parametrize(
@@ -1556,6 +1571,9 @@ class TestCorpusAnalysisTab:
         # Drive each non-default analysis view and confirm it renders cleanly.
         at = _make_apptest()
         at.session_state["main_nav"] = "Corpus Analysis"
+        # The two-group comparison views live behind the Groups 'Compare a second
+        # group' toggle; the single-group views show with it off.
+        at.session_state["groups_compare"] = view_key == "cmp_view"
         at.session_state[view_key] = view
         at.run(timeout=60)
         assert not at.exception, f"{view_key}={view!r}: {at.exception}"
@@ -1565,14 +1583,22 @@ class TestCorpusAnalysisTab:
 
     def test_group_filter_set_mode_renders(self):
         # The 'Independent filter sets' group-definition mode (the second of the
-        # two modes the user asked for) must render for both group sections.
-        at = _make_apptest()
-        at.session_state["main_nav"] = "Corpus Analysis"
-        at.session_state["cmp_mode"] = "Independent filter sets"
-        at.session_state["pgrp_mode"] = "Independent filter sets"
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        # two modes the user asked for) must render for both the single-group
+        # (compare off) and two-group (compare on) cases of the Groups tab.
+        single = _make_apptest()
+        single.session_state["main_nav"] = "Corpus Analysis"
+        single.session_state["pgrp_mode"] = "Independent filter sets"
+        single.run(timeout=60)
+        assert not single.exception, f"Streamlit exceptions: {single.exception}"
+        assert single.error == [], f"st.error: {[e.value for e in single.error]}"
+
+        compare = _make_apptest()
+        compare.session_state["main_nav"] = "Corpus Analysis"
+        compare.session_state["groups_compare"] = True
+        compare.session_state["cmp_mode"] = "Independent filter sets"
+        compare.run(timeout=60)
+        assert not compare.exception, f"Streamlit exceptions: {compare.exception}"
+        assert compare.error == [], f"st.error: {[e.value for e in compare.error]}"
 
 
 @pytest.mark.timeout(90)

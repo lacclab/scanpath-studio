@@ -8,6 +8,7 @@ import pytest
 
 from scanpath_studio.measures import (
     assign_fixations_to_words,
+    classify_saccades,
     compute_per_word_measures,
     enrich_fixations,
 )
@@ -83,6 +84,102 @@ class TestEnrichFixations:
         fix = assign_fixations_to_words(fix, four_word_layout, overwrite=True)
         enriched = enrich_fixations(fix, four_word_layout)
         assert list(enriched["is_regression"]) == [False, False, True]
+
+
+@pytest.fixture
+def two_line_layout():
+    """Single trial, 6 words on 2 lines (3 per line) — enough to exercise every
+    reading-saccade class (return sweep needs a line change)."""
+    return pd.DataFrame(
+        {
+            "participant_id": ["p1"] * 6,
+            "trial_id": ["t1"] * 6,
+            "word_id": [1, 2, 3, 4, 5, 6],
+            "text": ["the", "cat", "sat", "on", "the", "mat"],
+            "x": [100, 200, 300, 100, 200, 300],
+            "y": [50, 50, 50, 150, 150, 150],
+            "width": [80, 80, 80, 80, 80, 80],
+            "height": [40, 40, 40, 40, 40, 40],
+            "line_idx": [1, 1, 1, 2, 2, 2],
+        }
+    )
+
+
+class TestClassifySaccades:
+    def test_all_reading_classes(self, two_line_layout):
+        # word1 → word2 → word3 (forward, forward), sweep down to word4
+        # (return sweep), refixate word4 (refixation), skip to word6 (skip),
+        # regress back to word4 (regression), end on word4 (no outgoing saccade).
+        fix = _make_fixations(
+            [
+                (140, 70, 200, 0),  # word1  → forward
+                (240, 70, 200, 200),  # word2  → forward
+                (340, 70, 200, 400),  # word3  → return sweep (to line 2)
+                (140, 170, 200, 600),  # word4  → refixation
+                (140, 170, 200, 800),  # word4  → skip (to word6)
+                (340, 170, 200, 1000),  # word6  → regression (back to word4)
+                (140, 170, 200, 1200),  # word4  → None (last fixation)
+            ]
+        )
+        fix = assign_fixations_to_words(fix, two_line_layout, overwrite=True)
+        cls = classify_saccades(fix, two_line_layout)
+        # Align to reading order (the fixtures are already in timestamp order).
+        ordered = cls.reindex(fix.sort_values("timestamp_ms").index).tolist()
+        assert ordered == [
+            "forward",
+            "forward",
+            "return_sweep",
+            "refixation",
+            "skip",
+            "regression",
+            None,
+        ]
+
+    def test_out_of_text_endpoint_is_other(self, two_line_layout):
+        # The middle fixation lands far outside every box (word_id NaN), so the
+        # saccades touching it can't be classified → "other"; the last fixation
+        # still has no outgoing saccade → None.
+        fix = _make_fixations(
+            [
+                (140, 70, 200, 0),  # word1 → segment to an off-text point
+                (5000, 5000, 200, 200),  # off-text → segment to word2
+                (240, 70, 200, 400),  # word2 → None
+            ]
+        )
+        fix = assign_fixations_to_words(fix, two_line_layout, overwrite=True)
+        cls = classify_saccades(fix, two_line_layout)
+        ordered = cls.reindex(fix.sort_values("timestamp_ms").index).tolist()
+        assert ordered == ["other", "other", None]
+
+    def test_single_fixation_has_no_saccade(self, two_line_layout):
+        fix = _make_fixations([(140, 70, 200, 0)])
+        fix = assign_fixations_to_words(fix, two_line_layout, overwrite=True)
+        cls = classify_saccades(fix, two_line_layout)
+        assert cls.tolist() == [None]
+
+    def test_empty_frame(self, two_line_layout):
+        empty = _make_fixations([]).iloc[0:0]
+        cls = classify_saccades(empty, two_line_layout)
+        assert cls.empty
+
+    def test_aligned_to_input_index(self, two_line_layout):
+        # A shuffled (non-monotonic) index must round-trip: the result is aligned
+        # to fixations.index, not to reading order.
+        fix = _make_fixations(
+            [
+                (240, 70, 200, 200),  # word2, ts=200
+                (140, 70, 200, 0),  # word1, ts=0 (earlier, but row 1)
+                (340, 70, 200, 400),  # word3, ts=400
+            ]
+        )
+        fix = assign_fixations_to_words(fix, two_line_layout, overwrite=True)
+        cls = classify_saccades(fix, two_line_layout)
+        # Reading order is word1(ts0) → word2(ts200) → word3(ts400): forward,
+        # forward, then None on the last. Row 0 is word2 (a forward), row 1 is
+        # word1 (a forward), row 2 is word3 (the last → None).
+        assert cls.iloc[2] is None
+        assert cls.iloc[0] == "forward"
+        assert cls.iloc[1] == "forward"
 
 
 class TestComputePerWordMeasures:

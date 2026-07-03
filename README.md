@@ -16,7 +16,9 @@ It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / snake-case
 columns) and ships with a small [OneStop][onestop-paper] demo, so you can try it
 with zero setup.
 
-> **Authors:** Omer Shubi, Keren Gruteke Klein, and others (TBD) — LACC Lab, Technion.
+> **Authors:** Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jacobi,
+> David Reiche, Lena Jäger, and Yevgeni Berzak — LACC Lab (Technion) and
+> DiLi Lab (University of Zurich; David Reiche also University of Potsdam).
 
 ![A reading scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif)
 
@@ -56,8 +58,8 @@ The app is organized into three tabs:
 
 | Tab | What's there |
 |-----|--------------|
-| **Scanpath Visualization** | The layered scanpath: a **Browse by** selection row above the plot (trial / text / participant) and, beside it, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below: three subtabs — **Annotations**, **Stimulus & questions**, and **Export**, where Export bundles single-trial *and* bulk export (HTML / GIF / MP4 and figures / settings / tabular data across the filtered trials — or the whole dataset). |
-| **Corpus Analysis** | Two subtabs: **Generations (WIP)** — a real scanpath vs. several model-generated ones over the same text, scored by similarity *(placeholders for now)*; and **Aggregated Views** — trends of a metric by trial index and within-trial fixation index, per-text heatmaps pooled over readers, and grouped metric distributions. |
+| **Scanpath Visualization** | The layered scanpath: a **Browse by** selection row above the plot (trial / text / participant) and, beside it, a right-hand **control rail** with **Animate** and **Compare** toggles plus the per-layer visualization controls (style each scanpath independently). The trial's key info shows as configurable chips above the plot. Below, subtabs: **Annotations**, **Stimulus & questions**, **Comparisons** (score the selected scanpath against other scanpaths of the same text, grouped by a column you pick), **Line assignment** (compare drift-correction algorithms), **Export** (single-trial *and* bulk — HTML / GIF / MP4 and figures / settings / tabular data across the filtered trials or the whole dataset), **Data Inspection**, and **Share**. |
+| **Corpus Analysis** | Three subtabs — **Per text**, **Per reader**, and **Groups** (profile one cohort, or compare two) — the question-oriented analysis views: metric distributions and word profiles, per-text heatmaps pooled over readers, reader summaries, and group differences with effect sizes. |
 | **Data Inspection** | Paginated word / fixation / raw-gaze tables (CSV + Parquet download), summary statistics, and the active column mapping. |
 
 ![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/app_screenshot.png)

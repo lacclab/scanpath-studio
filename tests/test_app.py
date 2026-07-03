@@ -311,10 +311,17 @@ class TestBuildShareQuery:
             "global_saccade_style": "Dashed",
             "global_saccade_color": "#123456",
             "global_saccade_width": 4.5,
+            "global_saccade_color_mode": "By type",
+            "global_saccade_class_color_regression": "#010203",
+            "global_saccade_render_mode": "Arc",
+            "global_fixation_snap_to_word": True,
+            "global_anim_autoplay": False,
+            "global_stimulus_image_opacity": 0.5,
             "global_text_color": "#0a0b0c",
             "global_highlight_text_color": "#fedcba",
             "global_color_by": "duration_ms",
             "global_heatmap_style": "Interpolated",
+            "global_heatmap_norm": "Log",
             "global_marker_size_range": (10, 30),
             "global_order_font_size": 18,
             "global_line_spacing": 2.5,
@@ -327,10 +334,17 @@ class TestBuildShareQuery:
         assert parsed["saccade_style"] == ["Dashed"]
         assert parsed["saccade_color"] == ["#123456"]
         assert parsed["saccade_width"] == ["4.5"]
+        assert parsed["saccade_color_mode"] == ["By type"]
+        assert parsed["saccade_color_regression"] == ["#010203"]
+        assert parsed["saccade_render_mode"] == ["Arc"]
+        assert parsed["snap_fixations"] == ["1"]
+        assert parsed["anim_autoplay"] == ["0"]
+        assert parsed["stimulus_image_opacity"] == ["0.5"]
         assert parsed["text_color"] == ["#0a0b0c"]
         assert parsed["highlight_text_color"] == ["#fedcba"]
         assert parsed["color_by"] == ["duration_ms"]
         assert parsed["heatmap_style"] == ["Interpolated"]
+        assert parsed["heatmap_norm"] == ["Log"]
         assert parsed["marker_size_range"] == ["10,30"]
         assert parsed["order_font_size"] == ["18"]
         assert parsed["line_spacing"] == ["2.5"]
@@ -347,10 +361,17 @@ class TestBuildShareQuery:
         assert ss["global_saccade_style"] == "Dashed"
         assert ss["global_saccade_color"] == "#123456"
         assert ss["global_saccade_width"] == 4.5
+        assert ss["global_saccade_color_mode"] == "By type"
+        assert ss["global_saccade_class_color_regression"] == "#010203"
+        assert ss["global_saccade_render_mode"] == "Arc"
+        assert ss["global_fixation_snap_to_word"] is True
+        assert ss["global_anim_autoplay"] is False
+        assert ss["global_stimulus_image_opacity"] == 0.5
         assert ss["global_text_color"] == "#0a0b0c"
         assert ss["global_highlight_text_color"] == "#fedcba"
         assert ss["global_color_by"] == "duration_ms"
         assert ss["global_heatmap_style"] == "Interpolated"
+        assert ss["global_heatmap_norm"] == "Log"
         assert ss["global_marker_size_range"] == (10, 30)
         assert ss["global_order_font_size"] == 18
         assert ss["global_line_spacing"] == 2.5
@@ -383,6 +404,58 @@ class TestBuildShareQuery:
         assert "global_marker_size_range" not in ss
         assert "global_fixation_color_range" not in ss
 
+    def test_onestop_public_source_shares_variant_regime_parts(self, fake_st):
+        # DATA-3: the public OneStop corpus + its variant/regime/parts round-trip
+        # through the share link (build → apply).
+        from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+
+        fake_st.session_state = {
+            "_share_selection": {"participant_id": "p1", "trial_id": "t1"},
+            "onestop_variant": "public",
+            "onestop_regime": "repeated",
+            "onestop_parts": ["Paragraph", "Title"],
+        }
+        query, _ = _build_share_query(ONESTOP_PUBLIC_CHOICE)
+        parsed = parse_qs(query)
+        assert parsed["source"] == ["onestop_public"]
+        assert parsed["onestop_variant"] == ["public"]
+        assert parsed["onestop_regime"] == ["repeated"]
+        assert parsed["onestop_parts"] == ["Paragraph,Title"]
+
+        # Apply the link into a fresh session → the options are seeded pre-widget.
+        fake_st.session_state = {}
+        fake_st.query_params = {k: v[0] for k, v in parsed.items()}
+        assert _apply_url_preset() == "onestop_public"
+        ss = fake_st.session_state
+        assert ss["onestop_variant"] == "public"
+        assert ss["onestop_regime"] == "repeated"
+        assert ss["onestop_parts"] == ["Paragraph", "Title"]
+
+    def test_onestop_options_not_shared_for_other_sources(self, fake_st):
+        # The onestop_* params are emitted only when the source IS public OneStop.
+        fake_st.session_state = {
+            "onestop_variant": "public",
+            "onestop_regime": "repeated",
+        }
+        query, _ = _build_share_query(DEMO_CHOICE)
+        parsed = parse_qs(query)
+        assert "onestop_variant" not in parsed
+        assert "onestop_regime" not in parsed
+
+    def test_bad_onestop_url_options_ignored_on_apply(self, fake_st):
+        # A hand-edited link with junk options must not seed a bad widget value.
+        fake_st.query_params = {
+            "source": "onestop_public",
+            "onestop_variant": "bogus",
+            "onestop_regime": "nope",
+            "onestop_parts": "Paragraph,Garbage",
+        }
+        _apply_url_preset()  # must not raise
+        ss = fake_st.session_state
+        assert "onestop_variant" not in ss  # bogus variant dropped
+        assert "onestop_regime" not in ss  # bad regime dropped
+        assert ss["onestop_parts"] == ["Paragraph"]  # only the valid part kept
+
 
 class TestApplyUrlTrialSelection:
     """The ``?trial_id=`` deep link → trial-picker seeding (applied once)."""
@@ -403,13 +476,13 @@ class TestApplyUrlTrialSelection:
         assert fake_st.session_state["_url_trial_applied"] is True
 
     def test_seeds_every_selection_prefix(self, fake_st):
-        # Both the Scanpath ("single") and Generations ("multi") pickers must be
-        # seeded, or switching tabs after following a link lands on a different
-        # trial (mirrors the _SELECTION_PREFIXES loop in _apply_url_preset).
+        # The Scanpath ("single") picker is seeded from the link. Generations now
+        # reuses that same selection (ENG-8), so there's no second "multi" picker
+        # to seed — _SELECTION_PREFIXES is just ("single",).
         fake_st.query_params = {"trial_id": "t2"}
         _apply_url_trial_selection(self._combos())
         assert fake_st.session_state["single_trial_id"] == "t2"
-        assert fake_st.session_state["multi_trial_id"] == "t2"
+        assert "multi_trial_id" not in fake_st.session_state
 
     def test_trial_id_alone_without_participant(self, fake_st):
         # A ?trial_id= link with no ?participant= must still land on the trial.
@@ -484,3 +557,37 @@ class TestStimulusFontInstallHint:
         assert app_module._stimulus_font_install_hint("monospace") is None
         assert app_module._stimulus_font_install_hint(None) is None
         assert app_module._stimulus_font_install_hint("") is None
+
+
+class TestResolveDataDir:
+    """`_resolve_data_dir` anchors relative data dirs to the project root so the
+    found/download status is correct regardless of the process cwd."""
+
+    def test_relative_path_anchored_to_project_root(self):
+        resolved = app_module._resolve_data_dir("data/OneStop")
+        root = app_module._project_root()
+        assert resolved == str((root / "data/OneStop").resolve())
+        # Independent of cwd — same result no matter where we're called from.
+        import os
+
+        cwd = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(cwd))
+            assert app_module._resolve_data_dir("data/OneStop") == resolved
+        finally:
+            os.chdir(cwd)
+
+    def test_absolute_path_used_verbatim(self, tmp_path):
+        p = str(tmp_path)
+        assert app_module._resolve_data_dir(p) == p
+
+    def test_blank_stays_blank(self):
+        assert app_module._resolve_data_dir("") == ""
+        assert app_module._resolve_data_dir("  ") == ""
+
+    def test_user_expansion(self):
+        # A leading ~ expands to the home dir (absolute → used verbatim after that).
+        from pathlib import Path
+
+        resolved = app_module._resolve_data_dir("~/somewhere")
+        assert resolved == str(Path("~/somewhere").expanduser())

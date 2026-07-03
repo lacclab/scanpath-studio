@@ -25,14 +25,40 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 - **PERF-1** — Plotly → matplotlib migration ([PR #83](https://github.com/lacclab/scanpath-studio/pull/83), `matplotlib-migration` branch).
 - **DATA-1** — Broaden dataset support (ongoing epic).
 
+### Signed off 2026-07-03 (moved to the archive)
+**VIZ-1** (px-vs-pt note) · **VIZ-2** (larger small fonts) · **VIZ-3** (heatmap
+Linear/Log) · **BUG-3** (MultiplEYE text alignment) · **DATA-3** (OneStop public +
+shareable) · **DATA-9** (Data-sidebar reorg) · **ENG-11** (versioned Save & restore)
+· **ENG-12** (rendering docs).
+
 ### Awaiting your approval
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
-**AN-1 … AN-28** (the whole *Analysis & corpus views* epic — the four
-question-oriented Corpus Analysis sections + the cross-cutting controls);
-**DATA-3** (OneStop public dataset); **VIZ-1** (font-size px-vs-pt note);
-**PRE-3** (vertical drift correction — 10 algorithms + comparison grid +
-in-place correction). *(DATA-4 … DATA-7 — the data-source UI overhaul — signed
-off 2026-06-26 and archived.)*
+**AN-1 … AN-28** (the *Analysis & corpus views* epic — *you asked to keep this
+open*); **PRE-3** (vertical drift correction — *you'll revisit*); **VIZ-11**
+(animation slider readout — *you'll revisit*).
+
+### Your requested changes are now implemented (2026-07-03) — awaiting sign-off
+The whole "changes requested" + "ready" batch is done, tested (749 pass, ruff
+clean, docs build strict), and on every surface. **Please review + sign off** (→
+`Done` + archive):
+- **VIZ-4** — upload now overrides the dataset image; **Align to text** (image
+  X/Y offset + scale) added; `image_path`/`image_x`/`image_y` column convention
+  generalizes native images to any dataset. *(A per-trial image folder + naming
+  pattern resolver is split out as **VIZ-14** below.)*
+- **VIZ-5** — bulk export no longer skips every trial with "empty data" (words
+  that don't join / fixations-only datasets now export).
+- **VIZ-8** — class colour pickers seed correctly (not black); **Show legend**
+  toggle makes the by-type key optional.
+- **VIZ-9** — **Snap fixations above words** moved from Saccades to Fixations.
+- **VIZ-10** — autoplay actually fires now (polls for Plotly + the real frame
+  list, `_transitionData._frames`); on by default.
+- **ENG-8** — Generations → **Comparisons** (data-driven), **Line assignment**
+  unnested to its own subtab, redundant fixation-index slider + stimulus panel
+  removed.
+- **ENG-14** — full author list + affiliations applied everywhere.
+- **BUG-5** — pre-parse upload-size guard (warn + opt-in above ~25 MB).
+- **BUG-6** — branded theme now applies from any launch dir (CLI `--theme.*`
+  injection); parity-tested against `.streamlit/config.toml`.
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -92,47 +118,104 @@ bug); and **Color fixations by** restored in compare mode.
 
 ## Visualization & display
 
-**VIZ-1 · Warn that font sizes are px, not pt** — `Status: Pending approval`
+**VIZ-1 · Warn that font sizes are px, not pt** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-All font-size controls are in **pixels** (e.g. `format="%.1f px"`,
-`global_order_font_size`, `global_colorbar_tickfont_size` in
-[`controls.py`](scanpath_studio/controls.py:1052)), but stimulus typography is
-usually specified in **points**. Add a short note/warning near the font controls
-explaining the difference (and that matching the original stimulus requires a
-px↔pt conversion via DPI).
+**VIZ-2 · Increase font size across the app where possible** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**VIZ-2 · Increase font size across the app where possible** — `Status: Planned`
+**VIZ-3 · Alternative heatmap normalization** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-General readability pass on app chrome (labels, captions, table text). Likely
-[`styles.py`](scanpath_studio/styles.py) / theme. Keep within Streamlit theming;
-don't regress dense layouts.
+**VIZ-4 · Improve image-based stimuli support** — `Status: Pending approval (changes addressed 2026-07-03)`
 
-**VIZ-3 · Alternative heatmap normalization** — `Status: Backlog`
+> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested:
+> 1. **Bundled-demo image overrides the uploaded one.** For the bundled demo the
+>    dataset's built-in `image_path` wins over an uploaded image; the upload should
+>    take effect (fix the precedence so an explicit upload overrides the dataset
+>    image).
+> 2. **Use the image to reposition the text.** Text can be placed anywhere on the
+>    screen; let the image serve as a manual reference to **adjust the text
+>    position** (an offset/nudge for the word layer so labels line up on the image).
+> 3. **Generalize native image support.** MultiplEYE stamps images natively — make
+>    this general: in addition to the ad-hoc upload, let a dataset **declare an
+>    image path / naming convention** (+ whatever else is needed) so any dataset
+>    that ships stimulus images can use them.
+> 4. **Text-area-only images (OneStop).** In OneStop the image covers only the text
+>    area, not the whole screen — handle a **partial-coverage** image in the general
+>    case (correct origin/extent so it aligns with the AOIs).
 
-Explore normalization options for the heatmap views (e.g. per-trial vs per-corpus
-max, log scaling, per-word-area density). Related but distinct from the new
-`duration_mass` heatmap style (**PRE-8**).
+**Implemented (2026-07-02).** Image stimuli are no longer limited to the bundled
+corpora that stamp a per-trial `image_path`. Two additions:
+- **Upload a stimulus image for any dataset** — the **⚙️ Stimulus image** popover
+  (next to the layer toggle) has a `file_uploader`; the image is base64-encoded to
+  a `data:` URI (`controls._uploaded_image_data_uri`, cached by file id) and
+  stretched to fill the whole monitor (origin `(0,0)`, size = canvas) so it lines
+  up with the fixation coordinates. Session-only — an uploaded image can't ride a
+  deep link (the Share panel already caveats non-rebuildable sources); precise crop
+  placement is available headless via `background_image_size` / `_origin`.
+- **Image opacity** (`background_image_opacity`, new arg on `make_scanpath_figure`
+  + `make_scanpath_animation`; applied to the `layout.image`) — an **Image
+  opacity** slider dims a busy stimulus so the AOIs / fixations / saccades read
+  over it. Applies to dataset images (MultiplEYE) too.
 
-**VIZ-4 · Improve image-based stimuli support** — `Status: Backlog`
-
-Better handling/rendering when the stimulus is an image rather than laid-out text
-(scaling, alignment to fixation space, AOIs over images). Ties into the
+Exposed on **every surface**: UI (`global_stimulus_image_opacity` slider +
+uploader, collected by `_collect_viz_settings` as `stimulus_image_opacity` /
+`stimulus_image_upload_uri`, placed by `tabs.render_single_trial_tab`); Share deep
+link (`stimulus_image_opacity` in `_SHARE_FLOAT_PARAMS` + `_URL_BOUNDED`); 💾 Save
+& restore (`coloring.stimulus_image_opacity`); CLI (`render --stimulus-image PATH`
+`--stimulus-image-size WxH` `--stimulus-image-origin X,Y` `--stimulus-image-opacity
+O`, honoured by `--animate` too); headless API (`background_image_opacity` in
+`CANONICAL_FIGURE_DEFAULTS`; `background_image*` already existed). AOIs already
+draw *over* the image (word boxes are `layout.shapes` above the `layer="below"`
+image). Tests: `tests/test_plots.py` (`TestStimulusImageOpacity`),
+`tests/test_cli.py`, plus the Share + Save/restore round-trips. Ties into the
 stimulus-image fallback used for unsupported scripts in **PRE-6**.
 
-**VIZ-5 · Export the plot as separable layers** — `Status: Backlog`
+_Original ask:_ Better handling/rendering when the stimulus is an image rather
+than laid-out text (scaling, alignment to fixation space, AOIs over images).
 
-Add an export mode that keeps the figure's layers **separable** in the output
-file instead of one flattened image — so a *word boxes / fixations / saccades /
-heatmap / labels / stimulus image* split can be toggled and restyled in
-Illustrator / Inkscape for publication figures. Options to explore: vector
-(SVG/PDF) with one named `<g>` group per layer (Plotly traces already map cleanly
-to the per-layer helpers in [`plots.py`](scanpath_studio/plots.py) —
-`_add_saccade_layer`, `_add_raw_gaze_layer`, the `_add_*_heatmap` family, and the
-words/fixations cores), and/or a set of per-layer files dropped into the export
-zip. Wire into `export.ExportOptions` / `render_export_options` / `bulk_export`
-([`export.py`](scanpath_studio/export.py:47)) alongside the existing
-PNG/SVG/PDF/HTML formats, and surface it in the **Export** subtab
-(`tabs._render_export_panel`).
+**VIZ-5 · Export the plot as separable layers** — `Status: Pending approval (changes addressed 2026-07-03)`
+
+> **✅ Fixed 2026-07-03 (awaiting sign-off).** Was: with the **Separable layers**
+> toggle on, **no matter which format is selected the export produces an
+> "empty data" warning and nothing is written.** Repro + fix the separable-layer
+> export path (`export.bulk_export` layer branch / `layer_formats()` /
+> `split_scanpath_layers`); check the format-selection gating and the
+> figure-availability guard.
+
+**Implemented (2026-07-02).** Chose the **per-layer file set** approach over
+one-named-`<g>`-per-layer SVG surgery (Plotly's flat SVG doesn't cleanly map
+traces/shapes/images to groups, and word boxes vs heatmap rects are
+indistinguishable by geometry). New `plots.split_scanpath_layers(fig)` splits a
+built figure into `{layer: figure}` — each a `copy.deepcopy` of the full figure
+with only that layer's traces/shapes/images kept and a transparent background, so
+**layout (axis ranges + size + equal-aspect scaleanchor) stays byte-identical and
+the layers register perfectly when stacked**. Elements are tagged with their layer:
+shapes carry a `_LAYER_SHAPE_TAG`-prefixed `name` at creation (`build_word_boxes`,
+`build_critical_span_overlay`, `_draw_word_value_heatmap`, the plot border), traces
+are classified by their stable `name` (`_trace_layer` — `words`→labels, the saccade
+traces, `Raw gaze`, any `…heatmap…`; everything else is a fixation-marker variant),
+and the single `layout.image` is the stimulus. Layers:
+*stimulus_image / heatmap / word_boxes / saccades / fixations / raw_gaze / labels /
+frame* (only the visible ones). Surfaces (an export *action*, so no
+deep-link/Save-restore surface): **UI** — a **Separable layers** toggle in the bulk
+Export subtab (`export.ExportOptions.separable_layers` +
+`render_export_options`; `bulk_export` writes `per_trial/<slug>/layers/<layer>.<fmt>`
+using the selected non-HTML formats, or SVG when none is picked); **CLI** —
+`render --separable-layers` writes an `<output>_layers/` folder (static image output
+only); **API** — `save_figure_layers(fig, dir, fmt="svg")` + the exposed
+`split_scanpath_layers`. Tests: `tests/test_plots.py` (`TestSplitScanpathLayers` —
+complete/disjoint partition, identical registration, transparent bg, correct
+element→layer routing), `tests/test_export.py` (`TestSeparableLayers`),
+`tests/test_api.py`, `tests/test_cli.py`. An adversarial review pass then fixed
+two real defects: the per-layer render loop shared the combined-figure `try`, so a
+layer failure was mis-reported as "figure export failed" and could leave the
+combined figure silently un-flagged — now its own `try` reporting "layer export
+failed" (combined figures survive; `tests/test_export.py::…layer_failure_reported_distinctly`);
+and the bulk toggle silently fell back to SVG (needs Kaleido) when only HTML was
+picked — now a UI caption warns.
+
+_Original ask:_ keep the figure's layers **separable** in the output instead of one
+flattened image, so a word-boxes / fixations / saccades / heatmap / labels /
+stimulus-image split can be restyled in Illustrator / Inkscape.
 
 **VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Done (signed off 2026-06-23)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
@@ -140,7 +223,44 @@ moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 **VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done (signed off 2026-06-23)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**VIZ-8 · Color saccades by saccade type** — `Status: Backlog`
+**VIZ-8 · Color saccades by saccade type** — `Status: Pending approval (changes addressed 2026-07-03)`
+
+> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested (looked good otherwise):
+> 1. **Colour-picker defaults show black.** In "By type" mode the per-class colour
+>    pickers render **black** even though the plot draws the correct class colours —
+>    seed each picker with its actual class colour (`SACCADE_CLASS_COLORS`) so the
+>    swatches match the plot.
+> 2. **Make the legend optional.** The by-type legend **always** shows; it should be
+>    a toggle like the other legends/colour bars.
+
+**Implemented (2026-07-02).** A new **Saccade color** mode (`Uniform` | `By type`)
+in the ⚙️ Saccade-style popover encodes each saccade by its reading class —
+*forward / skip / refixation / return sweep / regression* (the classic schematic),
+plus a grey `other` catch-all for off-text endpoints. New pure classifier
+`measures.classify_saccades(fixations, words)` labels each *outgoing* saccade from
+the departing fixation's `word_id` delta + line membership
+(`measures.assign_fixation_lines`); it's computed at **render time** inside
+`make_scanpath_figure` (like `color_by_line`), so it needs no pipeline
+pre-enrichment and works headless. `plots._add_saccade_layer` splits into one
+legended sub-trace per class (colours from `constants.SACCADE_CLASS_COLORS`,
+five recolourable in the UI); arrows stay a single colour (they encode
+direction). Exposed on **every surface**: UI (`global_saccade_color_mode` +
+`global_saccade_class_color_*` in `_VIZ_WIDGET_DEFAULTS`, collected by
+`_collect_viz_settings`); deep link / Share (`saccade_color_mode` +
+`saccade_color_<class>` in `url_state._SHARE_VALUE_PARAMS`, both read & write);
+💾 Save & restore JSON (writer `tabs._build_studio_config` + reader
+`url_state._restore_plot_config`); CLI (`render --saccade-color-by-type` /
+repeatable `--saccade-type-color CLASS=COLOR`); headless API
+(`saccade_color_mode` / `saccade_class_colors` in `CANONICAL_FIGURE_DEFAULTS`).
+Tests: `tests/test_measures.py` (`TestClassifySaccades`), `tests/test_plots.py`
+(`TestSaccadeColorByType`), `tests/test_cli.py`, `tests/test_api.py`,
+`tests/test_app.py` + `tests/test_plot_config_restore.py` (round-trips). An
+adversarial review pass caught + fixed three defects before sign-off: a
+pandas-3.0 `None`→`NaN` dtype coercion in `classify_saccades` (now
+`dtype=object`; CI's pandas 3.0.3 would have failed while the stale local 2.3.3
+passed), the Save & restore surface gap above, and the `other` class rendering
+in the uniform colour instead of grey in the UI (palette now merges over the
+full defaults).
 
 Encode each saccade by its reading type — *forward saccade / skip / refixation /
 return sweep / regression* (the classic schematic). Saccades currently draw as one
@@ -156,8 +276,39 @@ consecutive fixations' `word_id` + line membership (`measures.cluster_word_lines
 "Off / By type" mode + 5-swatch palette to the saccade popover
 (`global_saccade_type_*`, seeded in `_VIZ_WIDGET_DEFAULTS`); render one sub-trace
 per type in `_add_saccade_layer` with a small legend. Related: **CMP-4**, **VIZ-6**.
+*(Note: implemented as a render-time `saccade_class` rather than an
+`enrich_fixations` column, and named distinctly to avoid clobbering the existing
+source-passthrough `saccade_type` column that the trial filter reads.)*
 
-**VIZ-9 · "Linear reading" view — saccades as arcs, fixations above the words** — `Status: Backlog`
+**VIZ-9 · "Linear reading" view — saccades as arcs, fixations above the words** — `Status: Pending approval (changes addressed 2026-07-03)`
+
+> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested: move the **Snap
+> fixations above words** control out of the ⚙️ Saccade-style popover and into the
+> **Fixations** controls (it's a fixation setting, not a saccade one).
+> `global_fixation_snap_to_word` stays the same key; just relocate the widget.
+
+**Implemented (2026-07-02).** A **Line shape** selector (`Straight` | `Arc`) in
+the ⚙️ Saccade-style popover draws saccades as upward Bézier arches
+(`plots._arch_points` → `_saccade_render_mode`, apex above the chord under the
+reversed y-axis, threaded through `_saccade_segments` / `_saccade_segments_by_class`
+so it composes with VIZ-8 by-type colouring), and a **Snap fixations above words**
+checkbox (`plots._snap_fixations_to_words`) moves each fixation to the top-centre
+of its assigned word (unassigned fixations keep their raw gaze point). Both apply
+on the true-scale path via a `render_fix` snapped copy used by the saccade layer
++ fixation markers (the heatmap keeps the raw gaze density). Off by default.
+Exposed on **every surface**: UI (`global_saccade_render_mode` /
+`global_fixation_snap_to_word` in `_VIZ_WIDGET_DEFAULTS`, collected by
+`_collect_viz_settings`); Share deep link (`saccade_render_mode` +
+`snap_fixations`); 💾 Save & restore; CLI (`render --saccade-arcs` /
+`--snap-fixations`); headless API (`CANONICAL_FIGURE_DEFAULTS`). Tests:
+`tests/test_plots.py` (`TestLinearReadingView`), `tests/test_cli.py`,
+`tests/test_api.py`, plus the Share + Save/restore round-trips. An adversarial
+review pass found the every-surface wiring clean but caught a real **arc-apex
+clipping** bug — a wide top-line arch rose above the view and was cut off (both
+fit modes); fixed by reserving exact Bézier-apex headroom at the top of the
+y-range in Arc mode only (the default view is byte-identical) — plus two
+mutation-surviving test gaps (the x-snap and the `rise = frac·|dx|` formula),
+now pinned with mutation-verified assertions.
 
 A stylized reading-diagram mode (cf. the schematic): draw saccades as curved
 **arcs/arches** instead of straight connectors, and snap each fixation directly
@@ -174,7 +325,40 @@ reposition fixation y to each word's top-center (reuse `assign_fixations_to_word
 Must stay on the true-scale path (`tabs._render_true_scale_chart`) and include the
 mode in the figure cache key. Related: **PRE-3** (`snap_to_lines`), **VIZ-5**.
 
-**VIZ-10 · Animate: autoplay on by default + a start/stop autoplay control** — `Status: Backlog`
+**VIZ-10 · Animate: autoplay on by default + a start/stop autoplay control** — `Status: Pending approval (changes addressed 2026-07-03)`
+
+> **✅ Fixed 2026-07-03 (awaiting sign-off).** Was: **autoplay doesn't actually
+> fire.** It's already on by default (`global_anim_autoplay=True`), but the replay
+> doesn't start on load — pressing/toggling it does nothing, even after switching
+> trials. The `Plotly.animate` kick-off (`plots.animation_autoplay_post_script`
+> emitted via `to_html(post_script=…)` in `tabs._render_true_scale_chart`) isn't
+> triggering in the user's environment — investigate the post-script injection /
+> the `{plot_id}` substitution / whether the frames exist at kick-off time. Keep
+> autoplay **on by default** once fixed.
+
+**Implemented (2026-07-02).** The animated replay now **autoplays on load** by
+default, *at the configured playback speed*. Plotly's built-in `auto_play`
+ignores the configured `frame_duration` (it runs at Plotly's own default), so the
+autoplay is a small client-side kick-off: `make_scanpath_animation(autoplay=True)`
+stamps the autoplay intent + the resolved per-frame duration on `fig.layout.meta`,
+and every HTML-embedding surface (`tabs._render_true_scale_chart` via
+`to_html(post_script=…)`, `api.save_figure` via `write_html`) emits a
+`Plotly.animate(gd, null, {frame:{duration, redraw:false}, fromcurrent:true})`
+kick-off at that speed (`plots.animation_autoplay_post_script` /
+`animation_autoplay_frame_duration`). The figure is always built paused, so
+autoplay-off (and static figures) stay paused. A new **Autoplay on load** checkbox
+lives in the Animate ⚙️ Playback popover (`global_anim_autoplay`, default on,
+seeded in `_VIZ_WIDGET_DEFAULTS`, collected by `_collect_viz_settings` as
+`anim_autoplay`). Exposed on **every surface**: UI toggle; Share deep link
+(`anim_autoplay` in `_SHARE_TOGGLE_PARAMS`); 💾 Save & restore (`layers.autoplay`
+writer + `_PLOT_CONFIG_LAYER_KEYS` reader); CLI (`render --animate --no-autoplay`);
+headless API (`animate_scanpath(..., autoplay=…)`, honoured by `save_figure`).
+Tests: `tests/test_plots.py` (`TestAnimationAutoplay`), `tests/test_api.py`,
+`tests/test_cli.py`, plus the Share + Save/restore round-trips. An adversarial
+review pass caught one every-surface gap: the **downloaded** animation HTML
+(`tabs._render_animation_export`) used a plain `to_html`, so it wouldn't autoplay
+at the configured speed like the live embed / API — now routed through the same
+`animation_autoplay_post_script` kick-off.
 
 Make the animated scanpath **autoplay on load** by default, and add a user option
 to turn autoplay on/off (start/stop). Today the true-scale embed forces the
@@ -197,7 +381,18 @@ a `--no-autoplay` (or `--autoplay`) flag on `cli.py render --animate`, and an
 `autoplay` parameter on `api.animate_scanpath` + `CANONICAL_FIGURE_DEFAULTS`.
 Related: **VIZ-9**, **CMP-4**.
 
-**VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Backlog`
+**VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Pending approval`
+
+> **Note (2026-07-03):** the user will **revisit this later** before signing off.
+
+**Implemented (2026-07-02).** Frames now sit on a uniform time grid
+(`plots._anim_timeline` → `_ANIM_GRID_STEP_MS` / `_ANIM_MAX_FRAMES`, returning
+`(frame_times, frame_duration_ms, reading_span_ms)`); the slider
+(`_animation_time_slider(frame_times, total_ms)`) labels each step `elapsed /
+total s` and dropped the `Elapsed:` prefix. Uniform per-frame duration keeps the
+GIF/MP4 export bounded. Display-only (no deep-link/CLI/API surface). Tests in
+[`tests/test_plots.py`](tests/test_plots.py) (`TestScanpathAnimation` /
+`TestDualScanpathAnimation` / `TestAnimationPlaybackTiming`).
 
 Improve the animation time slider so its readout and stepping are **time-based**
 rather than fixation-onset-based, and the readout shows elapsed **out of total**
@@ -238,7 +433,19 @@ moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 **VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Done (signed off 2026-06-25)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-_Next item: `VIZ-14`._
+**VIZ-14 · Per-trial stimulus images from a folder + naming pattern** — `Status: Backlog`
+
+Split out of VIZ-4 (2026-07-03). The `image_path` / `image_x` / `image_y` column
+convention already lets *any* dataset declare embedded/absolute per-trial images,
+and an uploaded image can be aligned via VIZ-4's **Align to text** controls. What's
+still missing is the case the user raised — a dataset that stores images **on disk
+keyed by a column value**: a UI to point at an **image folder** + a **filename
+pattern / column** (e.g. `{text_id}.png`) so per-trial images resolve without
+embedding them. Local-only (folders aren't reachable on the hosted demo); generalize
+`data._resolve_sample_image_paths` from the bundled `sample_data` dir to a
+user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus.
+
+_Next item: `VIZ-15`._
 
 ---
 
@@ -258,17 +465,7 @@ Fold experimental-setup values (screen resolution, viewing distance, DPI, stimul
 font pt, etc.) into the display/data settings so true-to-scale rendering and the
 px↔pt note (**VIZ-1**) can use them directly instead of being implicit.
 
-**DATA-3 · Expose OneStop as a public dataset (OSF download)** — `Status: Pending approval`
-
-OneStop now appears in the **Public datasets** picker alongside PoTeC / MultiplEYE,
-downloading the paragraph-level interest-area + fixation reports from
-[OSF](https://osf.io/2prdq/) on demand (regime-selectable: ordinary / information
-seeking / repeated / information-seeking-repeated). Loader
-`datasets.onestop_raw_frames` / `download_onestop` (reads via `data.read_table` to
-skip the OSF zips' `__MACOSX` cruft); sidebar source `_load_onestop_public_source`
-+ registry entry in [`app.py`](scanpath_studio/app.py). Docs: [`onestop.md`](docs/onestop.md).
-Distinct from the env-var `$ONESTOP_DATA_DIR` "OneStop server bundle" source, which
-stays for local `lacclab` exports + per-pid shards.
+**DATA-3 · Broaden OneStop public-dataset support (all regimes · all parts · public + LaCC lab)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). *(Public source + variant/regime/parts now shareable via `?source=onestop_public`.)*
 
 ### Data-source UI overhaul (DATA-4 … DATA-7)
 
@@ -292,40 +489,10 @@ moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 **DATA-7 · Rework the download + mapping flow (button, not a checkbox)** — `Status: Done (signed off 2026-06-26)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**DATA-8 · Show the column-mapping override for the Bundled Demo too** — `Status: Pending approval`
+**DATA-8 · Show the column-mapping override for the Bundled Demo too** — `Status: Done (signed off 2026-07-02)` →
+moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**Implemented (2026-06-26).** `prepare_data`'s `allow_override` gate now also
-fires for the **Bundled Demo** (`data_choice in (PUBLIC_DATASETS_CHOICE,
-DEMO_CHOICE)`, [`app.py`](scanpath_studio/app.py)), so the **Column mapping —
-Words/IA** and **Column mapping — Fixations** expanders render in the sidebar on
-the default first-load source — pre-filled with auto-detection, so an untouched
-mapping normalizes identically. Makes the re-mapping capability discoverable.
-Verified via `AppTest` (both expanders present, no errors). Related: **DATA-9**.
-
-**DATA-9 · Reorganize the Data sidebar to be intuitive (merge source + selection, nest setup/mapping)** — `Status: Pending approval`
-
-**Implemented (2026-06-26).** Per the user's chosen design (a single **flat**
-picker):
-- **Source picker merged** — the *Data source* radio + the separate *Public
-  datasets → Dataset* selectbox are now **one flat `st.selectbox`**, each entry
-  tagged by kind: **🧪 demo · 🔒 private** (your uploads + local env bundles, shown
-  "name (yours)") **· 🌐 public** (each corpus listed individually, by short name).
-  `data_source_choice` stays the canonical key; a public-corpus token resolves back
-  to `PUBLIC_DATASETS_CHOICE` (+ `public_dataset_choice`) on return so the load /
-  deep-link / monitor / reset paths are unchanged. A legacy `PUBLIC_DATASETS_CHOICE`
-  value migrates to the concrete corpus token (first public corpus when none
-  remembered). `_load_public_dataset` dropped its now-redundant corpus selectbox.
-- **Per-dataset config nested** — **Experimental Setup** + **Column mapping —
-  Words/IA / Fixations** render under one **"⚙️ <dataset> options"** group beside
-  the source (was three sibling top-level expanders). A `dataset_options_slot`
-  container holds an Experimental-Setup sub-slot + a column-mapping sub-slot
-  (`_source_display_name` for the header); `prepare_data` gained a `mapping_host`
-  arg threaded to `column_mapping_ui`.
-
-Code anchors: `app.render_sidebar_data_source`, `_load_public_dataset`,
-`_source_display_name`, `prepare_data(mapping_host=…)` ([`app.py`](scanpath_studio/app.py)).
-Tests updated in [`tests/test_apptest.py`](tests/test_apptest.py) (flat picker
-options, corpus switching, finalize selection). Related: **DATA-4**, **DATA-8**.
+**DATA-9 · Reorganize the Data sidebar to be intuitive (merge source + selection, nest setup/mapping)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 _Next item: `DATA-10`._
 
@@ -359,6 +526,10 @@ active trial filters and the metric picker.
 DataFrame), build figures in [`plots.py`](scanpath_studio/plots.py) via the
 `make_*_figure` pattern, wire into [`tabs.py`](scanpath_studio/tabs.py). Add a
 smoke test per figure against the bundled sample (3 pid × 2 articles).
+
+> **Note (2026-07-03):** the user asked to **keep this epic open** (not signing off
+> yet). *Generations* has since moved out to the Scanpath view's Comparisons
+> subtab (ENG-8), so Corpus Analysis is now **Per text · Per reader · Groups**.
 
 **Status (`Pending approval`):** the whole epic is implemented. *Aggregated Views*
 is replaced by four question-oriented subtabs — **Per text · Per reader · Per
@@ -599,6 +770,8 @@ reindex) that propagates to measures + export.
 
 **PRE-3 · Vertical drift correction (`snap_to_lines`) + before/after viz** — `Status: Pending approval` *(implemented 2026-06-28)*
 
+> **Note (2026-07-03):** the user will **revisit this later** before signing off.
+
 The headline gap (today only a 50px nearest-word fallback exists in
 [`measures.py`](scanpath_studio/measures.py)). **This is the "support fixation
 alignment algorithms" request.** Wrap eyekit `FixationSequence.snap_to_lines`
@@ -668,7 +841,11 @@ feature on every surface*): (1) **deep link / Share** — add `align_algorithm` 
 correction happens outside `make_scanpath_figure`, either add an
 `align`/`drift_correct` parameter to `api.plot_scanpath` that calls
 `alignment.correct` before building, or document `alignment.correct` as the
-scripting entry point. Keep the four in sync. Follows **PRE-3**.
+scripting entry point. (4) **💾 Save & restore** — `align_algorithm` /
+`align_connectors` are collected in `controls._collect_viz_settings` but written
+by neither `tabs._build_studio_config` nor read by `url_state._restore_plot_config`,
+so a saved plot-config JSON doesn't round-trip the drift setting either (add an
+`alignment` config section + reader). Keep all surfaces in sync. Follows **PRE-3**.
 
 ---
 
@@ -696,73 +873,7 @@ and feeds **DATA-1**.
 _BUG-1, BUG-2 signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**BUG-3 · MultiplEYE: stimulus text renders misaligned (fixations + image are fine)** — `Status: Pending approval`
-
-**Implemented (2026-06-24).** Both fixes landed and are verified (headless render
-shows the word boxes framing the printed stimulus text exactly; 580 tests pass).
-(a) The loader reads `FONT_SIZE` + `FONT` from the stimulus config and stamps
-`stimulus_font_px` / `stimulus_font_family` (a CSS stack, NotoSansMonoCJKsc →
-`'Noto Sans Mono CJK SC', …`) onto the frames (`datasets._multipleye_font_config`
-/ `_multipleye_font_css` / `_multipleye_stamp_font`; registered as meta
-passthrough fields in `data.py` so they survive normalization); the app snaps its
-font controls to them (exact 28 px + CJK family, scale-to-boxes off) on a source
-switch (`app._dataset_font` + the font snap in `render_sidebar_canvas_controls`,
-mirroring the canvas snap). (b) `scale_text_to_boxes` now budgets from the line
-**pitch** (`plots._line_pitch`) instead of the glyph-tight box height, and the
-width cap is script-aware (`_latin_advance` / `_is_fullwidth`, per-word em sum),
-so CJK + mixed CJK/Latin lines size sensibly; OneStop is byte-identical. Tests in
-`tests/test_plots.py` (TestLinePitchAndScript), `tests/test_dataset_support.py`
-(font config + stamping), `tests/test_app.py` (TestDatasetFont). Docs synced
-(CHANGELOG / `scanpath_studio/CLAUDE.md` / `docs/multipleye.md`).
-
-On a MultiplEYE trial the fixations and the stimulus **image** background line up
-correctly, but the **true-to-scale word text** (the word labels drawn from the
-word boxes) does **not** sit where it should. So the box/fixation geometry is
-right (image origin shift via `_MULTIPLEYE_IMAGE_ORIGIN` and the offset word
-boxes from `_multipleye_word_boxes_from_frame`
-[`datasets.py`](scanpath_studio/datasets.py:422) agree with the page image), but
-the *rendered text layer* is off — likely a label-positioning / font-sizing
-mismatch in the true-to-scale text path, not a coordinate-offset problem.
-
-**Root cause (diagnosed 2026-06-23).** Two independent issues, both in the
-true-to-scale text path (`_word_label_font_px` [`plots.py`](scanpath_studio/plots.py:339)),
-**not** the coordinates (image-origin shift + offset boxes are correct):
-
-1. **Size under-budgeted ~3×.** `scale_text_to_boxes` sets font =
-   `box_height / line_spacing`. MultiplEYE AOI char boxes are **tight around the
-   glyph** (height 34 px), not line-pitch-tall like OneStop (where box height ==
-   line pitch, so `/3` leaves a blank line above+below). MultiplEYE's actual line
-   pitch is 98.6 px and the real font is **`FONT_SIZE = 28`** (from
-   `…/stimuli_…/config/config_zh_ch_Zurich_1_2025.py`). So `34/3 ≈ 11 px` is ~3×
-   too small → the user disables the toggle. Manual font **28** works because it's
-   literally the config's `FONT_SIZE` (image is drawn 1 img-px = 1 screen-px = 1
-   data-px: 1310×991 centered on 1920×1080), and the manual path still ×`scale`,
-   staying true-to-scale. Also `_width_fit_font`'s `_MONO_ASPECT = 0.6` is a
-   **Latin** assumption; the stimulus font is `NotoSansMonoCJKsc` (**full-width,
-   aspect ≈ 1.0**), so the width cap is wrong for CJK too.
-2. **"Almost" but not exact, even at 28.** (a) Font-family mismatch — labels
-   render in generic `"monospace"` ([`constants.py`](scanpath_studio/constants.py:10)),
-   not `NotoSansMonoCJKsc`, so a fallback CJK font's advance widths/cap-height
-   differ → horizontal drift along a line + small vertical offset. (b)
-   Nominal-vs-inked size + anchor: PIL drew glyphs top-left in a 34 px cell for a
-   28 px font; Plotly centers the label in the box and rasterizes "28" differently,
-   distributing the ~6 px slack differently.
-
-**Fix direction.** Stop *inferring* typography from box geometry for image-backed
-corpora; thread the real values through. (a) MultiplEYE loader reads `FONT_SIZE`
-(+ ideally the font file / a CJK-capable family) from the stimulus config and
-stamps it onto the dataset → feed as the true-to-scale font size + `font_family`.
-(b) Make `scale_text_to_boxes` budget from the **line pitch** (line-to-line
-distance) rather than the tight box height, and make the width-fit aspect
-**script-aware** (CJK full-width ≈ 1.0). OneStop is unaffected (box height ==
-pitch there).
-
-Acceptance: with the stimulus image off, the rendered MultiplEYE word text falls
-within its word boxes and matches the page layout *without* manual font tweaks;
-with the image on, the labels sit on top of the corresponding image words.
-Related: **VIZ-4** (image-based stimuli support), **VIZ-1**/**DATA-2** (px↔pt /
-experimental-setup params), **PRE-6** (RTL/multilingual rendering — MultiplEYE
-adds non-English scripts), **DATA-1**.
+**BUG-3 · MultiplEYE: stimulus text renders misaligned (fixations + image are fine)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). *(Residual sub-pixel offset = BUG-4.)*
 
 **BUG-4 · MultiplEYE: residual small text-vs-image mismatch** — `Status: Backlog`
 
@@ -782,7 +893,16 @@ Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
 (`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
 in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
 
-**BUG-5 · Upload crashes on Streamlit Community Cloud (works locally)** — `Status: Backlog`
+**BUG-5 · Upload crashes on Streamlit Community Cloud (works locally)** — `Status: Pending approval (changes addressed 2026-07-03)`
+
+> **User input (2026-07-03):** the **Cloud log shows nothing** (no Python
+> traceback) and the crash was on **OneStop repeated reading**. Empty log + a large
+> upload ⇒ almost certainly a **memory (OOM) kill** — Streamlit Cloud kills the
+> process on RAM exhaustion without a traceback. **Chosen fix: (a)** add a
+> pre-upload **size/row guard** + a clear "too large for the hosted app — run
+> locally" warning (wizard flow in [`wizard.py`](scanpath_studio/wizard.py) /
+> `app.render_sidebar_data_source`). Repro data supplied at
+> `data/OneStop/public/repeated` — **size it first** to set the guard threshold.
 
 Uploading a dataset through the Upload / Add-dataset wizard works on a local
 `streamlit run` but **crashes on the deployed Streamlit Community Cloud app**.
@@ -796,7 +916,30 @@ between local and the Cloud image. Code anchors: the wizard flow in
 config in `streamlit_app.py` / any `.streamlit/config.toml`. Confirm whether it's
 size-, memory-, or import-related before fixing.
 
-**BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Backlog`
+**BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Pending approval (changes addressed 2026-07-03)`
+
+> **✅ Fixed 2026-07-03 (awaiting sign-off).** Was (reopened): the deployed Cloud app is now blue, but running
+> **`python -m scanpath_studio` from the repo root** (`/Users/shubi/Projects/scanpath_studio`)
+> still shows **red**. Root cause: the pinned theme lives in
+> **`app/.streamlit/config.toml`**, and Streamlit only reads `.streamlit/config.toml`
+> relative to the **launch CWD** — so launching from the parent of `app/` (or any
+> other dir) misses it and falls back to the default red. Fix so the theme applies
+> regardless of CWD: either move/duplicate the config to the repo root, or set the
+> theme via `st.set_page_config(theme=…)` / injected CSS in `app.py` so it's not
+> CWD-dependent. (The `tour.py` red-fallback fix already landed.)
+
+**Resolved (2026-07-03) — superseded by the reopen above.** The repo pins an
+explicit theme in
+[`.streamlit/config.toml`](.streamlit/config.toml) (`[theme] primaryColor =
+#1f77b4` light / `#5aa9e6` dark), so both environments now match — the user
+confirmed the **deployed Cloud app renders blue**. The one leftover inconsistency
+was fixed: `tour.py`'s spotlight accent fell back to Streamlit's default red
+(`#ff4b4b`) when the runtime didn't expose `theme.primaryColor`; it now falls back
+to the brand blue `#1f77b4` so the tour matches the pinned theme in every
+environment.
+
+_Original diagnosis below (kept for context):_
+
 
 The app's accent/primary color renders **blue when run locally** (`streamlit
 run`) but **red on the deployed Streamlit Community Cloud version** (e.g. the
@@ -850,9 +993,55 @@ Skipped at the user's request (2026-06-23): the app has hundreds of keys and
 deep-links seed many pre-widget, so a full typed migration is high-risk for low
 payoff right now.
 
-**ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Backlog`
+**ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Pending approval (changes addressed 2026-07-03)`
 
-Finish it or hide it (`model_scanpaths.py` / `similarity.py` / `synthetic.py`).
+> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested (first cut reviewed):
+> 1. **Rename "Generations".** It needn't be model generations — it's any set of
+>    scanpaths of the same text (e.g. repeated readings), so give it a more general
+>    name. **"Comparisons"** is a good name for the tab itself.
+> 2. **Unnest Line assignment.** Move **Line assignment** back out to its own
+>    top-level subtab — so **Comparisons has no subtabs** (it's just the renamed
+>    Generations view); Line assignment sits beside it in the subtab bar.
+> 3. **Drop the Fixation-index range slider** from the Comparisons view — it's
+>    redundant with the fixation-index control already in the main rail's Fixations
+>    section.
+> 4. **Drop the "Stimulus & questions" panel** shown inside Generations — there's
+>    already a dedicated **Stimulus & questions** subtab.
+
+**Implemented (2026-07-03).** Finished + relocated, per the user's spec:
+- **New "🔬 Comparisons" subtab** in the Scanpath view (where "📐 Line assignment"
+  was), holding two nested subtabs — **Generations** and **📐 Line assignment**.
+  Both use the **main scanpath selection**; neither renders its own trial picker.
+  Generations is **removed from Corpus Analysis** (now Per text · Per reader ·
+  Groups); `render_corpus_analysis_tab` lost its `combos` param.
+- **Generations is now data-driven, not synthetic.** Dropped the trial picker (uses
+  the main selection) and the **🎲 Regenerate** button. Added a **Generation
+  column** selectbox: the distinct values of that column — over the **same text**
+  as the selected trial — are the generations, scored against the selected reading.
+  New pure helpers `_generation_column_options` (ranks model/condition-like names,
+  then reader/trial ids; excludes coordinates + per-fixation ids; skips
+  unhashable/JSON columns) + `_collect_generations` (scopes to the trial's text via
+  the canonical `text_id`/`unique_text_id`/`paragraph_id` priority, excludes the
+  selected trial, groups by the column, caps the grid at 24 with a "showing N of M"
+  caption). The existing similarity machinery (`compute_similarity_table` /
+  `nld_by_*` / convergence plots) is reused unchanged; the table's column reads
+  **Generation**.
+- **Dead code removed:** the synthetic `_cached_model_scanpaths` + its
+  `model_scanpaths` import (the `model_scanpaths.py` module is now unused by the
+  app — its tests still pass; candidate for a later delete). `_SELECTION_PREFIXES`
+  dropped `"multi"` (no second picker).
+
+Tests: `tests/test_multiple_comparison_ui.py` (`_generation_column_options` /
+`_collect_generations` — text scoping incl. real `text_id` + `paragraph_id`
+fallback, exclusions, unhashable guard); `tests/test_apptest.py` (Generations
+renders real generations from the bundled demo). An adversarial review pass caught
+a real **HIGH**: the first cut scoped on `paragraph_id`, which normalized OneStop
+fixations don't carry (they use `text_id`), so generations mixed across texts —
+now fixed to the canonical text-column priority; plus three LOW robustness fixes
+(within-trial ids excluded, `nunique()` TypeError on list columns guarded, grid
+iframe keys made collision-proof).
+
+_Original ask:_ finish it or hide it (`model_scanpaths.py` / `similarity.py`).
 
 ### UX / robustness
 
@@ -860,22 +1049,33 @@ _ENG-9 (surface auto-detected columns) · ENG-10 (animation-export errors when
 Chrome is missing) signed off & archived — see
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**ENG-11 · Version saved plot-config JSON + migration path** — `Status: Backlog`
+**ENG-11 · Version saved plot-config JSON + migration path** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-So old saved configs keep loading as the schema evolves.
-
-### Docs
-
-**ENG-12 · Document the true-to-scale text rendering model** — `Status: Backlog`
-
-Data-space word size → screen px; currently only in code comments. (Relates to
-VIZ-1 px↔pt and DATA-2.)
+**ENG-12 · Document the true-to-scale text rendering model** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **ENG-13 · Document the new analysis sections once built** — `Status: Backlog`
 
 Add to `docs/` after AN-* land.
 
-**ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Backlog`
+**ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Pending approval (changes addressed 2026-07-03)`
+
+> **Confirmed by the user (2026-07-03):** the list + **order** below is correct,
+> **all authors appear in every place** (CITATION / README / constants / app), and
+> the affiliations are:
+> - **DiLi Lab is at UZH (University of Zurich).**
+> - **David Reiche also has a University of Potsdam affiliation** (two affiliations).
+>
+> **Final author order** (apply everywhere, in sync):
+> 1. **Omer Shubi** — LACC Lab, Technion
+> 2. **Keren Gruteke Klein** — LACC Lab, Technion
+> 3. **Ella Lion** — LACC Lab, Technion
+> 4. **Deborah Jacobi** — DiLi Lab, University of Zurich (UZH)
+> 5. **David Reiche** — DiLi Lab, University of Zurich (UZH); University of Potsdam
+> 6. **Lena Jäger** — DiLi Lab, University of Zurich (UZH)
+> 7. **Yevgeni Berzak** — (as currently in `CITATION.cff`)
+>
+> *(Still to double-check while editing: Berzak's affiliation string, and that the
+> in-prep paper's author list matches this set + order.)*
 
 The author/citation metadata is still provisional. Add the confirmed co-authors
 in place of the `TBD` / "and others" placeholders:

@@ -14,10 +14,22 @@ authors:
   - given-names: Keren
     family-names: "Gruteke Klein"
     affiliation: "LACC Lab, Technion – Israel Institute of Technology"
+  - given-names: Ella
+    family-names: Lion
+    affiliation: "LACC Lab, Technion – Israel Institute of Technology"
+  - given-names: Deborah
+    family-names: Jacobi
+    affiliation: "DiLi Lab, University of Zurich"
+  - given-names: David
+    family-names: Reiche
+    affiliation: "DiLi Lab, University of Zurich; University of Potsdam"
+  - given-names: Lena
+    family-names: Jäger
+    affiliation: "DiLi Lab, University of Zurich"
   - given-names: Yevgeni
     family-names: Berzak
     affiliation: "LACC Lab, Technion – Israel Institute of Technology"
-# NOTE: author list is provisional (a paper is in preparation).
+# NOTE: a paper is in preparation.
 repository-code: "https://github.com/lacclab/scanpath-studio"
 url: "https://scanpath-studio.streamlit.app"
 license: MIT

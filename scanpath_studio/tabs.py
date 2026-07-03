@@ -91,12 +91,10 @@ from scanpath_studio.export import (
     bulk_export,
     render_export_options,
 )
-from scanpath_studio.model_scanpaths import (
-    DEFAULT_N_MODELS,
-    generate_model_scanpaths,
-)
 from scanpath_studio.plots import (
     _png_pixel_size,
+    animation_autoplay_frame_duration,
+    animation_autoplay_post_script,
     animation_playback_ms,
     make_comparison_figure,
     make_density_scatter_figure,
@@ -177,6 +175,14 @@ def _render_true_scale_chart(
     """
     width = int(fig.layout.width or 900)
     height = int(fig.layout.height or 600)
+    # VIZ-10: an animation built with autoplay on carries its per-frame duration on
+    # the figure; kick off `Plotly.animate` at that speed after mount (Plotly's own
+    # `auto_play` would ignore the configured speed). `None` for static figures or
+    # autoplay-off animations → the built-in `auto_play=False` keeps them paused.
+    autoplay_ms = animation_autoplay_frame_duration(fig)
+    autoplay_script = (
+        animation_autoplay_post_script(autoplay_ms) if autoplay_ms is not None else None
+    )
     plot_html = fig.to_html(
         include_plotlyjs="cdn",
         full_html=False,
@@ -185,8 +191,10 @@ def _render_true_scale_chart(
         # to_html defaults to auto_play=True, which auto-runs an animated figure on
         # load at Plotly's default frame duration (ignoring the configured playback
         # speed). Start paused so the animation only plays — at the right speed —
-        # when the user presses Play. No effect on static (frame-less) figures.
+        # either via the autoplay kickoff below or when the user presses Play. No
+        # effect on static (frame-less) figures.
         auto_play=False,
+        post_script=autoplay_script,
     )
     # Scale factor: shrink to the available width, and (when capped) also to the
     # cell height, never upscaling past 1×.
@@ -366,7 +374,22 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     )
 
     if fmt == "HTML":
-        html_bytes = fig.to_html(include_plotlyjs="cdn", full_html=True).encode("utf-8")
+        # VIZ-10: the downloaded HTML must autoplay at the configured speed too
+        # (Plotly's default auto_play ignores frame_duration), matching the live
+        # embed + api.save_figure. Autoplay-off / static figures stay paused.
+        autoplay_ms = animation_autoplay_frame_duration(fig)
+        if autoplay_ms is not None:
+            html = fig.to_html(
+                include_plotlyjs="cdn",
+                full_html=True,
+                auto_play=False,
+                post_script=animation_autoplay_post_script(autoplay_ms),
+            )
+        elif fig.frames:
+            html = fig.to_html(include_plotlyjs="cdn", full_html=True, auto_play=False)
+        else:
+            html = fig.to_html(include_plotlyjs="cdn", full_html=True)
+        html_bytes = html.encode("utf-8")
         st.download_button(
             "⬇ Download HTML",
             data=html_bytes,
@@ -517,6 +540,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
         show_heatmap=viz_settings["show_heatmap"],
         heatmap_style=viz_settings.get("heatmap_style", "Word boxes"),
+        heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_raw_gaze=effective_show_raw_gaze,
         color_by=viz_settings["color_by"],
@@ -540,6 +564,11 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
             viz_settings.get("saccade_style", "Solid"), "solid"
         ),
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
+        saccade_color_mode=viz_settings.get("saccade_color_mode", "Uniform"),
+        saccade_class_colors=viz_settings.get("saccade_class_colors"),
+        saccade_type_legend=viz_settings.get("saccade_type_legend", True),
+        saccade_render_mode=viz_settings.get("saccade_render_mode", "Straight"),
+        fixation_snap_to_word=viz_settings.get("fixation_snap_to_word", False),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
@@ -599,27 +628,6 @@ def _cached_scanpath_figure(
     ``_figure_input_key``) is the cache key, so a rerun with the same trial and
     settings reuses the figure instead of rebuilding all its traces/shapes."""
     return make_scanpath_figure(_words, _fixations, **_build_kwargs)
-
-
-@st.cache_data(show_spinner=False)
-def _cached_model_scanpaths(
-    _words: pd.DataFrame,
-    n_models: int,
-    reference_trial_id: object,
-    text_id: object,
-    nonce: int,
-    words_fp,
-) -> dict:
-    """Cache the (deterministic) synthetic model scanpaths for a trial so they
-    aren't regenerated on every rerun — the Generations tab renders each time the
-    app reruns, including while the user is on a different tab."""
-    return generate_model_scanpaths(
-        _words,
-        n_models=n_models,
-        reference_trial_id=reference_trial_id,
-        text_id=text_id,
-        nonce=nonce,
-    )
 
 
 def _render_compare_selector(
@@ -1191,10 +1199,14 @@ def _build_studio_config(
     text/highlighting, canvas, axes, trial selection), every per-trial
     annotation, and provenance (app version, export date, data source, column
     mapping)."""
+    # ENG-11: PLOT_CONFIG_SCHEMA is the single source of truth for the version;
+    # bump it (+ register a migration) in url_state when this layout changes.
+    from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
+
     return {
         # schema 2 = config + annotations + text/highlighting + provenance;
         # schema 1 (plot config only) still restores via the same reader.
-        "schema": 2,
+        "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": app_version},
         # When this config was saved (ISO 8601, local time) — provenance only,
         # surfaced when restoring (sidebar + the upload wizard's restore step).
@@ -1218,11 +1230,14 @@ def _build_studio_config(
             "raw_gaze": figure_settings["show_raw_gaze"],
             "stimulus_image": viz_settings.get("show_stimulus_image", False),
             "full_monitor": figure_settings.get("fit_to_monitor", True),
+            # VIZ-10: autoplay the animated replay on load.
+            "autoplay": bool(viz_settings.get("anim_autoplay", True)),
         },
         "coloring": {
             "color_by": figure_settings["color_by"],
             "heatmap_metric": viz_settings["heatmap_metric"],
             "heatmap_style": figure_settings.get("heatmap_style", "Word boxes"),
+            "heatmap_norm": figure_settings.get("heatmap_norm", "Linear"),
             "show_colorbars": figure_settings["show_colorbars"],
             "fixation_range": (
                 list(figure_settings["fixation_color_range"])
@@ -1241,8 +1256,32 @@ def _build_studio_config(
             "saccade_width": float(
                 viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH)
             ),
+            # VIZ-8: colour-by-reading-type mode + per-class palette + legend.
+            "saccade_color_mode": viz_settings.get("saccade_color_mode", "Uniform"),
+            "saccade_type_legend": bool(viz_settings.get("saccade_type_legend", True)),
+            "saccade_class_colors": dict(
+                viz_settings.get("saccade_class_colors") or {}
+            ),
+            # VIZ-9: linear-reading mode (arced saccades + snap fixations).
+            "saccade_render_mode": viz_settings.get("saccade_render_mode", "Straight"),
+            "fixation_snap_to_word": bool(
+                viz_settings.get("fixation_snap_to_word", False)
+            ),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
             "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
+            # VIZ-4: image-stimulus opacity + manual alignment (dataset + uploads).
+            "stimulus_image_opacity": float(
+                viz_settings.get("stimulus_image_opacity", 1.0)
+            ),
+            "stimulus_image_offset_x": float(
+                viz_settings.get("stimulus_image_offset_x", 0.0)
+            ),
+            "stimulus_image_offset_y": float(
+                viz_settings.get("stimulus_image_offset_y", 0.0)
+            ),
+            "stimulus_image_scale": float(
+                viz_settings.get("stimulus_image_scale", 1.0)
+            ),
             "colorbar_orientation": figure_settings.get(
                 "colorbar_orientation", "Vertical"
             ),
@@ -1548,6 +1587,7 @@ def _build_and_render_animation(
     background_image: Optional[str] = None,
     background_image_size: Optional[Tuple[float, float]] = None,
     background_image_origin: Optional[Tuple[float, float]] = None,
+    background_image_opacity: float = 1.0,
 ):
     """Build + render the animation figure (single or dual co-animation) in the
     main column. Returns ``(fig, playback_ms, save_slug, file_stem)``."""
@@ -1598,6 +1638,8 @@ def _build_and_render_animation(
         background_image=background_image,
         background_image_size=background_image_size,
         background_image_origin=background_image_origin,
+        background_image_opacity=background_image_opacity,
+        autoplay=viz_settings.get("anim_autoplay", True),
     )
     _render_true_scale_chart(fig, key="single_anim")
     if dual:
@@ -2024,6 +2066,15 @@ def render_single_trial_tab(
                     help="Playback speed relative to the recorded fixation timings.",
                     key="single_playback_speed",
                 )
+                # VIZ-10: start the replay automatically on load (at the speed
+                # above). Off → the figure waits on the ▶ Play button.
+                st.checkbox(
+                    "Autoplay on load",
+                    key="global_anim_autoplay",
+                    help="Start the replay automatically when the plot loads, at "
+                    "the playback speed set above. Turn off to start paused (press "
+                    "▶ Play to run it).",
+                )
                 anim_info_slot = st.container()
         # Compare is a view mode (toggle here); the second-trial selector renders
         # above the chips in the plot column (compare_slot below), mirroring the
@@ -2106,16 +2157,49 @@ def render_single_trial_tab(
     effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
     figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
     figure_settings["raw_gaze"] = trial_raw_gaze if trial_has_raw_gaze else None
-    # Stimulus-image background layer — only when toggled on and available for
-    # this trial. Pass the path (small cache key); plots.py base64-encodes it.
-    if viz_settings.get("show_stimulus_image") and has_stimulus_image:
-        figure_settings["background_image"] = trial_image_path
-        figure_settings["background_image_size"] = trial_image_size
-        figure_settings["background_image_origin"] = trial_image_origin
+    # Stimulus-image background layer (VIZ-4) — only when toggled on. A
+    # user-uploaded image WINS over the dataset's built-in one (VIZ-4 fix): the
+    # upload is an explicit override, so it must beat the bundled demo's / a
+    # MultiplEYE session's image. The upload is stretched to fill the monitor at
+    # (0,0); the dataset image carries a precise per-trial origin/size (pass the
+    # path — a small cache key; plots.py base64-encodes it). Either way the manual
+    # nudge below lets the user fine-tune the fit to the text + fixations.
+    upload_uri = viz_settings.get("stimulus_image_upload_uri")
+    if viz_settings.get("show_stimulus_image") and upload_uri:
+        base_image = upload_uri
+        base_size = (float(canvas_width), float(canvas_height))
+        base_origin = (0.0, 0.0)
+    elif viz_settings.get("show_stimulus_image") and has_stimulus_image:
+        base_image = trial_image_path
+        base_size = trial_image_size
+        base_origin = trial_image_origin
+    else:
+        base_image = None
+        base_size = None
+        base_origin = None
+    # VIZ-4: manual alignment — nudge the image origin (dx, dy) and scale its size
+    # so the user can line the stimulus up with the text boxes / fixations when the
+    # data's coordinate frame doesn't match the image exactly.
+    if base_image is not None and base_size is not None:
+        dx = float(viz_settings.get("stimulus_image_offset_x", 0.0))
+        dy = float(viz_settings.get("stimulus_image_offset_y", 0.0))
+        scale = float(viz_settings.get("stimulus_image_scale", 1.0)) or 1.0
+        ox, oy = base_origin or (0.0, 0.0)
+        figure_settings["background_image"] = base_image
+        figure_settings["background_image_size"] = (
+            base_size[0] * scale,
+            base_size[1] * scale,
+        )
+        figure_settings["background_image_origin"] = (ox + dx, oy + dy)
     else:
         figure_settings["background_image"] = None
         figure_settings["background_image_size"] = None
         figure_settings["background_image_origin"] = None
+    # Opacity applies to whichever image is shown (dataset or uploaded); harmless
+    # when no image is drawn.
+    figure_settings["background_image_opacity"] = viz_settings.get(
+        "stimulus_image_opacity", 1.0
+    )
     # Carried into both the live figure and the bulk export so exported plots are
     # sized identically to what's on screen (true-to-scale reading text).
     figure_settings["line_spacing"] = line_spacing
@@ -2253,6 +2337,9 @@ def render_single_trial_tab(
                         background_image_origin=figure_settings.get(
                             "background_image_origin"
                         ),
+                        background_image_opacity=figure_settings.get(
+                            "background_image_opacity", 1.0
+                        ),
                     )
                 )
             if comparing and compare_fix.empty:
@@ -2334,10 +2421,19 @@ def render_single_trial_tab(
     # conditions and summary stats (configurable via the sidebar 🏷️ Trial chips).
     # Keyed wrapper so the welcome tour can spotlight the per-trial subtab bar.
     with st.container(key="tour_grp_subtabs"):
-        tab_annot, tab_stim, tab_align, tab_export, tab_inspect, tab_share = st.tabs(
+        (
+            tab_annot,
+            tab_stim,
+            tab_compare,
+            tab_align,
+            tab_export,
+            tab_inspect,
+            tab_share,
+        ) = st.tabs(
             [
                 "📝 Annotations",
                 "Stimulus & questions",
+                "🔬 Comparisons",
                 "📐 Line assignment",
                 "Export",
                 "🔎 Data Inspection",
@@ -2348,7 +2444,30 @@ def render_single_trial_tab(
         render_trial_annotations(selected_participant, selected_trial, bare=True)
     with tab_stim:
         _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
+    with tab_compare:
+        # ENG-8: Comparisons overlays the selected scanpath against other readings
+        # of the SAME text, grouped by a chosen column (repeated readings, model
+        # generations, …), scored by similarity. It uses the main scanpath
+        # selection and renders no picker of its own. Line assignment is now its
+        # own top-level subtab (tab_align), not nested here.
+        render_multiple_comparison_tab(
+            trial_words,
+            trial_fixations,
+            words_filtered,
+            fixations_filtered,
+            selected_participant=selected_participant,
+            selected_trial=selected_trial,
+            canvas_width=canvas_width,
+            canvas_height=canvas_height,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            viz_settings=viz_settings,
+            line_spacing=line_spacing,
+            scale_text_to_boxes=scale_text_to_boxes,
+        )
     with tab_align:
+        # PRE-3: the drift-correction algorithm comparison grid, on the same
+        # selected trial. Unnested from Comparisons to its own subtab (ENG-8).
         render_alignment_comparison_tab(
             trial_words,
             trial_fixations,
@@ -2579,7 +2698,7 @@ def _render_comparison_figure(
 
 
 # -----------------------------------------------------------------------------
-# Corpus Analysis Tab  (parent of Generations + Aggregated Views)
+# Corpus Analysis Tab  (Per text · Per reader · Groups subtabs)
 # -----------------------------------------------------------------------------
 
 # --- Cached analysis wrappers ------------------------------------------------
@@ -2689,29 +2808,9 @@ def _measure_picker(
         options=options,
         index=index,
         key=key,
-        help="Eye-movement measure every view in this section reads (AN-23).",
+        help="The eye-movement measure every view in this section reads.",
     )
     return MEASURES[labels[chosen]]
-
-
-def _agg_spread_controls(host, *, key, with_spread=True):
-    """Aggregation (mean/median/sum) + spread (SD/SEM/IQR/bootstrap) (AN-24)."""
-    cols = host.columns(2 if with_spread else 1)
-    agg = cols[0].selectbox(
-        "Aggregate",
-        _AGG_OPTIONS,
-        key=f"{key}_agg",
-        help="How per-reader values are combined (AN-24).",
-    )
-    spread = "SD"
-    if with_spread:
-        spread = cols[1].selectbox(
-            "Spread",
-            _SPREAD_OPTIONS,
-            key=f"{key}_spread",
-            help="Band / error around the centre (AN-24).",
-        )
-    return agg, spread
 
 
 def _normalize_toggle(host, *, key, disabled=False):
@@ -2722,7 +2821,7 @@ def _normalize_toggle(host, *, key, disabled=False):
             value=False,
             key=key,
             disabled=disabled,
-            help="Compare slow vs fast readers on shape, not absolute level (AN-25).",
+            help="Compare slow vs fast readers on shape, not absolute level.",
         )
     )
 
@@ -2737,7 +2836,7 @@ def _min_readers_input(host, *, key, label="Min readers per word", default=1):
             value=default,
             step=1,
             key=key,
-            help="Words backed by fewer observations are dropped (AN-26).",
+            help="Words backed by fewer observations are dropped.",
         )
     )
 
@@ -2939,7 +3038,6 @@ def _text_column(frame: pd.DataFrame) -> Optional[str]:
 def render_corpus_analysis_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
-    combos: pd.DataFrame,
     *,
     canvas_width: int,
     canvas_height: int,
@@ -2952,11 +3050,11 @@ def render_corpus_analysis_tab(
     """Corpus Analysis tab — question-oriented analysis sections.
 
     Replaces the single *Aggregated Views* subtab with one subtab per question —
-    **Per text** (one text, many readers; AN-1…6), **Per reader** (one reader,
-    many trials; AN-7…13), **Per group** (a cohort; AN-14…17) and **Group
-    comparison** (two cohorts; AN-18…22) — plus the WIP **Generations** tab. Every
-    section obeys the active trial filters and reads the shared measure picker /
-    aggregation / spread / normalization controls (AN-23…27).
+    **Per text** (one text, many readers), **Per reader** (one reader, many
+    trials), and **Groups** (profile one cohort, or flip a toggle to compare two).
+    Every section obeys the active trial filters and reads the shared measure
+    picker / aggregation / spread / normalization controls. (**Generations** moved
+    to the Scanpath view's **Comparisons** subtab — ENG-8.)
     """
     common = dict(
         canvas_width=canvas_width,
@@ -2966,32 +3064,15 @@ def render_corpus_analysis_tab(
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
     )
-    text_tab, reader_tab, group_tab, cmp_tab, gen_tab = st.tabs(
-        ["Per text", "Per reader", "Per group", "Group comparison", "Generations (WIP)"]
-    )
+    text_tab, reader_tab, groups_tab = st.tabs(["Per text", "Per reader", "Groups"])
     with text_tab:
         render_per_text_tab(
             words_filtered, fixations_filtered, viz_settings=viz_settings, **common
         )
     with reader_tab:
         render_per_reader_tab(words_filtered, fixations_filtered, **common)
-    with group_tab:
-        render_per_group_tab(words_filtered, fixations_filtered, **common)
-    with cmp_tab:
-        render_group_comparison_tab(words_filtered, fixations_filtered, **common)
-    with gen_tab:
-        render_multiple_comparison_tab(
-            words_filtered,
-            fixations_filtered,
-            combos,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            viz_settings=viz_settings,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-        )
+    with groups_tab:
+        render_groups_tab(words_filtered, fixations_filtered, **common)
 
 
 # -----------------------------------------------------------------------------
@@ -3105,7 +3186,12 @@ def render_per_text_tab(
     )
     if measure is None:
         return
-    agg = c[1].selectbox("Aggregate", _AGG_OPTIONS, key="ptext_agg")
+    agg = c[1].selectbox(
+        "Aggregate",
+        _AGG_OPTIONS,
+        key="ptext_agg",
+        help="How each word's value is combined across readers (e.g. the mean per word).",
+    )
     # Normalization is per-reader; it doesn't apply to the single aggregate tint
     # of the stimulus view (AN-4), so disable the toggle there rather than show an
     # inert control.
@@ -3161,7 +3247,13 @@ def render_per_text_tab(
             st, per, name=f"word_reader_{measure.key}_{text_id}.csv", key="dl_ptext2"
         )
     elif view == "Cohort profile":  # AN-3
-        spread = c[2].selectbox("Spread", _SPREAD_OPTIONS, key="ptext3_spread")
+        spread = c[2].selectbox(
+            "Spread",
+            _SPREAD_OPTIONS,
+            key="ptext3_spread",
+            help="Band around each word's mean across readers — SD, SEM, IQR, "
+            "or a 95% bootstrap confidence interval.",
+        )
         min_readers = _min_readers_input(st, key="ptext3_min")
         prof = _c_cohort_profile(
             words_filtered,
@@ -3214,6 +3306,7 @@ def render_per_text_tab(
             color_by="value",
             heatmap_metric=None,
             heatmap_style="Word boxes",
+            heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
             marker_size_range=viz_settings.get(
                 "marker_size_range", DEFAULT_MARKER_SIZE_RANGE
             ),
@@ -3443,7 +3536,12 @@ def render_per_reader_tab(
         measure = _measure_picker(words_filtered, fix_e, key="prdr_measure", host=c[0])
         if measure is None:
             return
-        agg = c[1].selectbox("Aggregate", _AGG_OPTIONS, key="prdr13_agg")
+        agg = c[1].selectbox(
+            "Aggregate",
+            _AGG_OPTIONS,
+            key="prdr13_agg",
+            help="How the measure is combined within each trial (across its words / fixations).",
+        )
         frame = fix_e if measure.frame == "fixations" else words_filtered
         sub = frame[frame["participant_id"].astype(str) == str(pid)].copy()
         if not has_explicit_trial_index(sub):
@@ -3462,6 +3560,44 @@ def render_per_reader_tab(
         _download_tidy(st, df, name=f"trend_{measure.key}_{pid}.csv", key="dl_prdr13")
 
 
+def render_groups_tab(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    base_font_size: int,
+    font_family: str,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    scale_text_to_boxes: bool = True,
+) -> None:
+    """*Groups* — profile one cohort, or compare two.
+
+    One group answers "what does this group look like?"; flip **Compare a second
+    group** to define Group B and get the two-cohort comparison views. A single
+    group is just the one-group case of a comparison, so both live in one tab.
+    """
+    common = dict(
+        canvas_width=canvas_width,
+        canvas_height=canvas_height,
+        base_font_size=base_font_size,
+        font_family=font_family,
+        line_spacing=line_spacing,
+        scale_text_to_boxes=scale_text_to_boxes,
+    )
+    compare = st.toggle(
+        "Compare a second group",
+        value=False,
+        key="groups_compare",
+        help="Off: profile a single group. On: define a second group and compare "
+        "A vs B — difference profile, paired bars, effect size, and more.",
+    )
+    if compare:
+        render_group_comparison_tab(words_filtered, fixations_filtered, **common)
+    else:
+        render_per_group_tab(words_filtered, fixations_filtered, **common)
+
+
 def render_per_group_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -3473,7 +3609,9 @@ def render_per_group_tab(
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
 ) -> None:
-    """*What does this group look like?* — a cohort by the active filter (AN-14…17)."""
+    """*What does this group look like?* — a cohort by the active filter.
+
+    The one-group case of the Groups tab (wrapped by ``render_groups_tab``)."""
     st.caption(
         "Define a **group** (split a field or build a filter set), then pool its "
         "readers: distribution summaries, the cohort word profile, a per-reader "
@@ -3539,7 +3677,12 @@ def render_per_group_tab(
         )
         if measure is None:
             return
-        agg = c[2].selectbox("Aggregate", _AGG_OPTIONS, key="pgrp15_agg")
+        agg = c[2].selectbox(
+            "Aggregate",
+            _AGG_OPTIONS,
+            key="pgrp15_agg",
+            help="How each word's value is combined across the group's readers.",
+        )
         spread = c[3].selectbox("Spread", _SPREAD_OPTIONS, key="pgrp15_spread")
         min_readers = _min_readers_input(st, key="pgrp15_min")
         prof = _c_cohort_profile(
@@ -3579,7 +3722,12 @@ def render_per_group_tab(
         measure = _measure_picker(words_g, fix_g, key="pgrp_measure", host=c[0])
         if measure is None:
             return
-        agg = c[1].selectbox("Aggregate", _AGG_OPTIONS, key="pgrp17_agg")
+        agg = c[1].selectbox(
+            "Aggregate",
+            _AGG_OPTIONS,
+            key="pgrp17_agg",
+            help="How the measure is combined within each trial (across its words / fixations).",
+        )
         show_readers = c[2].checkbox(
             "Per-reader behind", value=False, key="pgrp17_readers"
         )
@@ -3701,7 +3849,12 @@ def render_group_comparison_tab(
         )
         if measure is None:
             return
-        agg = c[2].selectbox("Aggregate", _AGG_OPTIONS, key="cmp19_agg")
+        agg = c[2].selectbox(
+            "Aggregate",
+            _AGG_OPTIONS,
+            key="cmp19_agg",
+            help="How each word's value is combined across each group's readers, before A−B.",
+        )
         min_readers = _min_readers_input(c[3], key="cmp19_min", label="Min/grp")
         diff = group_word_difference(
             words_filtered,
@@ -3739,7 +3892,12 @@ def render_group_comparison_tab(
             key="cmp20_measures",
         )
         c = st.columns(2)
-        agg = c[0].selectbox("Aggregate", _AGG_OPTIONS, key="cmp20_agg")
+        agg = c[0].selectbox(
+            "Aggregate",
+            _AGG_OPTIONS,
+            key="cmp20_agg",
+            help="How each measure is combined across each group's readers.",
+        )
         spread = c[1].selectbox(
             "Error bars", _SPREAD_OPTIONS, index=1, key="cmp20_spread"
         )
@@ -3813,7 +3971,12 @@ def render_group_comparison_tab(
         )
         if measure is None:
             return
-        agg = c[2].selectbox("Aggregate", _AGG_OPTIONS, key="cmp22_agg")
+        agg = c[2].selectbox(
+            "Aggregate",
+            _AGG_OPTIONS,
+            key="cmp22_agg",
+            help="How each word's value is combined across each group's readers.",
+        )
         long = two_group_word_profiles(
             words_filtered,
             text_col,
@@ -3840,7 +4003,7 @@ def render_group_comparison_tab(
 
 
 # -----------------------------------------------------------------------------
-# Generations (WIP) Tab  (formerly "Multiple Comparison")
+# Comparisons Tab  (Scanpath view subtab; formerly "Generations" / "Multiple Comparison")
 # -----------------------------------------------------------------------------
 
 
@@ -4073,11 +4236,148 @@ def render_alignment_comparison_tab(
                 )
 
 
+# Per-fixation continuous quantities can't group scanpaths into generations, so
+# they're never offered as a generation identifier.
+_GEN_COL_EXCLUDE = {
+    "x",
+    "y",
+    "duration_ms",
+    "timestamp_ms",
+    "saccade_amplitude",
+    "order_in_trial",
+    "first_fix_x",
+    "first_fix_y",
+    "noise_flag",
+    # Per-fixation identifiers — grouping by these would make one "generation"
+    # per fixation / word, not per scanpath, so they're never generation columns.
+    "word_id",
+    "fixation_id",
+}
+# The grid shows at most this many generation panels (readability). When more
+# than this exist they're ranked by similarity to the selected scanpath and the
+# *closest* ones are shown — never an arbitrary label-sorted subset.
+_GEN_MAX_PANELS = 24
+# Score at most this many generations (bounds the NLD cost for a high-cardinality
+# column like participant_id on a big corpus). A safety budget above the grid cap
+# so the "most similar" ranking still sees more candidates than it displays.
+_GEN_MAX_SCORE = 60
+
+
+def _generation_column_options(fixations: pd.DataFrame) -> list:
+    """Columns that can identify the different generations of a scanpath.
+
+    A generation column splits a text's scanpaths into comparable variants (a
+    model / condition / reading id), so we offer the non-coordinate columns that
+    actually vary and rank the most generation-like first (a name hit, then the
+    reader / trial ids, then everything else)."""
+    if fixations is None or fixations.empty:
+        return []
+    hints = (
+        "generation",
+        "model",
+        "source",
+        "system",
+        "variant",
+        "condition",
+        "method",
+        "decoding",
+        "run",
+        "sample",
+    )
+    cols = []
+    for c in fixations.columns:
+        if c in _GEN_COL_EXCLUDE:
+            continue
+        try:
+            if fixations[c].nunique(dropna=True) >= 2:
+                cols.append(c)
+        except TypeError:
+            # A column holding unhashable values (e.g. a list / JSON column like
+            # MultiplEYE's `comprehension_questions`) can't group scanpaths.
+            continue
+
+    def _rank(col: str) -> tuple:
+        low = col.lower()
+        if any(h in low for h in hints):
+            return (0, col)
+        if col in ("participant_id", "trial_id"):
+            return (1, col)
+        return (2, col)
+
+    return sorted(cols, key=_rank)
+
+
+def _collect_generations(
+    fixations_pool: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    gen_col: str,
+    selected_participant,
+    selected_trial,
+) -> tuple:
+    """Same-text scanpaths grouped by ``gen_col``, minus the selected trial.
+
+    Scopes the pool to the selected trial's **text** so only variants of the SAME
+    text are compared (using the best-available text identifier — normalized
+    fixations use ``text_id`` / ``unique_text_id``, not always ``paragraph_id``),
+    drops the selected (participant, trial) so it isn't scored against itself,
+    groups the rest by ``gen_col`` → ``{label: fixations}``, and caps the panel
+    count. Returns ``(generations, n_total)`` where ``n_total`` is the count
+    before the cap."""
+    if gen_col not in fixations_pool.columns or fixations_pool.empty:
+        return {}, 0
+    pool = fixations_pool
+    # Match the canonical text-column priority used elsewhere (utils / pickers):
+    # the first present on the fixations frame identifies the text.
+    text_col = next(
+        (
+            c
+            for c in (
+                "unique_text_id",
+                "text_id",
+                "unique_paragraph_id",
+                "paragraph_id",
+            )
+            if c in pool.columns
+        ),
+        None,
+    )
+    if text_col is not None and not trial_fixations.empty:
+        text_val = trial_fixations[text_col].iloc[0]
+        if pd.notna(text_val):
+            pool = pool[pool[text_col] == text_val]
+    if {"participant_id", "trial_id"} <= set(pool.columns):
+        pool = pool[
+            ~(
+                (pool["participant_id"] == selected_participant)
+                & (pool["trial_id"] == selected_trial)
+            )
+        ]
+    generations: dict = {}
+    for value, group in pool.groupby(gen_col, dropna=True):
+        if group.empty:
+            continue
+        label = str(value)
+        # Two distinct values that stringify the same (e.g. int 1 and str "1" in
+        # a mixed object column) must not collapse — disambiguate so neither group
+        # is silently lost and n_total stays accurate.
+        if label in generations:
+            label = f"{label} ({value!r})"
+        generations[label] = group
+    n_total = len(generations)
+    # Cap the SCORING budget only (the grid/ranking cut to _GEN_MAX_PANELS by
+    # similarity happens in the tab, after scoring). Sorted for determinism.
+    ordered = dict(sorted(generations.items())[:_GEN_MAX_SCORE])
+    return ordered, n_total
+
+
 def render_multiple_comparison_tab(
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
-    combos: pd.DataFrame,
     *,
+    selected_participant: str,
+    selected_trial: str,
     canvas_width: int,
     canvas_height: int,
     base_font_size: int,
@@ -4086,143 +4386,99 @@ def render_multiple_comparison_tab(
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
 ) -> None:
-    """Render the Generations (WIP) tab.
+    """Render the **Comparisons** subtab.
 
-    Shows the real scanpath for the selected trial on top, then a configurable
-    grid of model-generated scanpaths over the SAME text, and a similarity
-    table scoring each model against the real reading (NLD plus placeholder
-    metrics). The model scanpaths are synthetic placeholders until real model
-    outputs are connected — see :mod:`scanpath_studio.model_scanpaths`. Work in
-    progress.
+    Compares the scanpath for the *selected* trial (from the main trial picker)
+    against other scanpaths of the same text — grouped by a user-chosen column (a
+    reading regime, repeated-reading id, model generation, …) — and scores each
+    against the selected reading (NLD plus placeholder metrics). The selection
+    comes from the main scanpath picker; there's no separate picker here (ENG-8).
     """
     st.caption(
-        "Compare a real scanpath with several **model-generated** scanpaths over "
-        "the same text, and score how close each model is to the real reading. "
-        "⚠️ The model scanpaths are **synthetic placeholders** (reproducible, "
-        "reading-like random paths) until real model outputs are connected."
+        "Compare the **selected** scanpath (from the main trial picker above) with "
+        "other scanpaths of the same text — grouped by a column you choose (a "
+        "reading regime, repeated-reading id, model generation, …) — and score how "
+        "close each is to the selected reading."
     )
+    if trial_words.empty or trial_fixations.empty:
+        st.info(
+            "Comparisons needs a **words + fixations** table for the selected "
+            "trial — pick a trial with fixations in the main picker above."
+        )
+        return
+
+    gen_cols = _generation_column_options(fixations_filtered)
+    if not gen_cols:
+        st.info(
+            "No column in the fixations table can distinguish several scanpaths of "
+            "the same text. Load data whose fixations carry a regime / condition / "
+            "reading-id column (or use `participant_id` / `trial_id`) to compare "
+            "several scanpaths over the same text here."
+        )
+        return
 
     col_side, col_main = st.columns([3, 7], gap="medium")
 
     with col_side:
-        selected_participant, selected_trial, _mode, _text = select_trial(
-            combos,
-            key_prefix="multi",
-            filter_cols=_filter_fields_for(words_filtered, fixations_filtered),
+        gen_col = st.selectbox(
+            "Comparison column",
+            options=gen_cols,
+            key="multi_gen_col",
+            help="Which column identifies the scanpaths to compare. Each distinct "
+            "value — over the SAME text as the selected trial — becomes one "
+            "comparison scanpath, scored against the selected reading.",
         )
-    if not (selected_participant and selected_trial):
-        return
-
-    trial_words = extract_trial(words_filtered, selected_participant, selected_trial)
-    trial_fixations = extract_trial(
-        fixations_filtered, selected_participant, selected_trial
-    )
-    if trial_words.empty or trial_fixations.empty:
-        with col_main:
-            st.info(
-                "Generations needs a **words + fixations** table for the "
-                "selected trial — it scores model scanpaths against the real "
-                "reading over the text."
-            )
-        return
-
-    with col_side:
-        # The number of models is inferred from the model-scanpath data. Until
-        # real model outputs are connected we generate a fixed set of example
-        # scanpaths behind the scenes — so there's no user control for it.
-        n_models = DEFAULT_N_MODELS
         n_cols = st.slider(
             "Grid columns",
             min_value=1,
             max_value=4,
             value=3,
             key="multi_n_cols",
-            help="Columns in the model grid (rows fill automatically).",
-        )
-        if st.button(
-            "🎲 Regenerate",
-            key="multi_regen",
-            help="Re-draw the synthetic model scanpaths with a fresh random seed.",
-        ):
-            st.session_state["multi_nonce"] = (
-                int(st.session_state.get("multi_nonce", 0)) + 1
-            )
-        nonce = int(st.session_state.get("multi_nonce", 0))
-
-        text_id = _trial_text_id(trial_words)
-        models = _cached_model_scanpaths(
-            trial_words,
-            n_models,
-            selected_trial,
-            text_id,
-            nonce,
-            words_fp=frame_fingerprint(trial_words),
+            help="Columns in the comparison grid (rows fill automatically).",
         )
 
-        # Fixation-index window: restrict which fixations are drawn (and scored
-        # in the snapshot table) for the real scanpath and every model.
-        max_fix = max([len(trial_fixations)] + [len(m) for m in models.values()])
-        if max_fix >= 2:
-            # The slider value persists across trial / model-count changes, which
-            # shift max_fix. Seed/clamp it via session_state *only* (no value=
-            # arg), so the stored value is always inside [1, max_fix] — passing
-            # both a value= and a session-state value raises a Streamlit warning,
-            # and an out-of-range stored value would otherwise raise outright.
-            stored = st.session_state.get("multi_fix_range")
-            if isinstance(stored, (tuple, list)) and len(stored) == 2:
-                lo = max(1, min(int(stored[0]), int(max_fix)))
-                hi = max(lo, min(int(stored[1]), int(max_fix)))
-                st.session_state["multi_fix_range"] = (lo, hi)
-            else:
-                st.session_state["multi_fix_range"] = (1, int(max_fix))
-            fix_start, fix_end = st.slider(
-                "Fixation index range",
-                min_value=1,
-                max_value=int(max_fix),
-                key="multi_fix_range",
-                help="Plot (and score, in the table) only fixations whose index "
-                "falls in this range — applied to the real scanpath and every "
-                "model. The convergence plots below always span the full reading.",
+    generations, n_total = _collect_generations(
+        fixations_filtered,
+        trial_fixations,
+        gen_col,
+        selected_participant,
+        selected_trial,
+    )
+    if not generations:
+        with col_main:
+            st.info(
+                f"No other scanpaths of this text found for **{gen_col}** in the "
+                "current filter — only the selected scanpath matches. Widen the "
+                "trial filters or pick a different comparison column."
             )
-        else:
-            fix_start, fix_end = 1, int(max_fix)
+        return
+    # More scanpaths of this text exist than we score (very high-cardinality
+    # column); the ones we do score are ranked by similarity below.
+    scored_capped = n_total > len(generations)
 
+    with col_side:
+        # ENG-8: no local fixation-index slider (it duplicated the main rail's
+        # Fixations → index-range control) and no stimulus-text panel (the
+        # top-level "Stimulus & questions" subtab already shows it). The grid and
+        # table score the full readings; the rail control still windows the main
+        # plot above.
         _render_trial_header(
             selected_participant,
             selected_trial,
             trial_words,
-            prefix="Real scanpath:",
+            prefix="Selected scanpath:",
         )
-        _render_paragraph_panel(
-            trial_words, trial_fixations=trial_fixations, expanded=False
-        )
+        if scored_capped:
+            st.caption(
+                f"{n_total} scanpaths of this text; scoring the first "
+                f"{len(generations)} (capped)."
+            )
 
-    def _slice_range(fix: pd.DataFrame) -> pd.DataFrame:
-        """Keep only fixations whose 1-based order index is in [start, end]."""
-        if "order_in_trial" in fix.columns and not fix.empty:
-            return fix[
-                (fix["order_in_trial"] >= fix_start)
-                & (fix["order_in_trial"] <= fix_end)
-            ]
-        return fix
-
-    # Reuse the user's viz toggles, but force a clean comparison view (no
-    # heatmap / raw gaze). The small model panels additionally drop word labels
-    # and order numbers, which are illegible at grid scale.
-    #
-    # Normalize to a clean, comparable spatial view regardless of the sidebar
-    # choices. The grid is an inherently spatial scanpath view, and the synthetic
-    # model frames only carry the canonical fixation columns with *synthetic*
-    # participant ids — so any option that (a) reads a real-only column or (b)
-    # routes through a (participant_id, trial_id) groupby against the real
-    # trial_words would either KeyError or silently mis-render the model panels:
-    #   - x/y axes + color_by: a real-only column (saccade_amplitude, surprisal…)
-    #     KeyErrors / falls back to a flat colour → pin axes to x/y, colour by
-    #     duration_ms (present in every frame);
-    #   - color_by_line / fixation_flags: call measures helpers that group
-    #     by (participant_id, trial_id); the model frames' "Model N" id never
-    #     matches trial_words, so every model fixation would land off-line /
-    #     out-of-bounds → pin both off.
+    # Reuse the user's viz toggles but force a clean, comparable spatial view: the
+    # grid is inherently spatial, and a generation frame may lack the selected
+    # trial's extra columns, so pin axes to x/y, colour by duration_ms (present in
+    # every frame), and turn off heatmap / raw gaze / by-line / flags (they group
+    # by (participant_id, trial_id) against trial_words and would mis-render).
     base_settings = _build_figure_settings(viz_settings, False)
     base_settings["raw_gaze"] = None
     base_settings["line_spacing"] = line_spacing
@@ -4250,71 +4506,86 @@ def render_multiple_comparison_tab(
             **settings,
         )
 
-    # Sliced (windowed) frames feed the spatial figures and the snapshot table;
-    # the convergence plots below use the FULL scanpaths.
-    sliced_real = _slice_range(trial_fixations)
-    sliced_models = {name: _slice_range(m) for name, m in models.items()}
-    windowed = fix_start > 1 or fix_end < max_fix
+    # The full readings feed the spatial figures, the snapshot table, and the
+    # convergence plots (ENG-8 removed the local fixation-index window).
+    sliced_real = trial_fixations
+    sliced_gens = generations
 
     with col_main:
-        st.markdown("#### Real scanpath")
-        if windowed:
-            st.caption(
-                f"Showing fixations **{fix_start}–{fix_end}** of up to {max_fix}."
-            )
+        st.markdown("#### Selected scanpath")
         real_fig = _make_fig(sliced_real, real_settings)
         _render_true_scale_chart(real_fig, key="multi_real")
 
-        # Compute the similarity table once up front: the per-model NLD annotates
-        # each grid panel below, and the full table is shown beneath the grid.
-        table = compute_similarity_table(sliced_real, sliced_models, trial_words)
-        nld_by_model = (
+        # Score every collected generation against the selected scanpath. The
+        # per-generation NLD annotates each grid panel and orders both the grid and
+        # the table; the full table is shown beneath the grid.
+        table = compute_similarity_table(sliced_real, sliced_gens, trial_words)
+        nld_by_gen = (
             dict(zip(table["Model"], table["NLD"])) if "NLD" in table.columns else {}
         )
 
-        st.markdown("#### Model-generated scanpaths")
-        # Estimate a uniform cell height from the figure aspect + column count
-        # so panels line up and don't leave a tall whitespace band below each.
+        # Rank by similarity (lowest NLD = most similar; unscored/NaN last) and show
+        # the closest _GEN_MAX_PANELS in the grid — never an arbitrary label subset.
+        ranked = sorted(
+            sliced_gens,
+            key=lambda n: (
+                pd.isna(nld_by_gen.get(n)),
+                nld_by_gen.get(n) if pd.notna(nld_by_gen.get(n)) else 0.0,
+            ),
+        )
+        grid_names = ranked[:_GEN_MAX_PANELS]
+        grid_capped = len(sliced_gens) > _GEN_MAX_PANELS
+
+        st.markdown("#### Other scanpaths")
+        if grid_capped:
+            st.caption(
+                f"Showing the **{_GEN_MAX_PANELS} most similar** of "
+                f"{len(sliced_gens)} scored scanpaths (by NLD)."
+            )
+        # Estimate a uniform cell height from the figure aspect + column count so
+        # panels line up and don't leave a tall whitespace band below each.
         fig_w = float(real_fig.layout.width or 900)
         fig_h = float(real_fig.layout.height or 600)
         aspect = fig_h / fig_w if fig_w else 0.5
         assumed_col_px = max(200, int(780 / max(1, n_cols)))
         cell_h = max(150, int(assumed_col_px * aspect) + 16)
 
-        names = list(models.keys())
+        names = grid_names
         for start in range(0, len(names), n_cols):
             row_names = names[start : start + n_cols]
             grid_cols = st.columns(n_cols)
-            for cell, name in zip(grid_cols, row_names):
+            for offset, (cell, name) in enumerate(zip(grid_cols, row_names)):
                 with cell:
-                    fix = sliced_models[name]
-                    nld = nld_by_model.get(name)
+                    fix = sliced_gens[name]
+                    nld = nld_by_gen.get(name)
                     if nld is not None and pd.notna(nld):
                         st.caption(f"**{name}** · NLD {nld:.2f} · {len(fix)} fix")
                     else:
                         st.caption(f"**{name}** · {len(fix)} fix")
+                    # Key on the absolute panel index (dict order is stable), so two
+                    # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
                         _make_fig(fix, panel_settings),
-                        key=f"multi_model_{name.replace(' ', '_')}",
+                        key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )
 
-        st.markdown("#### Similarity to the real scanpath")
-        st.dataframe(_style_similarity_table(table), hide_index=True, width="stretch")
+        st.markdown("#### Similarity to the selected scanpath")
+        st.dataframe(
+            _style_similarity_table(table.rename(columns={"Model": "Generation"})),
+            hide_index=True,
+            width="stretch",
+        )
 
-        # Cumulative metric convergence over the full scanpaths. Memoized so
-        # dragging the fixation slider — which does NOT change these curves —
-        # doesn't recompute the per-prefix NLDs. The key includes a fingerprint
-        # of the real fixation content (not just the participant/trial id
-        # strings), so a different dataset that happens to reuse the same ids
-        # (e.g. two uploads both labelled participant "1") can't serve stale
-        # curves.
+        # Cumulative NLD convergence over the full scanpaths. Memoized on the
+        # selection + comparison column + set + a content fingerprint so unrelated
+        # reruns don't recompute the curves.
         st.markdown("#### Metric convergence")
         st.caption(
-            "NLD between the real scanpath and each model, computed cumulatively "
-            "over the first *k* fixations (left) and the first *t* seconds of "
-            "reading (right). Lower = more similar; computed on the full reading "
-            "regardless of the fixation-range slider."
+            "NLD between the selected scanpath and each comparison scanpath, "
+            "computed cumulatively over the first *k* fixations (left) and the "
+            "first *t* seconds of reading (right). Lower = more similar; computed "
+            "on the full reading."
         )
         if trial_fixations.empty:
             fix_fingerprint: tuple = (0,)
@@ -4326,22 +4597,25 @@ def render_multiple_comparison_tab(
                 round(float(pd.to_numeric(trial_fixations["y"]).sum()), 3),
                 round(float(pd.to_numeric(trial_fixations["duration_ms"]).sum()), 3),
             )
+        # Convergence covers the grid subset (the shown, most-similar generations),
+        # so it matches the grid and stays bounded on a high-cardinality column.
+        conv_gens = {name: generations[name] for name in grid_names}
         conv_key = (
             str(selected_participant),
             str(selected_trial),
-            int(nonce),
-            int(n_models),
+            str(gen_col),
+            tuple(sorted(conv_gens.keys())),
             fix_fingerprint,
         )
         if st.session_state.get("_multi_conv_key") != conv_key:
             st.session_state["_multi_conv_key"] = conv_key
             st.session_state["_multi_conv_fix"] = {
-                name: nld_by_fixation_index(trial_fixations, m, trial_words)
-                for name, m in models.items()
+                name: nld_by_fixation_index(trial_fixations, g, trial_words)
+                for name, g in conv_gens.items()
             }
             st.session_state["_multi_conv_time"] = {
-                name: nld_by_time(trial_fixations, m, trial_words)
-                for name, m in models.items()
+                name: nld_by_time(trial_fixations, g, trial_words)
+                for name, g in conv_gens.items()
             }
         fix_curves = st.session_state["_multi_conv_fix"]
         time_curves = st.session_state["_multi_conv_time"]
@@ -4356,7 +4630,6 @@ def render_multiple_comparison_tab(
                 canvas_width=520,
                 base_font_size=int(base_font_size),
                 font_family=font_family,
-                highlight_x_range=(fix_start, fix_end) if windowed else None,
             )
             st.plotly_chart(fig_idx, width="stretch", config={"responsive": True})
         with conv_cols[1]:

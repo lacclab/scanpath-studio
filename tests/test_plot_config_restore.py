@@ -96,6 +96,7 @@ def _full_config() -> dict:
             "heatmap": False,
             "raw_gaze": False,
             "stimulus_image": True,
+            "autoplay": False,
         },
         "coloring": {
             "color_by": "pass_index",
@@ -126,6 +127,7 @@ class TestPlotConfigRestore:
         assert ss["global_show_saccade_arrows"] is True
         assert ss["global_show_order"] is False
         assert ss["global_show_stimulus_image"] is True  # round-trips like raw_gaze
+        assert ss["global_anim_autoplay"] is False  # VIZ-10 autoplay round-trips
         # coloring
         assert ss["global_heatmap_style"] == "Interpolated"
         assert ss["global_color_by"] == "pass_index"
@@ -173,8 +175,18 @@ class TestPlotConfigRestore:
         config["coloring"] = dict(
             config["coloring"],
             color_by="line",  # synthetic opt
+            heatmap_norm="Log",
+            stimulus_image_opacity=0.4,
+            stimulus_image_offset_x=25.0,
+            stimulus_image_offset_y=-40.0,
+            stimulus_image_scale=1.5,
+            saccade_render_mode="Arc",
+            fixation_snap_to_word=True,
             saccade_style="Dashed",
             saccade_width=4.0,
+            saccade_color_mode="By type",
+            saccade_type_legend=False,
+            saccade_class_colors={"regression": "#010203"},
             hollow_fixations=True,
             colorbar_orientation="Horizontal",
             colorbar_tickangle=45,
@@ -236,6 +248,7 @@ class TestPlotConfigRestore:
         ]
         ss = _run(_restore_app, _config=config).session_state
         assert ss["global_color_by"] == "line"  # "line" is a valid option now
+        assert ss["global_heatmap_norm"] == "Log"
         assert ss["global_scale_text_to_boxes"] is False
         assert ss["global_line_spacing"] == 2.5
         assert ss["global_font_family"] == "Courier New"
@@ -245,6 +258,15 @@ class TestPlotConfigRestore:
         assert ss["global_fixclass_short_threshold_ms"] == 70
         assert ss["global_saccade_style"] == "Dashed"
         assert ss["global_saccade_width"] == 4.0
+        assert ss["global_saccade_render_mode"] == "Arc"
+        assert ss["global_fixation_snap_to_word"] is True
+        assert ss["global_stimulus_image_opacity"] == 0.4
+        assert ss["global_stimulus_image_offset_x"] == 25.0
+        assert ss["global_stimulus_image_offset_y"] == -40.0
+        assert ss["global_stimulus_image_scale"] == 1.5
+        assert ss["global_saccade_color_mode"] == "By type"
+        assert ss["global_saccade_type_legend"] is False
+        assert ss["global_saccade_class_color_regression"] == "#010203"
         assert ss["global_hollow_fixations"] is True
         assert ss["global_text_color"] == "#010203"
         assert ss["global_highlight_text_color"] == "#fedcba"
@@ -390,6 +412,7 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         "show_raw_gaze": False,
         "color_by": "line",
         "heatmap_style": "Word boxes",
+        "heatmap_norm": "Log",
         "show_colorbars": False,
         "fixation_color_range": None,
         "heatmap_range": None,
@@ -443,6 +466,10 @@ def test_build_studio_config_includes_provenance_and_round_trips():
             "heatmap_metric": "duration_ms",
             "saccade_style": "Dotted",
             "saccade_width": 6.0,
+            "saccade_color_mode": "By type",
+            "saccade_class_colors": {"regression": "#010203"},
+            "saccade_render_mode": "Arc",
+            "fixation_snap_to_word": True,
             "hollow_fixations": True,
         },
         base_font_size=16,
@@ -463,15 +490,24 @@ def test_build_studio_config_includes_provenance_and_round_trips():
         exported_at="2026-06-15T12:00:00",
         compare_styles=compare_styles,
     )
-    assert cfg["schema"] == 2
+    # ENG-11: the writer stamps the single-source-of-truth schema constant, so
+    # writer + reader can't drift when the version is bumped.
+    from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
+
+    assert cfg["schema"] == PLOT_CONFIG_SCHEMA
     assert cfg["app"] == {"name": "Scanpath Studio", "version": "9.9.9"}
     assert cfg["exported_at"] == "2026-06-15T12:00:00"
     assert cfg["data_source"] == "Use bundled demo"
     assert cfg["column_mapping"] == {"col_map_fix_x": "CURRENT_FIX_X"}
     assert cfg["selection"] == {"participant_id": "p1", "trial_id": "t1"}
     assert cfg["coloring"]["color_by"] == "line"
+    assert cfg["coloring"]["heatmap_norm"] == "Log"
     assert cfg["coloring"]["saccade_style"] == "Dotted"
     assert cfg["coloring"]["saccade_width"] == 6.0
+    assert cfg["coloring"]["saccade_color_mode"] == "By type"
+    assert cfg["coloring"]["saccade_class_colors"]["regression"] == "#010203"
+    assert cfg["coloring"]["saccade_render_mode"] == "Arc"
+    assert cfg["coloring"]["fixation_snap_to_word"] is True
     assert cfg["coloring"]["hollow_fixations"] is True
     assert cfg["text"]["font_family"] == "Courier New"
     assert cfg["text"]["text_color"] == "#010203"
@@ -530,3 +566,150 @@ def test_collect_column_mapping_excludes_uploader_widgets():
         "col_map_words_box_format": "edges",
     }
     json.dumps(mapping)  # must be JSON-serializable
+
+
+class TestConfigMigration:
+    """ENG-11: the Save & restore JSON is versioned. An older upload is upgraded
+    to the current schema before its fields are read; a newer upload restores
+    best-effort with a warning. These exercise the pure migration core directly
+    (no Streamlit runtime) plus two end-to-end restores."""
+
+    def test_detect_schema_missing_key_is_v1(self):
+        from scanpath_studio.url_state import _detect_config_schema
+
+        assert _detect_config_schema({}) == 1  # schema 1 predates the `schema` key
+
+    def test_detect_schema_explicit_value(self):
+        from scanpath_studio.url_state import _detect_config_schema
+
+        assert _detect_config_schema({"schema": 2}) == 2
+
+    def test_detect_schema_garbage_or_low_is_v1(self):
+        from scanpath_studio.url_state import _detect_config_schema
+
+        assert _detect_config_schema({"schema": "banana"}) == 1
+        assert _detect_config_schema({"schema": None}) == 1
+        assert _detect_config_schema({"schema": 0}) == 1  # clamped to >= 1
+
+    def test_detect_schema_infinity_is_v1(self):
+        # json.loads accepts the non-standard Infinity/NaN literals; int(inf)
+        # raises OverflowError, which must degrade to v1, not abort the restore.
+        from scanpath_studio.url_state import _detect_config_schema
+
+        assert _detect_config_schema({"schema": float("inf")}) == 1
+        assert _detect_config_schema({"schema": float("-inf")}) == 1
+        assert _detect_config_schema({"schema": float("nan")}) == 1
+
+    def test_migrate_deep_copies_nested_sections(self):
+        # The migration contract is pure dict->dict: editing a nested section of
+        # the returned config must not touch the caller's input dict.
+        from scanpath_studio.url_state import _migrate_plot_config
+
+        original = {"layers": {"words": False}, "coloring": {"color_by": "line"}}
+        migrated, _ = _migrate_plot_config(original)
+        assert migrated["layers"] is not original["layers"]
+        migrated["layers"]["words"] = True
+        migrated["coloring"]["color_by"] = "pass_index"
+        assert original["layers"]["words"] is False  # input untouched
+        assert original["coloring"]["color_by"] == "line"
+
+    def test_migrate_v1_stamps_current_schema_no_note(self):
+        from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA, _migrate_plot_config
+
+        migrated, note = _migrate_plot_config({"layers": {"words": False}})
+        assert note is None
+        assert migrated["schema"] == PLOT_CONFIG_SCHEMA
+        assert migrated["layers"] == {"words": False}  # content preserved
+
+    def test_migrate_does_not_mutate_input(self):
+        from scanpath_studio.url_state import _migrate_plot_config
+
+        original = {"layers": {"words": False}}
+        _migrate_plot_config(original)
+        assert "schema" not in original  # a copy is stamped, not the caller's dict
+
+    def test_migrate_current_schema_is_noop(self):
+        from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA, _migrate_plot_config
+
+        migrated, note = _migrate_plot_config({"schema": PLOT_CONFIG_SCHEMA})
+        assert note is None
+        assert migrated["schema"] == PLOT_CONFIG_SCHEMA
+
+    def test_migrate_newer_schema_warns_and_preserves(self):
+        from scanpath_studio.url_state import _migrate_plot_config
+
+        migrated, note = _migrate_plot_config(
+            {"schema": 999, "layers": {"words": True}, "future_only": 1}
+        )
+        assert note is not None and "newer version" in note
+        # Best-effort: content is untouched (the reader ignores unknown keys).
+        assert migrated["layers"] == {"words": True}
+        assert migrated["future_only"] == 1
+
+    def test_migration_chain_walks_each_step(self, monkeypatch):
+        # Prove the loop applies migrations in sequence, not just the first step.
+        import scanpath_studio.url_state as url_state
+
+        calls = []
+
+        def fake_1_to_2(cfg):
+            calls.append(1)
+            return dict(cfg, _via_1=True)
+
+        def fake_2_to_3(cfg):
+            calls.append(2)
+            return dict(cfg, _via_2=True)
+
+        monkeypatch.setattr(url_state, "PLOT_CONFIG_SCHEMA", 3)
+        monkeypatch.setattr(
+            url_state, "_PLOT_CONFIG_MIGRATIONS", {1: fake_1_to_2, 2: fake_2_to_3}
+        )
+        migrated, note = url_state._migrate_plot_config({})  # detected as v1
+        assert calls == [1, 2]
+        assert migrated["_via_1"] and migrated["_via_2"]
+        assert migrated["schema"] == 3
+        assert note is None
+
+    def test_missing_migration_step_warns(self, monkeypatch):
+        import scanpath_studio.url_state as url_state
+
+        monkeypatch.setattr(url_state, "PLOT_CONFIG_SCHEMA", 5)
+        monkeypatch.setattr(url_state, "_PLOT_CONFIG_MIGRATIONS", {})  # no 1->2 step
+        migrated, note = url_state._migrate_plot_config({"schema": 1})
+        assert note is not None
+        assert migrated["schema"] == 1  # couldn't advance past the gap
+
+    def test_schema_constant_is_two(self):
+        # Pin the current version so a bump is a deliberate, reviewed change that
+        # forces a matching migration + this assertion to move together.
+        from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
+
+        assert PLOT_CONFIG_SCHEMA == 2
+
+    def test_schema1_config_still_restores_end_to_end(self):
+        # A schema-1 file (no `schema` key) applies its plot settings through the
+        # migration + reader unchanged — nothing regresses for old saved configs.
+        config = _full_config()
+        assert "schema" not in config
+        ss = _run(_restore_app, _config=config).session_state
+        assert ss["global_show_words"] is False
+        assert ss["global_color_by"] == "pass_index"
+        assert ss["_applied"] > 0
+
+    def test_newer_config_restores_known_fields_end_to_end(self):
+        config = dict(_full_config())
+        config["schema"] = 999
+        config["some_future_section"] = {"unknown": True}
+        at = _run(_restore_app, _config=config)
+        ss = at.session_state
+        # Known fields still applied despite the newer schema; unknown ignored.
+        assert ss["global_color_by"] == "pass_index"
+        assert ss["_applied"] > 0
+        # ...and the user is warned their config is from a newer build (this pins
+        # the note -> st.toast wiring in _restore_plot_config, not just the return).
+        assert any("newer version" in t.value for t in at.toast)
+
+    def test_schema1_config_fires_no_migration_warning(self):
+        # The common case (an old/current config) must NOT nag the user.
+        at = _run(_restore_app, _config=_full_config())
+        assert not any("newer version" in t.value for t in at.toast)

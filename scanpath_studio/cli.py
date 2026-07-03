@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.resources as resources
+import os.path
 import sys
 from typing import List, Optional
 
@@ -21,19 +22,44 @@ from . import __version__
 from .constants import (
     DEFAULT_SACCADE_WIDTH,
     FONT_FAMILY,
+    SACCADE_CLASS_COLORS,
+    SACCADE_CLASS_EDITABLE,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
 )
 
 
+def _theme_cli_flags() -> List[str]:
+    """The branded theme as ``--theme.*`` CLI flags (BUG-6).
+
+    Streamlit resolves ``.streamlit/config.toml`` relative to the launch
+    directory, so ``python -m scanpath_studio`` from outside ``app/`` (or a
+    ``pip``-installed console script) misses the bundled config and renders the
+    default red accent. Passing the theme explicitly makes every launch path
+    match. Values live in ``constants`` (kept in sync with the config file)."""
+    from .constants import APP_THEME, APP_THEME_DARK
+
+    flags = [f"--theme.{key}={value}" for key, value in APP_THEME.items()]
+    flags += [f"--theme.dark.{key}={value}" for key, value in APP_THEME_DARK.items()]
+    return flags
+
+
 def launch_app(extra_args: List[str]) -> None:
     """Launch the Streamlit app via ``streamlit run``, forwarding extra args."""
     from streamlit.web import cli as stcli
 
+    # Inject the branded theme unless the caller passes their own ``--theme.*``
+    # (explicit flags win), so the app looks the same regardless of where it was
+    # launched from (BUG-6).
+    theme_args = (
+        []
+        if any(str(arg).startswith("--theme") for arg in extra_args)
+        else _theme_cli_flags()
+    )
     app_resource = resources.files(__package__).joinpath("app.py")
     with resources.as_file(app_resource) as app_path:
-        sys.argv = ["streamlit", "run", str(app_path), *extra_args]
+        sys.argv = ["streamlit", "run", str(app_path), *theme_args, *extra_args]
         sys.exit(stcli.main())
 
 
@@ -74,6 +100,50 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading "
         "the needed files (~45 MB) on first use. Participants are reader ids "
         "(0–105), trials are text ids (b0–b5, p0–p5).",
+    )
+    src.add_argument(
+        "--onestop",
+        metavar="DIR",
+        help="Load the OneStop corpus from DIR. For the public variant the "
+        "chosen regime + parts' reports are downloaded from OSF on first use "
+        "(tens–hundreds MB each); the lacclab variant reads a local export. "
+        "Tune with --onestop-regime / --onestop-part / --onestop-variant.",
+    )
+    src.add_argument(
+        "--onestop-regime",
+        metavar="REGIME",
+        choices=[
+            "ordinary",
+            "information_seeking",
+            "repeated",
+            "information_seeking_repeated",
+        ],
+        default="ordinary",
+        help="OneStop reading regime for --onestop (default: ordinary).",
+    )
+    src.add_argument(
+        "--onestop-part",
+        metavar="PART",
+        action="append",
+        choices=[
+            "Title",
+            "Question_Preview",
+            "Paragraph",
+            "Questions",
+            "Answers",
+            "QA",
+            "Feedback",
+        ],
+        help="OneStop trial part(s) for --onestop; repeatable (default: "
+        "Paragraph). Loading several makes each part its own trial.",
+    )
+    src.add_argument(
+        "--onestop-variant",
+        metavar="VARIANT",
+        choices=["public", "lacclab"],
+        default="public",
+        help="OneStop source variant for --onestop: 'public' (OSF download) or "
+        "'lacclab' (a local lab-processed export; no download).",
     )
     src.add_argument(
         "--source",
@@ -179,6 +249,45 @@ def _render_parser() -> argparse.ArgumentParser:
         f"(default: {DEFAULT_SACCADE_WIDTH:g}).",
     )
     viz.add_argument(
+        "--saccade-color-by-type",
+        dest="saccade_color_by_type",
+        action="store_true",
+        help="Colour each saccade by its reading type (forward / skip / "
+        "refixation / return sweep / regression) instead of one uniform colour "
+        "(VIZ-8).",
+    )
+    viz.add_argument(
+        "--saccade-type-color",
+        dest="saccade_type_colors",
+        metavar="CLASS=COLOR",
+        action="append",
+        help="Override a reading-type colour, e.g. --saccade-type-color "
+        "regression=#000000 (repeatable; classes: forward, skip, refixation, "
+        "return_sweep, regression). Implies --saccade-color-by-type.",
+    )
+    viz.add_argument(
+        "--no-saccade-type-legend",
+        dest="saccade_type_legend",
+        action="store_false",
+        help="With --saccade-color-by-type: hide the saccade-type colour key on "
+        "the figure (the coloured lines still draw). Legend shows by default "
+        "(VIZ-8).",
+    )
+    viz.add_argument(
+        "--saccade-arcs",
+        dest="saccade_arcs",
+        action="store_true",
+        help="Draw saccades as upward arcs (the linear-reading diagram) instead "
+        "of straight connectors (VIZ-9).",
+    )
+    viz.add_argument(
+        "--snap-fixations",
+        dest="snap_fixations",
+        action="store_true",
+        help="Snap each fixation above the word it lands on instead of its raw "
+        "gaze point (VIZ-9).",
+    )
+    viz.add_argument(
         "--color-by",
         metavar="FIELD",
         help="Fixation color field (default: duration_ms).",
@@ -192,6 +301,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "--heatmap-colorscale",
         metavar="NAME",
         help="Heatmap colorscale, e.g. Greens (default: the app's default).",
+    )
+    viz.add_argument(
+        "--heatmap-norm",
+        choices=["linear", "log"],
+        help="Heatmap colour scaling: linear (default) or log — log compresses "
+        "heavy-tailed dwell times so a few hot words don't wash out the rest "
+        "(VIZ-3).",
     )
     viz.add_argument(
         "--fixation-colorscale",
@@ -211,6 +327,37 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="WxH",
         help="Monitor size in px, e.g. 2560x1440 (default: estimated from data; "
         "the bundled sample uses 2560x1440 automatically).",
+    )
+    # VIZ-4: overlay an image stimulus (a screenshot of the reading screen) under
+    # the scanpath. The API already supports background_image*; these expose it on
+    # the CLI. Works with --animate too.
+    viz.add_argument(
+        "--stimulus-image",
+        metavar="PATH",
+        help="Draw an image (PNG/JPG) as the stimulus background under the "
+        "scanpath (VIZ-4). By default it's stretched to the image's own pixel "
+        "size (PNG) or the canvas; set --stimulus-image-size / -origin to place "
+        "a crop precisely in fixation coordinates.",
+    )
+    viz.add_argument(
+        "--stimulus-image-size",
+        metavar="WxH",
+        help="Stimulus-image size in px, e.g. 1310x991 (default: the PNG's own "
+        "pixel size, else the canvas). Use with --stimulus-image.",
+    )
+    viz.add_argument(
+        "--stimulus-image-origin",
+        metavar="X,Y",
+        help="Top-left of the stimulus image in monitor px, e.g. 305,44 (default: "
+        "0,0). Use with --stimulus-image to align a centered crop to the "
+        "fixation coordinates.",
+    )
+    viz.add_argument(
+        "--stimulus-image-opacity",
+        type=float,
+        metavar="O",
+        help="Stimulus-image opacity 0.1–1.0 (default: 1.0 = opaque). Lower it to "
+        "dim a busy image so the fixations / saccades / word boxes read over it.",
     )
     viz.add_argument(
         "--width",
@@ -247,11 +394,28 @@ def _render_parser() -> argparse.ArgumentParser:
         help=f"Word label font (default: {FONT_FAMILY}).",
     )
     viz.add_argument(
+        "--separable-layers",
+        action="store_true",
+        help="Also write the figure split into one file per layer (word boxes / "
+        "fixations / saccades / heatmap / labels / stimulus image) in a "
+        "`<output>_layers/` folder, so each can be restyled in Illustrator / "
+        "Inkscape. Static image output only (.svg/.pdf/.png); the layers register "
+        "when stacked (VIZ-5).",
+    )
+    viz.add_argument(
         "--playback-speed",
         type=float,
         default=1.0,
         metavar="X",
         help="Animation speed multiplier for --animate (default: 1.0 = real time).",
+    )
+    viz.add_argument(
+        "--no-autoplay",
+        dest="autoplay",
+        action="store_false",
+        help="With --animate: start the replay paused (press ▶ Play to run it). "
+        "By default the saved HTML autoplays on load at the playback speed "
+        "(VIZ-10).",
     )
     return parser
 
@@ -266,6 +430,19 @@ def _parse_canvas(value: Optional[str]) -> Optional[tuple]:
     if w <= 0 or h <= 0:
         raise SystemExit(f"--canvas dimensions must be positive, got {value!r}")
     return (w, h)
+
+
+def _parse_xy(value: Optional[str]) -> Optional[tuple]:
+    """Parse an ``X,Y`` origin (VIZ-4 --stimulus-image-origin) to floats."""
+    if not value:
+        return None
+    try:
+        x, y = (float(part) for part in value.split(","))
+    except ValueError:
+        raise SystemExit(
+            f"--stimulus-image-origin expects X,Y (e.g. 305,44), got {value!r}"
+        )
+    return (x, y)
 
 
 def _load_multipleye_render(
@@ -377,13 +554,14 @@ def render(argv: List[str]) -> None:
                 args.sample,
                 bool(args.words or args.fixations),
                 bool(args.potec),
+                bool(args.onestop),
                 bool(args.source),
             ]
         )
         != 1
     ):
         raise SystemExit(
-            "Provide exactly one input: --sample, --potec DIR, "
+            "Provide exactly one input: --sample, --potec DIR, --onestop DIR, "
             "--source NAME [--export DIR], or your own tables (--words and/or "
             "--fixations; one of them is enough for single-report datasets)."
         )
@@ -418,6 +596,22 @@ def render(argv: List[str]) -> None:
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
         canvas = canvas or (1680, 1050)  # PoTeC monitor (DELL P2210)
+    elif args.onestop:
+        from .datasets import load_onestop
+
+        try:
+            words, fixations = load_onestop(
+                args.onestop,
+                regime=args.onestop_regime,
+                parts=args.onestop_part,  # None → Paragraph default
+                variant=args.onestop_variant,
+                # The lacclab variant is local (no download); the public one
+                # fetches the chosen regime + parts from OSF on first use.
+                download=args.onestop_variant == "public",
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        canvas = canvas or (2560, 1440)  # OneStop monitor (Dell U2715H)
     elif args.source == "multipleye":
         from .datasets import MULTIPLEYE_MONITOR
 
@@ -467,6 +661,8 @@ def render(argv: List[str]) -> None:
         overrides["heatmap_metric"] = args.heatmap_metric
     if args.heatmap_colorscale:
         overrides["heatmap_colorscale"] = args.heatmap_colorscale
+    if args.heatmap_norm:
+        overrides["heatmap_norm"] = args.heatmap_norm.capitalize()  # linear→Linear
     if args.fixation_colorscale:
         overrides["fixation_colorscale"] = args.fixation_colorscale
     if args.marker_size_range:
@@ -477,6 +673,47 @@ def render(argv: List[str]) -> None:
         overrides["saccade_style"] = args.saccade_style
     if args.saccade_width is not None:
         overrides["saccade_width"] = args.saccade_width
+    # VIZ-8: colour saccades by reading type. Either flag turns the mode on; each
+    # CLASS=COLOR pair overrides one class colour; --no-saccade-type-legend hides
+    # the colour key.
+    if args.saccade_color_by_type or args.saccade_type_colors:
+        overrides["saccade_color_mode"] = "By type"
+    if not args.saccade_type_legend:
+        overrides["saccade_type_legend"] = False
+    if args.saccade_type_colors:
+        class_colors = dict(SACCADE_CLASS_COLORS)
+        for pair in args.saccade_type_colors:
+            cls_name, _, color = pair.partition("=")
+            cls_name = cls_name.strip()
+            if not color or cls_name not in SACCADE_CLASS_EDITABLE:
+                raise SystemExit(
+                    f"--saccade-type-color expects CLASS=COLOR with CLASS one of "
+                    f"{', '.join(SACCADE_CLASS_EDITABLE)}; got {pair!r}."
+                )
+            class_colors[cls_name] = color.strip()
+        overrides["saccade_class_colors"] = class_colors
+    # VIZ-9: linear-reading mode.
+    if args.saccade_arcs:
+        overrides["saccade_render_mode"] = "Arc"
+    if args.snap_fixations:
+        overrides["fixation_snap_to_word"] = True
+    # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
+    # when a size is known, so default to the PNG's own pixel size, then the
+    # canvas.
+    if args.stimulus_image:
+        from .plots import _png_pixel_size
+
+        overrides["background_image"] = args.stimulus_image
+        overrides["background_image_size"] = (
+            _parse_canvas(args.stimulus_image_size)
+            or _png_pixel_size(args.stimulus_image)
+            or canvas
+        )
+        overrides["background_image_origin"] = _parse_xy(
+            args.stimulus_image_origin
+        ) or (0.0, 0.0)
+    if args.stimulus_image_opacity is not None:
+        overrides["background_image_opacity"] = args.stimulus_image_opacity
 
     common = dict(
         canvas_size=canvas,
@@ -510,8 +747,13 @@ def render(argv: List[str]) -> None:
                     "color_by",
                     "heatmap_metric",
                     "heatmap_colorscale",
+                    "heatmap_norm",
                     "fixation_colorscale",
                     "marker_size_range",
+                    "saccade_color_mode",
+                    "saccade_class_colors",
+                    "saccade_render_mode",
+                    "fixation_snap_to_word",
                 )
                 if key in overrides
             ]
@@ -525,12 +767,21 @@ def render(argv: List[str]) -> None:
             anim_kwargs.update(
                 {k: overrides[k] for k in saccade_keys if k in overrides}
             )
+            # VIZ-4: the stimulus-image background is honoured by the animation too.
+            image_keys = (
+                "background_image",
+                "background_image_size",
+                "background_image_origin",
+                "background_image_opacity",
+            )
+            anim_kwargs.update({k: overrides[k] for k in image_keys if k in overrides})
             fig = api.animate_scanpath(
                 words,
                 fixations,
                 participant,
                 trial,
                 playback_speed=args.playback_speed,
+                autoplay=args.autoplay,
                 **anim_kwargs,
                 **common,
             )
@@ -541,9 +792,35 @@ def render(argv: List[str]) -> None:
         out = api.save_figure(
             fig, args.output, scale=args.scale, width=args.width, height=args.height
         )
+        # VIZ-5: also drop a per-layer breakdown next to the output.
+        layer_paths = None
+        if args.separable_layers:
+            suffix = os.path.splitext(args.output)[1].lower().lstrip(".")
+            if args.animate or suffix not in ("svg", "pdf", "png"):
+                print(
+                    "Warning: --separable-layers needs a static image output "
+                    "(.svg/.pdf/.png) and no --animate; skipping the layer split.",
+                    file=sys.stderr,
+                )
+            else:
+                layer_dir = f"{os.path.splitext(args.output)[0]}_layers"
+                layer_paths = api.save_figure_layers(
+                    fig,
+                    layer_dir,
+                    fmt=suffix,
+                    scale=int(args.scale),
+                    width=args.width,
+                    height=args.height,
+                )
     except (ValueError, RuntimeError, OSError) as exc:
         raise SystemExit(str(exc))
     print(f"Wrote {out}", file=sys.stderr)
+    if layer_paths:
+        print(
+            f"Wrote {len(layer_paths)} layer files to {os.path.splitext(args.output)[0]}"
+            "_layers/",
+            file=sys.stderr,
+        )
 
 
 _HELP = f"""scanpath-studio {__version__} — visualize eye-tracking-while-reading scanpaths

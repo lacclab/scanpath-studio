@@ -4,7 +4,11 @@ import pandas as pd
 import plotly.graph_objects as go
 import pytest
 
+from scanpath_studio.constants import SACCADE_CLASS_COLORS, SACCADE_CLASS_LABELS
 from scanpath_studio.plots import (
+    _ANIM_MAX_FRAMES,
+    _ANIM_MIN_FRAME_MS,
+    _arch_points,
     _image_to_data_uri,
     _latin_advance,
     _line_pitch,
@@ -12,12 +16,15 @@ from scanpath_studio.plots import (
     _saccade_arrow_markers,
     _width_fit_font,
     _word_label_font_px,
+    animation_autoplay_frame_duration,
+    animation_autoplay_post_script,
     animation_playback_ms,
     build_critical_span_overlay,
     build_word_boxes,
     make_comparison_figure,
     make_scanpath_animation,
     make_scanpath_figure,
+    split_scanpath_layers,
 )
 
 # A valid 1x1 RGBA PNG — header lets _png_pixel_size + base64 encoding work.
@@ -156,6 +163,482 @@ class TestSaccadeColor:
         )
         line = [t for t in fig.data if t.name == "saccades"]
         assert line and float(line[0].line.width) == 5.5
+
+
+class TestSaccadeColorByType:
+    """VIZ-8: colour each saccade by its reading class."""
+
+    def test_uniform_mode_is_a_single_trace(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(),  # saccade_color_mode defaults to "Uniform"
+        )
+        assert [t for t in fig.data if t.name == "saccades"]
+        assert not [t for t in fig.data if t.legendgroup == "saccade_type"]
+
+    def test_by_type_splits_into_legended_class_traces(self):
+        # A 2-line trial that exercises forward + return-sweep + regression, so
+        # the by-type render must produce more than one class sub-trace.
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 6,
+                "trial_id": ["t1"] * 6,
+                "word_id": [1, 2, 3, 4, 5, 6],
+                "text": ["the", "cat", "sat", "on", "the", "mat"],
+                "x": [100, 200, 300, 100, 200, 300],
+                "y": [50, 50, 50, 150, 150, 150],
+                "width": [80, 80, 80, 80, 80, 80],
+                "height": [40, 40, 40, 40, 40, 40],
+            }
+        )
+        fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 5,
+                "trial_id": ["t1"] * 5,
+                "x": [140, 240, 340, 140, 240],
+                "y": [70, 70, 70, 170, 170],
+                "word_id": [1, 2, 3, 4, 5],  # forward, forward, return sweep, forward
+                "duration_ms": [200, 200, 200, 200, 200],
+                "timestamp_ms": [0, 200, 400, 600, 800],
+                "order_in_trial": [1, 2, 3, 4, 5],
+            }
+        )
+        fig = make_scanpath_figure(
+            words, fix, **_scanpath_kwargs(saccade_color_mode="By type")
+        )
+        # No single "saccades" trace; instead one legended sub-trace per class.
+        assert not [t for t in fig.data if t.name == "saccades"]
+        by_type = [t for t in fig.data if t.legendgroup == "saccade_type"]
+        assert len(by_type) >= 2
+        assert all(t.showlegend for t in by_type)
+        assert SACCADE_CLASS_LABELS["return_sweep"] in {t.name for t in by_type}
+        # Legend order follows SACCADE_CLASS_ORDER (forward before return sweep).
+        names = [t.name for t in by_type]
+        assert names == sorted(
+            names, key=lambda n: list(SACCADE_CLASS_LABELS.values()).index(n)
+        )
+
+    def test_by_type_honors_custom_palette(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(
+                saccade_color_mode="By type",
+                saccade_class_colors={**SACCADE_CLASS_COLORS, "forward": "#abcdef"},
+            ),
+        )
+        fwd = [
+            t
+            for t in fig.data
+            if t.name == SACCADE_CLASS_LABELS["forward"]
+            and t.legendgroup == "saccade_type"
+        ]
+        assert fwd and fwd[0].line.color == "#abcdef"
+
+    def test_other_class_stays_grey_with_ui_palette(self):
+        # The UI supplies a 5-key palette (no "other"). An off-text fixation
+        # produces an "other" saccade; it must still render its fixed grey, not
+        # fall back to the uniform line colour (parity with CLI/API).
+        from scanpath_studio.constants import SACCADE_CLASS_EDITABLE
+
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "word_id": [1, 2, 3],
+                "text": ["a", "b", "c"],
+                "x": [100, 200, 300],
+                "y": [50, 50, 50],
+                "width": [80, 80, 80],
+                "height": [40, 40, 40],
+            }
+        )
+        fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "x": [140, 5000, 240],  # middle fixation is far off-text
+                "y": [70, 5000, 70],
+                "duration_ms": [200, 200, 200],
+                "timestamp_ms": [0, 200, 400],
+                "order_in_trial": [1, 2, 3],
+            }
+        )
+        ui_palette = {c: SACCADE_CLASS_COLORS[c] for c in SACCADE_CLASS_EDITABLE}
+        fig = make_scanpath_figure(
+            words,
+            fix,
+            **_scanpath_kwargs(
+                saccade_color="#ff0000",  # uniform colour, must NOT leak to "other"
+                saccade_color_mode="By type",
+                saccade_class_colors=ui_palette,
+            ),
+        )
+        other = [
+            t
+            for t in fig.data
+            if t.name == SACCADE_CLASS_LABELS["other"]
+            and t.legendgroup == "saccade_type"
+        ]
+        assert other and other[0].line.color == SACCADE_CLASS_COLORS["other"]
+
+
+class TestHeatmapNormalization:
+    """VIZ-3: Linear vs Log heatmap colour scaling."""
+
+    def test_apply_heatmap_norm_helper(self):
+        from scanpath_studio.plots import _apply_heatmap_norm
+
+        assert list(_apply_heatmap_norm([0, 1, 9, 99], "Linear")) == [0, 1, 9, 99]
+        log = _apply_heatmap_norm([0, 1, 9, 99], "Log")
+        # log1p: log(1)=0, log(2), log(10), log(100).
+        assert log[0] == 0.0
+        assert log[1] == pytest.approx(0.6931, rel=1e-3)
+        # Negative values are clamped to 0 (log1p(0)=0), never NaN.
+        assert _apply_heatmap_norm([-5.0], "Log")[0] == 0.0
+
+    def _heat_kwargs(self, style, norm):
+        return _scanpath_kwargs(
+            show_words=False,
+            show_word_labels=False,
+            show_fixations=False,
+            show_saccades=False,
+            show_heatmap=True,
+            heatmap_style=style,
+            heatmap_norm=norm,
+            heatmap_metric="duration_ms",
+        )
+
+    def test_word_box_log_changes_colours(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        def box_colors(norm):
+            fig = make_scanpath_figure(
+                normalized_words_df,
+                normalized_fixations_df,
+                **self._heat_kwargs("Word boxes", norm),
+            )
+            return [s.fillcolor for s in fig.layout.shapes if s.layer == "below"]
+
+        lin, log = box_colors("Linear"), box_colors("Log")
+        assert lin and len(lin) == len(log)
+        assert lin != log  # log scaling remaps the box tints
+
+    def test_interpolated_log_changes_z(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        def heat_z(norm):
+            fig = make_scanpath_figure(
+                normalized_words_df,
+                normalized_fixations_df,
+                **self._heat_kwargs("Interpolated", norm),
+            )
+            t = [t for t in fig.data if t.name == "Fixation heatmap"][0]
+            import numpy as np
+
+            return np.nan_to_num(np.array(t.z, dtype=float))
+
+        import numpy as np
+
+        assert not np.allclose(heat_z("Linear"), heat_z("Log"))
+
+    def test_density_fallback_is_a_heatmap_trace(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        # No words → density fallback; must render a go.Heatmap (so it honours
+        # the norm) and mark the colour bar "(log)" in log mode.
+        fig = make_scanpath_figure(
+            normalized_words_df.iloc[0:0],
+            normalized_fixations_df,
+            **_scanpath_kwargs(
+                show_words=False,
+                show_word_labels=False,
+                show_fixations=False,
+                show_saccades=False,
+                show_heatmap=True,
+                heatmap_style="Word boxes",  # no words → density path
+                heatmap_norm="Log",
+                heatmap_metric="counts",
+                show_colorbars=True,
+            ),
+        )
+        heat = [t for t in fig.data if t.name == "Fixation heatmap"]
+        assert heat and isinstance(heat[0], go.Heatmap)
+        assert heat[0].colorbar.title.text.endswith("(log)")
+
+    def test_word_box_range_endpoints_transform_with_values(self):
+        # The core VIZ-3 contract: under Log the raw-unit heatmap_range keeps its
+        # meaning because the endpoints are transformed alongside the values. So a
+        # word AT an endpoint maps to the same colour under Linear and Log (both
+        # land at colour position 0 or 1), while a mid-range word is compressed.
+        # (Kills the mutation "compare transformed values against RAW endpoints".)
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "word_id": [1, 2, 3],
+                "text": ["a", "b", "c"],
+                "x": [100, 300, 500],
+                "y": [50, 50, 50],
+                "width": [80, 80, 80],
+                "height": [40, 40, 40],
+            }
+        )
+        fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "x": [140, 340, 540],  # one fixation centred in each box
+                "y": [70, 70, 70],
+                "duration_ms": [100.0, 500.0, 1000.0],  # → per-word summed weights
+                "timestamp_ms": [0, 100, 200],
+                "order_in_trial": [1, 2, 3],
+            }
+        )
+
+        def box_colors(norm):
+            fig = make_scanpath_figure(
+                words,
+                fix,
+                **_scanpath_kwargs(
+                    show_words=False,
+                    show_word_labels=False,
+                    show_fixations=False,
+                    show_saccades=False,
+                    show_heatmap=True,
+                    heatmap_style="Word boxes",
+                    heatmap_norm=norm,
+                    heatmap_metric="duration_ms",
+                    heatmap_range=(100.0, 1000.0),  # value 100 → pos 0, 1000 → pos 1
+                ),
+            )
+            return [s.fillcolor for s in fig.layout.shapes if s.layer == "below"]
+
+        lin, log = box_colors("Linear"), box_colors("Log")
+        assert len(lin) == len(log) == 3
+        assert lin[0] == log[0]  # value == range min → colour position 0.0 in both
+        assert lin[2] == log[2]  # value == range max → colour position 1.0 in both
+        assert lin[1] != log[1]  # mid-range word: log compresses it
+
+    def _density_trace(self, norm, metric):
+        empty_words = pd.DataFrame({"x": [], "y": [], "width": [], "height": []})
+        # Five fixations stacked on one point + one elsewhere → an unambiguous hot
+        # cell whose count / duration-sum and location are known. The cluster sits
+        # at an ASYMMETRIC corner (low x, high y) so a dropped `grid.T` transpose
+        # would misplace it (caught below).
+        fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 6,
+                "trial_id": ["t1"] * 6,
+                "x": [200.0] * 5 + [800.0],
+                "y": [700.0] * 5 + [300.0],
+                "duration_ms": [10.0] * 6,
+                "timestamp_ms": list(range(6)),
+                "order_in_trial": list(range(6)),
+            }
+        )
+        fig = make_scanpath_figure(
+            empty_words,
+            fix,
+            **_scanpath_kwargs(
+                show_words=False,
+                show_word_labels=False,
+                show_fixations=False,
+                show_saccades=False,
+                show_heatmap=True,
+                heatmap_style="Word boxes",  # no words → density path
+                heatmap_norm=norm,
+                heatmap_metric=metric,
+            ),
+        )
+        return [t for t in fig.data if t.name == "Fixation heatmap"][0]
+
+    def test_density_linear_orientation_and_magnitude(self):
+        import numpy as np
+
+        # counts: the hottest cell holds the 5 stacked fixations…
+        t = self._density_trace("Linear", "counts")
+        z = np.array(t.z, dtype=float)
+        assert np.nanmax(z) == 5.0
+        # …and sits at the (x, y) they were placed at (pins the grid.T orientation:
+        # cluster is at low-x / high-y, so a missing transpose flips it).
+        row, col = np.unravel_index(np.nanargmax(z), z.shape)
+        assert abs(float(t.x[col]) - 200.0) < abs(float(t.x[col]) - 800.0)
+        assert abs(float(t.y[row]) - 700.0) < abs(float(t.y[row]) - 300.0)
+        # duration-weighted: the same cell now holds the summed dwell (5 × 10 ms).
+        tw = self._density_trace("Linear", "duration_ms")
+        assert np.nanmax(np.array(tw.z, dtype=float)) == 50.0
+
+    def test_density_log_is_log1p_of_linear(self):
+        import numpy as np
+
+        lin = np.array(self._density_trace("Linear", "counts").z, dtype=float)
+        log = np.array(self._density_trace("Log", "counts").z, dtype=float)
+        # Log density is exactly log1p of the linear grid (NaNs — empty cells —
+        # stay NaN in both). Kills the "density ignores the norm" mutation.
+        assert not np.allclose(np.nan_to_num(lin), np.nan_to_num(log))
+        mask = ~np.isnan(lin)
+        assert np.allclose(log[mask], np.log1p(lin[mask]))
+
+
+class TestLinearReadingView:
+    """VIZ-9: arced saccades + fixations snapped above their word."""
+
+    def _trial(self):
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 2,
+                "trial_id": ["t1"] * 2,
+                "word_id": [1, 2],
+                "text": ["the", "cat"],
+                "x": [100, 300],
+                "y": [50, 200],  # two different lines
+                "width": [80, 80],
+                "height": [40, 40],
+            }
+        )
+        fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 2,
+                "trial_id": ["t1"] * 2,
+                # Inside each word box but OFF its centre (word centres are 140 /
+                # 340) so the x-snap is observable, not a coincidental match.
+                "x": [120.0, 320.0],
+                "y": [75.0, 225.0],  # raw gaze, below each word's top edge
+                "word_id": [1, 2],
+                "duration_ms": [200.0, 200.0],
+                "timestamp_ms": [0, 100],
+                "order_in_trial": [1, 2],
+            }
+        )
+        return words, fix
+
+    def _kwargs(self, **over):
+        return _scanpath_kwargs(
+            show_words=False,
+            show_word_labels=False,
+            show_fixations=True,
+            show_order=False,
+            show_saccades=True,
+            show_heatmap=False,
+            **over,
+        )
+
+    def test_arch_points_apex_is_above_chord(self):
+        xs, ys = _arch_points(0.0, 100.0, 100.0, 100.0, 0.28)
+        assert (xs[0], ys[0]) == (0.0, 100.0)  # endpoints preserved
+        assert xs[-1] == pytest.approx(100.0) and ys[-1] == pytest.approx(100.0)
+        assert min(ys) < 100.0  # apex rises above the chord (smaller y = up)
+        # The rise scales with the HORIZONTAL span: doubling |dx| ~doubles the
+        # bulge (pins `rise = frac*abs(x1-x0)`, not abs(y1-y0)).
+        bulge_narrow = 100.0 - min(_arch_points(0.0, 100.0, 50.0, 100.0, 0.28)[1])
+        bulge_wide = 100.0 - min(_arch_points(0.0, 100.0, 100.0, 100.0, 0.28)[1])
+        assert bulge_wide == pytest.approx(2 * bulge_narrow, rel=1e-6)
+
+    def test_arch_points_degenerate_cases(self):
+        import numpy as np
+
+        # Vertical saccade (x0==x1): rise = frac*|dx| = 0, so NO upward bulge past
+        # the top endpoint (this fails if the rise used abs(y1-y0) instead).
+        xs, ys = _arch_points(50.0, 0.0, 50.0, 100.0, 0.28)
+        assert all(x == pytest.approx(50.0) for x in xs)
+        assert min(ys) == pytest.approx(0.0, abs=1e-9)
+        # Zero-length (refixation): collapses to a single point, no bulge.
+        xs0, ys0 = _arch_points(10.0, 10.0, 10.0, 10.0, 0.28)
+        assert min(ys0) == pytest.approx(10.0) and max(ys0) == pytest.approx(10.0)
+        # A NaN endpoint propagates to NaN samples (Plotly skips them).
+        xn, _ = _arch_points(float("nan"), 0.0, 100.0, 0.0, 0.28)
+        assert any(np.isnan(v) for v in xn)
+
+    def test_arc_mode_curves_the_saccade(self):
+        words, fix = self._trial()
+        straight = make_scanpath_figure(
+            words, fix, **self._kwargs(saccade_render_mode="Straight")
+        )
+        arc = make_scanpath_figure(
+            words, fix, **self._kwargs(saccade_render_mode="Arc")
+        )
+        s = [t for t in straight.data if t.name == "saccades"][0]
+        a = [t for t in arc.data if t.name == "saccades"][0]
+        # One segment: straight = 3 pts (p0, p1, None); arc = many sampled pts.
+        assert len(s.x) == 3
+        assert len(a.x) > 10
+
+    def test_snap_moves_fixations_to_word_top_centre(self):
+        words, fix = self._trial()
+        base = make_scanpath_figure(
+            words, fix, **self._kwargs(fixation_snap_to_word=False)
+        )
+        snapped = make_scanpath_figure(
+            words, fix, **self._kwargs(fixation_snap_to_word=True)
+        )
+        raw = [t for t in base.data if t.mode == "markers"][0]
+        snap = [t for t in snapped.data if t.mode == "markers"][0]
+        assert list(raw.x) == [120.0, 320.0]  # raw gaze x (off the word centre)
+        assert list(raw.y) == [75.0, 225.0]  # raw gaze y
+        # Snapped to each word's top-centre: x = word centre (140/340, NOT the raw
+        # 120/320), y = word top edge (50/200, NOT the raw 75/225).
+        assert list(snap.x) == [140.0, 340.0]
+        assert list(snap.y) == [50.0, 200.0]
+
+    def test_arc_mode_reserves_headroom_so_apex_is_not_clipped(self):
+        import numpy as np
+
+        # A wide saccade along the top line arcs high; the view must grow upward so
+        # the apex isn't clipped — while Straight mode leaves the range unchanged.
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 2,
+                "trial_id": ["t1"] * 2,
+                "word_id": [1, 2],
+                "text": ["a", "b"],
+                "x": [100, 900],
+                "y": [50, 50],
+                "width": [80, 80],
+                "height": [40, 40],
+            }
+        )
+        fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 2,
+                "trial_id": ["t1"] * 2,
+                "x": [140.0, 940.0],
+                "y": [70.0, 70.0],
+                "duration_ms": [200.0, 200.0],
+                "timestamp_ms": [0, 100],
+                "order_in_trial": [1, 2],
+            }
+        )
+
+        def top_and_apex(mode):
+            fig = make_scanpath_figure(
+                words, fix, **self._kwargs(saccade_render_mode=mode)
+            )
+            top = min(fig.layout.yaxis.range)  # smallest y = top edge
+            sac = [t for t in fig.data if t.name == "saccades"][0]
+            apex = float(np.nanmin([v for v in sac.y if v is not None]))
+            return top, apex
+
+        straight_top, _ = top_and_apex("Straight")
+        arc_top, arc_apex = top_and_apex("Arc")
+        assert arc_apex >= arc_top  # apex sits inside the view (not clipped)
+        assert arc_top < straight_top  # Arc reserved extra headroom above
+
+    def test_arc_mode_works_with_by_type_colouring(self):
+        words, fix = self._trial()
+        fig = make_scanpath_figure(
+            words,
+            fix,
+            **self._kwargs(saccade_render_mode="Arc", saccade_color_mode="By type"),
+        )
+        by_type = [t for t in fig.data if t.legendgroup == "saccade_type"]
+        assert by_type  # a class sub-trace exists…
+        assert any(len(t.x) > 10 for t in by_type)  # …and it is arced, not straight
 
 
 class TestHighlightColumn:
@@ -525,7 +1008,7 @@ class TestMakeScanpathAnimation:
         )
         assert isinstance(fig, go.Figure)
         assert hasattr(fig, "frames")
-        assert len(fig.frames) == len(normalized_fixations_df)
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
 
     def test_make_scanpath_animation_background_image_layer(
         self, tmp_path, normalized_words_df, normalized_fixations_df
@@ -551,7 +1034,7 @@ class TestMakeScanpathAnimation:
         assert (im.x, im.y, im.sizex, im.sizey) == (305.0, 44.5, 1310, 991)
         assert im.layer == "below" and im.yanchor == "top"
         assert str(im.source).startswith("data:image/png;base64,")
-        assert len(fig.frames) == len(normalized_fixations_df)
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
 
     def test_make_scanpath_animation_background_image_dual_overlay(
         self, tmp_path, normalized_words_df, normalized_fixations_df
@@ -740,13 +1223,12 @@ class TestMakeScanpathAnimation:
             prev_shown = shown
         assert prev_shown == n  # last frame shows the whole reading
 
-    def test_slider_declutters_long_reading_but_keeps_elapsed(
-        self, normalized_words_df
-    ):
-        # A long reading must not draw a tick + time label per frame (illegible
-        # smear). Every step keeps its real time label (so the "Elapsed" readout
-        # updates on every frame and stays frame-accurate), while the per-step
-        # ticks and labels are hidden — the readout is the one time display.
+    def test_slider_uniform_time_grid_bounded_and_labelled(self, normalized_words_df):
+        # VIZ-11: frames sit on a uniform time grid, so the slider scrubs linearly
+        # and every per-step label reads "elapsed / total s". A long reading
+        # coarsens the grid instead of emitting one frame per fixation, so the step
+        # count stays bounded (the GIF/MP4 export can't balloon). The per-step tick
+        # ruler + labels are hidden — the single readout is the one time display.
         n = 60
         fixations = pd.DataFrame(
             {
@@ -770,14 +1252,282 @@ class TestMakeScanpathAnimation:
             font_family="Arial",
         )
         slider = fig.layout.sliders[0]
-        assert len(slider.steps) == n  # every frame scrubbable
-        # Every step labelled -> the Elapsed readout shows a time at any position.
-        assert all(s.label for s in slider.steps)
+        assert 1 <= len(slider.steps) <= _ANIM_MAX_FRAMES + 1
+        # "elapsed / total s" label on every step (meaningful for any reader count).
+        assert all(" / " in s.label and s.label.endswith("s") for s in slider.steps)
         assert slider.currentvalue.visible
         # Tick ruler hidden, and per-step labels drawn transparent.
         assert slider.ticklen == 0
         assert slider.minorticklen == 0
         assert "0)" in slider.font.color or "rgba" in str(slider.font.color)
+
+        # A very long reading coarsens the grid rather than exceeding the cap.
+        long_n = 800
+        long_fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * long_n,
+                "trial_id": ["t1"] * long_n,
+                "x": [100 + (i % 3) * 50 for i in range(long_n)],
+                "y": [50] * long_n,
+                "duration_ms": [100] * long_n,
+                "timestamp_ms": list(range(0, long_n * 100, 100)),
+                "word_id": [1] * long_n,
+                "order_in_trial": list(range(1, long_n + 1)),
+                "pass_index": [1] * long_n,
+            }
+        )
+        long_fig = make_scanpath_animation(
+            normalized_words_df,
+            long_fix,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+        )
+        assert len(long_fig.frames) <= _ANIM_MAX_FRAMES + 1 < long_n
+
+
+class TestAnimationAutoplay:
+    """VIZ-10: autoplay-on-load marker + the client-side kickoff script."""
+
+    def _anim(self, words, fixations, **kw):
+        return make_scanpath_animation(
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=600,
+            base_font_size=12,
+            font_family="Arial",
+            playback_speed=4.0,
+            **kw,
+        )
+
+    def test_autoplay_on_by_default_stamps_frame_duration(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = self._anim(normalized_words_df, normalized_fixations_df)
+        # The marker rides on layout.meta so every HTML embedder honors it.
+        assert fig.layout.meta["scanpath_autoplay"] is True
+        dur = animation_autoplay_frame_duration(fig)
+        assert isinstance(dur, int) and dur >= _ANIM_MIN_FRAME_MS
+        # The autoplay duration MUST equal the ▶ Play button's frame duration, so
+        # the auto-started replay runs at the configured speed, not Plotly's
+        # default. (Both come from _anim_timeline.)
+        play = fig.layout.updatemenus[0].buttons[0]
+        assert play.label.startswith("▶")
+        assert play.args[1]["frame"]["duration"] == dur
+
+    def test_autoplay_off_suppresses_kickoff(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = self._anim(normalized_words_df, normalized_fixations_df, autoplay=False)
+        assert fig.layout.meta["scanpath_autoplay"] is False
+        assert animation_autoplay_frame_duration(fig) is None
+
+    def test_no_frames_never_autoplays(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        # Empty fixations → no frames → nothing to auto-start even with autoplay on.
+        empty = normalized_fixations_df.iloc[0:0]
+        fig = self._anim(normalized_words_df, empty, autoplay=True)
+        assert fig.layout.meta["scanpath_autoplay"] is False
+        assert animation_autoplay_frame_duration(fig) is None
+
+    def test_static_figure_has_no_autoplay(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = make_scanpath_figure(
+            normalized_words_df, normalized_fixations_df, **_scanpath_kwargs()
+        )
+        assert animation_autoplay_frame_duration(fig) is None
+
+    def test_post_script_is_plotly_animate_at_the_given_duration(self):
+        script = animation_autoplay_post_script(123)
+        # {plot_id} stays literal for Plotly to substitute at write time.
+        assert "{plot_id}" in script
+        assert "Plotly.animate" in script
+        assert "123" in script
+        assert "redraw:false" in script
+
+    def test_post_script_reads_real_frame_location_and_starts_from_first(self):
+        # VIZ-10 regression: Plotly stores frames on gd._transitionData._frames,
+        # NOT gd.frames (which is undefined) — a guard that checks gd.frames alone
+        # always bails, so autoplay never fires. The kickoff must poll the real
+        # location and start a clean 0->end run (fromcurrent:false).
+        script = animation_autoplay_post_script(100)
+        assert "_transitionData" in script
+        assert "_frames" in script
+        assert "fromcurrent:false" in script
+        # It polls (loops) rather than firing a single fixed-delay shot.
+        assert "setTimeout" in script
+
+    def test_post_script_floors_tiny_durations(self):
+        # A sub-minimum duration is clamped so the kickoff can't request a 0ms grid.
+        assert str(_ANIM_MIN_FRAME_MS) in animation_autoplay_post_script(0)
+
+
+class TestStimulusImageOpacity:
+    """VIZ-4: the stimulus-image layer honours an opacity (dataset + uploads)."""
+
+    def test_static_figure_applies_opacity(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(
+                background_image=str(p),
+                background_image_size=(1310, 991),
+                background_image_opacity=0.35,
+            ),
+        )
+        assert len(fig.layout.images) == 1
+        assert fig.layout.images[0].opacity == 0.35
+
+    def test_static_figure_defaults_to_opaque(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(
+                background_image=str(p), background_image_size=(1310, 991)
+            ),
+        )
+        assert fig.layout.images[0].opacity == 1.0
+
+    def test_animation_applies_opacity(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        fig = make_scanpath_animation(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_width=1920,
+            canvas_height=1080,
+            base_font_size=12,
+            font_family="Arial",
+            background_image=str(p),
+            background_image_size=(1310, 991),
+            background_image_opacity=0.5,
+        )
+        assert fig.layout.images[0].opacity == 0.5
+
+    def test_uploaded_data_uri_is_drawn(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        # An uploaded image reaches the builder as a `data:` URI (controls encodes
+        # it); it must be accepted straight through and stretched to the size given.
+        import base64
+
+        data_uri = "data:image/png;base64," + base64.b64encode(_PNG_1x1).decode()
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(
+                background_image=data_uri,
+                background_image_size=(1920, 1080),
+                background_image_opacity=0.8,
+            ),
+        )
+        assert str(fig.layout.images[0].source).startswith("data:image/png")
+        assert (fig.layout.images[0].sizex, fig.layout.images[0].opacity) == (1920, 0.8)
+
+
+class TestSplitScanpathLayers:
+    """VIZ-5: split the figure into one registered figure per layer."""
+
+    def _rich_figure(self, tmp_path, words, fixations):
+        p = tmp_path / "stim.png"
+        p.write_bytes(_PNG_1x1)
+        return make_scanpath_figure(
+            words,
+            fixations,
+            **_scanpath_kwargs(
+                show_word_labels=True,
+                show_order=True,
+                show_saccade_arrows=True,
+                show_heatmap=True,
+                heatmap_style="Word boxes",
+                heatmap_metric="duration_ms",
+                background_image=str(p),
+                background_image_size=(1310, 991),
+            ),
+        )
+
+    def test_partition_is_complete_and_disjoint(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        fig = self._rich_figure(tmp_path, normalized_words_df, normalized_fixations_df)
+        layers = split_scanpath_layers(fig)
+        # Every trace and shape lands in exactly one layer (no drops, no dupes).
+        assert sum(len(g.data) for g in layers.values()) == len(fig.data)
+        assert sum(len(g.layout.shapes or ()) for g in layers.values()) == len(
+            fig.layout.shapes or ()
+        )
+        # The stimulus image lives on exactly one layer.
+        total_imgs = sum(len(g.layout.images or ()) for g in layers.values())
+        assert total_imgs == len(fig.layout.images)
+
+    def test_layers_register_identically(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        # Same axis ranges + size across every layer ⇒ they stack in perfect
+        # registration in a vector editor.
+        fig = self._rich_figure(tmp_path, normalized_words_df, normalized_fixations_df)
+        layers = split_scanpath_layers(fig)
+        fingerprints = {
+            (
+                tuple(g.layout.xaxis.range),
+                tuple(g.layout.yaxis.range),
+                g.layout.width,
+                g.layout.height,
+            )
+            for g in layers.values()
+        }
+        assert len(fingerprints) == 1
+
+    def test_layers_have_transparent_background(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        fig = self._rich_figure(tmp_path, normalized_words_df, normalized_fixations_df)
+        for g in split_scanpath_layers(fig).values():
+            assert str(g.layout.paper_bgcolor) == "rgba(0,0,0,0)"
+            assert str(g.layout.plot_bgcolor) == "rgba(0,0,0,0)"
+
+    def test_elements_land_on_the_right_layer(
+        self, tmp_path, normalized_words_df, normalized_fixations_df
+    ):
+        fig = self._rich_figure(tmp_path, normalized_words_df, normalized_fixations_df)
+        layers = split_scanpath_layers(fig)
+        # Word boxes and heatmap rects are both fill rects but split apart.
+        assert layers["word_boxes"].layout.shapes  # AOI rectangles
+        assert layers["heatmap"].layout.shapes  # coloured heatmap rects
+        assert all(
+            "heatmap" not in (sh.name or "")
+            for sh in layers["word_boxes"].layout.shapes
+        )
+        # Labels are the word-text trace; saccades carry the line + arrow traces.
+        assert [tr.name for tr in layers["labels"].data] == ["words"]
+        assert "saccades" in {tr.name for tr in layers["saccades"].data}
+        assert len(layers["stimulus_image"].layout.images) == 1
+        # Fixations layer holds the markers, not saccades/labels.
+        assert any("Fixation" in (tr.name or "") for tr in layers["fixations"].data)
+
+    def test_no_heatmap_layer_when_off(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        fig = make_scanpath_figure(
+            normalized_words_df,
+            normalized_fixations_df,
+            **_scanpath_kwargs(show_heatmap=False),
+        )
+        assert "heatmap" not in split_scanpath_layers(fig)
 
 
 class TestDualScanpathAnimation:
@@ -813,8 +1563,9 @@ class TestDualScanpathAnimation:
         )
         assert isinstance(fig, go.Figure)
         assert hasattr(fig, "frames")
-        # One frame per distinct fixation onset across both scanpaths.
-        assert len(fig.frames) == 4
+        # Frames sit on a uniform time grid (VIZ-11), bounded regardless of the
+        # onset pattern across the two overlaid scanpaths.
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
         # A/B legend is off by default (CMP-2) — the flat colours already tell the
         # two readers apart.
         assert [t.name for t in fig.data if t.showlegend] == []
@@ -886,16 +1637,18 @@ class TestDualScanpathAnimation:
             fixations_b=fix_a.iloc[:1].copy(),  # single fixation at t=0
         )
         labels = [s.label for s in fig.layout.sliders[0].steps]
-        # Real-timestamp clock → onset of fixation 2 at 1.0s; a duration clock
-        # would have shown 0.1s.
-        assert labels == ["0.0s", "1.0s"], labels
-        assert fig.layout.sliders[0].currentvalue.prefix == "Elapsed: "
+        # Uniform time grid (VIZ-11): every label reads "elapsed / total s". The
+        # *total* proves the clock — real timestamps span ~1.1s (fixation 2 onset
+        # at 1.0s + 0.1s dwell); a duration-based clock would collapse it to 0.2s.
+        total_s = float(labels[0].split("/")[1].strip().rstrip("s"))
+        assert total_s >= 1.0, labels
+        assert labels[0].startswith("0.0 / "), labels
+        assert labels[-1].startswith(f"{total_s:.1f} / "), labels
 
     def test_dual_animation_identical_inputs(
         self, normalized_words_df, normalized_fixations_df
     ):
-        # Identical scanpaths share onsets, so the merged frame count collapses
-        # to a single scanpath's fixation count.
+        # Identical scanpaths animate on the same uniform time grid (VIZ-11).
         fig = make_scanpath_animation(
             normalized_words_df,
             normalized_fixations_df,
@@ -905,7 +1658,7 @@ class TestDualScanpathAnimation:
             font_family="Arial",
             fixations_b=normalized_fixations_df,
         )
-        assert len(fig.frames) == len(normalized_fixations_df)
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
 
     def test_dual_animation_one_empty_falls_back(
         self, normalized_words_df, normalized_fixations_df
@@ -921,7 +1674,7 @@ class TestDualScanpathAnimation:
             fixations_b=pd.DataFrame(),
         )
         assert isinstance(fig, go.Figure)
-        assert len(fig.frames) == len(normalized_fixations_df)
+        assert 1 <= len(fig.frames) <= _ANIM_MAX_FRAMES + 1
         assert [t for t in fig.data if t.showlegend] == []
 
     def test_dual_animation_both_empty(self, normalized_words_df):
@@ -965,20 +1718,22 @@ class TestAnimationPlaybackTiming:
     def test_playback_ms_empty(self):
         assert animation_playback_ms([], 1.0) == (0.0, 0.0)
 
-    def test_frame_floor_clamps_tiny_gaps(self, normalized_words_df):
-        # Gaps below the frame floor are clamped up so frames stay renderable
-        # (browsers cap ~60fps); the Play frame duration is the floor itself.
+    def test_frame_floor_clamps_fast_playback(self, normalized_words_df):
+        # The Play frame duration floors at _ANIM_MIN_FRAME_MS so frames stay
+        # renderable (browsers cap ~60fps). Under the uniform time grid (VIZ-11)
+        # the per-frame duration is step / playback_speed, so a very high speed
+        # would drive it below the floor — the clamp keeps it at the floor.
         from scanpath_studio.plots import _ANIM_MIN_FRAME_MS
 
         fix = pd.DataFrame(
             {
-                "participant_id": ["p1", "p1", "p1"],
-                "trial_id": ["t1", "t1", "t1"],
-                "x": [100, 200, 300],
-                "y": [50, 50, 50],
-                "duration_ms": [5, 5, 5],
-                "timestamp_ms": [0, 10, 20],  # 10 ms gaps, below the floor
-                "order_in_trial": [1, 2, 3],
+                "participant_id": ["p1"] * 10,
+                "trial_id": ["t1"] * 10,
+                "x": [100 + i * 10 for i in range(10)],
+                "y": [50] * 10,
+                "duration_ms": [100] * 10,
+                "timestamp_ms": list(range(0, 1000, 100)),
+                "order_in_trial": list(range(1, 11)),
             }
         )
         fig = make_scanpath_animation(
@@ -988,7 +1743,7 @@ class TestAnimationPlaybackTiming:
             canvas_height=600,
             base_font_size=12,
             font_family="Arial",
-            playback_speed=1.0,
+            playback_speed=1000.0,  # step / speed << floor
         )
         play_ms = fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"]
         assert play_ms == _ANIM_MIN_FRAME_MS

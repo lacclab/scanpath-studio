@@ -380,7 +380,11 @@ def render_spotlight_tour() -> None:
     step_idx = min(st.session_state.get("tour_step", 0), n - 1)
     step = _SPOTLIGHT_STEPS[step_idx]
 
-    accent = st.get_option("theme.primaryColor") or "#ff4b4b"
+    # BUG-6: fall back to the app's brand blue (matches the pinned theme
+    # `.streamlit/config.toml` primaryColor), never Streamlit's default red, so
+    # the tour accent stays consistent even if the runtime doesn't expose the
+    # theme option.
+    accent = st.get_option("theme.primaryColor") or "#1f77b4"
     # Card colors follow the active theme when the runtime exposes it
     # (st.context.theme, Streamlit ≥1.46); default to light otherwise.
     theme = getattr(getattr(st, "context", None), "theme", None)

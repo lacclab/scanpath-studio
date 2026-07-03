@@ -231,7 +231,7 @@ def get_app_css() -> str:
     .sps-chip-more-summary::-webkit-details-marker { display: none; }
     .sps-chip-more-summary::after {
         content: "▾";
-        font-size: 0.7rem;
+        font-size: 0.78rem;
         margin-left: 0.4rem;  /* breathing room between "More" and its arrow */
     }
     .sps-chip-more[open] .sps-chip-more-summary::after { content: "▴"; }
@@ -271,7 +271,7 @@ def get_app_css() -> str:
         justify-content: space-between;
         gap: 1.5rem;
         padding: 0.32rem 0;
-        font-size: 0.82rem;
+        font-size: 0.9rem;
         line-height: 1.25;
         white-space: nowrap;
     }
@@ -283,7 +283,7 @@ def get_app_css() -> str:
         align-items: center;
         padding: 0.12rem 0.6rem;
         border-radius: 999px;
-        font-size: 0.82rem;
+        font-size: 0.9rem;
         font-weight: 600;
         line-height: 1.55;
         /* Chip backgrounds are always light (set inline), so pin dark text so it
@@ -298,7 +298,7 @@ def get_app_css() -> str:
         min-height: 0 !important;
         padding: 0.1rem 0.5rem !important;
         border-radius: 999px !important;
-        font-size: 0.82rem !important;
+        font-size: 0.9rem !important;
         line-height: 1.55 !important;
     }
     /* Control rail: a subtle card so it reads as a panel, with a hair more
@@ -360,6 +360,27 @@ def get_app_css() -> str:
     #this-trial, #multiple-trials {
         font-size: 24px !important; line-height: 28.8px !important;
         font-weight: 600 !important; padding: 8px 0 16px !important;
+    }
+
+    /* ── VIZ-2: nudge the smallest UI text up a little for readability ──────
+       A gentle, uniform lift on the smallest *native* Streamlit text — captions,
+       widget labels, radio / checkbox / toggle option labels, and help tooltips
+       (the app's tiniest fonts). Kept modest (~+5-10%) and scoped to small text
+       only, so the pinned header sizes and the dense-layout spacing rules above
+       are untouched and no panel reflows. */
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p {
+        font-size: 0.92rem !important;
+    }
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] label {
+        font-size: 0.92rem !important;
+    }
+    [data-baseweb="radio"] label,
+    [data-testid="stCheckbox"] label,
+    [data-testid="stExpander"] summary p,
+    div[data-testid="stTooltipContent"] p {
+        font-size: 0.92rem !important;
     }
     </style>
     """

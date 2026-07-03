@@ -68,7 +68,7 @@ from .tour import (
     render_spotlight_wizard_guide,
     render_wizard_guide_button,
 )
-from .url_state import _seed_column_mapping
+from .url_state import PLOT_CONFIG_SCHEMA, _seed_column_mapping
 
 
 class _UploadResult(NamedTuple):
@@ -810,9 +810,10 @@ def _wizard_setup_config() -> dict:
     from scanpath_studio import __version__
 
     return {
-        # schema 2 = the shared Save & restore format; the restore step only
-        # needs ``column_mapping`` + provenance, but keep the shape compatible.
-        "schema": 2,
+        # The shared Save & restore format — this setup file can be loaded through
+        # the main "💾 Save & restore" uploader too, so it stamps the same
+        # single-source-of-truth schema version (ENG-11) rather than a literal.
+        "schema": PLOT_CONFIG_SCHEMA,
         "app": {"name": "Scanpath Studio", "version": __version__},
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "data_source": (st.session_state.get("wizard_dataset_name") or "").strip()

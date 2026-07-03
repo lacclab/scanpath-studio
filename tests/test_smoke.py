@@ -223,9 +223,9 @@ class TestPipelineFigures:
             base_font_size=14,
             font_family="monospace",
         )
-        assert len(fig.frames) == len(tf), (
-            "Animation should have one frame per fixation"
-        )
+        # VIZ-11: frames sit on a uniform time grid (not one per fixation), so a
+        # long reading is bounded to the grid cap rather than the fixation count.
+        assert 1 <= len(fig.frames) <= 361, "Animation should have grid frames"
 
     def test_comparison_figure(self, normalized_demo):
         words, fixations = normalized_demo

@@ -32,6 +32,7 @@ def test_top_level_exports():
         "plot_scanpath",
         "animate_scanpath",
         "save_figure",
+        "save_figure_layers",
     ):
         assert callable(getattr(sps, name))
     with pytest.raises(AttributeError):
@@ -95,6 +96,58 @@ def test_plot_scanpath_overrides(sample):
     # Word boxes gone: only the canvas border rect remains, vs one shape per
     # word (plus border) in the canonical default.
     assert len(fig.layout.shapes or ()) < len(default_fig.layout.shapes)
+
+
+def test_plot_scanpath_saccade_color_by_type(sample):
+    # VIZ-8: headless "By type" mode splits the saccades into legended class
+    # sub-traces (the classification runs inside make_scanpath_figure, so no
+    # pipeline pre-enrichment is needed).
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    fig = sps.plot_scanpath(
+        words, fixations, pid, tid, show_heatmap=False, saccade_color_mode="By type"
+    )
+    by_type = [t for t in fig.data if t.legendgroup == "saccade_type"]
+    assert len(by_type) >= 2
+    assert not [t for t in fig.data if t.name == "saccades"]
+
+
+def test_plot_scanpath_heatmap_log_norm(sample):
+    # VIZ-3: log normalization remaps the word-box heatmap tints vs linear.
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+
+    def box_colors(norm):
+        fig = sps.plot_scanpath(
+            words,
+            fixations,
+            pid,
+            tid,
+            show_fixations=False,
+            show_saccades=False,
+            heatmap_norm=norm,
+        )
+        return [s.fillcolor for s in fig.layout.shapes if s.layer == "below"]
+
+    lin, log = box_colors("Linear"), box_colors("Log")
+    assert lin and lin != log
+
+
+def test_plot_scanpath_snap_fixations(sample):
+    # VIZ-9: snapping repositions the fixation markers (fewer distinct y — one per
+    # text line — than the raw gaze scatter).
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+
+    def marker_ys(snap):
+        fig = sps.plot_scanpath(
+            words, fixations, pid, tid, show_heatmap=False, fixation_snap_to_word=snap
+        )
+        m = [t for t in fig.data if t.mode and "markers" in t.mode]
+        return list(m[0].y)
+
+    raw, snapped = marker_ys(False), marker_ys(True)
+    assert len(set(snapped)) < len(set(raw))
 
 
 def test_plot_scanpath_axis_field_override(sample):
@@ -169,6 +222,26 @@ def test_animate_scanpath_returns_frames(sample):
     assert len(fig.frames) > 0
 
 
+def test_animate_scanpath_autoplay_saves_kickoff(sample, tmp_path):
+    # VIZ-10: autoplay on (default) → the saved HTML auto-starts the replay.
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    fig = sps.animate_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
+    out = sps.save_figure(fig, tmp_path / "auto.html")
+    assert "Plotly.animate" in out.read_text()
+
+
+def test_animate_scanpath_no_autoplay_saves_paused(sample, tmp_path):
+    # VIZ-10: autoplay=False → no kickoff, and the HTML is written paused.
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    fig = sps.animate_scanpath(
+        words, fixations, pid, tid, canvas_size=(2560, 1440), autoplay=False
+    )
+    html = sps.save_figure(fig, tmp_path / "paused.html").read_text()
+    assert "Plotly.animate" not in html
+
+
 def test_compute_word_metrics(sample):
     metrics = sps.compute_word_metrics(*sample)
     assert "total_fixation_duration_ms" in metrics.columns
@@ -197,3 +270,25 @@ def test_save_figure_forwards_size(tmp_path, monkeypatch):
     monkeypatch.setattr(fig, "write_image", lambda path, **kw: captured.update(kw))
     sps.save_figure(fig, tmp_path / "fig.png", scale=1, width=900, height=600)
     assert captured == {"scale": 1, "width": 900, "height": 600}
+
+
+def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
+    # VIZ-5: split into per-layer files named <layer>.<fmt>. Stub save_figure to
+    # avoid Kaleido/Chrome — we're checking the split + naming, not the render.
+    from pathlib import Path
+
+    words, fixations = sample
+    pid, tid = sps.list_trials(words, fixations).iloc[0]
+    fig = sps.plot_scanpath(words, fixations, pid, tid, show_heatmap=True)
+
+    def fake_save(f, path, **kw):
+        Path(path).write_text("x")
+        return Path(path)
+
+    monkeypatch.setattr(api, "save_figure", fake_save)
+    written = api.save_figure_layers(fig, tmp_path / "layers", fmt="svg")
+    # Every layer a full scanpath draws is present, each its own file.
+    assert {"word_boxes", "fixations", "saccades", "labels", "frame"} <= set(written)
+    for layer, path in written.items():
+        assert path.name == f"{layer}.svg"
+        assert path.is_file()

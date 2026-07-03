@@ -8,6 +8,7 @@ these; nothing here imports back from ``app`` (no cycle).
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from typing import Dict, Optional, Tuple
@@ -26,6 +27,11 @@ from .constants import (
     DEMO_CHOICE,
     MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
+    ONESTOP_PART_LABELS,
+    ONESTOP_PUBLIC_CHOICE,
+    ONESTOP_REGIME_LABELS,
+    ONESTOP_VARIANT_LABELS,
+    SACCADE_CLASS_EDITABLE,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SYNTHETIC_CHOICE,
@@ -41,12 +47,12 @@ from .controls import (
 # `_apply_url_preset()` to preset widgets when the page is opened from an
 # external tool with a deep link.
 #
-# Selection prefixes — every selectable tab (Scanpath Visualization,
-# Generations, …) renders its own `select_trial` with a different `key_prefix`,
-# so a URL deep link has to seed all of them or only the first tab lands on
-# the requested trial. Keep this list in sync with the `key_prefix=` values
-# passed to `select_trial` in tabs.py.
-_SELECTION_PREFIXES = ("single", "multi")
+# Selection prefixes — the trial pickers a URL deep link seeds so the link lands
+# on the requested trial. There's only the Scanpath view's `single` picker now:
+# the Comparisons subtab (ENG-8) reuses that same selection instead of rendering
+# its own `select_trial`, so there's no second `multi` picker to seed. Keep this list
+# in sync with the `key_prefix=` values passed to `select_trial` in tabs.py.
+_SELECTION_PREFIXES = ("single",)
 
 
 def _coerce_bool(v) -> bool:
@@ -78,6 +84,11 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_order": "global_show_order",
     "show_saccades": "global_show_saccades",
     "show_saccade_arrows": "global_show_saccade_arrows",
+    # VIZ-8: saccade-type colour key (default on, so always emitted).
+    "saccade_type_legend": "global_saccade_type_legend",
+    "snap_fixations": "global_fixation_snap_to_word",
+    # VIZ-10: autoplay the animated replay on load (default on, so always emitted).
+    "anim_autoplay": "global_anim_autoplay",
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     "show_colorbars": "global_show_colorbars",
@@ -87,15 +98,24 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     "color_by": "global_color_by",
     "heatmap_style": "global_heatmap_style",
+    "heatmap_norm": "global_heatmap_norm",
     "heatmap_metric": "global_heatmap_metric",
     "critical_span_style": "global_critical_span_style",
     "highlight_column": "global_highlight_column",
     "x_field": "global_x_field",
     "y_field": "global_y_field",
     "saccade_style": "global_saccade_style",
+    "saccade_render_mode": "global_saccade_render_mode",
     "fixation_colorscale": "global_fixation_colorscale",
     "heatmap_colorscale": "global_heatmap_colorscale",
     "saccade_color": "global_saccade_color",
+    # VIZ-8: colour-by-reading-type mode + the five class colours.
+    "saccade_color_mode": "global_saccade_color_mode",
+    "saccade_color_forward": "global_saccade_class_color_forward",
+    "saccade_color_skip": "global_saccade_class_color_skip",
+    "saccade_color_refixation": "global_saccade_class_color_refixation",
+    "saccade_color_return_sweep": "global_saccade_class_color_return_sweep",
+    "saccade_color_regression": "global_saccade_class_color_regression",
     "order_font_color": "global_order_font_color",
     "text_color": "global_text_color",
     "highlight_text_color": "global_highlight_text_color",
@@ -109,6 +129,14 @@ _SHARE_FLOAT_PARAMS = {
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
     "fixation_opacity": "global_fixation_opacity",
+    # VIZ-4: image-stimulus opacity (applies to dataset images too, so worth
+    # sharing; the uploaded image itself can't ride a link).
+    "stimulus_image_opacity": "global_stimulus_image_opacity",
+    # VIZ-4: manual image alignment — origin nudge + size scale (apply to dataset
+    # images, so they round-trip; an uploaded image is re-uploaded on the far end).
+    "stimulus_image_offset_x": "global_stimulus_image_offset_x",
+    "stimulus_image_offset_y": "global_stimulus_image_offset_y",
+    "stimulus_image_scale": "global_stimulus_image_scale",
 }
 _SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
 _SHARE_FLOAT_RANGE_PARAMS = {
@@ -141,6 +169,11 @@ _URL_BOUNDED = {
     "global_order_font_size": (6, 72),
     "global_marker_size_range": (4, 40),
     "global_fixation_opacity": (0.1, 1.0),
+    "global_stimulus_image_opacity": (0.1, 1.0),
+    # VIZ-4: image-alignment nudge — clamp a hand-crafted link to sane ranges.
+    "global_stimulus_image_offset_x": (-5000.0, 5000.0),
+    "global_stimulus_image_offset_y": (-5000.0, 5000.0),
+    "global_stimulus_image_scale": (0.25, 3.0),
 }
 
 
@@ -165,6 +198,9 @@ _SHAREABLE_SOURCES = {
     ONESTOP_CHOICE: "onestop",
     MULTIPLEYE_BUNDLE_CHOICE: "multipleye",
     SYNTHETIC_CHOICE: "synthetic",
+    # DATA-3: the public OneStop corpus (OSF download-on-demand) is shareable too;
+    # its variant/regime/parts options ride alongside via `_build_share_query`.
+    ONESTOP_PUBLIC_CHOICE: "onestop_public",
 }
 
 
@@ -250,6 +286,20 @@ def _apply_url_preset() -> Optional[str]:
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
 
+    # DATA-3: the public OneStop source options (variant / regime / parts) ride
+    # the deep link too, seeded before the loader's widgets render. Validate each
+    # against its known domain so a hand-edited link can't wedge the widget.
+    if qp.get("onestop_variant") in ONESTOP_VARIANT_LABELS:
+        st.session_state.setdefault("onestop_variant", qp["onestop_variant"])
+    if qp.get("onestop_regime") in ONESTOP_REGIME_LABELS:
+        st.session_state.setdefault("onestop_regime", qp["onestop_regime"])
+    if "onestop_parts" in qp:
+        parts = [
+            p for p in str(qp["onestop_parts"]).split(",") if p in ONESTOP_PART_LABELS
+        ]
+        if parts:
+            st.session_state.setdefault("onestop_parts", parts)
+
     source = qp.get("source")
     return source.lower() if source else None
 
@@ -267,6 +317,7 @@ _PLOT_CONFIG_LAYER_KEYS = {
     "raw_gaze": "global_show_raw_gaze",
     "stimulus_image": "global_show_stimulus_image",
     "full_monitor": "global_fit_to_monitor",
+    "autoplay": "global_anim_autoplay",
 }
 # Static widget bounds, mirrored from controls.sidebar_controls /
 # render_sidebar_canvas_controls, so a restored value is clamped to a range the
@@ -274,6 +325,99 @@ _PLOT_CONFIG_LAYER_KEYS = {
 _CANVAS_BOUNDS = (100, 10000)
 _FONT_BOUNDS = (6, 72)
 _MARKER_BOUNDS = (4, 40)
+
+
+# --- Save & restore config schema versioning (ENG-11) ---------------------
+#
+# Single source of truth for the "💾 Save & restore" JSON schema version. The
+# writer (`tabs._build_studio_config`) stamps this onto every saved config; the
+# reader (`_restore_plot_config`) upgrades an older upload to it before applying,
+# so a config saved by an earlier build keeps loading as the layout evolves.
+#
+#   schema 1 — the original plot-config-only format (no `schema` key at all,
+#              no annotations / provenance / text / highlighting sections).
+#   schema 2 — config + annotations + text/highlighting + provenance.
+#
+# **Bump `PLOT_CONFIG_SCHEMA` and register a migration in `_PLOT_CONFIG_MIGRATIONS`
+# whenever the config layout changes** (a renamed key, a moved section, a changed
+# value encoding). Each migration is a pure `dict -> dict` upgrading version N to
+# N+1; they run in sequence so a very old config is walked forward one step at a
+# time. The field-by-field reader already tolerates *missing* sections, so a
+# migration is only needed when an old key must be *translated*, not merely when
+# new keys are added.
+PLOT_CONFIG_SCHEMA = 2
+
+
+def _detect_config_schema(config: dict) -> int:
+    """Best-effort schema version of an uploaded config.
+
+    Schema 1 (the original plot-config-only format) predates the ``schema`` key,
+    so a missing or non-numeric value means version 1 rather than an error.
+    ``OverflowError`` is caught too: Python's ``json.loads`` accepts the
+    non-standard ``Infinity`` / ``NaN`` literals, and ``int(float("inf"))`` raises
+    it — a hand-edited config with such a ``schema`` should still degrade to v1
+    (and keep its valid plot settings) rather than abort the whole restore."""
+    raw = config.get("schema")
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError, OverflowError):
+        return 1
+
+
+def _migrate_config_1_to_2(config: dict) -> dict:
+    """Upgrade a schema-1 config to schema 2.
+
+    Schema 1 held only plot settings — no annotations / provenance / text /
+    highlighting sections. Those were *added* in schema 2, and `_restore_plot_config`
+    already treats an absent section as "keep the default", so a schema-1 config
+    needs no key translation: this migration is intentionally an identity beyond
+    the version stamp applied by `_migrate_plot_config`. It stays registered so the
+    migration chain is exercised (and so a future schema-3 has a worked example to
+    copy) rather than special-casing "no migration needed"."""
+    return config
+
+
+# version N -> callable that upgrades an N config to N+1. Keyed by the *source*
+# version so `_migrate_plot_config` can walk an old config forward step by step.
+_PLOT_CONFIG_MIGRATIONS = {
+    1: _migrate_config_1_to_2,
+}
+
+
+def _migrate_plot_config(config: dict) -> Tuple[dict, Optional[str]]:
+    """Upgrade an uploaded plot-config dict to the current schema.
+
+    Returns ``(config, note)``. ``config`` is a **deep** copy stamped with the
+    resolved ``schema`` and walked through every registered migration between its
+    detected version and :data:`PLOT_CONFIG_SCHEMA`. The copy is deep (configs are
+    small) so a migration is genuinely ``dict -> dict`` pure: a future step that
+    translates a renamed key by editing a nested section in place can't leak back
+    into the caller's dict. ``note`` is a human-readable warning or ``None`` — set
+    when the config was saved by a *newer* build than this one understands (we
+    still restore best-effort: the reader simply ignores keys it doesn't
+    recognise), or when the chain is missing a step and can't reach the current
+    version."""
+    version = _detect_config_schema(config)
+    working = copy.deepcopy(config)
+    if version > PLOT_CONFIG_SCHEMA:
+        return working, (
+            "This plot config was saved by a newer version of Scanpath Studio "
+            f"(format v{version}; this build understands up to v{PLOT_CONFIG_SCHEMA}). "
+            "Settings it doesn't recognise were ignored."
+        )
+    while version < PLOT_CONFIG_SCHEMA:
+        migrate = _PLOT_CONFIG_MIGRATIONS.get(version)
+        if migrate is None:
+            note = (
+                f"Couldn't fully upgrade this plot config (no migration from format "
+                f"v{version} to v{PLOT_CONFIG_SCHEMA}); applied what still fit."
+            )
+            working["schema"] = version
+            return working, note
+        working = migrate(working)
+        version += 1
+    working["schema"] = version
+    return working, None
 
 
 def _restore_selection(
@@ -404,6 +548,12 @@ def _restore_plot_config(
     before any widget renders (see ``_apply_uploaded_plot_config``); data-
     dependent fields are validated against the loaded data and skipped when they
     don't apply, so a config shared with a different dataset degrades gracefully."""
+    # ENG-11: upgrade an older (or flag a newer) saved config to the current
+    # schema before reading its fields, so configs keep loading across versions.
+    config, migration_note = _migrate_plot_config(config)
+    if migration_note:
+        st.toast(migration_note, icon="⚠️")
+
     applied = 0
     skipped: list = []
 
@@ -466,6 +616,13 @@ def _restore_plot_config(
             style,
             "heatmap style",
         )
+    if "heatmap_norm" in coloring:
+        put_valid(
+            coloring["heatmap_norm"] in ("Linear", "Log"),
+            "global_heatmap_norm",
+            coloring["heatmap_norm"],
+            "heatmap colour scaling",
+        )
     if "color_by" in coloring:
         put_valid(
             coloring["color_by"] in color_field_options(fixations),
@@ -507,6 +664,33 @@ def _restore_plot_config(
             SACCADE_WIDTH_BOUNDS[1],
             "saccade line width",
         )
+    # VIZ-9: linear-reading mode (arced saccades + snap fixations above words).
+    if "saccade_render_mode" in coloring:
+        put_valid(
+            coloring["saccade_render_mode"] in ("Straight", "Arc"),
+            "global_saccade_render_mode",
+            coloring["saccade_render_mode"],
+            "saccade line shape",
+        )
+    if "fixation_snap_to_word" in coloring:
+        put("global_fixation_snap_to_word", bool(coloring["fixation_snap_to_word"]))
+    # VIZ-8: colour-by-reading-type mode + per-class palette + optional legend.
+    mode = coloring.get("saccade_color_mode")
+    if mode is not None:
+        put_valid(
+            mode in ("Uniform", "By type"),
+            "global_saccade_color_mode",
+            mode,
+            "saccade colour mode",
+        )
+    if "saccade_type_legend" in coloring:
+        put("global_saccade_type_legend", bool(coloring["saccade_type_legend"]))
+    class_colors = coloring.get("saccade_class_colors")
+    if isinstance(class_colors, dict):
+        for cls_name in SACCADE_CLASS_EDITABLE:
+            col = class_colors.get(cls_name)
+            if isinstance(col, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", col):
+                put(f"global_saccade_class_color_{cls_name}", col)
     if "hollow_fixations" in coloring:
         put("global_hollow_fixations", bool(coloring["hollow_fixations"]))
     if "fixation_opacity" in coloring:
@@ -516,6 +700,39 @@ def _restore_plot_config(
             0.1,
             1.0,
             "fixation opacity",
+        )
+    if "stimulus_image_opacity" in coloring:  # VIZ-4
+        put_float(
+            coloring["stimulus_image_opacity"],
+            "global_stimulus_image_opacity",
+            0.1,
+            1.0,
+            "stimulus image opacity",
+        )
+    # VIZ-4: manual image alignment (origin nudge + size scale).
+    if "stimulus_image_offset_x" in coloring:
+        put_float(
+            coloring["stimulus_image_offset_x"],
+            "global_stimulus_image_offset_x",
+            -5000.0,
+            5000.0,
+            "stimulus image X offset",
+        )
+    if "stimulus_image_offset_y" in coloring:
+        put_float(
+            coloring["stimulus_image_offset_y"],
+            "global_stimulus_image_offset_y",
+            -5000.0,
+            5000.0,
+            "stimulus image Y offset",
+        )
+    if "stimulus_image_scale" in coloring:
+        put_float(
+            coloring["stimulus_image_scale"],
+            "global_stimulus_image_scale",
+            0.25,
+            3.0,
+            "stimulus image scale",
         )
     co = coloring.get("colorbar_orientation")
     if co is not None:
@@ -799,6 +1016,22 @@ def _build_share_query(data_choice: str) -> Tuple[str, list]:
             "This data source can't be rebuilt from a link — the recipient will "
             "need to load the same data. The view settings below are still shared."
         )
+
+    # DATA-3: the public OneStop source carries its variant / regime / parts so a
+    # shared link reopens the same corpus slice. The recipient still needs the
+    # reports present (or downloadable) — the source caveat above covers that.
+    if data_choice == ONESTOP_PUBLIC_CHOICE:
+        variant = st.session_state.get("onestop_variant")
+        if variant in ONESTOP_VARIANT_LABELS:
+            params["onestop_variant"] = str(variant)
+        regime = st.session_state.get("onestop_regime")
+        if regime in ONESTOP_REGIME_LABELS:
+            params["onestop_regime"] = str(regime)
+        parts = st.session_state.get("onestop_parts")
+        if isinstance(parts, (list, tuple)):
+            valid = [p for p in parts if p in ONESTOP_PART_LABELS]
+            if valid:
+                params["onestop_parts"] = ",".join(valid)
 
     selection = st.session_state.get("_share_selection") or {}
     participant = selection.get("participant_id")

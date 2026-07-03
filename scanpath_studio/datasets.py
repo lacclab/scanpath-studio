@@ -354,20 +354,75 @@ def load_potec(
 # ---------------------------------------------------------------------------
 # OneStop Eye Movements — 360-participant English corpus (Berzak et al. 2025,
 # https://github.com/lacclab/OneStop-Eye-Movements). Distributed on OSF as
-# paragraph-level interest-area (word) + fixation reports, split by reading
-# regime. The reports share the bundled demo's schema (the demo is a 3-pid
-# subset of OneStop), so the generic auto-detect → normalize pipeline handles
-# them with no dataset-specific column mapping — this loader only fetches and
-# reads the two CSV.zips. Distinct from the env-var "OneStop server bundle"
-# source (``data.load_onestop_server_bundle``), which serves a local lacclab
-# export and its per-pid shards for review-app deep links.
+# interest-area (word) + fixation reports, split by reading **regime** and by
+# trial **part** (which screen of a trial — title / question preview /
+# paragraph / questions / answers / QA / feedback). The reports share the
+# bundled demo's schema (the demo is a 3-pid subset of the Paragraph part), so
+# the generic auto-detect → normalize pipeline handles every part with no
+# part-specific column mapping — this loader only fetches, reads, and (when more
+# than one part is loaded) folds the part into the trial identity so the parts
+# don't collide.
+#
+# Two **variants**:
+#   * ``public`` — the OSF download-on-demand release (this module fetches it).
+#   * ``lacclab`` — a lab-processed local export with ~40 extra derived columns
+#     (``unique_paragraph_id``, span indices, normalized dwell, …); a superset
+#     of the public schema, so it flows through the same pipeline (and its
+#     ``unique_paragraph_id`` wins in normalization). No download — a local path.
+#
+# Distinct from the env-var "OneStop server bundle" source
+# (``data.load_onestop_server_bundle``), which serves a lacclab export via
+# ``$ONESTOP_DATA_DIR`` and its per-pid shards for review-app deep links.
 # ---------------------------------------------------------------------------
 
-# OSF file ids from the OneStop repo's download_data_files.py, per reading
-# regime: the paragraph-level interest-area and fixation reports (same columns
-# as the bundled OneStop demo). Keep the keys ("ia"/"fixations") aligned with
-# the report filename prefixes.
 _ONESTOP_OSF_URL = "https://osf.io/download/{resource}"
+
+# The seven trial parts (interest periods), in presentation order. Each maps to
+# one interest-area + one fixation OSF report in the ``onestop-full`` release
+# (all-regimes). Paragraph is the reading passage; the others are the surrounding
+# screens (title, the pre/post question, its four answers, the combined QA
+# screen, the correctness feedback). All share the Paragraph report schema
+# (IA_LEFT/RIGHT/TOP/BOTTOM boxes, IA_LABEL word text, per-word reading measures),
+# so every part renders as a scanpath. Keep the display order = presentation order.
+_ONESTOP_PARTS: Tuple[str, ...] = (
+    "Title",
+    "Question_Preview",
+    "Paragraph",
+    "Questions",
+    "Answers",
+    "QA",
+    "Feedback",
+)
+ONESTOP_DEFAULT_PARTS: Tuple[str, ...] = ("Paragraph",)
+
+# OSF ids for the all-regimes **full** release (every part), from the OneStop
+# repo's download_data_files.py "onestop-full" group. kind → part → OSF id.
+_ONESTOP_FULL_OSF = {
+    "ia": {
+        "Title": "u7f9b",
+        "Question_Preview": "zn473",
+        "Paragraph": "zhywq",
+        "Questions": "tcv9h",
+        "Answers": "q3shp",
+        "QA": "3j8av",
+        "Feedback": "t6n8v",
+    },
+    "fixations": {
+        "Title": "uwz2e",
+        "Question_Preview": "7a3md",
+        "Paragraph": "tbxdc",
+        "Questions": "cmx6k",
+        "Answers": "ax4md",
+        "QA": "fg7se",
+        "Feedback": "e76vz",
+    },
+}
+
+# OSF ids for the per-regime **Paragraph-only** releases (the four reading
+# regimes each ship just the paragraph reports, filtered to that regime), from
+# the "ordinary"/"information_seeking"/"repeated"/"information_seeking_repeated"
+# groups. regime → kind → OSF id. Only the Paragraph part is regime-split on OSF;
+# the other parts come from the all-regimes full release (see _ONESTOP_FULL_OSF).
 _ONESTOP_REGIMES = {
     "ordinary": dict(ia="xkgfz", fixations="ne4az"),
     "information_seeking": dict(ia="yxzte", fixations="bznfk"),
@@ -375,33 +430,105 @@ _ONESTOP_REGIMES = {
     "information_seeking_repeated": dict(ia="ygjup", fixations="paqn8"),
 }
 
-
-def _onestop_report_path(root: Path, kind: str, regime: str) -> Path:
-    """Local path of a OneStop report CSV.zip (matches the OSF filenames)."""
-    return root / f"{kind}_Paragraph_{regime}.csv.zip"
+ONESTOP_VARIANTS = ("public", "lacclab")
 
 
-def onestop_present(root, *, regime: str = "ordinary") -> bool:
-    """True when ``root`` already holds the two OneStop reports for ``regime``.
+def _onestop_osf_resource(kind: str, part: str, regime: str) -> Optional[str]:
+    """OSF id for a (kind, part, regime), or None when not published.
 
-    Lets the app show a *found vs. download* status before any (large) read."""
+    Paragraph is regime-split (four separate downloads); every other part only
+    exists in the all-regimes full release, so it uses the full-release id
+    regardless of regime."""
+    if part == "Paragraph" and regime in _ONESTOP_REGIMES:
+        return _ONESTOP_REGIMES[regime].get(kind)
+    return _ONESTOP_FULL_OSF.get(kind, {}).get(part)
+
+
+def _onestop_report_path(
+    root: Path, kind: str, regime: str, part: str = "Paragraph"
+) -> Path:
+    """Local path of a public-variant OneStop report CSV.zip.
+
+    Paragraph keeps the historical ``<kind>_Paragraph_<regime>.csv.zip`` name
+    (per-regime download). Other parts are all-regimes, so they use
+    ``<kind>_<Part>.csv.zip`` (matching the OSF full-release filenames)."""
+    if part == "Paragraph":
+        return root / f"{kind}_Paragraph_{regime}.csv.zip"
+    return root / f"{kind}_{part}.csv.zip"
+
+
+def _onestop_lacclab_report_path(root: Path, kind: str, part: str) -> Path:
+    """Local path of a lacclab-variant OneStop report CSV.zip.
+
+    The lacclab export names files plainly by part (no regime suffix) — e.g.
+    ``ia_Paragraph.csv.zip`` / ``fixations_Paragraph.csv.zip`` — since a lacclab
+    export folder holds one regime's reports."""
+    return root / f"{kind}_{part}.csv.zip"
+
+
+def _onestop_part_paths(
+    root: Path, kind: str, regime: str, part: str, variant: str
+) -> Path:
+    """Dispatch to the public or lacclab path convention for one report."""
+    if variant == "lacclab":
+        return _onestop_lacclab_report_path(root, kind, part)
+    return _onestop_report_path(root, kind, regime, part)
+
+
+def _normalize_onestop_parts(parts: Optional[Iterable[str]]) -> list:
+    """Validate + order a requested parts selection (defaults to Paragraph)."""
+    if not parts:
+        return list(ONESTOP_DEFAULT_PARTS)
+    requested = {str(p) for p in parts}
+    unknown = sorted(requested - set(_ONESTOP_PARTS))
+    if unknown:
+        raise ValueError(
+            f"Unknown OneStop parts: {unknown} (valid: {list(_ONESTOP_PARTS)})"
+        )
+    # Keep presentation order regardless of how they were passed.
+    return [p for p in _ONESTOP_PARTS if p in requested]
+
+
+def onestop_present(
+    root,
+    *,
+    regime: str = "ordinary",
+    parts: Optional[Iterable[str]] = None,
+    variant: str = "public",
+) -> bool:
+    """True when ``root`` holds the IA + fixation reports for every chosen part.
+
+    Lets the app show a *found vs. download* status before any (large) read.
+    ``variant`` selects the file-name convention (public OSF vs lacclab local)."""
     root = Path(root)
-    return (
-        _onestop_report_path(root, "ia", regime).is_file()
-        and _onestop_report_path(root, "fixations", regime).is_file()
-    )
+    for part in _normalize_onestop_parts(parts):
+        for kind in ("ia", "fixations"):
+            if not _onestop_part_paths(root, kind, regime, part, variant).is_file():
+                return False
+    return True
 
 
-def download_onestop(root, *, regime: str = "ordinary") -> Path:
-    """Download a OneStop regime's paragraph IA + fixation reports into ``root``.
+def download_onestop(
+    root,
+    *,
+    regime: str = "ordinary",
+    parts: Optional[Iterable[str]] = None,
+) -> Path:
+    """Download a OneStop regime + parts' IA + fixation reports into ``root``.
 
-    Fetches the two CSV.zip reports for ``regime`` from OneStop's OSF release
-    into ``root``, skipping any already present, so it's safe to call
-    repeatedly. The reports are large (tens to hundreds of MB); caching them on
-    disk means only the first load pays the download.
+    Fetches the two CSV.zip reports for each chosen ``part`` from OneStop's OSF
+    release into ``root``, skipping any already present, so it's safe to call
+    repeatedly. The reports are large (tens to hundreds of MB each); caching them
+    on disk means only the first load pays the download.
 
     ``regime`` is one of ``ordinary``, ``information_seeking``, ``repeated``,
-    ``information_seeking_repeated``.
+    ``information_seeking_repeated``. ``parts`` is any subset of
+    ``Title / Question_Preview / Paragraph / Questions / Answers / QA /
+    Feedback`` (default: just Paragraph). Only Paragraph is regime-split on OSF;
+    the other parts come from the all-regimes full release.
+
+    (Download is a *public*-variant operation — the lacclab variant is a local
+    export with no download URL.)
     """
     if regime not in _ONESTOP_REGIMES:
         raise ValueError(
@@ -409,61 +536,167 @@ def download_onestop(root, *, regime: str = "ordinary") -> Path:
         )
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
-    for kind, resource in _ONESTOP_REGIMES[regime].items():
-        dest = _onestop_report_path(root, kind, regime)
-        if dest.is_file():
-            continue
-        url = _ONESTOP_OSF_URL.format(resource=resource)
-        print(f"Downloading OneStop {regime} {kind} report from {url} …")
-        # Write to a temp file and atomically rename into place, so an
-        # interrupted write (killed process / full disk) never leaves a
-        # truncated .csv.zip that `dest.is_file()` would then skip forever —
-        # forcing a manual delete. The reports are large, so that window is real.
-        tmp = dest.with_name(dest.name + ".part")
-        with urllib.request.urlopen(url) as response:
-            tmp.write_bytes(response.read())
-        tmp.replace(dest)
+    for part in _normalize_onestop_parts(parts):
+        for kind in ("ia", "fixations"):
+            dest = _onestop_report_path(root, kind, regime, part)
+            if dest.is_file():
+                continue
+            resource = _onestop_osf_resource(kind, part, regime)
+            if resource is None:
+                continue
+            url = _ONESTOP_OSF_URL.format(resource=resource)
+            print(f"Downloading OneStop {regime} {part} {kind} report from {url} …")
+            # Write to a temp file and atomically rename into place, so an
+            # interrupted write (killed process / full disk) never leaves a
+            # truncated .csv.zip that `dest.is_file()` would then skip forever —
+            # forcing a manual delete. The reports are large, so the window is real.
+            tmp = dest.with_name(dest.name + ".part")
+            with urllib.request.urlopen(url) as response:
+                tmp.write_bytes(response.read())
+            tmp.replace(dest)
     return root
+
+
+def _read_onestop_part(
+    root: Path, kind: str, regime: str, part: str, variant: str
+) -> pd.DataFrame:
+    """Read one part's report and stamp a ``part`` column onto it.
+
+    QA repeats the question words in the answer region with the *same* IA_ID, so
+    its per-trial word ids aren't unique — drop the exact-duplicate rows so the
+    fixation→word assignment (which keys on word id) keeps one box per word."""
+    from . import data
+
+    path = _onestop_part_paths(root, kind, regime, part, variant)
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"OneStop {regime} {part} {kind} report not found: {path} — pass "
+            "download=True to fetch it from OSF (public variant), or point at a "
+            "folder holding the lacclab reports."
+        )
+    # Read via data.read_table (not pd.read_csv directly): the OSF .csv.zip
+    # archives wrap the CSV alongside macOS __MACOSX resource-fork entries, which
+    # pandas' zip reader rejects ("Multiple files found in ZIP"). read_table's
+    # zip path filters that cruft and reads with low_memory=False.
+    frame = data.read_table(path)
+    frame["part"] = part
+    if part == "QA":
+        frame = frame.drop_duplicates()
+    return frame
+
+
+def _fold_onestop_part_into_identity(
+    words: pd.DataFrame, fixations: pd.DataFrame, parts: list
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """When >1 part is loaded, prefix the paragraph id with the part.
+
+    Every part of a trial shares the same ``paragraph_id`` / ``TRIAL_INDEX``, so
+    loading e.g. Paragraph + Title together would collapse them into one trial
+    (and fight over word boxes). Prefix ``unique_paragraph_id`` /
+    ``paragraph_id`` / ``unique_trial_id`` with the part so each part becomes its
+    own trial — ``Paragraph::1`` vs ``Title::1``. A single-part load is untouched
+    (the historical trial ids are preserved)."""
+    if len(parts) <= 1:
+        return words, fixations
+
+    def _prefix(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty or "part" not in frame.columns:
+            return frame
+        frame = frame.copy()
+        part = frame["part"].astype(str)
+        for col in ("unique_paragraph_id", "paragraph_id", "unique_trial_id"):
+            if col in frame.columns:
+                frame[col] = part + "::" + frame[col].astype(str)
+        return frame
+
+    return _prefix(words), _prefix(fixations)
 
 
 def onestop_raw_frames(
     root,
     *,
     regime: str = "ordinary",
+    parts: Optional[Iterable[str]] = None,
+    variant: str = "public",
     download: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Raw (pre-normalization) OneStop ``(words, fixations)`` frames for a regime.
+    """Raw (pre-normalization) OneStop ``(words, fixations)`` frames.
 
-    Reads the paragraph-level interest-area + fixation reports for ``regime``
-    from ``root`` (fetching them from OSF first when ``download=True``). The
-    reports already match the bundled demo's schema, so the returned frames go
-    through the same auto-detect → normalize path as an upload — no
-    OneStop-specific column mapping is needed here.
+    Reads the interest-area + fixation reports for each chosen ``part`` of
+    ``regime`` from ``root`` (fetching the public reports from OSF first when
+    ``download=True``). The reports already match the bundled demo's schema, so
+    the returned frames go through the same auto-detect → normalize path as an
+    upload — no OneStop-specific column mapping is needed here.
+
+    ``parts`` is any subset of the seven trial parts (default: Paragraph). When
+    more than one is chosen, each part becomes its own trial (the part is folded
+    into the paragraph/trial id so they don't collide). ``variant`` is
+    ``"public"`` (OSF release) or ``"lacclab"`` (a local lab-processed export;
+    superset schema, no download).
     """
     if regime not in _ONESTOP_REGIMES:
         raise ValueError(
             f"regime must be one of {sorted(_ONESTOP_REGIMES)}, got {regime!r}"
         )
+    if variant not in ONESTOP_VARIANTS:
+        raise ValueError(
+            f"variant must be one of {list(ONESTOP_VARIANTS)}, got {variant!r}"
+        )
+    part_list = _normalize_onestop_parts(parts)
     root = Path(root)
-    if download:
-        download_onestop(root, regime=regime)
-    ia_path = _onestop_report_path(root, "ia", regime)
-    fix_path = _onestop_report_path(root, "fixations", regime)
-    for path, label in ((ia_path, "interest-area"), (fix_path, "fixation")):
-        if not path.is_file():
-            raise FileNotFoundError(
-                f"OneStop {regime} {label} report not found: {path} — pass "
-                "download=True to fetch it from OSF."
-            )
-    # Read via data.read_table (not pd.read_csv directly): the OSF .csv.zip
-    # archives wrap the CSV alongside macOS __MACOSX resource-fork entries, which
-    # pandas' zip reader rejects ("Multiple files found in ZIP"). read_table's
-    # zip path filters that cruft and reads with low_memory=False.
-    from . import data
+    if download and variant == "public":
+        download_onestop(root, regime=regime, parts=part_list)
 
-    words = data.read_table(ia_path)
-    fixations = data.read_table(fix_path)
-    return words, fixations
+    word_frames = [
+        _read_onestop_part(root, "ia", regime, part, variant) for part in part_list
+    ]
+    fix_frames = [
+        _read_onestop_part(root, "fixations", regime, part, variant)
+        for part in part_list
+    ]
+    words = pd.concat(word_frames, ignore_index=True, sort=False)
+    fixations = pd.concat(fix_frames, ignore_index=True, sort=False)
+    return _fold_onestop_part_into_identity(words, fixations, part_list)
+
+
+def load_onestop(
+    root,
+    *,
+    regime: str = "ordinary",
+    parts: Optional[Iterable[str]] = None,
+    variant: str = "public",
+    download: bool = False,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load OneStop as normalized ``(words, fixations)`` frames, ready to plot.
+
+    ``root`` is a folder holding (or to download into, public variant only) the
+    OneStop reports. Narrow the load with ``regime`` (``ordinary`` /
+    ``information_seeking`` / ``repeated`` / ``information_seeking_repeated``),
+    ``parts`` (any subset of ``Title / Question_Preview / Paragraph / Questions /
+    Answers / QA / Feedback`` — default Paragraph), and ``variant`` (``public``
+    OSF release or ``lacclab`` local export). The public OSF reports are large;
+    pass ``download=True`` to fetch the chosen regime + parts into ``root`` on
+    first use::
+
+        words, fixations = load_onestop(
+            "data/OneStop", regime="ordinary", parts=["Paragraph"], download=True
+        )
+        fig = scanpath_studio.plot_scanpath(
+            words, fixations, canvas_size=(2560, 1440)
+        )
+
+    OneStop's presentation monitor was 2560×1440 (Dell U2715H); pass that as
+    ``canvas_size`` to :func:`scanpath_studio.plot_scanpath` for true-to-scale
+    rendering. The reports already match the bundled demo's schema, so this reuses
+    the generic auto-detect → normalize path (no OneStop-specific column mapping).
+    """
+    words_raw, fixations_raw = onestop_raw_frames(
+        root, regime=regime, parts=parts, variant=variant, download=download
+    )
+
+    from . import api
+
+    return api.load_scanpath_data(words=words_raw, fixations=fixations_raw)
 
 
 # ---------------------------------------------------------------------------

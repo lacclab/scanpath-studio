@@ -534,14 +534,17 @@ def _write_csv_zip_with_macosx(path, frame, member_name):
         zf.writestr(f"__MACOSX/._{member_name}", b"\x00\x00")
 
 
-def _fake_onestop_reports(root, regime):
-    """Write minimal OneStop-shaped IA + fixation reports for ``regime``."""
+def _fake_onestop_part_frames(part, label_a, label_b):
+    """Minimal OneStop-shaped (ia, fixations) frames for a part.
+
+    Distinct IA_LABELs per part let a multi-part load prove the parts stayed
+    separate (each part's words carry its own labels)."""
     ia = pd.DataFrame(
         {
             "participant_id": ["p1", "p1"],
             "unique_paragraph_id": ["1_Adv_1", "1_Adv_1"],
             "IA_ID": [1, 2],
-            "IA_LABEL": ["The", "cat"],
+            "IA_LABEL": [label_a, label_b],
             "IA_LEFT": [100.0, 140.0],
             "IA_RIGHT": [138.0, 180.0],
             "IA_TOP": [80.0, 80.0],
@@ -559,26 +562,44 @@ def _fake_onestop_reports(root, regime):
             "CURRENT_FIX_DURATION": [200.0, 180.0],
         }
     )
+    return ia, fix
+
+
+# Per-part word labels for the fake reports (so multi-part loads are separable).
+_FAKE_ONESTOP_PART_LABELS = {
+    "Paragraph": ("The", "cat"),
+    "Title": ("Bold", "Head"),
+    "Question_Preview": ("What", "when"),
+    "Questions": ("Which", "who"),
+    "Answers": ("First", "Second"),
+    "QA": ("Both", "combined"),
+    "Feedback": ("Correct", "yes"),
+}
+
+
+def _fake_onestop_reports(root, regime, parts=("Paragraph",), variant="public"):
+    """Write minimal OneStop-shaped IA + fixation reports for regime + parts."""
     root = datasets_module.Path(root)
     root.mkdir(parents=True, exist_ok=True)
-    _write_csv_zip_with_macosx(
-        datasets_module._onestop_report_path(root, "ia", regime),
-        ia,
-        f"ia_Paragraph_{regime}.csv",
-    )
-    _write_csv_zip_with_macosx(
-        datasets_module._onestop_report_path(root, "fixations", regime),
-        fix,
-        f"fixations_Paragraph_{regime}.csv",
-    )
+    for part in parts:
+        la, lb = _FAKE_ONESTOP_PART_LABELS[part]
+        ia, fix = _fake_onestop_part_frames(part, la, lb)
+        ia_path = datasets_module._onestop_part_paths(root, "ia", regime, part, variant)
+        fix_path = datasets_module._onestop_part_paths(
+            root, "fixations", regime, part, variant
+        )
+        _write_csv_zip_with_macosx(ia_path, ia, ia_path.name.removesuffix(".zip"))
+        _write_csv_zip_with_macosx(fix_path, fix, fix_path.name.removesuffix(".zip"))
 
 
 @pytest.fixture
 def onestop_offline(monkeypatch):
     """Replace download_onestop with a network-free report writer."""
 
-    def fake_download(root, *, regime="ordinary"):
-        _fake_onestop_reports(root, regime)
+    def fake_download(root, *, regime="ordinary", parts=None):
+        _fake_onestop_reports(
+            root, regime, parts or list(datasets_module.ONESTOP_DEFAULT_PARTS)
+        )
         return datasets_module.Path(root)
 
     monkeypatch.setattr(datasets_module, "download_onestop", fake_download)
@@ -662,6 +683,132 @@ def test_download_onestop_atomic_and_skips_existing(monkeypatch, tmp_path):
     # Re-run skips the reports already present (no new downloads).
     datasets_module.download_onestop(tmp_path, regime="ordinary")
     assert len(calls) == 2
+
+
+def test_onestop_default_part_is_paragraph(onestop_offline, tmp_path):
+    words, _ = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", download=True
+    )
+    assert set(words["part"]) == {"Paragraph"}
+    # Single-part load keeps the historical (unfolded) paragraph id.
+    assert set(words["unique_paragraph_id"]) == {"1_Adv_1"}
+
+
+def test_onestop_multiple_parts_stay_separate(onestop_offline, tmp_path):
+    """Loading several parts keeps each as its own trial (part folded into the
+    paragraph id) so the word boxes don't collide."""
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path,
+        regime="ordinary",
+        parts=["Title", "Paragraph"],
+        download=True,
+    )
+    # Both parts present, each labelled with its own words.
+    assert set(words["part"]) == {"Title", "Paragraph"}
+    assert set(words["IA_LABEL"]) == {"Bold", "Head", "The", "cat"}
+    # The shared paragraph id was prefixed with the part, so the two parts are
+    # now distinct trials rather than one collapsed one.
+    assert set(words["unique_paragraph_id"]) == {
+        "Title::1_Adv_1",
+        "Paragraph::1_Adv_1",
+    }
+    assert set(fixations["unique_paragraph_id"]) == {
+        "Title::1_Adv_1",
+        "Paragraph::1_Adv_1",
+    }
+    # Parts are returned in presentation order (Title before Paragraph).
+    assert list(dict.fromkeys(words["part"])) == ["Title", "Paragraph"]
+
+
+def test_onestop_qa_deduplicates(tmp_path):
+    """QA repeats rows with the same IA_ID; the loader drops exact duplicates so
+    word ids stay unique per trial."""
+    ia = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p1"],
+            "unique_paragraph_id": ["1_Adv_1"] * 3,
+            "IA_ID": [1, 1, 2],  # first row duplicated (the QA artifact)
+            "IA_LABEL": ["According", "According", "to"],
+            "IA_LEFT": [100.0, 100.0, 140.0],
+            "IA_RIGHT": [138.0, 138.0, 180.0],
+            "IA_TOP": [80.0, 80.0, 80.0],
+            "IA_BOTTOM": [110.0, 110.0, 110.0],
+        }
+    )
+    root = datasets_module.Path(tmp_path)
+    _write_csv_zip_with_macosx(
+        datasets_module._onestop_report_path(root, "ia", "ordinary", "QA"),
+        ia,
+        "ia_QA.csv",
+    )
+    _write_csv_zip_with_macosx(
+        datasets_module._onestop_report_path(root, "fixations", "ordinary", "QA"),
+        pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "unique_paragraph_id": ["1_Adv_1"],
+                "CURRENT_FIX_INDEX": [1],
+                "CURRENT_FIX_X": [110.0],
+                "CURRENT_FIX_Y": [95.0],
+                "CURRENT_FIX_DURATION": [200.0],
+            }
+        ),
+        "fixations_QA.csv",
+    )
+    words, _ = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", parts=["QA"]
+    )
+    # The exact-duplicate IA_ID=1 row is gone → 2 unique words.
+    assert len(words) == 2
+    assert list(words["IA_ID"]) == [1, 2]
+
+
+def test_onestop_bad_part(tmp_path):
+    with pytest.raises(ValueError, match="Unknown OneStop parts"):
+        datasets_module.onestop_raw_frames(tmp_path, parts=["Bogus"])
+
+
+def test_onestop_bad_variant(tmp_path):
+    with pytest.raises(ValueError, match="variant must be one of"):
+        datasets_module.onestop_raw_frames(tmp_path, variant="bogus")
+
+
+def test_onestop_lacclab_variant_paths(tmp_path):
+    """The lacclab variant reads plain <kind>_<part>.csv.zip files (no regime
+    suffix) from a local folder — no download."""
+    _fake_onestop_reports(tmp_path, "ordinary", parts=["Paragraph"], variant="lacclab")
+    # The lacclab file name has no regime suffix.
+    assert (tmp_path / "ia_Paragraph.csv.zip").is_file()
+    assert datasets_module.onestop_present(
+        tmp_path, regime="ordinary", parts=["Paragraph"], variant="lacclab"
+    )
+    words, fixations = datasets_module.onestop_raw_frames(
+        tmp_path, regime="ordinary", parts=["Paragraph"], variant="lacclab"
+    )
+    assert set(words["part"]) == {"Paragraph"}
+    assert list(words["IA_LABEL"]) == ["The", "cat"]
+
+
+def test_onestop_present_per_part(onestop_offline, tmp_path):
+    datasets_module.download_onestop(tmp_path, regime="ordinary", parts=["Paragraph"])
+    assert datasets_module.onestop_present(
+        tmp_path, regime="ordinary", parts=["Paragraph"]
+    )
+    # A part that wasn't downloaded is reported missing.
+    assert not datasets_module.onestop_present(
+        tmp_path, regime="ordinary", parts=["Paragraph", "Title"]
+    )
+
+
+def test_load_onestop_normalized(onestop_offline, tmp_path):
+    """The normalized headless loader returns plot-ready frames."""
+    words, fixations = datasets_module.load_onestop(
+        tmp_path, regime="ordinary", parts=["Paragraph"], download=True
+    )
+    assert not words.empty
+    assert {"participant_id", "trial_id", "word_id", "text"} <= set(words.columns)
+    fig = sps.plot_scanpath(words, fixations)
+    assert len(fig.data) > 0
 
 
 # ---------------------------------------------------------------------------

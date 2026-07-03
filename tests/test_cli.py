@@ -141,6 +141,93 @@ def test_render_forwards_saccade_styling(tmp_path, monkeypatch):
     assert captured["saccade_width"] == 6.0
 
 
+def test_render_forwards_saccade_color_by_type(tmp_path, monkeypatch):
+    # --saccade-color-by-type flips the mode; --saccade-type-color overrides a
+    # class colour and implies the mode (VIZ-8).
+    import scanpath_studio.api as api
+
+    captured = {}
+
+    def fake_plot(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "plot_scanpath", fake_plot)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--saccade-type-color",
+            "regression=#000000",
+            "-o",
+            str(tmp_path / "x.html"),
+        ]
+    )
+    assert captured["saccade_color_mode"] == "By type"
+    assert captured["saccade_class_colors"]["regression"] == "#000000"
+    # Untouched classes keep their default palette colour.
+    assert captured["saccade_class_colors"]["forward"] != "#000000"
+
+
+def test_render_forwards_heatmap_norm(tmp_path, monkeypatch):
+    # --heatmap-norm log reaches the figure builder as "Log" (VIZ-3).
+    import scanpath_studio.api as api
+
+    captured = {}
+
+    def fake_plot(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "plot_scanpath", fake_plot)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(
+        ["render", "--sample", "--heatmap-norm", "log", "-o", str(tmp_path / "x.html")]
+    )
+    assert captured["heatmap_norm"] == "Log"
+
+
+def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
+    # VIZ-9: --saccade-arcs / --snap-fixations reach the figure builder.
+    import scanpath_studio.api as api
+
+    captured = {}
+
+    def fake_plot(words, fixations, participant=None, trial=None, **kwargs):
+        captured.update(kwargs)
+        return "FIG"
+
+    monkeypatch.setattr(api, "plot_scanpath", fake_plot)
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: path)
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--saccade-arcs",
+            "--snap-fixations",
+            "-o",
+            str(tmp_path / "x.html"),
+        ]
+    )
+    assert captured["saccade_render_mode"] == "Arc"
+    assert captured["fixation_snap_to_word"] is True
+
+
+def test_render_saccade_type_color_rejects_bad_class(tmp_path):
+    with pytest.raises(SystemExit):
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "--saccade-type-color",
+                "nonsense=#000000",
+                "-o",
+                str(tmp_path / "x.html"),
+            ]
+        )
+
+
 def test_render_animate_forwards_saccade_styling(tmp_path, monkeypatch):
     # The animation builder honors the saccade trio too, so --animate forwards it.
     import scanpath_studio.api as api
@@ -174,6 +261,20 @@ def test_render_animate_html(tmp_path):
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "-o", str(out_file)])
     assert out_file.is_file()
+
+
+def test_render_animate_autoplays_by_default(tmp_path):
+    # VIZ-10: the saved interactive HTML auto-starts the replay (kickoff script).
+    out_file = tmp_path / "anim.html"
+    cli.main(["render", "--sample", "--animate", "-o", str(out_file)])
+    assert "Plotly.animate" in out_file.read_text()
+
+
+def test_render_animate_no_autoplay_flag(tmp_path):
+    # VIZ-10: --no-autoplay saves a figure that opens paused (no kickoff).
+    out_file = tmp_path / "anim.html"
+    cli.main(["render", "--sample", "--animate", "--no-autoplay", "-o", str(out_file)])
+    assert "Plotly.animate" not in out_file.read_text()
 
 
 def test_render_animate_rejects_non_html(tmp_path):
@@ -234,6 +335,133 @@ def test_render_animate_warns_on_unsupported_flags(tmp_path, capsys):
     err = capsys.readouterr().err
     assert "ignoring" in err
     assert "color_by" in err and "show_heatmap" in err
+
+
+_PNG_1x1 = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+    "890000000d49444154789c6360000002000100052301e20000000049454e44ae"
+    "426082"
+)
+
+
+def test_render_stimulus_image_embeds_and_dims(tmp_path):
+    # VIZ-4: --stimulus-image overlays an image; --stimulus-image-opacity dims it.
+    img = tmp_path / "stim.png"
+    img.write_bytes(_PNG_1x1)
+    out_file = tmp_path / "out.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--stimulus-image",
+            str(img),
+            "--stimulus-image-opacity",
+            "0.3",
+            "-o",
+            str(out_file),
+        ]
+    )
+    html = out_file.read_text()
+    assert "data:image/png;base64" in html  # the image is embedded
+    assert '"opacity":0.3' in html or '"opacity": 0.3' in html
+
+
+def test_render_stimulus_image_origin_and_size(tmp_path):
+    # VIZ-4: explicit size + origin place a crop in fixation coordinates.
+    img = tmp_path / "stim.png"
+    img.write_bytes(_PNG_1x1)
+    out_file = tmp_path / "out.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--stimulus-image",
+            str(img),
+            "--stimulus-image-size",
+            "1310x991",
+            "--stimulus-image-origin",
+            "305,44",
+            "-o",
+            str(out_file),
+        ]
+    )
+    assert out_file.is_file()
+
+
+def test_render_stimulus_image_bad_origin_exits(tmp_path):
+    img = tmp_path / "stim.png"
+    img.write_bytes(_PNG_1x1)
+    with pytest.raises(SystemExit, match="X,Y"):
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "--stimulus-image",
+                str(img),
+                "--stimulus-image-origin",
+                "nope",
+                "-o",
+                str(tmp_path / "x.html"),
+            ]
+        )
+
+
+def test_render_animate_forwards_stimulus_image(tmp_path):
+    # VIZ-4: the animation honours the stimulus image too.
+    img = tmp_path / "stim.png"
+    img.write_bytes(_PNG_1x1)
+    out_file = tmp_path / "anim.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "--animate",
+            "--stimulus-image",
+            str(img),
+            "-o",
+            str(out_file),
+        ]
+    )
+    assert "data:image/png;base64" in out_file.read_text()
+
+
+def test_render_separable_layers(tmp_path, monkeypatch):
+    # VIZ-5: --separable-layers writes a <output>_layers/ folder. Stub the writers
+    # to avoid Kaleido/Chrome; assert the CLI targets the right dir + format.
+    import scanpath_studio.api as api
+    from pathlib import Path
+
+    captured = {}
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: Path(path))
+
+    def fake_layers(fig, directory, **k):
+        captured["dir"] = str(directory)
+        captured["fmt"] = k.get("fmt")
+        return {"word_boxes": Path(directory) / "word_boxes.svg"}
+
+    monkeypatch.setattr(api, "save_figure_layers", fake_layers)
+    cli.main(
+        ["render", "--sample", "--separable-layers", "-o", str(tmp_path / "fig.svg")]
+    )
+    assert captured["dir"].endswith("fig_layers")
+    assert captured["fmt"] == "svg"
+
+
+def test_render_separable_layers_skips_html(tmp_path, monkeypatch, capsys):
+    # A non-image output (or --animate) can't be split into vector layers.
+    import scanpath_studio.api as api
+    from pathlib import Path
+
+    called = []
+    monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: Path(path))
+    monkeypatch.setattr(
+        api, "save_figure_layers", lambda *a, **k: called.append(1) or {}
+    )
+    cli.main(
+        ["render", "--sample", "--separable-layers", "-o", str(tmp_path / "fig.html")]
+    )
+    assert called == []  # skipped
+    assert "separable-layers" in capsys.readouterr().err
 
 
 def test_render_from_files(tmp_path):

@@ -56,7 +56,13 @@ from .constants import (  # noqa: E402
     FONT_FAMILY,
     SACCADE_COLOR,
 )
-from .plots import make_scanpath_animation, make_scanpath_figure  # noqa: E402
+from .plots import (  # noqa: E402
+    animation_autoplay_frame_duration,
+    animation_autoplay_post_script,
+    make_scanpath_animation,
+    make_scanpath_figure,
+    split_scanpath_layers,
+)
 
 TableLike = Union[pd.DataFrame, str, Path]
 TablesLike = Union[TableLike, "list[TableLike]"]
@@ -76,6 +82,7 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     show_saccade_arrows=False,
     show_heatmap=True,
     heatmap_style="Word boxes",
+    heatmap_norm="Linear",
     color_by="duration_ms",
     heatmap_metric="duration_ms",
     marker_size_range=DEFAULT_MARKER_SIZE_RANGE,
@@ -91,6 +98,11 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     saccade_color=SACCADE_COLOR,
     saccade_style="solid",
     saccade_width=DEFAULT_SACCADE_WIDTH,
+    saccade_color_mode="Uniform",
+    saccade_class_colors=None,
+    saccade_type_legend=True,
+    saccade_render_mode="Straight",
+    fixation_snap_to_word=False,
     background_color=DEFAULT_BACKGROUND_COLOR,
     color_by_line=False,
     line_spacing=DEFAULT_LINE_SPACING,
@@ -98,6 +110,7 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     background_image=None,
     background_image_size=None,
     background_image_origin=None,
+    background_image_opacity=1.0,
 )
 
 
@@ -321,6 +334,7 @@ def animate_scanpath(
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
     playback_speed: float = 1.0,
+    autoplay: bool = True,
     **animation_overrides,
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
@@ -329,6 +343,13 @@ def animate_scanpath(
     returned Plotly figure plays in real reading time scaled by
     ``playback_speed``; save it as interactive HTML with :func:`save_figure`,
     or rasterize to GIF/MP4 with :func:`animation_export.export_animation`.
+
+    With ``autoplay`` (default ``True``, VIZ-10) the saved interactive HTML
+    auto-starts the replay on load *at ``playback_speed``* — :func:`save_figure`
+    honors the marker the builder stamps on the figure. Pass ``autoplay=False``
+    to save a figure that opens paused (press ▶ Play to run it). Autoplay only
+    affects the interactive HTML; GIF/MP4 rasterization renders every frame
+    regardless.
 
     The animation builder accepts a subset of the static figure's options
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``,
@@ -343,6 +364,7 @@ def animate_scanpath(
         "base_font_size",
         "font_family",
         "playback_speed",
+        "autoplay",
     }
     unknown = set(animation_overrides) - valid
     if unknown:
@@ -363,6 +385,7 @@ def animate_scanpath(
         base_font_size=int(base_font_size),
         font_family=font_family,
         playback_speed=playback_speed,
+        autoplay=autoplay,
         **animation_overrides,
     )
 
@@ -383,7 +406,21 @@ def save_figure(
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix == ".html":
-        fig.write_html(str(path))
+        # VIZ-10: an autoplay animation carries its per-frame duration; kick off
+        # `Plotly.animate` at that speed on load (Plotly's own `auto_play` ignores
+        # it). Any animation is otherwise saved paused so it doesn't run at the
+        # wrong default speed; static figures write unchanged.
+        autoplay_ms = animation_autoplay_frame_duration(fig)
+        if autoplay_ms is not None:
+            fig.write_html(
+                str(path),
+                auto_play=False,
+                post_script=animation_autoplay_post_script(autoplay_ms),
+            )
+        elif fig.frames:
+            fig.write_html(str(path), auto_play=False)
+        else:
+            fig.write_html(str(path))
         return path
     if suffix in (".png", ".svg", ".pdf"):
         try:
@@ -400,3 +437,33 @@ def save_figure(
     raise ValueError(
         f"Unsupported extension {suffix!r} — use .html, .png, .svg, or .pdf."
     )
+
+
+def save_figure_layers(
+    fig: go.Figure,
+    directory: Union[str, Path],
+    *,
+    fmt: str = "svg",
+    scale: int = 2,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+) -> dict:
+    """Split a scanpath figure into its layers and save one file per layer (VIZ-5).
+
+    Writes ``<directory>/<layer>.<fmt>`` for each *visible* layer (word boxes /
+    fixations / saccades / heatmap / labels / stimulus image / frame) and returns
+    ``{layer: Path}``. Each layer is the full figure with only that layer's
+    elements and a transparent background, at the same size and axis ranges — so
+    the files register perfectly when stacked in Illustrator / Inkscape. ``fmt``
+    is any :func:`save_figure` extension without the dot (``svg`` / ``pdf`` are
+    vector and best for editing; ``png`` / ``html`` also work). ``scale`` /
+    ``width`` / ``height`` are forwarded to :func:`save_figure`."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    written: dict = {}
+    for layer, layer_fig in split_scanpath_layers(fig).items():
+        path = directory / f"{layer}.{fmt.lstrip('.')}"
+        written[layer] = save_figure(
+            layer_fig, path, scale=scale, width=width, height=height
+        )
+    return written

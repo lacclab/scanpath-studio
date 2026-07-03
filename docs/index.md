@@ -35,10 +35,11 @@ plus **animated replay**, two-trial **comparison**, and **bulk export**. The app
 is organized into three tabs: **Scanpath Visualization**, **Corpus Analysis**, and
 **Data Inspection** (bulk export is the **Export** subtab of Scanpath
 Visualization). **Corpus Analysis** holds the question-oriented analysis sections —
-*Per text* (one text, many readers), *Per reader* (one reader, many trials), *Per
-group* (a cohort), and *Group comparison* (two cohorts) — plus the WIP model
-*Generations* tab; all share a measure picker, aggregation/spread, within-reader
-normalization, and per-view CSV downloads.
+*Per text* (one text, many readers), *Per reader* (one reader, many trials), and
+*Groups* (profile one cohort, or compare two) — all sharing a measure picker,
+aggregation/spread, within-reader normalization, and per-view CSV downloads. The
+Scanpath view's **Comparisons** subtab scores the selected scanpath against other
+scanpaths of the same text, grouped by a column you choose.
 
 Everything the app draws is also available headless through the
 [Python API](api.md) and the [CLI](cli.md) — same pipeline, same figure.

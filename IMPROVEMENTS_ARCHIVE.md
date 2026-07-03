@@ -212,6 +212,50 @@ maps colour to `log1p(value)` across all three heatmap styles (`_apply_heatmap_n
 Every surface (UI / Share `heatmap_norm` / Save & restore / CLI `--heatmap-norm` /
 API).
 
+**VIZ-4 · Improve image-based stimuli support** — `Status: Done` *(signed off 2026-07-03)*
+
+Any dataset can show a stimulus image: an **upload overrides** a dataset's built-in
+image, and the `image_path`/`image_x`/`image_y` column convention declares native
+per-trial images for any dataset. **Align to text** controls (image X/Y offset +
+scale) manually fit the image to the word boxes / fixations — handling
+text-area-only (OneStop) and off-origin (MultiplEYE) images. Opacity + alignment on
+every surface (UI / Share / Save & restore); CLI `--stimulus-image*`, API
+`background_image*`. On-disk folder + naming-pattern resolver deferred to **VIZ-14**.
+
+**VIZ-5 · Export the plot as separable layers** — `Status: Done` *(signed off 2026-07-03)*
+
+A bulk **Separable layers** toggle writes one file per layer (word boxes / fixations
+/ saccades / heatmap / labels / stimulus image / frame) that register when stacked;
+CLI `--separable-layers` + `save_figure_layers()` / `split_scanpath_layers()`. Fix:
+bulk export now uses `extract_trial` and skips a trial only when **both** frames are
+empty, so a fixations-only / non-joining-words dataset exports instead of reporting
+"empty data" for every trial.
+
+**VIZ-8 · Color saccades by saccade type** — `Status: Done` *(signed off 2026-07-03)*
+
+A **Saccade color** mode (Uniform / By type) colours each saccade by reading class
+(forward / skip / refixation / return-sweep / regression, + grey *other*) via a new
+`measures.classify_saccades`; the class colours are editable (and seed correctly
+now, not black) with an optional **Show legend** toggle. Every surface (Share
+`saccade_color_mode` / `saccade_type_legend` / `saccade_color_<class>`; CLI
+`--saccade-color-by-type` / `--saccade-type-color` / `--no-saccade-type-legend`; API).
+
+**VIZ-9 · "Linear reading" view — saccades as arcs, fixations above the words** — `Status: Done` *(signed off 2026-07-03)*
+
+A **Line shape** control (Straight / Arc) arches the saccades; **Snap fixations
+above words** (now under Fixations) places each fixation at the top-centre of its
+word — the classic reading diagram. Both off by default, every surface (Share /
+Save & restore / CLI `--saccade-arcs` / `--snap-fixations` / API).
+
+**VIZ-10 · Animate: autoplay on by default + a start/stop autoplay control** — `Status: Done` *(signed off 2026-07-03)*
+
+The replay autoplays on load at the configured speed (an **Autoplay on load**
+checkbox turns it off). The kickoff polls for Plotly + the real frame list
+(`_transitionData._frames`, not the always-`undefined` `gd.frames` — the bug that
+made it never fire) then plays from the first frame. Every surface (Share
+`anim_autoplay` / Save & restore / CLI `--animate --no-autoplay` / API
+`animate_scanpath(autoplay=…)`, honoured by `save_figure` for HTML).
+
 ---
 
 ## Bugs
@@ -254,6 +298,22 @@ on a source switch; `scale_text_to_boxes` now budgets from the line **pitch** (n
 the glyph-tight box height) with a script-aware width cap. MultiplEYE word text
 sits in its boxes without manual font tweaks; OneStop byte-identical. *(Residual
 sub-pixel offset tracked separately as BUG-4.)*
+
+**BUG-5 · Upload crashes on Streamlit Community Cloud (works locally)** — `Status: Done` *(signed off 2026-07-03)*
+
+Root cause: a large (often zipped) upload decompresses + parses into several
+in-memory copies that OOM-kill the ~1 GB hosted demo with no traceback. Fix: a
+pre-parse size guard (`data.upload_exceeds_limit`, ~25 MB) warns and requires an
+explicit opt-in before parsing (one click locally), wired into
+`app._read_uploaded_frame`.
+
+**BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Done` *(signed off 2026-07-03)*
+
+The theme (`primaryColor` blue) is pinned in `.streamlit/config.toml`, but Streamlit
+only auto-loads that relative to the launch dir — so `python -m scanpath_studio`
+from elsewhere fell back to red. `cli.launch_app` now injects the theme as
+`--theme.*` flags from `constants.APP_THEME` (parity-tested against the config
+file), so every launch path renders the same theme.
 
 ---
 
@@ -385,3 +445,18 @@ New [`docs/rendering.md`](docs/rendering.md) (in the MkDocs nav): the
 data-space→screen-px model, line-pitch font budgeting, script-aware width fitting,
 the pixels-vs-points distinction (folds in VIZ-1), and why the spatial plot uses
 the true-scale embed instead of `st.plotly_chart`.
+
+**ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Done` *(signed off 2026-07-03)*
+
+Became the data-driven **🔬 Comparisons** subtab: pick a **Comparison column** and
+score the selected scanpath against every other scanpath of the same text grouped
+by it (NLD; the closest shown in a grid). **📐 Line assignment** unnested to its own
+top-level subtab; the redundant fixation-index slider + stimulus panel removed.
+Synthetic `model_scanpaths.py` is now app-unused (tests only) — a delete candidate.
+
+**ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Done` *(signed off 2026-07-03)*
+
+Full author list + affiliations in order (Shubi · Gruteke Klein · Lion — LACC Lab,
+Technion · Jacobi · Reiche [also U Potsdam] · Jäger — DiLi Lab, UZH · Berzak)
+across `CITATION.cff`, the README, the About panel (BibTeX + credits), and
+`constants.CITATION`.

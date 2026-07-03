@@ -26,39 +26,21 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 - **DATA-1** — Broaden dataset support (ongoing epic).
 
 ### Signed off 2026-07-03 (moved to the archive)
-**VIZ-1** (px-vs-pt note) · **VIZ-2** (larger small fonts) · **VIZ-3** (heatmap
-Linear/Log) · **BUG-3** (MultiplEYE text alignment) · **DATA-3** (OneStop public +
-shareable) · **DATA-9** (Data-sidebar reorg) · **ENG-11** (versioned Save & restore)
-· **ENG-12** (rendering docs).
+Released in **v0.24.0**: **VIZ-1** (px-vs-pt note) · **VIZ-2** (larger small fonts)
+· **VIZ-3** (heatmap Linear/Log) · **VIZ-4** (image stimuli: upload override +
+align-to-text + generalized) · **VIZ-5** (separable-layer export + empty-data fix)
+· **VIZ-8** (saccade-by-type colours + optional legend) · **VIZ-9** ("linear
+reading" arcs + snap) · **VIZ-10** (animation autoplay) · **BUG-3** (MultiplEYE
+text alignment) · **BUG-5** (upload-size guard) · **BUG-6** (theme from any launch
+dir) · **DATA-3** (OneStop public + shareable) · **DATA-9** (Data-sidebar reorg) ·
+**ENG-8** (Comparisons subtab) · **ENG-11** (versioned Save & restore) · **ENG-12**
+(rendering docs) · **ENG-14** (author list).
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
 **AN-1 … AN-28** (the *Analysis & corpus views* epic — *you asked to keep this
 open*); **PRE-3** (vertical drift correction — *you'll revisit*); **VIZ-11**
 (animation slider readout — *you'll revisit*).
-
-### Your requested changes are now implemented (2026-07-03) — awaiting sign-off
-The whole "changes requested" + "ready" batch is done, tested (749 pass, ruff
-clean, docs build strict), and on every surface. **Please review + sign off** (→
-`Done` + archive):
-- **VIZ-4** — upload now overrides the dataset image; **Align to text** (image
-  X/Y offset + scale) added; `image_path`/`image_x`/`image_y` column convention
-  generalizes native images to any dataset. *(A per-trial image folder + naming
-  pattern resolver is split out as **VIZ-14** below.)*
-- **VIZ-5** — bulk export no longer skips every trial with "empty data" (words
-  that don't join / fixations-only datasets now export).
-- **VIZ-8** — class colour pickers seed correctly (not black); **Show legend**
-  toggle makes the by-type key optional.
-- **VIZ-9** — **Snap fixations above words** moved from Saccades to Fixations.
-- **VIZ-10** — autoplay actually fires now (polls for Plotly + the real frame
-  list, `_transitionData._frames`); on by default.
-- **ENG-8** — Generations → **Comparisons** (data-driven), **Line assignment**
-  unnested to its own subtab, redundant fixation-index slider + stimulus panel
-  removed.
-- **ENG-14** — full author list + affiliations applied everywhere.
-- **BUG-5** — pre-parse upload-size guard (warn + opt-in above ~25 MB).
-- **BUG-6** — branded theme now applies from any launch dir (CLI `--theme.*`
-  injection); parity-tested against `.streamlit/config.toml`.
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -124,98 +106,9 @@ bug); and **Color fixations by** restored in compare mode.
 
 **VIZ-3 · Alternative heatmap normalization** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**VIZ-4 · Improve image-based stimuli support** — `Status: Pending approval (changes addressed 2026-07-03)`
+**VIZ-4 · Improve image-based stimuli support** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested:
-> 1. **Bundled-demo image overrides the uploaded one.** For the bundled demo the
->    dataset's built-in `image_path` wins over an uploaded image; the upload should
->    take effect (fix the precedence so an explicit upload overrides the dataset
->    image).
-> 2. **Use the image to reposition the text.** Text can be placed anywhere on the
->    screen; let the image serve as a manual reference to **adjust the text
->    position** (an offset/nudge for the word layer so labels line up on the image).
-> 3. **Generalize native image support.** MultiplEYE stamps images natively — make
->    this general: in addition to the ad-hoc upload, let a dataset **declare an
->    image path / naming convention** (+ whatever else is needed) so any dataset
->    that ships stimulus images can use them.
-> 4. **Text-area-only images (OneStop).** In OneStop the image covers only the text
->    area, not the whole screen — handle a **partial-coverage** image in the general
->    case (correct origin/extent so it aligns with the AOIs).
-
-**Implemented (2026-07-02).** Image stimuli are no longer limited to the bundled
-corpora that stamp a per-trial `image_path`. Two additions:
-- **Upload a stimulus image for any dataset** — the **⚙️ Stimulus image** popover
-  (next to the layer toggle) has a `file_uploader`; the image is base64-encoded to
-  a `data:` URI (`controls._uploaded_image_data_uri`, cached by file id) and
-  stretched to fill the whole monitor (origin `(0,0)`, size = canvas) so it lines
-  up with the fixation coordinates. Session-only — an uploaded image can't ride a
-  deep link (the Share panel already caveats non-rebuildable sources); precise crop
-  placement is available headless via `background_image_size` / `_origin`.
-- **Image opacity** (`background_image_opacity`, new arg on `make_scanpath_figure`
-  + `make_scanpath_animation`; applied to the `layout.image`) — an **Image
-  opacity** slider dims a busy stimulus so the AOIs / fixations / saccades read
-  over it. Applies to dataset images (MultiplEYE) too.
-
-Exposed on **every surface**: UI (`global_stimulus_image_opacity` slider +
-uploader, collected by `_collect_viz_settings` as `stimulus_image_opacity` /
-`stimulus_image_upload_uri`, placed by `tabs.render_single_trial_tab`); Share deep
-link (`stimulus_image_opacity` in `_SHARE_FLOAT_PARAMS` + `_URL_BOUNDED`); 💾 Save
-& restore (`coloring.stimulus_image_opacity`); CLI (`render --stimulus-image PATH`
-`--stimulus-image-size WxH` `--stimulus-image-origin X,Y` `--stimulus-image-opacity
-O`, honoured by `--animate` too); headless API (`background_image_opacity` in
-`CANONICAL_FIGURE_DEFAULTS`; `background_image*` already existed). AOIs already
-draw *over* the image (word boxes are `layout.shapes` above the `layer="below"`
-image). Tests: `tests/test_plots.py` (`TestStimulusImageOpacity`),
-`tests/test_cli.py`, plus the Share + Save/restore round-trips. Ties into the
-stimulus-image fallback used for unsupported scripts in **PRE-6**.
-
-_Original ask:_ Better handling/rendering when the stimulus is an image rather
-than laid-out text (scaling, alignment to fixation space, AOIs over images).
-
-**VIZ-5 · Export the plot as separable layers** — `Status: Pending approval (changes addressed 2026-07-03)`
-
-> **✅ Fixed 2026-07-03 (awaiting sign-off).** Was: with the **Separable layers**
-> toggle on, **no matter which format is selected the export produces an
-> "empty data" warning and nothing is written.** Repro + fix the separable-layer
-> export path (`export.bulk_export` layer branch / `layer_formats()` /
-> `split_scanpath_layers`); check the format-selection gating and the
-> figure-availability guard.
-
-**Implemented (2026-07-02).** Chose the **per-layer file set** approach over
-one-named-`<g>`-per-layer SVG surgery (Plotly's flat SVG doesn't cleanly map
-traces/shapes/images to groups, and word boxes vs heatmap rects are
-indistinguishable by geometry). New `plots.split_scanpath_layers(fig)` splits a
-built figure into `{layer: figure}` — each a `copy.deepcopy` of the full figure
-with only that layer's traces/shapes/images kept and a transparent background, so
-**layout (axis ranges + size + equal-aspect scaleanchor) stays byte-identical and
-the layers register perfectly when stacked**. Elements are tagged with their layer:
-shapes carry a `_LAYER_SHAPE_TAG`-prefixed `name` at creation (`build_word_boxes`,
-`build_critical_span_overlay`, `_draw_word_value_heatmap`, the plot border), traces
-are classified by their stable `name` (`_trace_layer` — `words`→labels, the saccade
-traces, `Raw gaze`, any `…heatmap…`; everything else is a fixation-marker variant),
-and the single `layout.image` is the stimulus. Layers:
-*stimulus_image / heatmap / word_boxes / saccades / fixations / raw_gaze / labels /
-frame* (only the visible ones). Surfaces (an export *action*, so no
-deep-link/Save-restore surface): **UI** — a **Separable layers** toggle in the bulk
-Export subtab (`export.ExportOptions.separable_layers` +
-`render_export_options`; `bulk_export` writes `per_trial/<slug>/layers/<layer>.<fmt>`
-using the selected non-HTML formats, or SVG when none is picked); **CLI** —
-`render --separable-layers` writes an `<output>_layers/` folder (static image output
-only); **API** — `save_figure_layers(fig, dir, fmt="svg")` + the exposed
-`split_scanpath_layers`. Tests: `tests/test_plots.py` (`TestSplitScanpathLayers` —
-complete/disjoint partition, identical registration, transparent bg, correct
-element→layer routing), `tests/test_export.py` (`TestSeparableLayers`),
-`tests/test_api.py`, `tests/test_cli.py`. An adversarial review pass then fixed
-two real defects: the per-layer render loop shared the combined-figure `try`, so a
-layer failure was mis-reported as "figure export failed" and could leave the
-combined figure silently un-flagged — now its own `try` reporting "layer export
-failed" (combined figures survive; `tests/test_export.py::…layer_failure_reported_distinctly`);
-and the bulk toggle silently fell back to SVG (needs Kaleido) when only HTML was
-picked — now a UI caption warns.
-
-_Original ask:_ keep the figure's layers **separable** in the output instead of one
-flattened image, so a word-boxes / fixations / saccades / heatmap / labels /
-stimulus-image split can be restyled in Illustrator / Inkscape.
+**VIZ-5 · Export the plot as separable layers** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Done (signed off 2026-06-23)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
@@ -223,163 +116,11 @@ moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 **VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done (signed off 2026-06-23)` →
 moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**VIZ-8 · Color saccades by saccade type** — `Status: Pending approval (changes addressed 2026-07-03)`
+**VIZ-8 · Color saccades by saccade type** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested (looked good otherwise):
-> 1. **Colour-picker defaults show black.** In "By type" mode the per-class colour
->    pickers render **black** even though the plot draws the correct class colours —
->    seed each picker with its actual class colour (`SACCADE_CLASS_COLORS`) so the
->    swatches match the plot.
-> 2. **Make the legend optional.** The by-type legend **always** shows; it should be
->    a toggle like the other legends/colour bars.
+**VIZ-9 · "Linear reading" view — saccades as arcs, fixations above the words** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-**Implemented (2026-07-02).** A new **Saccade color** mode (`Uniform` | `By type`)
-in the ⚙️ Saccade-style popover encodes each saccade by its reading class —
-*forward / skip / refixation / return sweep / regression* (the classic schematic),
-plus a grey `other` catch-all for off-text endpoints. New pure classifier
-`measures.classify_saccades(fixations, words)` labels each *outgoing* saccade from
-the departing fixation's `word_id` delta + line membership
-(`measures.assign_fixation_lines`); it's computed at **render time** inside
-`make_scanpath_figure` (like `color_by_line`), so it needs no pipeline
-pre-enrichment and works headless. `plots._add_saccade_layer` splits into one
-legended sub-trace per class (colours from `constants.SACCADE_CLASS_COLORS`,
-five recolourable in the UI); arrows stay a single colour (they encode
-direction). Exposed on **every surface**: UI (`global_saccade_color_mode` +
-`global_saccade_class_color_*` in `_VIZ_WIDGET_DEFAULTS`, collected by
-`_collect_viz_settings`); deep link / Share (`saccade_color_mode` +
-`saccade_color_<class>` in `url_state._SHARE_VALUE_PARAMS`, both read & write);
-💾 Save & restore JSON (writer `tabs._build_studio_config` + reader
-`url_state._restore_plot_config`); CLI (`render --saccade-color-by-type` /
-repeatable `--saccade-type-color CLASS=COLOR`); headless API
-(`saccade_color_mode` / `saccade_class_colors` in `CANONICAL_FIGURE_DEFAULTS`).
-Tests: `tests/test_measures.py` (`TestClassifySaccades`), `tests/test_plots.py`
-(`TestSaccadeColorByType`), `tests/test_cli.py`, `tests/test_api.py`,
-`tests/test_app.py` + `tests/test_plot_config_restore.py` (round-trips). An
-adversarial review pass caught + fixed three defects before sign-off: a
-pandas-3.0 `None`→`NaN` dtype coercion in `classify_saccades` (now
-`dtype=object`; CI's pandas 3.0.3 would have failed while the stale local 2.3.3
-passed), the Save & restore surface gap above, and the `other` class rendering
-in the uniform colour instead of grey in the UI (palette now merges over the
-full defaults).
-
-Encode each saccade by its reading type — *forward saccade / skip / refixation /
-return sweep / regression* (the classic schematic). Saccades currently draw as one
-trace in a single global colour (`global_saccade_color` + style/width,
-[`controls.py`](scanpath_studio/controls.py:1188); `plots._add_saccade_layer`
-[`plots.py`](scanpath_studio/plots.py:671)). The app computes per-fixation
-`is_regression` and word-level `regression_in/out_flag`
-([`measures.py`](scanpath_studio/measures.py:161)) but never uses them for saccade
-encoding, and the forward/skip/refixation/return-sweep distinction isn't classified
-yet. Plan: derive a per-saccade `saccade_type` in `enrich_fixations` from
-consecutive fixations' `word_id` + line membership (`measures.cluster_word_lines`
-[`measures.py`](scanpath_studio/measures.py:257)) and `is_regression`; add an
-"Off / By type" mode + 5-swatch palette to the saccade popover
-(`global_saccade_type_*`, seeded in `_VIZ_WIDGET_DEFAULTS`); render one sub-trace
-per type in `_add_saccade_layer` with a small legend. Related: **CMP-4**, **VIZ-6**.
-*(Note: implemented as a render-time `saccade_class` rather than an
-`enrich_fixations` column, and named distinctly to avoid clobbering the existing
-source-passthrough `saccade_type` column that the trial filter reads.)*
-
-**VIZ-9 · "Linear reading" view — saccades as arcs, fixations above the words** — `Status: Pending approval (changes addressed 2026-07-03)`
-
-> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested: move the **Snap
-> fixations above words** control out of the ⚙️ Saccade-style popover and into the
-> **Fixations** controls (it's a fixation setting, not a saccade one).
-> `global_fixation_snap_to_word` stays the same key; just relocate the widget.
-
-**Implemented (2026-07-02).** A **Line shape** selector (`Straight` | `Arc`) in
-the ⚙️ Saccade-style popover draws saccades as upward Bézier arches
-(`plots._arch_points` → `_saccade_render_mode`, apex above the chord under the
-reversed y-axis, threaded through `_saccade_segments` / `_saccade_segments_by_class`
-so it composes with VIZ-8 by-type colouring), and a **Snap fixations above words**
-checkbox (`plots._snap_fixations_to_words`) moves each fixation to the top-centre
-of its assigned word (unassigned fixations keep their raw gaze point). Both apply
-on the true-scale path via a `render_fix` snapped copy used by the saccade layer
-+ fixation markers (the heatmap keeps the raw gaze density). Off by default.
-Exposed on **every surface**: UI (`global_saccade_render_mode` /
-`global_fixation_snap_to_word` in `_VIZ_WIDGET_DEFAULTS`, collected by
-`_collect_viz_settings`); Share deep link (`saccade_render_mode` +
-`snap_fixations`); 💾 Save & restore; CLI (`render --saccade-arcs` /
-`--snap-fixations`); headless API (`CANONICAL_FIGURE_DEFAULTS`). Tests:
-`tests/test_plots.py` (`TestLinearReadingView`), `tests/test_cli.py`,
-`tests/test_api.py`, plus the Share + Save/restore round-trips. An adversarial
-review pass found the every-surface wiring clean but caught a real **arc-apex
-clipping** bug — a wide top-line arch rose above the view and was cut off (both
-fit modes); fixed by reserving exact Bézier-apex headroom at the top of the
-y-range in Arc mode only (the default view is byte-identical) — plus two
-mutation-surviving test gaps (the x-snap and the `rise = frac·|dx|` formula),
-now pinned with mutation-verified assertions.
-
-A stylized reading-diagram mode (cf. the schematic): draw saccades as curved
-**arcs/arches** instead of straight connectors, and snap each fixation directly
-**above the word** it lands on rather than at its raw gaze point. Straight
-connectors come from `plots._saccade_segments` → `_add_saccade_layer`
-([`plots.py`](scanpath_studio/plots.py:671)); fixations use raw x/y in the marker
-trace; word-box geometry comes from `build_word_boxes` and line membership from
-`measures.cluster_word_lines`. Plan: add viz-mode keys (e.g.
-`global_saccade_render_mode` = straight|arc, `global_fixation_snap_to_word`) in
-`_VIZ_WIDGET_DEFAULTS`, surface a Render-style selectbox + snap checkbox in the
-saccade popover, thread them through `_collect_viz_settings` →
-`make_scanpath_figure`, add a `_curved_saccade_segments` Bézier variant, and
-reposition fixation y to each word's top-center (reuse `assign_fixations_to_words`).
-Must stay on the true-scale path (`tabs._render_true_scale_chart`) and include the
-mode in the figure cache key. Related: **PRE-3** (`snap_to_lines`), **VIZ-5**.
-
-**VIZ-10 · Animate: autoplay on by default + a start/stop autoplay control** — `Status: Pending approval (changes addressed 2026-07-03)`
-
-> **✅ Fixed 2026-07-03 (awaiting sign-off).** Was: **autoplay doesn't actually
-> fire.** It's already on by default (`global_anim_autoplay=True`), but the replay
-> doesn't start on load — pressing/toggling it does nothing, even after switching
-> trials. The `Plotly.animate` kick-off (`plots.animation_autoplay_post_script`
-> emitted via `to_html(post_script=…)` in `tabs._render_true_scale_chart`) isn't
-> triggering in the user's environment — investigate the post-script injection /
-> the `{plot_id}` substitution / whether the frames exist at kick-off time. Keep
-> autoplay **on by default** once fixed.
-
-**Implemented (2026-07-02).** The animated replay now **autoplays on load** by
-default, *at the configured playback speed*. Plotly's built-in `auto_play`
-ignores the configured `frame_duration` (it runs at Plotly's own default), so the
-autoplay is a small client-side kick-off: `make_scanpath_animation(autoplay=True)`
-stamps the autoplay intent + the resolved per-frame duration on `fig.layout.meta`,
-and every HTML-embedding surface (`tabs._render_true_scale_chart` via
-`to_html(post_script=…)`, `api.save_figure` via `write_html`) emits a
-`Plotly.animate(gd, null, {frame:{duration, redraw:false}, fromcurrent:true})`
-kick-off at that speed (`plots.animation_autoplay_post_script` /
-`animation_autoplay_frame_duration`). The figure is always built paused, so
-autoplay-off (and static figures) stay paused. A new **Autoplay on load** checkbox
-lives in the Animate ⚙️ Playback popover (`global_anim_autoplay`, default on,
-seeded in `_VIZ_WIDGET_DEFAULTS`, collected by `_collect_viz_settings` as
-`anim_autoplay`). Exposed on **every surface**: UI toggle; Share deep link
-(`anim_autoplay` in `_SHARE_TOGGLE_PARAMS`); 💾 Save & restore (`layers.autoplay`
-writer + `_PLOT_CONFIG_LAYER_KEYS` reader); CLI (`render --animate --no-autoplay`);
-headless API (`animate_scanpath(..., autoplay=…)`, honoured by `save_figure`).
-Tests: `tests/test_plots.py` (`TestAnimationAutoplay`), `tests/test_api.py`,
-`tests/test_cli.py`, plus the Share + Save/restore round-trips. An adversarial
-review pass caught one every-surface gap: the **downloaded** animation HTML
-(`tabs._render_animation_export`) used a plain `to_html`, so it wouldn't autoplay
-at the configured speed like the live embed / API — now routed through the same
-`animation_autoplay_post_script` kick-off.
-
-Make the animated scanpath **autoplay on load** by default, and add a user option
-to turn autoplay on/off (start/stop). Today the true-scale embed forces the
-animation to start paused — `tabs._render_true_scale_chart` passes `auto_play=False`
-to `fig.to_html` ([`tabs.py`](scanpath_studio/tabs.py:178)) so the figure only plays
-at the configured speed when the user presses ▶ Play (`plots._animation_play_buttons`
-[`plots.py`](scanpath_studio/plots.py:1827)). Note the original reason for
-`auto_play=False`: Plotly's default autoplay ignores the configured playback speed
-and runs at its own default frame duration — so flipping the default isn't a
-one-liner; autoplay needs to honor `frame_duration`/playback speed (likely by
-emitting a small client-side `Plotly.animate(...)` kickoff after mount using the
-computed `avg_frame_duration`, rather than relying on `to_html(auto_play=True)`).
-Plan: add an `global_anim_autoplay` viz key (default **on**) to `_VIZ_WIDGET_DEFAULTS`
-+ a toggle in the Animate ⚙ popover (`controls.py` / the Animate view-mode controls
-in `tabs.render_single_trial_tab`), thread it through `_collect_viz_settings` into
-the animation render so the embed kicks off (or skips) playback at the right speed.
-Expose on **every surface** per *AGENTS.md → Exposing a feature on every surface*:
-the deep link / Share contract in `url_state.py` (`_URL_PRESETS` / `_build_share_query`),
-a `--no-autoplay` (or `--autoplay`) flag on `cli.py render --animate`, and an
-`autoplay` parameter on `api.animate_scanpath` + `CANONICAL_FIGURE_DEFAULTS`.
-Related: **VIZ-9**, **CMP-4**.
+**VIZ-10 · Animate: autoplay on by default + a start/stop autoplay control** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Pending approval`
 
@@ -893,68 +634,9 @@ Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
 (`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
 in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
 
-**BUG-5 · Upload crashes on Streamlit Community Cloud (works locally)** — `Status: Pending approval (changes addressed 2026-07-03)`
+**BUG-5 · Upload crashes on Streamlit Community Cloud (works locally)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-> **User input (2026-07-03):** the **Cloud log shows nothing** (no Python
-> traceback) and the crash was on **OneStop repeated reading**. Empty log + a large
-> upload ⇒ almost certainly a **memory (OOM) kill** — Streamlit Cloud kills the
-> process on RAM exhaustion without a traceback. **Chosen fix: (a)** add a
-> pre-upload **size/row guard** + a clear "too large for the hosted app — run
-> locally" warning (wizard flow in [`wizard.py`](scanpath_studio/wizard.py) /
-> `app.render_sidebar_data_source`). Repro data supplied at
-> `data/OneStop/public/repeated` — **size it first** to set the guard threshold.
-
-Uploading a dataset through the Upload / Add-dataset wizard works on a local
-`streamlit run` but **crashes on the deployed Streamlit Community Cloud app**.
-Repro + capture the actual traceback from the Cloud logs first — the local-vs-deployed
-split points at an environment difference rather than wizard logic: likely the
-Cloud upload-size limit (`server.maxUploadSize`), a memory cap on large
-CSV/Parquet, a missing/locked writable temp dir, or a dependency/version skew
-between local and the Cloud image. Code anchors: the wizard flow in
-[`wizard.py`](scanpath_studio/wizard.py) and the upload source handling in
-`app.render_sidebar_data_source` ([`app.py`](scanpath_studio/app.py)); deployment
-config in `streamlit_app.py` / any `.streamlit/config.toml`. Confirm whether it's
-size-, memory-, or import-related before fixing.
-
-**BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Pending approval (changes addressed 2026-07-03)`
-
-> **✅ Fixed 2026-07-03 (awaiting sign-off).** Was (reopened): the deployed Cloud app is now blue, but running
-> **`python -m scanpath_studio` from the repo root** (`/Users/shubi/Projects/scanpath_studio`)
-> still shows **red**. Root cause: the pinned theme lives in
-> **`app/.streamlit/config.toml`**, and Streamlit only reads `.streamlit/config.toml`
-> relative to the **launch CWD** — so launching from the parent of `app/` (or any
-> other dir) misses it and falls back to the default red. Fix so the theme applies
-> regardless of CWD: either move/duplicate the config to the repo root, or set the
-> theme via `st.set_page_config(theme=…)` / injected CSS in `app.py` so it's not
-> CWD-dependent. (The `tour.py` red-fallback fix already landed.)
-
-**Resolved (2026-07-03) — superseded by the reopen above.** The repo pins an
-explicit theme in
-[`.streamlit/config.toml`](.streamlit/config.toml) (`[theme] primaryColor =
-#1f77b4` light / `#5aa9e6` dark), so both environments now match — the user
-confirmed the **deployed Cloud app renders blue**. The one leftover inconsistency
-was fixed: `tour.py`'s spotlight accent fell back to Streamlit's default red
-(`#ff4b4b`) when the runtime didn't expose `theme.primaryColor`; it now falls back
-to the brand blue `#1f77b4` so the tour matches the pinned theme in every
-environment.
-
-_Original diagnosis below (kept for context):_
-
-
-The app's accent/primary color renders **blue when run locally** (`streamlit
-run`) but **red on the deployed Streamlit Community Cloud version** (e.g. the
-selected data-source radio and the filter chips show red online). The theme
-should be consistent across environments. Likely cause: a theme `primaryColor`
-mismatch between a local `~/.streamlit/config.toml` (or a personal theme) and
-what the deployed app actually uses — the repo may not pin a theme, so local
-picks up a user/default theme while Cloud falls back to its own default. Fix by
-pinning an explicit theme in the repo (`.streamlit/config.toml` `[theme]
-primaryColor = …`, or via `st.set_page_config` / injected CSS) so both
-environments match; decide the intended accent. Code anchors: any
-`.streamlit/config.toml`, `streamlit_app.py`, page config in
-[`app.py`](scanpath_studio/app.py), and injected CSS in
-[`styles.py`](scanpath_studio/styles.py). Related: **BUG-5** (also
-local-vs-deployed).
+**BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 _Next item: `BUG-7`._
 
@@ -993,55 +675,7 @@ Skipped at the user's request (2026-06-23): the app has hundreds of keys and
 deep-links seed many pre-widget, so a full typed migration is high-risk for low
 payoff right now.
 
-**ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Pending approval (changes addressed 2026-07-03)`
-
-> **✅ Implemented 2026-07-03 (awaiting sign-off).** Was requested (first cut reviewed):
-> 1. **Rename "Generations".** It needn't be model generations — it's any set of
->    scanpaths of the same text (e.g. repeated readings), so give it a more general
->    name. **"Comparisons"** is a good name for the tab itself.
-> 2. **Unnest Line assignment.** Move **Line assignment** back out to its own
->    top-level subtab — so **Comparisons has no subtabs** (it's just the renamed
->    Generations view); Line assignment sits beside it in the subtab bar.
-> 3. **Drop the Fixation-index range slider** from the Comparisons view — it's
->    redundant with the fixation-index control already in the main rail's Fixations
->    section.
-> 4. **Drop the "Stimulus & questions" panel** shown inside Generations — there's
->    already a dedicated **Stimulus & questions** subtab.
-
-**Implemented (2026-07-03).** Finished + relocated, per the user's spec:
-- **New "🔬 Comparisons" subtab** in the Scanpath view (where "📐 Line assignment"
-  was), holding two nested subtabs — **Generations** and **📐 Line assignment**.
-  Both use the **main scanpath selection**; neither renders its own trial picker.
-  Generations is **removed from Corpus Analysis** (now Per text · Per reader ·
-  Groups); `render_corpus_analysis_tab` lost its `combos` param.
-- **Generations is now data-driven, not synthetic.** Dropped the trial picker (uses
-  the main selection) and the **🎲 Regenerate** button. Added a **Generation
-  column** selectbox: the distinct values of that column — over the **same text**
-  as the selected trial — are the generations, scored against the selected reading.
-  New pure helpers `_generation_column_options` (ranks model/condition-like names,
-  then reader/trial ids; excludes coordinates + per-fixation ids; skips
-  unhashable/JSON columns) + `_collect_generations` (scopes to the trial's text via
-  the canonical `text_id`/`unique_text_id`/`paragraph_id` priority, excludes the
-  selected trial, groups by the column, caps the grid at 24 with a "showing N of M"
-  caption). The existing similarity machinery (`compute_similarity_table` /
-  `nld_by_*` / convergence plots) is reused unchanged; the table's column reads
-  **Generation**.
-- **Dead code removed:** the synthetic `_cached_model_scanpaths` + its
-  `model_scanpaths` import (the `model_scanpaths.py` module is now unused by the
-  app — its tests still pass; candidate for a later delete). `_SELECTION_PREFIXES`
-  dropped `"multi"` (no second picker).
-
-Tests: `tests/test_multiple_comparison_ui.py` (`_generation_column_options` /
-`_collect_generations` — text scoping incl. real `text_id` + `paragraph_id`
-fallback, exclusions, unhashable guard); `tests/test_apptest.py` (Generations
-renders real generations from the bundled demo). An adversarial review pass caught
-a real **HIGH**: the first cut scoped on `paragraph_id`, which normalized OneStop
-fixations don't carry (they use `text_id`), so generations mixed across texts —
-now fixed to the canonical text-column priority; plus three LOW robustness fixes
-(within-trial ids excluded, `nunique()` TypeError on list columns guarded, grid
-iframe keys made collision-proof).
-
-_Original ask:_ finish it or hide it (`model_scanpaths.py` / `similarity.py`).
+**ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 ### UX / robustness
 
@@ -1057,50 +691,7 @@ Chrome is missing) signed off & archived — see
 
 Add to `docs/` after AN-* land.
 
-**ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Pending approval (changes addressed 2026-07-03)`
-
-> **Confirmed by the user (2026-07-03):** the list + **order** below is correct,
-> **all authors appear in every place** (CITATION / README / constants / app), and
-> the affiliations are:
-> - **DiLi Lab is at UZH (University of Zurich).**
-> - **David Reiche also has a University of Potsdam affiliation** (two affiliations).
->
-> **Final author order** (apply everywhere, in sync):
-> 1. **Omer Shubi** — LACC Lab, Technion
-> 2. **Keren Gruteke Klein** — LACC Lab, Technion
-> 3. **Ella Lion** — LACC Lab, Technion
-> 4. **Deborah Jacobi** — DiLi Lab, University of Zurich (UZH)
-> 5. **David Reiche** — DiLi Lab, University of Zurich (UZH); University of Potsdam
-> 6. **Lena Jäger** — DiLi Lab, University of Zurich (UZH)
-> 7. **Yevgeni Berzak** — (as currently in `CITATION.cff`)
->
-> *(Still to double-check while editing: Berzak's affiliation string, and that the
-> in-prep paper's author list matches this set + order.)*
-
-The author/citation metadata is still provisional. Add the confirmed co-authors
-in place of the `TBD` / "and others" placeholders:
-- **Ella Lion** — LACC Lab, Technion (our lab).
-- **Deborah Jacobi**, **David Reiche**, **Lena Jäger** — DiLi Lab (Lena Jäger's
-  Digital Linguistics group).
-
-Update every surface that carries the author list (keep them in sync):
-- [`CITATION.cff`](CITATION.cff:10) — the `authors:` block (currently Shubi /
-  Gruteke Klein / Berzak with a "provisional" note at line 20); add the new
-  `given-names` / `family-names` / `affiliation` entries and drop the note once
-  final.
-- [`README.md`](README.md:19) — "Omer Shubi, Keren Gruteke Klein, and others
-  (TBD) — LACC Lab, Technion."
-- [`scanpath_studio/constants.py`](scanpath_studio/constants.py:106) —
-  `CITATION["authors"]` (`"Omer Shubi, LACC Lab (Technion)"`), surfaced in-app.
-- [`scanpath_studio/app.py`](scanpath_studio/app.py:263) — the "… and TBD at the
-  LaCC Lab" About text.
-
-**The paper and app author lists must match** — keep the in-prep paper's authors
-(the "citation TBD" note at [`README.md`](README.md:145)) and the software author
-list above as the same set, in the same order.
-
-Confirm exact name spelling/diacritics (Jäger), affiliation wording, and author
-order with the user before editing.
+**ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 ---
 

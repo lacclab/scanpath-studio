@@ -7,188 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-07-03
+
 ### Added
-- **Comparisons subtab** (ENG-8) — a new **🔬 Comparisons** subtab in the Scanpath
-  view compares the selected scanpath against every other scanpath of the **same
-  text**, grouped by a **Comparison column** you pick (a reading regime,
-  repeated-reading id, model generation — or `participant_id` / `trial_id`), scored
-  by similarity (NLD) with the closest shown in a grid. It follows the main trial
-  picker (no separate selector, no duplicate fixation-index slider or stimulus
-  panel). **📐 Line assignment** is now its own top-level subtab (no longer nested).
-  This analysis moved out of Corpus Analysis (now Per text · Per reader · Groups).
-- **Public OneStop corpus is shareable** (DATA-3) — a Share link / deep link to the
-  public OneStop source now carries its **variant / regime / parts**, so a
-  collaborator opens the same corpus slice (`?source=onestop_public&onestop_regime=…`).
-  The recipient still needs the reports present or downloadable.
-- **Separable-layer export** (VIZ-5) — export the figure split into one file per
-  layer (**word boxes / fixations / saccades / heatmap / labels / stimulus image /
-  frame**) so each can be toggled and restyled independently in Illustrator /
-  Inkscape for publication figures. Every layer is the full figure with only that
-  layer's elements and a transparent background, at identical size and axis ranges,
-  so the files **register perfectly when stacked**. In the app it's a **Separable
-  layers** toggle in the bulk **Export** subtab (writes `layers/<layer>.<fmt>` per
-  trial into the zip); headless via `render --separable-layers` (writes an
-  `<output>_layers/` folder) and the new `save_figure_layers()` /
-  `split_scanpath_layers()` API.
-- **Image-based stimuli** (VIZ-4) — any dataset can show a stimulus image behind
-  the scanpath, not just the bundled corpora: **upload a screenshot** of the
-  reading screen from the **⚙️ Stimulus image** popover (an upload **overrides** a
-  dataset's built-in image), and any dataset whose tables carry `image_path` /
-  `image_x` / `image_y` declares its own per-trial images. **Align to text**
-  controls (image **X/Y offset** + **scale**) manually line the image up with the
-  word boxes / fixations when the data's coordinate frame doesn't match it exactly
-  — handling text-area-only images (OneStop) and off-origin stimuli (MultiplEYE)
-  alike. An **Image opacity** slider dims a busy image. Alignment + opacity travel
-  in the Share link and 💾 Save & restore; headless surfaces set the image on the
-  CLI (`render --stimulus-image PATH [--stimulus-image-size WxH]
-  [--stimulus-image-origin X,Y] [--stimulus-image-opacity O]`, works with
-  `--animate`) and the Python API `background_image*` parameters.
-- **Animated replay autoplays on load** (VIZ-10) — the animated scanpath now
-  starts playing automatically when it loads, *at the configured playback speed*
-  (Plotly's own autoplay ignores it). The kickoff **polls** until Plotly and the
-  frames are attached (Plotly stores them on `_transitionData._frames`, so the old
-  one-shot guard checking `gd.frames` always bailed and autoplay never fired), then
-  plays from the first frame. A new **Autoplay on load** checkbox in the Animate ⚙️
-  Playback popover turns it off (start paused). On every surface: the
-  Share deep link (`anim_autoplay`), 💾 Save & restore, the CLI
-  (`render --animate --no-autoplay`), and the headless API
-  (`animate_scanpath(..., autoplay=False)`, honoured by `save_figure` when writing
-  interactive HTML).
-- **"Linear reading" view** (VIZ-9) — a **Line shape** control (Straight / **Arc**)
-  draws saccades as upward arches over the text, and a **Snap fixations above
-  words** toggle places each fixation at the top-centre of the word it lands on
-  instead of its raw gaze point — the classic reading-diagram schematic. Both are
-  off by default and available on every surface (Share deep link, 💾 Save &
-  restore, CLI `--saccade-arcs` / `--snap-fixations`, and the headless API).
-- **Heatmap colour scaling: Linear or Log** (VIZ-3) — a **Color scaling** control
-  in the ⚙️ Heatmap-style popover. **Log** maps colour to `log(1+value)`,
-  compressing heavy-tailed dwell times so a few very-hot words don't wash out the
-  rest; applies to all three heatmap styles (word boxes, interpolated, density).
-  On every surface: Share deep link (`heatmap_norm`), 💾 Save & restore, CLI
-  (`render --heatmap-norm log`), and the headless API
-  (`plot_scanpath(..., heatmap_norm="Log")`).
-- **Colour saccades by reading type** (VIZ-8) — a new **Saccade color** mode
-  (Uniform / By type) colours each saccade by its reading class — *forward, skip,
-  refixation, return sweep, regression* (plus a grey *other* for off-text
-  endpoints) — with an **optional legend** (a **Show legend** toggle, on by
-  default). The five class colours are editable (and now seed correctly in the
-  picker). Available on every surface: the Share deep link (`saccade_color_mode` /
-  `saccade_type_legend` / `saccade_color_<class>`), the CLI
-  (`render --saccade-color-by-type` / `--saccade-type-color CLASS=COLOR` /
-  `--no-saccade-type-legend`), and the headless API
-  (`plot_scanpath(..., saccade_color_mode="By type", saccade_type_legend=…)`).
-  Classification is a new pure `measures.classify_saccades`.
-- **Vertical drift correction** (PRE-3) — the ten line-assignment algorithms of
-  Carr et al. (2021) — *attach, chain, cluster, compare, merge, regress, segment,
-  split, stretch, warp* — natively ported in a new `alignment.py`. Apply one
-  in place from **Fixations ⚙️ → Drift correction** (snaps each fixation to its
-  assigned text line, colours by line, optional original→corrected connectors),
-  or compare all ten side by side in the new **📐 Line assignment** subtab.
-- **Font-size unit note** (VIZ-1) — a note under the Experimental Setup font
-  controls explains that sizes are in pixels (not the points stimuli are usually
-  specified in) and gives the `px = pt × DPI ÷ 72` conversion.
-- **Animation slider is a linear time scrubber** (VIZ-11) — the animated scanpath
-  now emits frames on a uniform time grid (≈100 ms, coarsening for long readings
-  so the frame count — and the GIF/MP4 export — stays bounded) instead of one per
-  fixation onset, so the slider scrubs linearly through reading time. Its readout
-  now shows **elapsed / total seconds** (e.g. "1.2 / 30.0s") — meaningful for a
-  two-reader comparison, where a single fixation index isn't.
-- **OneStop public dataset — full corpus surface** (DATA-3) — the OneStop public
-  source now spans **all four reading regimes** (ordinary / information-seeking /
-  repeated / information-seeking-repeated), **all seven trial parts** (Title ·
-  Question preview · Paragraph · Question · Answers · QA · Feedback, a Parts
-  multiselect defaulting to Paragraph — loading several makes each part its own
-  trial), and **two variants**: **Public** (OSF download-on-demand) and **LaCC
-  lab** (a local lab-processed export; superset schema, no download,
-  path-editable). Exposed headlessly as `sps.load_onestop(...)` and on the CLI as
-  `render --onestop DIR [--onestop-regime … --onestop-part … --onestop-variant …]`.
-- **Bundled demo ships stimulus images** — the bundled OneStop demo now carries
-  per-trial rendered paragraph PNGs (under `sample_data/images/`) plus
-  `image_path`/`image_x`/`image_y`, so the **stimulus-image background** layer
-  works on the demo, not just MultiplEYE.
-- **Native folder picker in the Data location UI** — a "📁 Browse…" button opens a
-  native folder dialog when running locally (falls back silently to the text input
-  on a headless host).
-- **Data sidebar reorganized** (DATA-8/9) — one flat source picker tagged by kind
-  (🧪 demo · 🔒 private · 🌐 public); each source's config renders in one ordered
-  **⚙️ Configure** group (Description → Options → Data location → Experimental
-  Setup → Column mapping), dropping the duplicative "<name> options" labels. Save &
-  restore moved to its own separated top-level section. Column-mapping override
-  now also shows on the Bundled Demo.
-- **Annotation markers in the trial selectors** (UX-6) — favorited (★), tagged
-  (🏷️), and noted (📝) trials are flagged in the trial and compare-trial pickers
-  (composable, alongside the 📄 same-text / 👤 same-participant relation icons; UX-4
-  switched same-text from ★ to 📄).
-- **Stable trial selectors across datasets** (UX-5) — condition columns that are
-  also More-filter columns narrow via the More filters instead of spawning their own
-  cascading selector, so the picker shows the same Participant/Text selectors
-  regardless of dataset.
-- **Quick-view active preset indicator** (VIZ-12) — the active 👁️ Scanpath / 🔥
-  Heatmap button highlights when the current layers match that preset.
-- **Word hover: clearer labels + configurable measure** (VIZ-13) — tooltip shows
-  Word/Word #N/Line #N plus a reading measure, picked via a new **Hover: show
-  measure** selectbox (TFD/FFD/FPRT/RPD/count/Off; preserved in Share links).
+- **Comparisons subtab** (ENG-8) — score the selected scanpath against other scanpaths of the same text, grouped by a **Comparison column** you pick (regime / repeated-reading id / model generation / participant / trial); closest shown, ranked by NLD. **Line assignment** (drift-correction grid) is now its own top-level subtab.
+- **Corpus Analysis** (AN) — question-oriented views **Per text · Per reader · Groups** (profile one cohort or compare two): metric distributions + word profiles, per-text heatmaps pooled over readers, reader summaries, and group differences with effect sizes; shared measure / aggregation / spread pickers with 95% bootstrap CI bands.
+- **Image-based stimuli** (VIZ-4) — show a stimulus image on any dataset: an upload **overrides** a dataset's built-in image; `image_path` / `image_x` / `image_y` columns declare native per-trial images; **Align to text** (X/Y offset + scale) and an opacity slider fit/dim it.
+- **Colour saccades by reading type** (VIZ-8) — Uniform / By type (forward · skip · refixation · return-sweep · regression), editable class colours, optional legend.
+- **"Linear reading" view** (VIZ-9) — arched saccades + snap each fixation above its word.
+- **Animated replay autoplays on load** (VIZ-10) — at the configured speed; an **Autoplay on load** checkbox turns it off. Slider is now a linear time scrubber with an elapsed/total-seconds readout (VIZ-11).
+- **Vertical drift correction** (PRE-3) — the ten Carr et al. (2021) line-assignment algorithms, applied in place or compared in the Line assignment subtab.
+- **Separable-layer export** (VIZ-5) — one file per layer (boxes / fixations / saccades / heatmap / labels / image) that register when stacked.
+- **Heatmap colour scaling: Linear or Log** (VIZ-3).
+- **Public OneStop corpus** (DATA-3) — all four regimes, seven parts, two variants; shareable via deep link. The bundled demo now ships per-trial stimulus images.
+- **Data sidebar reorganized** (DATA-8/9) — one flat source picker tagged by kind, one ordered ⚙️ Configure group, native folder picker; plus stable trial selectors + annotation markers (UX-5/6), a quick-view preset indicator (VIZ-12), a configurable word-hover measure (VIZ-13), and a px-vs-pt font note (VIZ-1).
+
+Every feature reaches all surfaces: UI · deep-link + Share · Save & restore · CLI · headless API.
 
 ### Changed
-- **Corpus Analysis: "Per group" + "Group comparison" merged into one "Groups"
-  tab** — profile a single cohort, or flip **Compare a second group** to define
-  Group B and get the two-cohort views (overlaid distributions, difference
-  profile, paired bars, effect size, stacked heatmap). A single group is just the
-  one-group case of a comparison. Corpus Analysis is now **Per text · Per reader ·
-  Groups**.
-- **Corpus Analysis controls clarified** — internal item IDs removed from the
-  help tooltips; each **Aggregate** / **Spread** control now says what it
-  aggregates over (across readers / within a trial), and **Spread** offers a 95%
-  bootstrap confidence-interval band.
-- **Word labels are left-aligned in their AOI box** (was centered) — the word
-  text is left-aligned within its box, so a centered label drifted ~half a
-  character right of the real glyph; centering only looked right because there
-  was nothing to compare against until the stimulus image landed. Left-aligning
-  makes the labels coincide with the stimulus image and the fixations.
-- **Saved plot configs are versioned and forward-compatible** (ENG-11) — the
-  💾 Save & restore JSON now carries a single-source-of-truth schema version and
-  goes through a migration step on load, so a config saved by an older build keeps
-  restoring as the format evolves, and a config saved by a **newer** build restores
-  best-effort with a clear warning instead of silently dropping settings.
-- **Slightly larger small text** (VIZ-2) — captions, widget labels, radio/checkbox
-  option labels, and help tooltips are nudged up a touch for readability, without
-  reflowing dense panels.
-- **Author list** (ENG-14) — the About panel, `CITATION.cff`, and README now list
-  the full author set in order with affiliations (LACC Lab, Technion · DiLi Lab,
-  University of Zurich · University of Potsdam).
+- **Save & restore configs are versioned** (ENG-11) — a schema version + migration on load; a newer config restores best-effort with a warning.
+- **Word labels are left-aligned in their AOI box** (was centered) so they coincide with the stimulus image + fixations.
+- **Author list** (ENG-14) — full co-author set with affiliations in the About panel, `CITATION.cff`, and README.
+- **Slightly larger small text** (VIZ-2).
 
 ### Fixed
-- **Branded theme applies from any launch directory** (BUG-6) — Streamlit only
-  auto-loads `.streamlit/config.toml` relative to the launch dir, so `python -m
-  scanpath_studio` (or a `pip`-installed console script) from outside `app/` fell
-  back to Streamlit's default red accent. `cli.launch_app` now injects the theme
-  as `--theme.*` flags (from a single source of truth kept in sync with the config
-  file), so every launch path renders the same blue theme.
-- **Bulk export skipped every trial with "empty data"** (VIZ-5) — a dataset whose
-  words/IA table doesn't join per-(participant, trial) — a fixations-only upload,
-  or words keyed by text — made the export require both frames and skip all trials
-  (empty zip), even though the live view renders fine. It now uses the same
-  trial-extraction as the view and exports whenever either frame has data.
-- **Large uploads could crash the hosted demo** (BUG-5) — a big upload (e.g. the
-  OneStop repeated-reading export) decompresses and parses into several in-memory
-  copies that OOM-kill the ~1 GB hosted demo with no traceback. The wizard now
-  warns above ~25 MB and asks for an explicit opt-in before parsing (one click
-  locally; real protection on the host).
-- **"No data found" for a present dataset, when the server runs outside the repo
-  root** — the default data dirs are relative (`data/OneStop`, …) and only resolved
-  when cwd == repo root; they're now anchored to the project root (and so are
-  relative paths the user types), independent of cwd.
-- **Bundled-demo stimulus image vertical origin** — the demo shipped
-  `image_y=148`, placing the page image ~36px too high (the text sat above the
-  word boxes / fixations). Corrected to `184` so the rendered page aligns with
-  the AOI boxes (matches the OneStop paragraph top at y≈186).
+- **Branded theme applies from any launch directory** (BUG-6) — injected as `--theme.*` flags, so `python -m scanpath_studio` from anywhere renders the pinned blue theme instead of Streamlit's default red.
+- **Bulk export no longer skips trials whose words don't join** (VIZ-5) — a fixations-only / non-joining-words dataset now exports instead of reporting "empty data".
+- **Large uploads no longer OOM-crash the hosted demo** (BUG-5) — a pre-parse size guard warns and asks to confirm above ~25 MB.
+- **MultiplEYE stimulus text alignment** (BUG-3), the **bundled-demo stimulus-image vertical origin**, and **"No data found" when run outside the repo root** (default data dirs anchored to the project root).
 
 ### Docs
-- **True-to-scale rendering guide** (ENG-12) — a new
-  [`docs/rendering.md`](docs/rendering.md) documenting the data-space→screen-px
-  model: line-pitch font budgeting, script-aware width fitting, the
-  pixels-vs-points distinction (VIZ-1), and why the spatial plot uses the
-  true-scale embed instead of `st.plotly_chart`.
+- **True-to-scale rendering guide** (ENG-12) — new [`docs/rendering.md`](docs/rendering.md).
 
 ## [0.23.0] - 2026-06-24
 

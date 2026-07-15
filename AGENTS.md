@@ -118,6 +118,10 @@ ruff format --exclude other_vis .
 # Regenerate bundled sample data (needs the full OneStop CSVs under sample_data/OneStop/)
 python -m scanpath_studio.update_sample_data
 
+# Standalone desktop bundle (ENG-15; needs `pip install . pyinstaller` — non-editable)
+pyinstaller --clean --noconfirm desktop/scanpath_studio.spec
+python desktop/smoke_test.py     # selfcheck + server-boot smoke test
+
 # Docs site (MkDocs Material; API autodoc via mkdocstrings from docstrings)
 pip install -e ".[docs]"
 mkdocs serve                 # local preview
@@ -223,3 +227,7 @@ link / CLI / API silently can't be shared, scripted, or rendered headlessly.
 5. The `Publish to PyPI` GitHub Actions workflow builds the wheel + sdist and
    publishes via PyPI Trusted Publishing (requires `pypi` environment set up
    on GitHub with the project name `scanpath-studio`).
+6. The `Desktop builds` workflow (`.github/workflows/desktop.yml`) builds the
+   standalone per-OS desktop bundles (`desktop/` — PyInstaller launcher + spec
+   + smoke test; design in `plans/eng-15-desktop-app.md`) and attaches them to
+   the GitHub release for the tag.

@@ -31,6 +31,20 @@ Tested on **Python 3.11–3.14** (CI runs the suite on all four). The fresh-inst
 path above — `conda create` → `pip install -e ".[test]"` → `pytest` — is verified
 to pass end to end on current dependency releases.
 
+### Desktop app (no Python needed)
+
+Standalone builds for **Windows / macOS / Linux** are attached to each
+[GitHub release](https://github.com/lacclab/scanpath-studio/releases): download
+the archive for your OS, unpack it, and double-click **ScanpathStudio** — it
+starts a local server and opens the app in your browser. Everything runs on
+your machine; no data leaves it.
+
+!!! note "Unsigned builds"
+    The builds are not code-signed yet, so macOS Gatekeeper / Windows
+    SmartScreen will warn on first launch (macOS: right-click → *Open*).
+    PNG/SVG/PDF and GIF/MP4 export still need a Chrome/Chromium on the machine,
+    like the pip install; HTML export works without one.
+
 !!! tip "Static image export needs a browser"
     Interactive **HTML** export is browser-free. **PNG / SVG / PDF** (and GIF /
     MP4 animation) go through [Kaleido](https://github.com/plotly/Kaleido), which

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Standalone desktop app** (ENG-15) — a double-clickable PyInstaller bundle per OS (Windows / macOS / Linux; no Python install needed, data stays local): `desktop/` launcher + spec + icons + smoke test, built and attached to releases by the new `Desktop builds` workflow. Design in `plans/eng-15-desktop-app.md`.
+
 ## [0.24.0] - 2026-07-03
 
 ### Added

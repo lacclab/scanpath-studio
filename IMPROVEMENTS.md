@@ -40,7 +40,8 @@ dir) · **DATA-3** (OneStop public + shareable) · **DATA-9** (Data-sidebar reor
 Implemented, not yet signed off (→ `Done` + archive on your confirmation):
 **AN-1 … AN-28** (the *Analysis & corpus views* epic — *you asked to keep this
 open*); **PRE-3** (vertical drift correction — *you'll revisit*); **VIZ-11**
-(animation slider readout — *you'll revisit*).
+(animation slider readout — *you'll revisit*); **ENG-15** (standalone desktop
+app — implemented 2026-07-16).
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -692,6 +693,56 @@ Chrome is missing) signed off & archived — see
 Add to `docs/` after AN-* land.
 
 **ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
+
+### Distribution / packaging
+
+**ENG-15 · Package the app as a standalone desktop application** — `Status: Pending approval`
+
+**Implemented (2026-07-16).** Approach per the ADR
+([`plans/eng-15-desktop-app.md`](plans/eng-15-desktop-app.md)): **PyInstaller
+onedir + the system default browser** (stlite/WASM rejected — scipy/Parquet/
+Kaleido; Electron/Tauri and briefcase/constructor rejected for v1). New
+[`desktop/`](desktop/): `launcher.py` (free-port Streamlit server + branded
+theme via `cli._theme_cli_flags` (BUG-6) + health-check browser open +
+`--selfcheck`), `scanpath_studio.spec` (package **source** + `sample_data/`
+collected — Streamlit re-execs `app.py` from disk — plus
+streamlit/plotly/sortables/kaleido/imageio-ffmpeg data;
+`--global.developmentMode=false` guards frozen Streamlit), `smoke_test.py`
+(frozen selfcheck: sample → figure → HTML + full app-module import; then boot +
+`/_stcore/health` poll + `GET /`), `make_icons.py` + committed `icons/`
+(scanpath motif; .png/.ico/.icns). CI:
+[`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) — 3-OS matrix
+on `v*` tags + manual dispatch, builds, smoke-tests, uploads artifacts, and
+attaches archives to the GitHub release. **Verified locally on Linux**: 507 MB
+onedir bundle, smoke test fully green. Known limits (documented): unsigned
+builds (Gatekeeper/SmartScreen warn), PNG/GIF export still needs a system
+Chrome (ENG-10), console window stays visible in v1 (native window = follow-up).
+
+Ship Scanpath Studio as a double-clickable desktop app (Windows / macOS / Linux)
+so non-technical researchers can use it without installing Python or running
+`pip install` + a terminal command. Today the entry points are the PyPI package
+(`scanpath-studio run` via [`cli.py`](scanpath_studio/cli.py)) and the hosted
+Streamlit Community Cloud demo — both assume either a Python toolchain or
+internet access; a desktop build also keeps private eye-tracking data fully
+local. Candidate approaches to evaluate:
+
+- **`streamlit-desktop-app` / PyInstaller** — bundle the Python runtime + app
+  into a single executable that launches the Streamlit server and opens a
+  native window (pywebview). Most direct; watch binary size (Plotly, pandas,
+  scipy) and the `sample_data/` + font assets (`importlib.resources` paths must
+  survive freezing).
+- **Electron/Tauri wrapper** around a bundled server — more moving parts, but
+  proven for Streamlit (e.g. stlite desktop). **stlite (Pyodide/WASM)** itself
+  is likely out: scipy/Parquet/Chrome-based animation export may not run in WASM.
+- **Conda constructor / briefcase** — installer-style distribution instead of a
+  single binary.
+
+Scope: pick an approach (small ADR), a build script + CI job per OS
+(`.github/workflows/`), an app icon, and a smoke test that the frozen build
+boots the bundled demo. Gotchas to verify under freezing: the theme lookup from
+any launch dir (BUG-6), Chrome/kaleido discovery for PNG + animation export
+(ENG-10), and `st.cache_data` temp paths. Related: **DATA-1** (private local
+corpora are the main audience), **PERF-1**.
 
 ---
 

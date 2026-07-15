@@ -1,0 +1,79 @@
+# ENG-15: standalone desktop builds (PyInstaller onedir — see
+# plans/eng-15-desktop-app.md). Runs on release tags + manual dispatch, not
+# per-PR: a 3-OS build is release infrastructure, not a PR gate.
+name: Desktop builds
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # attach archives to the release on tag builds
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archive: ScanpathStudio-linux-x86_64.tar.gz
+          - os: macos-latest
+            archive: ScanpathStudio-macos-arm64.tar.gz
+          - os: windows-latest
+            archive: ScanpathStudio-windows-x86_64.zip
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # A regular (non-editable) install: PyInstaller's collect_* helpers need
+      # a real installed package tree, not an editable finder.
+      - name: Install package + PyInstaller
+        run: pip install . pyinstaller
+
+      - name: Build the bundle
+        run: pyinstaller --clean --noconfirm desktop/scanpath_studio.spec
+
+      - name: Smoke test (selfcheck + server boot)
+        run: python desktop/smoke_test.py
+
+      - name: Archive (tar.gz, keeps the executable bit)
+        if: runner.os != 'Windows'
+        run: tar -C dist -czf ${{ matrix.archive }} ScanpathStudio
+
+      - name: Archive (zip)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path dist/ScanpathStudio -DestinationPath ${{ matrix.archive }}
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        # publish.yml normally creates the release for this tag, but it runs in
+        # parallel — create it if it isn't there yet (tolerating the race
+        # across the three matrix jobs), then attach the archive.
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --verify-tag --title "$TAG" \
+                 --notes "Release $TAG." \
+            || true
+          gh release upload "$TAG" "${{ matrix.archive }}" --clobber
+        shell: bash

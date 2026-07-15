@@ -359,6 +359,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Install">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#desktop-app-no-python-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Desktop app (no Python needed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -653,6 +670,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Install">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#desktop-app-no-python-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Desktop app (no Python needed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -736,6 +770,21 @@
 <p>Tested on <strong>Python 3.11–3.14</strong> (CI runs the suite on all four). The fresh-install
 path above — <code>conda create</code> → <code>pip install -e ".[test]"</code> → <code>pytest</code> — is verified
 to pass end to end on current dependency releases.</p>
+<h3 id="desktop-app-no-python-needed">Desktop app (no Python needed)<a class="headerlink" href="#desktop-app-no-python-needed" title="Permanent link">&para;</a></h3>
+<p>Standalone builds for <strong>Windows / macOS / Linux</strong> are attached to each
+<a href="https://github.com/lacclab/scanpath-studio/releases">GitHub release</a>: download
+the archive for your OS, unpack it, and double-click <strong>ScanpathStudio</strong> — it
+starts a local server and opens the app in your browser. Everything runs on
+your machine; no data leaves it. The macOS build is <strong>Apple silicon (M-series)
+only</strong>; on an Intel Mac (or any other unsupported platform), use the
+<a href="#install">pip install</a> instead.</p>
+<div class="admonition note">
+<p class="admonition-title">Unsigned builds</p>
+<p>The builds are not code-signed yet, so macOS Gatekeeper / Windows
+SmartScreen will warn on first launch (macOS: right-click → <em>Open</em>).
+PNG/SVG/PDF and GIF/MP4 export still need a Chrome/Chromium on the machine,
+like the pip install; HTML export works without one.</p>
+</div>
 <div class="admonition tip">
 <p class="admonition-title">Static image export needs a browser</p>
 <p>Interactive <strong>HTML</strong> export is browser-free. <strong>PNG / SVG / PDF</strong> (and GIF /

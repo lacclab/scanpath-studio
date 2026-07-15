@@ -47,13 +47,13 @@ OneStop is exposed as a **Public dataset**. In the app, choose
 
 | Part | What it is |
 | --- | --- |
-| Title | The article title screen. |
-| Question preview | The question shown before reading (information-seeking regimes). |
-| Paragraph | The reading passage (the default). |
-| Question | The question re-shown after reading. |
-| Answers | The four answer choices. |
-| Question + answers (QA) | The combined question-and-answers screen. |
-| Feedback | The one-second correctness notification. |
+| `Title` | The article title screen. |
+| `Question_Preview` | The question shown before reading (information-seeking regimes). |
+| `Paragraph` | The reading passage (the default). |
+| `Questions` | The question re-shown after reading. |
+| `Answers` | The four answer choices. |
+| `QA` | The combined question-and-answers screen. |
+| `Feedback` | The one-second correctness notification. |
 
 Every part ships an **interest-area report** (one row per word, with bounding
 boxes and reading measures) and a **fixation report**, all in the same schema —

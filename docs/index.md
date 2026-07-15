@@ -1,45 +1,134 @@
+---
+hide:
+  - navigation
+  - toc
+---
+
+<div class="sps-hero" markdown>
+<img class="sps-hero-logo" src="assets/icon.png" alt="Scanpath Studio icon" />
+<div class="sps-hero-text" markdown>
+
 # Scanpath Studio
 
-An interactive workbench for visualizing **eye-tracking-while-reading** data.
-Drop in a trial and see the scanpath the way the reader saw it — words at their
-true on-screen positions, with fixations, saccades, a density heatmap, and
-animated replay layered on top, all exportable as publication-ready figures.
+<p class="sps-tagline">
+See eye-tracking-while-reading data the way the reader saw it — words at their
+true on-screen positions, with fixations, saccades, heatmaps, and animated
+replay layered on top. Publication-ready figures included.
+</p>
 
-It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / snake-case
-columns) and ships with a small [OneStop](https://github.com/lacclab/OneStop-Eye-Movements)
-demo, so you can try it with zero setup.
+<div class="sps-buttons" markdown>
+[:material-play-circle: Try the live demo](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
+[:material-rocket-launch: Get started](getting-started.md){ .md-button }
+[:material-download: Desktop app](desktop.md){ .md-button }
+</div>
 
-[Try the live demo](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
-[Get started](getting-started.md){ .md-button }
+</div>
+</div>
 
-## What's here
+![The Scanpath Studio app: a scanpath drawn true-to-scale over the stimulus text, with the layer controls on the right](assets/app_screenshot.png){ .sps-shot }
 
-- **[Getting started](getting-started.md)** — install (pip / conda / source),
-  launch the app, and make your first figure.
-- **[Python API](api.md)** — the headless surface: load → list → measure →
-  plot / animate → save.
-- **[CLI reference](cli.md)** — `scanpath-studio` (launch) and
-  `scanpath-studio render` (headless figures) with every flag.
-- **[Data format](data-format.md)** — what tables to bring and how column
-  mapping works.
-- **[Export & troubleshooting](export-troubleshooting.md)** — HTML vs.
-  PNG/SVG/PDF (Kaleido/Chrome), GIF/MP4, and common gotchas.
-- **[Architecture](architecture.md)** — a map of the codebase for contributors.
+## What it does
 
-## At a glance
+<div class="grid cards" markdown>
 
-The scanpath plot is built from layers you toggle independently — **text** at
-true pixel coordinates, **fixations** (sized by duration, colored by any
-column), **saccades**, **areas of interest**, and a word-level **heatmap** —
-plus **animated replay**, two-trial **comparison**, and **bulk export**. The app
-is organized into three tabs: **Scanpath Visualization**, **Corpus Analysis**, and
-**Data Inspection** (bulk export is the **Export** subtab of Scanpath
-Visualization). **Corpus Analysis** holds the question-oriented analysis sections —
-*Per text* (one text, many readers), *Per reader* (one reader, many trials), and
-*Groups* (profile one cohort, or compare two) — all sharing a measure picker,
-aggregation/spread, within-reader normalization, and per-view CSV downloads. The
-Scanpath view's **Comparisons** subtab scores the selected scanpath against other
-scanpaths of the same text, grouped by a column you choose.
+- :material-eye:{ .lg .middle } **True-to-scale scanpaths**
 
-Everything the app draws is also available headless through the
-[Python API](api.md) and the [CLI](cli.md) — same pipeline, same figure.
+    ---
+
+    The stimulus text is re-rendered at its exact on-screen geometry, so
+    fixations, saccades, and word boxes line up with what the reader actually
+    saw — or overlay the original stimulus image. See
+    [how the rendering works](rendering.md).
+
+- :material-counter:{ .lg .middle } **Canonical reading measures**
+
+    ---
+
+    FFD, gaze duration, go-past, total fixation duration, skips, and
+    regressions per word — precomputed EyeLink IA values are used when present,
+    computed natively when not.
+
+- :material-chart-bar:{ .lg .middle } **Corpus analysis**
+
+    ---
+
+    Question-oriented views: profile a **text** across readers, a **reader**
+    across trials, or one or two **groups** — with shared measure pickers,
+    spread bands, effect sizes, and per-view CSV downloads.
+
+- :material-format-align-middle:{ .lg .middle } **Vertical drift correction**
+
+    ---
+
+    The ten Carr et al. (2021) line-assignment algorithms, applied in place or
+    compared side-by-side in a grid, ported natively (no GPL dependency).
+
+- :material-database-import:{ .lg .middle } **Any dataset**
+
+    ---
+
+    Auto-detects EyeLink / Gazepoint / snake-case columns, with a guided
+    upload wizard and manual mapping override. OneStop, PoTeC, and MultiplEYE
+    load out of the box. See the [data format](data-format.md).
+
+- :material-export:{ .lg .middle } **Everything exports**
+
+    ---
+
+    HTML / PNG / SVG / PDF figures (also as separable layers), GIF / MP4
+    replays, tidy CSV/Parquet tables, and shareable deep links. Every figure is
+    scriptable via the [Python API](api.md) and [CLI](cli.md).
+
+</div>
+
+## Ways to run it
+
+<div class="grid cards" markdown>
+
+- :material-web:{ .lg .middle } **In the browser**
+
+    ---
+
+    The [hosted demo](https://scanpath-studio.streamlit.app) runs the bundled
+    3-participant [OneStop](https://github.com/lacclab/OneStop-Eye-Movements)
+    sample — nothing to install.
+
+- :material-language-python:{ .lg .middle } **From PyPI**
+
+    ---
+
+    ```bash
+    pip install scanpath-studio
+    scanpath-studio
+    ```
+
+    Python 3.11–3.14 — see [Getting started](getting-started.md).
+
+- :material-download-box:{ .lg .middle } **As a desktop app**
+
+    ---
+
+    A double-clickable build for Windows / macOS / Linux — no Python needed,
+    and private data never leaves your machine.
+    [Download & instructions](desktop.md).
+
+</div>
+
+## The app in one paragraph
+
+Two views, toggled from the header: **Scanpath Visualization** (one trial —
+the layered plot plus Annotations, Stimulus & questions, Comparisons, Line
+assignment, Export, Data Inspection, and Share subtabs) and **Corpus Analysis**
+(*Per text* · *Per reader* · *Groups*). Layers — text, fixations, saccades,
+word boxes, heatmap, stimulus image — toggle independently; **Animate** replays
+the reading, **Compare** overlays a second trial, and the **Comparisons**
+subtab ranks same-text scanpaths by similarity. Everything obeys the active
+trial filters, and everything the app draws is reproducible headless through
+the same pipeline.
+
+!!! quote "Citing Scanpath Studio"
+    If you use Scanpath Studio in your research, please cite it — the citation
+    metadata lives in
+    [`CITATION.cff`](https://github.com/lacclab/scanpath-studio/blob/main/CITATION.cff)
+    (also surfaced in the app's About panel), and the bundled demo data comes
+    from [OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2).

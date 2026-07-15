@@ -9,39 +9,69 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  logo: assets/icon.png
+  favicon: assets/icon.png
+  icon:
+    repo: fontawesome/brands/github
   palette:
+    # Brand palette (APP_THEME / APP_THEME_DARK in scanpath_studio/constants.py)
+    # via the `custom` scheme colors in stylesheets/extra.css.
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
+    - navigation.footer
+    - navigation.indexes
     - content.code.copy
+    - content.tabs.link
     - toc.follow
     - search.suggest
+    - search.highlight
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/lacclab/scanpath-studio
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/scanpath-studio/
+    - icon: material/play-circle
+      link: https://scanpath-studio.streamlit.app
+      name: Live demo
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Python API: api.md
-  - CLI reference: cli.md
-  - Data format: data-format.md
-  - True-to-scale rendering: rendering.md
-  - OneStop dataset: onestop.md
-  - MultiplEYE dataset: multipleye.md
-  - Export & troubleshooting: export-troubleshooting.md
-  - Architecture: architecture.md
+  - Using the app:
+      - Getting started: getting-started.md
+      - Desktop app: desktop.md
+      - Data format: data-format.md
+      - Export & troubleshooting: export-troubleshooting.md
+  - Headless:
+      - Python API: api.md
+      - CLI reference: cli.md
+  - Datasets:
+      - OneStop: onestop.md
+      - MultiplEYE: multipleye.md
+  - Internals:
+      - True-to-scale rendering: rendering.md
+      - Architecture: architecture.md
 
 plugins:
   - search
@@ -58,11 +88,18 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - toc:
       permalink: true
+  - pymdownx.details
+  - pymdownx.keys
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
   - pymdownx.inlinehilite
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg

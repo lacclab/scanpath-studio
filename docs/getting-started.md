@@ -34,18 +34,10 @@ to pass end to end on current dependency releases.
 ### Desktop app (no Python needed)
 
 Standalone builds for **Windows / macOS / Linux** are attached to each
-[GitHub release](https://github.com/lacclab/scanpath-studio/releases): download
-the archive for your OS, unpack it, and double-click **ScanpathStudio** — it
-starts a local server and opens the app in your browser. Everything runs on
-your machine; no data leaves it. The macOS build is **Apple silicon (M-series)
-only**; on an Intel Mac (or any other unsupported platform), use the
-[pip install](#install) instead.
-
-!!! note "Unsigned builds"
-    The builds are not code-signed yet, so macOS Gatekeeper / Windows
-    SmartScreen will warn on first launch (macOS: right-click → *Open*).
-    PNG/SVG/PDF and GIF/MP4 export still need a Chrome/Chromium on the machine,
-    like the pip install; HTML export works without one.
+[GitHub release](https://github.com/lacclab/scanpath-studio/releases): unpack
+and double-click — no Python, and private data never leaves your machine. See
+the **[Desktop app](desktop.md)** page for per-OS steps (including the
+unsigned-build warnings) and limitations.
 
 !!! tip "Static image export needs a browser"
     Interactive **HTML** export is browser-free. **PNG / SVG / PDF** (and GIF /

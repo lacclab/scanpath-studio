@@ -7,7 +7,7 @@ once the server answers its health check.
 
 Environment overrides (used by the smoke test, handy for debugging):
     SCANPATH_DESKTOP_PORT        fixed port instead of a free one
-    SCANPATH_DESKTOP_NO_BROWSER  set to 1 to skip opening the browser
+    SCANPATH_DESKTOP_NO_BROWSER  set to 1/true/yes to skip opening the browser
 
 ``--selfcheck`` runs a headless sanity pass inside the frozen process (load
 the bundled sample, build a figure, render HTML) and exits — it catches
@@ -23,27 +23,35 @@ import threading
 import time
 import urllib.request
 import webbrowser
-from pathlib import Path
 
-HEALTH_TIMEOUT_S = 60.0
-
-
-def _app_script() -> Path:
-    """The packaged ``app.py`` on disk (Streamlit re-execs it as a script).
-
-    Under PyInstaller the package sources are collected next to the bundle's
-    other data files, and ``scanpath_studio.__file__`` points into that tree,
-    so the same lookup works frozen and unfrozen.
-    """
-    import scanpath_studio
-
-    return Path(scanpath_studio.__file__).resolve().parent / "app.py"
+# Windows first launches can spend minutes under a Defender/SmartScreen scan
+# of the unpacked bundle before the server answers; match the smoke test's
+# boot budget rather than giving up while the server is still coming up.
+HEALTH_TIMEOUT_S = 180.0
 
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def _resolve_port() -> int:
+    """``SCANPATH_DESKTOP_PORT`` when it's a usable port, else a free one."""
+    raw = os.environ.get("SCANPATH_DESKTOP_PORT", "").strip()
+    if raw:
+        try:
+            port = int(raw)
+        except ValueError:
+            port = 0
+        if 0 < port < 65536:
+            return port
+        print(f"Ignoring invalid SCANPATH_DESKTOP_PORT={raw!r}; using a free port.")
+    return _free_port()
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _wait_for_server(url: str, timeout_s: float = HEALTH_TIMEOUT_S) -> bool:
@@ -62,6 +70,11 @@ def _wait_for_server(url: str, timeout_s: float = HEALTH_TIMEOUT_S) -> bool:
 def _open_browser_when_ready(port: int) -> None:
     if _wait_for_server(f"http://127.0.0.1:{port}/_stcore/health"):
         webbrowser.open(f"http://127.0.0.1:{port}")
+    else:
+        print(
+            f"Server did not answer within {HEALTH_TIMEOUT_S:.0f}s — if it is "
+            f"still starting, open http://127.0.0.1:{port} yourself."
+        )
 
 
 def selfcheck() -> int:
@@ -98,29 +111,9 @@ def main() -> None:
     if "--selfcheck" in sys.argv[1:]:
         sys.exit(selfcheck())
 
-    port = int(os.environ.get("SCANPATH_DESKTOP_PORT") or _free_port())
-    open_browser = os.environ.get("SCANPATH_DESKTOP_NO_BROWSER", "") not in (
-        "1",
-        "true",
-    )
+    port = _resolve_port()
 
-    from scanpath_studio.cli import _theme_cli_flags
-
-    flags = [
-        # Frozen Streamlit can misdetect development mode, which then rejects
-        # an explicit --server.port; force it off.
-        "--global.developmentMode=false",
-        # headless=true stops Streamlit's own browser-open; we open it after
-        # the health check instead (and not at all under the smoke test).
-        "--server.headless=true",
-        f"--server.port={port}",
-        # No hot reload in a frozen app; the watcher only costs threads.
-        "--server.fileWatcherType=none",
-        "--browser.gatherUsageStats=false",
-        *_theme_cli_flags(),
-    ]
-
-    if open_browser:
+    if not _env_flag("SCANPATH_DESKTOP_NO_BROWSER"):
         threading.Thread(
             target=_open_browser_when_ready, args=(port,), daemon=True
         ).start()
@@ -128,10 +121,26 @@ def main() -> None:
     print(f"Scanpath Studio starting on http://127.0.0.1:{port}")
     print("Close this window (or press Ctrl+C) to quit.")
 
-    from streamlit.web import cli as stcli
+    from scanpath_studio.cli import launch_app
 
-    sys.argv = ["streamlit", "run", str(_app_script()), *flags]
-    sys.exit(stcli.main())
+    # launch_app resolves the packaged app.py, injects the branded theme
+    # (BUG-6), and hands off to `streamlit run` — one launch path shared with
+    # `scanpath-studio run`, so fixes there reach the frozen app too.
+    launch_app(
+        [
+            # Frozen Streamlit can misdetect development mode, which then
+            # rejects an explicit --server.port; force it off.
+            "--global.developmentMode=false",
+            # headless=true stops Streamlit's own browser-open; we open it
+            # after the health check instead (and not at all under the smoke
+            # test).
+            "--server.headless=true",
+            f"--server.port={port}",
+            # No hot reload in a frozen app; the watcher only costs threads.
+            "--server.fileWatcherType=none",
+            "--browser.gatherUsageStats=false",
+        ]
+    )
 
 
 if __name__ == "__main__":

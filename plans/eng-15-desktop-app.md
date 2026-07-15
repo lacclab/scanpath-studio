@@ -89,6 +89,8 @@ lines + fixation dots + saccade arcs) and committed under `desktop/icons/`
 
 ## Follow-ups (out of scope for v1)
 
+- An Intel-macOS build (a `macos-13` matrix leg) if users ask — v1 ships
+  Apple-silicon only (`macos-latest`), and the docs say so.
 - Native window (pywebview) or Tauri shell instead of a browser tab.
 - Code signing / notarization (macOS Gatekeeper and Windows SmartScreen will
   warn on unsigned builds — documented in the download instructions).

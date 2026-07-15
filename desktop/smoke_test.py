@@ -11,18 +11,22 @@ Without an argument it looks for ``dist/ScanpathStudio/ScanpathStudio`` (with
 2. Boot: launch the server with the browser suppressed, poll the Streamlit
    health endpoint until it answers ``ok``, require HTTP 200 on ``/``.
 
-Exit code 0 = both passed. Stdlib only (runs on the bare CI runners).
+Exit code 0 = both passed. Stdlib only (runs on the bare CI runners; the
+``launcher`` import is the sibling module, itself stdlib-only at import time).
 """
 
 from __future__ import annotations
 
 import os
-import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from launcher import _free_port  # noqa: E402
 
 BOOT_TIMEOUT_S = 180.0
 SELFCHECK_TIMEOUT_S = 300.0
@@ -32,12 +36,6 @@ def _default_binary() -> Path:
     repo_root = Path(__file__).resolve().parent.parent
     name = "ScanpathStudio.exe" if sys.platform.startswith("win") else "ScanpathStudio"
     return repo_root / "dist" / "ScanpathStudio" / name
-
-
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 def _run_selfcheck(binary: Path) -> None:
@@ -66,42 +64,53 @@ def _run_boot_test(binary: Path) -> None:
     env["SCANPATH_DESKTOP_PORT"] = str(port)
 
     print(f"[smoke] booting server on port {port}: {binary}")
-    proc = subprocess.Popen(
-        [str(binary)],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    try:
-        deadline = time.monotonic() + BOOT_TIMEOUT_S
-        health_url = f"http://127.0.0.1:{port}/_stcore/health"
-        while True:
-            if proc.poll() is not None:
-                out = proc.stdout.read() if proc.stdout else ""
-                raise SystemExit(
-                    f"[smoke] server exited early (exit {proc.returncode}):\n{out}"
-                )
-            if time.monotonic() > deadline:
-                raise SystemExit(
-                    f"[smoke] server not healthy after {BOOT_TIMEOUT_S:.0f}s"
-                )
-            try:
-                with _get(health_url) as response:
-                    if response.status == 200 and b"ok" in response.read().lower():
-                        break
-            except OSError:
-                pass
-            time.sleep(1.0)
-        print("[smoke] health endpoint answered ok")
+    # Server output goes to a file, not a PIPE: an undrained pipe would block
+    # the server once its buffer fills, and the output must survive a kill so
+    # a failed boot is diagnosable in CI.
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as log:
+        proc = subprocess.Popen(
+            [str(binary)],
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
 
-        with _get(f"http://127.0.0.1:{port}/") as response:
-            if response.status != 200:
-                raise SystemExit(f"[smoke] GET / returned HTTP {response.status}")
-        print("[smoke] root page served (HTTP 200)")
-    finally:
-        proc.kill()
-        proc.wait(timeout=30)
+        def server_log() -> str:
+            log.flush()
+            log.seek(0)
+            return log.read()
+
+        try:
+            deadline = time.monotonic() + BOOT_TIMEOUT_S
+            health_url = f"http://127.0.0.1:{port}/_stcore/health"
+            while True:
+                if proc.poll() is not None:
+                    raise SystemExit(
+                        f"[smoke] server exited early (exit {proc.returncode}):\n"
+                        f"{server_log()}"
+                    )
+                if time.monotonic() > deadline:
+                    raise SystemExit(
+                        f"[smoke] server not healthy after {BOOT_TIMEOUT_S:.0f}s:\n"
+                        f"{server_log()}"
+                    )
+                try:
+                    with _get(health_url) as response:
+                        if response.status == 200 and b"ok" in response.read().lower():
+                            break
+                except OSError:
+                    pass
+                time.sleep(1.0)
+            print("[smoke] health endpoint answered ok")
+
+            with _get(f"http://127.0.0.1:{port}/") as response:
+                if response.status != 200:
+                    raise SystemExit(f"[smoke] GET / returned HTTP {response.status}")
+            print("[smoke] root page served (HTTP 200)")
+        finally:
+            proc.kill()
+            proc.wait(timeout=30)
 
 
 def main() -> None:

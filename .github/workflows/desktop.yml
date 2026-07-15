@@ -8,9 +8,6 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
-permissions:
-  contents: write # attach archives to the release on tag builds
-
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -21,6 +18,8 @@ jobs:
         include:
           - os: ubuntu-latest
             archive: ScanpathStudio-linux-x86_64.tar.gz
+          # macos-latest is Apple silicon; there is no Intel build (documented
+          # in docs/getting-started.md — add a macos-13 leg if users need one).
           - os: macos-latest
             archive: ScanpathStudio-macos-arm64.tar.gz
           - os: windows-latest
@@ -62,18 +61,35 @@ jobs:
           path: ${{ matrix.archive }}
           if-no-files-found: error
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+  # Single fan-in job so the three matrix legs don't race each other (or
+  # publish.yml) creating the release. publish.yml owns the release notes and
+  # overwrites (`gh release edit`) whatever exists once it succeeds.
+  release:
+    name: Attach archives to the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all archives
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Create release if missing and upload
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        # publish.yml normally creates the release for this tag, but it runs in
-        # parallel — create it if it isn't there yet (tolerating the race
-        # across the three matrix jobs), then attach the archive.
+        # Tolerate exactly one failure mode of `create`: losing the race to
+        # publish.yml (re-check with `view`). Anything else — permissions, a
+        # bad tag — still fails the job loudly.
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 \
-            || gh release create "$TAG" --verify-tag --title "$TAG" \
-                 --notes "Release $TAG." \
-            || true
-          gh release upload "$TAG" "${{ matrix.archive }}" --clobber
-        shell: bash
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "$TAG" \
+              --notes "Release $TAG (notes added by the PyPI publish workflow)." \
+              || gh release view "$TAG" >/dev/null
+          fi
+          gh release upload "$TAG" ScanpathStudio-*.tar.gz ScanpathStudio-*.zip --clobber

@@ -19,11 +19,13 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from scanpath_studio.constants import APP_THEME_DARK, CURRENT_FIX_OUTLINE
+
 SIZE = 512
-BG = "#0e1117"  # APP_THEME_DARK backgroundColor
-LINE = "#3a4154"  # muted text-line bars
-SACCADE = "#5aa9e6"  # APP_THEME_DARK primaryColor
-FIXATION = "#ff7f0e"  # constants.py fixation accent (Plotly D2 orange)
+BG = APP_THEME_DARK["backgroundColor"]
+LINE = "#3a4154"  # muted text-line bars (icon-only shade)
+SACCADE = APP_THEME_DARK["primaryColor"]
+FIXATION = CURRENT_FIX_OUTLINE
 
 # Fixation centers (x, y, radius) along three "text lines", with a regression
 # from the 5th fixation back up to the 6th.

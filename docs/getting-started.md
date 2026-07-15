@@ -37,7 +37,9 @@ Standalone builds for **Windows / macOS / Linux** are attached to each
 [GitHub release](https://github.com/lacclab/scanpath-studio/releases): download
 the archive for your OS, unpack it, and double-click **ScanpathStudio** — it
 starts a local server and opens the app in your browser. Everything runs on
-your machine; no data leaves it.
+your machine; no data leaves it. The macOS build is **Apple silicon (M-series)
+only**; on an Intel Mac (or any other unsupported platform), use the
+[pip install](#install) instead.
 
 !!! note "Unsigned builds"
     The builds are not code-signed yet, so macOS Gatekeeper / Windows

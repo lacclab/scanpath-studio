@@ -85,11 +85,22 @@ jobs:
           TAG: ${{ github.ref_name }}
         # Tolerate exactly one failure mode of `create`: losing the race to
         # publish.yml (re-check with `view`). Anything else — permissions, a
-        # bad tag — still fails the job loudly.
+        # bad tag — still fails the job loudly. Uploads retry per file:
+        # uploads.github.com intermittently 404s mid-batch (it dropped the
+        # macOS asset on the v0.25.0 release), and --clobber makes retries
+        # idempotent.
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --verify-tag --title "$TAG" \
               --notes "Release $TAG (notes added by the PyPI publish workflow)." \
               || gh release view "$TAG" >/dev/null
           fi
-          gh release upload "$TAG" ScanpathStudio-*.tar.gz ScanpathStudio-*.zip --clobber
+          for f in ScanpathStudio-*.tar.gz ScanpathStudio-*.zip; do
+            ok=""
+            for attempt in 1 2 3; do
+              if gh release upload "$TAG" "$f" --clobber; then ok=1; break; fi
+              echo "upload of $f failed (attempt $attempt/3); retrying in 15s"
+              sleep 15
+            done
+            [ -n "$ok" ] || { echo "::error::upload of $f failed after 3 attempts"; exit 1; }
+          done

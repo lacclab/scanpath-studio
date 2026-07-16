@@ -14,6 +14,13 @@ on:
       - .github/workflows/docs.yml
   workflow_dispatch:
 
+# Two rapid pushes to main run gh-deploy concurrently and the force-pushes to
+# gh-pages collide (seen on the v0.25.0 release: the #97 merge and the release
+# commit raced, first run failed). Queue instead — last run still wins.
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
 permissions:
   contents: write
 

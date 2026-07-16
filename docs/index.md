@@ -76,8 +76,9 @@ replay layered on top. Publication-ready figures included.
     ---
 
     HTML / PNG / SVG / PDF figures (also as separable layers), GIF / MP4
-    replays, tidy CSV/Parquet tables, and shareable deep links. Every figure is
-    scriptable via the [Python API](api.md) and [CLI](cli.md).
+    replays, tidy CSV/Parquet tables, and shareable deep links. The scanpath
+    and replay figures are also scriptable via the [Python API](api.md) and
+    [CLI](cli.md).
 
 </div>
 
@@ -123,8 +124,8 @@ assignment, Export, Data Inspection, and Share subtabs) and **Corpus Analysis**
 word boxes, heatmap, stimulus image — toggle independently; **Animate** replays
 the reading, **Compare** overlays a second trial, and the **Comparisons**
 subtab ranks same-text scanpaths by similarity. Everything obeys the active
-trial filters, and everything the app draws is reproducible headless through
-the same pipeline.
+trial filters, and the single-trial scanpath and replay figures are
+reproducible headless through the same pipeline.
 
 !!! quote "Citing Scanpath Studio"
     If you use Scanpath Studio in your research, please cite it — the citation

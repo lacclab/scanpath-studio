@@ -40,7 +40,7 @@ scanpath-studio render --sample --animate -o replay.html   # animated replay (HT
 | `--sample` | Use the bundled 3-participant OneStop demo. |
 | `--words PATH [PATH …]` | Words / IA table(s) (`csv`/`tsv`/`parquet`/`feather`). Multiple paths or a quoted glob concatenate multi-file datasets. |
 | `--fixations PATH [PATH …]` | Fixations table(s); same multi-file rules (e.g. one file per participant). |
-| `--potec DIR` | Load the [PoTeC](https://github.com/DiLi-Lab/PoTeC) corpus from `DIR`, downloading (~45 MB) on first use. 75 readers, texts `b0–b5` / `p0–p5`. |
+| `--potec DIR` | Load the [PoTeC](https://github.com/DiLi-Lab/PoTeC) corpus from `DIR`, downloading (~45 MB) on first use. 75 readers with sparse ids within `0–105` (`--list-trials` shows them), texts `b0–b5` / `p0–p5`. |
 
 ### Selection & output
 

@@ -45,15 +45,19 @@ OneStop is exposed as a **Public dataset**. In the app, choose
 
 **Parts** — which *screen* of a trial to load (default **Paragraph**):
 
-| Part | What it is |
-| --- | --- |
-| `Title` | The article title screen. |
-| `Question_Preview` | The question shown before reading (information-seeking regimes). |
-| `Paragraph` | The reading passage (the default). |
-| `Questions` | The question re-shown after reading. |
-| `Answers` | The four answer choices. |
-| `QA` | The combined question-and-answers screen. |
-| `Feedback` | The one-second correctness notification. |
+| Part (app label) | CLI / deep-link id | What it is |
+| --- | --- | --- |
+| Title | `Title` | The article title screen. |
+| Question preview | `Question_Preview` | The question shown before reading (information-seeking regimes). |
+| Paragraph | `Paragraph` | The reading passage (the default). |
+| Question | `Questions` | The question re-shown after reading. |
+| Answers | `Answers` | The four answer choices. |
+| Question + answers (QA) | `QA` | The combined question-and-answers screen. |
+| Feedback | `Feedback` | The one-second correctness notification. |
+
+The first column is what the app's **Parts** picker shows; the second is the
+literal id for `--onestop-part` on the [CLI](cli.md) and the
+`?onestop_parts=` deep-link parameter.
 
 Every part ships an **interest-area report** (one row per word, with bounding
 boxes and reading measures) and a **fixation report**, all in the same schema —

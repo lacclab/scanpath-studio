@@ -99,7 +99,8 @@ def _render_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading "
         "the needed files (~45 MB) on first use. Participants are the corpus's "
-        "75 reader ids, trials are text ids (b0–b5, p0–p5).",
+        "75 reader ids (sparse within 0–105; --list-trials shows them), trials "
+        "are text ids (b0–b5, p0–p5).",
     )
     src.add_argument(
         "--onestop",

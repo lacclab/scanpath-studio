@@ -8,8 +8,9 @@ leaves it**, which makes the desktop build the right choice for private
 eye-tracking corpora.
 
 Builds are attached to every
-[GitHub release](https://github.com/lacclab/scanpath-studio/releases)
-(≈190 MB download, ≈500 MB unpacked).
+[GitHub release](https://github.com/lacclab/scanpath-studio/releases) from
+**v0.25.0** on (≈190 MB download, ≈500 MB unpacked; earlier releases predate
+the desktop build).
 
 !!! warning "Unsigned builds"
     The builds are not code-signed yet, so your OS will warn on first launch —
@@ -51,10 +52,9 @@ Builds are attached to every
 
 ## Good to know
 
-- **Static image / video export needs Chrome.** PNG / SVG / PDF figures and
-  GIF / MP4 replays go through Kaleido, which needs a Chrome or Chromium on the
-  machine — same as the pip install. Interactive **HTML** export always works.
-  See [Export & troubleshooting](export-troubleshooting.md).
+- **Static image / video export needs a Chrome/Chromium on the machine** —
+  same as the pip install; interactive HTML export always works. Details in
+  [Export & troubleshooting](export-troubleshooting.md).
 - **Advanced:** two environment variables tweak the launch —
   `SCANPATH_DESKTOP_PORT` pins the server port (default: a free one), and
   `SCANPATH_DESKTOP_NO_BROWSER=1` skips opening the browser.

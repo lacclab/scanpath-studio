@@ -639,7 +639,34 @@ in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6*
 
 **BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
-_Next item: `BUG-7`._
+**BUG-7 · EyeLink `'.'`-sentinel flag columns normalize to all-True** — `Status: Backlog`
+
+`IA_REGRESSION_IN` / `IA_REGRESSION_OUT` in the bundled demo (and any LaCC-style
+export) hold **strings** `'0'` / `'1'` / `'.'`; normalization casts them by
+truthiness, so the canonical `regression_in_flag` / `regression_out_flag` come
+out `True` for **every** row (`'0'` and `'.'` are non-empty strings). Repro:
+`sps.load_sample_data()` → `compute_word_metrics(...)` →
+`regression_in_flag.value_counts()` = `{True: 3922}`. Fix in the
+[`data.py`](scanpath_studio/data.py) normalize path: `pd.to_numeric(errors="coerce")`
+(or explicit `'.'`→NaN) before the bool cast, for every flag-like measure
+column; add a regression test with a mixed `'0'/'1'/'.'` column. Found while
+producing the paper's measure-validation numbers (2026-07-03).
+
+**BUG-8 · Bundled-demo fixation `word_id` is 1-based vs. words `IA_ID` 0-based** — `Status: Backlog`
+
+The demo fixation report's word column runs `1..N` while `ia.csv`'s `IA_ID`
+runs `0..N-1`, so each fixation's pre-assigned `word_id` points at the **next**
+word. `measures.assign_fixations_to_words` keeps existing ids
+(`overwrite=False`), so computed-from-raw measures on this data shape attach to
+the wrong words — masked in normal use because the pre-computed IA measures
+take precedence. Verify: first fixation of `l37_1129` /
+`l37_1129_2_2_1_Adv_r0` sits at (374, 196) on the first word but carries
+`word_id=1.0`; that word's `word_id=0`. Decide: regenerate the sample with
+consistent ids ([`update_sample_data.py`](scanpath_studio/update_sample_data.py)),
+and/or detect a 1-based offset during normalization. Related: **BUG-7** (same
+discovery pass).
+
+_Next item: `BUG-9`._
 
 ---
 

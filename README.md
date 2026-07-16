@@ -62,7 +62,7 @@ The app is organized into three tabs:
 | **Corpus Analysis** | Three subtabs — **Per text**, **Per reader**, and **Groups** (profile one cohort, or compare two) — the question-oriented analysis views: metric distributions and word profiles, per-text heatmaps pooled over readers, reader summaries, and group differences with effect sizes. |
 | **Data Inspection** | Paginated word / fixation / raw-gaze tables (CSV + Parquet download), summary statistics, and the active column mapping. |
 
-![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/app_screenshot.png)
+![The Scanpath Studio app](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/docs/assets/app_screenshot.png)
 
 ## Project map
 

@@ -7,6 +7,7 @@ committed icon files:
     desktop/icons/icon.png    512x512 master (also the Linux icon)
     desktop/icons/icon.ico    Windows (multi-resolution)
     desktop/icons/icon.icns   macOS
+    docs/assets/icon.png      docs-site logo/favicon (same master)
 
 Run once (or after tweaking the design) from the repo root:
     python desktop/make_icons.py
@@ -82,13 +83,20 @@ def main() -> None:
     master = draw_icon()
     master.save(out_dir / "icon.png")
 
+    # The docs site uses the same master as logo/favicon — regenerate it here
+    # so a redesign can't leave the published site on the old icon.
+    docs_icon = Path(__file__).resolve().parent.parent / "docs" / "assets" / "icon.png"
+    master.save(docs_icon)
+
     ico_sizes = [(n, n) for n in (16, 24, 32, 48, 64, 128, 256)]
     master.save(out_dir / "icon.ico", sizes=ico_sizes)
 
     # Pillow writes .icns cross-platform; macOS reads the embedded sizes.
     master.save(out_dir / "icon.icns")
 
-    print(f"Wrote icon.png / icon.ico / icon.icns to {out_dir}")
+    print(
+        f"Wrote icon.png / icon.ico / icon.icns to {out_dir} (+ docs/assets/icon.png)"
+    )
 
 
 if __name__ == "__main__":

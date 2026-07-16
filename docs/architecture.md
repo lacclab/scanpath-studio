@@ -8,8 +8,10 @@ the repo root (kept current as the code changes); this is the short version.
 
 | Module | Responsibility |
 |--------|----------------|
-| `app.py` | Streamlit entry point: page config, URL deep-link presets, sidebar, data load, filtering, and dispatch to the three tabs. |
-| `tabs.py` | Tab renderers: Scanpath Visualization (Annotations / Stimulus & questions / Comparisons / Line assignment / Export subtabs — Export folds in the former Bulk Export tab), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections), Data Inspection. |
+| `app.py` | Streamlit entry point: page config, sidebar, data load, filtering, and dispatch to the two top-level views (Scanpath Visualization ⇄ Corpus Analysis, toggled from the header). |
+| `url_state.py` | Deep links + plot-config save/restore (versioned schema + migrations) + the Share link, split out of `app.py`. |
+| `wizard.py` | The Upload / Add-dataset guided setup flow. |
+| `tabs.py` | View renderers: Scanpath Visualization (Annotations / Stimulus & questions / Comparisons / Line assignment / Export / Data Inspection / Share subtabs), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections). |
 | `controls.py` | Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel. |
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
 | `measures.py` | Canonical reading measures (FFD/FPRT/RPD/TFD, regressions) + geometry helpers. |
@@ -21,6 +23,14 @@ the repo root (kept current as the code changes); this is the short version.
 | `cli.py` | Console entry point (`run` / `render`). |
 | `tour.py` | First-visit welcome tour + the dataset-setup guide card. |
 | `annotations.py` | Per-trial favorites / tags / notes (session state + JSON). |
+| `alignment.py` | Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. |
+| `datasets.py` | Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE). |
+
+The standalone desktop build (launcher, PyInstaller spec, smoke test, CI
+matrix) lives outside the package in
+[`desktop/`](https://github.com/lacclab/scanpath-studio/tree/main/desktop) —
+see the [Desktop app](desktop.md) page and the
+[ENG-15 ADR](https://github.com/lacclab/scanpath-studio/blob/main/plans/eng-15-desktop-app.md).
 
 ## Pipeline
 

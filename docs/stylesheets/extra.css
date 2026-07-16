@@ -1,0 +1,84 @@
+/* Brand palette — mirrors APP_THEME / APP_THEME_DARK in
+   scanpath_studio/constants.py (#1f77b4 light, #5aa9e6 dark). */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #1f77b4;
+  --md-primary-fg-color--light: #5aa9e6;
+  --md-primary-fg-color--dark: #15537e;
+  --md-accent-fg-color: #15537e;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1f77b4;
+  --md-primary-fg-color--light: #5aa9e6;
+  --md-primary-fg-color--dark: #15537e;
+  --md-accent-fg-color: #5aa9e6;
+  --md-typeset-a-color: #5aa9e6;
+}
+
+/* ---------- Landing page ---------- */
+
+.sps-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 1rem 0 2rem;
+  flex-wrap: wrap;
+}
+
+.sps-hero img.sps-hero-logo {
+  width: 108px;
+  height: 108px;
+  border-radius: 22%;
+  box-shadow: 0 6px 24px rgba(31, 119, 180, 0.35);
+}
+
+.sps-hero .sps-hero-text {
+  flex: 1;
+  min-width: 16rem;
+}
+
+.sps-hero h1 {
+  margin: 0 0 0.4rem;
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sps-hero p.sps-tagline {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 34rem;
+}
+
+.sps-buttons {
+  margin: 1.2rem 0 0;
+}
+
+.sps-buttons .md-button {
+  margin: 0 0.5rem 0.5rem 0;
+}
+
+/* Screenshot / animation frames */
+.sps-shot {
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Feature grid cards: hover lift on top of Material's .grid.cards */
+.md-typeset .grid.cards > ul > li {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border-radius: 0.5rem;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(31, 119, 180, 0.18);
+  border-color: var(--md-primary-fg-color--light);
+}
+
+/* Card title icons pick up the brand color */
+.md-typeset .grid.cards > ul > li > p:first-child .twemoji {
+  color: var(--md-primary-fg-color);
+}

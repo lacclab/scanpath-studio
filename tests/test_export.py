@@ -416,3 +416,115 @@ class TestSeparableLayers:
         assert not any("/layers/" in n for n in names)
         assert any("layer export failed" in e for e in progress.errors)
         assert not any("figure export failed" in e for e in progress.errors)
+
+
+class TestLocalPathsAreNotExported:
+    """DATA-16 / security audit S4.
+
+    `image_path` is a passthrough meta field on both schemas, so it survives
+    normalization and rides into the exported fixation tables — and a fixations
+    CSV is exactly the file that gets attached to a paper, posted to OSF, or
+    mailed to a collaborator. `/Users/<name>/` discloses the OS account name and
+    the rest discloses the directory layout, including where a MultiplEYE corpus
+    lives on the machine.
+    """
+
+    LEAKY = "/Users/someone/Projects/corpora/images/2_1_1_Ele__paragraph.png"
+
+    def _export(self, combos, words, fixations, settings, fmt="csv"):
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_plot_config=False,
+            include_fixations=True,
+            include_measures=True,
+            include_mega_table=True,
+            table_format=fmt,
+        )
+        zip_bytes, _ = bulk_export(
+            combos,
+            words,
+            fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=12,
+            font_family="sans-serif",
+            x_field="x",
+            y_field="y",
+            settings=settings,
+            options=opts,
+        )
+        return zipfile.ZipFile(io.BytesIO(zip_bytes))
+
+    def test_no_exported_table_carries_the_directory(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        """Checked the way the audit found it: grep every zip member."""
+        fixations = minimal_fixations.assign(image_path=self.LEAKY)
+        words = minimal_words.assign(image_path=self.LEAKY)
+        archive = self._export(minimal_combos, words, fixations, base_settings)
+        leaked = [
+            name
+            for name in archive.namelist()
+            if b"/Users/someone" in archive.read(name)
+        ]
+        assert leaked == [], leaked
+
+    def test_the_basename_is_kept_so_the_column_stays_useful(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        """Stripping the column entirely would break matching a row to its
+        stimulus; the filename is what that matching uses."""
+        fixations = minimal_fixations.assign(image_path=self.LEAKY)
+        archive = self._export(minimal_combos, minimal_words, fixations, base_settings)
+        name = next(n for n in archive.namelist() if n.endswith("fixations.csv"))
+        body = archive.read(name).decode()
+        assert "2_1_1_Ele__paragraph.png" in body
+
+    def test_parquet_is_sanitized_too(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        """The fix belongs at the single write chokepoint, not per format."""
+        fixations = minimal_fixations.assign(image_path=self.LEAKY)
+        archive = self._export(
+            minimal_combos, minimal_words, fixations, base_settings, fmt="parquet"
+        )
+        for name in archive.namelist():
+            assert b"/Users/someone" not in archive.read(name), name
+
+
+class TestStripLocalPaths:
+    def test_a_frame_without_the_column_is_returned_unchanged(self):
+        from scanpath_studio.export import strip_local_paths
+
+        df = pd.DataFrame({"x": [1, 2]})
+        assert strip_local_paths(df) is df
+
+    def test_the_callers_frame_is_not_mutated(self):
+        from scanpath_studio.export import strip_local_paths
+
+        df = pd.DataFrame({"image_path": ["/a/b/c.png"]})
+        out = strip_local_paths(df)
+        assert out["image_path"].iloc[0] == "c.png"
+        assert df["image_path"].iloc[0] == "/a/b/c.png"
+
+    def test_missing_values_stay_missing(self):
+        from scanpath_studio.export import strip_local_paths
+
+        df = pd.DataFrame({"image_path": ["/a/b/c.png", None]})
+        out = strip_local_paths(df)
+        assert out["image_path"].iloc[0] == "c.png"
+        assert pd.isna(out["image_path"].iloc[1])
+
+    def test_a_windows_path_is_reduced_too(self):
+        """An export produced on Windows leaks `C:\\Users\\<name>\\…` the same way."""
+        from scanpath_studio.export import strip_local_paths
+
+        df = pd.DataFrame({"image_path": [r"C:\Users\someone\corpora\stim.png"]})
+        assert strip_local_paths(df)["image_path"].iloc[0] == "stim.png"
+
+    def test_a_bare_filename_survives(self):
+        from scanpath_studio.export import strip_local_paths
+
+        df = pd.DataFrame({"image_path": ["stim.png"]})
+        assert strip_local_paths(df)["image_path"].iloc[0] == "stim.png"

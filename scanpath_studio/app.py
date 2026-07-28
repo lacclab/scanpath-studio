@@ -594,20 +594,66 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+# DATA-16 (security audit S2). The corpus **Data directory** box takes a
+# free-text path from the browser, stats it, reports the result back into the
+# page, and — via ⬇ Download — writes into it. On a local run that's just a file
+# picker. On anything another person can reach it's a path-existence oracle plus
+# an arbitrary-directory write, and the app has no authentication on any
+# deployment.
+#
+# Default is LOCAL, because that's how this is overwhelmingly run and flipping it
+# would break every existing install on upgrade. A shared deployment sets
+# `SCANPATH_LOCAL_FS=0`, which hides the path box, the folder picker and the
+# download button; `SCANPATH_DATA_ROOT` then supplies the corpus location
+# server-side. Setting `SCANPATH_DATA_ROOT` alone is also useful locally: it
+# confines every entered path to that subtree.
+LOCAL_FS_ENV = "SCANPATH_LOCAL_FS"
+DATA_ROOT_ENV = "SCANPATH_DATA_ROOT"
+
+
+def local_filesystem_enabled() -> bool:
+    """Whether the user may point the app at an arbitrary local directory.
+
+    True unless ``SCANPATH_LOCAL_FS`` is ``0`` / ``false`` / ``no``. Read at call
+    time so tests can toggle it."""
+    raw = os.environ.get(LOCAL_FS_ENV, "").strip().lower()
+    return raw not in ("0", "false", "no")
+
+
+def data_root() -> Optional[Path]:
+    """The configured allow-root for corpus paths, or ``None`` if unset."""
+    raw = os.environ.get(DATA_ROOT_ENV, "").strip()
+    return Path(raw).expanduser().resolve() if raw else None
+
+
 def _resolve_data_dir(root: str) -> str:
     """Resolve a possibly-relative data dir against the project root.
 
     Absolute paths (and ``~``) are used verbatim; a relative path is joined to
     the project root so it resolves no matter where the server was launched from
     (fixes the "No data found" false-negative when cwd != repo root). A blank
-    stays blank (the loader then shows its missing-data note)."""
+    stays blank (the loader then shows its missing-data note).
+
+    When ``SCANPATH_DATA_ROOT`` is set, the result is confined to that subtree
+    (S2): a path resolving outside it — including via ``..`` or a symlink, since
+    the comparison is on the *resolved* path — collapses to the root itself
+    rather than being passed through to a stat or a download."""
     text = (root or "").strip()
     if not text:
         return text
     expanded = Path(text).expanduser()
-    if expanded.is_absolute():
-        return str(expanded)
-    return str((_project_root() / expanded).resolve())
+    # Unchanged when no allow-root is configured: absolute paths pass through
+    # verbatim (resolving them would rewrite a symlinked data dir in the "Found
+    # in `…`" line), relative ones anchor to the project root.
+    literal = expanded if expanded.is_absolute() else (_project_root() / expanded)
+    allow_root = data_root()
+    if allow_root is None:
+        return str(literal if expanded.is_absolute() else literal.resolve())
+    # The containment test is on the *resolved* path, so `..` and symlinks are
+    # caught rather than string-matched.
+    if not literal.resolve().is_relative_to(allow_root):
+        return str(allow_root)
+    return str(literal)
 
 
 def _pick_directory_dialog() -> Optional[str]:
@@ -616,7 +662,14 @@ def _pick_directory_dialog() -> Optional[str]:
     Only works when the app runs on a machine with a display + tkinter (a
     locally-run app). Returns None — and never raises — on a headless host
     (Streamlit Cloud), a missing tkinter, or a cancelled dialog, so the text
-    input stays the portable fallback."""
+    input stays the portable fallback.
+
+    S2: refuses outright on a shared deployment. Degrading to None on a headless
+    host was never the guarantee — on a host that *does* have a display, a remote
+    visitor clicking 📁 pops a modal dialog on the server's own desktop and blocks
+    the thread until someone there dismisses it."""
+    if not local_filesystem_enabled():
+        return None
     try:
         import tkinter as tk
         from tkinter import filedialog
@@ -644,6 +697,16 @@ def _dataset_dir_input(
     and writes the pick back into the text input; it's silently skipped on a
     headless host, where the text box is the only control."""
     dir_key = f"{key_prefix}_dir"
+    # S2: on a shared deployment the path box is a path-existence oracle, so it
+    # isn't rendered at all — the location comes from the server's environment.
+    if not local_filesystem_enabled():
+        configured = str(data_root()) if data_root() else _resolve_data_dir(default_dir)
+        cfg.caption(
+            f"Reading from the server's configured data location: `{configured}`"
+        )
+        with cfg.expander("Expected files", expanded=False):
+            st.markdown(structure_md)
+        return configured
     # A prior Browse pick is applied before the widget instantiates (assigning a
     # widget-backed key inline after render is unreliable — see the source picker).
     picked = st.session_state.pop(f"{dir_key}_picked", None)
@@ -784,6 +847,22 @@ def _dataset_access_status(
         )
         return False
     cfg.info(f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}.")
+    # S2: fetching writes tens-to-hundreds of MB into a browser-supplied path. On
+    # a shared deployment that's a remote visitor filling the server's disk, so
+    # the corpus has to be placed by whoever runs it.
+    if not local_filesystem_enabled():
+        cfg.caption(
+            "Downloading is disabled on this deployment — ask whoever runs it to "
+            "place the corpus in the configured data location."
+        )
+        _note_dataset_unavailable(
+            label=label,
+            reason="it isn't present in the server's data location.",
+            action="This deployment can't fetch corpora itself — ask whoever runs "
+            "it to place the files listed under **Expected files**",
+            root=root,
+        )
+        return False
     _note_dataset_unavailable(
         label=label,
         reason="it hasn't been downloaded yet.",

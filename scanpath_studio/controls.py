@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_sortables import sort_items
 
+from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .annotations import known_tags
 from .constants import (
     BACKGROUND_PRESETS,
@@ -35,7 +36,6 @@ from .constants import (
     compare_palette_color,
     palette_settings,
 )
-from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .data import frame_fingerprint
 
 NONE_OPTION = "(none)"

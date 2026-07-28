@@ -84,7 +84,8 @@ seconds.
     told. The desktop launcher suppresses Streamlit's own output and prints a
     loopback URL instead, which is why it is ranked separately and higher.
 
-**Status:** open. [privacy.md](privacy.md) states the same thing in user-facing
+**Status:** **fixed** 2026-07-28 — `desktop/launcher.py` now passes
+`--server.address=127.0.0.1`. [privacy.md](privacy.md) states the same thing in user-facing
 terms ("it does not restrict the bind address, so the same LAN exposure
 applies") and tells readers how to set `server.address` themselves in the
 meantime. When this fix lands, that page needs updating too.
@@ -146,7 +147,14 @@ its own docstring says "Enabled by default".)
   resolves outside it, rather than passing the string through
   `_resolve_data_dir` untouched.
 
-**Status:** open.
+**Status:** **fixed** 2026-07-28 — `app.local_filesystem_enabled()`
+(`SCANPATH_LOCAL_FS`, default *local*, so an existing install is unaffected on
+upgrade) gates the path box, the 📁 picker and the ⬇ Download button; a shared
+deployment sets it to `0` and supplies the corpus location through
+`SCANPATH_DATA_ROOT`. That variable also acts as an allow-root wherever it is
+set: `app._resolve_data_dir` compares the *resolved* path against it, so `..`
+and symlinks collapse to the root rather than being stat'd or written into.
+Covered by `tests/test_deployment_gate.py`.
 
 !!! danger "Related: the folder picker opens a dialog on the *server's* screen"
     `app.py:_pick_directory_dialog` opens a `tkinter.filedialog.askdirectory()`.
@@ -288,7 +296,12 @@ written to CSV/Parquet (and in the mega-table), and do the same in
 basename keeps the column useful for matching a stimulus without disclosing the
 tree.
 
-**Status:** open.
+**Status:** **fixed** 2026-07-28 — `export.strip_local_paths` reduces
+`image_path` to its basename at `export._write_table`, the single chokepoint
+every exported table (per-trial, aggregate, mega-table; CSV and Parquet) passes
+through. The basename is kept so the column still matches a row to its stimulus.
+Covered by `tests/test_export.py::TestLocalPathsAreNotExported`, which greps
+every zip member the way this audit did.
 
 ---
 
@@ -573,17 +586,14 @@ wires them up would ship the leak with them.
 
 ## What is fixed, and what is accepted
 
-**Fixed: nothing yet, deliberately.** This audit produced no code change — the
-page is the whole artifact, so that the fixes land as reviewable commits with
-their own tests rather than riding in on a docs PR. `Status:` on each finding is
-the authoritative record, and the file + function named in each one is precise
-enough to apply the fix without re-deriving it.
+**Fixed so far: S1, S2, S4** (2026-07-28), each with its own tests — see the
+`Status:` line on each finding, which is the authoritative record. The audit
+itself produced no code change; the fixes landed afterwards as reviewable
+commits, tracked as **DATA-16** in `IMPROVEMENTS.md`.
 
-Two are one-line changes worth doing first, because they are the only findings a
-stranger on the network can reach at all: `--server.address=127.0.0.1` in
-`desktop/launcher.py:main` (S1), and gating the dataset-directory input on a
-local-deployment flag in `app.py` (S2). Everything else needs someone who can
-already open the app.
+S1 and S2 went first because they are the only findings a stranger on the network
+can reach at all. **Still open: S3, S5, S6, S7, S10, S11** — all of which need
+someone who can already open the app.
 
 **Accepted, with the reason:**
 

@@ -34,6 +34,7 @@ import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import PurePosixPath
 from typing import List, Optional
 
 import pandas as pd
@@ -53,7 +54,6 @@ from .constants import (
 from .data import compute_word_metrics
 from .plots import make_scanpath_figure, split_scanpath_layers
 from .utils import extract_trial
-
 
 # --- EXP-1 · customizable export paths ---------------------------------------
 # A zip of 200 trials landed with names the tool chose, which is rarely how a
@@ -383,7 +383,43 @@ def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
         )
 
 
+# DATA-16 (security audit S4). Columns that hold a filesystem path from the
+# machine the app ran on. `image_path` is a `passthrough` meta field on both
+# schemas, so it survives normalization and rides into the exported fixation
+# tables — and a fixations CSV is exactly the file that gets attached to a paper,
+# posted to OSF, or mailed to a collaborator. `/Users/<name>/` discloses the OS
+# account; the rest discloses the directory layout, including where a MultiplEYE
+# corpus lives. The basename still identifies the stimulus, which is all the
+# column is used for downstream.
+#
+# `source_file` is deliberately NOT here: `data.read_tables` stores `Path(...).stem`,
+# so it never held a directory in the first place.
+_PATH_COLUMNS = ("image_path",)
+
+
+def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
+    """Reduce path-bearing columns to their basename (S4).
+
+    Returns ``df`` unchanged (the same object) when it carries none of them, so
+    the common case costs one membership test and no copy.
+    """
+    present = [c for c in _PATH_COLUMNS if c in df.columns]
+    if not present:
+        return df
+    out = df.copy()
+    for column in present:
+        values = out[column]
+        out[column] = values.where(
+            values.isna(),
+            values.astype(str).map(
+                lambda text: PurePosixPath(text.replace("\\", "/")).name
+            ),
+        )
+    return out
+
+
 def _write_table(zf: zipfile.ZipFile, path: str, df: pd.DataFrame, fmt: str) -> int:
+    df = strip_local_paths(df)
     if fmt == "parquet":
         buf = io.BytesIO()
         df.to_parquet(buf, index=False)

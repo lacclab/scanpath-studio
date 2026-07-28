@@ -23,7 +23,6 @@ import pytest
 from scanpath_studio import alignment
 from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 
-
 # A clean 3-line layout, lines wide enough that compare's return-sweep detector
 # (512 px default) fires on the line breaks. 4 words per line.
 _LINE_Y = np.array([100.0, 200.0, 300.0])

@@ -428,8 +428,9 @@ def test_render_animate_forwards_stimulus_image(tmp_path):
 def test_render_separable_layers(tmp_path, monkeypatch):
     # VIZ-5: --separable-layers writes a <output>_layers/ folder. Stub the writers
     # to avoid Kaleido/Chrome; assert the CLI targets the right dir + format.
-    import scanpath_studio.api as api
     from pathlib import Path
+
+    import scanpath_studio.api as api
 
     captured = {}
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: Path(path))
@@ -449,8 +450,9 @@ def test_render_separable_layers(tmp_path, monkeypatch):
 
 def test_render_separable_layers_skips_html(tmp_path, monkeypatch, capsys):
     # A non-image output (or --animate) can't be split into vector layers.
-    import scanpath_studio.api as api
     from pathlib import Path
+
+    import scanpath_studio.api as api
 
     called = []
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: Path(path))

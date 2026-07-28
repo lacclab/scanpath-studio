@@ -477,10 +477,10 @@ re-deriving it. Ranked by what an attacker or an accident can actually achieve:
 
 | # | Sev | Finding | Fix lands in |
 | --- | --- | --- | --- |
-| S1 | High | The desktop bundle binds every interface, not just localhost | `desktop/launcher.py:main` |
-| S2 | High\* | The dataset-directory box is a server-side path oracle **and** an arbitrary-directory write | `app.py` (`_dataset_dir_input`) |
+| ~~S1~~ | High | ~~The desktop bundle binds every interface~~ — **fixed**: `--server.address=127.0.0.1` | `desktop/launcher.py:main` |
+| ~~S2~~ | High\* | ~~Path oracle + arbitrary-directory write~~ — **fixed**: `local_filesystem_enabled()` gates the box / picker / download, `SCANPATH_DATA_ROOT` is an allow-root | `app.py` |
 | S3 | Med | A share link names a participant, in the URL | `url_state._render_share_body` |
-| S4 | Med | Exported tables carry an absolute local path → leaks the OS username | `export.bulk_export` |
+| ~~S4~~ | Med | ~~Exported tables carry an absolute local path~~ — **fixed**: `strip_local_paths` at the `_write_table` chokepoint | `export.py` |
 | S5 | Med | `frame_fingerprint` ignores the middle of a frame, so edited data can serve a stale cached result | `data.frame_fingerprint` |
 | S6 | Low–Med | A zip upload is decompressed with no size cap | `data._read_zipped_table` |
 | S7 | Low | Stimulus text is interpolated into raw HTML unescaped | `tabs` (stimulus panel) |
@@ -490,10 +490,15 @@ re-deriving it. Ranked by what an attacker or an accident can actually achieve:
 \* hosted deployments only — the app has **no authentication on any deployment**,
 so every access-control decision is made by whatever binds the port.
 
-**S1 and S2 first**: they are the only two a stranger on the network can reach at
-all, and S1 is a one-line change. S8 (MP4 temp file) and S9 (`..` in a
-*user-typed* export pattern) are accepted with reasons recorded on the page —
-don't reopen them without reading those. Related: **DATA-12**, **ENG-15**
+**Done 2026-07-28: S1, S2, S4**, each with its own tests
+([`tests/test_deployment_gate.py`](tests/test_deployment_gate.py),
+[`tests/test_export.py`](tests/test_export.py)). S1 and S2 went first because
+they are the only two a stranger on the network can reach at all.
+
+**Next: S5** (the cache-staleness one — a correctness bug that bites anyone who
+edits a file and reloads), then S3, S6, S7, S10, S11. S8 (MP4 temp file) and S9
+(`..` in a *user-typed* export pattern) are accepted with reasons recorded on the
+page — don't reopen them without reading those. Related: **DATA-12**, **ENG-15**
 (desktop), **ENG-17** (a hosted mode would make S2 load-bearing).
 
 _DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) are in

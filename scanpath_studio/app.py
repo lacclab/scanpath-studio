@@ -214,7 +214,12 @@ def _render_about_panel() -> None:
     keeping the header lean.
     """
     header = st.container(key="about_header")
-    title_col, buttons_col = header.columns([5, 2], vertical_alignment="center")
+    # Same ratio + gap as the Scanpath view's plot/control-rail split
+    # (`tabs.render_single_trial_tab`: `st.columns([4, 1], gap="large")`), so the
+    # full-width nav button lines up exactly with the rail card below it.
+    title_col, buttons_col = header.columns(
+        [4, 1], gap="large", vertical_alignment="center"
+    )
     with title_col:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")

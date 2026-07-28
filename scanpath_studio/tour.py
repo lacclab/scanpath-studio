@@ -276,8 +276,10 @@ _CARD_CSS = """
     opacity: 0.55;
 }
 .st-key-tour_sp_close button:hover { opacity: 1; }
-/* Breathing room between the progress bar and the Back / Next footer. */
-.st-key-tour_card [data-testid="stProgress"] { margin-bottom: 0.5rem; }
+/* Breathing room between the progress bar and the Back / Next footer (set on
+   both sides — the column row is what actually carries the gap). */
+.st-key-tour_card [data-testid="stProgress"] { margin-bottom: 0.75rem; }
+.st-key-tour_card [data-testid="stHorizontalBlock"] { margin-top: 0.75rem; }
 """
 
 # Welcome step only: center the card like a modal and dim the app behind it

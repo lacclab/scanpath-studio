@@ -81,7 +81,10 @@ def _numeric_slider(
     def _apply() -> None:
         st.session_state[key] = st.session_state[num_key]
 
-    slider_col, num_col = host.columns([3, 2], vertical_alignment="bottom")
+    # A narrow box on the same line as the slider: the box is for typing an
+    # exact value, so it only needs room for the number itself (the CSS drops its
+    # +/- steppers and caps its width), and the slider keeps most of the row.
+    slider_col, num_col = host.columns([5, 1.5], vertical_alignment="bottom")
     slider_col.slider(
         label,
         min_value=min_value,
@@ -115,11 +118,11 @@ def _range_slider(
     number_format: Optional[str] = None,
     help: Optional[str] = None,
 ) -> None:
-    """A two-handle range slider plus min/max number boxes for the same setting.
+    """A two-handle range slider plus min/max number boxes, all on one line.
 
-    The boxes sit on their own row under the slider (left = min, right = max):
-    three widgets on one line leaves each box too narrow to use in the rail's
-    popovers. A min typed above the max is swapped rather than rejected.
+    The boxes are deliberately small — they hold a number, not a sentence — so
+    the slider still gets most of the row. A min typed above the max is swapped
+    rather than rejected.
     """
     lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
     current = st.session_state.get(key)
@@ -130,7 +133,10 @@ def _range_slider(
         lo, hi = st.session_state[lo_key], st.session_state[hi_key]
         st.session_state[key] = (min(lo, hi), max(lo, hi))
 
-    host.slider(
+    slider_col, lo_col, hi_col = host.columns(
+        [5, 1.5, 1.5], vertical_alignment="bottom"
+    )
+    slider_col.slider(
         label,
         min_value=min_value,
         max_value=max_value,
@@ -140,7 +146,6 @@ def _range_slider(
         help=help,
     )
     fmt = number_format if number_format is not None else slider_format
-    lo_col, hi_col = host.columns(2)
     for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
         col.number_input(
             f"{label} ({side})",

@@ -333,14 +333,22 @@ def get_app_css() -> str:
     }
     /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
        `__num_hi`) exists for typing an *exact* value — the slider beside it
-       already handles stepping. Drop its +/- buttons so the field stays usable
-       at the widths it gets inside the narrow control rail and its popovers. */
+       already handles stepping. It holds a number, not a sentence, so drop the
+       +/- buttons, cap its width and tighten its padding: it sits on the same
+       line as the slider and must not steal the row. */
     div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputStepUp"],
     div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputStepDown"] {
         display: none !important;
     }
     div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputContainer"] {
         min-width: 0;
+        max-width: 5rem;
+    }
+    div[class*="st-key-"][class*="__num"] input {
+        padding-left: 0.4rem !important;
+        padding-right: 0.2rem !important;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
     }
 
     /* Control rail: a subtle card so it reads as a panel, with a hair more

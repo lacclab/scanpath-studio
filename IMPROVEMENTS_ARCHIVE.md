@@ -81,6 +81,30 @@ since `filter_cols` *is* the More field list). Test:
 `test_filter_col_component_dropped_from_cascade`
 ([`tests/test_composite_selection.py`](tests/test_composite_selection.py)).
 
+**UX-16 · About popover: collapse the citation by default** — `Status: Done` *(signed off 2026-07-28)*
+
+The BibTeX block filled the popover and pushed everything under it out of view.
+It now opens from a **Show BibTeX** expander inside a divider-separated
+*📖 Citing Scanpath Studio* section, so version, authors, affiliations and the
+links read first. The About panel was tightened at the same time: Documentation
+and Code merged into one line of bare links, the two lab links that duplicated
+the affiliations line were dropped, and every co-author is linked.
+
+**UX-17 · Link to the documentation site from the app** — `Status: Done` *(signed off 2026-07-28)*
+
+`CITATION["docs_url"]` is the single source; it's linked from the sidebar Help
+group (a `link_button` marked **↗** so it reads as leaving the app) and from the
+About popover. Both say "opens in a new tab".
+
+**UX-18 · Make the Corpus Analysis view more discoverable** — `Status: Done` *(signed off 2026-07-28)*
+
+The only door to the corpus-level half of the app was a plain secondary button,
+routinely missed. Outbound it now renders `primary` with a **→** cue and a
+spelled-out help string; the return trip stays quiet (secondary, **←**) so the
+two don't compete. Still one button, not a second navigation system. (A
+"what's over there" caption was tried and removed at review — the button carries
+it.)
+
 **UX-8 · Collapsed-sidebar hover expand is hard to dismiss** — `Status: Done` *(signed off 2026-07-28)*
 
 The real obstacle wasn't the hover zone: Streamlit's only exit from an open
@@ -290,6 +314,27 @@ made it never fire) then plays from the first frame. Every surface (Share
 `anim_autoplay` / Save & restore / CLI `--animate --no-autoplay` / API
 `animate_scanpath(autoplay=…)`, honoured by `save_figure` for HTML).
 
+**VIZ-17 · Default fixations to one colour (colour vs. size is redundant)** — `Status: Done` *(signed off 2026-07-28)*
+
+Marker size and marker hue both encoded fixation duration, double-encoding one
+variable and spending the colour channel on nothing. `constants.UNIFORM_COLOR_FIELD`
+(`"(uniform)"`) leads the **Color fixations by** list and is the default on every
+surface — the app, `?color_by=`, `--color-by`, and `api.CANONICAL_FIGURE_DEFAULTS`
+— with a `fixation_color` picker/kwarg for the flat colour. Colour-by is now an
+explicit opt-in for a *second* variable (surprisal, frequency, line, pass index),
+and the fixation colorscale picker only appears once one is chosen.
+
+**VIZ-19 · Simpler saccade colouring** — `Status: Done` *(signed off 2026-07-28)*
+
+A third mode, **Forward / regression**, sits between one uniform colour and the
+five-way *By type* split — the distinction most reading figures actually draw.
+It reuses the whole by-type machinery: `constants.SACCADE_DIRECTION_FOLD` collapses
+the five reading classes into two buckets before the segments are built, so the
+colour pickers, the legend toggle, the deep link, `--saccade-color-by-direction`
+and the headless API are unchanged. The control surface shrank with it — only the
+two class colours that mode actually draws are shown. A test asserts the fold
+draws the same number of segment points as the five-way split, so nothing is lost.
+
 ---
 
 ## Bugs
@@ -348,6 +393,7 @@ only auto-loads that relative to the launch dir — so `python -m scanpath_studi
 from elsewhere fell back to red. `cli.launch_app` now injects the theme as
 `--theme.*` flags from `constants.APP_THEME` (parity-tested against the config
 file), so every launch path renders the same theme.
+
 
 ---
 

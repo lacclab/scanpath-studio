@@ -13,6 +13,7 @@ import pytest
 from scanpath_studio import api
 from scanpath_studio.constants import (
     DEFAULT_PALETTE,
+    FIXATION_GLYPH_SYMBOLS,
     FIXATION_SYMBOLS,
     PALETTES,
     SACCADE_COLOR_MODES,
@@ -77,12 +78,53 @@ class TestUniformFixationColor:
 class TestMarkerSymbol:
     """VIZ-15: shape as a second channel that survives greyscale."""
 
-    @pytest.mark.parametrize("symbol", list(FIXATION_SYMBOLS))
+    @pytest.mark.parametrize(
+        "symbol", [s for s in FIXATION_SYMBOLS if s not in FIXATION_GLYPH_SYMBOLS]
+    )
     def test_every_offered_symbol_reaches_the_marker(
         self, normalized_words_df, normalized_fixations_df, symbol
     ):
         fig = _fig(normalized_words_df, normalized_fixations_df, fixation_symbol=symbol)
         assert _fixation_marker(fig).symbol == symbol
+
+    @pytest.mark.parametrize("symbol", list(FIXATION_GLYPH_SYMBOLS))
+    def test_glyph_shapes_render_as_sized_text(
+        self, normalized_words_df, normalized_fixations_df, symbol
+    ):
+        """Plotly's symbol enum has no ♥, so glyph shapes are drawn as text —
+        with a per-point size array, so duration→size still holds."""
+        fig = _fig(normalized_words_df, normalized_fixations_df, fixation_symbol=symbol)
+        trace = next(t for t in fig.data if t.name == "Fixations")
+        assert trace.mode == "text"
+        assert set(trace.text) == {FIXATION_GLYPH_SYMBOLS[symbol]}
+        assert len(trace.textfont.size) == len(trace.x)
+
+    def test_a_glyph_shape_keeps_the_fixation_index_labels(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        """One Scatter has one text field, so the indices get their own trace."""
+        fig = _fig(
+            normalized_words_df,
+            normalized_fixations_df,
+            fixation_symbol="heart",
+            show_order=True,
+        )
+        assert any(t.name == "Fixation index" for t in fig.data)
+
+    def test_the_animation_falls_back_rather_than_raising_on_a_glyph(
+        self, normalized_words_df, normalized_fixations_df
+    ):
+        """The trail restates a Plotly marker per frame, which can't take ♥."""
+        fig = api.animate_scanpath(
+            normalized_words_df,
+            normalized_fixations_df,
+            canvas_size=(1000, 600),
+            fixation_symbol="heart",
+        )
+        symbols = {
+            getattr(t.marker, "symbol", None) for t in fig.data if hasattr(t, "marker")
+        }
+        assert "heart" not in symbols
 
     def test_animation_honours_the_symbol(
         self, normalized_words_df, normalized_fixations_df

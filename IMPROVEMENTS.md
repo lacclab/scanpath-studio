@@ -34,11 +34,9 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
-**UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-10** (sortable trial picker), **UX-16**
-(collapsed citation), **UX-17** (docs link), **UX-18** (Corpus Analysis
-discoverability), **VIZ-15** (marker shape), **VIZ-17** (uniform fixation
-colour), **VIZ-18** (selectable palettes), **VIZ-19** (two-way saccade
-colouring) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
+**UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-10**
+(sortable trial picker), **VIZ-15** (marker shape), **VIZ-18** (selectable
+palettes) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
 corpus views* epic — *you asked to keep this open*); **PRE-3** (vertical drift
 correction — *you'll revisit*); **VIZ-11** (animation slider readout — *you'll
 revisit*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
@@ -67,7 +65,7 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-_UX-1 … UX-6, UX-8, UX-12, UX-13 are in
+_UX-1 … UX-6, UX-8, UX-12, UX-13, UX-16, UX-17, UX-18 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **UX-7 · Clearer "no data" states — say what's missing and how to fix it** — `Status: Pending approval` *(implemented 2026-07-28)*
@@ -154,30 +152,8 @@ docs site. Content still to be decided — collect the recurring questions first
 (column mapping, why measures differ from EyeLink's, what drift correction does,
 where data goes / privacy → **DATA-12**).
 
-**UX-16 · About popover: collapse the citation by default** — `Status: Pending approval` *(implemented 2026-07-28)*
 
-`_render_about_sidebar` ([`app.py`](scanpath_studio/app.py:249)) renders the
-BibTeX block with `st.code(...)` unconditionally, so a tall citation dominates the
-popover and pushes the links below it out of view. Put it behind a collapsed
-expander ("📖 How to cite"), leaving version, authors and the code link visible
-first.
 
-**UX-17 · Link to the documentation site from the app** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-Nothing in the app links to <https://lacclab.github.io/scanpath-studio/> — the
-About popover links the lab site, the GitHub repo and the OneStop paper, but not
-the project's own docs, so a user who needs the full reference has to find it
-elsewhere. Add it to the About popover and to the Help group in the sidebar (and
-consider a contextual "learn more" from the tour, **UX-14**).
-
-**UX-18 · Make the Corpus Analysis view more discoverable** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-The Corpus⇄Scanpath view toggle ([`url_state.py`](scanpath_studio/url_state.py))
-is easy to miss, so the entire Corpus Analysis half of the app goes unnoticed.
-Give it more visual weight — bolder styling, an arrow or other directional cue,
-clearer labelling of what's on the other side — without turning it into a second
-navigation system. Related: **UX-14** (a tutorial should walk a user there at
-least once).
 
 **UX-19 · Layout breaks on smaller laptop screens** — `Status: Planned`
 
@@ -347,14 +323,6 @@ Add the word text (the word-box hover already does this,
 [`plots.py`](scanpath_studio/plots.py:906)) via `customdata`, for the single,
 compare, and animation traces.
 
-**VIZ-17 · Default fixations to one colour (colour vs. size is redundant)** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-By default both marker size and marker hue encode fixation duration —
-double-encoding one variable, which wastes the colour channel and makes the plot
-busier than it needs to be. Make the default a single uniform fixation colour,
-with colour-by an explicit opt-in for a *different* variable (surprisal,
-frequency, line, pass index). Changes a default, so check the deep-link/CLI/API
-defaults (`CANONICAL_FIGURE_DEFAULTS`) move with it and note it in the CHANGELOG.
 
 **VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Pending approval` *(implemented 2026-07-28)*
 
@@ -366,13 +334,6 @@ than only the current one, and prefer a default that survives greyscale
 conversion. Interacts with **VIZ-15** (shape as a redundant channel) and
 **VIZ-17**.
 
-**VIZ-19 · Simpler saccade colouring** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-`saccade_color_mode="By type"` splits saccades into five legended sub-traces
-(forward / skip / refixation / return-sweep / regression), which is more than most
-users want and makes the controls heavy. Offer a simpler middle option — e.g.
-just **forward vs. regression** — between "one uniform colour" and the full
-five-way split, and simplify the control surface accordingly.
 
 **VIZ-20 · Hand-authored scanpaths + an "Illustration" mode** — `Status: Backlog`
 

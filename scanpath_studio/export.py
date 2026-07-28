@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -46,11 +47,26 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
+    UNIFORM_COLOR_FIELD,
     WORD_LABEL_COLOR,
 )
 from .data import compute_word_metrics
 from .plots import make_scanpath_figure, split_scanpath_layers
 from .utils import extract_trial
+
+
+# --- EXP-1 · customizable export paths ---------------------------------------
+# A zip of 200 trials landed with names the tool chose, which is rarely how a
+# user organizes figures for a paper. The path of every artifact is now a
+# *pattern* over the trial's own fields, so a batch can be dropped straight into
+# an existing folder structure. The default reproduces the historical layout
+# exactly, so nothing changes unless the pattern is edited.
+DEFAULT_PATH_PATTERN = "per_trial/{participant_id}__{trial_id}/{artifact}.{ext}"
+# EXP-2 · a figure pulled into a paper or a slide loses its provenance the moment
+# it leaves the app, so it can carry its own. Same substitution as the path
+# patterns; empty means "no title / no caption".
+DEFAULT_TITLE_PATTERN = "{participant_id} · {trial_id}"
+DEFAULT_CAPTION_PATTERN = "{text_id} · {n_fixations} fixations · {settings}"
 
 
 @dataclass
@@ -78,6 +94,14 @@ class ExportOptions:
     separable_layers: bool = False
     table_format: str = "csv"  # "csv" | "parquet" | "both"
     png_scale: int = 2
+    # EXP-1: where each artifact lands inside the zip. `{artifact}` / `{ext}` name
+    # the file (figure / fixations / measures / plot_config / layer names); every
+    # other placeholder comes from the trial. The default is the historical layout.
+    path_pattern: str = DEFAULT_PATH_PATTERN
+    # EXP-2: an optional title + caption rendered into the exported image and
+    # recorded in the per-trial manifest. Empty = off (the historical behaviour).
+    title_pattern: str = ""
+    caption_pattern: str = ""
     # When True, export operates on the whole loaded dataset, ignoring the
     # sidebar "Filter trials" panel; the caller supplies the unfiltered frames.
     export_unfiltered: bool = False
@@ -141,6 +165,222 @@ class ExportProgress:
 
 def _safe_id(text: str) -> str:
     return "".join(c if c.isalnum() or c in "-_." else "_" for c in str(text))
+
+
+# Placeholders every pattern gets on top of the trial's own columns.
+_PATTERN_EXTRA_FIELDS = (
+    "artifact",
+    "ext",
+    "n_fixations",
+    "n_words",
+    "reading_time_s",
+    "settings",
+)
+_PLACEHOLDER_RE = re.compile(r"\{([^{}]*)\}")
+
+
+def _settings_summary(settings: dict) -> str:
+    """A one-line description of the settings that produced the figure (EXP-2)."""
+    layers = [
+        name
+        for name, key in (
+            ("boxes", "show_words"),
+            ("text", "show_word_labels"),
+            ("fixations", "show_fixations"),
+            ("saccades", "show_saccades"),
+            ("heatmap", "show_heatmap"),
+        )
+        if settings.get(key)
+    ]
+    parts = [f"layers: {', '.join(layers) or 'none'}"]
+    color_by = settings.get("color_by")
+    if color_by and color_by != UNIFORM_COLOR_FIELD:
+        parts.append(f"colour by {color_by}")
+    palette = settings.get("palette", DEFAULT_PALETTE)
+    if palette and palette != DEFAULT_PALETTE:
+        parts.append(f"{palette} palette")
+    return " · ".join(parts)
+
+
+def pattern_fields(
+    participant: str,
+    trial: str,
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    settings: dict,
+    combo_row: Optional[dict] = None,
+) -> dict:
+    """Every value a filename / title / caption pattern can substitute.
+
+    The trial's own combo columns (participant, trial, text, conditions …) plus
+    counts and the settings summary. Values are left raw here; path rendering
+    sanitizes them, while titles and captions want them readable.
+    """
+    fields: dict = dict(combo_row or {})
+    fields.update(
+        participant_id=participant,
+        trial_id=trial,
+        n_fixations=len(trial_fixations),
+        n_words=len(trial_words),
+        reading_time_s=round(
+            float(
+                pd.to_numeric(trial_fixations.get("duration_ms"), errors="coerce").sum()
+            )
+            / 1000.0,
+            1,
+        )
+        if "duration_ms" in getattr(trial_fixations, "columns", [])
+        else 0.0,
+        settings=_settings_summary(settings),
+    )
+    fields.setdefault("text_id", trial)
+    return fields
+
+
+def pattern_error(pattern: str, fields: dict) -> Optional[str]:
+    """A human message naming any unknown placeholder, or ``None`` if valid.
+
+    Validated up front (and shown live in the UI) rather than at export time —
+    discovering a typo after a 200-trial render is the worst place to find it.
+    """
+    known = set(fields) | set(_PATTERN_EXTRA_FIELDS)
+    unknown = [name for name in _PLACEHOLDER_RE.findall(pattern) if name not in known]
+    if not unknown:
+        return None
+    return (
+        f"Unknown field{'s' if len(unknown) > 1 else ''}: "
+        f"{', '.join('{' + u + '}' for u in unknown)}. "
+        f"Available: {', '.join('{' + k + '}' for k in sorted(known))}."
+    )
+
+
+def _path_component(text: str) -> str:
+    """One path segment, sanitized. ``.`` / ``..`` collapse so nothing escapes."""
+    safe = _safe_id(text)
+    return "_" if set(safe) <= {"."} else safe
+
+
+def render_pattern(
+    pattern: str,
+    fields: dict,
+    *,
+    as_path: bool = False,
+    multi_segment_fields: tuple = (),
+) -> str:
+    """Substitute ``fields`` into ``pattern``.
+
+    ``as_path`` sanitizes each substituted value, so a *data* value containing
+    ``/`` or ``..`` becomes one flat segment and can't escape the folder the
+    pattern describes; the pattern's own ``/`` stay real separators.
+    ``multi_segment_fields`` names the tool-controlled fields allowed to expand
+    into several segments (``artifact``, which carries ``layers/<name>``) — each
+    of their segments is still sanitized individually. A missing or null value
+    becomes ``na`` rather than failing the whole export.
+    """
+
+    def _sub(match: "re.Match") -> str:
+        name = match.group(1)
+        value = fields.get(name, "")
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            value = "na"
+        text = str(value)
+        if not as_path:
+            return text
+        if name in multi_segment_fields:
+            return "/".join(_path_component(part) for part in text.split("/"))
+        return _path_component(text)
+
+    return _PLACEHOLDER_RE.sub(_sub, pattern)
+
+
+def resolve_export_path(
+    pattern: str, fields: dict, *, artifact: str, ext: str, used: set
+) -> str:
+    """The zip path for one artifact, de-duplicated against ``used``.
+
+    Two trials can render to the same path (a pattern that omits the trial id,
+    say). Writing both would put two entries at one name in the zip and silently
+    lose one, so the second gets a ``-2`` suffix instead. ``used`` is mutated.
+    """
+    path = render_pattern(
+        pattern,
+        {**fields, "artifact": artifact, "ext": ext},
+        as_path=True,
+        multi_segment_fields=("artifact",),
+    ).lstrip("/")
+    if path not in used:
+        used.add(path)
+        return path
+    stem, dot, suffix = path.rpartition(".")
+    base, tail = (stem, f"{dot}{suffix}") if dot else (path, "")
+    n = 2
+    while f"{base}-{n}{tail}" in used:
+        n += 1
+    path = f"{base}-{n}{tail}"
+    used.add(path)
+    return path
+
+
+# --- EXP-2 · titles and captions on the exported figure -----------------------
+# Sized bands rather than Plotly's automatic title spacing: the scanpath figure
+# is equal-aspect (`scaleanchor`), so anything that eats into the plot area
+# shrinks the WHOLE plot — and the true-to-scale word labels, computed for the
+# un-shrunk size, then no longer match their boxes. Same constraint the animation
+# transport controls hit; same fix: grow the figure by exactly what the band
+# takes, so the plot region is untouched.
+_TITLE_BAND_PX = 46
+_CAPTION_LINE_PX = 22
+_CAPTION_PAD_PX = 12
+
+
+def annotate_figure(fig, *, title: str = "", caption: str = "") -> None:
+    """Stamp ``title`` / ``caption`` onto ``fig`` in place, without shrinking it.
+
+    The figure grows by the height of each band and its margin grows to match, so
+    the plotting area — and therefore the true-to-scale text — is byte-identical
+    to the untitled figure.
+    """
+    if not title and not caption:
+        return
+    margin = fig.layout.margin
+    height = fig.layout.height
+    if title:
+        fig.layout.margin.t = (margin.t or 0) + _TITLE_BAND_PX
+        if height:
+            height += _TITLE_BAND_PX
+            fig.layout.height = height
+        fig.update_layout(
+            title=dict(
+                text=title,
+                x=0.5,
+                xanchor="center",
+                y=1.0,
+                yanchor="top",
+                pad=dict(t=14),
+                font=dict(size=20),
+            )
+        )
+    if caption:
+        original_bottom = fig.layout.margin.b or 0
+        band = _CAPTION_LINE_PX * (caption.count("\n") + 1) + _CAPTION_PAD_PX
+        fig.layout.margin.b = original_bottom + band
+        if height:
+            fig.layout.height = height + band
+        # Anchored to the plot's bottom edge and pushed into the space just
+        # added, so it never overlaps whatever already lived in that margin.
+        fig.add_annotation(
+            text=caption.replace("\n", "<br>"),
+            xref="paper",
+            yref="paper",
+            x=0,
+            y=0,
+            xanchor="left",
+            yanchor="top",
+            yshift=-(original_bottom + _CAPTION_PAD_PX // 2),
+            showarrow=False,
+            align="left",
+            font=dict(size=13, color="#555555"),
+        )
 
 
 def _write_table(zf: zipfile.ZipFile, path: str, df: pd.DataFrame, fmt: str) -> int:
@@ -339,6 +579,98 @@ def _render_scope_picker(
     return scope, scope_participant, scope_trial, scope_text, export_unfiltered
 
 
+def _preview_fields(combos: pd.DataFrame) -> dict:
+    """Stand-in field values for the live pattern preview (EXP-1/EXP-2).
+
+    Uses the first trial in scope, so the preview is a path the user will
+    actually get rather than a made-up example.
+    """
+    row = combos.iloc[0].to_dict() if combos is not None and not combos.empty else {}
+    fields = dict(row)
+    fields.setdefault("participant_id", "p01")
+    fields.setdefault("trial_id", "t01")
+    fields.setdefault("text_id", fields["trial_id"])
+    fields.update(
+        n_fixations=123,
+        n_words=45,
+        reading_time_s=18.4,
+        settings="layers: fixations, saccades, text",
+    )
+    return fields
+
+
+def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
+    """The **Naming & labels** block: EXP-1 path pattern + EXP-2 title/caption.
+
+    Every pattern is validated and previewed against the first trial in scope as
+    it's typed — finding a typo after a 200-trial render is the worst possible
+    place to find it. Returns ``(path_pattern, title_pattern, caption_pattern)``;
+    an invalid pattern falls back to its default so a bad keystroke can't produce
+    a broken zip.
+    """
+    st.markdown("### Naming & labels")
+    fields = _preview_fields(combos)
+    available = ", ".join(
+        f"`{{{k}}}`" for k in sorted(set(fields) | set(_PATTERN_EXTRA_FIELDS))
+    )
+
+    def _pattern_input(label: str, default: str, key: str, help_text: str) -> str:
+        value = st.text_input(label, value=default, key=key, help=help_text)
+        error = pattern_error(value, fields)
+        if error:
+            st.error(error)
+            return default
+        return value
+
+    path_pattern = _pattern_input(
+        "File path pattern",
+        DEFAULT_PATH_PATTERN,
+        f"{key_prefix}_path_pattern",
+        "Where each file lands inside the zip. `{artifact}` is the file "
+        "(figure / fixations / measures / plot_config) and `{ext}` its format; "
+        "`/` makes a folder.",
+    )
+    st.caption(
+        "Preview — "
+        + " · ".join(
+            f"`{resolve_export_path(path_pattern, fields, artifact=a, ext=e, used=set())}`"
+            for a, e in (("figure", "png"), ("fixations", "csv"))
+        )
+    )
+    with st.expander("Available fields", expanded=False):
+        st.markdown(available)
+
+    label_figures = st.toggle(
+        "Title & caption on the figure",
+        value=False,
+        key=f"{key_prefix}_labels",
+        help="Render a title and/or caption into the exported image (and record "
+        "them in the plot config), so a figure dropped into a paper or a slide "
+        "carries its own provenance. The plot itself is not scaled down — the "
+        "figure grows to make room.",
+    )
+    if not label_figures:
+        return path_pattern, "", ""
+    title_pattern = _pattern_input(
+        "Title",
+        DEFAULT_TITLE_PATTERN,
+        f"{key_prefix}_title_pattern",
+        "Same fields as the path. Leave empty for no title.",
+    )
+    caption_pattern = _pattern_input(
+        "Caption",
+        DEFAULT_CAPTION_PATTERN,
+        f"{key_prefix}_caption_pattern",
+        "`{settings}` expands to a summary of the settings that produced the "
+        "figure. Leave empty for no caption.",
+    )
+    if title_pattern:
+        st.caption(f"Title preview — **{render_pattern(title_pattern, fields)}**")
+    if caption_pattern:
+        st.caption(f"Caption preview — {render_pattern(caption_pattern, fields)}")
+    return path_pattern, title_pattern, caption_pattern
+
+
 def render_export_options(
     st_module,
     combos: pd.DataFrame,
@@ -465,6 +797,10 @@ def render_export_options(
         else:
             table_format = str(st.session_state.get(f"{key_prefix}_fmt", "csv"))
 
+        path_pattern, title_pattern, caption_pattern = _render_naming_options(
+            st, combos, key_prefix
+        )
+
     return ExportOptions(
         include_png=include_png,
         include_svg=include_svg,
@@ -477,6 +813,9 @@ def render_export_options(
         separable_layers=separable_layers,
         table_format=table_format,
         png_scale=int(png_scale),
+        path_pattern=path_pattern,
+        title_pattern=title_pattern,
+        caption_pattern=caption_pattern,
         export_unfiltered=export_unfiltered,
         scope=scope,
         scope_participant=scope_pid,
@@ -582,12 +921,15 @@ def bulk_export(
     # figure or the per-layer breakdown).
     figure_formats = options.figure_formats()
     layer_formats = options.layer_formats()
+    # EXP-1: a user pattern can map two trials to the same path (one that omits
+    # the trial id, say). Two zip entries at one name silently loses a file, so
+    # `resolve_export_path` disambiguates against what's already been written.
+    used_paths: set = set()
     with _figure_renderer(options.needs_kaleido()) as render_figure:
         for combo in combos.itertuples(index=False):
             participant = getattr(combo, "participant_id")
             trial = getattr(combo, "trial_id")
             slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
-            prefix = f"per_trial/{slug}/"
 
             # Slice via the same str-normalized position index the live view uses
             # (utils.extract_trial), so the export selects *exactly* what the trial
@@ -607,6 +949,37 @@ def bulk_export(
                 if progress_callback:
                     progress_callback(progress)
                 continue
+
+            # EXP-1/EXP-2: everything this trial's paths, title and caption can
+            # substitute — its combo row plus counts and the settings summary.
+            fields = pattern_fields(
+                participant,
+                trial,
+                trial_words,
+                trial_fix,
+                settings,
+                combo_row=combo._asdict(),
+            )
+
+            def _path(artifact: str, ext: str, _f=fields) -> str:
+                return resolve_export_path(
+                    options.path_pattern,
+                    _f,
+                    artifact=artifact,
+                    ext=ext,
+                    used=used_paths,
+                )
+
+            title = (
+                render_pattern(options.title_pattern, fields)
+                if options.title_pattern
+                else ""
+            )
+            caption = (
+                render_pattern(options.caption_pattern, fields)
+                if options.caption_pattern
+                else ""
+            )
 
             if options.needs_figure():
                 fig = None
@@ -690,6 +1063,10 @@ def bulk_export(
                         line_spacing=settings.get("line_spacing", DEFAULT_LINE_SPACING),
                         scale_text_to_boxes=settings.get("scale_text_to_boxes", True),
                     )
+                    # EXP-2: stamp the title/caption BEFORE measuring the output
+                    # size — the bands grow the figure, and rendering at the
+                    # pre-title size would crop them off.
+                    annotate_figure(fig, title=title, caption=caption)
                     # Render at the figure's own fitted size (not the raw
                     # monitor canvas) so the exported reading text matches the
                     # on-screen scale.
@@ -704,7 +1081,7 @@ def bulk_export(
                         else:
                             scale = options.png_scale if fmt == "png" else 1
                             data = render_figure(fig, fmt, out_w, out_h, scale)
-                        zf.writestr(f"{prefix}figure.{fmt}", data)
+                        zf.writestr(_path("figure", fmt), data)
                         progress.bytes_written += len(data)
                 except Exception as exc:
                     progress.errors.append(f"{slug}: figure export failed ({exc})")
@@ -725,7 +1102,7 @@ def bulk_export(
                                 data = render_figure(
                                     layer_fig, fmt, out_w, out_h, scale
                                 )
-                                zf.writestr(f"{prefix}layers/{layer_name}.{fmt}", data)
+                                zf.writestr(_path(f"layers/{layer_name}", fmt), data)
                                 progress.bytes_written += len(data)
                     except Exception as exc:
                         progress.errors.append(f"{slug}: layer export failed ({exc})")
@@ -740,8 +1117,11 @@ def bulk_export(
                     y_field,
                     settings,
                 )
+                # EXP-2: the title/caption are part of how the figure looked, so
+                # the manifest records them verbatim alongside the settings.
+                cfg["annotations"] = {"title": title, "caption": caption}
                 data = json.dumps(cfg, indent=2).encode("utf-8")
-                zf.writestr(f"{prefix}plot_config.json", data)
+                zf.writestr(_path("plot_config", "json"), data)
                 progress.bytes_written += len(data)
 
             # Per-word measures need the word table; a fixations-only trial has no
@@ -756,11 +1136,11 @@ def bulk_export(
             for fmt in options.table_formats():
                 if options.include_fixations:
                     progress.bytes_written += _write_table(
-                        zf, f"{prefix}fixations.{fmt}", trial_fix, fmt
+                        zf, _path("fixations", fmt), trial_fix, fmt
                     )
                 if options.include_measures and per_trial_measures is not None:
                     progress.bytes_written += _write_table(
-                        zf, f"{prefix}measures.{fmt}", per_trial_measures, fmt
+                        zf, _path("measures", fmt), per_trial_measures, fmt
                     )
 
             if options.include_mega_table:

@@ -26,6 +26,8 @@ from .constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_SACCADE_WIDTH,
     FIX_MARKER_OUTLINE,
+    FIXATION_GLYPH_SIZE_SCALE,
+    FIXATION_GLYPH_SYMBOLS,
     FONT_FAMILY,
     HIGHLIGHTED_TEXT_COLOR,
     HOLLOW_OUTLINE_WIDTH,
@@ -507,6 +509,18 @@ def _resolve_marker_colors(
     marker_color = [cat_to_color[val] for val in series]
     legend = [(val, cat_to_color[val]) for val in unique_vals]
     return marker_color, legend
+
+
+def _marker_symbol(symbol: Optional[str]) -> str:
+    """A ``marker.symbol`` Plotly will accept.
+
+    The VIZ-15 glyph shapes (♥) aren't in Plotly's symbol enum — the static
+    figure draws them as text instead — so anywhere that *must* hand Plotly a
+    marker symbol falls back to the default rather than raising.
+    """
+    if not symbol or symbol in FIXATION_GLYPH_SYMBOLS:
+        return DEFAULT_FIXATION_SYMBOL
+    return symbol
 
 
 def _compute_marker_sizes(
@@ -1641,36 +1655,91 @@ def make_scanpath_figure(
         )
         if hollow_fixations:
             marker = _make_hollow(marker)
-        fig.add_trace(
-            go.Scatter(
-                x=ordered[x_field],
-                y=ordered[y_field],
-                mode="markers+text" if show_order else "markers",
-                marker=marker,
-                text=ordered["order_in_trial"] if show_order else None,
-                textfont=dict(
-                    color=order_font_color,
-                    size=order_font_size,
-                    family=font_settings["family"],
-                ),
-                textposition="top center",
-                hovertemplate=(
-                    "Fixation #%{customdata[0]}<br>"
-                    "Duration %{customdata[1]} ms<br>"
-                    "Word #%{customdata[2]}<extra></extra>"
-                ),
-                customdata=np.stack(
-                    [
-                        ordered["order_in_trial"],
-                        ordered["duration_ms"],
-                        ordered.get("word_id", pd.Series([np.nan] * len(ordered))),
-                    ],
-                    axis=1,
-                ),
-                name="Fixations",
-                showlegend=False,
-            )
+        customdata = np.stack(
+            [
+                ordered["order_in_trial"],
+                ordered["duration_ms"],
+                ordered.get("word_id", pd.Series([np.nan] * len(ordered))),
+            ],
+            axis=1,
         )
+        hovertemplate = (
+            "Fixation #%{customdata[0]}<br>"
+            "Duration %{customdata[1]} ms<br>"
+            "Word #%{customdata[2]}<extra></extra>"
+        )
+        glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
+        if glyph:
+            # VIZ-15: a shape Plotly's marker enum doesn't carry (♥). Draw it as
+            # text — an array `textfont.size` keeps duration→size, and the
+            # fixation-index labels move to their own trace since one Scatter has
+            # only one text field. `textfont.color` takes no colorscale, so a
+            # numeric colour-by is sampled to literal colours (same trick the
+            # hollow markers use).
+            glyph_color = marker["color"]
+            if is_numeric_color:
+                glyph_color = _sample_colorscale_colors(
+                    glyph_color,
+                    fixation_colorscale,
+                    marker.get("cmin"),
+                    marker.get("cmax"),
+                )
+            fig.add_trace(
+                go.Scatter(
+                    x=ordered[x_field],
+                    y=ordered[y_field],
+                    mode="text",
+                    text=[glyph] * len(ordered),
+                    textfont=dict(
+                        color=glyph_color,
+                        size=np.asarray(sizes) * FIXATION_GLYPH_SIZE_SCALE,
+                    ),
+                    textposition="middle center",
+                    opacity=marker["opacity"],
+                    hovertemplate=hovertemplate,
+                    customdata=customdata,
+                    name="Fixations",
+                    showlegend=False,
+                )
+            )
+            if show_order:
+                fig.add_trace(
+                    go.Scatter(
+                        x=ordered[x_field],
+                        y=ordered[y_field],
+                        mode="text",
+                        text=ordered["order_in_trial"],
+                        textfont=dict(
+                            color=order_font_color,
+                            size=order_font_size,
+                            family=font_settings["family"],
+                        ),
+                        textposition="top center",
+                        hoverinfo="skip",
+                        name="Fixation index",
+                        showlegend=False,
+                    )
+                )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    x=ordered[x_field],
+                    y=ordered[y_field],
+                    mode="markers+text" if show_order else "markers",
+                    marker=marker,
+                    text=ordered["order_in_trial"] if show_order else None,
+                    textfont=dict(
+                        color=order_font_color,
+                        size=order_font_size,
+                        family=font_settings["family"],
+                    ),
+                    textposition="top center",
+                    hovertemplate=hovertemplate,
+                    customdata=customdata,
+                    name="Fixations",
+                    showlegend=False,
+                )
+            )
         legend_limit = len(_QUALITATIVE_PALETTE)
         truncated_legend = category_legend[:legend_limit]
         if category_legend:
@@ -2739,7 +2808,12 @@ def make_scanpath_animation(
         colors = s["marker_colors"]
         marker = dict(
             size=list(s["sizes"]),
-            symbol=fixation_symbol or DEFAULT_FIXATION_SYMBOL,
+            # VIZ-15: the glyph shapes (♥) are drawn as *text* in the static
+            # figure — a Plotly marker can't take them, and the animation's trail
+            # restates the marker on every frame, so it falls back to the default
+            # symbol rather than raising. One of the Animate-mode gaps VIZ-21 is
+            # to map out.
+            symbol=_marker_symbol(fixation_symbol),
             color=colors if colors is not None else s["color"],
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             **s["marker_extra"],

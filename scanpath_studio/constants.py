@@ -156,8 +156,18 @@ FIXATION_SYMBOLS = {
     "x": "✖ X",
     "star": "★ Star",
     "hexagon": "⬡ Hexagon",
+    "heart": "♥ Heart",
 }
 DEFAULT_FIXATION_SYMBOL = "circle"
+
+# Shapes Plotly's ``marker.symbol`` enum doesn't have. They're drawn as *text*
+# glyphs instead — a Scatter in text mode, sized per point via an array
+# ``textfont.size``, so duration→size still holds. Kept as a mapping so adding
+# another glyph shape needs no new branch in the figure builder.
+# Glyphs render at roughly half the visual weight of a marker of the same
+# nominal size, so the sizes are scaled up to match the other shapes.
+FIXATION_GLYPH_SYMBOLS = {"heart": "♥"}
+FIXATION_GLYPH_SIZE_SCALE = 1.8
 
 # VIZ-17 · the "Color fixations by" option meaning *don't* map a variable to hue.
 # Marker size already encodes fixation duration, so colouring by duration too

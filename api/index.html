@@ -1613,7 +1613,10 @@ regardless.</p>
 <p>The animation builder accepts a subset of the static figure's options
 (<code>show_words</code>, <code>show_word_labels</code>, <code>show_saccades</code>, <code>show_order</code>,
 styling, and second-scanpath overlays) — an unsupported key raises a
-<code>ValueError</code> naming the valid ones rather than an opaque <code>TypeError</code>.</p>
+<code>ValueError</code> naming the valid ones rather than an opaque <code>TypeError</code>.
+<code>palette=</code> (VIZ-18) works here too; the colours it implies that the
+animation doesn't support are dropped rather than raising, since the caller
+named a look, not those individual keys.</p>
 
 
     </div>

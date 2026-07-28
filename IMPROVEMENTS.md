@@ -481,7 +481,7 @@ re-deriving it. Ranked by what an attacker or an accident can actually achieve:
 | ~~S2~~ | High\* | ~~Path oracle + arbitrary-directory write~~ — **fixed**: `local_filesystem_enabled()` gates the box / picker / download, `SCANPATH_DATA_ROOT` is an allow-root | `app.py` |
 | S3 | Med | A share link names a participant, in the URL | `url_state._render_share_body` |
 | ~~S4~~ | Med | ~~Exported tables carry an absolute local path~~ — **fixed**: `strip_local_paths` at the `_write_table` chokepoint | `export.py` |
-| S5 | Med | `frame_fingerprint` ignores the middle of a frame, so edited data can serve a stale cached result | `data.frame_fingerprint` |
+| ~~S5~~ | Med | ~~`frame_fingerprint` ignores the middle of a frame~~ — **fixed**: full hash to 200k rows, order-sensitive digest | `data.frame_fingerprint` |
 | S6 | Low–Med | A zip upload is decompressed with no size cap | `data._read_zipped_table` |
 | S7 | Low | Stimulus text is interpolated into raw HTML unescaped | `tabs` (stimulus panel) |
 | S10 | Low | The debug log handler is added per session to the process-wide root logger | `debug_log` |
@@ -490,13 +490,12 @@ re-deriving it. Ranked by what an attacker or an accident can actually achieve:
 \* hosted deployments only — the app has **no authentication on any deployment**,
 so every access-control decision is made by whatever binds the port.
 
-**Done 2026-07-28: S1, S2, S4**, each with its own tests
+**Done 2026-07-28: S1, S2, S4, S5**, each with its own tests
 ([`tests/test_deployment_gate.py`](tests/test_deployment_gate.py),
 [`tests/test_export.py`](tests/test_export.py)). S1 and S2 went first because
 they are the only two a stranger on the network can reach at all.
 
-**Next: S5** (the cache-staleness one — a correctness bug that bites anyone who
-edits a file and reloads), then S3, S6, S7, S10, S11. S8 (MP4 temp file) and S9
+**Next: S3, S6, S7, S10, S11.** S8 (MP4 temp file) and S9
 (`..` in a *user-typed* export pattern) are accepted with reasons recorded on the
 page — don't reopen them without reading those. Related: **DATA-12**, **ENG-15**
 (desktop), **ENG-17** (a hosted mode would make S2 load-bearing).

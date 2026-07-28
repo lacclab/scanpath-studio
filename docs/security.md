@@ -371,7 +371,19 @@ stays O(1) in the row count, costs a few hundred rows, and catches a middle edit
 Separately, make the last-resort branch return a value that cannot be reused
 (a fresh `uuid4`, or `None` meaning "do not cache") rather than `0`.
 
-**Status:** open.
+**Status:** **fixed** 2026-07-28 — `data.frame_fingerprint` now hashes the
+**whole frame** up to 200,000 rows, so any edit anywhere changes the key
+(measured: ~12 ms at the cap). Above it the key stays a sample — both ends plus a
+stride — because a full hash costs ~237 ms at 5M rows and roughly six
+corpus-sized fingerprints are taken per rerun; that limit is stated on the
+function, with the advice to use **Clear cache** after editing a corpus that
+large. The last-resort branch now returns a `uuid4` instead of `0`, so an
+unhashable frame *misses* the cache rather than matching every frame of its
+shape. Writing the tests surfaced a second collision the audit didn't name: the
+per-row hashes were combined with `.sum()`, which is order-invariant, so a frame
+and a `sort_values` of itself — same rows, same index labels — shared a key; they
+are now digested in order. Covered by
+`tests/test_data.py::TestFrameFingerprint`.
 
 ---
 

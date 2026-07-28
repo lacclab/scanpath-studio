@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import glob
+import hashlib
 import importlib.resources as resources
 import io
 import os
 import re
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
@@ -15,45 +17,89 @@ import streamlit as st
 
 from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME
 
+# DATA-16 / audit S5. Up to this many rows the fingerprint hashes the WHOLE
+# frame, so any edit anywhere changes the key. Measured on a 4-column frame:
+# 8 ms at 100k rows, 59 ms at 1M, 237 ms at 5M — and roughly six corpus-sized
+# fingerprints are taken per rerun, so a full hash of a multi-million-row corpus
+# would cost seconds of latency on every interaction. 200k keeps the exact path
+# under ~16 ms while covering the case that actually matters: a user editing
+# their own table and re-uploading it.
+_FINGERPRINT_FULL_MAX_ROWS = 200_000
+# Above the threshold: rows sampled from each end, plus an evenly-spaced stride.
+_FINGERPRINT_EDGE_ROWS = 64
+_FINGERPRINT_STRIDE_ROWS = 256
+
 
 def frame_fingerprint(df: Optional[pd.DataFrame]) -> tuple:
     """Cheap, content-sensitive identity for a DataFrame.
 
     Used as an *explicit* ``@st.cache_data`` key for functions that take an
     underscore-prefixed (un-hashed) frame argument — so Streamlit never re-hashes
-    a multi-million-row frame on every rerun just to look up the cache. We sample
-    shape + column names + a hash of the first/last rows, which uniquely
-    identifies real datasets while staying O(1) in the row count.
+    a multi-million-row frame on every rerun just to look up the cache.
 
-    Two genuinely different frames could in principle collide, but the head/tail
-    hash plus the exact row count makes that astronomically unlikely for real
-    eye-tracking tables.
+    **Up to ``_FINGERPRINT_FULL_MAX_ROWS`` the whole frame is hashed**, so any
+    edit anywhere changes the key. This is the fix for DATA-16 / audit S5: the
+    previous key sampled only the first and last 64 rows, so a table of ≥129 rows
+    edited anywhere in between produced an *identical* key — not a probabilistic
+    collision but a certain one. Re-uploading a corrected table of the same shape
+    then served every figure, measure and aggregate from the pre-edit data,
+    silently, which is a route to a wrong number in a paper.
+
+    **Above the threshold the key is a sample** (both ends plus an evenly-spaced
+    stride) and detection becomes probabilistic: a single-cell edit in a
+    5-million-row corpus has roughly a 1-in-19,000 chance of landing on a sampled
+    row. That is a deliberate trade — a full hash there costs ~237 ms, taken
+    about six times per rerun. It is the right trade because the frames people
+    hand-edit and re-upload are their own tables, not multi-million-row public
+    corpora, but it *is* a limit: after editing a corpus that large, use **Clear
+    cache** in the ☰ menu.
+
+    The per-row hashes are digested **in order** rather than summed. Summing is
+    order-invariant, so a frame and a ``sort_values`` of itself — same rows, same
+    index labels, different order — used to share a key while producing different
+    results downstream.
 
     ``hash_pandas_object`` raises on columns of unhashable objects (lists/arrays —
     e.g. parquet-preserved span-index fields). We stringify and retry rather than
     drop the content signal entirely: zeroing the hash would collapse every frame
     of the same shape + columns to one fingerprint, serving stale cached results
-    when switching between two such frames. Only a last-resort failure falls back
-    to ``(n, columns, 0, 0)``.
+    when switching between two such frames. If even that fails the key becomes
+    *unique* rather than zero — an unhashable frame must miss the cache, not
+    match every other frame of its shape.
     """
     if df is None or getattr(df, "empty", True):
         return (0, ())
     cols = tuple(map(str, df.columns))
     n = int(len(df))
 
-    def _hash(sample: pd.DataFrame) -> int:
+    def _hash(sample: pd.DataFrame) -> str:
         try:
-            return int(pd.util.hash_pandas_object(sample, index=True).sum())
+            per_row = pd.util.hash_pandas_object(sample, index=True)
         except TypeError:
             # Unhashable cell objects — stringify so content still drives the key.
-            return int(pd.util.hash_pandas_object(sample.astype(str), index=True).sum())
+            per_row = pd.util.hash_pandas_object(sample.astype(str), index=True)
+        # Digest the per-row hashes in ORDER. Summing them (the previous
+        # approach) is order-invariant, so a frame and a `sort_values` of itself
+        # — same rows, same index labels, different order — produced the same
+        # key while yielding different results downstream.
+        return hashlib.blake2b(
+            per_row.to_numpy(dtype="uint64").tobytes(), digest_size=16
+        ).hexdigest()
 
     try:
-        head = _hash(df.head(64))
-        tail = _hash(df.tail(64))
+        if n <= _FINGERPRINT_FULL_MAX_ROWS:
+            return (n, cols, _hash(df))
+        head = _hash(df.head(_FINGERPRINT_EDGE_ROWS))
+        tail = _hash(df.tail(_FINGERPRINT_EDGE_ROWS))
+        # An evenly-spaced sample of the whole frame, capped at
+        # _FINGERPRINT_STRIDE_ROWS rows however long the table is.
+        middle = _hash(df.iloc[:: max(1, n // _FINGERPRINT_STRIDE_ROWS)])
     except Exception:
-        head = tail = 0
-    return (n, cols, head, tail)
+        # Fail CLOSED: a key nothing else can equal, so this frame simply doesn't
+        # share a cache entry. `(n, cols, 0, 0)` failed *open* — every frame of
+        # the same shape collided.
+        return (n, cols, uuid.uuid4().hex)
+    return (n, cols, head, tail, middle)
 
 
 # ---------------------------------------------------------------------------

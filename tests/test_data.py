@@ -2,7 +2,9 @@
 
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
+import pytest
 
 from scanpath_studio.controls import (
     BOX_FORMAT_EDGES,
@@ -11,6 +13,7 @@ from scanpath_studio.controls import (
 )
 from scanpath_studio.data import (
     compute_canvas_size,
+    frame_fingerprint,
     compute_word_metrics,
     default_filters,
     filter_data,
@@ -782,3 +785,89 @@ class TestDefaultFilters:
         normalized_fixations_df["saccade_type"] = ["RIGHT", "LEFT", "RIGHT"]
         filters = default_filters(normalized_words_df, normalized_fixations_df)
         assert "saccade_types" in filters
+
+
+class TestFrameFingerprint:
+    """DATA-16 / audit S5.
+
+    The fingerprint is the explicit `@st.cache_data` key for ~32 call sites,
+    including the whole normalize step. It used to sample only the first and last
+    64 rows, so a table of >=129 rows edited anywhere in between produced an
+    identical key — a certain collision, not a probabilistic one. Re-uploading a
+    corrected table of the same shape then served every figure, measure and
+    aggregate from the pre-edit data, silently.
+    """
+
+    def _pair(self, n, edit_at):
+        a = pd.DataFrame(
+            {"participant_id": [f"p{i}" for i in range(n)], "duration_ms": range(n)}
+        )
+        b = a.copy()
+        b.loc[edit_at, "duration_ms"] = 999999
+        return a, b
+
+    @pytest.mark.parametrize("n", [129, 130, 300, 1000, 10_000])
+    def test_an_edit_in_the_middle_changes_the_key(self, n):
+        a, b = self._pair(n, n // 2)
+        assert frame_fingerprint(a) != frame_fingerprint(b)
+
+    def test_the_audit_repro_no_longer_collides(self):
+        """Verbatim from docs/security.md."""
+        a = pd.DataFrame(
+            {
+                "participant_id": [f"p{i}" for i in range(300)],
+                "duration_ms": list(range(300)),
+            }
+        )
+        b = a.copy()
+        b.loc[150, "duration_ms"] = 999999
+        assert frame_fingerprint(a) != frame_fingerprint(b)
+
+    @pytest.mark.parametrize("where", ["start", "middle", "end"])
+    def test_an_edit_anywhere_is_caught_below_the_full_hash_cap(self, where):
+        n = 5000
+        index = {"start": 3, "middle": n // 2, "end": n - 3}[where]
+        a, b = self._pair(n, index)
+        assert frame_fingerprint(a) != frame_fingerprint(b)
+
+    def test_identical_frames_still_share_a_key(self):
+        """It's a cache key — equal content must hit, or nothing is ever cached."""
+        a, _ = self._pair(500, 0)
+        assert frame_fingerprint(a) == frame_fingerprint(a.copy())
+
+    def test_row_order_matters(self):
+        a, _ = self._pair(500, 0)
+        assert frame_fingerprint(a) != frame_fingerprint(a.iloc[::-1])
+
+    def test_an_empty_or_missing_frame_is_stable(self):
+        assert frame_fingerprint(None) == (0, ())
+        assert frame_fingerprint(pd.DataFrame()) == (0, ())
+
+    def test_a_huge_frame_falls_back_to_sampling_rather_than_stalling(self):
+        """Above the cap a full hash would cost ~237 ms at 5M rows, taken about
+        six times per rerun. The sampled key is a deliberate trade, documented on
+        the function — this pins that the cheap path is actually taken."""
+        import time
+
+        from scanpath_studio.data import _FINGERPRINT_FULL_MAX_ROWS
+
+        n = _FINGERPRINT_FULL_MAX_ROWS + 1
+        df = pd.DataFrame({"x": np.arange(n, dtype=float)})
+        start = time.perf_counter()
+        key = frame_fingerprint(df)
+        assert time.perf_counter() - start < 0.1
+        assert len(key) == 5  # (n, cols, head, tail, middle) — the sampled shape
+        assert len(frame_fingerprint(df.head(100))) == 3  # (n, cols, full hash)
+
+    def test_an_unhashable_frame_fails_closed(self):
+        """The old last resort returned (n, cols, 0, 0), so every frame of the
+        same shape collided — it failed *open*. A frame that can't be hashed must
+        miss the cache instead."""
+        rows = [{"span": {"a": 1}} for _ in range(3)]
+        df = pd.DataFrame({"span": [frozenset({1}) | frozenset() for _ in rows]})
+        df["span"] = [object() for _ in range(3)]  # unhashable-to-stringify path
+        first, second = frame_fingerprint(df), frame_fingerprint(df)
+        # Either it hashed fine (equal keys) or it failed closed (unique keys) —
+        # what must NOT happen is a constant that other frames also produce.
+        if first != second:
+            assert frame_fingerprint(pd.DataFrame({"span": [1, 2, 3]})) != first

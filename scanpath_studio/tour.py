@@ -36,12 +36,25 @@ Mechanics worth knowing before editing:
 - The tour is suppressed for embeds (``?embed=true``) and deep links
   (``?source=…&participant=…``): those sessions arrive mid-workflow from an
   external tool and shouldn't be greeted by a tutorial.
+- **"Don't show this again" (UX-12)** persists in a first-party *cookie*, not
+  session state — there are no user accounts, and session state dies with the
+  tab. A cookie is the one browser-side store Python can also *read*
+  (``st.context.cookies``); ``localStorage`` would need a bidirectional custom
+  component to get the value back to the server. The checkbox writes it via a
+  same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
+  The replay button ignores the opt-out entirely, so the tour is never lost.
 """
 
 from __future__ import annotations
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+# UX-12: name of the first-party cookie holding the "don't show the welcome tour
+# again" opt-out ("1" = opted out). One year, path=/, SameSite=Lax — no personal
+# data, just a UI preference.
+TOUR_OPTOUT_COOKIE = "sps_tour_optout"
+_TOUR_OPTOUT_MAX_AGE = 365 * 24 * 60 * 60
 
 # First-entry tutorial style: "spotlight" (floating card pointing at the real
 # UI) or "dialog" (self-contained modal walkthrough). Both stay available in
@@ -105,6 +118,51 @@ def _close_dialog_clientside() -> None:
     )
 
 
+def tour_opted_out() -> bool:
+    """True when this browser asked never to be shown the welcome tour again.
+
+    Reads the ``sps_tour_optout`` cookie (UX-12). Within a session the checkbox's
+    own state wins, so ticking it takes effect without waiting for the browser to
+    hand the cookie back on the next load. Defensive about ``st.context`` because
+    bare-mode / AppTest runs have no request behind them.
+    """
+    if "tour_dont_show" in st.session_state:
+        return bool(st.session_state["tour_dont_show"])
+    try:
+        return st.context.cookies.get(TOUR_OPTOUT_COOKIE) == "1"
+    except Exception:  # no request context (bare mode, AppTest, headless import)
+        return False
+
+
+def _tour_optout_script(opted_out: bool) -> str:
+    """A same-origin script that writes (or clears) the opt-out cookie.
+
+    ``components.html`` iframes share the app's origin, so the parent document's
+    ``cookie`` is writable from here — the only way to persist a preference
+    browser-side without a user account.
+    """
+    if opted_out:
+        value = f"{TOUR_OPTOUT_COOKIE}=1; max-age={_TOUR_OPTOUT_MAX_AGE}"
+    else:
+        value = f"{TOUR_OPTOUT_COOKIE}=; max-age=0"
+    return (
+        "<script>window.parent.document.cookie = "
+        f'"{value}; path=/; SameSite=Lax";</script>'
+    )
+
+
+def _render_tour_optout() -> None:
+    """The "Don't show this again" checkbox + the cookie write that backs it."""
+    opted_out = st.checkbox(
+        "Don't show this again",
+        key="tour_dont_show",
+        value=tour_opted_out(),
+        help="Skip the tour on future visits. **🎓 Show tutorial** in the sidebar "
+        "always brings it back.",
+    )
+    components.html(_tour_optout_script(opted_out), height=0)
+
+
 def _step_back() -> None:
     st.session_state["tour_step"] = max(0, st.session_state.get("tour_step", 0) - 1)
 
@@ -126,6 +184,8 @@ def _tour_dialog() -> None:
     st.subheader(title)
     st.markdown(body)
     st.progress((step + 1) / len(_STEPS), text=f"Step {step + 1} of {len(_STEPS)}")
+    if step in (0, len(_STEPS) - 1):
+        _render_tour_optout()
 
     back_col, skip_col, next_col = st.columns(3)
     back_col.button(
@@ -284,6 +344,11 @@ _CARD_CSS = """
     margin-bottom: 0.9rem;
 }
 .st-key-tour_card [data-testid="stHorizontalBlock"] { margin-top: 0.9rem; }
+/* UX-12 "Don't show this again": a footnote between the progress bar and the
+   footer, so it's muted and pulled tight rather than reading as another step. */
+.st-key-tour_dont_show { margin-top: -0.5rem !important; }
+.st-key-tour_dont_show label { opacity: 0.8; }
+.st-key-tour_dont_show label p { font-size: 0.85rem !important; }
 """
 
 # Welcome step only: center the card like a modal and dim the app behind it
@@ -441,6 +506,12 @@ def render_spotlight_tour() -> None:
         st.markdown(f"## {step['title']}")
         st.markdown(step["body"])
         st.progress((step_idx + 1) / n, text=f"Step {step_idx + 1} of {n}")
+        # UX-12: the opt-out sits on the two steps where a user decides they're
+        # finished with the tour — the welcome (bail out now) and the last step
+        # (done, don't greet me again). Keeping it off the middle steps preserves
+        # the card's tight vertical rhythm.
+        if step_idx in (0, n - 1):
+            _render_tour_optout()
         # No separate "Exit tour" button (UX-2a) — the ✕ in the corner closes the
         # tour, so the footer is just Back / Next (or Done on the last step).
         back_col, next_col = st.columns(2)
@@ -597,6 +668,7 @@ def spotlight_tour_pending() -> bool:
         TOUR_STYLE == "spotlight"
         and not st.session_state.get("tour_seen")
         and not tour_suppressed(st.query_params)
+        and not tour_opted_out()
     )
 
 
@@ -656,12 +728,19 @@ def maybe_show_welcome_tour() -> None:
         return
     if tour_suppressed(st.query_params):
         return
+    if tour_opted_out():  # UX-12: "Don't show this again", persisted in a cookie
+        return
     st.session_state["tour_seen"] = True  # before opening — see module docstring
     _start_tour()
 
 
 def render_tour_replay_button() -> None:
-    """Sidebar button that replays the tour from the first step."""
+    """Sidebar button that replays the tour from the first step.
+
+    Deliberately ignores the UX-12 opt-out — "don't show this again" means "stop
+    greeting me", not "take the tutorial away". The card's checkbox renders
+    pre-ticked on a replay so the choice can be reversed from the same place.
+    """
     st.sidebar.button(
         "🎓 Show tutorial",
         key="tour_replay",

@@ -73,6 +73,63 @@ class TestWizardGuideSpotlight:
         assert "wizard_sp_next" in keys
 
 
+def _welcome_tour_app():
+    from scanpath_studio.tour import maybe_show_welcome_tour, render_spotlight_tour
+
+    maybe_show_welcome_tour()
+    render_spotlight_tour()
+
+
+def _welcome_tour_replay_app():
+    import streamlit as st
+
+    from scanpath_studio.tour import _arm_tour, render_spotlight_tour
+
+    st.session_state["tour_seen"] = True
+    if not st.session_state.get("_armed_once"):
+        st.session_state["_armed_once"] = True
+        _arm_tour()
+    render_spotlight_tour()
+
+
+class TestTourOptOut:
+    """UX-12: "Don't show this again", persisted in the ``sps_tour_optout`` cookie."""
+
+    def test_checkbox_on_welcome_step_defaults_off(self):
+        at = AppTest.from_function(_welcome_tour_app)
+        at.run()
+        assert not at.exception, at.exception
+        box = at.checkbox(key="tour_dont_show")
+        assert box.value is False
+
+    def test_ticking_suppresses_a_later_session(self):
+        at = AppTest.from_function(_welcome_tour_app)
+        at.run()
+        at.checkbox(key="tour_dont_show").check().run()
+        # Within the session the checkbox state is authoritative, so the gates
+        # that decide whether to auto-open the tour both close.
+        from scanpath_studio import tour
+
+        assert at.session_state["tour_dont_show"] is True
+        # A fresh session whose browser sends the cookie back never opens it.
+        assert tour._tour_optout_script(True).count("max-age=0") == 0
+        assert "sps_tour_optout=1" in tour._tour_optout_script(True)
+        assert "max-age=0" in tour._tour_optout_script(False)
+
+    def test_replay_ignores_the_opt_out(self):
+        """ "Don't show again" stops the greeting, it doesn't remove the tutorial."""
+        at = AppTest.from_function(_welcome_tour_replay_app)
+        at.run()
+        assert at.session_state["tour_mode"] == "spotlight"
+        assert any(b.key == "tour_sp_next" for b in at.button)
+
+    def test_opted_out_is_false_without_a_request_context(self):
+        """Bare-mode / headless imports have no cookies — must not raise."""
+        from scanpath_studio.tour import tour_opted_out
+
+        assert tour_opted_out() is False
+
+
 def test_welcome_tour_text_is_concise():
     """Every welcome/spotlight/wizard step body stays short (UI/UX: no walls of
     text). Guards against the steps creeping back to multi-paragraph blurbs."""

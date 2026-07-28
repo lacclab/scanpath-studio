@@ -16,6 +16,8 @@ working tracker focused on open work.
 [UX & Interaction](#ux--interaction) ·
 [Compare mode](#compare-mode) ·
 [Visualization](#visualization) ·
+[Analysis & corpus views](#analysis--corpus-views) ·
+[Export](#export) ·
 [Datasets & ingestion](#datasets--ingestion) ·
 [Bugs](#bugs) ·
 [Engineering](#engineering)
@@ -150,6 +152,42 @@ New `utils.annotation_markers(participant, trial)` returns composable markers �
 icons in the compare selector. Markers are independent and stack (zero → all
 three). Test: `test_annotation_markers_compose`
 ([`tests/test_composite_selection.py`](tests/test_composite_selection.py)).
+
+---
+
+**UX-9 · Numeric entry (text box or ± buttons) alongside sliders** — `Status: Done` *(signed off 2026-07-28)*
+
+Sliders (marker size, opacity, short/long ms thresholds, line width, font size)
+can't be set to an exact value. Pair the `global_*` sliders in
+[`controls.py`](scanpath_studio/controls.py) with a number input or stepper so a
+precise value can be typed. Purely a widget change — the session keys and every
+downstream surface stay as they are.
+
+**UX-11 · Redesign the trial chip strip** — `Status: Done` *(signed off 2026-07-28)*
+
+The `Field = Value` chip strip above the plot
+(`tabs._render_trial_condition_chips` [`tabs.py`](scanpath_studio/tabs.py:1803))
+is **awkward as it stands and needs a rethink, not a patch** — treat the current
+symptoms as evidence of the wrong shape rather than as the work items:
+
+- The **More** disclosure repeats every chip already visible inline, so the same
+  facts are shown twice. This is deliberate today — the comment at
+  [`tabs.py`](scanpath_studio/tabs.py:1871) argues that which chips fit is a
+  live-width question Python can't answer, so *More* always carries everything —
+  which is exactly the constraint the redesign has to escape.
+- The last chip is clipped by the **More** toggle.
+- The inline ✏️ edit toggle sits too high relative to the chip baseline.
+
+**Approach:** start from what the strip is *for* — "what am I looking at" at a
+glance, plus the full trial detail on demand — and pick a form that survives any
+window width. Options worth weighing: real CSS overflow (a wrapping or
+horizontally-scrolling row, so nothing is silently cut and *More* isn't needed as
+a fallback); a fixed small set of primary chips with everything else behind one
+explicit **Details** control; or dropping the one-line constraint entirely and
+letting the strip wrap to two lines. Whatever lands should keep the configurable
+field list (the ✏️ picker, `controls.render_trial_chip_picker`) and the
+condition colouring (`_chip_color`). Related: **UX-19** (the same strip is one of
+the first things to break on a narrow laptop).
 
 ---
 
@@ -334,6 +372,18 @@ colour pickers, the legend toggle, the deep link, `--saccade-color-by-direction`
 and the headless API are unchanged. The control surface shrank with it — only the
 two class colours that mode actually draws are shown. A test asserts the fold
 draws the same number of segment points as the five-way split, so nothing is lost.
+
+---
+
+**VIZ-15 · Fixation marker shape control** — `Status: Done` *(signed off 2026-07-28)*
+
+Fixation markers are configurable in size, colour, opacity and hollow/filled, but
+the **symbol** is fixed. Add a shape picker (circle / square / diamond / cross /
+triangle …) as a `global_*` key threaded through `_collect_viz_settings` →
+`make_scanpath_figure`, plus deep link / CLI / headless API per *AGENTS.md →
+Exposing a feature on every surface*. Pairs with **VIZ-17** (a shape becomes a
+second channel once colour stops duplicating size) and **VIZ-18** (shape carries
+the distinction in print / greyscale).
 
 ---
 
@@ -540,3 +590,196 @@ Full author list + affiliations in order (Shubi · Gruteke Klein · Lion — LAC
 Technion · Jacobi · Reiche [also U Potsdam] · Jäger — DiLi Lab, UZH · Berzak)
 across `CITATION.cff`, the README, the About panel (BibTeX + credits), and
 `constants.CITATION`.
+
+---
+
+## Analysis & corpus views
+
+_Signed off 2026-07-28. **AN-28** (thread the active filter + visualization
+settings into Corpus Analysis) is the one piece that did not land and stays open
+in [`IMPROVEMENTS.md`](IMPROVEMENTS.md)._
+
+**Goal:** replace the single *Corpus Analysis → Aggregated Views* subtab with a
+set of analysis sections, each answering one question — *what does a text look
+like? a reader? a group? two groups against each other?* All sections obey the
+active trial filters and the metric picker.
+
+**Implementation convention:** keep aggregation logic **pure** in
+[`aggregation.py`](scanpath_studio/aggregation.py) (one helper per view → tidy
+DataFrame), build figures in [`plots.py`](scanpath_studio/plots.py) via the
+`make_*_figure` pattern, wire into [`tabs.py`](scanpath_studio/tabs.py). Add a
+smoke test per figure against the bundled sample (3 pid × 2 articles).
+
+> **Note (2026-07-03):** the user asked to **keep this epic open** (not signing off
+> yet). *Generations* has since moved out to the Scanpath view's Comparisons
+> subtab (ENG-8), so Corpus Analysis is now **Per text · Per reader · Groups**.
+
+**Status (`Pending approval`):** the whole epic is implemented. *Aggregated Views*
+is replaced by four question-oriented subtabs — **Per text · Per reader · Per
+group · Group comparison** (`render_per_text_tab` / `render_per_reader_tab` /
+`render_per_group_tab` / `render_group_comparison_tab`) — alongside *Generations
+(WIP)*. Pure helpers + a `Measure` registry live in `aggregation.py`, builders in
+`plots.py`, cross-cutting controls + cached wrappers in `tabs.py`; groups are
+defined by splitting a field **or** by two independent filter sets. Tests in
+[`tests/test_analysis_views.py`](tests/test_analysis_views.py) (unit per helper +
+smoke per figure on the bundled sample); `scipy` added for AN-21. Docs synced
+(CHANGELOG / AGENTS / `scanpath_studio/CLAUDE.md` / `docs/`).
+
+### Per text — one `paragraph_id`/`trial_id`, many readers
+
+**AN-1 · Stacked per-reader word profiles (small multiples)** — `Status: Done` *(signed off 2026-07-28)* *(primary request)*
+
+X = `word_id` (reading order), Y = chosen measure (TFD default; switch FFD/FPRT/
+RPD/`n_fixations`). One panel per `participant_id`, stacked with shared X
+(`make_subplots`, `shared_xaxes`). Optional faint cohort-mean overlay per panel.
+
+**AN-2 · Word × reader heatmap** — `Status: Done` *(signed off 2026-07-28)*
+
+Same data collapsed to one heatmap: rows = participants, cols = `word_id`, color =
+measure. Bright columns = universally hard words; bright rows = uniformly slow
+reader. Reuses word-level heatmap machinery.
+
+**AN-3 · Cohort word profile with spread band** — `Status: Done` *(signed off 2026-07-28)*
+
+Mean measure per word + shaded IQR/±1 SD band across readers — the "average
+reader of this text" with uncertainty.
+
+**AN-4 · Word difficulty annotated on the stimulus** — `Status: Done` *(signed off 2026-07-28)*
+
+The text laid out (true-to-scale renderer), each word tinted by aggregate measure
+or `skip_rate` / `regression_in_rate` — corpus-level scanpath, no fixations drawn.
+
+**AN-5 · Measure vs. linguistic feature scatter** — `Status: Done` *(signed off 2026-07-28)*
+
+Per-word mean measure vs. a bundled feature (`gpt2_surprisal`,
+`wordfreq_frequency`, `word_length`, `universal_pos`) with a trend line. OneStop
+sample ships these columns.
+
+**AN-6 · Skip / regression rate per word** — `Status: Done` *(signed off 2026-07-28)*
+
+Bar/lollipop of `skip_flag` and `regression_in_flag` rates by `word_id`.
+
+### Per participant — one `participant_id`, many trials
+
+**AN-7 · Measure distributions vs. cohort** — `Status: Done` *(signed off 2026-07-28)*
+
+Histogram/violin/box of fixation `duration_ms`, `saccade_amplitude`, per-word
+TFD/FFD for the selected reader, with the cohort distribution behind. Optional KDE.
+
+**AN-8 · Reading speed & summary card** — `Status: Done` *(signed off 2026-07-28)*
+
+WPM, mean fixation duration, fixation count, regression rate, skip rate, mean
+saccade amplitude — compact stat strip + cohort percentiles.
+
+**AN-9 · Fixation duration over time** — `Status: Done` *(signed off 2026-07-28)*
+
+X = `timestamp_ms` (or `order_in_trial`), Y = `duration_ms` — within-trial
+fatigue/settling. Faceted by trial or averaged.
+
+**AN-10 · Saccade amplitude vs. fixation duration** — `Status: Done` *(signed off 2026-07-28)*
+
+2D density / hexbin — the classic oculomotor scatter (careful vs. skimming).
+
+**AN-11 · Progressive vs. regressive saccades** — `Status: Done` *(signed off 2026-07-28)*
+
+Counts/share of `is_regression` / `regression_out_flag` per trial.
+
+**AN-12 · Launch-site / landing-position curves** — `Status: Done` *(signed off 2026-07-28)*
+
+Histogram of landing position within words (needs `first_fix_x` relative to word
+box) — the preferred-viewing-location curve. Overlaps **PRE-4**'s
+`initial_landing_position`.
+
+**AN-13 · Per-trial trend for this reader** — `Status: Done` *(signed off 2026-07-28)*
+
+The existing Trends line filtered to one participant — does this person slow down
+across the session?
+
+### Per group — a cohort defined by the active filter
+
+**AN-14 · Group distribution summaries** — `Status: Done` *(signed off 2026-07-28)*
+
+Per-participant distributions pooled across the group (violin/box of fixation
+duration, saccade amplitude, TFD, reading speed).
+
+**AN-15 · Group word profile** — `Status: Done` *(signed off 2026-07-28)*
+
+Cohort word profile (mean + band) computed within the group, for a selected text.
+
+**AN-16 · Per-reader summary table for the group** — `Status: Done` *(signed off 2026-07-28)*
+
+Sortable table, one row per participant, columns = summary stats — spot outliers.
+
+**AN-17 · Group trend** — `Status: Done` *(signed off 2026-07-28)*
+
+Trends line averaged within the group (optionally per-participant faint behind).
+
+### Group comparison — two groups side by side
+
+**AN-18 · Overlaid distributions** — `Status: Done` *(signed off 2026-07-28)*
+
+Two groups' fixation-duration / saccade-amplitude / TFD distributions on shared
+axes (violin halves or overlaid KDE).
+
+**AN-19 · Difference word profile** — `Status: Done` *(signed off 2026-07-28)*
+
+Per-word measure A − B along the text with a zero reference line and diverging
+colormap — *where* the groups diverge (Adv vs. Ele, L1 vs. L2).
+
+**AN-20 · Paired summary bars** — `Status: Done` *(signed off 2026-07-28)*
+
+Side-by-side group-mean bars per measure with error bars (SD / SEM / bootstrap CI).
+
+**AN-21 · Effect size + simple test** — `Status: Done` *(signed off 2026-07-28)*
+
+Per measure: mean difference, Cohen's *d*, Mann–Whitney / t-test p-value, with a
+clear "exploratory, not pre-registered" caveat.
+
+**AN-22 · Two-group word heatmap, stacked** — `Status: Done` *(signed off 2026-07-28)*
+
+Group A heatmap above group B (shared word axis) for direct visual comparison.
+
+### Cross-cutting controls for the analysis sections
+
+**AN-23 · Shared measure picker** — `Status: Done` *(signed off 2026-07-28)*
+
+One measure picker (TFD/FFD/FPRT/RPD/`n_fixations`/skip/regression) every section
+reads from.
+
+**AN-24 · Aggregation & spread choice** — `Status: Done` *(signed off 2026-07-28)*
+
+Mean/median/sum aggregation and SD/IQR/SEM/bootstrap-CI spread where a band or
+error bar is drawn.
+
+**AN-25 · Normalization toggle (raw vs. z-scored within reader)** — `Status: Done` *(signed off 2026-07-28)*
+
+So slow and fast readers compare on shape, not absolute level.
+
+**AN-26 · Min-readers / min-trials guard** — `Status: Done` *(signed off 2026-07-28)*
+
+Gray out / warn when a per-word cell is backed by too few observations.
+
+**AN-27 · Download the underlying tidy table per view** — `Status: Done` *(signed off 2026-07-28)*
+
+Reuse the export plumbing so users can re-plot elsewhere.
+
+---
+
+## Export
+
+**EXP-1 · Customizable export file / folder names** — `Status: Done` *(signed off 2026-07-28)*
+
+Export uses fixed naming, so a zip of many trials lands with names that don't
+match how the user organizes figures. Let the user supply a filename / folder
+**pattern** built from trial fields — e.g.
+`{participant_id}/{trial_id}_{measure}.png` — validated against the available
+fields, with a live preview of the resulting paths and a safe fallback for
+missing or unsafe values.
+
+**EXP-2 · Titles and captions on exports** — `Status: Done` *(signed off 2026-07-28)*
+
+Add an optional figure **title** and **caption**, either auto-generated from the
+trial (participant, text, condition, and the settings that produced the figure) or
+hand-written, rendered into the exported image and recorded in the export
+manifest — so a figure pulled into a paper or slide carries its own provenance.
+Related: **EXP-1**, **AN-27** (tidy-table download).

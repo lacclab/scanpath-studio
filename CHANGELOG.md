@@ -8,32 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Export path patterns** (EXP-1) — name the files and folders in the export zip from the trial's own fields (e.g. `{participant_id}/{trial_id}_{artifact}.{ext}`), validated with a live preview.
-- **Titles and captions on exported figures** (EXP-2) — auto-generated from the trial (or hand-written) using the same fields plus a `{settings}` summary; rendered into the image and recorded in the plot config. The plot itself isn't scaled down — the figure grows to make room.
-- **Sort the trial picker** (UX-10) — a ⇅ popover beside the picker orders the pool by a computed stat (fixation count, reading time, mean fixation) or any trial-level reader / text / condition column, ascending or descending.
-- **Selectable colour palettes** (VIZ-18) — **Colourblind-safe** (Okabe–Ito), **Print / greyscale** (hue-free, survives a B&W print) and **High contrast**, alongside the default. A palette presets the ordinary colour pickers, so anything can still be overridden.
-- **Fixation marker shape** (VIZ-15) — circle / square / diamond / triangle / cross / X / star / hexagon / heart; a channel that reads in black & white.
-- **Forward vs. regression saccade colouring** (VIZ-19) — a two-way split between one uniform colour and the full five-class breakdown.
-- **Type an exact value into any slider** (UX-9) — marker size, opacity, line width, label sizes, colour ranges and the fixation-index window each pair their slider with a number box.
-- **"Don't show this again" on the welcome tour** (UX-12) — persisted per browser in a first-party cookie; **🎓 Show tutorial** always brings it back.
-- **Documentation link in the app** (UX-17) — the docs site is now one click away from the sidebar Help group and the About popover.
+- **Export path patterns** (EXP-1) — name files and folders in the export zip from the trial's own fields, with a live preview.
+- **Titles and captions on exported figures** (EXP-2) — auto-generated from the trial or hand-written; the figure grows to make room rather than shrinking the plot.
+- **Sort the trial picker** (UX-10) — order the pool by a computed stat or any trial-level column, either direction.
+- **Selectable colour palettes** (VIZ-18) — colourblind-safe (Okabe–Ito), print/greyscale, and high-contrast presets over the existing colour pickers.
+- **Fixation marker shape** (VIZ-15) — nine shapes incl. heart; a channel that survives black & white.
+- **Forward vs. regression saccade colouring** (VIZ-19) — a two-way split beside the five-class breakdown.
+- **Numeric entry beside every slider** (UX-9) — type an exact value instead of dragging.
+- **"Don't show this again" on the welcome tour** (UX-12) — per-browser cookie; **🎓 Show tutorial** brings it back.
+- **Documentation link in the app** (UX-17) — from the sidebar Help group and the About popover.
 
 ### Changed
-- **Trial chip strip redesigned** (UX-11) — the strip wraps instead of clipping at one line, so nothing is ever cut and the **More** disclosure that re-listed every chip is gone; the computed summary stats moved to a **Details** popover, and both it and ✏️ now sit on the chip baseline.
-- **The layout holds down to ~1024 px** (UX-19) — real width breakpoints (there were none): tighter page padding, rail labels that wrap instead of running out of the card, stacked quick-view buttons, and a shrinking number box. The scanpath keeps its true-to-scale guarantee — it only ever scales down, uniformly.
-- **Empty states say what happened** (UX-7) — an empty trial pool now names *which* filter emptied it (or reports that it's the combination), with a one-click **Clear all filters**; a public corpus that isn't on disk gets a main-area panel naming it, the download size and an inline **Download now**, instead of quietly showing demo data.
-- **Fixations default to one colour** (VIZ-17) — marker size already encodes duration, so colour is no longer spent restating it; **Color fixations by** now opts *in* to a second variable. Applies to the app, deep links, `--color-by` and the headless API.
-- **Corpus Analysis is easier to find** (UX-18) — the header toggle is a primary button with a directional cue and a one-line caption naming what's on the other side.
-- **About popover** (UX-16) — the BibTeX citation opens from a collapsed **📖 How to cite** expander instead of filling the panel.
-- **"Snap fixations above words"** (UX-13) moved into its own *Linear-reading schematic* block so it no longer reads as a drift-correction option; both it and the Arc saccade mode now name each other.
+- **Trial chip strip wraps instead of clipping** (UX-11) — no truncation, so the duplicate **More** list is gone; summary stats moved to a **Details** popover.
+- **The layout holds down to ~1024 px** (UX-19) — real width breakpoints, where there were none. The scanpath still only ever scales down, uniformly.
+- **Empty states say what happened** (UX-7) — names the filter that emptied the pool, or the missing corpus and its download, instead of a blank chart.
+- **Fixations default to one colour** (VIZ-17) — size already encodes duration; **Color fixations by** now opts *in* to a second variable. All four surfaces.
+- **Corpus Analysis is easier to find** (UX-18) — the header toggle is a primary button with a directional cue.
+- **About popover** (UX-16) — BibTeX moved into a collapsed **📖 How to cite** expander.
+- **"Snap fixations above words"** (UX-13) moved out of Drift correction into its own *Linear-reading schematic* block.
 
 ### Fixed
-- **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink-style boxes carry the whole inter-word space as trailing padding, so every boundary sat a half-space too far right and a fixation in the space *before* a word was credited to the previous one. Detected per corpus and applied through a single `measures.word_box_bounds` accessor, so *everything* that reads an AOI edge agrees: fixation→word assignment, the out-of-text test, the drawn boxes, the word-level heatmap (which was tinting rects half a space off the outlines beside them), the critical-span outline, within-word landing position, snap-to-word, drift-correction word centres, and the model-scanpath generator. Glyph-tight AOIs (PoTeC / MultiplEYE) are left alone, and the reading text keeps its glyph origin so the stimulus-image alignment is unchanged.
-- **Regression flags were True for every word** (BUG-7) — EyeLink writes flag columns as the strings `'0'` / `'1'` / `'.'` (its missing-value sentinel), and the boolean cast read every non-empty string as true. On the bundled demo `regression_in_flag` was `True` for all 3,922 rows; it is now 815.
-- The sidebar's collapse control (UX-8) is always visible and has a proper hit area, so an open sidebar is as easy to dismiss as it is to open.
-- Tutorial card spacing — the ✕ sits a touch lower in the corner, and the Back / Next footer no longer crowds the progress bar.
-- The header's **Corpus Analysis** / **← Scanpath** nav button now lines up exactly with the control rail below it (same width and right edge).
-- **README weight** (ENG-16) — the dual-reader demo is a still instead of a second 1.2 MB GIF, so one animation loads before the install line; the animated version moved to the docs site.
+- **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink boxes carry the inter-word space as trailing padding, so every boundary sat a half-space right and a fixation *before* a word went to the previous one. One `measures.word_box_bounds` accessor now feeds all nine consumers — assignment, out-of-text, drawn boxes, the word heatmap, critical spans, landing position, snap-to-word, drift correction, model scanpaths. Glyph-tight corpora (PoTeC / MultiplEYE) are untouched.
+- **Regression flags were True for every word** (BUG-7) — EyeLink writes flags as `'0'`/`'1'`/`'.'` strings and the bool cast took every non-empty string as true. On the demo, `regression_in_flag` went from 3,922 True to 815.
+- The sidebar collapse control (UX-8) is always visible and has a real hit area.
+- Tutorial card spacing — the ✕ and the Back / Next footer no longer crowd the progress bar.
+- The header nav button lines up with the control rail below it.
+- **README weight** (ENG-16) — the dual-reader demo is a still, not a second 1.2 MB GIF; the animation moved to the docs site.
 
 ## [0.25.0] - 2026-07-16
 

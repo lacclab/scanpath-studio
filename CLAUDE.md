@@ -15,8 +15,11 @@ you work under `scanpath_studio/`); contributor setup is in
 - **Run ruff first — always.** `ruff check --exclude other_vis .` and
   `ruff format --exclude other_vis .`. CI's Lint job gates on **both**, so a
   missed format fails the build. Don't skip it, even for "docs-only" changes.
-- **Update `CHANGELOG.md` as you go** — a concise line or two under the
-  `[Unreleased]` section (grouped Added / Changed / Fixed), not a per-tweak log.
+- **Update `CHANGELOG.md` as you go** — **one scannable line per item** under the
+  `[Unreleased]` section (grouped Added / Changed / Fixed), not a per-tweak log
+  and not a design doc. If it needs a paragraph, the paragraph belongs in
+  `IMPROVEMENTS.md` / `IMPROVEMENTS_ARCHIVE.md`; the changelog gets the one-line
+  version. A bug fix may take two lines when the *wrong* behaviour needs naming.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
 

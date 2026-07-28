@@ -12,7 +12,7 @@
 === "conda"
 
     ```bash
-    conda create -n scanpath python=3.12 -y
+    conda create -n scanpath python=3.14 -y
     conda activate scanpath
     pip install scanpath-studio
     scanpath-studio

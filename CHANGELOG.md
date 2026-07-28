@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The sidebar collapse control (UX-8) is always visible and has a real hit area.
 - Tutorial card spacing — the ✕ and the Back / Next footer no longer crowd the progress bar.
 - The header nav button lines up with the control rail below it.
-- **README weight** (ENG-16) — the dual-reader demo is a still, not a second 1.2 MB GIF; the animation moved to the docs site.
+- **README weight** (ENG-16) — the dual-reader demo is a still, not a second GIF; the animation moved to the docs site. Both are now rendered from the real pipeline against the bundled demo (`assets/render_dual_scanpath.py`) instead of being hand-made, and palette-quantized (still 197 KB, GIF 1.36 MB).
 
 ## [0.25.0] - 2026-07-16
 

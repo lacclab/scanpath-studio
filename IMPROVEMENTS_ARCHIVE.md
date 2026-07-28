@@ -447,6 +447,79 @@ file), so every launch path renders the same theme.
 
 ---
 
+**BUG-7 · EyeLink `'.'`-sentinel flag columns normalize to all-True** — `Status: Done` *(signed off 2026-07-28)*
+
+`IA_REGRESSION_IN` / `IA_REGRESSION_OUT` in the bundled demo (and any LaCC-style
+export) hold **strings** `'0'` / `'1'` / `'.'`; normalization casts them by
+truthiness, so the canonical `regression_in_flag` / `regression_out_flag` come
+out `True` for **every** row (`'0'` and `'.'` are non-empty strings). Repro:
+`sps.load_sample_data()` → `compute_word_metrics(...)` →
+`regression_in_flag.value_counts()` = `{True: 3922}`. Fix in the
+[`data.py`](scanpath_studio/data.py) normalize path: `pd.to_numeric(errors="coerce")`
+(or explicit `'.'`→NaN) before the bool cast, for every flag-like measure
+column; add a regression test with a mixed `'0'/'1'/'.'` column. Found while
+producing the paper's measure-validation numbers (2026-07-03).
+
+**BUG-10 · Arcs don't clear the text** — `Status: Done` *(signed off 2026-07-28)*
+
+Arc height is a fraction of saccade **length** (`_ARCH_FRAC`), so short saccades —
+the majority within a line — arch by only a few pixels and stay inside the line of
+text, defeating the point of the mode (the arc should read as a jump *over* the
+words). Derive the arch height from the text geometry instead — line pitch /
+word-box top (`_line_pitch`, [`plots.py`](scanpath_studio/plots.py:339)) — with a
+floor, so every within-line arc sits above the words regardless of length.
+Related: **BUG-9**, **VIZ-9**.
+
+**Closed as working-as-intended (2026-07-28).** Arc mode is used for *single sentences*, where an arch proportional to saccade length reads correctly — a floor derived from the line pitch would over-arch the short within-line saccades that dominate there. Left as is.
+
+**BUG-11 · Word box edges don't fall midway between words** — `Status: Done` *(signed off 2026-07-28)* *(reopened and completed the same day — see below)*
+
+> **Reopened 2026-07-28.** The first pass corrected only
+> `assign_fixations_to_words` and `build_word_boxes` — two of the nine places
+> that read an AOI edge — so the bug was still visible: with the heatmap on, the
+> tinted rects were drawn from the raw frame while the outlines came from the
+> corrected one, half a space apart. **Second pass:** one pure accessor
+> `measures.word_box_bounds(words, *, layout=None)` returns the corrected
+> `(x0, y0, x1, y1)` arrays and *every* consumer goes through it —
+> `_assign_word_ids_single`, `fixation_in_text_mask`, `build_word_boxes`,
+> `_add_word_level_heatmap` (binning) + `_draw_word_value_heatmap` (rects),
+> `build_critical_span_overlay`, `aggregation.landing_positions`,
+> `plots._snap_fixations_to_words`, `alignment._word_centers_reading_order`,
+> `model_scanpaths`, and `data.fill_fixation_xy_from_words`. Returning *arrays*
+> rather than a shifted frame is the point: the frame-shaped
+> `recentre_word_boxes` could be applied twice and silently double-shift, which
+> is what made the first pass fragile. `layout=` covers the subset trap — tiling
+> is a property of the whole line, so a highlighted span or the dwelt-on words
+> must hand the full frame to the detector or the holes read as glyph-tight
+> gaps. Tests in
+> [`tests/test_word_box_geometry.py`](tests/test_word_box_geometry.py) (26).
+
+Word box boundaries should sit in the **middle of the whitespace** between two
+words; they don't — each box carries the *entire* inter-word space as trailing
+padding, so every boundary is pushed a half-space to the right and each word sits
+flush against its own left edge with a gap before the next word's glyphs.
+
+**Measured on the bundled demo** (first trial, 19 px/char): every box is exactly
+`(n_chars + 1) × 19` px wide and starts at the word's first glyph — `'Robert'`
+`x0=358 → x1=491` (6 chars = 114 px of glyphs + 19 px of space), with
+`'Myslajek'` starting at exactly `x0=491`. Boxes therefore *tile* the line (0 px
+gaps, which is why this doesn't look obviously broken) but are offset by half a
+space (~9.5 px here) from where they should be. Fixations landing in the space
+before a word are attributed to the *previous* word — this touches
+`measures.assign_fixations_to_words`, not just appearance.
+
+Fix by re-centring the boundary — shift each box to
+`[x - space/2, x + width - space/2]`, deriving the space width from the layout
+(per-line, since it varies with font size) rather than assuming 19 px. Decide
+whether that belongs in `data.normalize_words` (fixes geometry once, so measures
+and export agree) or in `build_word_boxes`
+([`plots.py`](scanpath_studio/plots.py:696)) (appearance only, cheaper, but leaves
+assignment wrong). Check the other corpora too — PoTeC / MultiplEYE ship
+glyph-tight AOIs and may need the opposite adjustment. Related: **PRE-5** (custom
+interest areas), **VAL-1** (validate against the EyeLink-rendered image).
+
+---
+
 ## Datasets & ingestion
 
 The data-source UI overhaul (**DATA-4 … DATA-7**), signed off 2026-06-26. All four

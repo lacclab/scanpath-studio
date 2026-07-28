@@ -52,7 +52,8 @@ On top of that:
 
 ![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png)
 
-*Overlay a second reading to compare two readers of the same text
+*Two readers of the same bundled-demo paragraph, overlaid on one canvas — 305
+fixations between them
 ([watch it animated](https://lacclab.github.io/scanpath-studio/#the-app-in-one-paragraph)).*
 
 The app is organized into three tabs:

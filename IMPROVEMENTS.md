@@ -34,16 +34,16 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
-**UX-7** (empty states — *follow-up in progress*), **UX-10** (sortable trial
-picker — *follow-up in progress*), **UX-19** (responsive breakpoints),
-**VIZ-18** (selectable palettes), **BUG-7** (sentinel flag columns), **BUG-11**
-(word-box boundaries) — all implemented 2026-07-28; **AN-28** (the one gap left
-from the *Analysis & corpus views* epic); **PRE-3** (vertical drift correction —
-*you'll revisit*); **VIZ-11** (animation slider readout — *follow-up in
+**UX-7** (empty states, + review follow-up), **UX-10** (sortable trial picker,
++ review follow-up), **UX-19** (responsive breakpoints), **VIZ-18** (selectable
+palettes), **ENG-16** (README asset weight) — all 2026-07-28; **AN-28** (the one
+gap left from the *Analysis & corpus views* epic); **PRE-3** (vertical drift
+correction — *you'll revisit*); **VIZ-11** (animation slider — *follow-up in
 progress*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
 
 Signed off 2026-07-28 and archived: **UX-9**, **UX-11**, **VIZ-15**, **EXP-1**,
-**EXP-2**, **AN-1 … AN-27**.
+**EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10** (working as intended),
+**BUG-11**.
 
 ### Terminology
 Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
@@ -674,7 +674,7 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-_BUG-1, BUG-2, BUG-3, BUG-5, BUG-6 are in
+_BUG-1, BUG-2, BUG-3, BUG-5, BUG-6, BUG-7, BUG-10, BUG-11 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **BUG-4 · MultiplEYE: residual small text-vs-image mismatch** — `Status: Backlog`
@@ -695,19 +695,6 @@ Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
 (`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
 in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
 
-**BUG-7 · EyeLink `'.'`-sentinel flag columns normalize to all-True** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-`IA_REGRESSION_IN` / `IA_REGRESSION_OUT` in the bundled demo (and any LaCC-style
-export) hold **strings** `'0'` / `'1'` / `'.'`; normalization casts them by
-truthiness, so the canonical `regression_in_flag` / `regression_out_flag` come
-out `True` for **every** row (`'0'` and `'.'` are non-empty strings). Repro:
-`sps.load_sample_data()` → `compute_word_metrics(...)` →
-`regression_in_flag.value_counts()` = `{True: 3922}`. Fix in the
-[`data.py`](scanpath_studio/data.py) normalize path: `pd.to_numeric(errors="coerce")`
-(or explicit `'.'`→NaN) before the bool cast, for every flag-like measure
-column; add a regression test with a mixed `'0'/'1'/'.'` column. Found while
-producing the paper's measure-validation numbers (2026-07-03).
-
 **BUG-8 · Bundled-demo fixation `word_id` is 1-based vs. words `IA_ID` 0-based** — `Status: Backlog`
 
 The demo fixation report's word column runs `1..N` while `ia.csv`'s `IA_ID`
@@ -722,7 +709,7 @@ consistent ids ([`update_sample_data.py`](scanpath_studio/update_sample_data.py)
 and/or detect a 1-based offset during normalization. Related: **BUG-7** (same
 discovery pass).
 
-**BUG-9 · Arc saccades: direction arrowheads not aligned with the arc** — `Status: Backlog`
+**BUG-9 · Arc saccades: direction arrowheads not aligned with the arc** — `Status: Planned`
 
 With `saccade_render_mode="Arc"` (**VIZ-9**) the saccade is drawn as an upward
 arch, but the arrowheads still come from the straight chord: `_saccade_arrow_markers`
@@ -734,63 +721,7 @@ the marker position on the arc and its angle from the arc's tangent at that poin
 [`plots.py`](scanpath_studio/plots.py:1022)). Affects both the single-trial path
 and the comparison path ([`plots.py`](scanpath_studio/plots.py:3164)).
 
-**BUG-10 · Arcs don't clear the text** — `Status: Backlog`
-
-Arc height is a fraction of saccade **length** (`_ARCH_FRAC`), so short saccades —
-the majority within a line — arch by only a few pixels and stay inside the line of
-text, defeating the point of the mode (the arc should read as a jump *over* the
-words). Derive the arch height from the text geometry instead — line pitch /
-word-box top (`_line_pitch`, [`plots.py`](scanpath_studio/plots.py:339)) — with a
-floor, so every within-line arc sits above the words regardless of length.
-Related: **BUG-9**, **VIZ-9**.
-
-**BUG-11 · Word box edges don't fall midway between words** — `Status: Pending approval` *(implemented 2026-07-28; reopened + completed the same day)*
-
-> **Reopened 2026-07-28.** The first pass corrected only
-> `assign_fixations_to_words` and `build_word_boxes` — two of the nine places
-> that read an AOI edge — so the bug was still visible: with the heatmap on, the
-> tinted rects were drawn from the raw frame while the outlines came from the
-> corrected one, half a space apart. **Second pass:** one pure accessor
-> `measures.word_box_bounds(words, *, layout=None)` returns the corrected
-> `(x0, y0, x1, y1)` arrays and *every* consumer goes through it —
-> `_assign_word_ids_single`, `fixation_in_text_mask`, `build_word_boxes`,
-> `_add_word_level_heatmap` (binning) + `_draw_word_value_heatmap` (rects),
-> `build_critical_span_overlay`, `aggregation.landing_positions`,
-> `plots._snap_fixations_to_words`, `alignment._word_centers_reading_order`,
-> `model_scanpaths`, and `data.fill_fixation_xy_from_words`. Returning *arrays*
-> rather than a shifted frame is the point: the frame-shaped
-> `recentre_word_boxes` could be applied twice and silently double-shift, which
-> is what made the first pass fragile. `layout=` covers the subset trap — tiling
-> is a property of the whole line, so a highlighted span or the dwelt-on words
-> must hand the full frame to the detector or the holes read as glyph-tight
-> gaps. Tests in
-> [`tests/test_word_box_geometry.py`](tests/test_word_box_geometry.py) (26).
-
-Word box boundaries should sit in the **middle of the whitespace** between two
-words; they don't — each box carries the *entire* inter-word space as trailing
-padding, so every boundary is pushed a half-space to the right and each word sits
-flush against its own left edge with a gap before the next word's glyphs.
-
-**Measured on the bundled demo** (first trial, 19 px/char): every box is exactly
-`(n_chars + 1) × 19` px wide and starts at the word's first glyph — `'Robert'`
-`x0=358 → x1=491` (6 chars = 114 px of glyphs + 19 px of space), with
-`'Myslajek'` starting at exactly `x0=491`. Boxes therefore *tile* the line (0 px
-gaps, which is why this doesn't look obviously broken) but are offset by half a
-space (~9.5 px here) from where they should be. Fixations landing in the space
-before a word are attributed to the *previous* word — this touches
-`measures.assign_fixations_to_words`, not just appearance.
-
-Fix by re-centring the boundary — shift each box to
-`[x - space/2, x + width - space/2]`, deriving the space width from the layout
-(per-line, since it varies with font size) rather than assuming 19 px. Decide
-whether that belongs in `data.normalize_words` (fixes geometry once, so measures
-and export agree) or in `build_word_boxes`
-([`plots.py`](scanpath_studio/plots.py:696)) (appearance only, cheaper, but leaves
-assignment wrong). Check the other corpora too — PoTeC / MultiplEYE ship
-glyph-tight AOIs and may need the opposite adjustment. Related: **PRE-5** (custom
-interest areas), **VAL-1** (validate against the EyeLink-rendered image).
-
-**BUG-12 · Annotation filters don't reach the raw-gaze table** — `Status: Backlog`
+**BUG-12 · Annotation filters don't reach the raw-gaze table** — `Status: Planned`
 
 `data.filter_raw_gaze` narrows by participant + trial, but the annotation
 filters (favorites / tags) are applied to the words + fixations frames only —
@@ -855,11 +786,21 @@ Add to `docs/` after AN-* land.
 **ENG-16 · README: one single-scanpath GIF instead of two** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 **Implemented.** The README keeps the single-scanpath hero GIF and shows the
-dual-reader demo as a still (`assets/demo_dual_scanpath.png`, 90 KB — the
-animation's final frame, so it shows the *complete* pair of scanpaths rather
-than an empty first frame), captioned with a link to the animated version, which
-now lives on the docs site (`docs/index.md`, under *The app in one paragraph*).
-1.2 MB less animation on page load.
+dual-reader demo as a still (`assets/demo_dual_scanpath.png`, 197 KB), captioned
+with a link to the animated version, which now lives on the docs site
+(`docs/index.md`, under *The app in one paragraph*). 1.2 MB less animation before
+the install line.
+
+**Both assets re-rendered from the real pipeline (2026-07-28, your note).** The
+originals were hand-made and didn't correspond to any actual reading. New script
+[`assets/render_dual_scanpath.py`](assets/render_dual_scanpath.py) builds them
+from the bundled demo — two readers of `2_1_1_Ele`, 305 fixations — through
+`plots.make_comparison_figure` and `make_scanpath_animation` +
+`animation_export.export_animation`, i.e. exactly what the app draws. Committed
+alongside its output, following the `project_map.dot` → `.png` precedent, so the
+assets can be regenerated rather than rotting. Word boxes are off (212 AOI
+outlines fight the scanpaths at README width) and both are palette-quantized:
+the still 1.0 MB → 197 KB, the GIF 2.49 MB → 1.36 MB, visually unchanged.
 
 The README embeds two animated GIFs — the hero
 (`assets/scanpath_animation.gif`, a single scanpath) and

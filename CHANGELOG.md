@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Sort the trial picker** (UX-10) — a ⇅ popover beside the picker orders the pool by a computed stat (fixation count, reading time, mean fixation) or any trial-level reader / text / condition column, ascending or descending.
 - **Selectable colour palettes** (VIZ-18) — **Colourblind-safe** (Okabe–Ito), **Print / greyscale** (hue-free, survives a B&W print) and **High contrast**, alongside the default. A palette presets the ordinary colour pickers, so anything can still be overridden.
 - **Fixation marker shape** (VIZ-15) — circle / square / diamond / triangle / cross / X / star / hexagon; a channel that reads in black & white.
 - **Forward vs. regression saccade colouring** (VIZ-19) — a two-way split between one uniform colour and the full five-class breakdown.

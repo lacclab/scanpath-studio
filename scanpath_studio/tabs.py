@@ -1993,6 +1993,11 @@ def render_single_trial_tab(
                     combos,
                     key_prefix="single",
                     filter_cols=_filter_fields_for(words_all, fixations_all),
+                    # UX-10: the frames `combos` was built from, so the ⇅ sort
+                    # popover can offer computed keys (fixation count, reading
+                    # time) alongside the reader / text / condition columns.
+                    words=words_filtered,
+                    fixations=fixations_filtered,
                 )
             )
         # Slots filled once the selection is resolved (chips need the trial). The

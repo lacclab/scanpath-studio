@@ -34,7 +34,7 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
-**UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-16**
+**UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-10** (sortable trial picker), **UX-16**
 (collapsed citation), **UX-17** (docs link), **UX-18** (Corpus Analysis
 discoverability), **VIZ-15** (marker shape), **VIZ-17** (uniform fixation
 colour), **VIZ-18** (selectable palettes), **VIZ-19** (two-way saccade
@@ -102,7 +102,7 @@ can't be set to an exact value. Pair the `global_*` sliders in
 precise value can be typed. Purely a widget change — the session keys and every
 downstream surface stay as they are.
 
-**UX-10 · Sort trial / reader / text pickers by properties** — `Status: Planned`
+**UX-10 · Sort trial / reader / text pickers by properties** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 The trial-combo selector (`utils.build_combo_options`) lists combos in data
 order. Add a sort control keyed on reader properties, text properties, and

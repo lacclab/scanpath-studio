@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -234,7 +234,11 @@ def trial_sort_keys(
         frame = fixations if which == "fixations" else words
         # The stat is keyed by the *plain* trial id on the data frames; combos may
         # be keyed by unique_trial_id, so fall back when the field is absent.
-        field = trial_field if (frame is not None and trial_field in frame.columns) else "trial_id"
+        field = (
+            trial_field
+            if (frame is not None and trial_field in frame.columns)
+            else "trial_id"
+        )
         series = _per_trial_stat(frame, field, how)
         if not series.empty:
             keys[label] = series
@@ -244,13 +248,16 @@ def trial_sort_keys(
     for col in _TRIAL_SORT_PREFERRED_COLS:
         if col not in combos.columns or col == trial_field:
             continue
-        series = combos.groupby(ids, sort=False)[col].nunique(dropna=False)
-        if (series > 1).any():  # varies within a trial — not a trial-level key
-            continue
-        values = combos.drop_duplicates(subset=[trial_field]).set_index(ids.unique())[
-            col
-        ]
-        keys[col.replace("_", " ").capitalize()] = values
+        if (combos.groupby(ids, sort=False)[col].nunique(dropna=False) > 1).any():
+            continue  # varies within a trial — can't order the pool by it
+        # Build the id→value Series from the deduplicated rows explicitly: an
+        # Arrow-backed `ids.unique()` isn't accepted as a `set_index` key, and
+        # pairing the two `.to_numpy()`s keeps id and value on the same row.
+        deduped = combos.drop_duplicates(subset=[trial_field])
+        keys[col.replace("_", " ").capitalize()] = pd.Series(
+            deduped[col].to_numpy(),
+            index=deduped[trial_field].astype(str).to_numpy(),
+        )
     return keys
 
 
@@ -298,21 +305,64 @@ def _trial_display_label(trial_id) -> str:
     return text
 
 
+def _render_trial_sort_popover(
+    host,
+    combos: pd.DataFrame,
+    trial_field: str,
+    key_prefix: str,
+    *,
+    words: Optional[pd.DataFrame],
+    fixations: Optional[pd.DataFrame],
+) -> Tuple[Optional[pd.Series], bool]:
+    """The ⇅ sort control beside the trial picker (UX-10).
+
+    Lives in a popover rather than inline: the picker row is already a selectbox,
+    a slider and two step buttons wide, and sorting is a "set it once" choice, not
+    a per-trial one. Returns ``(key_series, descending)`` for
+    :func:`sort_trial_options` — ``(None, …)`` for the default id order.
+    """
+    keys = trial_sort_keys(combos, trial_field, words=words, fixations=fixations)
+    if not keys:
+        return None, False
+    options = [TRIAL_SORT_DEFAULT, *keys]
+    state_key = f"{key_prefix}_trial_sort"
+    if st.session_state.get(state_key) not in options:
+        st.session_state[state_key] = TRIAL_SORT_DEFAULT
+    with host.popover("⇅", width="content", help="Sort the trial list"):
+        choice = st.selectbox(
+            "Sort trials by",
+            options=options,
+            key=state_key,
+            help="Reorder the picker so outliers surface without scrolling — by a "
+            "computed stat (fixation count, reading time) or a reader / text / "
+            "condition property.",
+        )
+        descending = st.checkbox("Descending", key=f"{key_prefix}_trial_sort_desc")
+    if choice == TRIAL_SORT_DEFAULT:
+        return None, False
+    return keys[choice], bool(descending)
+
+
 def _select_trial_none_mode(
     combos: pd.DataFrame,
     trial_field: str,
     text_field: str,
     key_prefix: str,
     picker_host=None,
+    *,
+    words: Optional[pd.DataFrame] = None,
+    fixations: Optional[pd.DataFrame] = None,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """The trial picker: a **selectbox + scrubbing slider + ◀ ▶ step buttons**,
-    all on one row. The slider thumb shows ``index/TOTAL · id`` (index first). The
-    pool is narrowed upstream (the "Narrow by" multiselects + the "More" filters),
-    so this just picks one trial from it.
+    """The trial picker: a **selectbox + scrubbing slider + ◀ ▶ step buttons + a ⇅
+    sort popover**, all on one row. The slider thumb shows ``index/TOTAL · id``
+    (index first). The pool is narrowed upstream (the "Narrow by" multiselects +
+    the "More" filters), so this just picks one trial from it and orders it.
 
     Creates its own row of columns, so call it where columns are allowed (the
     Scanpath/Corpus body), not nested inside another column. ``picker_host``
-    (when given) is the container to render into; defaults to the current one."""
+    (when given) is the container to render into; defaults to the current one.
+    ``words`` / ``fixations`` (optional) unlock the computed sort keys (UX-10);
+    without them only column-based orderings are offered."""
     host = picker_host if picker_host is not None else st
     available_trials = combos.drop_duplicates(subset=[trial_field])
     trial_options = sorted(available_trials[trial_field].dropna().astype(str).unique())
@@ -375,10 +425,28 @@ def _select_trial_none_mode(
             # so a separate "Trial X / N" caption is redundant.
             return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_option_label(value)}"
 
-        # One row: [selectbox] [slider] [◀][▶] — arrows adjacent at the end.
-        sel_col, slider_col, prev_col, next_col = host.columns(
-            [3, 5, 0.55, 0.55], vertical_alignment="bottom"
+        # One row: [selectbox] [slider] [◀][▶][⇅] — arrows adjacent at the end,
+        # then the UX-10 sort popover.
+        sel_col, slider_col, prev_col, next_col, sort_col = host.columns(
+            [3, 5, 0.55, 0.55, 0.55], vertical_alignment="bottom"
         )
+        # UX-10: order the pool *before* the widgets read `trial_options`, so the
+        # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
+        # canonical selection is a trial *id*, so re-sorting never changes which
+        # trial is selected — only where it sits in the list.
+        sort_key, sort_desc = _render_trial_sort_popover(
+            sort_col,
+            combos,
+            trial_field,
+            key_prefix,
+            words=words,
+            fixations=fixations,
+        )
+        if sort_key is not None:
+            trial_options = sort_trial_options(
+                trial_options, sort_key, descending=sort_desc
+            )
+            idx_of = {opt: i for i, opt in enumerate(trial_options)}
         current_idx = trial_options.index(current_label)
     else:
         sel_col = host
@@ -540,6 +608,9 @@ def select_trial(
     key_prefix: str = "",
     picker_host=None,
     filter_cols: Optional[Iterable[str]] = None,
+    *,
+    words: Optional[pd.DataFrame] = None,
+    fixations: Optional[pd.DataFrame] = None,
 ) -> Tuple[Optional[str], Optional[str], str, Optional[str]]:
     """Pick a specific trial from the (already-narrowed) pool.
 
@@ -556,6 +627,10 @@ def select_trial(
     the **More** popover). Composite components that are also filter columns are
     dropped from the cascading selectors so the trial picker stays identical across
     datasets — those columns narrow via **More** instead (UX-5).
+
+    ``words`` / ``fixations`` (optional) are the frames ``combos`` was built from;
+    passing them unlocks the UX-10 ⇅ sort popover's computed keys (fixation count,
+    reading time). Without them the sort still offers the column-based orderings.
 
     Returns:
         Tuple of (participant_id, trial_id, selection_mode, selected_text).
@@ -583,7 +658,13 @@ def select_trial(
         )
     else:
         participant, trial, text = _select_trial_none_mode(
-            combos, trial_field, text_field, key_prefix, picker_host=picker_host
+            combos,
+            trial_field,
+            text_field,
+            key_prefix,
+            picker_host=picker_host,
+            words=words,
+            fixations=fixations,
         )
 
     return participant, trial, "Trial", text

@@ -70,7 +70,7 @@ The app is organized into three tabs:
 
 ![Project map: built vs. planned capabilities](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/project_map.png)
 
-*Solid = built, dashed = planned ([IMPROVEMENTS.md](IMPROVEMENTS.md)).*
+*Solid = built, dashed = planned (see the [improvements tracker](tracker/index.html)).*
 
 ## Your data
 

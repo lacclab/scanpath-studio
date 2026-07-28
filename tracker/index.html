@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scanpath Studio — Improvements tracker</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfbfa;
+    --panel: #ffffff;
+    --panel-2: #f3f4f2;
+    --ink: #1c1c1a;
+    --ink-dim: #63645f;
+    --ink-faint: #8d8e88;
+    --line: #e2e2de;
+    --line-soft: #ededea;
+    --accent: #2f6f4f;
+    --accent-soft: #e4f0e9;
+    --code-bg: #f1f2ef;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181a;
+      --panel: #1e2124;
+      --panel-2: #24282c;
+      --ink: #e8e9e6;
+      --ink-dim: #a3a7a3;
+      --ink-faint: #7c817d;
+      --line: #303539;
+      --line-soft: #282d31;
+      --accent: #7fc79c;
+      --accent-soft: #23372c;
+      --code-bg: #24282c;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
+    }
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg:#fbfbfa; --panel:#fff; --panel-2:#f3f4f2; --ink:#1c1c1a; --ink-dim:#63645f;
+    --ink-faint:#8d8e88; --line:#e2e2de; --line-soft:#ededea; --accent:#2f6f4f;
+    --accent-soft:#e4f0e9; --code-bg:#f1f2ef;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
+  }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg:#16181a; --panel:#1e2124; --panel-2:#24282c; --ink:#e8e9e6; --ink-dim:#a3a7a3;
+    --ink-faint:#7c817d; --line:#303539; --line-soft:#282d31; --accent:#7fc79c;
+    --accent-soft:#23372c; --code-bg:#24282c;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; font-size: .88em; }
+  pre { background: var(--code-bg); padding: .7em .9em; border-radius: 8px; overflow-x: auto; font-size: .85em; }
+  pre code { background: none; padding: 0; }
+
+  /* ---------- header ---------- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar { display: flex; align-items: center; gap: 14px; padding: 12px 22px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+  .brand h1 { font-size: 17px; margin: 0; letter-spacing: -.01em; }
+  .brand .sub { color: var(--ink-faint); font-size: 12.5px; }
+  .search {
+    flex: 1 1 260px; max-width: 420px; min-width: 180px;
+    padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--ink); font-size: 14px;
+  }
+  .search:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  button, select {
+    font: inherit; font-size: 13px; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  button:hover { background: var(--panel-2); }
+  button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+
+  /* ---------- layout ---------- */
+  .wrap { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 26px; padding: 22px; max-width: 1240px; margin: 0 auto; align-items: start; }
+  aside { position: sticky; top: 68px; }
+  .facet { margin-bottom: 20px; }
+  .facet h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--ink-faint); margin: 0 0 8px; font-weight: 600;
+  }
+  .chip {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    border: 0; background: none; padding: 4px 7px; border-radius: 7px; color: var(--ink-dim); font-size: 13.2px;
+  }
+  .chip:hover { background: var(--panel-2); }
+  .chip.on { background: var(--accent-soft); color: var(--ink); font-weight: 550; }
+  .chip .n { margin-left: auto; color: var(--ink-faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .progress { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; margin: 6px 0 4px; }
+  .progress > span { display: block; height: 100%; background: var(--accent); }
+  .meta { font-size: 12px; color: var(--ink-faint); }
+
+  /* ---------- items ---------- */
+  section.group { margin-bottom: 30px; scroll-margin-top: 72px; }
+  section.group > h2 {
+    font-size: 15.5px; margin: 0 0 4px; letter-spacing: -.01em;
+    display: flex; align-items: baseline; gap: 9px;
+  }
+  section.group > h2 .n { color: var(--ink-faint); font-size: 12px; font-weight: 400; }
+  .blurb { color: var(--ink-dim); font-size: 13.4px; margin: 0 0 12px; }
+  .blurb p { margin: .4em 0; }
+
+  .item {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    margin-bottom: 8px; overflow: hidden; scroll-margin-top: 72px;
+  }
+  .item.open { box-shadow: var(--shadow); }
+  .item.hit { border-color: var(--accent); }
+  .head {
+    display: flex; align-items: flex-start; gap: 10px; padding: 10px 13px; cursor: pointer;
+    width: 100%; background: none; border: 0; text-align: left; color: inherit;
+  }
+  .head:hover { background: var(--panel-2); }
+  .idbadge {
+    flex: none; font-size: 11.5px; font-weight: 600; letter-spacing: .02em;
+    padding: 2px 7px; border-radius: 6px; background: var(--panel-2); color: var(--ink-dim);
+    border: 1px solid var(--line-soft); margin-top: 1px;
+  }
+  .titles { flex: 1 1 auto; min-width: 0; }
+  .ttl { font-size: 14.2px; font-weight: 550; letter-spacing: -.005em; }
+  .item.archived .ttl { font-weight: 450; color: var(--ink-dim); }
+  .sub { font-size: 12px; color: var(--ink-faint); margin-top: 1px; }
+  .status {
+    flex: none; font-size: 11.5px; padding: 2px 9px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; margin-top: 1px;
+    background: var(--panel-2); color: var(--ink-dim); border: 1px solid var(--line-soft);
+  }
+  .body { padding: 2px 15px 15px 15px; border-top: 1px solid var(--line-soft); }
+  .body > *:first-child { margin-top: .8em; }
+  .body p, .body ul, .body ol, .body blockquote, .body table, .body pre { margin: .65em 0; }
+  .body ul, .body ol { padding-left: 1.3em; }
+  .body li { margin: .25em 0; }
+  .body blockquote {
+    border-left: 3px solid var(--line); margin-left: 0; padding: .1em 0 .1em .9em; color: var(--ink-dim);
+  }
+  .body table { border-collapse: collapse; font-size: 13px; display: block; overflow-x: auto; }
+  .body th, .body td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+  .body th { background: var(--panel-2); font-weight: 600; }
+  .ref { font-weight: 600; }
+  .empty { color: var(--ink-faint); padding: 40px 0; text-align: center; }
+
+  dialog {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink);
+    max-width: 660px; width: calc(100% - 40px); padding: 22px 24px; box-shadow: var(--shadow);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h3 { margin: 0 0 10px; font-size: 16px; }
+  dialog h4 { margin: 18px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); }
+  dialog ul { padding-left: 1.2em; font-size: 13.6px; }
+  .close { position: absolute; top: 14px; right: 16px; }
+
+  @media (max-width: 860px) {
+    .wrap { grid-template-columns: 1fr; }
+    aside { position: static; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand">
+      <h1>Improvements tracker</h1>
+      <span class="sub">Scanpath Studio</span>
+    </div>
+    <input id="q" class="search" type="search" placeholder="Search id, title, text…  (/)">
+    <button id="expand">Expand all</button>
+    <button id="help">How this works</button>
+    <button id="theme" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside>
+    <div class="facet">
+      <h2>Progress</h2>
+      <div class="progress"><span id="bar"></span></div>
+      <div class="meta" id="progressText"></div>
+    </div>
+    <div class="facet">
+      <h2>Status</h2>
+      <div id="statuses"></div>
+    </div>
+    <div class="facet">
+      <h2>Group</h2>
+      <div id="groups"></div>
+    </div>
+    <div class="facet">
+      <h2>View</h2>
+      <button class="chip" id="toggleArchive"><span class="dot" style="background:var(--ink-faint)"></span>Show archived<span class="n" id="archN"></span></button>
+      <button class="chip" id="reset">Reset filters</button>
+    </div>
+  </aside>
+
+  <main id="list"></main>
+</div>
+
+<dialog id="helpBox">
+  <button class="close" onclick="helpBox.close()">✕</button>
+  <h3>How this tracker works</h3>
+  <p style="font-size:13.6px;color:var(--ink-dim)">
+    Every item has a stable <b>ID</b> you can cite in chat ("let's do <code>CMP-3</code>"),
+    a <b>status</b>, and a short write-up with code anchors. The data lives in
+    <code>tracker/data.js</code> — edit that file; this page just reads it.
+  </p>
+
+  <h4>Status</h4>
+  <ul>
+    <li><b>Backlog</b> — captured, not scheduled, but eligible.</li>
+    <li><b>Planned</b> — next-ish, scoped.</li>
+    <li><b>In progress</b> · <b>Blocked</b>.</li>
+    <li><b>Parked</b> — deliberately deferred; <i>not</i> to be picked up as ordinary next
+      work. Park with a date and a one-line reason; unparking is just a status change.</li>
+    <li><b>Pending approval</b> — implemented, awaiting the user's final sign-off.</li>
+    <li><b>Done</b> / <b>Dropped</b> — set <code>"archived": true</code> at the same time.</li>
+  </ul>
+
+  <h4>Rules</h4>
+  <ul>
+    <li><b>Approval gate.</b> When implementation is finished, mark it
+      <code>Pending approval</code> — never jump straight to <code>Done</code>. Only after the
+      user signs off does it become <code>Done</code> + <code>archived: true</code>. An item
+      closed <i>without</i> being implemented is archived the same way, with the reason.</li>
+    <li><b>IDs are stable.</b> Never renumber. New items take the next free number in their
+      prefix (see below); archived items keep their ID.</li>
+    <li><b>Composite asks are split</b> into sub-items so they can land independently.</li>
+    <li>When implementing an item, ask for clarification as needed before starting.</li>
+    <li>When any view, measure, severity, or path here lands, update <code>AGENTS.md</code>,
+      <code>scanpath_studio/CLAUDE.md</code>, <code>CHANGELOG.md</code> and the
+      <code>docs/</code> site in the same change.</li>
+  </ul>
+
+  <h4>Next free ID</h4>
+  <div id="nextIds" class="mono" style="font-size:12.5px;color:var(--ink-dim);line-height:1.9"></div>
+
+  <h4>Adding an item</h4>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Append to <code>items</code> in
+    <code>tracker/data.js</code>. <code>body</code> is an array of markdown lines
+    (one entry per source line, so diffs stay line-by-line):</p>
+  <pre><code>{
+ "id": "VIZ-22",
+ "prefix": "VIZ", "num": 22, "sub": "",
+ "title": "Short imperative title",
+ "status": "Backlog", "note": "", "date": "",
+ "group": "Visualization &amp; display", "subgroup": "",
+ "archived": false,
+ "body": ["First line of the write-up.", "Second line — **VIZ-4** cross-refs auto-link."]
+}</code></pre>
+</dialog>
+
+<script src="data.js"></script>
+<script>
+(() => {
+  const DATA = window.TRACKER;
+  const ITEMS = DATA.items;
+  const BY_ID = new Map(ITEMS.map(i => [i.id, i]));
+  const ORDER = ["In progress", "Pending approval", "Blocked", "Planned", "Backlog",
+                 "Partly done", "Decided", "Parked", "Done", "Dropped"];
+  const COLOR = {
+    "In progress": "#3b82f6", "Pending approval": "#a855f7", "Blocked": "#ef4444",
+    "Planned": "#0ea5e9", "Backlog": "#94a3b8", "Partly done": "#14b8a6",
+    "Decided": "#8b5cf6", "Parked": "#f59e0b", "Done": "#22c55e", "Dropped": "#64748b",
+  };
+  const color = s => COLOR[s] || "#94a3b8";
+
+  /* ---------- tiny markdown ---------- */
+  const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const ID_RE = /\b([A-Z]{2,4}-\d+[a-z]?)\b/g;
+
+  function inline(src) {
+    const code = [];
+    let s = src.replace(/`([^`]+)`/g, (_, c) => `\uE000${code.push(c) - 1}\uE000`);
+    s = esc(s);
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, href) => {
+      const ext = /^https?:|^mailto:/.test(href);
+      const url = ext ? href : "../" + href.replace(/:(\d+)$/, "");
+      return `<a href="${url}"${ext ? ' target="_blank" rel="noopener"' : ""}>${t}</a>`;
+    });
+    s = s.replace(/&lt;(https?:\/\/[^\s>]+)&gt;/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    s = s.replace(ID_RE, (m) => BY_ID.has(m) ? `<a class="ref" href="#${m}">${m}</a>` : m);
+    s = s.replace(/\\([*_`~[\]\\|])/g, "$1");
+    return s.replace(/\uE000(\d+)\uE000/g, (_, i) => `<code>${esc(code[+i])}</code>`);
+  }
+
+  function markdown(lines) {
+    const out = [];
+    let i = 0, para = [], list = null, quote = [];
+    const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; } };
+    const flushList = () => { if (list) { out.push(`<${list.tag}>${list.items.map(x => `<li>${inline(x.join(" "))}</li>`).join("")}</${list.tag}>`); list = null; } };
+    const flushQuote = () => { if (quote.length) { out.push(`<blockquote>${inline(quote.join(" "))}</blockquote>`); quote = []; } };
+    const flushAll = () => { flushPara(); flushList(); flushQuote(); };
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (/^\s*```/.test(line)) {
+        flushAll();
+        const buf = []; i++;
+        while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
+        i++;
+        out.push(`<pre><code>${esc(buf.join("\n"))}</code></pre>`);
+        continue;
+      }
+      if (/^\s*\|/.test(line)) {
+        flushAll();
+        const rows = [];
+        while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]);
+        const cells = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+        const head = cells(rows[0]);
+        const body = rows.slice(/^[\s|:-]+$/.test(rows[1] || "") ? 2 : 1);
+        out.push(`<table><thead><tr>${head.map(h => `<th>${inline(h)}</th>`).join("")}</tr></thead><tbody>`
+          + body.map(r => `<tr>${cells(r).map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")
+          + `</tbody></table>`);
+        continue;
+      }
+      if (!line.trim()) { flushAll(); i++; continue; }
+      const bullet = line.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+      if (bullet) {
+        flushPara(); flushQuote();
+        const tag = /\d/.test(bullet[2]) ? "ol" : "ul";
+        if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
+        list.items.push([bullet[3]]);
+        i++; continue;
+      }
+      if (list && /^\s+\S/.test(line)) { list.items[list.items.length - 1].push(line.trim()); i++; continue; }
+      const q = line.match(/^>\s?(.*)$/);
+      if (q) { flushPara(); flushList(); quote.push(q[1]); i++; continue; }
+      flushList(); flushQuote();
+      para.push(line.trim());
+      i++;
+    }
+    flushAll();
+    return out.join("");
+  }
+
+  /* ---------- state ---------- */
+  const saved = JSON.parse(localStorage.getItem("tracker-ui") || "{}");
+  const state = {
+    q: "", status: new Set(saved.status || []), group: saved.group || null,
+    archive: !!saved.archive, expandAll: false,
+  };
+  const persist = () => localStorage.setItem("tracker-ui",
+    JSON.stringify({ status: [...state.status], group: state.group, archive: state.archive }));
+  const openIds = new Set();
+
+  const visiblePool = () => ITEMS.filter(i => state.archive ? true : !i.archived);
+
+  function matches(it) {
+    if (!state.archive && it.archived) return false;
+    if (state.status.size && !state.status.has(it.status)) return false;
+    if (state.group && it.group !== state.group) return false;
+    if (state.q) {
+      const hay = (it.id + " " + it.title + " " + it.status + " " + it.note + " " + it.body.join(" ")).toLowerCase();
+      if (!state.q.split(/\s+/).every(t => hay.includes(t))) return false;
+    }
+    return true;
+  }
+
+  /* ---------- render ---------- */
+  const el = id => document.getElementById(id);
+
+  function renderFacets() {
+    const pool = visiblePool();
+    const counts = {};
+    pool.forEach(i => counts[i.status] = (counts[i.status] || 0) + 1);
+    el("statuses").innerHTML = ORDER.filter(s => counts[s]).map(s => `
+      <button class="chip ${state.status.has(s) ? "on" : ""}" data-status="${s}">
+        <span class="dot" style="background:${color(s)}"></span>${s}<span class="n">${counts[s]}</span>
+      </button>`).join("");
+
+    const gc = {};
+    pool.forEach(i => gc[i.group] = (gc[i.group] || 0) + 1);
+    el("groups").innerHTML = DATA.groups.filter(g => gc[g.name]).map(g => `
+      <button class="chip ${state.group === g.name ? "on" : ""}" data-group="${g.name}">
+        ${g.name}<span class="n">${gc[g.name]}</span>
+      </button>`).join("");
+
+    const done = ITEMS.filter(i => i.archived).length;
+    el("bar").style.width = Math.round(done / ITEMS.length * 100) + "%";
+    el("progressText").textContent = `${done} archived · ${ITEMS.length - done} open · ${ITEMS.length} total`;
+    el("archN").textContent = done;
+    el("toggleArchive").classList.toggle("on", state.archive);
+  }
+
+  function itemHTML(it) {
+    const open = state.expandAll || openIds.has(it.id);
+    const sub = [it.subgroup, it.note].filter(Boolean).join(" · ");
+    return `<article class="item ${open ? "open" : ""} ${it.archived ? "archived" : ""}" id="${it.id}">
+      <button class="head" data-id="${it.id}">
+        <span class="idbadge">${it.id}</span>
+        <span class="titles">
+          <span class="ttl">${inline(it.title)}</span>
+          ${sub ? `<div class="sub">${inline(sub)}</div>` : ""}
+        </span>
+        <span class="status"><span class="dot" style="background:${color(it.status)}"></span>${it.status}</span>
+      </button>
+      ${open ? `<div class="body">${markdown(it.body)}</div>` : ""}
+    </article>`;
+  }
+
+  function render() {
+    renderFacets();
+    const shown = ITEMS.filter(matches);
+    const rank = s => { const i = ORDER.indexOf(s); return i < 0 ? 99 : i; };
+    const html = DATA.groups.map(g => {
+      const mine = shown.filter(i => i.group === g.name)
+        .sort((a, b) => rank(a.status) - rank(b.status) || a.prefix.localeCompare(b.prefix)
+          || a.num - b.num || a.sub.localeCompare(b.sub));
+      if (!mine.length) return "";
+      const blurb = g.blurb.length && !state.q ? `<div class="blurb">${markdown(g.blurb)}</div>` : "";
+      const note = state.archive && !state.q && g.archiveNote.length
+        ? `<div class="blurb">${markdown(g.archiveNote)}</div>` : "";
+      return `<section class="group" id="g-${g.name.replace(/\W+/g, "-")}">
+        <h2>${g.name}<span class="n">${mine.length}</span></h2>
+        ${blurb}${note}${mine.map(itemHTML).join("")}
+      </section>`;
+    }).join("");
+    el("list").innerHTML = html || `<div class="empty">Nothing matches those filters.</div>`;
+  }
+
+  /* ---------- events ---------- */
+  el("list").addEventListener("click", e => {
+    const head = e.target.closest(".head");
+    if (!head) return;
+    const id = head.dataset.id;
+    if (state.expandAll) { state.expandAll = false; el("expand").classList.remove("on"); ITEMS.forEach(i => openIds.add(i.id)); }
+    openIds.has(id) ? openIds.delete(id) : openIds.add(id);
+    render();
+    document.getElementById(id)?.scrollIntoView({ block: "nearest" });
+  });
+
+  document.querySelector("aside").addEventListener("click", e => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    if (chip.dataset.status) {
+      const s = chip.dataset.status;
+      state.status.has(s) ? state.status.delete(s) : state.status.add(s);
+    } else if (chip.dataset.group) {
+      state.group = state.group === chip.dataset.group ? null : chip.dataset.group;
+    } else if (chip.id === "toggleArchive") {
+      state.archive = !state.archive;
+    } else if (chip.id === "reset") {
+      state.status.clear(); state.group = null; state.archive = false;
+      el("q").value = ""; state.q = "";
+    }
+    persist(); render();
+  });
+
+  let t;
+  el("q").addEventListener("input", e => {
+    clearTimeout(t);
+    t = setTimeout(() => { state.q = e.target.value.trim().toLowerCase(); render(); }, 120);
+  });
+
+  el("expand").addEventListener("click", () => {
+    state.expandAll = !state.expandAll;
+    el("expand").classList.toggle("on", state.expandAll);
+    el("expand").textContent = state.expandAll ? "Collapse all" : "Expand all";
+    if (!state.expandAll) openIds.clear();
+    render();
+  });
+
+  el("help").addEventListener("click", () => {
+    const next = {};
+    ITEMS.forEach(i => next[i.prefix] = Math.max(next[i.prefix] || 0, i.num));
+    el("nextIds").innerHTML = Object.keys(next).sort()
+      .map(p => `${p}-${next[p] + 1}`).join(" &nbsp;·&nbsp; ");
+    el("helpBox").showModal();
+  });
+
+  el("theme").addEventListener("click", () => {
+    const cur = document.documentElement.dataset.theme;
+    const nextTheme = cur === "dark" ? "light" : cur === "light" ? "" : "dark";
+    document.documentElement.dataset.theme = nextTheme;
+    localStorage.setItem("tracker-theme", nextTheme);
+  });
+  document.documentElement.dataset.theme = localStorage.getItem("tracker-theme") || "";
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "/" && document.activeElement !== el("q")) { e.preventDefault(); el("q").focus(); }
+    if (e.key === "Escape" && document.activeElement === el("q")) { el("q").value = ""; state.q = ""; render(); }
+  });
+
+  function jumpToHash() {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!BY_ID.has(id)) return;
+    const it = BY_ID.get(id);
+    if (it.archived && !state.archive) { state.archive = true; persist(); }
+    if (state.group && it.group !== state.group) state.group = null;
+    if (state.status.size && !state.status.has(it.status)) state.status.clear();
+    openIds.add(id);
+    render();
+    const node = document.getElementById(id);
+    node?.scrollIntoView({ block: "center" });
+    node?.classList.add("hit");
+  }
+  window.addEventListener("hashchange", jumpToHash);
+
+  render();
+  jumpToHash();
+})();
+</script>
+</body>
+</html>

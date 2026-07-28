@@ -17,8 +17,8 @@ you work under `scanpath_studio/`); contributor setup is in
   missed format fails the build. Don't skip it, even for "docs-only" changes.
 - **Update `CHANGELOG.md` as you go** — **one scannable line per item** under the
   `[Unreleased]` section (grouped Added / Changed / Fixed), not a per-tweak log
-  and not a design doc. If it needs a paragraph, the paragraph belongs in
-  `IMPROVEMENTS.md` / `IMPROVEMENTS_ARCHIVE.md`; the changelog gets the one-line
+  and not a design doc. If it needs a paragraph, the paragraph belongs in the
+  item's write-up in `tracker/data.js`; the changelog gets the one-line
   version. A bug fix may take two lines when the *wrong* behaviour needs naming.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
@@ -47,13 +47,20 @@ you work under `scanpath_studio/`); contributor setup is in
 
 ## Tracking work
 
-- Open work lives in [`IMPROVEMENTS.md`](IMPROVEMENTS.md): grouped sections with
-  stable IDs (e.g. `CMP-3`) and a `Status`. When an item is signed off, **cut it
-  from that file** and write it up as `Done` in
-  [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md) — `IMPROVEMENTS.md` lists
-  only open work (plus a one-line per-section pointer to the archive).
+- All work — open **and** archived — lives in [`tracker/data.js`](tracker/data.js),
+  one object per item with a stable ID (e.g. `CMP-3`), a `Status`, a group, and a
+  `body` array of markdown lines. Edit that file; open
+  [`tracker/index.html`](tracker/index.html) in a browser to read it (search,
+  status/group filters, cross-referenced IDs, `#ID` deep links). It replaces the
+  old `IMPROVEMENTS.md` / `IMPROVEMENTS_ARCHIVE.md` pair.
+- **Approval gate.** Finished implementing → `Status: Pending approval`; **never**
+  jump straight to `Done`. On the user's sign-off, set `"status": "Done"` **and**
+  `"archived": true` (same for an item closed without being implemented — record
+  the reason in `note`). Archived items are hidden until *Show archived*.
+- **IDs are stable** — never renumber. New items take the next free number in
+  their prefix (the app's *How this works* panel prints it).
 - **Notice an unrelated issue?** Fix it on the spot if it's small; otherwise add
-  it to `IMPROVEMENTS.md` so it doesn't get lost.
+  an item to `tracker/data.js` so it doesn't get lost.
 
 ## On release
 

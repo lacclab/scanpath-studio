@@ -1,6 +1,6 @@
 # ENG-15 — Standalone desktop application (ADR + design)
 
-**Status:** accepted 2026-07-15 · **Tracker:** `IMPROVEMENTS.md → ENG-15`
+**Status:** accepted 2026-07-15 · **Tracker:** `tracker/ → ENG-15`
 
 ## Context
 

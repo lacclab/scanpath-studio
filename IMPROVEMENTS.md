@@ -421,8 +421,36 @@ plausible fiction. Either ship genuine OneStop raw samples for the bundled
 trials, or label it unmistakably as synthetic everywhere it's shown (the overlay
 control, the docs, the export).
 
+**DATA-16 · Fix the security audit's findings** — `Status: Planned`
+
+**DATA-13** produced [`docs/security.md`](docs/security.md) and deliberately
+changed no code, so the fixes land as reviewable commits with their own tests.
+Each finding names the file + function precisely enough to apply without
+re-deriving it. Ranked by what an attacker or an accident can actually achieve:
+
+| # | Sev | Finding | Fix lands in |
+| --- | --- | --- | --- |
+| S1 | High | The desktop bundle binds every interface, not just localhost | `desktop/launcher.py:main` |
+| S2 | High\* | The dataset-directory box is a server-side path oracle **and** an arbitrary-directory write | `app.py` (`_dataset_dir_input`) |
+| S3 | Med | A share link names a participant, in the URL | `url_state._render_share_body` |
+| S4 | Med | Exported tables carry an absolute local path → leaks the OS username | `export.bulk_export` |
+| S5 | Med | `frame_fingerprint` ignores the middle of a frame, so edited data can serve a stale cached result | `data.frame_fingerprint` |
+| S6 | Low–Med | A zip upload is decompressed with no size cap | `data._read_zipped_table` |
+| S7 | Low | Stimulus text is interpolated into raw HTML unescaped | `tabs` (stimulus panel) |
+| S10 | Low | The debug log handler is added per session to the process-wide root logger | `debug_log` |
+| S11 | Low | An unreachable Data Inspection download helper holds a latent leak | `tabs` |
+
+\* hosted deployments only — the app has **no authentication on any deployment**,
+so every access-control decision is made by whatever binds the port.
+
+**S1 and S2 first**: they are the only two a stranger on the network can reach at
+all, and S1 is a one-line change. S8 (MP4 temp file) and S9 (`..` in a
+*user-typed* export pattern) are accepted with reasons recorded on the page —
+don't reopen them without reading those. Related: **DATA-12**, **ENG-15**
+(desktop), **ENG-17** (a hosted mode would make S2 load-bearing).
+
 _DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) are in
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-16`._
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-17`._
 
 ---
 

@@ -256,10 +256,11 @@ _CARD_CSS = """
     padding: 0.25rem 1.5rem 0.4rem 0 !important;
     margin: 0 !important;
 }
-/* Close (✕) pinned to the card's top-right corner. */
+/* Close (✕) pinned to the card's top-right corner (top offset roughly matches
+   the right one so it doesn't hug the edge). */
 .st-key-tour_sp_close {
     position: absolute;
-    top: 0.35rem;
+    top: 0.6rem;
     right: 0.5rem;
     width: auto;
     z-index: 1;
@@ -275,6 +276,8 @@ _CARD_CSS = """
     opacity: 0.55;
 }
 .st-key-tour_sp_close button:hover { opacity: 1; }
+/* Breathing room between the progress bar and the Back / Next footer. */
+.st-key-tour_card [data-testid="stProgress"] { margin-bottom: 0.5rem; }
 """
 
 # Welcome step only: center the card like a modal and dim the app behind it

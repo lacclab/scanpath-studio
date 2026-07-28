@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Tutorial card spacing — the ✕ sits a touch lower in the corner, and the Back / Next footer no longer crowds the progress bar.
+
 ## [0.25.0] - 2026-07-16
 
 ### Added

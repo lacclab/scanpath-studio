@@ -38,13 +38,12 @@ Implemented, not yet signed off (→ archived on your confirmation):
   (contributing a dataset), **ENG-13** (corpus analysis). All four rewritten
   2026-07-29 after your "too long / too AI" note.
 - **UX-20** — the AI-assistance disclosure (rewritten shorter 2026-07-29).
-- **VIZ-18** — selectable palettes; the selector now reads *Custom* once you edit one (2026-07-29).
 - Older: **AN-28** (the one gap left from *Analysis & corpus views*); **PRE-3**
   (vertical drift correction — *you'll revisit*); **ENG-15** (standalone desktop
   app, 2026-07-16).
 
-Signed off **2026-07-29** and archived: **UX-19**, **VIZ-11**, **DATA-13**,
-**ENG-1**, **ENG-2**, **ENG-3**, **ENG-4**, **ENG-16**, **ENG-18**.
+Signed off **2026-07-29** and archived: **UX-19**, **VIZ-11**, **VIZ-18**,
+**DATA-13**, **ENG-1**, **ENG-2**, **ENG-3**, **ENG-4**, **ENG-16**, **ENG-18**.
 Signed off 2026-07-28: **UX-7**, **UX-9**, **UX-10**, **UX-11**, **VIZ-15**,
 **EXP-1**, **EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10** (working as
 intended), **BUG-11**.
@@ -217,7 +216,7 @@ _Next item: `CMP-9`._
 
 ## Visualization & display
 
-_VIZ-1 … VIZ-13, VIZ-15 are in
+_VIZ-1 … VIZ-13, VIZ-15, VIZ-17, VIZ-18, VIZ-19 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **VIZ-14 · Per-trial stimulus images from a folder + naming pattern** — `Status: Backlog`
@@ -231,45 +230,6 @@ pattern / column** (e.g. `{text_id}.png`) so per-trial images resolve without
 embedding them. Local-only (folders aren't reachable on the hosted demo); generalize
 `data._resolve_sample_image_paths` from the bundled `sample_data` dir to a
 user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus.
-
-**VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Pending approval` *(implemented 2026-07-28, follow-up 2026-07-29)*
-
-Audit the [`constants.py`](scanpath_studio/constants.py) defaults against the ways
-these figures actually get used: on-screen contrast, **printed** in a paper,
-reproduced in **black & white**, and read by **colourblind** viewers. Offer
-selectable palettes (colourblind-safe, print/greyscale-safe, high-contrast) rather
-than only the current one, and prefer a default that survives greyscale
-conversion. Interacts with **VIZ-15** (shape as a redundant channel) and
-**VIZ-17**.
-
-**Implemented (2026-07-28).** `constants.PALETTES` + `palette_settings`, applied by
-`controls.apply_palette` as the selector's `on_change`. A palette does not *replace*
-the existing colour controls — it **presets** them, writing into the same
-`global_*` keys the ordinary pickers own: `global_fixation_color`,
-`global_fixation_colorscale`, `global_heatmap_colorscale`, `global_saccade_color`,
-`global_text_color`, `global_highlight_text_color` and one key per editable saccade
-class. Every picker stays authoritative and editable afterwards; background colour
-is deliberately excluded (canvas, not marks).
-
-**Follow-up done (2026-07-29) — the selector no longer claims a palette you've
-edited away from.** `apply_palette` is one-way and fires only on change, so
-picking *Colourblind-safe* and then hand-editing one colour left the dropdown
-still reading "Colourblind-safe" while the figure no longer was. Fixed the way
-**VIZ-12** fixed it for quick views: new `controls._active_palette()` derives the
-active palette by comparing the live `global_*` values against each palette's
-`palette_state` (hex normalized — the pickers hand colours back lowercase), and
-returns `None` once they diverge. `constants.CUSTOM_PALETTE` is then offered as an
-option *only while it's true*, with a caption naming what you drifted from
-("Your own colours, edited from **Colourblind-safe**"); undo the edit and the real
-palette comes back and *Custom* disappears. Deliberately **not** in `PALETTES`, so
-`--palette`'s choices, `api._expand_palette` and `?palette=` still see exactly the
-four applicable palettes. `_collect_viz_settings` derives the name too, so Share,
-Save & restore and the export caption report `Custom` instead of a stale palette;
-`_restore_plot_config` accepts it rather than flagging the user's own valid file.
-Tests in [`tests/test_viz_palette.py`](tests/test_viz_palette.py) — including an
-`AppTest` that drives the real rail — with four mutations run to confirm they
-discriminate.
-
 
 **VIZ-20 · Hand-authored scanpaths + an "Illustration" mode** — `Status: Backlog`
 

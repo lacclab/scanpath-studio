@@ -461,6 +461,39 @@ computes that without building the figure. All four surfaces: the two
 `--anim-grid-step-ms` / `--anim-max-frames` on `render`, and the same two names as
 `animate_scanpath` overrides. Defaults unchanged.
 
+**VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Done` *(signed off 2026-07-29)*
+
+These figures get read on screen, printed in a paper, photocopied in black &
+white, and by colourblind viewers — one palette can't be right for all four, so
+they're **selectable**: `constants.PALETTES` (colourblind-safe / print-greyscale /
+high-contrast, plus the original), applied by `controls.apply_palette` as the
+selector's `on_change`.
+
+A palette **presets** rather than replaces the colour controls — it writes into
+the same `global_*` keys the ordinary pickers own (`global_fixation_color`,
+`global_fixation_colorscale`, `global_heatmap_colorscale`, `global_saccade_color`,
+`global_text_color`, `global_highlight_text_color`, one key per editable saccade
+class), so every picker stays authoritative and editable afterwards. Background
+colour is deliberately excluded (canvas, not marks).
+
+**Follow-up (2026-07-29) — the selector no longer claims a palette you've edited
+away from.** `apply_palette` is one-way and fires only on change, so picking
+*Colourblind-safe* and hand-editing one colour left the dropdown still reading
+"Colourblind-safe" while the figure no longer was. Fixed as **VIZ-12** fixed it
+for quick views: `controls._active_palette()` derives the active palette by
+comparing live `global_*` values against each palette's `palette_state` (hex
+normalized — pickers hand colours back lowercase) and returns `None` once they
+diverge. `constants.CUSTOM_PALETTE` is offered as an option *only while it's
+true*, captioned with what you drifted from ("Your own colours, edited from
+**Colourblind-safe**"); undo the edit and the real palette returns, *Custom*
+disappears. Deliberately **not** in `PALETTES`, so `--palette`'s choices,
+`api._expand_palette` and `?palette=` still see exactly the four real palettes.
+`_collect_viz_settings` derives the name too, so Share, Save & restore and the
+export caption report `Custom` instead of a stale palette; `_restore_plot_config`
+accepts it rather than flagging the user's own valid file. Tests in
+[`tests/test_viz_palette.py`](tests/test_viz_palette.py), including an `AppTest`
+driving the real rail, with four mutations run to confirm they discriminate.
+
 ---
 
 ## Bugs

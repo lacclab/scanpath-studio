@@ -25,13 +25,16 @@ from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
     DEMO_CHOICE,
+    FIXATION_SYMBOLS,
     MULTIPLEYE_BUNDLE_CHOICE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
     ONESTOP_PUBLIC_CHOICE,
     ONESTOP_REGIME_LABELS,
     ONESTOP_VARIANT_LABELS,
+    PALETTES,
     SACCADE_CLASS_EDITABLE,
+    SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SYNTHETIC_CHOICE,
@@ -41,6 +44,7 @@ from .controls import (
     _OUT_OF_TEXT_MARKERS,
     color_field_options,
     numeric_field_options,
+    palette_state,
 )
 
 # URL query-param → session_state key map for the deep-link API. Used by
@@ -106,6 +110,13 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "y_field": "global_y_field",
     "saccade_style": "global_saccade_style",
     "saccade_render_mode": "global_saccade_render_mode",
+    # VIZ-15 marker shape · VIZ-17 uniform fixation colour · VIZ-18 palette. The
+    # palette is a *preset* — the colours it implies ride in the individual params
+    # below — so it's expanded first and any explicit colour in the same link
+    # wins (see `_apply_url_palette`).
+    "fixation_symbol": "global_fixation_symbol",
+    "fixation_color": "global_fixation_color",
+    "palette": "global_palette",
     "fixation_colorscale": "global_fixation_colorscale",
     "heatmap_colorscale": "global_heatmap_colorscale",
     "saccade_color": "global_saccade_color",
@@ -204,6 +215,23 @@ _SHAREABLE_SOURCES = {
 }
 
 
+def _apply_url_palette(qp) -> None:
+    """Expand a ``?palette=<name>`` deep link into its colour session keys (VIZ-18).
+
+    A palette is a preset over the ordinary colour keys, so it must be applied
+    *before* the generic ``_URL_PRESETS`` loop — and any colour the same link
+    states explicitly has to win over it. Both fall out of skipping the keys the
+    URL already carries and using ``setdefault`` for the rest.
+    """
+    name = qp.get("palette")
+    if name not in PALETTES:
+        return
+    explicit = {_URL_PRESETS[k][0] for k in qp if k in _URL_PRESETS}
+    for state_key, value in palette_state(name).items():
+        if state_key not in explicit:
+            st.session_state.setdefault(state_key, value)
+
+
 def _apply_url_preset() -> Optional[str]:
     """Read `st.query_params` and preset Streamlit session state for deep links.
 
@@ -261,6 +289,8 @@ def _apply_url_preset() -> Optional[str]:
                     st.session_state.setdefault(f"{prefix}_slider", int(qp["trial"]))
                 except (ValueError, TypeError):
                     st.warning(f"Ignored bad URL param ?trial={qp['trial']!r}")
+
+    _apply_url_palette(qp)
 
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
         if url_key not in qp:
@@ -608,6 +638,17 @@ def _restore_plot_config(
             put(state_key, bool(layers[cfg_key]))
 
     coloring = section("coloring")
+    # VIZ-18: the palette goes FIRST — it presets the individual colour keys, and
+    # every explicit colour saved alongside it (below) must overwrite that preset,
+    # not the other way round. Same ordering rule as the `?palette=` deep link.
+    palette = coloring.get("palette")
+    if palette is not None:
+        if palette in PALETTES:
+            for state_key, value in palette_state(palette).items():
+                put(state_key, value)
+            put("global_palette", palette)
+        else:
+            skipped.append("palette")
     if "heatmap_style" in coloring:
         style = coloring["heatmap_style"]
         put_valid(
@@ -678,7 +719,7 @@ def _restore_plot_config(
     mode = coloring.get("saccade_color_mode")
     if mode is not None:
         put_valid(
-            mode in ("Uniform", "By type"),
+            mode in SACCADE_COLOR_MODES,  # VIZ-19 added "Forward / regression"
             "global_saccade_color_mode",
             mode,
             "saccade colour mode",
@@ -691,6 +732,18 @@ def _restore_plot_config(
             col = class_colors.get(cls_name)
             if isinstance(col, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", col):
                 put(f"global_saccade_class_color_{cls_name}", col)
+    # VIZ-15 marker shape · VIZ-17 uniform fixation colour.
+    symbol = coloring.get("fixation_symbol")
+    if symbol is not None:
+        put_valid(
+            symbol in FIXATION_SYMBOLS,
+            "global_fixation_symbol",
+            symbol,
+            "fixation marker shape",
+        )
+    fix_color = coloring.get("fixation_color")
+    if isinstance(fix_color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", fix_color):
+        put("global_fixation_color", fix_color)
     if "hollow_fixations" in coloring:
         put("global_hollow_fixations", bool(coloring["hollow_fixations"]))
     if "fixation_opacity" in coloring:

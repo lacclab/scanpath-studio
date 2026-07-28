@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Selectable colour palettes** (VIZ-18) — **Colourblind-safe** (Okabe–Ito), **Print / greyscale** (hue-free, survives a B&W print) and **High contrast**, alongside the default. A palette presets the ordinary colour pickers, so anything can still be overridden.
+- **Fixation marker shape** (VIZ-15) — circle / square / diamond / triangle / cross / X / star / hexagon; a channel that reads in black & white.
+- **Forward vs. regression saccade colouring** (VIZ-19) — a two-way split between one uniform colour and the full five-class breakdown.
 - **Type an exact value into any slider** (UX-9) — marker size, opacity, line width, label sizes, colour ranges and the fixation-index window each pair their slider with a number box.
 - **"Don't show this again" on the welcome tour** (UX-12) — persisted per browser in a first-party cookie; **🎓 Show tutorial** always brings it back.
 - **Documentation link in the app** (UX-17) — the docs site is now one click away from the sidebar Help group and the About popover.
 
 ### Changed
+- **Fixations default to one colour** (VIZ-17) — marker size already encodes duration, so colour is no longer spent restating it; **Color fixations by** now opts *in* to a second variable. Applies to the app, deep links, `--color-by` and the headless API.
 - **Corpus Analysis is easier to find** (UX-18) — the header toggle is a primary button with a directional cue and a one-line caption naming what's on the other side.
 - **About popover** (UX-16) — the BibTeX citation opens from a collapsed **📖 How to cite** expander instead of filling the panel.
 - **"Snap fixations above words"** (UX-13) moved into its own *Linear-reading schematic* block so it no longer reads as a drift-correction option; both it and the Arc saccade mode now name each other.

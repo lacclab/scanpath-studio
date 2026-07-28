@@ -118,6 +118,55 @@ SACCADE_CLASS_COLORS = {
 # fixed grey).
 SACCADE_CLASS_EDITABLE = SACCADE_CLASS_ORDER[:-1]
 
+# VIZ-19 · saccade colour modes. The five-way "By type" split is more than most
+# figures need, so there's a middle option between one flat colour and the full
+# reading-class breakdown: "Forward / regression", the distinction almost every
+# reading paper actually draws. It reuses the same per-class machinery — the
+# classes are just folded into two buckets before the segments are built, so the
+# colour pickers, the legend toggle and every surface stay as they are.
+SACCADE_COLOR_MODES = ("Uniform", "Forward / regression", "By type")
+SACCADE_DIRECTION_CLASSES = ("forward", "regression")
+# reading class → the bucket it is drawn in under "Forward / regression".
+# ``other`` stays ``other`` (grey catch-all) so unclassifiable saccades aren't
+# silently counted as progressive.
+SACCADE_DIRECTION_FOLD = {
+    "forward": "forward",
+    "skip": "forward",
+    "refixation": "forward",
+    "return_sweep": "forward",
+    "regression": "regression",
+    "other": "other",
+}
+SACCADE_DIRECTION_LABELS = {
+    "forward": "Forward",
+    "regression": "Regression",
+    "other": "Other",
+}
+
+# VIZ-15 · fixation marker shape. Plotly symbol name → the label shown in the
+# picker. Shape is a *second* encoding channel, and unlike hue it survives
+# greyscale printing — so it pairs with VIZ-17 (colour freed up once it stops
+# duplicating size) and VIZ-18 (print / colourblind palettes).
+FIXATION_SYMBOLS = {
+    "circle": "● Circle",
+    "square": "■ Square",
+    "diamond": "◆ Diamond",
+    "triangle-up": "▲ Triangle",
+    "cross": "✚ Cross",
+    "x": "✖ X",
+    "star": "★ Star",
+    "hexagon": "⬡ Hexagon",
+}
+DEFAULT_FIXATION_SYMBOL = "circle"
+
+# VIZ-17 · the "Color fixations by" option meaning *don't* map a variable to hue.
+# Marker size already encodes fixation duration, so colouring by duration too
+# double-encodes one variable and spends the colour channel on nothing. The
+# default is therefore one flat colour, and colour-by is an explicit opt-in for a
+# *different* variable (surprisal, frequency, line, pass index).
+UNIFORM_COLOR_FIELD = "(uniform)"
+DEFAULT_FIXATION_COLOR = "#1f77b4"
+
 # Outline width (px) for hollow (outline-only) fixation markers.
 HOLLOW_OUTLINE_WIDTH = 2.0
 
@@ -136,6 +185,118 @@ BACKGROUND_PRESETS = {
 
 CANVAS_PAD_MIN_PX = 20.0
 CANVAS_PAD_FRACTION = 0.05
+
+
+# --- VIZ-18 · selectable palettes --------------------------------------------
+# These figures don't only get looked at on the screen they were made on: they go
+# into papers (printed, sometimes in black & white) and are read by colourblind
+# viewers. One palette can't serve all of that, so the colour defaults are a
+# *choice* rather than a constant.
+#
+# A palette is a preset, not a second rendering path: picking one writes the
+# ordinary per-element colour keys, so every existing picker still overrides it
+# and every surface (deep link, Save & restore, CLI, API) carries the resulting
+# colours with no new plumbing. ``palette_settings`` returns the figure-kwarg
+# form; ``controls.apply_palette`` writes the session keys.
+#
+# Rules each non-default palette follows:
+#   * hues distinguishable under deuteranopia/protanopia (no red-vs-green pair
+#     carrying meaning on its own), and
+#   * **lightness** ordered as well as hue, so the figure still reads after a
+#     greyscale conversion. Marker shape (VIZ-15) and the two-way saccade mode
+#     (VIZ-19) are the redundant channels when colour alone can't carry it.
+PALETTES: dict[str, dict] = {
+    "Default": {
+        "description": "The original palette — tuned for a colour screen.",
+        "fixation_color": DEFAULT_FIXATION_COLOR,
+        "fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
+        "heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
+        "saccade_color": SACCADE_COLOR,
+        "saccade_class_colors": dict(SACCADE_CLASS_COLORS),
+        "word_label_color": WORD_LABEL_COLOR,
+        "highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
+        "background_color": DEFAULT_BACKGROUND_COLOR,
+    },
+    # Okabe & Ito's eight-colour set — the de-facto standard for qualitative
+    # colourblind-safe encoding — plus Viridis, which is both perceptually
+    # uniform and safe across the common deficiencies.
+    "Colourblind-safe": {
+        "description": "Okabe–Ito hues + Viridis scales; safe for deuteran-, "
+        "protan- and tritanopia.",
+        "fixation_color": "#0072B2",  # blue
+        "fixation_colorscale": "Viridis",
+        "heatmap_colorscale": "Viridis",
+        "saccade_color": "#CC79A7",  # reddish purple
+        "saccade_class_colors": {
+            "forward": "#009E73",  # bluish green
+            "skip": "#56B4E9",  # sky blue
+            "refixation": "#CC79A7",  # reddish purple
+            "return_sweep": "#E69F00",  # orange
+            "regression": "#D55E00",  # vermillion
+            "other": "#999999",
+        },
+        "word_label_color": "#000000",
+        "highlight_text_color": "#D55E00",
+        "background_color": "#ffffff",
+    },
+    # Lightness-only encoding: everything survives a black & white print or
+    # photocopy, because nothing depends on hue at all.
+    "Print / greyscale": {
+        "description": "Greys only — nothing depends on hue, so it survives a "
+        "black & white print. Pair with marker shape.",
+        "fixation_color": "#1a1a1a",
+        "fixation_colorscale": "Greys",
+        "heatmap_colorscale": "Greys",
+        "saccade_color": "#7a7a7a",
+        "saccade_class_colors": {
+            # Ordered by lightness, darkest = the thing you're looking for.
+            "forward": "#a6a6a6",
+            "skip": "#8a8a8a",
+            "refixation": "#5e5e5e",
+            "return_sweep": "#c4c4c4",
+            "regression": "#000000",
+            "other": "#d9d9d9",
+        },
+        "word_label_color": "#333333",
+        "highlight_text_color": "#000000",
+        "background_color": "#ffffff",
+    },
+    # Maximum separation from the background and from each other — projectors,
+    # low-quality displays, and low-vision viewers.
+    "High contrast": {
+        "description": "Saturated, dark-on-white hues for projectors and "
+        "low-contrast displays.",
+        "fixation_color": "#0033cc",
+        "fixation_colorscale": "Cividis",
+        "heatmap_colorscale": "Cividis",
+        "saccade_color": "#cc0000",
+        "saccade_class_colors": {
+            "forward": "#006600",
+            "skip": "#0033cc",
+            "refixation": "#6600cc",
+            "return_sweep": "#cc6600",
+            "regression": "#cc0000",
+            "other": "#4d4d4d",
+        },
+        "word_label_color": "#000000",
+        "highlight_text_color": "#cc0066",
+        "background_color": "#ffffff",
+    },
+}
+DEFAULT_PALETTE = "Default"
+
+
+def palette_settings(name: str) -> dict:
+    """Figure-kwarg colour settings for palette ``name`` (falls back to Default).
+
+    Returns a fresh dict (nested ``saccade_class_colors`` copied too), so callers
+    can mutate the result without corrupting the registry.
+    """
+    entry = PALETTES.get(name) or PALETTES[DEFAULT_PALETTE]
+    settings = {k: v for k, v in entry.items() if k != "description"}
+    settings["saccade_class_colors"] = dict(settings["saccade_class_colors"])
+    return settings
+
 
 # --- App theme (BUG-6) -------------------------------------------------------
 # The branded look. Streamlit only auto-loads ``.streamlit/config.toml`` relative

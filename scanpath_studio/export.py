@@ -39,7 +39,10 @@ import pandas as pd
 
 from .constants import (
     CITATION,
+    DEFAULT_FIXATION_COLOR,
+    DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
+    DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
@@ -228,6 +231,12 @@ def _plot_config_dict(
             "heatmap_style": settings.get("heatmap_style", "Word boxes"),
             "fixation_colorscale": settings.get("fixation_colorscale"),
             "heatmap_colorscale": settings.get("heatmap_colorscale"),
+            # VIZ-18 palette · VIZ-17 flat colour · VIZ-15 shape — part of how the
+            # figure looked, so the manifest records them for reproduction.
+            "palette": settings.get("palette", DEFAULT_PALETTE),
+            "fixation_color": settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
+            "fixation_symbol": settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
+            "saccade_color_mode": settings.get("saccade_color_mode", "Uniform"),
         },
         "sizing": {
             "marker_size_range": list(settings.get("marker_size_range", [])),
@@ -646,6 +655,28 @@ def bulk_export(
                         ),
                         hollow_fixations=settings.get("hollow_fixations", False),
                         fixation_opacity=settings.get("fixation_opacity", 1.0),
+                        # VIZ-17 flat fixation colour · VIZ-15 marker shape.
+                        fixation_color=settings.get(
+                            "fixation_color", DEFAULT_FIXATION_COLOR
+                        ),
+                        fixation_symbol=settings.get(
+                            "fixation_symbol", DEFAULT_FIXATION_SYMBOL
+                        ),
+                        # VIZ-8/19 saccade colour mode + VIZ-9 linear-reading mode:
+                        # the bulk export rebuilds the figure from scratch, so it
+                        # has to restate these or a batch silently comes out styled
+                        # differently from the on-screen figure it was launched from.
+                        saccade_color_mode=settings.get(
+                            "saccade_color_mode", "Uniform"
+                        ),
+                        saccade_class_colors=settings.get("saccade_class_colors"),
+                        saccade_type_legend=settings.get("saccade_type_legend", True),
+                        saccade_render_mode=settings.get(
+                            "saccade_render_mode", "Straight"
+                        ),
+                        fixation_snap_to_word=settings.get(
+                            "fixation_snap_to_word", False
+                        ),
                         critical_span_style=settings.get(
                             "critical_span_style", "Mark text"
                         ),

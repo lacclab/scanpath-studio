@@ -51,10 +51,13 @@ from scanpath_studio.animation_export import (
 )
 from scanpath_studio.annotations import render_trial_annotations
 from scanpath_studio.constants import (
+    DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
+    DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
@@ -571,6 +574,8 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         fixation_snap_to_word=viz_settings.get("fixation_snap_to_word", False),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
+        fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
+        fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
         highlight_text_color=viz_settings.get(
             "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
@@ -1269,6 +1274,16 @@ def _build_studio_config(
             ),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
             "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
+            # VIZ-17 uniform fixation colour · VIZ-15 marker shape · VIZ-18 palette
+            # (the palette's colours are already in the individual keys; the name
+            # rides along so the picker restores onto the right entry).
+            "fixation_color": viz_settings.get(
+                "fixation_color", DEFAULT_FIXATION_COLOR
+            ),
+            "fixation_symbol": viz_settings.get(
+                "fixation_symbol", DEFAULT_FIXATION_SYMBOL
+            ),
+            "palette": viz_settings.get("palette", DEFAULT_PALETTE),
             # VIZ-4: image-stimulus opacity + manual alignment (dataset + uploads).
             "stimulus_image_opacity": float(
                 viz_settings.get("stimulus_image_opacity", 1.0)
@@ -1624,6 +1639,8 @@ def _build_and_render_animation(
         saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
         fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
+        fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
+        fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_legend=viz_settings.get("show_compare_legend", False),

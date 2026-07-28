@@ -47,14 +47,19 @@ for _name in (
 from . import data as _data  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
+    DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
+    DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_ORDER_FONT_COLOR,
     DEFAULT_SACCADE_WIDTH,
     FONT_FAMILY,
+    PALETTES,
     SACCADE_COLOR,
+    UNIFORM_COLOR_FIELD,
+    palette_settings,
 )
 from .plots import (  # noqa: E402
     animation_autoplay_frame_duration,
@@ -83,7 +88,10 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     show_heatmap=True,
     heatmap_style="Word boxes",
     heatmap_norm="Linear",
-    color_by="duration_ms",
+    # VIZ-17: no variable mapped to fixation hue by default. Marker *size* already
+    # encodes duration, so the old `color_by="duration_ms"` spent the colour
+    # channel restating it. Pass an explicit `color_by=` for a second variable.
+    color_by=UNIFORM_COLOR_FIELD,
     heatmap_metric="duration_ms",
     marker_size_range=DEFAULT_MARKER_SIZE_RANGE,
     order_font_size=16,
@@ -103,6 +111,11 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     saccade_type_legend=True,
     saccade_render_mode="Straight",
     fixation_snap_to_word=False,
+    # VIZ-17 uniform fixation colour · VIZ-15 marker shape. `color_by` above stays
+    # "duration_ms" for the canonical headless figure (it renders every encoding),
+    # unlike the app's first view, which now opens on the uniform colour.
+    fixation_color=DEFAULT_FIXATION_COLOR,
+    fixation_symbol=DEFAULT_FIXATION_SYMBOL,
     background_color=DEFAULT_BACKGROUND_COLOR,
     color_by_line=False,
     line_spacing=DEFAULT_LINE_SPACING,
@@ -266,10 +279,41 @@ def _select_trial(
 
 
 def _figure_kwargs(overrides: dict) -> dict:
-    settings = {**CANONICAL_FIGURE_DEFAULTS, **overrides}
+    settings = {**CANONICAL_FIGURE_DEFAULTS, **_expand_palette(overrides)}
     if settings.get("heatmap_metric") == "counts":
         settings["heatmap_metric"] = None
     return settings
+
+
+def _expand_palette(overrides: dict) -> dict:
+    """Expand a ``palette=`` override into the colour kwargs it stands for (VIZ-18).
+
+    ``palette`` names a set of colour defaults tuned for a medium — screen,
+    colourblind viewers, a black & white print, a projector. It's a *preset*, so
+    any colour the caller also passes explicitly wins over it::
+
+        sps.plot_scanpath(w, f, palette="Print / greyscale")
+        sps.plot_scanpath(w, f, palette="Colourblind-safe", saccade_color="#000")
+
+    The palette itself isn't a figure kwarg, so it's consumed here rather than
+    forwarded. Raises on an unknown name — a silent fallback to the default
+    palette would quietly produce the wrong figure for a print run.
+    """
+    name = overrides.get("palette")
+    if name is None:
+        return overrides
+    if name not in PALETTES:
+        raise ValueError(
+            f"Unknown palette {name!r}; choose one of {', '.join(PALETTES)}."
+        )
+    expanded = dict(overrides)
+    expanded.pop("palette")
+    # `word_label_color` is `text_color` on the figure builders.
+    settings = palette_settings(name)
+    settings["text_color"] = settings.pop("word_label_color")
+    for key, value in settings.items():
+        expanded.setdefault(key, value)
+    return expanded
 
 
 def plot_scanpath(
@@ -355,6 +399,9 @@ def animate_scanpath(
     (``show_words``, ``show_word_labels``, ``show_saccades``, ``show_order``,
     styling, and second-scanpath overlays) — an unsupported key raises a
     ``ValueError`` naming the valid ones rather than an opaque ``TypeError``.
+    ``palette=`` (VIZ-18) works here too; the colours it implies that the
+    animation doesn't support are dropped rather than raising, since the caller
+    named a look, not those individual keys.
     """
     valid = set(inspect.signature(make_scanpath_animation).parameters) - {
         "words",
@@ -366,7 +413,15 @@ def animate_scanpath(
         "playback_speed",
         "autoplay",
     }
-    unknown = set(animation_overrides) - valid
+    explicit = set(animation_overrides) - {"palette"}
+    animation_overrides = _expand_palette(animation_overrides)
+    # Only the keys the caller named are held to the "is this supported?" rule;
+    # a palette's extras (heatmap colorscale, highlight text colour, …) that the
+    # animation has no parameter for are simply dropped.
+    animation_overrides = {
+        k: v for k, v in animation_overrides.items() if k in valid or k in explicit
+    }
+    unknown = explicit - valid
     if unknown:
         raise ValueError(
             f"Options not supported by the animation: {sorted(unknown)}. "

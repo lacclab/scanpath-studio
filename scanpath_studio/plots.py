@@ -18,7 +18,9 @@ from .constants import (
     COMPARISON_PALETTE,
     CURRENT_FIX_COLOR,
     CURRENT_FIX_OUTLINE,
+    DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
+    DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
     DEFAULT_MARKER_SIZE_RANGE,
@@ -32,7 +34,11 @@ from .constants import (
     SACCADE_CLASS_LABELS,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
+    SACCADE_DIRECTION_CLASSES,
+    SACCADE_DIRECTION_FOLD,
+    SACCADE_DIRECTION_LABELS,
     TRENDLINE_COLOR,
+    UNIFORM_COLOR_FIELD,
     WORD_BOX_COLOR,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -475,7 +481,9 @@ _QUALITATIVE_PALETTE = [
 
 
 def _resolve_marker_colors(
-    color_data: Optional[pd.Series], is_numeric_color: bool
+    color_data: Optional[pd.Series],
+    is_numeric_color: bool,
+    uniform_color: str = DEFAULT_FIXATION_COLOR,
 ) -> Tuple[object, list]:
     """Return (marker_color, category_legend) for the fixation scatter trace.
 
@@ -483,10 +491,11 @@ def _resolve_marker_colors(
     - Categorical color_data is mapped to a discrete palette so the picker has
       visible effect; the returned legend is a list of (category, hex) pairs the
       caller can render as legend-only scatter traces.
-    - Missing / unmappable color_data falls back to the first palette color.
+    - No color_data (VIZ-17's uniform default, or a `color_by` column that isn't
+      in the frame) paints every marker ``uniform_color``.
     """
     if color_data is None:
-        return _QUALITATIVE_PALETTE[0], []
+        return uniform_color, []
     if is_numeric_color:
         return color_data, []
     series = color_data.fillna("(missing)").astype(str)
@@ -1001,13 +1010,15 @@ def _add_saccade_layer(
     class_colors: Optional[dict] = None,
     class_legend: bool = True,
     render_mode: str = "Straight",
+    two_way: bool = False,
 ) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
 
     Connects consecutive fixations in time order. When ``saccade_classes`` is
     given (VIZ-8 "By type" mode) the lines are split into one sub-trace per
     reading class, each in its own colour from ``class_colors`` and shown in a
-    small legend; otherwise a single uniform-``color`` trace is drawn.
+    small legend; ``two_way`` (VIZ-19) first folds those five classes down to
+    forward vs. regression. Otherwise a single uniform-``color`` trace is drawn.
     ``render_mode="Arc"`` (VIZ-9) draws each saccade as an upward arch instead of
     a straight connector. The arrowheads are a separate, independently-toggled
     trace drawn before the fixation markers so the dots sit on top (uniform
@@ -1026,10 +1037,25 @@ def _add_saccade_layer(
         # reading classes) still get their intended colour instead of falling
         # back to the uniform line colour.
         palette = {**SACCADE_CLASS_COLORS, **(class_colors or {})}
+        # VIZ-19: the two-way mode is the five-way one with the classes folded
+        # into forward/regression buckets, so everything below — segments,
+        # colours, legend — is shared. "Forward" takes the forward class's
+        # colour, which is what the picker shows for it.
+        if two_way:
+            saccade_classes = saccade_classes.map(
+                lambda c: SACCADE_DIRECTION_FOLD.get(c, "other")
+            )
+            draw_order = [*SACCADE_DIRECTION_CLASSES, "other"]
+            labels = SACCADE_DIRECTION_LABELS
+            legend_title = "Saccade direction"
+        else:
+            draw_order = SACCADE_CLASS_ORDER
+            labels = SACCADE_CLASS_LABELS
+            legend_title = "Saccade type"
         segs = _saccade_segments_by_class(
             fixations, x_field, y_field, saccade_classes, arch_frac
         )
-        for cls_name in SACCADE_CLASS_ORDER:
+        for cls_name in draw_order:
             seg = segs.get(cls_name)
             if not seg or not seg[0]:
                 continue
@@ -1047,8 +1073,8 @@ def _add_saccade_layer(
                     # coloured sub-traces) when class_legend is off.
                     showlegend=class_legend,
                     legendgroup="saccade_type",
-                    legendgrouptitle_text="Saccade type",
-                    name=SACCADE_CLASS_LABELS.get(cls_name, cls_name),
+                    legendgrouptitle_text=legend_title,
+                    name=labels.get(cls_name, cls_name),
                 )
             )
             # Reserve legend margin only when the key is actually shown.
@@ -1177,6 +1203,8 @@ def make_scanpath_figure(
     fixation_snap_to_word: bool = False,
     hollow_fixations: bool = False,
     fixation_opacity: float = 1.0,
+    fixation_color: str = DEFAULT_FIXATION_COLOR,
+    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
@@ -1465,8 +1493,11 @@ def make_scanpath_figure(
         # here from the trial's fixations + words — reuse a precomputed
         # `saccade_class` column if the pipeline already added one. Classify on the
         # RAW fixations (word_id is unchanged by the snap).
+        # VIZ-19: "Forward / regression" is the same classification folded into
+        # two buckets, so both non-uniform modes take this path.
         saccade_classes = None
-        if saccade_color_mode == "By type":
+        two_way_saccades = saccade_color_mode == "Forward / regression"
+        if saccade_color_mode in ("By type", "Forward / regression"):
             existing = fixations.get("saccade_class")
             if existing is not None:
                 saccade_classes = existing
@@ -1487,6 +1518,7 @@ def make_scanpath_figure(
             class_colors=saccade_class_colors,
             class_legend=saccade_type_legend,
             render_mode=saccade_render_mode,
+            two_way=two_way_saccades,
         ):
             legend_active = True
 
@@ -1567,6 +1599,11 @@ def make_scanpath_figure(
             )
             color_label = "line"
             is_numeric_color = False
+        elif color_by == UNIFORM_COLOR_FIELD:
+            # VIZ-17: no variable mapped to hue — size already encodes duration.
+            color_data = None
+            color_label = color_by
+            is_numeric_color = False
         else:
             color_data = ordered[color_by] if color_by in ordered.columns else None
             color_label = color_by
@@ -1574,11 +1611,12 @@ def make_scanpath_figure(
                 color_data
             )
         marker_color, category_legend = _resolve_marker_colors(
-            color_data, is_numeric_color
+            color_data, is_numeric_color, fixation_color
         )
         sizes = _compute_marker_sizes(ordered["duration_ms"], marker_size_range)
         marker = dict(
             size=sizes,
+            symbol=fixation_symbol or DEFAULT_FIXATION_SYMBOL,
             color=marker_color,
             colorscale=fixation_colorscale if is_numeric_color else None,
             showscale=show_colorbars and is_numeric_color,
@@ -2536,6 +2574,8 @@ def make_scanpath_animation(
     saccade_width: float = DEFAULT_SACCADE_WIDTH,
     hollow_fixations: bool = False,
     fixation_opacity: float = 1.0,
+    fixation_color: Optional[str] = None,
+    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
     background_color: Optional[str] = None,
     fixations_b: Optional[pd.DataFrame] = None,
     words_b: Optional[pd.DataFrame] = None,
@@ -2626,7 +2666,9 @@ def make_scanpath_animation(
         # A lone scanpath always wears the canonical single-replay colour,
         # whether it arrived as `fixations` or (degenerately) only as
         # `fixations_b`, so the trail never silently renders in the B colour.
-        specs[0]["color"] = COMPARISON_PALETTE[0]
+        # VIZ-17/18: honour the caller's uniform fixation colour when one is
+        # given, so the replay matches the static figure (and the palette).
+        specs[0]["color"] = fixation_color or COMPARISON_PALETTE[0]
 
     # Metric colouring, mirroring the static figure's fixation trace. Single
     # replay only: the dual overlay keeps its flat A/B colours (they're what
@@ -2639,6 +2681,10 @@ def make_scanpath_animation(
         s["marker_extra"] = {}
     category_legend: list = []
     color_label = color_by or ""
+    # VIZ-17: the uniform sentinel means "no variable mapped to hue" — leave the
+    # trail on its flat colour rather than looking for a column by that name.
+    if color_by == UNIFORM_COLOR_FIELD:
+        color_by, color_label = None, ""
     if not dual and specs and (color_by or color_by_line):
         ordered0 = specs[0]["ordered"]
         if color_by_line and not words.empty:
@@ -2693,6 +2739,7 @@ def make_scanpath_animation(
         colors = s["marker_colors"]
         marker = dict(
             size=list(s["sizes"]),
+            symbol=fixation_symbol or DEFAULT_FIXATION_SYMBOL,
             color=colors if colors is not None else s["color"],
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
             **s["marker_extra"],

@@ -12,20 +12,28 @@ from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
     DEFAULT_BACKGROUND_COLOR,
+    DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
+    DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_MARKER_SIZE_RANGE,
+    DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    FIXATION_SYMBOLS,
     HIGHLIGHTED_TEXT_COLOR,
     OUT_OF_TEXT_COLOR,
+    PALETTES,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_LABELS,
     SACCADE_COLOR,
+    SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
+    UNIFORM_COLOR_FIELD,
     WORD_LABEL_COLOR,
     compare_palette_color,
+    palette_settings,
 )
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
 from .data import frame_fingerprint
@@ -231,6 +239,16 @@ _VIZ_WIDGET_DEFAULTS = {
     # / deep links that carry it still render hollow.
     "global_fixation_opacity": 0.7,
     "global_hollow_fixations": False,
+    # VIZ-17: the flat colour every fixation wears when "Color fixations by" is
+    # "(uniform)" — the default, since marker size already encodes duration.
+    "global_fixation_color": DEFAULT_FIXATION_COLOR,
+    # VIZ-15: fixation marker shape. A second encoding channel that, unlike hue,
+    # survives greyscale printing.
+    "global_fixation_symbol": DEFAULT_FIXATION_SYMBOL,
+    # VIZ-18: the active colour palette. A preset, not a rendering mode — picking
+    # one writes the individual colour keys below, so every per-element picker
+    # still overrides it and every surface carries the resulting colours.
+    "global_palette": DEFAULT_PALETTE,
     # PRE-3: in-place vertical drift-correction. "Off" = raw fixations; otherwise
     # one of alignment.ALGORITHMS (title-cased in the UI) snaps each fixation to
     # its assigned text line. `align_connectors` draws faint original→corrected
@@ -465,6 +483,69 @@ def _active_quick_view() -> Optional[str]:
         if all(ss.get(k) == v for k, v in _VIEW_PRESETS[name].items()):
             return name
     return None
+
+
+# VIZ-18: palette setting name → the session key it writes. A palette is applied
+# by writing the *ordinary* colour keys, so nothing downstream has to know
+# palettes exist — the per-element pickers, the deep link, Save & restore, the
+# CLI and the API all keep carrying plain colours.
+_PALETTE_STATE_KEYS = {
+    "fixation_color": "global_fixation_color",
+    "fixation_colorscale": "global_fixation_colorscale",
+    "heatmap_colorscale": "global_heatmap_colorscale",
+    "saccade_color": "global_saccade_color",
+    "word_label_color": "global_text_color",
+    "highlight_text_color": "global_highlight_text_color",
+}
+
+
+def palette_state(name: str) -> Dict:
+    """The ``session_state`` writes that applying palette ``name`` performs."""
+    settings = palette_settings(name)
+    state = {
+        state_key: settings[setting]
+        for setting, state_key in _PALETTE_STATE_KEYS.items()
+        if setting in settings
+    }
+    for cls_name, color in settings.get("saccade_class_colors", {}).items():
+        if cls_name in SACCADE_CLASS_EDITABLE:
+            state[f"global_saccade_class_color_{cls_name}"] = color
+    return state
+
+
+def apply_palette(name: str) -> None:
+    """Apply a VIZ-18 palette by writing its colours into ``session_state``.
+
+    Runs as a widget ``on_change`` callback — i.e. before the next rerun
+    instantiates the colour pickers — so writing their keys here is picked up
+    cleanly, exactly like ``_apply_view_preset``. Deliberately does *not* touch
+    the background colour: that's a canvas/Experimental-Setup choice the user
+    makes for their output medium, not part of the mark palette.
+    """
+    for key, value in palette_state(name).items():
+        st.session_state[key] = value
+
+
+def _on_palette_change() -> None:
+    apply_palette(st.session_state.get("global_palette") or DEFAULT_PALETTE)
+
+
+def _popover_selectbox(label: str, options: list, state_key: str, **kwargs):
+    """A selectbox inside a popover whose seeded session value actually shows.
+
+    A *keyed* selectbox first painted inside a (closed-until-clicked) popover
+    renders its first option rather than the value seeded into session state, and
+    commits that wrong value on the next interaction — the same first-open quirk
+    the VIZ-8 class colour pickers hit. Passing an explicit ``index=`` and writing
+    the pick back by hand sidesteps it, which is what lets a VIZ-18 palette (or a
+    deep link, or a restored config) set a non-first colorscale and have the
+    picker agree with the figure.
+    """
+    current = st.session_state.get(state_key)
+    index = options.index(current) if current in options else 0
+    picked = st.selectbox(label, options=options, index=index, **kwargs)
+    st.session_state[state_key] = picked
+    return picked
 
 
 # Help text for the (multi-capable) Trial ID mapping, shared by all tables.
@@ -873,10 +954,12 @@ def color_field_options(trial_fixations: pd.DataFrame) -> List[str]:
     ]
     fields = [f for f in preferred_color_fields if f in trial_fixations.columns]
     fields = fields or ["duration_ms"]
-    # "line" is a synthetic option (not a real column): colour each fixation by
-    # the text line it lands on, lines inferred from word geometry. Folded in
-    # from the former standalone "Color fixations by line" checkbox.
-    return fields + ["line"]
+    # `(uniform)` leads and is the default (VIZ-17): marker *size* already encodes
+    # duration, so mapping duration to hue as well spends the colour channel on a
+    # variable that's already shown. Colour-by is then an opt-in for a *second*
+    # variable. "line" is likewise synthetic (not a real column): colour each
+    # fixation by the text line it lands on, inferred from word geometry.
+    return [UNIFORM_COLOR_FIELD] + fields + ["line"]
 
 
 def numeric_field_options(trial_fixations: pd.DataFrame) -> List[str]:
@@ -1147,10 +1230,8 @@ def _seed_viz_state(
 
     color_fields = color_field_options(trial_fixations)
     _drop_stale("global_color_by", color_fields)
-    st.session_state.setdefault(
-        "global_color_by",
-        "duration_ms" if "duration_ms" in color_fields else color_fields[0],
-    )
+    # VIZ-17: one flat colour by default — see `color_field_options`.
+    st.session_state.setdefault("global_color_by", UNIFORM_COLOR_FIELD)
 
     numeric_fields = numeric_field_options(trial_fixations)
     if numeric_fields:
@@ -1329,6 +1410,13 @@ def _collect_viz_settings(
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
         fixation_opacity=float(ss.get("global_fixation_opacity", 1.0)),
+        # VIZ-17 uniform fixation colour + VIZ-15 marker shape.
+        fixation_color=ss.get("global_fixation_color") or DEFAULT_FIXATION_COLOR,
+        fixation_symbol=ss.get("global_fixation_symbol") or DEFAULT_FIXATION_SYMBOL,
+        # VIZ-18: the active palette name. The colours it implies are already in
+        # the individual keys above; this rides along so Share / Save & restore
+        # can name it and the picker comes back on the right entry.
+        palette=ss.get("global_palette") or DEFAULT_PALETTE,
         fix_index_range=fix_index_range,
         highlight_text_color=ss.get("global_highlight_text_color"),
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
@@ -1452,6 +1540,23 @@ def sidebar_controls(
         args=("heatmap",),
     )
 
+    # VIZ-18: these figures end up in papers — printed, sometimes in black &
+    # white — and are read by colourblind viewers, so the colour defaults are a
+    # choice rather than a constant. Picking one writes the individual colour
+    # keys, so every per-element picker below still overrides it.
+    _palette = viz.selectbox(
+        "Palette",
+        options=list(PALETTES),
+        key="global_palette",
+        on_change=_on_palette_change,
+        help="Colour defaults for the marks. **Colourblind-safe** uses the "
+        "Okabe–Ito hues; **Print / greyscale** drops hue entirely so the figure "
+        "survives a black & white print (pair it with a marker shape); **High "
+        "contrast** is for projectors. Each one just presets the colour pickers — "
+        "change any of them afterwards.",
+    )
+    viz.caption(PALETTES[_palette]["description"])
+
     viz.divider()
 
     # Each main layer is an `st.toggle`; the layer's detailed styling lives in a
@@ -1479,10 +1584,31 @@ def sidebar_controls(
                 "Color fixations by",
                 options=color_fields,
                 key="global_color_by",
-                help="The metric mapped to fixation marker hue. Pick a column, or "
-                "'line' to tint each fixation by the text line it lands on. In "
+                help=f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
+                "(the default) maps nothing — marker *size* already shows fixation "
+                "duration, so colour is free for a second variable. Pick a column, "
+                "or 'line' to tint each fixation by the text line it lands on. In "
                 "compare mode it colours both scanpaths by this metric.",
             )
+            # VIZ-17: the flat colour, shown only when nothing is mapped to hue.
+            if color_by == UNIFORM_COLOR_FIELD and not comparing:
+                st.color_picker(
+                    "Fixation color",
+                    key="global_fixation_color",
+                    help="The single colour every fixation marker wears.",
+                )
+            # VIZ-15: marker shape — a channel that survives greyscale printing,
+            # so a figure stays readable where hue doesn't (see the Palette
+            # picker's **Print / greyscale** option).
+            if not comparing:
+                st.selectbox(
+                    "Marker shape",
+                    options=list(FIXATION_SYMBOLS),
+                    format_func=lambda s: FIXATION_SYMBOLS[s],
+                    key="global_fixation_symbol",
+                    help="Shape of the fixation markers. Unlike colour, shape "
+                    "still reads in black & white.",
+                )
             # PRE-3: vertical drift correction. Snap each fixation to its assigned
             # text line using one of the Carr et al. (2021) algorithms; "Off"
             # leaves the raw coordinates. Single-figure only (mirrors color-by-line,
@@ -1548,13 +1674,16 @@ def sidebar_controls(
                     help="Fixation marker opacity. Lower it so overlapping "
                     "fixations show through (1.0 = fully opaque).",
                 )
-            st.selectbox(
-                "Colorscale",
-                options=COLORSCALES,
-                key="global_fixation_colorscale",
-                help="Colour palette for fixation markers when colouring by "
-                "numeric values.",
-            )
+            # Only meaningful once a variable is mapped to hue (VIZ-17): with
+            # "(uniform)" there is nothing for a colorscale to scale.
+            if color_by != UNIFORM_COLOR_FIELD:
+                _popover_selectbox(
+                    "Colorscale",
+                    COLORSCALES,
+                    "global_fixation_colorscale",
+                    help="Colour palette for fixation markers when colouring by "
+                    "numeric values.",
+                )
             raw_cmin = (
                 trial_fixations[color_by].min()
                 if color_by in trial_fixations.columns
@@ -1620,22 +1749,35 @@ def sidebar_controls(
                 "direction.",
             )
             if not comparing:
-                # VIZ-8: uniform colour vs. colour-by-reading-type.
-                color_mode = st.segmented_control(
+                # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-
+                # regression split, or the full reading-class breakdown. The
+                # segmented control is vertical because three labels don't fit
+                # side by side in the rail's popover.
+                color_mode = st.radio(
                     "Saccade color",
-                    options=["Uniform", "By type"],
+                    options=SACCADE_COLOR_MODES,
                     key="global_saccade_color_mode",
-                    help="**Uniform** — one colour for every saccade. **By "
-                    "type** — colour each saccade by its reading class (forward, "
-                    "skip, refixation, return sweep, regression), with a legend.",
+                    help="**Uniform** — one colour for every saccade. **Forward / "
+                    "regression** — the two-way split most reading figures want. "
+                    "**By type** — the full reading-class breakdown (forward, "
+                    "skip, refixation, return sweep, regression).",
                 )
-                if color_mode == "By type":
+                if color_mode != "Uniform":
+                    # VIZ-19: the two-way mode reuses the same class colours, so
+                    # only show the pickers it actually draws with.
+                    classes = (
+                        ["forward", "regression"]
+                        if color_mode == "Forward / regression"
+                        else SACCADE_CLASS_EDITABLE
+                    )
                     st.caption(
                         "Each saccade is classed by where it lands relative to "
                         "the departing fixation."
+                        if color_mode == "By type"
+                        else "Every non-backward saccade counts as forward."
                     )
-                    swatches = st.columns(len(SACCADE_CLASS_EDITABLE))
-                    for col, cls_name in zip(swatches, SACCADE_CLASS_EDITABLE):
+                    swatches = st.columns(len(classes))
+                    for col, cls_name in zip(swatches, classes):
                         # VIZ-8: pass an explicit ``value=`` seeded from session
                         # state and write the pick back, rather than a bare
                         # ``key=``. A keyed color_picker first painted inside a
@@ -1806,11 +1948,11 @@ def sidebar_controls(
                     "eye-movement heatmap)."
                 ),
             )
-            st.selectbox(
+            _popover_selectbox(
                 "Heatmap colorscale",
-                options=COLORSCALES,
+                COLORSCALES,
+                "global_heatmap_colorscale",
                 help="Colour palette for the density heatmap overlay.",
-                key="global_heatmap_colorscale",
             )
             st.radio(
                 "Color scaling",

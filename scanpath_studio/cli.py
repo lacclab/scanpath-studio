@@ -20,13 +20,18 @@ from typing import List, Optional
 
 from . import __version__
 from .constants import (
+    DEFAULT_FIXATION_COLOR,
+    DEFAULT_FIXATION_SYMBOL,
     DEFAULT_SACCADE_WIDTH,
+    FIXATION_SYMBOLS,
     FONT_FAMILY,
+    PALETTES,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
+    UNIFORM_COLOR_FIELD,
 )
 
 
@@ -258,6 +263,14 @@ def _render_parser() -> argparse.ArgumentParser:
         "(VIZ-8).",
     )
     viz.add_argument(
+        "--saccade-color-by-direction",
+        dest="saccade_color_by_direction",
+        action="store_true",
+        help="Colour saccades forward vs. regression only — the two-way split "
+        "between one uniform colour and the full --saccade-color-by-type "
+        "breakdown (VIZ-19).",
+    )
+    viz.add_argument(
         "--saccade-type-color",
         dest="saccade_type_colors",
         metavar="CLASS=COLOR",
@@ -289,9 +302,30 @@ def _render_parser() -> argparse.ArgumentParser:
         "gaze point (VIZ-9).",
     )
     viz.add_argument(
+        "--palette",
+        choices=list(PALETTES),
+        help="Colour palette for the marks (VIZ-18): Colourblind-safe "
+        "(Okabe–Ito), Print / greyscale (hue-free, survives a B&W print), or "
+        "High contrast. Individual --*-color flags override it.",
+    )
+    viz.add_argument(
         "--color-by",
         metavar="FIELD",
-        help="Fixation color field (default: duration_ms).",
+        help=f"Fixation color field, e.g. duration_ms or gpt2_surprisal "
+        f"(default: {UNIFORM_COLOR_FIELD} — one flat colour, since marker size "
+        f"already shows duration).",
+    )
+    viz.add_argument(
+        "--fixation-color",
+        metavar="COLOR",
+        help=f"Flat fixation marker colour used when --color-by is "
+        f"{UNIFORM_COLOR_FIELD} (default: {DEFAULT_FIXATION_COLOR}).",
+    )
+    viz.add_argument(
+        "--fixation-symbol",
+        choices=list(FIXATION_SYMBOLS),
+        help="Fixation marker shape (VIZ-15). Unlike colour, shape survives a "
+        f"greyscale print (default: {DEFAULT_FIXATION_SYMBOL}).",
     )
     viz.add_argument(
         "--heatmap-metric",
@@ -656,8 +690,16 @@ def render(argv: List[str]) -> None:
             "show_saccade_arrows",
         )
     }
+    # VIZ-18: the palette rides along as an override; api._expand_palette turns
+    # it into colour kwargs and lets any explicit --*-color below win.
+    if args.palette:
+        overrides["palette"] = args.palette
     if args.color_by:
         overrides["color_by"] = args.color_by
+    if args.fixation_color:  # VIZ-17 flat fixation colour
+        overrides["fixation_color"] = args.fixation_color
+    if args.fixation_symbol:  # VIZ-15 marker shape
+        overrides["fixation_symbol"] = args.fixation_symbol
     if args.heatmap_metric:
         overrides["heatmap_metric"] = args.heatmap_metric
     if args.heatmap_colorscale:
@@ -677,6 +719,10 @@ def render(argv: List[str]) -> None:
     # VIZ-8: colour saccades by reading type. Either flag turns the mode on; each
     # CLASS=COLOR pair overrides one class colour; --no-saccade-type-legend hides
     # the colour key.
+    # VIZ-19: --saccade-color-by-direction is the two-way fold; the full five-way
+    # split wins if both are given (it's the more specific request).
+    if args.saccade_color_by_direction:
+        overrides["saccade_color_mode"] = "Forward / regression"
     if args.saccade_color_by_type or args.saccade_type_colors:
         overrides["saccade_color_mode"] = "By type"
     if not args.saccade_type_legend:

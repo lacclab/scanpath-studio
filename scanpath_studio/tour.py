@@ -243,7 +243,7 @@ _CARD_CSS = """
     max-width: calc(100vw - 2.5rem);
     border-radius: 0.75rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    padding: 1rem 1.25rem;
+    padding: 1rem 1.25rem 0.6rem;
 }
 /* The card title is an <h2> for a valid page heading outline (see the title
    render in render_spotlight_tour); pin it back to the original <h4> size so
@@ -253,7 +253,7 @@ _CARD_CSS = """
     line-height: 1.3 !important;
     font-weight: 600 !important;
     letter-spacing: normal !important;
-    padding: 0.25rem 1.5rem 0.4rem 0 !important;
+    padding: 0.25rem 1.5rem 0.75rem 0 !important;
     margin: 0 !important;
 }
 /* Close (✕) pinned to the card's top-right corner (top offset roughly matches
@@ -276,10 +276,14 @@ _CARD_CSS = """
     opacity: 0.55;
 }
 .st-key-tour_sp_close button:hover { opacity: 1; }
-/* Breathing room between the progress bar and the Back / Next footer (set on
-   both sides — the column row is what actually carries the gap). */
-.st-key-tour_card [data-testid="stProgress"] { margin-bottom: 0.75rem; }
-.st-key-tour_card [data-testid="stHorizontalBlock"] { margin-top: 0.75rem; }
+/* Vertical rhythm inside the card: body → progress → Back / Next footer (the
+   gap around the progress bar is set on both sides — the column row is what
+   actually carries it). The card's own bottom padding is trimmed to match. */
+.st-key-tour_card [data-testid="stProgress"] {
+    margin-top: 0.5rem;
+    margin-bottom: 0.9rem;
+}
+.st-key-tour_card [data-testid="stHorizontalBlock"] { margin-top: 0.9rem; }
 """
 
 # Welcome step only: center the card like a modal and dim the app behind it

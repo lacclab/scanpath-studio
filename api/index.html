@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/api/">
       
       
-        <link rel="prev" href="../export-troubleshooting/">
+        <link rel="prev" href="../privacy/">
       
       
         <link rel="next" href="../cli/">
@@ -421,6 +421,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -557,6 +563,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../bring-your-own-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bring your own data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../corpus-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../export-troubleshooting/" class="md-nav__link">
         
   
@@ -565,6 +627,34 @@
     
   
     Export & troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
   
 
     
@@ -595,6 +685,8 @@
   
     
     
+      
+        
       
         
       
@@ -918,6 +1010,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -933,6 +1053,8 @@
   
     
     
+      
+        
       
         
       
@@ -1039,6 +1161,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing-a-dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing a dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1054,6 +1204,8 @@
   
     
     
+      
+        
       
         
       
@@ -1147,6 +1299,34 @@
     
   
     Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security audit
   
 
     
@@ -1435,7 +1615,9 @@ are broadcast across the participants found in the fixations, and
 fixations without x/y but with a word/AoI ID are placed at word-box
 centers.</p>
 <p>Returns the normalized <code>(words, fixations)</code> frames the plotting
-functions expect. Raises <code>ValueError</code> if required fields can't be found.</p>
+functions expect. Raises <code>ValueError</code> if a required field can't be found —
+the message names the canonical field, the column names auto-detection
+looked for, and the columns the table actually has.</p>
 
 
     </div>
@@ -1455,7 +1637,9 @@ functions expect. Raises <code>ValueError</code> if required fields can't be fou
 
     <div class="doc doc-contents first">
 
-        <p>Return the bundled 3-participant OneStop demo, normalized and ready to plot.</p>
+        <p>Return the bundled OneStop demo, normalized and ready to plot.</p>
+<p>Three readers' word boxes ship with the package but only two of them have
+fixations, so :func:<code>list_trials</code> reports the two plottable readers.</p>
 
 
     </div>
@@ -1564,7 +1748,7 @@ dims a busy image so the AOIs / fixations read over it.</p>
 
 
 <a href="#scanpath_studio.api.plot_scanpath" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">raw_gaze</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DataFrame</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">figure_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">raw_gaze</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DataFrame</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_correction</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_connectors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">figure_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1576,10 +1760,23 @@ the frames contain exactly one combo. <code>canvas_size</code> is the monitor si
 in px; by default it is estimated from the data extents — pass the real
 monitor resolution (e.g. <code>(2560, 1440)</code> for OneStop) to keep coordinates
 true to scale. <code>raw_gaze</code> is a normalized frame (see
-:func:<code>data.normalize_raw_gaze</code>) and is filtered to the selected trial.
-Remaining keywords override the app's defaults and are forwarded to
+:func:<code>data.normalize_raw_gaze</code>) and is filtered to the selected trial.</p>
+<p><code>drift_correction</code> (PRE-3) names one of the ten Carr et al. (2021)
+line-assignment algorithms (<code>alignment.ALGORITHMS</code>: <code>"attach"</code>,
+<code>"chain"</code>, <code>"cluster"</code>, <code>"compare"</code>, <code>"merge"</code>, <code>"regress"</code>,
+<code>"segment"</code>, <code>"split"</code>, <code>"stretch"</code>, <code>"warp"</code>); each fixation is
+snapped to its assigned text line and coloured by line, exactly as the app's
+<em>Drift correction</em> control does. <code>drift_connectors=True</code> also draws a faint
+line from each fixation's original y to its corrected one.</p>
+<p><code>fix_index_range=(start, end)</code> (VIZ-7) draws only fixations <code>start</code>
+through <code>end</code> (1-based, both inclusive) of the trial — the headless form of
+the app's fixation-index window. It is applied before the drift correction,
+like the app.</p>
+<p>Remaining keywords override the app's defaults and are forwarded to
 :func:<code>plots.make_scanpath_figure</code> (e.g. <code>show_heatmap=False</code>,
-<code>color_by="pass_index"</code>, <code>x_field="order_in_trial"</code>).</p>
+<code>color_by="pass_index"</code>, <code>x_field="order_in_trial"</code>); an unknown keyword
+raises a <code>TypeError</code> naming the closest valid options, and
+:func:<code>figure_options</code> lists them all with their defaults.</p>
 
 
     </div>
@@ -1594,7 +1791,7 @@ Remaining keywords override the app's defaults and are forwarded to
 
 
 <a href="#scanpath_studio.api.animate_scanpath" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">playback_speed</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">autoplay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">animation_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">playback_speed</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">autoplay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">animation_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1603,7 +1800,9 @@ Remaining keywords override the app's defaults and are forwarded to
 <p>Same trial selection and canvas semantics as :func:<code>plot_scanpath</code>. The
 returned Plotly figure plays in real reading time scaled by
 <code>playback_speed</code>; save it as interactive HTML with :func:<code>save_figure</code>,
-or rasterize to GIF/MP4 with :func:<code>animation_export.export_animation</code>.</p>
+or rasterize to GIF/MP4 with :func:<code>animation_export.export_animation</code>.
+<code>fix_index_range=(start, end)</code> replays only that window of the trial's
+fixations (1-based, inclusive), like :func:<code>plot_scanpath</code>.</p>
 <p>With <code>autoplay</code> (default <code>True</code>, VIZ-10) the saved interactive HTML
 auto-starts the replay on load <em>at <code>playback_speed</code></em> — :func:<code>save_figure</code>
 honors the marker the builder stamps on the figure. Pass <code>autoplay=False</code>
@@ -1612,11 +1811,13 @@ affects the interactive HTML; GIF/MP4 rasterization renders every frame
 regardless.</p>
 <p>The animation builder accepts a subset of the static figure's options
 (<code>show_words</code>, <code>show_word_labels</code>, <code>show_saccades</code>, <code>show_order</code>,
-styling, and second-scanpath overlays) — an unsupported key raises a
-<code>ValueError</code> naming the valid ones rather than an opaque <code>TypeError</code>.
-<code>palette=</code> (VIZ-18) works here too; the colours it implies that the
-animation doesn't support are dropped rather than raising, since the caller
-named a look, not those individual keys.</p>
+styling, and second-scanpath overlays) — see <code>figure_options("animation")</code>;
+an unsupported key raises a <code>ValueError</code> naming the valid ones rather than
+an opaque <code>TypeError</code>. The shared options default to the same values as
+:func:<code>plot_scanpath</code> (:data:<code>CANONICAL_FIGURE_DEFAULTS</code>), so the replay
+matches the static figure. <code>palette=</code> (VIZ-18) works here too; the colours
+it implies that the animation doesn't support are dropped rather than
+raising, since the caller named a look, not those individual keys.</p>
 
 
     </div>
@@ -1734,7 +1935,7 @@ ffmpeg requirements.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../export-troubleshooting/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Export &amp; troubleshooting">
+          <a href="../privacy/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Privacy">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1744,7 +1945,7 @@ ffmpeg requirements.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Export & troubleshooting
+                Privacy
               </div>
             </div>
           </a>

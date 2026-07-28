@@ -1,0 +1,2247 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+      
+      
+      
+        <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/contributing-a-dataset/">
+      
+      
+        <link rel="prev" href="../multipleye/">
+      
+      
+        <link rel="next" href="../rendering/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Contributing a dataset - Scanpath Studio</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#contributing-a-dataset" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Scanpath Studio" class="md-header__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Scanpath Studio
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Contributing a dataset
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Using the app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Headless
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../onestop/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Datasets
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../rendering/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Internals
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Scanpath Studio" class="md-nav__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    Scanpath Studio
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the app
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using the app
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop app
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bring-your-own-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bring your own data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../corpus-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../export-troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export & troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Headless
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Headless
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Datasets
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../onestop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneStop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multipleye/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiplEYE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing a dataset
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing a dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-built-in-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "built-in" means
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-adapters-that-exist-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The adapters that exist today
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-adapter-must-provide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an adapter must provide
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What an adapter must provide">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-a-raw-frames-function-the-required-entry-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. A raw-frames function — the required entry point
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-a-normalized-loader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. A normalized loader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-registration-for-any-extra-column-you-stamp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Registration for any extra column you stamp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-a-presence-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. A presence check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-a-downloader-if-the-data-is-publicly-fetchable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. A downloader, if the data is publicly fetchable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-constants-worth-exporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Constants worth exporting
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registering-it-in-the-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering it in the app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-other-three-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The other three surfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licence-expectations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licence expectations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bundled-in-the-wheel-vs-download-on-demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundled in the wheel vs. download on demand
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sample-size-and-update_sample_datapy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample size, and update_sample_data.py
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-a-new-adapter-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests a new adapter needs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-example-potec-end-to-end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked example: PoTeC, end to end
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#submitting-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitting it
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internals
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Internals
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    True-to-scale rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-built-in-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "built-in" means
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-adapters-that-exist-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The adapters that exist today
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-adapter-must-provide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an adapter must provide
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What an adapter must provide">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-a-raw-frames-function-the-required-entry-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. A raw-frames function — the required entry point
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-a-normalized-loader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. A normalized loader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-registration-for-any-extra-column-you-stamp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Registration for any extra column you stamp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-a-presence-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. A presence check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-a-downloader-if-the-data-is-publicly-fetchable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. A downloader, if the data is publicly fetchable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-constants-worth-exporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Constants worth exporting
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registering-it-in-the-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering it in the app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-other-three-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The other three surfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licence-expectations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licence expectations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bundled-in-the-wheel-vs-download-on-demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundled in the wheel vs. download on demand
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sample-size-and-update_sample_datapy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample size, and update_sample_data.py
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests-a-new-adapter-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests a new adapter needs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worked-example-potec-end-to-end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked example: PoTeC, end to end
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#submitting-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Submitting it
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="contributing-a-dataset">Contributing a dataset<a class="headerlink" href="#contributing-a-dataset" title="Permanent link">&para;</a></h1>
+<p>Scanpath Studio ships three ready-made corpus adapters — OneStop, PoTeC, and
+MultiplEYE. Each shows up as an entry in the app's data-source picker and as a
+<code>load_*</code> function in the headless API. This page is the contract for adding a
+fourth.</p>
+<p>It is about getting a <strong>public corpus shipped with the app</strong>, so that in a
+future release every user finds it in the picker. Two things it is <em>not</em>:</p>
+<ul>
+<li>Loading a corpus you already have on disk needs no code at all — see
+  <a href="../bring-your-own-data/">Bring your own data</a>.</li>
+<li>The canonical column names and table shapes are in
+  <a href="../data-format/">Data format</a>; this page doesn't repeat them.</li>
+</ul>
+<h2 id="what-built-in-means">What "built-in" means<a class="headerlink" href="#what-built-in-means" title="Permanent link">&para;</a></h2>
+<p>Three levels, and the built-in data sources use all three:</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Where the data lives</th>
+<th>Precedent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Bundled in the wheel</strong></td>
+<td>inside the installed package, under <code>scanpath_studio/sample_data/</code></td>
+<td>Only the demo — a 3-reader / 36-trial OneStop subset (4.4 MB).</td>
+</tr>
+<tr>
+<td><strong>Download on demand</strong></td>
+<td>fetched from the corpus' own host into a folder the user picks, then cached on disk</td>
+<td>PoTeC (~45 MB), OneStop (OSF reports, tens to a few hundred MB each).</td>
+</tr>
+<tr>
+<td><strong>Local directory</strong></td>
+<td>a tree the user already has; the adapter only reads it</td>
+<td>MultiplEYE (no public download URL).</td>
+</tr>
+</tbody>
+</table>
+<p>Only the first is literally bundled, and in practice a new corpus lands at level
+2 or 3 — nothing corpus-scale goes into the wheel (see <em>Bundled in the wheel vs.
+download on demand</em> below). All three levels are equally "built-in" from the
+user's side: one entry in the picker, one <code>load_*</code> in the API.</p>
+<h2 id="the-adapters-that-exist-today">The adapters that exist today<a class="headerlink" href="#the-adapters-that-exist-today" title="Permanent link">&para;</a></h2>
+<p>All three live in
+<a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/datasets.py"><code>scanpath_studio/datasets.py</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Corpus</th>
+<th>Data comes from</th>
+<th>Entry points</th>
+<th>Why it needs an adapter</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>OneStop</strong></td>
+<td>OSF release (<code>public</code> variant) or a local lab export (<code>lacclab</code>)</td>
+<td><code>onestop_raw_frames</code> · <code>load_onestop</code> · <code>download_onestop</code> · <code>onestop_present</code></td>
+<td>Not the columns — the reports already match the bundled demo's EyeLink schema. The adapter picks the right regime × part files, filters the OSF zips' <code>__MACOSX</code> cruft, and folds the trial <em>part</em> into the trial id so parts don't collide.</td>
+</tr>
+<tr>
+<td><strong>PoTeC</strong></td>
+<td>OSF archive (fixations) + the DiLi-Lab GitHub repo (AOI files)</td>
+<td><code>potec_raw_frames</code> · <code>load_potec</code> · <code>download_potec</code> · <code>potec_present</code></td>
+<td>900 per-trial TSVs to concatenate; stimulus-level word AOIs with no participant column; fixations with <strong>no coordinates</strong> at all — x/y is reconstructed from the fixated character's box centre in the per-text <code>.ias</code> files.</td>
+</tr>
+<tr>
+<td><strong>MultiplEYE</strong></td>
+<td>a local session tree (also a browser-upload path)</td>
+<td><code>multipleye_raw_frames</code> · <code>load_multipleye</code> · <code>multipleye_inventory</code> · <code>multipleye_frames_from_uploads</code></td>
+<td>Participant, session, trial, and stimulus exist only in folder and file names; character AOIs must be aggregated into word boxes; the pages of one stimulus reuse the same screen coordinates, so each page has to become its own trial.</td>
+</tr>
+</tbody>
+</table>
+<p>If your corpus is just two tables with recognizable column names, you probably
+don't need an adapter: the generic loader already accepts a list or glob of
+files and auto-detects EyeLink / Gazepoint / snake_case columns. Adapters exist
+for the parts the generic path <em>cannot</em> guess — identity hidden in filenames,
+coordinates that have to be reconstructed, AOIs at the wrong granularity, a
+download step.</p>
+<h2 id="what-an-adapter-must-provide">What an adapter must provide<a class="headerlink" href="#what-an-adapter-must-provide" title="Permanent link">&para;</a></h2>
+<p><code>datasets.py</code> is the only module that knows about a specific corpus. It is
+pandas plus the standard library (<code>pathlib</code>, <code>urllib</code>, <code>zipfile</code>, …) and
+imports <strong>no Streamlit</strong>. Keep it that way: it has to be importable from a
+plain script, and everything app-facing lives in <code>app.py</code>.</p>
+<h3 id="1-a-raw-frames-function-the-required-entry-point">1. A raw-frames function — the required entry point<a class="headerlink" href="#1-a-raw-frames-function-the-required-entry-point" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="o">&lt;</span><span class="n">corpus</span><span class="o">&gt;</span><span class="n">_raw_frames</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">root</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">download</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">...</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Raw (pre-normalization) ``(words, fixations)`` frames.&quot;&quot;&quot;</span>
+</code></pre></div>
+<p>It returns the two tables <strong>before</strong> normalization, in whatever column names
+the corpus uses. That is deliberate: the app feeds them through the same
+auto-detect → normalize → harmonize pipeline as an upload, so the sidebar
+<strong>Column mapping</strong> panels still appear and stay overridable. A loader that
+returned already-normalized frames would bypass them.</p>
+<p>Requirements:</p>
+<ul>
+<li><strong>Read the whole corpus.</strong> There is no per-source participant/text narrowing
+  in the app any more — the global <strong>Narrow by</strong> trial filters scope it. Keep
+  <code>readers=</code> / <code>texts=</code> / <code>sessions=</code> keyword arguments for the headless
+  callers, but let them default to everything.</li>
+<li><strong>Concatenate multi-file corpora yourself</strong>, or hand the paths to
+  <code>data.read_tables</code>, which tags each row with its <code>source_file</code> stem — the way
+  to recover identity that lives only in a filename.</li>
+<li><strong>Raise <code>FileNotFoundError</code> with a message that says what to do</strong> (PoTeC's
+  names the missing path and points at <code>download=True</code>). The app's loader
+  catches it and prints it in the sidebar — <code>Couldn't load PoTeC from
+  &lt;root&gt;: &lt;your message&gt;</code> — so the message is the whole error UI.</li>
+<li><strong>Read only.</strong> The raw-frames function must not write anything: no caches, no
+  rewritten source files, and never anything inside the installed package.
+  Writing to disk is the downloader's job alone, and it writes only into the
+  root the user pointed at.</li>
+</ul>
+<h3 id="2-a-normalized-loader">2. A normalized loader<a class="headerlink" href="#2-a-normalized-loader" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_</span><span class="o">&lt;</span><span class="n">corpus</span><span class="o">&gt;</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">words_raw</span><span class="p">,</span> <span class="n">fixations_raw</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">corpus</span><span class="o">&gt;</span><span class="n">_raw_frames</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">api</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">return</span> <span class="n">api</span><span class="o">.</span><span class="n">load_scanpath_data</span><span class="p">(</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        <span class="n">words</span><span class="o">=</span><span class="n">words_raw</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        <span class="n">fixations</span><span class="o">=</span><span class="n">fixations_raw</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="n">word_schema</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="o">&lt;</span><span class="n">CORPUS</span><span class="o">&gt;</span><span class="n">_WORD_SCHEMA</span><span class="p">),</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="n">fix_schema</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="o">&lt;</span><span class="n">CORPUS</span><span class="o">&gt;</span><span class="n">_FIX_SCHEMA</span><span class="p">),</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="p">)</span>
+</code></pre></div>
+<p><a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a> validates the
+schemas, normalizes, and then harmonizes: stimulus-level word boxes (no
+participant column) are broadcast across the participants found in the
+fixations, and fixations with a word id but no coordinates are placed at their
+word box's centre.</p>
+<p>Pass <strong>explicit schema dicts</strong> when the corpus' column names are stable and you
+want the loader to keep working if the corpus adds columns; omit them to let
+auto-detection run (OneStop does, because its reports already match the demo's
+schema). PoTeC's are the model — note <code>participant=None</code>, which is what marks
+the word table as stimulus-level:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">POTEC_WORD_SCHEMA</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">participant</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="o">=</span><span class="s2">&quot;text_id&quot;</span><span class="p">,</span> <span class="n">word_id</span><span class="o">=</span><span class="s2">&quot;aoi&quot;</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span> <span class="n">line</span><span class="o">=</span><span class="s2">&quot;line&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">left</span><span class="o">=</span><span class="s2">&quot;start_x&quot;</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="s2">&quot;end_x&quot;</span><span class="p">,</span> <span class="n">top</span><span class="o">=</span><span class="s2">&quot;start_y&quot;</span><span class="p">,</span> <span class="n">bottom</span><span class="o">=</span><span class="s2">&quot;end_y&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">POTEC_FIX_SCHEMA</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">participant</span><span class="o">=</span><span class="s2">&quot;reader_id&quot;</span><span class="p">,</span> <span class="n">trial</span><span class="o">=</span><span class="s2">&quot;text_id&quot;</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="s2">&quot;fixation_duration&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">x</span><span class="o">=</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="n">fixation_id</span><span class="o">=</span><span class="s2">&quot;fixation_index&quot;</span><span class="p">,</span> <span class="n">word_id</span><span class="o">=</span><span class="s2">&quot;word_index_in_text&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
+</code></pre></div>
+<p>The full key sets are whatever <code>data.propose_word_schema</code> /
+<code>data.propose_fix_schema</code> return:</p>
+<ul>
+<li><strong>Words</strong> — <code>participant</code>, <code>trial</code>, <code>text_id</code>, <code>word_id</code>, <code>text</code>, <code>line</code>, and
+  the box as either <code>x</code>/<code>y</code>/<code>width</code>/<code>height</code> <strong>or</strong>
+  <code>left</code>/<code>right</code>/<code>top</code>/<code>bottom</code>. Validation blocks without <code>trial</code>, <code>word_id</code>,
+  and one complete box form.</li>
+<li><strong>Fixations</strong> — <code>participant</code>, <code>trial</code>, <code>text_id</code>, <code>fixation_id</code>,
+  <code>timestamp</code>, <code>duration</code>, <code>x</code>, <code>y</code>, <code>word_id</code>. Validation blocks without
+  <code>trial</code>, <code>duration</code>, and either <code>(x, y)</code> or <code>word_id</code>.</li>
+</ul>
+<p>Your explicit dicts bind the <strong>headless</strong> loader only. The app never sees them:
+it takes the raw frames from <code>&lt;corpus&gt;_raw_frames</code> and runs
+<code>data.propose_word_schema</code> / <code>propose_fix_schema</code> over them, exactly as it would
+for an upload. So auto-detection has to land on the same answer, or the user
+opens your corpus and has to fix the mapping by hand. Check it before you ship —
+on PoTeC's raw frames, detection returns <code>trial="text_id"</code>, <code>word_id="aoi"</code>,
+<code>left="start_x"</code> …, <code>duration="fixation_duration"</code>, matching
+<code>POTEC_WORD_SCHEMA</code> / <code>POTEC_FIX_SCHEMA</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="kn">import</span> <span class="n">data</span><span class="p">,</span> <span class="n">datasets</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">potec_raw_frames</span><span class="p">(</span><span class="s2">&quot;data/PoTeC&quot;</span><span class="p">,</span> <span class="n">texts</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;b0&quot;</span><span class="p">])</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">assert</span> <span class="n">data</span><span class="o">.</span><span class="n">validate_word_schema</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">propose_word_schema</span><span class="p">(</span><span class="n">words</span><span class="p">))</span> <span class="o">==</span> <span class="p">[]</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">assert</span> <span class="n">data</span><span class="o">.</span><span class="n">validate_fix_schema</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">propose_fix_schema</span><span class="p">(</span><span class="n">fixations</span><span class="p">))</span> <span class="o">==</span> <span class="p">[]</span>
+</code></pre></div>
+<p>If a column can't be guessed, add its name to the right <code>*_CANDIDATES</code> list in
+<code>data.py</code> rather than renaming it in the loader — that fixes it for every
+dataset using the same convention.</p>
+<h3 id="3-registration-for-any-extra-column-you-stamp">3. Registration for any extra column you stamp<a class="headerlink" href="#3-registration-for-any-extra-column-you-stamp" title="Permanent link">&para;</a></h3>
+<p>Normalization does not carry your columns along. <code>data.normalize_words</code> /
+<code>normalize_fixations</code> build a <strong>fresh</strong> frame holding the canonical fields plus
+whatever matches <code>data.WORD_OPTIONAL_FIELDS</code> / <code>FIX_OPTIONAL_FIELDS</code> (matched on
+the <em>exact</em> source column name); everything else is dropped silently. So a
+corpus-specific extra — reader metadata, a stimulus-image path, the stimulus
+typeface, a genre facet — needs a <code>(source, dest, kind, category)</code> row there,
+with <code>kind</code> ∈ <code>numeric | string | boolean | passthrough</code> and <code>category</code> ∈
+<code>measure | linguistic | meta</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">(</span><span class="s2">&quot;stimulus_font_px&quot;</span><span class="p">,</span> <span class="s2">&quot;stimulus_font_px&quot;</span><span class="p">,</span> <span class="s2">&quot;numeric&quot;</span><span class="p">,</span> <span class="s2">&quot;meta&quot;</span><span class="p">),</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="p">(</span><span class="s2">&quot;comprehension_questions&quot;</span><span class="p">,</span> <span class="s2">&quot;comprehension_questions&quot;</span><span class="p">,</span> <span class="s2">&quot;passthrough&quot;</span><span class="p">,</span> <span class="s2">&quot;meta&quot;</span><span class="p">),</span>
+</code></pre></div>
+<p>That is how MultiplEYE's <code>image_path</code> / <code>image_x</code> / <code>image_y</code>,
+<code>stimulus_font_px</code> / <code>stimulus_font_family</code>, <code>comprehension_questions</code>, and
+<code>pp_*</code> reader metadata reach the app. Entries are inert for corpora that don't
+emit the column, so adding yours costs other datasets nothing — but skipping it
+means your enrichment work vanishes between the loader and the first plot, with
+no error.</p>
+<h3 id="4-a-presence-check">4. A presence check<a class="headerlink" href="#4-a-presence-check" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="o">&lt;</span><span class="n">corpus</span><span class="o">&gt;</span><span class="n">_present</span><span class="p">(</span><span class="n">root</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</code></pre></div>
+<p>Path stats only — no file reads — so the app can show a found/missing status
+before any expensive load. Be <strong>strict</strong>: return <code>True</code> only when everything a
+whole-corpus load needs is there. <code>potec_present</code> requires all twelve texts'
+word <em>and</em> character AOI files, because a lenient "any AOI file" check would
+pass a partial tree and then crash mid-load with no way for the user to
+recover; requiring all of them lets the app offer the Download button, which
+self-heals the gap.</p>
+<h3 id="5-a-downloader-if-the-data-is-publicly-fetchable">5. A downloader, if the data is publicly fetchable<a class="headerlink" href="#5-a-downloader-if-the-data-is-publicly-fetchable" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">download_</span><span class="o">&lt;</span><span class="n">corpus</span><span class="o">&gt;</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+</code></pre></div>
+<p>Follow what <code>download_potec</code> / <code>download_onestop</code> do:</p>
+<ul>
+<li><strong>Skip anything already present</strong>, so it is safe to call repeatedly and a
+  second load never touches the network.</li>
+<li><strong>Write atomically</strong> — fetch to <code>&lt;dest&gt;.part</code>, then <code>Path.replace</code> into
+  place. An interrupted fetch must never leave a truncated file that the
+  presence check then treats as complete; with hundred-MB reports that window
+  is real. (An archive you extract can't use that trick — <code>download_potec</code>
+  extracts the OSF zip in one go and gates the whole step on the target folder
+  not existing yet.)</li>
+<li><strong>Print what it is fetching</strong>, with the URL.</li>
+<li><strong>Fetch from the corpus' canonical host.</strong> Both existing downloaders reuse
+  the file ids from the corpus' own <code>download_data_files.py</code>. Scanpath Studio
+  never mirrors or re-hosts anyone's data.</li>
+</ul>
+<h3 id="6-constants-worth-exporting">6. Constants worth exporting<a class="headerlink" href="#6-constants-worth-exporting" title="Permanent link">&para;</a></h3>
+<p>At minimum the presentation monitor (<code>POTEC_MONITOR = (1680, 1050)</code>,
+<code>MULTIPLEYE_MONITOR = (1920, 1080)</code>), which is what makes the plot
+true-to-scale. Also export the valid text / regime / part lists you validate
+against, so the CLI and the app can build their pickers from them instead of
+re-typing the strings.</p>
+<h2 id="registering-it-in-the-app">Registering it in the app<a class="headerlink" href="#registering-it-in-the-app" title="Permanent link">&para;</a></h2>
+<p>Two additions to
+<a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/app.py"><code>app.py</code></a>.</p>
+<p><strong>A sidebar loader.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">_load_</span><span class="o">&lt;</span><span class="n">corpus</span><span class="o">&gt;</span><span class="n">_source</span><span class="p">(</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">options_host</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">location_host</span><span class="o">=</span><span class="kc">None</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+</code></pre></div>
+<p>It renders the corpus' controls and returns <em>raw</em> frames. The two hosts are the
+sidebar sub-slots: source options (variant, regime, fixation source) go in
+<code>options_host</code>, the data location in <code>location_host</code>. Use the shared helpers so
+every corpus looks the same:</p>
+<ul>
+<li><code>_dataset_dir_input(loc, default_dir=…, dir_help=…, structure_md=…, key_prefix=…)</code>
+  — the <em>Data directory</em> text box, a <strong>📁</strong> button opening a native folder
+  dialog (silently unavailable on a headless host, where the text box is the
+  only control), and an <em>Expected files</em> expander. It returns the directory
+  already resolved, so hand its return value — not the raw text — to your
+  presence check. Write the layout tree as a <code>_&lt;CORPUS&gt;_STRUCTURE_MD</code> constant
+  next to the existing ones; it is what tells a user who already has the data
+  where to drop it.</li>
+<li><code>_dataset_access_status(loc, root=…, present=…, download=…, size_hint=…, key_prefix=…, label=…)</code>
+  — "Found in <code>&lt;root&gt;</code>" versus "Not downloaded yet (~45 MB)" plus a <strong>⬇
+  Download</strong> button. It also records the main-area <em>this corpus isn't here yet</em>
+  state, so a user who picks a corpus they haven't downloaded doesn't silently
+  get demo scanpaths.</li>
+<li>When it isn't ready, <code>return load_sample_data()</code> — the app has to stay usable.</li>
+<li>Wrap the actual read in a module-level <code>@st.cache_data</code> function keyed on
+  plain strings (<code>_cached_potec_raw_frames(root)</code>), so toggling a viz control
+  doesn't re-read hundreds of files.</li>
+<li>Catch <code>(FileNotFoundError, ValueError, OSError)</code> around the read and surface
+  it with <code>loc.error(...)</code>, returning empty frames.</li>
+</ul>
+<p><strong>One registry entry</strong>, in <code>PUBLIC_DATASET_REGISTRY</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="s2">&quot;PoTeC — Potsdam Textbook Corpus&quot;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">loader</span><span class="o">=</span><span class="n">_load_potec_source</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">monitor</span><span class="o">=</span><span class="p">(</span><span class="mi">1680</span><span class="p">,</span> <span class="mi">1050</span><span class="p">),</span>          <span class="c1"># DELL P2210 — canvas snaps to this</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">short</span><span class="o">=</span><span class="s2">&quot;PoTeC&quot;</span><span class="p">,</span>                 <span class="c1"># what the picker shows</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">language</span><span class="o">=</span><span class="s2">&quot;German&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">size</span><span class="o">=</span><span class="s2">&quot;75 readers · 12 texts&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Potsdam Textbook Corpus — German reading of biology &amp; &quot;</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="s2">&quot;physics textbook passages (expert/novice readers).&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">link</span><span class="o">=</span><span class="s2">&quot;https://github.com/DiLi-Lab/PoTeC&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="p">),</span>
+</code></pre></div>
+<p>The dict key is the entry's token in the flat data-source picker (tagged 🌐);
+<code>short</code> is the label shown, and <code>language</code> / <code>size</code> / <code>description</code> / <code>link</code>
+become the caption, blurb, and <em>Dataset home ↗</em> link under it. <code>monitor</code> is the
+real presentation screen — the canvas snaps to it on a source switch so the
+scanpath renders at true scale. Put the default data directory in
+<code>constants.py</code> as a <code>&lt;CORPUS&gt;_DEFAULT_DIR</code> — <code>_resolve_data_dir</code> anchors a
+relative path to the project root (<code>scanpath_studio/</code>'s parent), not the
+process cwd, so <code>data/PoTeC</code> means the same folder however the server was
+launched.</p>
+<p>Public datasets are enabled by default; <code>SCANPATH_PUBLIC_DATASETS=0</code> hides the
+whole group.</p>
+<h2 id="the-other-three-surfaces">The other three surfaces<a class="headerlink" href="#the-other-three-surfaces" title="Permanent link">&para;</a></h2>
+<p>A dataset is a user-facing feature, so the project's <em>Exposing a feature on
+every surface</em> rule applies — the picker entry is one surface out of four:</p>
+<ul>
+<li><strong>Headless API</strong> — <code>load_&lt;corpus&gt;</code> plus a lazy re-export in <code>__init__.py</code>
+  (add the name to <code>__all__</code> and to <code>_DATASET_EXPORTS</code>), so
+  <code>sps.load_&lt;corpus&gt;(...)</code> works, and a <code>:::</code> autodoc block in
+  <a href="../api/"><code>docs/api.md</code></a>.</li>
+<li><strong>CLI</strong> — a flag in <code>render</code>'s <em>input</em> argument group in <code>cli.py</code>, added to
+  the exactly-one-input check at the top of <code>render()</code> so it can't be combined
+  with <code>--sample</code> or <code>--words/--fixations</code>. PoTeC and OneStop use
+  <code>--potec DIR</code> / <code>--onestop DIR</code> (with
+  <code>--onestop-regime</code> / <code>--onestop-part</code> / <code>--onestop-variant</code> for the options);
+  MultiplEYE currently rides <code>--source multipleye --export DIR</code>. Prefer the
+  <code>--&lt;corpus&gt; DIR</code> shape.</li>
+<li><strong>Deep link / Share</strong> — register the source in <code>_SHAREABLE_SOURCES</code> in
+  <code>url_state.py</code>, and any per-corpus options in <code>_apply_url_preset</code> (read) and
+  <code>_build_share_query</code> (write). Of the three built-in corpora only OneStop does
+  this today: a shared link carries
+  <code>?source=onestop_public&amp;onestop_variant=…&amp;onestop_regime=…&amp;onestop_parts=…</code>.
+  Note that <code>url_state.py</code> must not import <code>app.py</code>'s registry (that would be an
+  import cycle), so a shareable corpus needs its picker key as a <code>constants.py</code>
+  constant — <code>ONESTOP_PUBLIC_CHOICE</code> is the precedent. A corpus that skips all
+  this still works, but a shared link can't reopen it (the Share panel says so).</li>
+</ul>
+<p>Finally, add a page under <strong>Datasets</strong> in the docs describing the corpus and
+the modelling decisions your adapter makes — <a href="../onestop/">OneStop</a> and
+<a href="../multipleye/">MultiplEYE</a> are the templates — and list it in <code>mkdocs.yml</code>'s
+<code>nav:</code> under <code>Datasets</code>. A page that isn't in the nav still builds, but nothing
+links to it.</p>
+<h2 id="licence-expectations">Licence expectations<a class="headerlink" href="#licence-expectations" title="Permanent link">&para;</a></h2>
+<p>The bar: the corpus must be publicly available under a licence that permits
+what the adapter does with it — reading it, and, for a downloader, fetching it
+from its own host on the user's behalf.</p>
+<p>How the existing adapters handle it:</p>
+<ul>
+<li><strong>No corpus data is vendored into this repository</strong>, with one exception: the
+  bundled demo, a subset of OneStop used under OneStop's own licence, cited in
+  the README and carried in <code>constants.CITATION["corpus_note"]</code> — which
+  <code>export.bulk_export</code> writes into every export bundle's <code>README.md</code>, so the
+  attribution travels with the data a user takes away.</li>
+<li><strong>Downloads point at the corpus' own host</strong> — PoTeC's OSF archive and its
+  GitHub repo, OneStop's OSF release — reusing the file ids those projects
+  publish. Nothing is mirrored.</li>
+<li><strong>Attribution rides in the registry entry</strong> (<code>link</code> → <em>Dataset home ↗</em>) and
+  in the corpus' docs page.</li>
+<li><strong>Ported code is a separate question.</strong> Third-party code carries a <code>NOTICE</code>
+  entry — the ten drift-correction algorithms in <code>alignment.py</code> are a native
+  port of Carr et al. (2021), CC BY 4.0, attributed there. If your adapter
+  ports logic from the corpus' own tooling, add a NOTICE entry, and check the
+  licence is compatible with this project's MIT licence (a GPL dependency is
+  not acceptable — that is why <code>alignment.py</code> is a native port rather than a
+  dependency).</li>
+</ul>
+<p>So the PR has to state the corpus' licence, its citation, and a stable public
+URL (see <em>Submitting it</em> below for the rest of the checklist).</p>
+<h2 id="bundled-in-the-wheel-vs-download-on-demand">Bundled in the wheel vs. download on demand<a class="headerlink" href="#bundled-in-the-wheel-vs-download-on-demand" title="Permanent link">&para;</a></h2>
+<p>The installed package is about 1.3 MB of Python and 4.4 MB of <code>sample_data/</code> —
+the demo is most of the wheel. That is the whole budget. A corpus that would
+add more than a couple of MB is download-on-demand or local-directory, never
+bundled, and in practice that rules out every complete corpus: PoTeC's
+eye-tracking archive alone is ~45 MB, and a single OneStop report runs from
+tens to a few hundred MB.</p>
+<p>What ships is declared in two places that must be updated together —
+<code>MANIFEST.in</code> (sdist) and <code>[tool.setuptools.package-data]</code> in <code>pyproject.toml</code>
+(wheel). Both are restricted to <code>sample_data/</code>: the <code>.csv</code> / <code>.parquet</code> /
+<code>.feather</code> tables and the demo stimulus <code>images/</code>.</p>
+<p>Download-on-demand, as it works today:</p>
+<ol>
+<li>The user picks a folder (seeded from the corpus' <code>&lt;CORPUS&gt;_DEFAULT_DIR</code>);
+   nothing is ever written into the package.</li>
+<li><code>&lt;corpus&gt;_present(root)</code> decides found vs. missing from path stats alone.</li>
+<li><code>_dataset_access_status</code> shows the status and, when missing, a <strong>⬇
+   Download</strong> button with a size hint — and records the main-area "isn't
+   available yet" state explaining that what's on screen is the demo.</li>
+<li><code>download_&lt;corpus&gt;</code> fetches only what's absent, writing atomically.</li>
+<li>From then on the corpus is on disk: <code>present</code> is <code>True</code>, and the loader
+   never touches the network again.</li>
+</ol>
+<h2 id="sample-size-and-update_sample_datapy">Sample size, and <code>update_sample_data.py</code><a class="headerlink" href="#sample-size-and-update_sample_datapy" title="Permanent link">&para;</a></h2>
+<p><code>python -m scanpath_studio.update_sample_data</code> regenerates the bundled demo
+from the full OneStop exports. Its flags are the sample-size policy in
+executable form: <code>--participants</code> (3), <code>--articles</code> (2, each spanning the
+Advanced and Elementary version), <code>--seed</code>, <code>--max-rows</code> (cap on rows read from
+each multi-GB source CSV), <code>--source-dir</code>, <code>--output-dir</code>. It writes
+<code>ia</code> and <code>fixations</code> as both CSV and Parquet, then synthesizes the <code>raw_gaze</code>
+overlay from the fixations of one bundled trial (<code>--raw-gaze-only</code> rebuilds
+just that). The result: 3 readers, 12 trials each (36 in all), 3,922
+interest-area rows, 3,209 fixation rows.</p>
+<p>That is the size a bundled sample is meant to be — large enough to exercise
+every feature (several readers of the same paragraph, both difficulty levels,
+pre-computed per-word measures, a raw-gaze overlay, stimulus images) and small
+enough to disappear into the wheel. If a proposal ever adds to or replaces the
+bundled sample, it needs an equivalent re-runnable script: the demo has to be
+reproducible from its source corpus, not a hand-curated blob.</p>
+<p>Stimulus images are <em>not</em> produced by that script — the demo PNGs come from a
+separate render step and are placed at data origin <code>(image_x=358,
+image_y=184)</code>; <code>tests/test_smoke.py::TestStimulusImageAlignment</code> asserts that
+origin keeps every rendered line on its word boxes.</p>
+<h2 id="tests-a-new-adapter-needs">Tests a new adapter needs<a class="headerlink" href="#tests-a-new-adapter-needs" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it must cover</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tests/test_dataset_support.py</code></td>
+<td>The loader itself, against a tiny corpus-shaped tree built under <code>tmp_path</code> — see the <code>potec_root</code> / <code>multipleye_root</code> fixtures and <code>_fake_onestop_reports</code>. Assert the normalized output exactly: participant and trial ids, word text, reconstructed coordinates, durations, word links. Plus the failure paths: unknown text/regime/part → <code>ValueError</code>, missing files → a <code>FileNotFoundError</code> whose message tells the user what to do, and <code>&lt;corpus&gt;_present</code> on a partial tree.</td>
+</tr>
+<tr>
+<td><code>tests/test_apptest.py</code></td>
+<td>The app wiring. <code>test_each_public_dataset_loader_ui_renders</code> loops over the whole <code>PUBLIC_DATASET_REGISTRY</code> and requires each loader to boot the app with no exception, no <code>st.error</code>, and a <em>Data directory</em> text input. A new entry is picked up by the loop automatically — <strong>but add your <code>&lt;CORPUS&gt;_DEFAULT_DIR</code> to the tuple of constants it monkeypatches to an empty <code>tmp_path</code></strong>. Without that the test reads your real default directory, so it passes or fails depending on what the dev machine happens to have downloaded, and a present corpus makes it read the whole thing and blow the timeout. <code>test_public_dataset_canvas_snaps_to_its_monitor</code> covers the <code>monitor</code> field.</td>
+</tr>
+<tr>
+<td><code>tests/test_cli.py</code></td>
+<td>The new <code>render</code> flag: that it conflicts with the other inputs (<code>--potec</code> + <code>--sample</code> → <em>exactly one input</em>), and that it renders.</td>
+</tr>
+<tr>
+<td><code>tests/test_app.py</code></td>
+<td>Only if you made the source shareable: the deep-link round-trip (build the query → apply it into a fresh session → the options come back), and that a hand-edited link with junk options is ignored rather than seeding a bad widget value.</td>
+</tr>
+<tr>
+<td><code>tests/test_&lt;corpus&gt;_enrichment.py</code></td>
+<td>If the adapter merges side data (reader metadata, comprehension questions, pre-computed reading measures, stimulus images), one test per surface, including the "file absent → column simply not there" case. <code>tests/test_multipleye_enrichment.py</code> is the model.</td>
+</tr>
+</tbody>
+</table>
+<p>Two hard rules: <strong>tests never hit the network</strong> — monkeypatch the downloader
+(as the <code>onestop_offline</code> fixture does) or build the tree directly — and
+<strong>expectations are hand-computed</strong>, not snapshots of whatever the code emitted.
+<code>test_load_potec</code> asserting <code>x == [104.0, 156.5, 86.5]</code> (the centres of the
+character boxes the fixations landed on) is the standard.</p>
+<h2 id="worked-example-potec-end-to-end">Worked example: PoTeC, end to end<a class="headerlink" href="#worked-example-potec-end-to-end" title="Permanent link">&para;</a></h2>
+<p>PoTeC is the smallest complete adapter; read it in this order.</p>
+<ol>
+<li><strong>Understand the shape.</strong> Fixations ship as 900 per-trial TSVs
+   (<code>eyetracking_data/scanpaths/reader&lt;N&gt;_&lt;text&gt;_scanpath.tsv</code>), word AOIs once
+   per text with no participant column
+   (<code>stimuli/word_aoi_texts/word_aoi_&lt;text&gt;.tsv</code>), and character AOIs per text
+   (<code>stimuli/aoi_texts/&lt;text&gt;.ias</code>). Fixations carry the fixated character's
+   AOI index, no pixels.</li>
+<li><strong>Fetch — <code>download_potec(root, *, fixation_source="scanpaths")</code>.</strong> Pulls
+   the eye-tracking zip from OSF (<code>_POTEC_OSF_RESOURCES</code>), keeping only the
+   real <code>.tsv</code> members (the OSF zips carry macOS resource-fork cruft), then the
+   24 AOI files from GitHub raw, each written to <code>&lt;name&gt;.part</code> and renamed into
+   place. Everything already on disk is skipped.</li>
+<li><strong>Check — <code>potec_present(root)</code>.</strong> A non-empty
+   <code>eyetracking_data/scanpaths/</code> <em>or</em> <code>eyetracking_data/fixations/</code> folder
+   (at least one <code>.tsv</code>), <em>and</em> both AOI files for all twelve texts
+   (<code>_POTEC_TEXTS</code> = <code>b0</code>–<code>b5</code>, <code>p0</code>–<code>p5</code>). <code>is_dir</code> / <code>is_file</code> / one <code>glob</code>
+   — no file is opened.</li>
+<li><strong>Build the word table — <code>_potec_words</code>.</strong> Reads each text's word AOI TSV,
+   adds <code>text_id</code> (which lives only in the filename), and recovers <code>line</code> by
+   mapping each word's <code>start_y</code> through the character AOIs, which share a
+   <code>start_y</code> per line. Every table is read with <code>keep_default_na=False</code> and an
+   explicit NA list, because PoTeC text <code>p3</code> contains the German word "null".</li>
+<li><strong>Build the fixation table — <code>_potec_fixations</code>.</strong> Concatenates the matching
+   per-trial TSVs, and merges each fixation's <code>aoi</code> against the character-box
+   centres to synthesize <code>x</code>/<code>y</code> — this is the step that gives PoTeC
+   within-word landing positions at all.</li>
+<li><strong>Expose it raw — <code>potec_raw_frames(root, *, readers, texts, download)</code>.</strong>
+   Downloads if asked, rejects unknown text ids with a <code>ValueError</code> naming the
+   valid ones, returns <code>(words, fixations)</code> unnormalized.</li>
+<li><strong>Expose it normalized —
+   <a class="autorefs autorefs-internal" title="scanpath_studio.datasets.load_potec" href="../api/#scanpath_studio.datasets.load_potec"><code>load_potec</code></a>.</strong> Calls
+   <code>api.load_scanpath_data</code> with <code>POTEC_WORD_SCHEMA</code> / <code>POTEC_FIX_SCHEMA</code>. The
+   stimulus-level word boxes get broadcast across readers here, so a trial that
+   started as one row per word per <em>text</em> ends up as one row per word per
+   <em>(reader, text)</em>.</li>
+<li><strong>Wire the app — <code>_load_potec_source</code></strong> (<code>app.py</code>): a <code>_dataset_dir_input</code>
+   with <code>_POTEC_STRUCTURE_MD</code>, a <code>_dataset_access_status</code> with
+   <code>download=datasets.download_potec</code> and <code>size_hint="~45 MB"</code>, then
+   <code>_cached_potec_raw_frames(root)</code>. One <code>PUBLIC_DATASET_REGISTRY</code> entry names
+   it, gives its DELL P2210 monitor <code>(1680, 1050)</code>, and links the GitHub repo.</li>
+<li><strong>Wire the other surfaces.</strong> <code>--potec DIR</code> in <code>cli.py</code>; <code>load_potec</code> in
+   <code>__all__</code> / <code>_DATASET_EXPORTS</code> in <code>__init__.py</code> and autodoc'd in
+   <a href="../api/"><code>docs/api.md</code></a>.</li>
+<li><strong>Test it.</strong> <code>tests/test_dataset_support.py</code> builds a two-word, two-reader
+    PoTeC tree in <code>tmp_path</code> (including the literal word "null", to guard the
+    NA handling) and asserts the broadcast word table, the reconstructed
+    coordinates, the reader subset, and both error messages.</li>
+</ol>
+<h2 id="submitting-it">Submitting it<a class="headerlink" href="#submitting-it" title="Permanent link">&para;</a></h2>
+<p>One pull request containing all of it: the adapter in <code>datasets.py</code>, any
+optional-field rows in <code>data.py</code>, the sidebar loader plus registry entry in
+<code>app.py</code>, the default directory in <code>constants.py</code>, the CLI flag, the API
+re-export, the tests, and a docs page under <strong>Datasets</strong> (plus its <code>mkdocs.yml</code>
+nav line). In the PR description, state the corpus' <strong>licence</strong>, a
+<strong>citation</strong>, its <strong>public URL</strong>, and its <strong>on-disk size</strong> (which determines
+download-on-demand vs. local directory).</p>
+<p>Before you open it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[test,docs]&quot;</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pytest
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>ruff<span class="w"> </span>check<span class="w"> </span>--exclude<span class="w"> </span>other_vis<span class="w"> </span>.
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>ruff<span class="w"> </span>format<span class="w"> </span>--exclude<span class="w"> </span>other_vis<span class="w"> </span>.
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict<span class="w">          </span><span class="c1"># if you added or edited a docs page</span>
+</code></pre></div>
+<p>Add a line under <code>[Unreleased]</code> in <code>CHANGELOG.md</code>, and see
+<a href="https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md">Contributing</a>
+for the rest of the development setup.</p>
+<p>If you're not sure whether your corpus is a good fit, open an
+<a href="https://github.com/lacclab/scanpath-studio/issues">issue</a> describing its shape
+first — the answer is usually either "the generic loader already handles this"
+or a short list of the specific things an adapter would have to reconstruct.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../multipleye/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MultiplEYE">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                MultiplEYE
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../rendering/" class="md-footer__link md-footer__link--next" aria-label="Next: True-to-scale rendering">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                True-to-scale rendering
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/lacclab/scanpath-studio" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/scanpath-studio/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://scanpath-studio.streamlit.app" target="_blank" rel="noopener" title="Live demo" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 16.5v-9l6 4.5M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.top", "navigation.footer", "navigation.indexes", "content.code.copy", "content.tabs.link", "toc.follow", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

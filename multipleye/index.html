@@ -16,7 +16,7 @@
         <link rel="prev" href="../onestop/">
       
       
-        <link rel="next" href="../rendering/">
+        <link rel="next" href="../contributing-a-dataset/">
       
       
         
@@ -421,6 +421,12 @@
       
         
       
+        
+      
+        
+      
+        
+      
     
     
     
@@ -557,6 +563,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../bring-your-own-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bring your own data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../corpus-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../export-troubleshooting/" class="md-nav__link">
         
   
@@ -565,6 +627,34 @@
     
   
     Export & troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
   
 
     
@@ -593,6 +683,8 @@
   
     
     
+      
+        
       
         
       
@@ -699,6 +791,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -716,6 +836,8 @@
   
     
     
+      
+        
       
         
       
@@ -938,6 +1060,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing-a-dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing a dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -953,6 +1103,8 @@
   
     
     
+      
+        
       
         
       
@@ -1046,6 +1198,34 @@
     
   
     Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security audit
   
 
     
@@ -1186,11 +1366,10 @@ structured and the modelling decisions the loader makes; the implementation live
 in <a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/datasets.py"><code>datasets.py</code></a>
 and <a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/data.py"><code>data.py</code></a>.</p>
 <h2 id="enabling-it">Enabling it<a class="headerlink" href="#enabling-it" title="Permanent link">&para;</a></h2>
-<p>MultiplEYE is exposed as a <strong>Public dataset</strong>. Public datasets are currently
-behind a feature flag:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">SCANPATH_PUBLIC_DATASETS</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>streamlit<span class="w"> </span>run<span class="w"> </span>streamlit_app.py
-</code></pre></div>
-<p>Then pick <strong>Public datasets → MultiplEYE</strong>, point <em>Data directory</em> at a session
+<p>MultiplEYE is exposed as a <strong>Public dataset</strong>, which is on by default. To hide
+the public-dataset sources (e.g. on a deployment that should only take uploads),
+set <code>SCANPATH_PUBLIC_DATASETS=0</code>.</p>
+<p>Pick <strong>Public datasets → MultiplEYE</strong>, point <em>Data directory</em> at a session
 set (the <em>Expected files</em> panel lists the layout it looks for), and choose the
 <strong>fixation source</strong> (<code>scanpaths</code> or <code>fixations</code>). The whole session set loads —
 use the <strong>Narrow by</strong> trial filters to focus on specific readers or stimuli. A
@@ -1329,13 +1508,13 @@ directory tree, so those surfaces are available only on a directory load.</p>
         
         
           
-          <a href="../rendering/" class="md-footer__link md-footer__link--next" aria-label="Next: True-to-scale rendering">
+          <a href="../contributing-a-dataset/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing a dataset">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                True-to-scale rendering
+                Contributing a dataset
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -1,0 +1,2572 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+      
+      
+      
+        <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/corpus-analysis/">
+      
+      
+        <link rel="prev" href="../bring-your-own-data/">
+      
+      
+        <link rel="next" href="../export-troubleshooting/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Corpus analysis - Scanpath Studio</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#corpus-analysis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Scanpath Studio" class="md-header__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Scanpath Studio
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Corpus analysis
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../getting-started/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Using the app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Headless
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../onestop/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Datasets
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../rendering/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Internals
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Scanpath Studio" class="md-nav__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    Scanpath Studio
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the app
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using the app
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop app
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bring-your-own-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bring your own data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus analysis
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-in-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's in scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-text-one-text-many-readers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per text — one text, many readers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per text — one text, many readers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-reader-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-reader profiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-reader-heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word × reader heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cohort-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cohort profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-difficulty-on-stimulus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word difficulty on stimulus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#measure-vs-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measure vs feature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skip-regression-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skip / regression rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-reader-one-reader-many-trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per reader — one reader, many trials
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per reader — one reader, many trials">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#distribution-vs-cohort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distribution vs cohort
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixation-duration-over-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixation duration over time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saccade-vs-fixation-duration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saccade vs fixation duration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#progressive-vs-regressive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Progressive vs regressive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#landing-position-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Landing-position curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-trial-trend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-trial trend
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#groups-one-cohort-or-two" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Groups — one cohort, or two
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Groups — one cohort, or two">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#defining-a-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defining a group
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One group
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comparing-two-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing two groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-shared-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The shared controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The shared controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#measure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregate-and-spread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregate and spread
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#z-score-within-reader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Z-score within reader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#min-readers-per-word" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Min readers per word
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download-this-table-csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Download this table (CSV)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-the-numbers-out-headlessly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting the numbers out headlessly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../export-troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export & troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Headless
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Headless
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Datasets
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../onestop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneStop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multipleye/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiplEYE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing-a-dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing a dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internals
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Internals
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    True-to-scale rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whats-in-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's in scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-text-one-text-many-readers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per text — one text, many readers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per text — one text, many readers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-reader-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-reader profiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-reader-heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word × reader heatmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cohort-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cohort profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#word-difficulty-on-stimulus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Word difficulty on stimulus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#measure-vs-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measure vs feature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skip-regression-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skip / regression rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-reader-one-reader-many-trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per reader — one reader, many trials
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per reader — one reader, many trials">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#distribution-vs-cohort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distribution vs cohort
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reading-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixation-duration-over-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixation duration over time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saccade-vs-fixation-duration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saccade vs fixation duration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#progressive-vs-regressive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Progressive vs regressive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#landing-position-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Landing-position curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-trial-trend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-trial trend
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#groups-one-cohort-or-two" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Groups — one cohort, or two
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Groups — one cohort, or two">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#defining-a-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defining a group
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#one-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One group
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comparing-two-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing two groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-shared-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The shared controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The shared controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#measure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregate-and-spread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregate and spread
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#z-score-within-reader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Z-score within reader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#min-readers-per-word" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Min readers per word
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download-this-table-csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Download this table (CSV)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-the-numbers-out-headlessly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting the numbers out headlessly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="corpus-analysis">Corpus analysis<a class="headerlink" href="#corpus-analysis" title="Permanent link">&para;</a></h1>
+<p>The <strong>Corpus Analysis</strong> view answers questions about a <em>set</em> of trials rather
+than one scanpath: what does this text look like across its readers, what does
+this reader look like across their trials, and how do two cohorts differ. Open it
+with the <strong>📊 Corpus Analysis →</strong> button in the header; <strong>← Scanpath</strong> goes back.</p>
+<p>It has three subtabs, and every one of them follows the same shape — pick a
+subject (a text, a reader, a group), pick a <strong>View</strong>, then set whichever of the
+shared controls that view exposes (measure, aggregation, spread, normalization,
+observation guard) in the row above the plot.</p>
+<table>
+<thead>
+<tr>
+<th>Subtab</th>
+<th>Subject</th>
+<th>Views</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Per text</strong></td>
+<td>one text, all its readers</td>
+<td>per-reader profiles · word × reader heatmap · cohort profile · word difficulty on stimulus · measure vs feature · skip / regression rate</td>
+</tr>
+<tr>
+<td><strong>Per reader</strong></td>
+<td>one reader, all their trials</td>
+<td>distribution vs cohort · reading summary · fixation duration over time · saccade vs fixation duration · progressive vs regressive · landing-position curve · per-trial trend</td>
+</tr>
+<tr>
+<td><strong>Groups</strong></td>
+<td>one cohort — or two, behind a toggle</td>
+<td>distributions · word profile · reader summary table · group trend — plus overlaid distributions · difference word profile · paired bars · effect size + test · two-group heatmap</td>
+</tr>
+</tbody>
+</table>
+<h2 id="whats-in-scope">What's in scope<a class="headerlink" href="#whats-in-scope" title="Permanent link">&para;</a></h2>
+<p>Every view reads the <strong>filtered</strong> words and fixations frames, so the active trial
+filter defines the corpus. Two things are worth knowing before you interpret a
+number:</p>
+<ul>
+<li><strong>The filter controls are not on this screen.</strong> <em>Narrow by</em> (Text,
+  Participant) and the <em>More</em> popover (reading regime, difficulty, repeated
+  reading, correctness, favourites, tags) live above the plot in the <strong>Scanpath
+  Visualization</strong> view. Set them there, then switch back — the filter is stored
+  in the session and applies to both views.</li>
+<li><strong>Filtering is global, but so is the fallout.</strong> A filter that leaves one reader
+  on a text will still draw a "cohort" profile for it: one reader's numbers, with
+  a zero-width spread band that looks like certainty rather than <em>n</em> = 1. Use
+  <em>Min readers per word</em> (below) to make that visible.</li>
+</ul>
+<p>Two sidebar/rail settings also reach in:</p>
+<ul>
+<li><strong>Experimental Setup</strong> (sidebar) — monitor size, font, line spacing, text
+  scaling. Only the <em>Word difficulty on stimulus</em> view is spatial, and it uses
+  these exactly as the scanpath plot does. See
+  <a href="../rendering/">True-to-scale rendering</a>.</li>
+<li><strong>Visualization controls</strong> (the Scanpath view's right rail) — the heatmap
+  colourscale, colour scaling (<code>Linear</code> / <code>Log</code>), colorbar orientation and font,
+  word-label styling, background colour. These feed the <em>Word difficulty on
+  stimulus</em> view; the <em>Word × reader heatmap</em> picks up the colourscale. The other
+  figures use fixed palettes.</li>
+</ul>
+<hr />
+<h2 id="per-text-one-text-many-readers">Per text — one text, many readers<a class="headerlink" href="#per-text-one-text-many-readers" title="Permanent link">&para;</a></h2>
+<p>Pick a <strong>Text</strong> and a <strong>View</strong>. The dropdown annotates each text with its reader
+count and is sorted by that count, so the most-read text is selected by default.
+The count is distinct readers in the <strong>words</strong> table, which can include readers
+whose fixations are missing or filtered out.</p>
+<div class="admonition warning">
+<p class="admonition-title">What counts as one text</p>
+<p>The text id is the first of <code>unique_text_id</code>, <code>text_id</code>,
+<code>unique_paragraph_id</code>, <code>paragraph_id</code> present in the data. In OneStop that id
+<strong>includes the difficulty variant</strong> — <code>2_2_1_Adv</code> and <code>2_2_1_Ele</code> are two
+different texts here, with different word counts and different <code>word_id</code>
+numbering. Anything per-word (profiles, heatmaps, the difference profile) is
+therefore <em>within</em> one variant; cross-difficulty comparison belongs in the
+distribution / paired-bar / effect-size views, which pool across texts.</p>
+</div>
+<h3 id="per-reader-profiles">Per-reader profiles<a class="headerlink" href="#per-reader-profiles" title="Permanent link">&para;</a></h3>
+<p><strong>Question:</strong> does every reader slow down at the same places, or is the pattern
+idiosyncratic?</p>
+<p>One stacked panel per reader, X = <code>word_id</code> in reading order, Y = the chosen
+measure. The <strong>Cohort mean</strong> checkbox draws the same cross-reader centre line
+(dotted grey) in every panel, so a reader's deviations from the group read
+directly.</p>
+<p>Capped at 12 readers; the title then says <em>showing 12 of N readers</em> rather than
+truncating silently. Those are the first 12 by participant id, not the 12 with
+the most data — narrow the participant filter if you need a specific set.
+Repeated readings of the same word by the same reader are collapsed by the
+<strong>Aggregate</strong> setting before plotting.</p>
+<h3 id="word-reader-heatmap">Word × reader heatmap<a class="headerlink" href="#word-reader-heatmap" title="Permanent link">&para;</a></h3>
+<p><strong>Question:</strong> which words were hard for <em>everyone</em>, and which readers were slow
+<em>everywhere</em>?</p>
+<p>The same per-(reader, word) table as above, collapsed to a matrix: rows =
+readers, columns = <code>word_id</code>, colour = measure. A bright vertical stripe is a
+word the whole cohort struggled with; a bright row is a uniformly slow reader.</p>
+<p>Caveat: one shared colour scale spans all cells, so a single very long fixation
+compresses everything else. Switch the measure to a rate, or turn on <strong>Z-score
+within reader</strong>, if one reader is washing out the map.</p>
+<h3 id="cohort-profile">Cohort profile<a class="headerlink" href="#cohort-profile" title="Permanent link">&para;</a></h3>
+<p><strong>Question:</strong> what does the "average reader of this text" look like, and how much
+do readers disagree?</p>
+<p>A centre line (the <strong>Aggregate</strong> across readers of each reader's per-word value)
+with a shaded band set by <strong>Spread</strong>. This is the view where the spread choice
+matters most:</p>
+<ul>
+<li><strong>SD</strong> — spread of the readers themselves. Widens with reader variability,
+  never with sample size.</li>
+<li><strong>SEM</strong> — precision of the centre line. Shrinks as readers are added.</li>
+<li><strong>IQR</strong> — 25th/75th percentiles; robust, and the right choice with <code>median</code>.</li>
+<li><strong>Bootstrap CI</strong> — 95 % percentile bootstrap of the aggregate (1000 resamples,
+  fixed seed, so re-running gives the same band).</li>
+</ul>
+<p><strong>Min readers per word</strong> drops words backed by fewer readers than the threshold
+and captions how many were hidden.</p>
+<h3 id="word-difficulty-on-stimulus">Word difficulty on stimulus<a class="headerlink" href="#word-difficulty-on-stimulus" title="Permanent link">&para;</a></h3>
+<p><strong>Question:</strong> where on the page is the difficulty?</p>
+<p>The text is laid out true-to-scale and each word box is tinted by the
+cross-reader aggregate of the measure. No fixations are drawn — this is a
+corpus-level version of the word heatmap from the scanpath view, so it honours
+the same colourscale, <code>Linear</code>/<code>Log</code> scaling, colorbar and label settings. The
+heatmap <em>style</em> is fixed to <strong>Word boxes</strong> here; the rail's interpolated and
+density styles need fixations, and there are none.</p>
+<div class="admonition note">
+<p class="admonition-title">No guard on this view</p>
+<p><strong>Z-score within reader</strong> is disabled here (there is no reader axis left
+after aggregating) and there is <strong>no min-readers guard</strong> — a word read by one
+reader is tinted exactly as confidently as a word read by all of them. Check
+coverage in the <em>Cohort profile</em> view first if the filter is narrow.</p>
+</div>
+<p>The CSV download for this view contains <code>word_id</code> and <code>value</code> only.</p>
+<h3 id="measure-vs-feature">Measure vs feature<a class="headerlink" href="#measure-vs-feature" title="Permanent link">&para;</a></h3>
+<p><strong>Question:</strong> does the measure track a lexical property of the word?</p>
+<p>Per-word cross-reader aggregate on Y, a bundled linguistic feature on X. A
+numeric feature draws a scatter with an OLS trend line and Pearson <em>r</em> in the
+title; a categorical one (part of speech) draws one box per tag.</p>
+<p>Four features can be picked, and only those whose column is in the loaded words
+table are listed: <strong>GPT-2 surprisal</strong> (<code>gpt2_surprisal</code>), <strong>word frequency</strong>
+(<code>wordfreq_frequency</code>), <strong>word length</strong> (<code>word_length</code>) and <strong>part of speech</strong>
+(<code>universal_pos</code>). Other columns the OneStop tables ship — <code>subtlex_frequency</code>,
+<code>ptb_pos</code>, <code>dependency_relation</code> — are not in the picker. With none of the four
+present the view says so instead of drawing.</p>
+<div class="admonition warning">
+<p class="admonition-title">This is a look, not a model</p>
+<p>The correlation is computed over the words of a <strong>single text</strong> — around 100
+points for a OneStop paragraph — so <em>r</em> is noisy and moves with the text you
+pick. Length, frequency and surprisal are also strongly collinear and nothing
+here partials them out. Export the tidy table and fit the model you actually
+want.</p>
+</div>
+<h3 id="skip-regression-rate">Skip / regression rate<a class="headerlink" href="#skip-regression-rate" title="Permanent link">&para;</a></h3>
+<p><strong>Question:</strong> which words got skipped, and which pulled regressions back to them?</p>
+<p>Grouped bars per word: <code>skip_flag</code> rate and <code>regression_in_flag</code> rate, averaged
+over every row for that word. This view has no measure picker — the two rates
+<em>are</em> the measure.</p>
+<div class="admonition note">
+<p class="admonition-title">The guard counts rows, not readers</p>
+<p>Everywhere else <em>Min readers per word</em> counts distinct readers. Here it
+counts <strong>word rows</strong> — one per reader per reading — so with repeated-reading
+trials in scope a word can clear a threshold of 4 on two readers.</p>
+</div>
+<hr />
+<h2 id="per-reader-one-reader-many-trials">Per reader — one reader, many trials<a class="headerlink" href="#per-reader-one-reader-many-trials" title="Permanent link">&para;</a></h2>
+<p>Pick a <strong>Reader</strong> and a <strong>View</strong>. In <em>Distribution vs cohort</em>, "Cohort" means
+<em>the other readers left by the trial filter</em> — narrowing the filter changes the
+comparison, not just the target. (<em>Reading summary</em> is the exception: its
+percentile pool includes the selected reader. See below.)</p>
+<p>Fixation-level views need <code>is_regression</code> / <code>saccade_amplitude</code> on the fixation
+table. When the source ships pre-aggregated EyeLink IA measures on the words
+table and never enriches the fixation stream, the app derives them on the fly
+from <code>word_id</code>. If <code>word_id</code> is missing too, the derivation is skipped: <em>Landing-
+position curve</em> and <em>Progressive vs regressive</em> then say what they need, and the
+rest fall back to an empty figure whose title ends in <em>(no data)</em> — that title is
+the signal, not a rendering bug.</p>
+<h3 id="distribution-vs-cohort">Distribution vs cohort<a class="headerlink" href="#distribution-vs-cohort" title="Permanent link">&para;</a></h3>
+<p>Violin or box of the measure for <strong>This reader</strong> against <strong>Cohort</strong>. Works for
+both word-level and fixation-level measures.</p>
+<div class="admonition warning">
+<p class="admonition-title">Z-scoring erases exactly what this view compares</p>
+<p><strong>Z-score within reader</strong> centres <em>every</em> reader at zero, including the one
+you selected. On the bundled demo with reader <code>l37_1129</code>, raw mean fixation
+duration is 218 ms for the reader vs 170 ms for the cohort; z-scored, both
+are 0.00. Use the toggle only when you care about the <em>shape</em> of the
+distribution (skew, spread, bimodality) and have already accepted that the
+level difference is gone.</p>
+</div>
+<h3 id="reading-summary">Reading summary<a class="headerlink" href="#reading-summary" title="Permanent link">&para;</a></h3>
+<p>A strip of up to six statistics — reading speed (wpm), mean fixation duration,
+fixation count, regression rate, skip rate, mean saccade amplitude — each showing
+the reader's <strong>percentile</strong> within the cohort in scope. Statistics whose backing
+column is absent are omitted rather than shown as zero.</p>
+<p>Reading speed is distinct <code>(trial, word)</code> rows divided by total reading time,
+where a trial's reading time is <em>last fixation end − first fixation start</em>
+(falling back to the sum of fixation durations when there are no timestamps).
+That counts every word of the text, not just fixated ones.</p>
+<div class="admonition note">
+<p class="admonition-title">Percentiles need a cohort</p>
+<p>The percentile is the share of readers in scope scoring strictly below this
+one, and the reader is counted in that pool — so with <em>k</em> readers it can only
+take the values 0, 100/<em>k</em>, …, 100(<em>k</em>−1)/<em>k</em>, and the top reader never
+reaches 100. The bundled demo has two readers with fixations, so every
+percentile there is either 0 or 50. The cohort is drawn from the fixation
+table when there is one, so readers present only in the words table are not
+counted. The download button hands you the whole cohort summary table, which
+is the honest thing to look at at small <em>n</em>.</p>
+</div>
+<h3 id="fixation-duration-over-time">Fixation duration over time<a class="headerlink" href="#fixation-duration-over-time" title="Permanent link">&para;</a></h3>
+<p>Mean of a <strong>per-fixation</strong> measure against position within the trial, averaged
+over this reader's trials, with a ±SEM band. Picking a word-level measure here
+prints a prompt instead of a plot.</p>
+<div class="admonition warning">
+<p class="admonition-title">Use <code>order in trial</code>, not <code>timestamp ms</code></p>
+<p>The X axis groups by <em>exact</em> value — there is no binning. <code>order_in_trial</code> is
+a small integer, so each point averages across this reader's trials as
+intended (on the bundled demo, 164 points backed by up to 12 trials each).
+<code>timestamp_ms</code> is the raw recording clock and is nearly unique per fixation:
+the same reader has 1215 fixations at 1195 distinct timestamps, and 1176 of
+those 1195 points average a single fixation. The "trend" is then a scatter of
+individual fixations with a zero-width band.</p>
+</div>
+<h3 id="saccade-vs-fixation-duration">Saccade vs fixation duration<a class="headerlink" href="#saccade-vs-fixation-duration" title="Permanent link">&para;</a></h3>
+<p>The classic oculomotor plot: a binned 2-D histogram (≈40 × 40 bins) of saccade
+amplitude (Y) against fixation duration in ms (X), for this reader's fixations.
+Careful reading concentrates at short saccades and moderate durations; skimming
+stretches the amplitude axis. The title reports the <em>n</em> that survived.</p>
+<div class="admonition warning">
+<p class="admonition-title">The amplitude axis says px — check what your source actually shipped</p>
+<p><code>saccade_amplitude</code> is a passthrough whenever the data ships one
+(<code>saccade_amplitude</code>, <code>NEXT_SAC_AMPLITUDE</code>, <code>PREVIOUS_SAC_AMPLITUDE</code>); the
+app computes it — as the pixel distance from the <em>previous</em> fixation — only
+when no such column exists. EyeLink reports its <code>*_SAC_AMPLITUDE</code> columns in
+<strong>degrees of visual angle</strong>, and the one OneStop ships is
+<code>NEXT_SAC_AMPLITUDE</code>, i.e. the <em>outgoing</em> saccade. So on the bundled demo the
+axis (and the <code>mean_saccade_px</code> column in the <em>Reading summary</em> download)
+reads "px" while the values are degrees: they run 0.13–22.3 where the
+matching pixel distances run to 1813, a constant ~78× apart. Take the unit
+and the direction from your source, not from the label.</p>
+</div>
+<p>No CSV download on this view.</p>
+<h3 id="progressive-vs-regressive">Progressive vs regressive<a class="headerlink" href="#progressive-vs-regressive" title="Permanent link">&para;</a></h3>
+<p>Per trial: a stacked bar of progressive and regressive counts, with the
+regression <em>share</em> as a line on a secondary axis.</p>
+<p>The flag is <code>is_regression</code>, and it is defined <strong>per fixation</strong>: a fixation is
+regressive when its <code>word_id</code> is behind the furthest word reached so far in that
+trial. That is the go-past sense of "in regressed territory", not a saccade
+classification — the five-way reading classes (forward / skip / refixation /
+return sweep / regression) used for saccade colouring in the scanpath view are a
+separate, render-time computation and do not feed this plot.</p>
+<div class="admonition warning">
+<p class="admonition-title">The bars count fixations, and unassigned ones count as progressive</p>
+<p>The figure's axis is labelled <em>Saccade count</em>, but the stack is a count of
+<strong>fixations</strong> — <code>regressive</code> is the number of flagged fixations and
+<code>progressive</code> is simply the rest. A fixation with no <code>word_id</code> (out of text,
+or a failed assignment) compares false against the running maximum, so it
+lands in the progressive bar. A trial with poor fixation→word assignment
+therefore reads as artificially progressive rather than dropping out. Only a
+fixation table with no <code>word_id</code> column at all — where the flag can't be
+derived — replaces the plot with a prompt.</p>
+</div>
+<h3 id="landing-position-curve">Landing-position curve<a class="headerlink" href="#landing-position-curve" title="Permanent link">&para;</a></h3>
+<p>Histogram of where the <strong>first</strong> fixation on each word fell inside that word's
+box — 0 = word start, 1 = word end. The preferred-viewing-location curve. The bin
+count is requested as 20; Plotly rounds it to a tidy bin width, so expect roughly
+that many.</p>
+<p>The values come from <code>first_fix_x</code> on the words table when present (skipped words
+excluded), otherwise from the earliest fixation on each <code>(participant, trial,
+word)</code> joined to the box.</p>
+<p>Caveat: the landing fraction pools all word lengths, so this is not a per-length
+PVL curve, and fractions are clipped into <code>[0, 1]</code> — fixations that landed before
+or past the box pile up on the end bins rather than showing as outliers.</p>
+<h3 id="per-trial-trend">Per-trial trend<a class="headerlink" href="#per-trial-trend" title="Permanent link">&para;</a></h3>
+<p>The measure aggregated within each trial, plotted against the trial's position in
+the session — does this reader slow down as the session goes on? <strong>Aggregate</strong>
+controls only the <em>within-trial</em> collapse; the trials sharing a trial index are
+then always averaged, and the band is their ±SEM.</p>
+<div class="admonition note">
+<p class="admonition-title">One reader means no band</p>
+<p>A single reader normally contributes one trial per trial index, so the SEM is
+0 and the band collapses onto the line. That is not a claim of precision —
+it is <em>n</em> = 1. The band only carries information in <em>Group trend</em>, where
+several readers share an index.</p>
+</div>
+<p>Trial order uses an explicit <code>trial_index</code> / <code>TRIAL_INDEX</code> column when the data
+has one — the bundled OneStop demo does, which is why its axis does not start at
+1: each reader's 12 sampled trials keep their real session positions (13–24,
+16–27 and 35–46 for the three demo readers). Otherwise trials are ranked by
+earliest <code>timestamp_ms</code>, falling back to first-appearance row order when there
+are no timestamps, and the view captions <em>"Trial order derived from fixation
+timestamps"</em> so you know the axis is inferred. Note that a <strong>word-level</strong> measure
+reads the words table, which usually carries no timestamps at all — there the
+inferred order is row order, whatever the caption says.</p>
+<hr />
+<h2 id="groups-one-cohort-or-two">Groups — one cohort, or two<a class="headerlink" href="#groups-one-cohort-or-two" title="Permanent link">&para;</a></h2>
+<p>The <strong>Groups</strong> subtab profiles a single cohort by default; flipping <strong>Compare a
+second group</strong> defines a Group B and swaps in the two-cohort views. A single
+group is just the one-group case of a comparison, which is why they share a tab.</p>
+<h3 id="defining-a-group">Defining a group<a class="headerlink" href="#defining-a-group" title="Permanent link">&para;</a></h3>
+<p>Two modes, both compiling to the same thing — a <code>{column: [allowed values]}</code>
+spec, AND-ed across columns and OR-ed within one:</p>
+<ul>
+<li><strong>Split a field</strong> — pick one categorical column and assign its values to A and
+  B. The picker offers columns present in <strong>both</strong> tables with 2–60 distinct
+  values: difficulty, reading regime (<code>question_preview</code>), reading number,
+  answer correctness, genre, session, gender, participant, and the text column.</li>
+<li><strong>Independent filter sets</strong> — build each group from its own participant / text
+  / condition multiselects, with its own label. Use this for groups that aren't a
+  clean split of one column (specific reader lists, a condition crossed with a
+  text subset).</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">A words-only field can't split the fixation table</p>
+<p>Groups are applied per frame. If a group is defined on a column present in
+the words table but absent from the fixations table, the fixation frame comes
+back unfiltered and the fixation-level views — distributions for a
+per-fixation measure, paired bars, effect size — would silently compare
+all-vs-all. The app warns and names the offending field; switch to a field
+both tables carry for those views. This can only happen in <em>Independent
+filter sets</em>: the <em>Split a field</em> picker already restricts itself to columns
+both tables carry.</p>
+</div>
+<p>Read the caption under the definition before reading any plot. One group reports
+its reader count <strong>and</strong> its fixation count; two groups report reader counts only
+— if a fixation-level view looks wrong, check the fixation counts yourself in the
+<strong>Data Inspection</strong> subtab.</p>
+<h3 id="one-group">One group<a class="headerlink" href="#one-group" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Distributions</strong> — one violin/box of the measure pooled across the group.</li>
+<li><strong>Word profile</strong> — the cohort profile (centre + spread band + min-readers
+  guard) computed within the group, for one text. Z-scoring is not offered here.</li>
+<li><strong>Reader summary table</strong> — one row per reader with the same statistics as the
+  <em>Reading summary</em> card. Sort it to find outliers; download it as CSV.</li>
+<li><strong>Group trend</strong> — the trial-index trend pooled over the group, with an optional
+  faint per-reader line behind it. The faint lines are the honest way to see
+  whether a group-level slope is real or one reader's. As in <em>Per-trial trend</em>,
+  <strong>Aggregate</strong> applies within a trial; across the trials that share an index the
+  combination is always the mean, and the band their ±SEM.</li>
+</ul>
+<h3 id="comparing-two-groups">Comparing two groups<a class="headerlink" href="#comparing-two-groups" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Overlaid distributions</strong> — both groups' distributions on shared axes.</li>
+<li><strong>Difference word profile</strong> — per-word A − B along the text, diverging colour
+  scale, zero reference line. <em>Min/grp</em> requires that many readers <strong>in each
+  group</strong> before a word is kept.</li>
+<li><strong>Paired summary bars</strong> — several measures at once (fixation duration, saccade
+  amplitude and TFD by default), one subplot per measure so differing units keep
+  their own scale, error bars from the <strong>Error bars</strong> spread (SEM by default).
+  Word measures read the words table, fixation measures the fixation table. Error
+  lengths are clamped at zero, so an asymmetric band that falls on the wrong side
+  of the centre — <code>mean</code> with <code>IQR</code> on skewed data — shows as a one-sided bar.</li>
+<li><strong>Effect size + test</strong> — group means with <em>n</em>, the mean difference, Cohen's <em>d</em>
+  (pooled SD), and Mann–Whitney or Welch's <em>t</em>. With fewer than two values in
+  either group, <em>d</em>, the statistic and <em>p</em> come back empty and only the means
+  render.</li>
+<li><strong>Two-group word heatmap</strong> — Group A's row above Group B's on a shared word
+  axis and colour scale.</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">The difference profile needs a field that varies within one text</p>
+<p>The per-word views fix a text first and split second. If the split field is
+baked into the text id — difficulty in OneStop, where <code>2_1_1_Ele</code> is an
+<code>Ele</code>-only text — then whichever group holds the other value is empty for
+every word: the profile comes back all-<code>NaN</code> with that group's <code>n</code> at 0, and
+the two-group heatmap draws a single row. Nothing warns you at the default
+<em>Min/grp</em> of 1, because the guard only speaks above 1 — so read the group
+caption and the <code>n_a</code> / <code>n_b</code> columns of the download. Split on something that
+varies <em>within</em> a text (reading regime, reading number, answer correctness,
+participant), or take the difficulty question to the distribution /
+paired-bar / effect-size views instead.</p>
+</div>
+<div class="admonition danger">
+<p class="admonition-title"><em>n</em> is observations, not readers</p>
+<p>The test and Cohen's <em>d</em> treat every row as an independent observation — that
+is words × readers, or fixations. Words within a reader and readers within a
+group are not independent, so the <em>p</em> value is anti-conservative, often
+dramatically so: a few readers can put <em>n</em> in the thousands. The app labels
+these views <em>exploratory, not pre-registered</em> for exactly this reason. Treat
+the effect size as a screening statistic and fit a mixed-effects model on the
+exported table before claiming anything.</p>
+</div>
+<hr />
+<h2 id="the-shared-controls">The shared controls<a class="headerlink" href="#the-shared-controls" title="Permanent link">&para;</a></h2>
+<h3 id="measure">Measure<a class="headerlink" href="#measure" title="Permanent link">&para;</a></h3>
+<p>Each subtab has one measure picker, shared by every view in it, so switching
+views keeps your choice. (The Groups subtab has two: one for the single-group
+views and one for the comparison views, so flipping <strong>Compare a second group</strong>
+starts a fresh choice.) Only measures whose backing column exists in the loaded
+data are listed; views that plot a per-word profile restrict the list to the
+word-level measures — <em>Per text</em> does so in every view. TFD is the default.</p>
+<table>
+<thead>
+<tr>
+<th>Picker label</th>
+<th>Column</th>
+<th>Table</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total fixation duration — TFD</td>
+<td><code>total_fixation_duration_ms</code></td>
+<td>words</td>
+</tr>
+<tr>
+<td>First fixation duration — FFD</td>
+<td><code>first_fixation_ms</code></td>
+<td>words</td>
+</tr>
+<tr>
+<td>First-pass gaze — FPRT</td>
+<td><code>first_pass_gaze_duration_ms</code></td>
+<td>words</td>
+</tr>
+<tr>
+<td>Regression-path — RPD</td>
+<td><code>regression_path_duration_ms</code></td>
+<td>words</td>
+</tr>
+<tr>
+<td>Fixations per word</td>
+<td><code>n_fixations</code></td>
+<td>words</td>
+</tr>
+<tr>
+<td>Skip rate</td>
+<td><code>skip_flag</code></td>
+<td>words (rate)</td>
+</tr>
+<tr>
+<td>Regression-in rate</td>
+<td><code>regression_in_flag</code></td>
+<td>words (rate)</td>
+</tr>
+<tr>
+<td>Regression-out rate</td>
+<td><code>regression_out_flag</code></td>
+<td>words (rate)</td>
+</tr>
+<tr>
+<td>Fixation duration</td>
+<td><code>duration_ms</code></td>
+<td>fixations</td>
+</tr>
+<tr>
+<td>Saccade amplitude</td>
+<td><code>saccade_amplitude</code></td>
+<td>fixations</td>
+</tr>
+</tbody>
+</table>
+<p>Rate measures are 0/1 flags averaged into a proportion. Where the source ships
+pre-computed EyeLink IA columns those win over the natively computed values —
+see <a href="../data-format/">Data format</a>. The app labels saccade amplitude "px", which
+is only right when it computed the column itself; see the caveat under <em>Saccade
+vs fixation duration</em>.</p>
+<div class="admonition note">
+<p class="admonition-title">Your measure resets when you cross into a word-only view</p>
+<p>In <strong>Groups</strong>, some views accept any measure and some accept only word-level
+ones, but they share one picker. Picking a fixation-level measure and then
+switching to <em>Word profile</em>, <em>Difference word profile</em> or <em>Two-group word
+heatmap</em> silently drops the selection back to TFD — and switching back does
+not restore it. Re-pick the measure after moving between those views.</p>
+</div>
+<h3 id="aggregate-and-spread">Aggregate and spread<a class="headerlink" href="#aggregate-and-spread" title="Permanent link">&para;</a></h3>
+<p><strong>Aggregate</strong> (<code>mean</code> / <code>median</code> / <code>sum</code>) means different things in different
+views, and the tooltip on each says which: across readers for a per-word profile,
+within a trial for the trend views, across a group's rows for the bars.</p>
+<p><strong>Spread</strong> (<code>SD</code> / <code>SEM</code> / <code>IQR</code> / <code>Bootstrap CI</code>) sets the band or error bar.
+One behaviour is worth knowing: with <code>sum</code> as the aggregate, SD and SEM fall back
+to a bootstrap, because the spread of individual observations says nothing useful
+about a <em>total</em>.</p>
+<h3 id="z-score-within-reader">Z-score within reader<a class="headerlink" href="#z-score-within-reader" title="Permanent link">&para;</a></h3>
+<p>Replaces each value with its z-score inside that reader's data, so slow and fast
+readers compare on shape rather than level. It is disabled for rate measures
+(a 0/1 flag has no meaningful z) and on <em>Word difficulty on stimulus</em> (nothing
+is left to z after the cross-reader aggregate). A reader with a single row, or
+with zero variance, z-scores to 0 rather than to <code>NaN</code>.</p>
+<p>The scope of the z differs by view and this matters:</p>
+<ul>
+<li><strong>Per-text views</strong> — z-scored over that reader's rows <em>in the selected text</em>,
+  before repeated readings are collapsed and before the cross-reader aggregate.
+  Every reader's mean over the text is therefore 0, and the cohort band is in SD
+  units.</li>
+<li><strong>Distribution views</strong> — z-scored over everything that reader contributes in
+  scope. Between-reader level differences are removed by construction, which is
+  the right move when both groups draw on the same readers (Adv vs Ele within
+  reader) and the wrong one when the groups <em>are</em> different readers.</li>
+</ul>
+<h3 id="min-readers-per-word">Min readers per word<a class="headerlink" href="#min-readers-per-word" title="Permanent link">&para;</a></h3>
+<p>The observation guard. Words backed by fewer than the threshold are dropped and a
+caption reports how many were hidden. At the default of 1 nothing is dropped and
+no caption appears — the guard only speaks when you ask it to.</p>
+<h3 id="download-this-table-csv">Download this table (CSV)<a class="headerlink" href="#download-this-table-csv" title="Permanent link">&para;</a></h3>
+<p>Most views offer the exact tidy table behind the plot, so you can re-plot or
+model elsewhere. Available on all six <em>Per text</em> views, on <em>Reading summary</em>,
+<em>Fixation duration over time</em>, <em>Progressive vs regressive</em> and <em>Per-trial trend</em>,
+and on <em>Word profile</em>, <em>Reader summary table</em>, <em>Group trend</em>, <em>Difference word
+profile</em>, <em>Paired summary bars</em> and <em>Two-group word heatmap</em>. The distribution,
+oculomotor-scatter, landing-curve and effect-size views have no download —
+recompute those from the raw tables exported from the Scanpath view's <strong>Export</strong>
+subtab.</p>
+<h2 id="getting-the-numbers-out-headlessly">Getting the numbers out headlessly<a class="headerlink" href="#getting-the-numbers-out-headlessly" title="Permanent link">&para;</a></h2>
+<p>The Corpus Analysis views are UI-only: unlike the single-trial scanpath, they
+have no CLI flag or <a href="../api/">Python API</a> entry point. The tidy-table download is
+the supported route.</p>
+<p>If you are scripting anyway, the aggregation helpers are plain pandas and take
+the same normalized frames the app uses:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="kn">import</span> <span class="n">aggregation</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_sample_data</span><span class="p">()</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">tfd</span> <span class="o">=</span> <span class="n">aggregation</span><span class="o">.</span><span class="n">MEASURES</span><span class="p">[</span><span class="s2">&quot;tfd&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">profile</span> <span class="o">=</span> <span class="n">aggregation</span><span class="o">.</span><span class="n">cohort_word_profile</span><span class="p">(</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">words</span><span class="p">,</span> <span class="s2">&quot;unique_text_id&quot;</span><span class="p">,</span> <span class="s2">&quot;2_1_1_Ele&quot;</span><span class="p">,</span> <span class="n">tfd</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">agg</span><span class="o">=</span><span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="n">spread</span><span class="o">=</span><span class="s2">&quot;SD&quot;</span><span class="p">,</span> <span class="n">min_readers</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="nb">print</span><span class="p">(</span><span class="n">profile</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1">#    word_id       value          lo          hi  n  enough word_text</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># 0        0  288.333333   49.598473  527.068193  3    True     There</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1"># 1        1  150.333333   18.969970  281.696697  3    True       are</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># 2        2  160.333333  128.250108  192.416558  3    True     about</span>
+</code></pre></div>
+<p><code>value</code> is the cross-reader aggregate, <code>lo</code>/<code>hi</code> the spread band, <code>n</code> the number
+of contributing readers and <code>enough</code> the min-readers guard — the same columns the
+<em>Cohort profile</em> view plots and downloads.</p>
+<div class="admonition note">
+<p class="admonition-title">Internal surface</p>
+<p><code>scanpath_studio.aggregation</code> is not part of the documented public API
+(<code>load_scanpath_data</code>, <code>plot_scanpath</code>, <code>animate_scanpath</code>, <code>save_figure</code>,
+…). Its signatures can change between releases without a deprecation path.</p>
+</div>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../getting-started/">Getting started</a> — install, launch, and the first figure.</li>
+<li><a href="../data-format/">Data format</a> — which columns feed which measure.</li>
+<li><a href="../onestop/">OneStop</a> — the corpus behind the bundled demo, and what its
+  condition columns mean.</li>
+<li><a href="../rendering/">True-to-scale rendering</a> — how the stimulus view sizes the text.</li>
+<li><a href="../export-troubleshooting/">Export &amp; troubleshooting</a> — getting figures out.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../bring-your-own-data/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Bring your own data">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Bring your own data
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../export-troubleshooting/" class="md-footer__link md-footer__link--next" aria-label="Next: Export &amp; troubleshooting">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Export & troubleshooting
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/lacclab/scanpath-studio" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/scanpath-studio/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://scanpath-studio.streamlit.app" target="_blank" rel="noopener" title="Live demo" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 16.5v-9l6 4.5M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.top", "navigation.footer", "navigation.indexes", "content.code.copy", "content.tabs.link", "toc.follow", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

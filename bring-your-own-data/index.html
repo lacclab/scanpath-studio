@@ -1,0 +1,2231 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Interactive workbench for visualizing eye-tracking-while-reading scanpaths, computing reading measures, and exporting figures and tabular data.">
+      
+      
+      
+        <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/bring-your-own-data/">
+      
+      
+        <link rel="prev" href="../data-format/">
+      
+      
+        <link rel="next" href="../corpus-analysis/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/icon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Bring your own data - Scanpath Studio</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bring-your-own-data" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Scanpath Studio" class="md-header__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Scanpath Studio
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Bring your own data
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../getting-started/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Using the app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Headless
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../onestop/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Datasets
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../rendering/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Internals
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Scanpath Studio" class="md-nav__button md-logo" aria-label="Scanpath Studio" data-md-component="logo">
+      
+  <img src="../assets/icon.png" alt="logo">
+
+    </a>
+    Scanpath Studio
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/lacclab/scanpath-studio" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    lacclab/scanpath-studio
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using the app
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using the app
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../desktop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop app
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bring your own data
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bring your own data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-minimum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The minimum
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The minimum">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#words-interest-areas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Words / interest areas
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-load-it-the-add-dataset-wizard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Load it — the Add-dataset wizard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-how-columns-are-detected-and-how-to-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. How columns are detected — and how to override
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. How columns are detected — and how to override">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overriding-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overriding later
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-save-a-mapping-reuse-it-on-the-next-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Save a mapping, reuse it on the next export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-worked-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Worked examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Worked examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#5a-eyelink-data-viewer-ia-report-fixation-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5a. EyeLink Data Viewer — IA report + fixation report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5b-a-plain-csv-with-xywidthheight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5b. A plain CSV with x/y/width/height
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5c-one-file-per-reader-with-the-ids-only-in-the-filename" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5c. One file per reader, with the ids only in the filename
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-when-it-goes-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. When it goes wrong
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../corpus-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Corpus analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../export-troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export & troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../privacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Privacy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Headless
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Headless
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For coding agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Datasets
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Datasets
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../onestop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OneStop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multipleye/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiplEYE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing-a-dataset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing a dataset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internals
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Internals
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rendering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    True-to-scale rendering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-minimum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The minimum
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The minimum">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#words-interest-areas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Words / interest areas
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-load-it-the-add-dataset-wizard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Load it — the Add-dataset wizard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-how-columns-are-detected-and-how-to-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. How columns are detected — and how to override
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. How columns are detected — and how to override">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overriding-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overriding later
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-save-a-mapping-reuse-it-on-the-next-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Save a mapping, reuse it on the next export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-worked-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Worked examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Worked examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#5a-eyelink-data-viewer-ia-report-fixation-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5a. EyeLink Data Viewer — IA report + fixation report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5b-a-plain-csv-with-xywidthheight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5b. A plain CSV with x/y/width/height
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5c-one-file-per-reader-with-the-ids-only-in-the-filename" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5c. One file per reader, with the ids only in the filename
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-when-it-goes-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. When it goes wrong
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="bring-your-own-data">Bring your own data<a class="headerlink" href="#bring-your-own-data" title="Permanent link">&para;</a></h1>
+<p>The path from a raw eye-tracker export to a dataset you can plot: what the app
+actually needs, how it guesses your column names, how to correct it when the
+guess is wrong, and what each failure symptom means.</p>
+<ul>
+<li>The column reference — which tables, which canonical names — is
+  <a href="../data-format/">Data format</a>. This page doesn't repeat it.</li>
+<li>Packaging a corpus so it ships <strong>with</strong> the app as a built-in source is
+  <a href="../contributing-a-dataset/">Contributing a dataset</a>.</li>
+</ul>
+<h2 id="1-the-minimum">1. The minimum<a class="headerlink" href="#1-the-minimum" title="Permanent link">&para;</a></h2>
+<p>Two tables, and neither one has to be complete. Required means <em>validation
+blocks</em> — the wizard won't let you finish until it's mapped. Either table may
+also be left out entirely: a words-only or a fixations-only upload is valid, and
+the missing layer is simply not drawn.</p>
+<h3 id="words-interest-areas">Words / interest areas<a class="headerlink" href="#words-interest-areas" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>If it's missing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Trial ID</strong></td>
+<td>✅</td>
+<td>Blocks. Several columns may be combined into one id.</td>
+</tr>
+<tr>
+<td><strong>Word/IA ID</strong></td>
+<td>✅</td>
+<td>Blocks. It's the key fixations attach to and the word order within a trial.</td>
+</tr>
+<tr>
+<td><strong>Word box</strong></td>
+<td>✅</td>
+<td>Blocks. Either <code>left/right/top/bottom</code> (EyeLink <code>IA_LEFT/IA_RIGHT/IA_TOP/IA_BOTTOM</code>) <strong>or</strong> <code>x/y/width/height</code>.</td>
+</tr>
+<tr>
+<td>Participant ID</td>
+<td>—</td>
+<td>The table is treated as <strong>stimulus-level</strong> and each trial's boxes are broadcast to every participant who has fixations for that trial. Correct for one-layout-per-text corpora. Map it whenever the table really is one row per <em>(reader, word)</em> — otherwise every reader gets every reader's boxes.</td>
+</tr>
+<tr>
+<td>Word text</td>
+<td>—</td>
+<td>Labels fall back to <code>w1</code>, <code>w2</code>, … The reading text isn't drawn and word tooltips are unhelpful.</td>
+</tr>
+<tr>
+<td>Text ID</td>
+<td>—</td>
+<td>Falls back to the trial id, so Corpus Analysis <em>Per text</em> groups by trial. If your trial id is per-reader (e.g. EyeLink <code>TRIAL_INDEX</code>), readers of the same passage are never pooled.</td>
+</tr>
+<tr>
+<td>Line index</td>
+<td>—</td>
+<td>Nothing visible changes. <code>line_idx</code> becomes a constant <code>1</code>, and every line-aware feature — color-by-line, the true-to-scale line pitch, drift correction — derives visual lines from word-box <code>y</code> instead (<code>measures.cluster_word_lines</code>), because IA exports usually ship a constant line number and it can't be trusted. Mapping it only affects two secondary sorts (the per-word bar chart, the reconstructed passage text).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fixations">Fixations<a class="headerlink" href="#fixations" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>If it's missing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Trial ID</strong></td>
+<td>✅</td>
+<td>Blocks.</td>
+</tr>
+<tr>
+<td><strong>Duration (ms)</strong></td>
+<td>✅</td>
+<td>Blocks. Drives marker size, dwell time, and every reading measure.</td>
+</tr>
+<tr>
+<td><strong>X + Y</strong> <em>or</em> <strong>Word/IA ID</strong></td>
+<td>✅ (one of)</td>
+<td>Blocks if neither. With a Word/IA ID but no coordinates, each fixation is placed at its word box's centre — an AOI-sequence dataset plots fine, but landing positions are synthetic.</td>
+</tr>
+<tr>
+<td>Participant ID</td>
+<td>—</td>
+<td>Every row becomes one anonymous reader, shown as <code>(all)</code>.</td>
+</tr>
+<tr>
+<td>Timestamp (ms)</td>
+<td>—</td>
+<td>Falls back to per-trial <strong>row order</strong> (0, 1, 2, …). Fixation order survives; the animation clock and any real-time axis do not.</td>
+</tr>
+<tr>
+<td>Fixation ID</td>
+<td>—</td>
+<td>Row order within the trial.</td>
+</tr>
+<tr>
+<td>Word/IA ID (with X/Y present)</td>
+<td>—</td>
+<td>Assignment becomes geometric: bounding-box containment, then the nearest word centre within 50 px, else unassigned (<code>NaN</code>) and counted as out-of-text. A mapped word id is <strong>authoritative</strong> and overrides that.</td>
+</tr>
+</tbody>
+</table>
+<p>A third <strong>raw gaze</strong> table is optional and only adds the sample-level overlay. It
+needs a trial id and x/y; participant and timestamp are optional (same fallbacks
+as above).</p>
+<div class="admonition warning">
+<p class="admonition-title">The monitor size is not a column</p>
+<p>Word boxes and fixations are drawn true-to-scale against the <strong>recording
+monitor's resolution</strong>, which no export carries. Set it under <em>Experimental
+setup</em> in the wizard (uploads default to 2560 × 1440). Get it wrong and the
+geometry is still self-consistent but the reading text is sized against the
+wrong canvas — see <a href="../export-troubleshooting/">Export &amp; troubleshooting</a>.</p>
+</div>
+<h2 id="2-load-it-the-add-dataset-wizard">2. Load it — the Add-dataset wizard<a class="headerlink" href="#2-load-it-the-add-dataset-wizard" title="Permanent link">&para;</a></h2>
+<p>Sidebar → <strong>➕ Add data</strong>. The steps, in order:</p>
+<ol>
+<li><strong>Dataset name</strong> — plus a <strong>Dataset format</strong> switch. <code>Generic</code> maps your own
+   columns; <code>MultiplEYE</code> is a preset that skips mapping entirely (see
+   <a href="../multipleye/">MultiplEYE</a>).</li>
+<li><strong>Experimental setup</strong> — monitor resolution, font, text scaling.</li>
+<li><strong>Upload your data</strong> — one box per table: <em>Raw gaze (optional)</em>, <em>Fixations</em>,
+   <em>Words / Interest Areas</em>. Each box reports its row count and previews the
+   first rows. <strong>Several files per table are concatenated</strong>, and each row keeps
+   its file's stem in a <code>source_file</code> column (see
+   <a href="#5c-one-file-per-reader-with-the-ids-only-in-the-filename">example 5c</a>).</li>
+<li><strong>Column mapping</strong> — sub-steps, in order: <em>Restore a saved setup</em> · <em>Derive
+   ids from filename</em> (only shown when a <code>source_file</code> column exists, and it has
+   its own on/off toggle) · <em>Trial identifier</em> · <em>Participants</em> · <em>Texts</em> ·
+   <em>Fixations</em> · <em>Text &amp; Interest Areas</em> · <em>More text mappings</em> · <em>More fixation
+   mappings</em> · <em>Raw gaze overlay</em>. Finished steps collapse; the first unfinished
+   one opens.</li>
+<li><strong>Filter &amp; keep</strong> — which extra source columns to carry through
+   normalization, and which become trial filters.</li>
+</ol>
+<p>Then <strong>✅ Add dataset</strong>. It becomes a switchable entry in <em>Data source</em> for the
+rest of the session.</p>
+<p>Three things about step 4 worth knowing before you start:</p>
+<ul>
+<li><strong>Identifiers are picked once for all tables.</strong> <em>Trial identifier</em>,
+  <em>Participants</em> and <em>Texts</em> each render one multiselect over the columns
+  <strong>common to every uploaded table</strong>, with a <em>Different … per table</em> toggle for
+  the rare export that names them differently.</li>
+<li><strong>Picking several columns composes an id</strong>, joined with <code>_</code>. That's how you
+  build a unique trial from <code>participant + paragraph + repeated_reading</code> when no
+  single column identifies a trial.</li>
+<li>
+<p><strong>The wizard's default Trial ID is often a composite, not the column
+  auto-detection would have picked.</strong> A trial is <em>one reading of one passage</em>, so
+  the step pre-selects, in this order:</p>
+<ol>
+<li>the auto-detected trial column, when it's a genuine trial id — i.e. not
+   the same column as the passage id;</li>
+<li>otherwise participant + the finest passage id present
+   (<code>unique_paragraph_id</code> / <code>paragraph_id</code>, else <code>unique_text_id</code> /
+   <code>text_id</code>) + a repeated-reading column (<code>repeated_reading_trial</code> /
+   <code>reread</code>) when there is one;</li>
+<li>otherwise a fallback chain — paragraph id + text id when the table has
+   both, else the detected trial column, else the passage id alone, else
+   nothing and you pick.</li>
+</ol>
+<p>Only columns present in <strong>every</strong> uploaded table are candidates, so a
+participant column that exists in the fixations but not the words table
+can't join the composite. Check the pre-selection rather than clicking past
+it — see the repeated-reading caveat in
+<a href="#5a-eyelink-data-viewer-ia-report-fixation-report">example 5a</a>.</p>
+</li>
+</ul>
+<p>Each of the three steps counts distinct values as you map and reports them
+(<em>✓ N trials</em> / <em>N participants</em> / <em>N texts</em>) — the cheapest check that your
+mapping is right. For the trial id the check is per table: a green count when
+both tables agree, an <em>ℹ️ trial coverage differs</em> note when they overlap
+partially, and a <strong>⚠️ no trial ids are shared across tables</strong> warning when they
+don't line up at all.</p>
+<div class="admonition tip">
+<p class="admonition-title">Large or sensitive data</p>
+<p>Browser upload reads the whole file into the server process. For a big corpus
+— or data that shouldn't leave your machine — run locally
+(<code>pip install scanpath-studio &amp;&amp; scanpath-studio</code>) or use the
+<a href="../api/">Python API</a>, which reads paths and globs directly.</p>
+</div>
+<h2 id="3-how-columns-are-detected-and-how-to-override">3. How columns are detected — and how to override<a class="headerlink" href="#3-how-columns-are-detected-and-how-to-override" title="Permanent link">&para;</a></h2>
+<p>Each field has a candidate list, walked in priority order. Matching is <strong>case-
+and separator-insensitive</strong>, so <code>IA_LEFT</code> = <code>ia_left</code> = <code>Ia-Left</code>, and
+<code>Participant ID</code> = <code>participant_id</code>. The first candidate with any match wins,
+which is why EyeLink names beat Gazepoint ones when a table has both.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Candidates (in priority order)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Participant</td>
+<td><code>participant_id</code>, <code>subject_id</code>, <code>participant</code>, <code>recording_session_label</code>, <code>reader_id</code></td>
+</tr>
+<tr>
+<td>Trial</td>
+<td><code>unique_trial_id</code>, <code>trial_id</code>, <code>unique_paragraph_id</code>, <code>paragraph_id</code>, <code>text_id</code>, <code>trial</code>, <code>trial_index</code></td>
+</tr>
+<tr>
+<td>Text ID</td>
+<td><code>unique_paragraph_id</code>, <code>paragraph_id</code>, <code>unique_text_id</code>, <code>text_id</code></td>
+</tr>
+<tr>
+<td>Word/IA id</td>
+<td><code>word_id</code>, <code>IA_ID</code>, <code>ia_index</code>, <code>word_index</code>, <code>aoi</code>, <code>word_idx</code>, <code>char_idx</code></td>
+</tr>
+<tr>
+<td>Word text</td>
+<td><code>text</code>, <code>IA_LABEL</code>, <code>label</code>, <code>word</code>, <code>content</code>, <code>token</code></td>
+</tr>
+<tr>
+<td>Box edges</td>
+<td><code>IA_LEFT</code> / <code>IA_RIGHT</code> / <code>IA_TOP</code> / <code>IA_BOTTOM</code>, <code>left</code>/<code>right</code>/<code>top</code>/<code>bottom</code>, <code>start_x</code>/<code>end_x</code>/<code>start_y</code>/<code>end_y</code></td>
+</tr>
+<tr>
+<td>Box origin+size</td>
+<td><code>x</code>, <code>y</code>, <code>width</code>, <code>height</code> (also <code>top_left_x</code> / <code>top_left_y</code>)</td>
+</tr>
+<tr>
+<td>Fixation x / y</td>
+<td><code>x</code>, <code>CURRENT_FIX_X</code>, <code>FPOGX</code>, <code>location_x</code> (and the <code>y</code> equivalents)</td>
+</tr>
+<tr>
+<td>Fixation duration</td>
+<td><code>duration_ms</code>, <code>CURRENT_FIX_DURATION</code>, <code>CURRENT_FIX_LEN</code>, <code>duration</code>, <code>fixation_duration</code></td>
+</tr>
+<tr>
+<td>Fixation timestamp</td>
+<td><code>timestamp_ms</code>, <code>CURRENT_FIX_START</code>, <code>CURRENT_FIX_START_TIME</code>, <code>CURRENT_FIX_TIME</code>, <code>CURRENT_FIX_ONSET</code>, <code>onset</code></td>
+</tr>
+<tr>
+<td>Fixation word id</td>
+<td><code>word_id</code>, <code>IA_ID</code>, <code>CURRENT_FIX_INTEREST_AREA_ID</code>, <code>CURRENT_FIX_INTEREST_AREA_INDEX</code>, <code>word_index_in_text</code>, <code>word_index</code>, <code>word_idx</code>, <code>char_idx</code></td>
+</tr>
+</tbody>
+</table>
+<p>The full lists are the <code>*_CANDIDATES</code> constants in
+<a href="https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/data.py"><code>data.py</code></a>.</p>
+<p><strong>Auto-detection shows its work.</strong> Every mapping widget prints what it found —
+<code>✨ auto-detected IA_LEFT</code> — and appends <code>· overridden</code> once you change it; a
+field with no caption at all matched nothing. If a <em>required</em> field can't be
+found, <strong>Add dataset</strong> stays disabled and the exact problem is listed, e.g.
+<em>"Words/IA: missing Word/IA ID; need either (x, y, width, height) or (left,
+right, top, bottom)"</em>. An unmatched <em>optional</em> field fails quietly, which is why
+the captions are worth a pass before you finish.</p>
+<div class="admonition warning">
+<p class="admonition-title">Two column <em>names</em> outrank your mapping</p>
+<p>Normalization reads a couple of columns by name, before it looks at the
+schema — so a table that happens to carry them ignores what you picked:</p>
+<ul>
+<li>a <strong><code>unique_trial_id</code></strong> column wins over a single-column <em>Trial ID</em>
+  mapping. Composing the trial id from several columns overrides it (a
+  composite is authoritative); mapping one other column does not.</li>
+<li>a <strong><code>unique_paragraph_id</code></strong> column wins over the <em>Text ID</em> mapping, and
+  also becomes <code>unique_text_id</code>.</li>
+</ul>
+<p>If your export has a leftover <code>unique_trial_id</code> / <code>unique_paragraph_id</code>
+column from someone else's pipeline, rename or drop it before uploading.</p>
+</div>
+<h3 id="overriding-later">Overriding later<a class="headerlink" href="#overriding-later" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>A dataset you already added</strong>: 🔎 <strong>Data Inspection → Column mapping</strong> is an
+  editable remap form. It re-derives the frames in place. It can only offer
+  columns that <em>survived</em> the original import — anything dropped is listed under
+  <em>⚠️ N columns dropped at import</em> and needs a re-upload to get back.</li>
+<li><strong>The bundled demo and public datasets</strong>: the sidebar carries the same
+  <em>Column mapping</em> panels, pre-filled with auto-detection.</li>
+<li><strong>Headless</strong>: pass explicit <code>word_schema</code> / <code>fix_schema</code> dicts to
+  <a class="autorefs autorefs-internal" title="scanpath_studio.api.load_scanpath_data" href="../api/#scanpath_studio.api.load_scanpath_data"><code>load_scanpath_data</code></a>. Field keys are
+  the same ones the UI shows.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">sps</span><span class="o">.</span><span class="n">load_scanpath_data</span><span class="p">(</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="s2">&quot;aoi/*.csv&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="s2">&quot;fixations/*.csv&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">word_schema</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">&quot;subj&quot;</span><span class="p">,</span> <span class="n">trial</span><span class="o">=</span><span class="s2">&quot;item&quot;</span><span class="p">,</span> <span class="n">word_id</span><span class="o">=</span><span class="s2">&quot;ianum&quot;</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="s2">&quot;token&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="n">left</span><span class="o">=</span><span class="s2">&quot;x_left&quot;</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="s2">&quot;x_right&quot;</span><span class="p">,</span> <span class="n">top</span><span class="o">=</span><span class="s2">&quot;y_top&quot;</span><span class="p">,</span> <span class="n">bottom</span><span class="o">=</span><span class="s2">&quot;y_bot&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="p">),</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">fix_schema</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="n">participant</span><span class="o">=</span><span class="s2">&quot;subj&quot;</span><span class="p">,</span> <span class="n">trial</span><span class="o">=</span><span class="s2">&quot;item&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="n">x</span><span class="o">=</span><span class="s2">&quot;gaze_x&quot;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">&quot;gaze_y&quot;</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="s2">&quot;fix_dur&quot;</span><span class="p">,</span> <span class="n">timestamp</span><span class="o">=</span><span class="s2">&quot;t_onset&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="p">),</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span>
+</code></pre></div>
+<p>A partial dict is fine, but an explicit schema <strong>replaces</strong> detection for that
+table rather than being merged into it: a field you leave out is not
+auto-detected, it falls back as in §1. In the example above, dropping
+<code>text="token"</code> doesn't fall back to the <code>token</code> column — the labels become <code>w1</code>,
+<code>w2</code>. Omit the argument entirely to auto-detect the whole table.</p>
+<h2 id="4-save-a-mapping-reuse-it-on-the-next-export">4. Save a mapping, reuse it on the next export<a class="headerlink" href="#4-save-a-mapping-reuse-it-on-the-next-export" title="Permanent link">&para;</a></h2>
+<p>Directly above <strong>✅ Add dataset</strong>: <strong>⬇️ Download setup (JSON)</strong>. It writes
+<code>scanpath_studio_setup.json</code> — the column mapping plus provenance (dataset name,
+export time, app version, config-schema version).</p>
+<p>For the next export from the same lab pipeline, open the wizard and drop that
+file into <strong>Restore a saved setup (optional)</strong> (the first sub-step of <em>Column
+mapping</em>). The mapping widgets are seeded from it and a caption confirms which
+dataset and date it came from, so you can tell you loaded the right one. It's the
+same JSON format the 💾 <strong>Save &amp; restore</strong> panel reads, so a setup file and a
+saved plot config are interchangeable inputs.</p>
+<p>For scripted runs, keep one Python dict per corpus instead — the <code>word_schema</code> /
+<code>fix_schema</code> arguments above are the same mapping in another form.</p>
+<h2 id="5-worked-examples">5. Worked examples<a class="headerlink" href="#5-worked-examples" title="Permanent link">&para;</a></h2>
+<h3 id="5a-eyelink-data-viewer-ia-report-fixation-report">5a. EyeLink Data Viewer — IA report + fixation report<a class="headerlink" href="#5a-eyelink-data-viewer-ia-report-fixation-report" title="Permanent link">&para;</a></h3>
+<p>The common case, and it needs <strong>no manual mapping at all</strong>. Interest-area report:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>RECORDING_SESSION_LABEL,TRIAL_INDEX,IA_ID,IA_LABEL,IA_LEFT,IA_RIGHT,IA_TOP,IA_BOTTOM,IA_FIRST_FIXATION_DURATION,IA_DWELL_TIME,IA_FIXATION_COUNT
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>p01,1,1,The,100,166,300,340,201,251,1
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>p01,1,2,quick,176,266,300,340,202,252,1
+</code></pre></div>
+<p>Fixation report:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>RECORDING_SESSION_LABEL,TRIAL_INDEX,CURRENT_FIX_INDEX,CURRENT_FIX_X,CURRENT_FIX_Y,CURRENT_FIX_DURATION,CURRENT_FIX_START,CURRENT_FIX_INTEREST_AREA_ID
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>p01,1,1,133.0,320.0,201,1250,1
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>p01,1,2,221.0,320.0,202,1500,2
+</code></pre></div>
+<p>What auto-detection produces:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Words/IA</th>
+<th>Fixations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Participant</td>
+<td><code>RECORDING_SESSION_LABEL</code></td>
+<td><code>RECORDING_SESSION_LABEL</code></td>
+</tr>
+<tr>
+<td>Trial</td>
+<td><code>TRIAL_INDEX</code></td>
+<td><code>TRIAL_INDEX</code></td>
+</tr>
+<tr>
+<td>Word/IA id</td>
+<td><code>IA_ID</code></td>
+<td><code>CURRENT_FIX_INTEREST_AREA_ID</code></td>
+</tr>
+<tr>
+<td>Word text</td>
+<td><code>IA_LABEL</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Box</td>
+<td><code>IA_LEFT</code> / <code>IA_RIGHT</code> / <code>IA_TOP</code> / <code>IA_BOTTOM</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>X / Y</td>
+<td>—</td>
+<td><code>CURRENT_FIX_X</code> / <code>CURRENT_FIX_Y</code></td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>—</td>
+<td><code>CURRENT_FIX_DURATION</code></td>
+</tr>
+<tr>
+<td>Timestamp</td>
+<td>—</td>
+<td><code>CURRENT_FIX_START</code></td>
+</tr>
+<tr>
+<td>Fixation id</td>
+<td>—</td>
+<td><code>CURRENT_FIX_INDEX</code></td>
+</tr>
+</tbody>
+</table>
+<p>Three things to check before you accept it:</p>
+<ul>
+<li><strong><code>TRIAL_INDEX</code> identifies a trial only within a reader.</strong> That's fine —
+  trials are keyed <code>(participant, trial)</code> — but the <em>text</em> id falls back to the
+  trial id, so trial 3 of every reader is treated as the same text. If trial
+  order was randomised, map your item/condition column as <strong>Text ID</strong>, or
+  Corpus Analysis will pool the wrong readings.</li>
+<li><strong>A paragraph/item column outranks <code>TRIAL_INDEX</code>.</strong> <code>TRIAL_INDEX</code> is last in
+  the trial candidate list, so a report that also carries <code>paragraph_id</code> /
+  <code>text_id</code> maps the trial to <em>that</em> — which is what you want for cross-reader
+  comparison, but it merges repeated readings unless they're separated. They
+  are, automatically: with no <code>unique_trial_id</code> column, a mapped participant and
+  a <code>TRIAL_INDEX</code> column present, the second reading of the same id becomes
+  <code>par3_r2</code> (ranked by <code>TRIAL_INDEX</code>), the third <code>par3_r3</code>.
+  <strong>The <code>_r2</code> suffixing runs only for a single-column trial mapping.</strong> Compose
+  the trial id from several columns and the composite is taken as authoritative
+  — so <code>participant + paragraph_id</code>, which is what the wizard pre-selects here,
+  collapses both readings into one trial, while <code>paragraph_id</code> alone would have
+  split them. If your export marks repeats with a column of its own, add that
+  column to the composite; if it doesn't, drop back to the single-column mapping
+  and let the <code>TRIAL_INDEX</code> ranking do it.</li>
+<li><strong>Pre-aggregated measures win.</strong> <code>IA_FIRST_FIXATION_DURATION</code>, <code>IA_DWELL_TIME</code>,
+  <code>IA_FIRST_RUN_DWELL_TIME</code>, <code>IA_REGRESSION_*</code>, <code>IA_SKIP</code>, <code>IA_FIXATION_COUNT</code> …
+  are carried through under canonical names and take precedence over the
+  fixation-based recomputation. Matching here is by <strong>exact</strong> source name (not
+  the fuzzy candidate matching), so a renamed export loses them and the app
+  recomputes from fixations instead.</li>
+</ul>
+<h3 id="5b-a-plain-csv-with-xywidthheight">5b. A plain CSV with x/y/width/height<a class="headerlink" href="#5b-a-plain-csv-with-xywidthheight" title="Permanent link">&para;</a></h3>
+<p><code>words.csv</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>participant_id,trial_id,word_id,text,x,y,width,height
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>s1,t1,1,The,100,300,80,40
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>s1,t1,2,quick,190,300,80,40
+</code></pre></div>
+<p><code>fixations.csv</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>participant_id,trial_id,x,y,duration,timestamp
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>s1,t1,140.0,320.0,211,1000
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>s1,t1,230.0,320.0,212,1250
+</code></pre></div>
+<p>Every column here is mapped except one: <strong><code>timestamp</code> is not in the fixation
+timestamp candidate list</strong> (<code>timestamp_ms</code> and the EyeLink/MultiplEYE names are).
+Left alone, fixation ordering silently falls back to row order. Either rename the
+column to <code>timestamp_ms</code> or map it by hand under <em>More fixation mappings</em>.</p>
+<p>The fixations here carry no word id, so assignment is geometric — with these
+boxes each fixation lands inside one, and <code>compute_word_metrics</code> returns FFD /
+TFD / counts per word.</p>
+<h3 id="5c-one-file-per-reader-with-the-ids-only-in-the-filename">5c. One file per reader, with the ids only in the filename<a class="headerlink" href="#5c-one-file-per-reader-with-the-ids-only-in-the-filename" title="Permanent link">&para;</a></h3>
+<p>PoTeC-shaped exports: <code>reader0_b0_scanpath.csv</code>, <code>reader0_b1_scanpath.csv</code>, … and
+no identity column inside the files at all.</p>
+<p>Upload all of them into the <em>Fixations</em> box (or pass a glob to the API). They're
+concatenated, and each row keeps the file's stem in <code>source_file</code>. Then, in the
+wizard's <strong>Derive ids from filename</strong> step, either:</p>
+<ul>
+<li><em>Split on a delimiter</em> — <code>_</code> turns <code>reader0_b0_scanpath</code> into <code>file_part_1</code> =
+  <code>reader0</code>, <code>file_part_2</code> = <code>b0</code>, <code>file_part_3</code> = <code>scanpath</code>; or</li>
+<li><em>Regex named groups</em> — <code>(?P&lt;reader&gt;reader\d+)_(?P&lt;item&gt;b\d+)_scanpath</code> gives
+  columns <code>reader</code> and <code>item</code>, which is robust when a part's length varies. A
+  group whose name collides with an existing column is skipped (the real data
+  wins) and the wizard warns, so rename the group rather than assume it applied.
+  Avoid group names the auto-detector already claims — a group called <code>text</code>
+  would be picked up as the <em>word text</em> on a words table.</li>
+</ul>
+<p>Now map <strong>Participant ID</strong> = <code>reader</code> and <strong>Trial ID</strong> = <code>reader</code> + <code>item</code>
+(two columns → the composite id <code>reader0_b0</code>). The trial picker then offers one
+cascading selector per component instead of one opaque dropdown.</p>
+<p>Headlessly the same two helpers are <code>data.split_source_file</code> and
+<code>data.extract_columns_from_source_file</code>, applied to the frame from
+<code>data.read_tables("fixations/reader*_scanpath.csv")</code> before you call
+<code>load_scanpath_data</code> with an explicit schema.</p>
+<h2 id="6-when-it-goes-wrong">6. When it goes wrong<a class="headerlink" href="#6-when-it-goes-wrong" title="Permanent link">&para;</a></h2>
+<p>Open 🔎 <strong>Data Inspection</strong> first: the headline counts (Participants · Texts ·
+Trials · Fixations · Words · Gaze points) identify most of these in one glance,
+and the raw tables below let you check actual values.</p>
+<details class="failure">
+<summary>Every fixation is flagged out-of-text; no word gets a measure</summary>
+<p>The fixations and the boxes are in different coordinate frames. The usual
+culprits, in order of frequency:</p>
+<ul>
+<li><strong>Y measured from the bottom</strong> of the screen in one table and from the top
+  in the other. On a 1080 px screen a fixation at <code>y = 320</code> becomes <code>y = 760</code>
+  — outside every box, and beyond the 50 px nearest-word fallback, so it is
+  left unassigned.</li>
+<li><strong>Different resolutions</strong> — fixations recorded at 1024 × 768, AOIs computed
+  on the 1920 × 1080 presentation screen.</li>
+<li><strong>Different units</strong> — degrees of visual angle vs pixels.</li>
+</ul>
+<p>Check it in Data Inspection: the fixation <code>x</code>/<code>y</code> ranges must overlap the
+word-box ranges. Fix it in the export (the app applies no coordinate
+transform), then re-upload.</p>
+</details>
+<details class="failure">
+<summary>The boxes are drawn, but the whole plot looks off-scale</summary>
+<p>Geometry is self-consistent; the canvas isn't. Set the real recording
+resolution under <em>Experimental setup</em> — word labels are sized in data space
+from the line pitch and then converted to screen pixels, so a canvas that
+isn't the presentation monitor makes the reading text too large or too small.
+Details in <a href="../rendering/">True-to-scale rendering</a>.</p>
+</details>
+<details class="failure">
+<summary>A trial shows fixations but no text and no boxes</summary>
+<p>The two tables disagree about the <strong>trial id string</strong>. The trial picker is
+built from the <em>fixations</em>; boxes are then looked up by the exact
+<code>(participant_id, trial_id)</code> pair, as strings. So:</p>
+<ul>
+<li><code>7</code> in the fixations vs <code>7.0</code> in the words — one stray blank cell makes
+  pandas read that column as float, and <code>"7" != "7.0"</code>.</li>
+<li><code>p01</code> vs <code>1</code>, or an id with trailing whitespace on one side.</li>
+</ul>
+<p>Map the <em>same</em> column in both tables (the unified identifier picker does this
+by default) and make the dtypes agree in the export. The same mismatch on
+<code>participant_id</code> produces the same empty result. The wizard catches the total
+version of this at mapping time — <em>"⚠️ No trial ids are shared across
+tables"</em> — but a partial mismatch only shows up as a coverage note.</p>
+<p>With a <strong>stimulus-level</strong> words table (no participant column) the same
+mismatch is worse: the broadcast across readers is an inner join on
+<code>trial_id</code>, so unmatched word rows are dropped outright and the Words count
+in Data Inspection reads <code>0</code> rather than merely being wrong for one trial.</p>
+</details>
+<details class="failure">
+<summary>One trial only, or far fewer trials than expected</summary>
+<p>The mapped trial column doesn't separate trials. Three causes, in order of
+frequency:</p>
+<ul>
+<li><strong>It's effectively constant</strong> — a session/experiment label rather than a
+  trial label. Check its distinct-value count in Data Inspection.</li>
+<li><strong>It's too coarse</strong> — <code>paragraph_id</code> alone merges every reader's reading
+  of that paragraph if no participant is mapped. Compose the trial id from
+  several columns (<code>participant</code> + <code>paragraph</code> + <code>repeated</code>) in the <em>Trial
+  identifier</em> step.</li>
+<li><strong>The composite is too coarse for repeated readings.</strong> The wizard
+  pre-selects <code>participant + passage</code> when it can, and a composite turns off
+  the automatic <code>_r2</code> suffixing — so two readings of the same passage land on
+  one trial id. Add the repeat-marking column to the composite (see
+  <a href="#5a-eyelink-data-viewer-ia-report-fixation-report">example 5a</a>).</li>
+</ul>
+</details>
+<details class="failure">
+<summary>Far more trials than expected</summary>
+<p>The opposite: something that varies <em>within</em> a trial got into the composite
+id — a fixation index, a timestamp, a per-fixation flag. Drop it from the
+multiselect; the trial count in Data Inspection updates immediately.</p>
+</details>
+<details class="failure">
+<summary>The only participant is <code>(all)</code></summary>
+<p>No participant column was mapped on the fixations table, so every row became
+a single anonymous reader. Map it in the <em>Participants</em> step.</p>
+</details>
+<details class="failure">
+<summary>Every reader shows every reader's word boxes</summary>
+<p>The words table is one row per <em>(reader, word)</em> but Participant ID was left
+unmapped, so it was treated as stimulus-level and broadcast across all
+readers with fixations for that trial. Map the participant column on the
+words table too.</p>
+</details>
+<details class="failure">
+<summary>A column I need disappeared after import</summary>
+<p>Everything not claimed at import is dropped, for speed. What survives:
+mapped columns; recognised reading-measure and linguistic fields (ticked by
+default under <em>Additional fields to keep</em>); recognised trial-level condition
+fields (ticked by default under <em>Filter trials by</em>); and anything else you
+tick yourself. A column the app doesn't recognise is <strong>off by default</strong> —
+tick it under <em>Filter &amp; keep → Additional fields to keep</em>. For an
+already-imported dataset the dropped list is shown in Data Inspection →
+Column mapping; recovering one needs a re-upload.</p>
+</details>
+<details class="failure">
+<summary>I mapped a column and the app used a different one</summary>
+<p>Two source column <em>names</em> are read directly by normalization and win over
+the mapping: <code>unique_trial_id</code> (over a single-column <em>Trial ID</em>) and
+<code>unique_paragraph_id</code> (over <em>Text ID</em>). See the warning in
+<a href="#3-how-columns-are-detected-and-how-to-override">§3</a>. Data Inspection →
+Column mapping shows the mapping that was <em>submitted</em>, not this override, so
+compare the trial ids in the raw table against the ones in the picker.</p>
+</details>
+<details class="failure">
+<summary>Reading measures are missing or all zero</summary>
+<p>Either the fixations have no usable coordinates (so nothing was assigned to a
+word — see the first entry), or your pre-aggregated measure columns aren't
+under the exact names the app recognises, in which case they're dropped and
+the fallback computation runs on whatever fixations were assigned.</p>
+</details>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../data-format/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Data format">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Data format
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../corpus-analysis/" class="md-footer__link md-footer__link--next" aria-label="Next: Corpus analysis">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Corpus analysis
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/lacclab/scanpath-studio" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/scanpath-studio/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://scanpath-studio.streamlit.app" target="_blank" rel="noopener" title="Live demo" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 16.5v-9l6 4.5M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.top", "navigation.footer", "navigation.indexes", "content.code.copy", "content.tabs.link", "toc.follow", "search.suggest", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

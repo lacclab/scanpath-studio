@@ -5,6 +5,10 @@
          <lastmod>2026-07-28</lastmod>
     </url>
     <url>
+         <loc>https://lacclab.github.io/scanpath-studio/agents/</loc>
+         <lastmod>2026-07-28</lastmod>
+    </url>
+    <url>
          <loc>https://lacclab.github.io/scanpath-studio/api/</loc>
          <lastmod>2026-07-28</lastmod>
     </url>
@@ -13,7 +17,19 @@
          <lastmod>2026-07-28</lastmod>
     </url>
     <url>
+         <loc>https://lacclab.github.io/scanpath-studio/bring-your-own-data/</loc>
+         <lastmod>2026-07-28</lastmod>
+    </url>
+    <url>
          <loc>https://lacclab.github.io/scanpath-studio/cli/</loc>
+         <lastmod>2026-07-28</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/contributing-a-dataset/</loc>
+         <lastmod>2026-07-28</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/corpus-analysis/</loc>
          <lastmod>2026-07-28</lastmod>
     </url>
     <url>
@@ -41,7 +57,15 @@
          <lastmod>2026-07-28</lastmod>
     </url>
     <url>
+         <loc>https://lacclab.github.io/scanpath-studio/privacy/</loc>
+         <lastmod>2026-07-28</lastmod>
+    </url>
+    <url>
          <loc>https://lacclab.github.io/scanpath-studio/rendering/</loc>
+         <lastmod>2026-07-28</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/security/</loc>
          <lastmod>2026-07-28</lastmod>
     </url>
 </urlset>

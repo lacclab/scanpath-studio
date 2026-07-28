@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Type an exact value into any slider** (UX-9) — marker size, opacity, line width, label sizes, colour ranges and the fixation-index window each pair their slider with a number box.
 - **"Don't show this again" on the welcome tour** (UX-12) — persisted per browser in a first-party cookie; **🎓 Show tutorial** always brings it back.
 - **Documentation link in the app** (UX-17) — the docs site is now one click away from the sidebar Help group and the About popover.
 

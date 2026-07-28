@@ -341,6 +341,18 @@ def get_app_css() -> str:
         font-size: 0.9rem !important;
         line-height: 1.55 !important;
     }
+    /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
+       `__num_hi`) exists for typing an *exact* value — the slider beside it
+       already handles stepping. Drop its +/- buttons so the field stays usable
+       at the widths it gets inside the narrow control rail and its popovers. */
+    div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputStepUp"],
+    div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputStepDown"] {
+        display: none !important;
+    }
+    div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputContainer"] {
+        min-width: 0;
+    }
+
     /* Control rail: a subtle card so it reads as a panel, with a hair more
        breathing room between the stacked toggles than the app-wide gap:0 rule. */
     .st-key-scanpath_rail {

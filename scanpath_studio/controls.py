@@ -32,6 +32,120 @@ from .data import frame_fingerprint
 
 NONE_OPTION = "(none)"
 
+
+# --- UX-9: sliders you can also type an exact value into ----------------------
+# A slider is the right control for "sweep until it looks right", but it can't be
+# set to a precise value — awkward when a figure has to match a spec (marker size
+# 12, opacity 0.65, line width 1.5). These wrappers pair each slider with a
+# number box.
+#
+# The SLIDER keeps the canonical session key, so nothing downstream changes: deep
+# links, Share, Save & restore and `_collect_viz_settings` all still read
+# `global_*` / `cmp*_*` / `single_*` exactly as before. The box owns a shadow
+# `{key}__num*` key and writes the canonical one from its `on_change`; the
+# canonical value is mirrored back into the box *before* either widget renders,
+# so a slider drag, a deep link, a restored config and a Quick-view preset all
+# move the box too — one-way sync each direction, no feedback loop.
+
+
+def _numeric_slider(
+    host,
+    label: str,
+    *,
+    key: str,
+    min_value,
+    max_value,
+    step=None,
+    slider_format: Optional[str] = None,
+    number_format: Optional[str] = None,
+    help: Optional[str] = None,
+) -> None:
+    """A single-value slider plus a number box bound to the same setting.
+
+    ``number_format`` defaults to ``slider_format``; pass it separately when the
+    slider's format carries a unit suffix (``"%.1f px"``), which ``number_input``
+    does not accept.
+    """
+    num_key = f"{key}__num"
+    if key in st.session_state:
+        st.session_state[num_key] = st.session_state[key]
+
+    def _apply() -> None:
+        st.session_state[key] = st.session_state[num_key]
+
+    slider_col, num_col = host.columns([3, 2], vertical_alignment="bottom")
+    slider_col.slider(
+        label,
+        min_value=min_value,
+        max_value=max_value,
+        step=step,
+        format=slider_format,
+        key=key,
+        help=help,
+    )
+    num_col.number_input(
+        label,
+        min_value=min_value,
+        max_value=max_value,
+        step=step,
+        format=number_format if number_format is not None else slider_format,
+        key=num_key,
+        on_change=_apply,
+        label_visibility="collapsed",
+    )
+
+
+def _range_slider(
+    host,
+    label: str,
+    *,
+    key: str,
+    min_value,
+    max_value,
+    step=None,
+    slider_format: Optional[str] = None,
+    number_format: Optional[str] = None,
+    help: Optional[str] = None,
+) -> None:
+    """A two-handle range slider plus min/max number boxes for the same setting.
+
+    The boxes sit on their own row under the slider (left = min, right = max):
+    three widgets on one line leaves each box too narrow to use in the rail's
+    popovers. A min typed above the max is swapped rather than rejected.
+    """
+    lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
+    current = st.session_state.get(key)
+    if isinstance(current, (tuple, list)) and len(current) == 2:
+        st.session_state[lo_key], st.session_state[hi_key] = current
+
+    def _apply() -> None:
+        lo, hi = st.session_state[lo_key], st.session_state[hi_key]
+        st.session_state[key] = (min(lo, hi), max(lo, hi))
+
+    host.slider(
+        label,
+        min_value=min_value,
+        max_value=max_value,
+        step=step,
+        format=slider_format,
+        key=key,
+        help=help,
+    )
+    fmt = number_format if number_format is not None else slider_format
+    lo_col, hi_col = host.columns(2)
+    for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
+        col.number_input(
+            f"{label} ({side})",
+            min_value=min_value,
+            max_value=max_value,
+            step=step,
+            format=fmt,
+            key=num_key,
+            on_change=_apply,
+            label_visibility="collapsed",
+        )
+
+
 # VIZ-4: MIME by extension for a user-uploaded stimulus image → a `data:` URI the
 # figure builders accept as `background_image` (plots._image_to_data_uri passes a
 # `data:` URI straight through).
@@ -879,16 +993,21 @@ def _render_compare_fix_styles() -> None:
             value=st.session_state.get(key, compare_palette_color(idx)),
             key=key,
         )
-        st.slider(
-            f"{name} — marker size range", 4, 40, key=f"cmp{idx}_marker_size_range"
+        _range_slider(
+            st,
+            f"{name} — marker size range",
+            key=f"cmp{idx}_marker_size_range",
+            min_value=4,
+            max_value=40,
         )
-        st.slider(
+        _numeric_slider(
+            st,
             f"{name} — opacity",
+            key=f"cmp{idx}_opacity",
             min_value=0.1,
             max_value=1.0,
             step=0.05,
-            format="%.2f",
-            key=f"cmp{idx}_opacity",
+            slider_format="%.2f",
             help="Marker opacity for this scanpath (1.0 = fully opaque).",
         )
 
@@ -908,13 +1027,15 @@ def _render_compare_saccade_styles() -> None:
         st.selectbox(
             f"{name} — line style", options=style_labels, key=f"cmp{idx}_saccade_style"
         )
-        st.slider(
+        _numeric_slider(
+            st,
             f"{name} — line width",
+            key=f"cmp{idx}_saccade_width",
             min_value=SACCADE_WIDTH_BOUNDS[0],
             max_value=SACCADE_WIDTH_BOUNDS[1],
             step=0.5,
-            format="%.1f px",
-            key=f"cmp{idx}_saccade_width",
+            slider_format="%.1f px",
+            number_format="%.1f",
         )
 
 
@@ -990,11 +1111,12 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
         st.session_state["single_fix_range"] = (lo, hi)
     else:
         st.session_state["single_fix_range"] = (1, max_fix)
-    st.slider(
+    _range_slider(
+        st,
         "Fixation index range",
+        key="single_fix_range",
         min_value=1,
         max_value=max_fix,
-        key="single_fix_range",
         help="Draw only fixations whose index falls in this range (their "
         "saccades follow). The chips and panels still describe the full trial; "
         "the bulk (multiple-trial) export is unaffected.",
@@ -1407,20 +1529,22 @@ def sidebar_controls(
             # appearance controls. The max is this trial's fixation count.
             _render_fix_range_slider(fix_range_fixations)
             if not comparing:
-                st.slider(
+                _range_slider(
+                    st,
                     "Size",
-                    4,
-                    40,
                     key="global_marker_size_range",
+                    min_value=4,
+                    max_value=40,
                     help="Fixation marker size (px).",
                 )
-                st.slider(
+                _numeric_slider(
+                    st,
                     "Opacity",
+                    key="global_fixation_opacity",
                     min_value=0.1,
                     max_value=1.0,
                     step=0.05,
-                    format="%.2f",
-                    key="global_fixation_opacity",
+                    slider_format="%.2f",
                     help="Fixation marker opacity. Lower it so overlapping "
                     "fixations show through (1.0 = fully opaque).",
                 )
@@ -1449,13 +1573,14 @@ def sidebar_controls(
                 st.session_state.setdefault(
                     "global_fixation_color_range", (cmin, cmax_eff)
                 )
-                st.slider(
+                _range_slider(
+                    st,
                     "Fixation color range",
+                    key="global_fixation_color_range",
                     min_value=cmin,
                     max_value=cmax_eff,
                     step=1.0,
-                    format="%d",
-                    key="global_fixation_color_range",
+                    slider_format="%d",
                 )
             show_order = st.checkbox("Fixation index", key="global_show_order")
             if show_order:
@@ -1464,11 +1589,12 @@ def sidebar_controls(
                     key="global_order_font_color",
                     help="Fixation-index label colour.",
                 )
-                st.slider(
+                _numeric_slider(
+                    st,
                     "Index label size",
-                    6,
-                    72,
                     key="global_order_font_size",
+                    min_value=6,
+                    max_value=72,
                     help="Fixation-index label size (figure pixels; the plot is "
                     "then scaled to fit the column, so on-screen it is a touch "
                     "smaller). Default 10.",
@@ -1545,13 +1671,15 @@ def sidebar_controls(
                     key="global_saccade_style",
                     help="Line style for the saccade traces.",
                 )
-                st.slider(
+                _numeric_slider(
+                    st,
                     "Saccade line width",
+                    key="global_saccade_width",
                     min_value=SACCADE_WIDTH_BOUNDS[0],
                     max_value=SACCADE_WIDTH_BOUNDS[1],
                     step=0.5,
-                    format="%.1f px",
-                    key="global_saccade_width",
+                    slider_format="%.1f px",
+                    number_format="%.1f",
                     help="Thickness of the saccade lines. Default 2.",
                 )
                 # VIZ-9: "linear reading" schematic — arched saccades. Its paired
@@ -1718,13 +1846,14 @@ def sidebar_controls(
                 st.session_state.setdefault(
                     "global_heatmap_color_range", (hmin, hmax_eff)
                 )
-                st.slider(
+                _range_slider(
+                    st,
                     "Heatmap color range",
+                    key="global_heatmap_color_range",
                     min_value=hmin,
                     max_value=hmax_eff,
                     step=1.0,
-                    format="%d",
-                    key="global_heatmap_color_range",
+                    slider_format="%d",
                     help="Min/max heatmap value mapped to the two ends of the "
                     "colorscale (the metric above — fixation duration or count; "
                     "for Interpolated, the smoothed density of those values). "
@@ -1766,12 +1895,14 @@ def sidebar_controls(
             "below to position/scale it. Not carried by Share links (upload it on "
             "the other end).",
         )
-        st.slider(
+        _numeric_slider(
+            st,
             "Image opacity",
+            key="global_stimulus_image_opacity",
             min_value=0.1,
             max_value=1.0,
             step=0.05,
-            key="global_stimulus_image_opacity",
+            number_format="%.2f",
             help="Dim the stimulus image so the fixations, saccades and word "
             "boxes stand out over it (1.0 = fully opaque).",
         )
@@ -1793,12 +1924,14 @@ def sidebar_controls(
             key="global_stimulus_image_offset_y",
             help="Shift the image vertically to line it up with the text.",
         )
-        st.slider(
+        _numeric_slider(
+            st,
             "Image scale",
+            key="global_stimulus_image_scale",
             min_value=0.25,
             max_value=3.0,
             step=0.05,
-            key="global_stimulus_image_scale",
+            number_format="%.2f",
             help="Scale the image up/down so its text matches the word boxes "
             "(1.0 = the image's native / dataset size).",
         )
@@ -1827,19 +1960,21 @@ def sidebar_controls(
             key="global_colorbar_orientation",
             help="Vertical bar on the right, or a horizontal bar below the plot.",
         )
-        axes.slider(
+        _numeric_slider(
+            axes,
             "Tick label angle",
+            key="global_colorbar_tickangle",
             min_value=-90,
             max_value=90,
             step=15,
-            key="global_colorbar_tickangle",
             help="Rotate the color-bar tick labels (degrees).",
         )
-        axes.slider(
+        _numeric_slider(
+            axes,
             "Tick label size",
+            key="global_colorbar_tickfont_size",
             min_value=6,
             max_value=20,
-            key="global_colorbar_tickfont_size",
             help="Color-bar tick-label font size (px).",
         )
     axes.selectbox("X axis field", options=numeric_fields, key="global_x_field")

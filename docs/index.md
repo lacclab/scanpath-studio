@@ -127,6 +127,11 @@ subtab ranks same-text scanpaths by similarity. Everything obeys the active
 trial filters, and the single-trial scanpath and replay figures are
 reproducible headless through the same pipeline.
 
+![Two readers of the same paragraph, animated on a shared real-time clock](assets/demo_dual_scanpath.gif){ .sps-shot }
+
+<p class="sps-caption">Compare mode replaying two readers of the same paragraph
+on one shared real-time clock.</p>
+
 !!! quote "Citing Scanpath Studio"
     If you use Scanpath Studio in your research, please cite it — the citation
     metadata lives in

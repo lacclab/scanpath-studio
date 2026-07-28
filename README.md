@@ -50,9 +50,10 @@ On top of that:
 - **Triage** — star, tag, and annotate trials; save and restore everything as a JSON sidecar.
 - **Bulk export** — one zip of per-trial PNG + SVG figures, plot settings, and tabular data across every filtered trial.
 
-![Two readers of the same paragraph, animated on a shared real-time clock](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.gif)
+![Two readers of the same paragraph, overlaid on one canvas](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/demo_dual_scanpath.png)
 
-*Overlay a second reading to compare two readers of the same text on a shared clock.*
+*Overlay a second reading to compare two readers of the same text
+([watch it animated](https://lacclab.github.io/scanpath-studio/#the-app-in-one-paragraph)).*
 
 The app is organized into three tabs:
 

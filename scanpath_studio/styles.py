@@ -44,13 +44,53 @@ def get_app_css() -> str:
         opacity: 1 !important;
     }
     /* Header button row (the Corpus Analysis ⇄ Scanpath view toggle): right-align
-       the content-sized trigger so it lines up with the page content's right edge. */
+       the trigger so it lines up with the page content's right edge. UX-18 stacks
+       a one-line "what's over there" caption under the button, so this is a
+       column, not a row; the caption is centred on the button and muted so it
+       reads as a subtitle rather than a second control. */
     .st-key-header_buttons {
-        flex-direction: row;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 0.5rem;
+        flex-direction: column;
+        justify-content: center;
+        align-items: stretch;
+        gap: 0.15rem;
     }
+    .st-key-header_buttons div[data-testid="stCaptionContainer"] p {
+        margin: 0 !important;
+        text-align: center;
+        font-size: 0.72rem;
+        line-height: 1.2;
+        opacity: 0.75;
+    }
+    .st-key-header_buttons button p { white-space: nowrap; }
+    /* === UX-8: make leaving the sidebar as easy as entering it ==============
+       Streamlit's only exit from an open sidebar is the "«" collapse control,
+       and it ships `visibility: hidden` until the pointer is already inside the
+       sidebar — so dismissing a sidebar you drifted into means hunting for a
+       target that is invisible *and* icon-small. Pin it visible (muted, so it
+       isn't shouty) and give it a real hit area; the matching "»" expand control
+       in the header gets the same treatment so the pair reads as one toggle. */
+    [data-testid="stSidebarCollapseButton"] {
+        visibility: visible !important;
+        opacity: 0.6;
+        transition: opacity 0.15s ease, background 0.15s ease;
+        border-radius: 8px;
+    }
+    [data-testid="stSidebarCollapseButton"]:hover { opacity: 1; }
+    [data-testid="stSidebarCollapseButton"] button,
+    button[data-testid="stExpandSidebarButton"] {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.4rem;
+        min-height: 2.4rem;
+        border-radius: 8px;
+        transition: background 0.15s ease;
+    }
+    [data-testid="stSidebarCollapseButton"] button:hover,
+    button[data-testid="stExpandSidebarButton"]:hover {
+        background: var(--sps-accent-soft);
+    }
+
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
     div[data-testid="stPopoverBody"] {

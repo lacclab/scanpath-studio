@@ -53,6 +53,7 @@ from scanpath_studio.annotations import (
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     BACKGROUND_PRESETS,
+    CITATION,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
@@ -225,6 +226,12 @@ def _render_about_panel() -> None:
         st.caption("Interactive visualization of eye movements in reading.")
     # The keyed wrapper right-aligns the content-sized trigger (see
     # `.st-key-header_buttons` in styles.py). It's also the spotlight-tour target.
+    #
+    # UX-18: this button is the *only* door to the whole Corpus Analysis half of
+    # the app, and as a plain secondary button it was routinely missed. Outbound
+    # it renders `primary` with a → cue and a one-line caption naming what's on
+    # the other side; the return trip stays quiet (secondary, ← cue) so the two
+    # don't compete. Still one button, not a second navigation system.
     button_row = buttons_col.container(key="header_buttons")
     with button_row:
         if _active_view() == _VIEW_CORPUS:
@@ -233,16 +240,20 @@ def _render_about_panel() -> None:
                 key="nav_to_scanpath",
                 on_click=_go_scanpath,
                 width="stretch",
-                help="Back to the scanpath visualization.",
+                help="Back to the single-trial scanpath visualization.",
             )
+            st.caption("One trial at a time")
         else:
             st.button(
-                "📊 Corpus Analysis",
+                "📊 Corpus Analysis →",
                 key="nav_to_corpus",
+                type="primary",
                 on_click=_go_corpus,
                 width="stretch",
-                help="Corpus-level analysis (generations + aggregated views).",
+                help="Switch to the corpus-level half of the app: aggregate "
+                "across readers, texts and groups instead of one trial at a time.",
             )
+            st.caption("Across readers & texts")
 
 
 def _render_about_sidebar() -> None:
@@ -253,8 +264,8 @@ def _render_about_sidebar() -> None:
     lean; Share remains in the header because the link it builds is contextual to
     the current trial/view."""
     from scanpath_studio import __version__
-    from scanpath_studio.constants import CITATION
 
+    docs_label = CITATION["docs_url"].removeprefix("https://").rstrip("/")
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Lion, Ella and "
@@ -283,18 +294,11 @@ Deborah Jacobi², David Reiche²ʼ³, Lena Jäger², and
 ² [DiLi Lab](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html),
 University of Zurich · ³ University of Potsdam
 
+📚 **Documentation** — [{docs_label}]({CITATION["docs_url"]}) —
+guides, the column-mapping reference, and the Python API.
+
 💻 **Code** — [github.com/lacclab/scanpath-studio]({CITATION["url"]})
 (MIT). Issues and contributions are welcome.
-
-📖 **How to cite** — a paper is in preparation; until then:
-"""
-        )
-        st.code(bibtex, language="bibtex", wrap_lines=True)
-        st.markdown(
-            """
-If you use the bundled demo data, also cite
-[OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2)
-(Berzak et al., 2025, *Scientific Data*).
 
 🧪 **More Works from Our Labs** —
 [Language, Computation and Cognition (LaCC) Lab](https://lacclab.github.io/) ·
@@ -302,6 +306,18 @@ If you use the bundled demo data, also cite
 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/)
 """
         )
+        # UX-16: the BibTeX block is tall enough to push everything above out of
+        # view, so it opens on demand rather than always being rendered.
+        with st.expander("📖 How to cite", expanded=False):
+            st.markdown("A paper is in preparation; until then:")
+            st.code(bibtex, language="bibtex", wrap_lines=True)
+            st.markdown(
+                """
+If you use the bundled demo data, also cite
+[OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2)
+(Berzak et al., 2025, *Scientific Data*).
+"""
+            )
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------
@@ -2221,6 +2237,14 @@ def main() -> None:
     # the About popover (moved here from the header).
     _sidebar_group("❓ Help")
     render_tour_replay_button()
+    # UX-17: the docs site is the full reference — link it directly here, not
+    # only from inside the About popover.
+    st.sidebar.link_button(
+        "📚 Documentation",
+        CITATION["docs_url"],
+        width="stretch",
+        help="Guides, the column-mapping reference, and the Python API.",
+    )
     _render_about_sidebar()
 
     # Developer debug panel — hidden unless the URL carries ?debug=1, which

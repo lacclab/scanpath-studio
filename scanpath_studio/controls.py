@@ -1382,15 +1382,24 @@ def sidebar_controls(
                         help="Draw a faint line from each fixation's original "
                         "position to its corrected (snapped) position.",
                     )
-                # VIZ-9: snap each fixation above the word it lands on (the
-                # "linear reading" schematic; pairs with the Saccade → Line
-                # shape → Arc control). A fixation-position control, so it lives
-                # here under Fixations, not Saccades.
+                # UX-13: "Snap fixations above words" used to sit flush under the
+                # Drift-correction selectbox, which made it read as a
+                # drift-correction option. It is not — it's the fixation half of
+                # the VIZ-9 *linear-reading schematic* (its partner, arcing
+                # saccades, is Saccade style → Line shape → Arc). Keep it under
+                # Fixations (it moves fixations), but in its own captioned block
+                # so the two are never confused.
+                st.divider()
+                st.caption("Linear-reading schematic")
                 st.checkbox(
                     "Snap fixations above words",
                     key="global_fixation_snap_to_word",
-                    help="Place each fixation at the top-centre of the word it "
-                    "lands on instead of its raw gaze point (VIZ-9).",
+                    help="Schematic layout, **not** drift correction: every "
+                    "fixation is redrawn at the top-centre of the word it landed "
+                    "on, so the scanpath reads as a diagram rather than as "
+                    "recorded gaze. Drift correction (above) instead nudges the "
+                    "raw coordinates onto their true text line. Pairs with "
+                    "Saccades → ⚙️ Saccade style → Line shape → **Arc**.",
                 )
             # Fixation-index window (VIZ-7): restrict which fixations (and their
             # saccades) are drawn on the main plot. Shared across single + compare
@@ -1545,14 +1554,17 @@ def sidebar_controls(
                     key="global_saccade_width",
                     help="Thickness of the saccade lines. Default 2.",
                 )
-                # VIZ-9: "linear reading" schematic — arched saccades (the paired
-                # "Snap fixations above words" control lives under Fixations).
+                # VIZ-9: "linear reading" schematic — arched saccades. Its paired
+                # control, "Snap fixations above words", lives under Fixations
+                # (it moves fixations) in its own "Linear-reading schematic"
+                # block — see UX-13.
                 st.segmented_control(
                     "Line shape",
                     options=["Straight", "Arc"],
                     key="global_saccade_render_mode",
                     help="Straight connectors, or upward **arcs** over the text "
-                    "(the classic linear-reading diagram).",
+                    "(the classic linear-reading diagram). Pairs with Fixations → "
+                    "⚙️ Fixation style → **Snap fixations above words**.",
                 )
             # Per-scanpath saccade styling for the two-trial comparison.
             if comparing:

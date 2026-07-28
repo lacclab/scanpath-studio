@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Documentation link in the app** (UX-17) — the docs site is now one click away from the sidebar Help group and the About popover.
+
+### Changed
+- **Corpus Analysis is easier to find** (UX-18) — the header toggle is a primary button with a directional cue and a one-line caption naming what's on the other side.
+- **About popover** (UX-16) — the BibTeX citation opens from a collapsed **📖 How to cite** expander instead of filling the panel.
+- **"Snap fixations above words"** (UX-13) moved into its own *Linear-reading schematic* block so it no longer reads as a drift-correction option; both it and the Arc saccade mode now name each other.
+
 ### Fixed
+- The sidebar's collapse control (UX-8) is always visible and has a proper hit area, so an open sidebar is as easy to dismiss as it is to open.
 - Tutorial card spacing — the ✕ sits a touch lower in the corner, and the Back / Next footer no longer crowds the progress bar.
 - The header's **Corpus Analysis** / **← Scanpath** nav button now lines up exactly with the control rail below it (same width and right edge).
 

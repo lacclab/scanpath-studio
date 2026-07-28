@@ -170,6 +170,7 @@ CITATION = {
     ),
     "title": "Scanpath Studio",
     "url": "https://github.com/lacclab/scanpath-studio",
+    "docs_url": "https://lacclab.github.io/scanpath-studio/",
     "lab_url": "https://lacclab.github.io/",
     "corpus_note": (
         "Bundled demo data is a subset of OneStop Eye Movements: "

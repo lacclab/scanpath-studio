@@ -112,6 +112,13 @@ order. Add a sort control keyed on reader properties, text properties, and
 trial-level stats (n fixations, reading speed, comprehension correctness) so
 outliers and interesting trials surface without scrolling.
 
+**Follow-up (2026-07-28), from your review.** The ordering was invisible — the
+key lived in the ⇅ popover, so a sorted pool just looked shuffled. Every option
+now ends with that trial's value for the active key (`utils.format_sort_value`:
+thousands separators, one decimal, Yes/No, `—` for missing), on both the
+selectbox and the slider thumb, and the picker's own label names the ordering:
+**Trial ID · by Fixations (n) ↓**. Also `Trial id` → `Trial ID` throughout.
+
 **UX-14 · Tutorials on the documentation site** — `Status: Backlog`
 
 **Primarily a `docs/` job, not an in-app one.** Write task-shaped tutorials on

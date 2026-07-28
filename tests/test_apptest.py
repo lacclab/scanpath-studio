@@ -1,4 +1,12 @@
-"""Streamlit AppTest integration: spin up the app and assert key surfaces render."""
+"""Streamlit AppTest integration: spin up the app and assert key surfaces render.
+
+Companion file: ``tests/test_apptest_flows.py`` (ENG-4) drives multi-step
+*flows* through the same harness — overriding a column mapping and checking the
+re-derived data, narrowing the trial pool with the condition/annotation filters
+(incl. the UX-7 empty state), and building the bulk-export zip from the Export
+subtab. Add render-level checks here; add "change a control, assert the next
+render" checks there.
+"""
 
 from __future__ import annotations
 
@@ -724,8 +732,10 @@ class TestUnmappedRawDataView:
         at.run(timeout=120)  # switch to MultiplEYE
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        sbs = {s.label: s for s in at.selectbox}
-        opts = list(sbs["Trial id"].options) if "Trial id" in sbs else []
+        # The picker's label carries the active sort key (UX-10), so match the
+        # stem rather than the whole string.
+        picker = next((s for s in at.selectbox if s.label.startswith("Trial ID")), None)
+        opts = list(picker.options) if picker is not None else []
         # Two per-page trials, not collapsed into one stimulus-level trial.
         assert len(opts) == 2, f"expected 2 per-page trials, got {opts}"
         assert all("· page" in o for o in opts), opts

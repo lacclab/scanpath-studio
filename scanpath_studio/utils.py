@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -174,7 +175,7 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 # scrolling the whole list. These build a sort key per trial from three sources:
 # computed per-trial stats, reader/text properties, and any trial-level column
 # the dataset carries. Pure and frame-driven, so they're testable without the UI.
-TRIAL_SORT_DEFAULT = "Trial id"
+TRIAL_SORT_DEFAULT = "Trial ID"
 # Computed stat label → (frame it needs, how to aggregate it per trial).
 # "fixations" / "words" name which frame the aggregation runs on.
 _TRIAL_SORT_STATS = {
@@ -291,6 +292,23 @@ def _sort_scalar(value):
         return (1, str(value))
 
 
+def format_sort_value(value) -> str:
+    """A sort key's value, short enough to ride along in a picker option.
+
+    Sorting the pool is only useful if you can *see* what you sorted by — an
+    ordering with the ordering key hidden just looks shuffled. Integers keep a
+    thousands separator, floats get one decimal, booleans read Yes/No.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "—"
+    if isinstance(value, (bool, np.bool_)):
+        return "Yes" if value else "No"
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        number = float(value)
+        return f"{number:,.0f}" if number == int(number) else f"{number:,.1f}"
+    return str(value)
+
+
 def _trial_display_label(trial_id) -> str:
     """Human-readable label for a trial id in the pickers.
 
@@ -313,17 +331,19 @@ def _render_trial_sort_popover(
     *,
     words: Optional[pd.DataFrame],
     fixations: Optional[pd.DataFrame],
-) -> Tuple[Optional[pd.Series], bool]:
+) -> Tuple[Optional[pd.Series], bool, str]:
     """The ⇅ sort control beside the trial picker (UX-10).
 
     Lives in a popover rather than inline: the picker row is already a selectbox,
     a slider and two step buttons wide, and sorting is a "set it once" choice, not
-    a per-trial one. Returns ``(key_series, descending)`` for
-    :func:`sort_trial_options` — ``(None, …)`` for the default id order.
+    a per-trial one. Returns ``(key_series, descending, choice)`` for
+    :func:`sort_trial_options` — ``(None, False, TRIAL_SORT_DEFAULT)`` for the
+    default id order. The chosen key's *name* comes back too, because the picker
+    labels the ordering it's showing.
     """
     keys = trial_sort_keys(combos, trial_field, words=words, fixations=fixations)
     if not keys:
-        return None, False
+        return None, False, TRIAL_SORT_DEFAULT
     options = [TRIAL_SORT_DEFAULT, *keys]
     state_key = f"{key_prefix}_trial_sort"
     if st.session_state.get(state_key) not in options:
@@ -339,8 +359,8 @@ def _render_trial_sort_popover(
         )
         descending = st.checkbox("Descending", key=f"{key_prefix}_trial_sort_desc")
     if choice == TRIAL_SORT_DEFAULT:
-        return None, False
-    return keys[choice], bool(descending)
+        return None, False, TRIAL_SORT_DEFAULT
+    return keys[choice], bool(descending), choice
 
 
 def _select_trial_none_mode(
@@ -378,12 +398,20 @@ def _select_trial_none_mode(
         for r in available_trials.to_dict("records")
     }
 
+    # Populated once the ⇅ popover has rendered (below), and read by the option
+    # labels — so an active ordering is *visible* in the picker itself rather than
+    # only inside the popover that set it.
+    sort_values: Dict[str, str] = {}
+
     def _option_label(value: str) -> str:
         marks = annotation_markers(trial_to_pid.get(value), value)
         base = _trial_display_label(value)
-        return f"{marks} {base}" if marks else base
+        label = f"{marks} {base}" if marks else base
+        shown = sort_values.get(value)
+        return f"{label}  ·  {shown}" if shown else label
 
     n_trials = len(trial_options)
+    picker_label = "Trial ID"
     trial_id_key = f"{key_prefix}_trial_id" if key_prefix else None
     slider_key = f"{key_prefix}_trial_pos" if key_prefix else "trial_pos"
 
@@ -434,7 +462,7 @@ def _select_trial_none_mode(
         # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
         # canonical selection is a trial *id*, so re-sorting never changes which
         # trial is selected — only where it sits in the list.
-        sort_key, sort_desc = _render_trial_sort_popover(
+        sort_key, sort_desc, sort_choice = _render_trial_sort_popover(
             sort_col,
             combos,
             trial_field,
@@ -447,6 +475,11 @@ def _select_trial_none_mode(
                 trial_options, sort_key, descending=sort_desc
             )
             idx_of = {opt: i for i, opt in enumerate(trial_options)}
+            lookup = sort_key.to_dict()
+            sort_values.update(
+                {opt: format_sort_value(lookup.get(opt)) for opt in trial_options}
+            )
+            picker_label = f"Trial ID  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
         current_idx = trial_options.index(current_label)
     else:
         sel_col = host
@@ -454,12 +487,13 @@ def _select_trial_none_mode(
     # The label is shown so its help "?" icon (the type-to-search hint) is visible
     # — a collapsed label hides it.
     selected_trial_label = sel_col.selectbox(
-        "Trial id",
+        picker_label,
         options=trial_options,
         key=trial_id_key,
         format_func=_option_label,
         help="💡 Click, then start typing to narrow down the trial list. "
-        "★ favorite · 🏷️ tagged · 📝 has notes.",
+        "★ favorite · 🏷️ tagged · 📝 has notes. When a sort key is active, each "
+        "option ends with that trial's value for it.",
     )
 
     if n_trials > 1:
@@ -469,8 +503,9 @@ def _select_trial_none_mode(
                 options=trial_options,
                 key=slider_key,
                 on_change=_on_trial_slider,
-                help=f"Scrub through the {n_trials} trials (index/total · id); the "
-                "dropdown jumps to a specific id.",
+                help=f"Scrub through the {n_trials} trials (index/total · id, "
+                "plus the sort value when one is active); the dropdown jumps to "
+                "a specific id.",
                 label_visibility="collapsed",
                 format_func=_slider_label,
             )

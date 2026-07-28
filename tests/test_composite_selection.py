@@ -63,7 +63,7 @@ class TestCompositeTrialPicker:
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
         labels = [s.label for s in at.selectbox]
-        assert "Trial id" not in labels
+        assert not any(label.startswith("Trial ID") for label in labels), labels
 
     def test_filter_col_component_dropped_from_cascade(self):
         # UX-5: a composite component that is also a More-popover filter column
@@ -219,7 +219,7 @@ class TestCompositeTrialPicker:
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        assert "Trial id" in labels
+        assert any(label.startswith("Trial ID") for label in labels), labels
 
 
 @pytest.mark.timeout(60)

@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Export path patterns** (EXP-1) — name files and folders in the export zip from the trial's own fields, with a live preview.
 - **Titles and captions on exported figures** (EXP-2) — auto-generated from the trial or hand-written; the figure grows to make room rather than shrinking the plot.
-- **Sort the trial picker** (UX-10) — order the pool by a computed stat or any trial-level column, either direction.
+- **Sort the trial picker** (UX-10) — order the pool by a computed stat or any trial-level column, either direction. Each option shows its value for the active key, and the picker label names the ordering.
 - **Selectable colour palettes** (VIZ-18) — colourblind-safe (Okabe–Ito), print/greyscale, and high-contrast presets over the existing colour pickers.
 - **Fixation marker shape** (VIZ-15) — nine shapes incl. heart; a channel that survives black & white.
 - **Forward vs. regression saccade colouring** (VIZ-19) — a two-way split beside the five-class breakdown.

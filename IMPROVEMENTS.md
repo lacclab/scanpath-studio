@@ -354,6 +354,17 @@ works and how to override it, saving and reusing a mapping, worked EyeLink-repor
 and plain-CSV examples, and a symptom→cause table for when it goes wrong. Linked
 from the wizard's first screen and from `getting-started` / `data-format`.
 
+**Rewritten 2026-07-29 (your note: too long, nobody will read it).** 435 → ~195
+lines. The content was right, the shape wasn't: it opened with a full field-by-field
+reference and a 12-row table of every candidate column name before saying what to
+*do*. Now it leads with the two-sentence answer (EyeLink users are done), states the
+minimum as prose, and keeps only the omissions that change behaviour. The candidate
+table is gone — it duplicated `data.py` and would rot; the page says how matching
+works instead. The trial-id pre-selection algorithm went from a nested numbered list
+to one sentence plus the caveat that mattered. The worked examples and the
+symptom→cause list are now collapsed (`???`), so the page is one screen until you
+need them.
+
 An end-to-end path from a raw export to a loaded dataset: what the app minimally
 needs (word boxes + fixations), how to map columns, how to save and reuse a
 mapping, and worked examples for the common export shapes. Docs page + a clear
@@ -372,6 +383,22 @@ links the page. Two code changes came out of it: the CLI now injects
 `.streamlit/config.toml` resolves against the launch directory, so a
 pip-installed run had telemetry on), and the desktop bundle binds loopback.
 
+**Rewritten 2026-07-29 (your note: over-confident, too detailed, terms you don't
+know).** 436 → ~170 lines, and the diagnosis was right — the draft was written for
+someone who already knows what `uuid4`, `SIGKILL`, `SameSite=Lax` and a CSRF
+double-submit token are, which is not the audience for a privacy page. Rewritten in
+plain language: the answer first ("nowhere"), then the one setting that actually
+matters on a shared network, then what's in a link / a config / an export, then what
+we didn't check. Every internal class name is gone; the technical version already
+exists as [`docs/security.md`](docs/security.md) and is linked.
+
+The rewrite also caught **three claims that had gone stale** since **DATA-16**
+landed — the page still said the desktop bundle serves the whole network (fixed by
+S1), that a pip install has Streamlit telemetry on (fixed: the CLI injects
+`--browser.gatherUsageStats=false`), and that exports carry an absolute local path
+(fixed by S4's `strip_local_paths`). A privacy page describing vulnerabilities that
+no longer exist is its own kind of wrong.
+
 Make it explicit, in the app and in the docs, that uploaded data isn't retained,
 transmitted, or used for anything beyond the current session, and spell out what
 that means per deployment: local install and the desktop bundle (**ENG-15**) never
@@ -388,6 +415,16 @@ optional-field registration, registry wiring, licence expectations, bundled vs.
 download-on-demand and the size threshold that decides, expected tests, and PR
 shape, with one existing adapter walked end to end. Linked from `CONTRIBUTING.md`
 and the sidebar data-source picker.
+
+**Rewritten 2026-07-29 (your note: too long).** 497 → ~240 lines. It's a
+contributor page, so the reader is technical — but it still opened with three
+sections of preamble before the question that decides everything, which is *do you
+need an adapter at all?* That's now first, as a table of what each existing adapter
+actually solves. The six-part contract is one scannable list with the schema detail
+collapsed; the ten-step PoTeC walkthrough became one paragraph naming the functions
+to read in order; the tests table became prose keeping the two rules that matter
+(never hit the network, hand-compute expectations) and the one trap that bites
+(add your `<CORPUS>_DEFAULT_DIR` to the monkeypatched tuple).
 
 Someone with a public corpus should be able to find out how to make it appear as
 a built-in data source in a future release — what an adapter in
@@ -816,6 +853,13 @@ Groups), what research question each view answers, how to read it, the caveat
 that matters for each, and the cross-cutting controls (measure picker,
 aggregation & spread, raw vs. z-scored, the min-readers guard, tidy-table
 download) plus how the active filter and viz settings carry in.
+
+**Rewritten 2026-07-29** alongside the other doc pages: 534 → ~315 lines. It's a
+reference, so it's meant to be scanned rather than read — the per-view entries are
+now Question + what it shows + the one caveat that changes how you read it, instead
+of a paragraph of elaboration each. The measure table collapsed from ten rows into
+two columns (word-level vs fixation-level), which is the distinction that actually
+governs which views accept it.
 
 Add to `docs/` after AN-* land.
 

@@ -218,7 +218,7 @@ figure's title and caption (EXP-2), not the per-trial notes. Only the sidebar's
 
 **Assessment.** This is inherent to the feature: a link that reopens a specific
 trial has to identify that trial. The right response is disclosure, not removal,
-and [privacy.md](privacy.md#what-a-share-link-and-a-saved-config-contain) already
+and [privacy.md](privacy.md#whats-in-a-link-a-config-file-and-an-export) already
 spells out exactly what a link carries. The residual gap is that the Share panel
 itself does not say so at the point of copying.
 
@@ -506,7 +506,7 @@ and the content is a public corpus fetched from a fixed URL, not the user's data
 
 **Assessment.** Accepted risk. It is inherent to `imageio`'s FFMPEG writer, which
 needs a real path. Documented in
-[privacy.md](privacy.md#where-an-upload-actually-goes) so a user on a shared
+[privacy.md](privacy.md#what-happens-to-a-file-you-upload) so a user on a shared
 machine knows.
 
 **Status:** accepted.
@@ -611,7 +611,7 @@ someone who can already open the app.
 
 | # | Accepted because |
 | --- | --- |
-| S8 · MP4 temp file | Inherent to `imageio`'s FFMPEG writer, which needs a real path. Mode `0600`, unlinked in a `finally`, survives only a `SIGKILL`, and holds rendered frames rather than the underlying tables. Documented in [privacy.md](privacy.md#where-an-upload-actually-goes) instead. |
+| S8 · MP4 temp file | Inherent to `imageio`'s FFMPEG writer, which needs a real path. Mode `0600`, unlinked in a `finally`, survives only a `SIGKILL`, and holds rendered frames rather than the underlying tables. Documented in [privacy.md](privacy.md#what-happens-to-a-file-you-upload) instead. |
 | S9 · `..` in a user-typed export pattern | Self-inflicted by definition — the traversal has to be typed by the person who then extracts their own zip, and `unzip`, macOS Archive Utility and CPython's `extractall` all refuse or strip it. Cheap to harden in `export.pattern_error` if wanted. |
 
 Everything else in the table above is either `open` or explicitly clean. Nothing
@@ -753,7 +753,7 @@ no `<` can reach it.
   trust.
 - Streamlit Community Cloud's platform-side logging, retention and isolation were
   not audited and are not ours to describe. See
-  [privacy.md](privacy.md#the-hosted-demo).
+  [privacy.md](privacy.md#the-online-demo).
 - No penetration testing was performed. The findings are the result of reading
   the code and reproducing specific behaviours in scripts, not of probing a
   running deployment.

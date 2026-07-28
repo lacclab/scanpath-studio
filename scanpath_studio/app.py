@@ -474,6 +474,36 @@ If you use the bundled demo data, also cite
 (Berzak et al., 2025, *Scientific Data*).
 """
             )
+        # UX-20. A bare "built with AI, there may be bugs" is unfalsifiable and
+        # gives the reader nothing to do with it — so this says how the behaviour
+        # was checked, what to do before publishing a number, and what makes a
+        # bug report actionable. Deliberately not a liability disclaimer; the MIT
+        # licence already carries the no-warranty text.
+        st.divider()
+        st.markdown("**🤖 Built with AI assistance**")
+        with st.expander("What that means for your results", expanded=False):
+            st.markdown(
+                f"""
+Much of this code was written with substantial AI assistance. We put real effort
+into validating it, and it's worth knowing exactly what that means:
+
+- The reading measures are checked against a **hand-traced trial** whose expected
+  values were worked out by hand, measure by measure. You can look at it
+  yourself: add `?source=synthetic` to this app's URL.
+- Where your export already carries EyeLink `IA_*` measures, **those win** over
+  anything this app derives, so on a normal EyeLink report the numbers are your
+  eye-tracker's, not ours.
+- The full load → normalize → measure → plot pipeline runs against the bundled
+  corpus on every change.
+
+That is not the same as being bug-free. **For a number going into a paper,
+cross-check it against your own pipeline or the source export** — the same thing
+a reviewer would ask.
+
+Found something wrong? [Open an issue]({CITATION["url"]}/issues) ↗ and attach the
+JSON from **💾 Save & restore** — it reproduces the exact view you were looking at.
+"""
+            )
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------

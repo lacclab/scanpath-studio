@@ -173,6 +173,27 @@ under its original license ([docs][onestop-docs]).
 [onestop-corpus]: https://github.com/lacclab/OneStop-Eye-Movements
 [onestop-docs]: https://lacclab.github.io/OneStop-Eye-Movements/
 
+## Built with AI assistance
+
+Much of this code was written with substantial AI assistance. We put real effort
+into validating it, and it's worth being precise about what that means:
+
+- Reading measures are checked against a **hand-traced trial** whose expected
+  values were worked out by hand, measure by measure
+  ([`tests/synthetic_data.py`](tests/synthetic_data.py)) — open it in the app
+  with `?source=synthetic` and check the numbers yourself.
+- Where your export already carries EyeLink `IA_*` measures, **those take
+  precedence** over anything Scanpath Studio derives, so on a normal EyeLink
+  report the numbers are your eye-tracker's.
+- The full load → normalize → measure → plot pipeline runs against the bundled
+  corpus on every change.
+
+That isn't the same as bug-free. **For a number going into a paper, cross-check
+it against your own pipeline or the source export** — the same thing a reviewer
+would ask. If something looks wrong,
+[open an issue](https://github.com/lacclab/scanpath-studio/issues) and attach the
+JSON from **💾 Save & restore**; it reproduces the exact view.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

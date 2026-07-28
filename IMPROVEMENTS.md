@@ -109,7 +109,7 @@ control rail, the plot's true-scale sizing at
 breakpoints. AC: no overlap or clipping across the target range; the true-scale
 plot keeps its scale guarantee (it may scroll, never distort).
 
-**UX-20 · Disclose that the code was written with AI assistance** — `Status: Planned`
+**UX-20 · Disclose that the code was written with AI assistance** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 Say plainly, where a user will see it, that Scanpath Studio was built with
 substantial AI assistance; that we made a real effort to validate behaviour but
@@ -136,9 +136,22 @@ Worth *not* saying: anything that reads as a liability disclaimer. The MIT
 licence already carries the no-warranty text; this note's job is to be useful.
 
 **Where it goes** — the same three places the citation lives: the About popover
-([`app.py`](scanpath_studio/app.py) `_render_about_sidebar`), the README, and the
-docs site. Related: **UX-16** (About layout), **DATA-12** (privacy — the other
-"what you should know before trusting this" note), **UX-15** (FAQ).
+([`app.py`](scanpath_studio/app.py) `_render_about_sidebar`, in a collapsed
+expander so it doesn't push the citation out of view), the README, and
+`docs/index.md`. Related: **UX-16** (About layout), **DATA-12** (privacy — the
+other "what you should know before trusting this" note), **UX-15** (FAQ).
+
+**Implemented.** All three surfaces, plus
+[`tests/test_disclosure.py`](tests/test_disclosure.py) — because a disclosure
+whose "you can check this yourself" turns out to be wrong is worse than none. The
+tests pin the note's own claims: that it appears on every surface with the
+actionable half intact, that it carries no liability-disclaimer language, that
+`?source=synthetic` really does load the hand-traced trial (drafting caught this
+— the note first said "pick it in the data-source picker", but the synthetic
+source is deliberately *not* offered fresh, so the deep link is the only route),
+that EXPECTED covers every canonical measure, and that a pre-computed EyeLink
+`IA_*` value survives both normalization and `compute_word_metrics` untouched —
+which is what makes "the numbers are your eye-tracker's" true.
 
 _Next item: `UX-21`._
 

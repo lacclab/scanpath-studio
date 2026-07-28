@@ -66,6 +66,14 @@
   border: 1px solid var(--md-default-fg-color--lightest);
 }
 
+/* Caption under a .sps-shot figure */
+.md-typeset .sps-caption {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  text-align: center;
+  color: var(--md-default-fg-color--light);
+}
+
 /* Feature grid cards: hover lift on top of Material's .grid.cards */
 .md-typeset .grid.cards > ul > li {
   transition: transform 0.15s ease, box-shadow 0.15s ease;

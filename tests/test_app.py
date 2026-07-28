@@ -404,6 +404,36 @@ class TestBuildShareQuery:
         assert "global_marker_size_range" not in ss
         assert "global_fixation_color_range" not in ss
 
+    def test_animation_frame_grid_round_trips(self, fake_st):
+        # VIZ-11 follow-up: a link that says "look at this replay" has to
+        # reproduce the same smoothness, so the grid rides the URL.
+        fake_st.session_state = {
+            "_share_selection": {"participant_id": "p1", "trial_id": "t1"},
+            "global_anim_grid_step_ms": 250,
+            "global_anim_max_frames": 120,
+        }
+        query, _ = _build_share_query(DEMO_CHOICE)
+        parsed = parse_qs(query)
+        assert parsed["anim_grid_step_ms"] == ["250"]
+        assert parsed["anim_max_frames"] == ["120"]
+
+        fake_st.session_state = {}
+        fake_st.query_params = {k: v[0] for k, v in parsed.items()}
+        _apply_url_preset()
+        assert fake_st.session_state["global_anim_grid_step_ms"] == 250
+        assert fake_st.session_state["global_anim_max_frames"] == 120
+
+    def test_an_out_of_range_frame_grid_link_is_clamped(self, fake_st):
+        # A hand-crafted link must not hand the widget a value outside its range
+        # — Streamlit raises when session state falls outside a slider's bounds.
+        fake_st.query_params = {
+            "anim_grid_step_ms": "99999",
+            "anim_max_frames": "1",
+        }
+        _apply_url_preset()
+        assert fake_st.session_state["global_anim_grid_step_ms"] == 500
+        assert fake_st.session_state["global_anim_max_frames"] == 30
+
     def test_onestop_public_source_shares_variant_regime_parts(self, fake_st):
         # DATA-3: the public OneStop corpus + its variant/regime/parts round-trip
         # through the share link (build → apply).

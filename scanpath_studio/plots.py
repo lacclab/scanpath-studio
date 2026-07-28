@@ -2362,25 +2362,31 @@ def _scanpath_anim_specs(entries, marker_size_range):
     return specs
 
 
-def _anim_timeline(specs, playback_speed):
+def _anim_timeline(specs, playback_speed, *, grid_step_ms=None, max_frames=None):
     """Uniform time-grid frame timeline across all scanpaths (VIZ-11).
 
     Returns ``(frame_times, frame_duration_ms, reading_span_ms)``. Frames are
     emitted on a **uniform time grid** — one every ``step`` ms, where ``step`` is
-    ``_ANIM_GRID_STEP_MS`` unless that would exceed ``_ANIM_MAX_FRAMES`` frames
-    (then it coarsens) — so the slider scrubs linearly through reading time no
-    matter how fixations cluster or how many scanpaths overlay (the union of
-    onset sets is meaningless for >1 reader). Each frame lasts a uniform
+    ``grid_step_ms`` unless that would exceed ``max_frames`` frames (then it
+    coarsens) — so the slider scrubs linearly through reading time no matter how
+    fixations cluster or how many scanpaths overlay (the union of onset sets is
+    meaningless for >1 reader). Each frame lasts a uniform
     ``step / playback_speed`` (floored at ``_ANIM_MIN_FRAME_MS``), so the Play
     button's runtime is ``≈ reading_span_ms / playback_speed``. Frame *content* is
     unchanged — every fixation whose onset ≤ t shows at time t. All readings are
     rebased to t=0; ``reading_span_ms`` is the longest reading's span. Returns an
     empty grid when there is nothing to animate.
+
+    Both knobs are user-facing (VIZ-11 follow-up): they trade smoothness against
+    frame count, which is what the GIF/MP4 export size and render time are made
+    of. Defaults are ``_ANIM_GRID_STEP_MS`` / ``_ANIM_MAX_FRAMES``.
     """
+    step_pref = float(grid_step_ms if grid_step_ms else _ANIM_GRID_STEP_MS)
+    cap = int(max_frames if max_frames else _ANIM_MAX_FRAMES)
     reading_span_ms = max((s["end"] for s in specs), default=0.0)
     if not specs or reading_span_ms <= 0:
         return [], _ANIM_MIN_FRAME_MS, reading_span_ms
-    step = max(_ANIM_GRID_STEP_MS, reading_span_ms / _ANIM_MAX_FRAMES)
+    step = max(step_pref, reading_span_ms / max(cap, 1))
     frame_times = [
         min(k * step, reading_span_ms) for k in range(int(reading_span_ms // step) + 1)
     ]
@@ -2425,7 +2431,9 @@ def _revealed_saccade_xy(all_x, all_y, kk):
     return sx, sy
 
 
-def animation_playback_ms(fixations_list, playback_speed):
+def animation_playback_ms(
+    fixations_list, playback_speed, *, grid_step_ms=None, max_frames=None
+):
     """Reading span and *actual* animation runtime for the given scanpath(s).
 
     Returns ``(reading_span_ms, playback_ms)``. ``playback_ms`` is the real
@@ -2434,15 +2442,43 @@ def animation_playback_ms(fixations_list, playback_speed):
     panel makes the stated playback time match what the user actually observes.
     Both 0 when there are no fixations.
     """
+    summary = animation_timeline_summary(
+        fixations_list, playback_speed, grid_step_ms=grid_step_ms, max_frames=max_frames
+    )
+    return summary["reading_span_ms"], summary["playback_ms"]
+
+
+def animation_timeline_summary(
+    fixations_list, playback_speed, *, grid_step_ms=None, max_frames=None
+) -> dict:
+    """What the chosen frame grid actually produces, without building the figure.
+
+    VIZ-11 follow-up: the grid step and the frame cap are user controls, so the UI
+    has to show their consequence — frame count, the effective step, and whether
+    the cap *coarsened* the requested step. Silently coarsening is the thing that
+    made the old hard-coded behaviour opaque.
+
+    Returns ``{"n_frames", "step_ms", "requested_step_ms", "coarsened",
+    "frame_duration_ms", "reading_span_ms", "playback_ms"}``.
+    """
+    requested = float(grid_step_ms if grid_step_ms else _ANIM_GRID_STEP_MS)
     specs = _scanpath_anim_specs(
         [(f, None, None) for f in fixations_list], DEFAULT_MARKER_SIZE_RANGE
     )
-    if not specs:
-        return 0.0, 0.0
     frame_times, frame_duration_ms, reading_span_ms = _anim_timeline(
-        specs, playback_speed
+        specs, playback_speed, grid_step_ms=grid_step_ms, max_frames=max_frames
     )
-    return reading_span_ms, float(len(frame_times) * frame_duration_ms)
+    n_frames = len(frame_times)
+    step = (frame_times[1] - frame_times[0]) if n_frames > 1 else float(reading_span_ms)
+    return {
+        "n_frames": n_frames,
+        "step_ms": float(step),
+        "requested_step_ms": requested,
+        "coarsened": bool(n_frames > 1 and step > requested + 1e-6),
+        "frame_duration_ms": int(frame_duration_ms),
+        "reading_span_ms": float(reading_span_ms),
+        "playback_ms": float(n_frames * frame_duration_ms),
+    }
 
 
 # VIZ-10 — autoplay. The animation is built with the Play button paused (so it can
@@ -2683,6 +2719,8 @@ def make_scanpath_animation(
     background_image_opacity: float = 1.0,
     fit_to_monitor: bool = False,
     autoplay: bool = True,
+    anim_grid_step_ms: Optional[float] = None,
+    anim_max_frames: Optional[int] = None,
 ) -> go.Figure:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
@@ -2993,7 +3031,12 @@ def make_scanpath_animation(
             )
         )
 
-    frame_times, frame_duration, reading_span_ms = _anim_timeline(specs, playback_speed)
+    frame_times, frame_duration, reading_span_ms = _anim_timeline(
+        specs,
+        playback_speed,
+        grid_step_ms=anim_grid_step_ms,
+        max_frames=anim_max_frames,
+    )
 
     frames = []
     for k, t in enumerate(frame_times):

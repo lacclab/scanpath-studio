@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Numeric entry beside every slider** (UX-9) — type an exact value instead of dragging.
 - **"Don't show this again" on the welcome tour** (UX-12) — per-browser cookie; **🎓 Show tutorial** brings it back.
 - **Documentation link in the app** (UX-17) — from the sidebar Help group and the About popover.
+- **Animation frame grid is now yours to set** (VIZ-11) — **Frame every (ms)** and **Max frames** in the Animate ⚙ popover, with a readout of the frames they produce and whether the cap coarsened your step. All four surfaces.
 
 ### Changed
 - **Trial chip strip wraps instead of clipping** (UX-11) — no truncation, so the duplicate **More** list is gone; summary stats moved to a **Details** popover.

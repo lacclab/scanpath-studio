@@ -135,7 +135,13 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "font_family": "global_font_family",
     "word_hover_measure": "global_word_hover_measure",
 }
-_SHARE_INT_PARAMS = {"order_font_size": "global_order_font_size"}
+_SHARE_INT_PARAMS = {
+    "order_font_size": "global_order_font_size",
+    # VIZ-11 follow-up: the animation frame grid. Worth sharing — a link that
+    # says "look at this replay" should reproduce the same smoothness.
+    "anim_grid_step_ms": "global_anim_grid_step_ms",
+    "anim_max_frames": "global_anim_max_frames",
+}
 _SHARE_FLOAT_PARAMS = {
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
@@ -178,6 +184,8 @@ _URL_BOUNDED = {
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_order_font_size": (6, 72),
+    "global_anim_grid_step_ms": (20, 500),
+    "global_anim_max_frames": (30, 2000),
     "global_marker_size_range": (4, 40),
     "global_fixation_opacity": (0.1, 1.0),
     "global_stimulus_image_opacity": (0.1, 1.0),
@@ -848,6 +856,25 @@ def _restore_plot_config(
             "global_base_font_size",
             *_FONT_BOUNDS,
             "figure font size",
+        )
+
+    # VIZ-11 follow-up: the animation frame grid.
+    animation = section("animation")
+    if "grid_step_ms" in animation:
+        put_int(
+            animation["grid_step_ms"],
+            "global_anim_grid_step_ms",
+            20,
+            500,
+            "animation frame step",
+        )
+    if "max_frames" in animation:
+        put_int(
+            animation["max_frames"],
+            "global_anim_max_frames",
+            30,
+            2000,
+            "animation frame cap",
         )
 
     canvas = section("canvas_px")

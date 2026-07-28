@@ -1691,6 +1691,92 @@ class TestDualScanpathAnimation:
         assert len(fig.frames) == 0
 
 
+class TestAnimationFrameGrid:
+    """VIZ-11 follow-up: the frame grid is the user's tradeoff to make, and the
+    cap coarsening the requested step must be *reported*, not silent."""
+
+    def _fix(self, n=200, gap_ms=100.0):
+        import pandas as pd
+
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1"] * n,
+                "trial_id": ["t1"] * n,
+                "x": [100.0 + i for i in range(n)],
+                "y": [100.0] * n,
+                "duration_ms": [200.0] * n,
+                "timestamp_ms": [i * gap_ms for i in range(n)],
+                "order_in_trial": list(range(1, n + 1)),
+            }
+        )
+
+    def test_a_finer_step_emits_more_frames(self):
+        from scanpath_studio.plots import animation_timeline_summary
+
+        # A cap high enough not to bind, so this isolates the step alone.
+        fine = animation_timeline_summary(
+            [self._fix()], 1.0, grid_step_ms=50, max_frames=10_000
+        )
+        coarse = animation_timeline_summary(
+            [self._fix()], 1.0, grid_step_ms=400, max_frames=10_000
+        )
+        assert fine["n_frames"] > coarse["n_frames"]
+        assert fine["step_ms"] == pytest.approx(50)
+        assert coarse["step_ms"] == pytest.approx(400)
+        assert not fine["coarsened"] and not coarse["coarsened"]
+
+    def test_the_cap_coarsens_the_step_and_says_so(self):
+        from scanpath_studio.plots import animation_timeline_summary
+
+        summary = animation_timeline_summary(
+            [self._fix()], 1.0, grid_step_ms=10, max_frames=25
+        )
+        assert summary["n_frames"] <= 26  # the exact end lands one extra frame
+        assert summary["coarsened"] is True
+        assert summary["requested_step_ms"] == pytest.approx(10)
+        assert summary["step_ms"] > 10
+
+    def test_the_defaults_reproduce_the_previous_behaviour(self):
+        from scanpath_studio.plots import (
+            _ANIM_GRID_STEP_MS,
+            _ANIM_MAX_FRAMES,
+            animation_timeline_summary,
+        )
+
+        fixations = self._fix()
+        explicit = animation_timeline_summary(
+            [fixations],
+            1.0,
+            grid_step_ms=_ANIM_GRID_STEP_MS,
+            max_frames=_ANIM_MAX_FRAMES,
+        )
+        implicit = animation_timeline_summary([fixations], 1.0)
+        assert implicit == explicit
+
+    def test_the_figure_honours_the_grid(self, normalized_words_df):
+        from scanpath_studio.plots import make_scanpath_animation
+
+        fixations = self._fix()
+        kwargs = dict(
+            canvas_width=1920,
+            canvas_height=1080,
+            base_font_size=14,
+            font_family="monospace",
+        )
+        fine = make_scanpath_animation(
+            normalized_words_df, fixations, anim_grid_step_ms=50, **kwargs
+        )
+        capped = make_scanpath_animation(
+            normalized_words_df,
+            fixations,
+            anim_grid_step_ms=50,
+            anim_max_frames=20,
+            **kwargs,
+        )
+        assert len(fine.frames) > len(capped.frames)
+        assert len(capped.frames) <= 21
+
+
 class TestAnimationPlaybackTiming:
     """The side panel must quote the *actual* animation runtime."""
 

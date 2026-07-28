@@ -452,6 +452,22 @@ def _render_parser() -> argparse.ArgumentParser:
         "By default the saved HTML autoplays on load at the playback speed "
         "(VIZ-10).",
     )
+    viz.add_argument(
+        "--anim-grid-step-ms",
+        type=float,
+        default=None,
+        metavar="MS",
+        help="With --animate: emit a frame every MS of reading time (default: "
+        "100). Smaller is smoother and larger to export.",
+    )
+    viz.add_argument(
+        "--anim-max-frames",
+        type=int,
+        default=None,
+        metavar="N",
+        help="With --animate: cap the frame count at N (default: 360). A long "
+        "reading coarsens the grid to stay under it.",
+    )
     return parser
 
 
@@ -829,6 +845,8 @@ def render(argv: List[str]) -> None:
                 trial,
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
+                anim_grid_step_ms=args.anim_grid_step_ms,
+                anim_max_frames=args.anim_max_frames,
                 **anim_kwargs,
                 **common,
             )

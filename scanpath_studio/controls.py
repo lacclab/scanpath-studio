@@ -237,6 +237,12 @@ _VIZ_WIDGET_DEFAULTS = {
     # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the kickoff
     # runs at the configured playback speed (plots.animation_autoplay_post_script).
     "global_anim_autoplay": True,
+    # VIZ-11 follow-up: the animation frame grid, exposed instead of decided for
+    # the user. Step = smoothness; max frames = the ceiling that keeps a long
+    # reading's GIF/MP4 bounded (it coarsens the step, and the popover says so).
+    # Defaults match the old constants, so nothing changes until someone moves them.
+    "global_anim_grid_step_ms": 100,
+    "global_anim_max_frames": 360,
     # VIZ-6: fixation marker alpha. Default 0.7 so overlapping fixations show
     # through (the classic translucent scanpath look); drag to 1.0 for fully
     # opaque markers. This replaced the old binary `Hollow circles` toggle in the
@@ -1413,6 +1419,9 @@ def _collect_viz_settings(
         fixation_snap_to_word=bool(ss.get("global_fixation_snap_to_word")),
         # VIZ-10: autoplay the animated replay on load (default on).
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
+        # VIZ-11 follow-up: the animation frame grid (smoothness vs. frame count).
+        anim_grid_step_ms=float(ss.get("global_anim_grid_step_ms", 100) or 100),
+        anim_max_frames=int(ss.get("global_anim_max_frames", 360) or 360),
         hollow_fixations=bool(ss.get("global_hollow_fixations")),
         fixation_opacity=float(ss.get("global_fixation_opacity", 1.0)),
         # VIZ-17 uniform fixation colour + VIZ-15 marker shape.

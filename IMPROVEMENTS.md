@@ -8,21 +8,19 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 - **Status:** `Backlog` (captured, not scheduled) · `Planned` (next-ish, scoped)
   · `In progress` · `Blocked` · `Parked` (wanted, deliberately deferred — see
-  below) · `Pending approval` (implemented, awaiting the user's final sign-off) ·
-  `Skipped` (closed without implementing — stays here for the rationale, **not**
-  archived).
-- **`Parked` vs. `Backlog` vs. `Skipped`.** `Backlog` is the normal queue —
-  unscheduled, but eligible. `Parked` means *we decided not to pursue this now*:
-  captured so the idea isn't lost, explicitly out of scope until revisited, and
-  not to be picked up as ordinary next work. `Skipped` is closed — we decided
-  **against** it. Park with a date and a one-line reason; unparking is just a
-  status change back to `Backlog`/`Planned`. ("Epic" is a scope label used in an
-  item's title, not a status.)
+  below) · `Pending approval` (implemented, awaiting the user's final sign-off).
+- **`Parked` vs. `Backlog`.** `Backlog` is the normal queue — unscheduled, but
+  eligible. `Parked` means *we decided not to pursue this now*: captured so the
+  idea isn't lost, explicitly out of scope until revisited, and not to be picked
+  up as ordinary next work. Park with a date and a one-line reason; unparking is
+  just a status change back to `Backlog`/`Planned`. ("Epic" is a scope label used
+  in an item's title, not a status.)
 - **Approval gate.** When an item's implementation is finished, mark it
   `Pending approval` — **never** jump straight to done. Only after the user gives
   the final confirmation is the item **cut from this file** and written up in
   [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md), so this file stays scoped
-  to open work. `Skipped` items are **not** archived.
+  to open work. An item closed *without* being implemented is archived the same
+  way, with the reason — this file holds only open work.
 - **IDs are stable.** Don't renumber when an item is finished. New items get the
   next free number in their group; archived items keep their ID over there.
 - **Composite asks are split** into sub-items so they can land independently.
@@ -34,23 +32,15 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
-**UX-7** (empty states, + review follow-up), **UX-10** (sortable trial picker,
-+ review follow-up), **UX-19** (responsive breakpoints), **VIZ-18** (selectable
-palettes), **ENG-16** (README asset weight) — all 2026-07-28; **AN-28** (the one
-gap left from the *Analysis & corpus views* epic); **PRE-3** (vertical drift
-correction — *you'll revisit*); **VIZ-11** (animation slider — *follow-up in
-progress*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
+**UX-19** (responsive breakpoints), **VIZ-18** (selectable palettes), **VIZ-11**
+(animation slider + the frame-grid controls), **ENG-16** (README assets, now
+rendered from the real pipeline) — all 2026-07-28; **AN-28** (the one gap left
+from the *Analysis & corpus views* epic); **PRE-3** (vertical drift correction —
+*you'll revisit*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
 
-Signed off 2026-07-28 and archived: **UX-9**, **UX-11**, **VIZ-15**, **EXP-1**,
-**EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10** (working as intended),
-**BUG-11**.
-
-### Terminology
-Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
-(`first_pass_gaze_duration_ms`), **RPD / go-past** (`regression_path_duration_ms`),
-**TFD** (`total_fixation_duration_ms`), plus `n_fixations`, `skip_flag`,
-`regression_in/out_flag`. Canonical keys: `participant_id`, `trial_id`,
-`paragraph_id`, `word_id`, `line_idx`.
+Signed off 2026-07-28 and archived: **UX-7**, **UX-9**, **UX-10**, **UX-11**,
+**VIZ-15**, **EXP-1**, **EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10**
+(working as intended), **BUG-11**.
 
 ### Groups
 [UX & Interaction](#ux--interaction) ·
@@ -71,53 +61,6 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 _UX-1 … UX-6, UX-8, UX-9, UX-11, UX-12, UX-13, UX-16, UX-17, UX-18 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-**UX-7 · Clearer "no data" states — say what's missing and how to fix it** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-Two cases, both terse or generic today.
-
-**(a) Filters / selection produced nothing.** [`app.py`](scanpath_studio/app.py:2051)
-shows one blanket *"No data after filtering. Loosen the Filter trials panel…"*
-for every cause — it doesn't say **which** filter emptied the set (participants,
-condition, favourites/tags, the trial-index window), how many rows each dropped,
-or offer a one-click **clear filters**. Same for a participant×text combo with no
-fixations, and for the raw-gaze-overlay message just above it.
-
-**(b) A public dataset isn't available locally.** Picking a download-on-demand
-corpus (OneStop `public`, PoTeC — `download_onestop` / `download_potec` in
-[`datasets.py`](scanpath_studio/datasets.py:511)) or a `$ONESTOP_DATA_DIR`-backed
-source when the files aren't there surfaces a raw `FileNotFoundError` / loader
-message instead of a first-class state. It should name the dataset, say what's
-missing (files, or an unset `ONESTOP_DATA_DIR`), how big the download is, and put
-the action inline — **Download now**, the env-var instructions, or "you're
-offline". The found-vs-download status check already exists
-([`datasets.py`](scanpath_studio/datasets.py:501)) — surface it *before* the read.
-
-AC: no blank chart and no bare traceback for either case; every empty state names
-the cause and offers the next action.
-
-**Follow-up (2026-07-28), from your review.** Three changes: the count says what
-it counts (*"**0** of the **36 trials** in this dataset get through"*, not
-"dataset has 36"); each named culprit gets its own **Clear** button beside it
-(`controls.clear_trial_filter`, fed by the reset keys `data.diagnose_filters`
-now carries per step — the Narrow-by *Text* multiselect is why they can't be
-derived from the column name); and both states render as **one** bordered,
-amber-tinted panel instead of a warning banner + a grey caption + a body
-paragraph + a button, which read as three unrelated messages.
-
-**UX-10 · Sort trial / reader / text pickers by properties** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-The trial-combo selector (`utils.build_combo_options`) lists combos in data
-order. Add a sort control keyed on reader properties, text properties, and
-trial-level stats (n fixations, reading speed, comprehension correctness) so
-outliers and interesting trials surface without scrolling.
-
-**Follow-up (2026-07-28), from your review.** The ordering was invisible — the
-key lived in the ⇅ popover, so a sorted pool just looked shuffled. Every option
-now ends with that trial's value for the active key (`utils.format_sort_value`:
-thousands separators, one decimal, Yes/No, `—` for missing), on both the
-selectbox and the slider thumb, and the picker's own label names the ordering:
-**Trial ID · by Fixations (n) ↓**. Also `Trial id` → `Trial ID` throughout.
 
 **UX-14 · Tutorials on the documentation site** — `Status: Backlog`
 
@@ -153,7 +96,38 @@ control rail, the plot's true-scale sizing at
 breakpoints. AC: no overlap or clipping across the target range; the true-scale
 plot keeps its scale guarantee (it may scroll, never distort).
 
-_Next item: `UX-20`._
+**UX-20 · Disclose that the code was written with AI assistance** — `Status: Planned`
+
+Say plainly, where a user will see it, that Scanpath Studio was built with
+substantial AI assistance; that we made a real effort to validate behaviour but
+bugs are possible; and that we want to hear about them.
+
+**What the note should also say** — a bare "there may be bugs" is unfalsifiable
+and gives the reader nothing to do with it. Three additions carry the weight:
+
+1. **How the behaviour *was* validated**, concretely, so the claim is checkable
+   rather than reassuring: a hand-traced synthetic trial with expected values for
+   every measure ([`tests/synthetic_data.py`](tests/synthetic_data.py) — also
+   loadable in-app as *Synthetic test trial*, so a user can eyeball it); the
+   full pipeline exercised against the bundled sample; and — the strongest point
+   — **pre-computed EyeLink `IA_*` measures take precedence over the ones this
+   app derives**, so on a normal EyeLink export the numbers *are* the vendor's.
+2. **What to do before publishing a number.** For results going into a paper,
+   cross-check against your own pipeline or the source export. That is the honest
+   ask for a research tool, and it's what a reviewer would ask anyway.
+3. **Where to report** — a direct link to GitHub issues, with the one thing that
+   makes a report actionable: the deep link / saved config (💾 Save & restore),
+   which reproduces the exact view.
+
+Worth *not* saying: anything that reads as a liability disclaimer. The MIT
+licence already carries the no-warranty text; this note's job is to be useful.
+
+**Where it goes** — the same three places the citation lives: the About popover
+([`app.py`](scanpath_studio/app.py) `_render_about_sidebar`), the README, and the
+docs site. Related: **UX-16** (About layout), **DATA-12** (privacy — the other
+"what you should know before trusting this" note), **UX-15** (FAQ).
+
+_Next item: `UX-21`._
 
 ---
 
@@ -233,7 +207,22 @@ _VIZ-1 … VIZ-10, VIZ-12, VIZ-13, VIZ-15 are in
 
 **VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Pending approval`
 
-> **Note (2026-07-03):** the user will **revisit this later** before signing off.
+**Follow-up (2026-07-28), from your review.** The grid was decided *for* the user
+in two module constants, and worse, the cap coarsened the requested step
+**silently** — on the bundled demo the default 100 ms grid is quietly widened to
+110 ms, which is exactly the kind of invisible decision that makes a setting feel
+arbitrary. Both knobs are now visible in the Animate ⚙ Playback popover —
+**Frame every (ms)** (smoothness) and **Max frames** (the ceiling that bounds the
+GIF/MP4) — and the info box states what the choice actually produced:
+*"361 frames · one every 110 ms of reading — coarsened from 100 ms to stay under
+the 360-frame cap"*. New pure helper `plots.animation_timeline_summary` computes
+that without building the figure. All four surfaces: the two `global_anim_*`
+keys, `anim_grid_step_ms` / `anim_max_frames` in the deep link (clamped via
+`_URL_BOUNDED`) and the saved config's new `animation` section,
+`--anim-grid-step-ms` / `--anim-max-frames` on `render`, and — free, since the
+allow-list is derived from the builder's signature — the same two names as
+`animate_scanpath` overrides. Defaults unchanged, so nothing moves until someone
+moves it.
 
 **Implemented (2026-07-02).** Frames now sit on a uniform time grid
 (`plots._anim_timeline` → `_ANIM_GRID_STEP_MS` / `_ANIM_MAX_FRAMES`, returning
@@ -795,11 +784,36 @@ Column-mapping UI, trial filters, bulk-export zip.
 _ENG-5 (decompose `app.py`) · ENG-7 (`watchdog`) · ENG-8 (Comparisons subtab) are
 in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**ENG-6 · Centralize `st.session_state` keys** — `Status: Skipped`
+**ENG-6 · Centralize `st.session_state` keys** — `Status: Backlog`
 
-Skipped at the user's request (2026-06-23): the app has hundreds of keys and
-deep-links seed many pre-widget, so a full typed migration is high-risk for low
-payoff right now.
+*(Was `Skipped` 2026-06-23 — reopened 2026-07-28.)* **273 distinct literal key
+strings across 445 occurrences** — 112 in `tabs.py`, 68 in `controls.py`, 42 in
+`app.py` — grouped only by naming convention (`global_*` 61, `wizard_*` 22,
+`tour_*` 21, `single_*` 12, `filter_*` 5). Replace the bare strings with typed
+constants so a typo is an `AttributeError` at import instead of a widget that
+silently reads its default forever.
+
+**The reason it was skipped is real and doesn't go away**: a key is not a local
+variable, it's a **wire-format contract**. `url_state._apply_url_preset` seeds
+many of them *before* the widget exists, `_build_share_query` reads them back,
+and the Save & restore JSON stores them — so a rename that looks local silently
+breaks a saved config or a shared link, and nothing fails loudly.
+
+**Suggested approach — do the contract, not the whole surface.** A big-bang typed
+migration of all 273 buys little and risks exactly the keys that matter. Instead:
+
+1. **Define constants only for the keys with an external contract** — the ones in
+   `_SHARE_*` / `_URL_PRESETS` / the Save-&-restore reader. Those are the ones a
+   rename can actually break, and there are far fewer of them than 273.
+2. **Add a test that pins the wire format**: assert the URL keys and config keys
+   against a frozen list, so any future rename fails a test instead of a user's
+   old link. *This is the payoff, and it's worth having even if step 1 stops
+   there.*
+3. Migrate the rest opportunistically, per module, as each is touched — no flag
+   day.
+
+Related: **ENG-11** (the config already versions itself; this is the same
+concern one layer down).
 
 ### UX / robustness
 

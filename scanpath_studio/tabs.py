@@ -72,6 +72,7 @@ from scanpath_studio.controls import (
     WORD_FIELD_SPECS,
     _collect_compare_styles,
     _filter_fields_for,
+    _numeric_slider,
     column_mapping_ui,
     render_narrow_by,
     render_trial_chip_picker,
@@ -99,6 +100,7 @@ from scanpath_studio.plots import (
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
     animation_playback_ms,
+    animation_timeline_summary,
     make_comparison_figure,
     make_density_scatter_figure,
     make_difference_profile_figure,
@@ -1238,6 +1240,12 @@ def _build_studio_config(
             # VIZ-10: autoplay the animated replay on load.
             "autoplay": bool(viz_settings.get("anim_autoplay", True)),
         },
+        # VIZ-11 follow-up: the animation frame grid, so a restored config
+        # reproduces the same smoothness / export size.
+        "animation": {
+            "grid_step_ms": int(viz_settings.get("anim_grid_step_ms", 100) or 100),
+            "max_frames": int(viz_settings.get("anim_max_frames", 360) or 360),
+        },
         "coloring": {
             "color_by": figure_settings["color_by"],
             "heatmap_metric": viz_settings["heatmap_metric"],
@@ -1544,14 +1552,21 @@ def _render_anim_info_box(
     compare_participant: Optional[str],
     compare_trial: Optional[str],
     playback_speed: float,
+    grid_step_ms: Optional[float] = None,
+    max_frames: Optional[int] = None,
 ) -> float:
     """Render the animation reading-time / playback info box (+ overlay caveats),
     shown in the side panel under the Animate toggle (TODO 3.1). Returns the
     playback duration in ms. No fixation count (TODO 1.17e)."""
     dual = fixations_b is not None and not fixations_b.empty
-    reading_span_ms, playback_ms = animation_playback_ms(
-        [trial_fixations] + ([fixations_b] if dual else []), playback_speed
+    summary = animation_timeline_summary(
+        [trial_fixations] + ([fixations_b] if dual else []),
+        playback_speed,
+        grid_step_ms=grid_step_ms,
+        max_frames=max_frames,
     )
+    reading_span_ms = summary["reading_span_ms"]
+    playback_ms = summary["playback_ms"]
     if dual:
         span_a = animation_playback_ms([trial_fixations], 1.0)[0]
         span_b = animation_playback_ms([fixations_b], 1.0)[0]
@@ -1578,6 +1593,19 @@ def _render_anim_info_box(
             f"Reading time: {reading_span_ms / 1000:.1f}s · "
             f"Playback at ×{playback_speed:g}: {playback_ms / 1000:.1f}s"
         )
+    # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
+    # coarsening the step used to be invisible, which is the whole reason the
+    # setting felt arbitrary.
+    grid = (
+        f"**{summary['n_frames']}** frames · one every "
+        f"{summary['step_ms']:.0f} ms of reading"
+    )
+    if summary["coarsened"]:
+        grid += (
+            f" — coarsened from {summary['requested_step_ms']:.0f} ms to stay "
+            f"under the {max_frames or 360}-frame cap"
+        )
+    st.caption(grid)
     return playback_ms
 
 
@@ -1607,8 +1635,13 @@ def _build_and_render_animation(
     """Build + render the animation figure (single or dual co-animation) in the
     main column. Returns ``(fig, playback_ms, save_slug, file_stem)``."""
     dual = fixations_b is not None and not fixations_b.empty
+    grid_step_ms = viz_settings.get("anim_grid_step_ms")
+    max_frames = viz_settings.get("anim_max_frames")
     _reading_span_ms, playback_ms = animation_playback_ms(
-        [trial_fixations] + ([fixations_b] if dual else []), playback_speed
+        [trial_fixations] + ([fixations_b] if dual else []),
+        playback_speed,
+        grid_step_ms=grid_step_ms,
+        max_frames=max_frames,
     )
     # The reading-time / playback info box renders in the side panel under the
     # Animate toggle (see _render_anim_info_box / TODO 3.1), not here.
@@ -1657,6 +1690,8 @@ def _build_and_render_animation(
         background_image_origin=background_image_origin,
         background_image_opacity=background_image_opacity,
         autoplay=viz_settings.get("anim_autoplay", True),
+        anim_grid_step_ms=grid_step_ms,
+        anim_max_frames=max_frames,
     )
     _render_true_scale_chart(fig, key="single_anim")
     if dual:
@@ -2100,6 +2135,33 @@ def render_single_trial_tab(
                     "the playback speed set above. Turn off to start paused (press "
                     "▶ Play to run it).",
                 )
+                # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
+                # against frame count, which is what export size and render time
+                # are made of. It used to be decided for the user in two module
+                # constants, and the cap coarsened the grid silently.
+                st.caption("**Frame grid**")
+                _numeric_slider(
+                    st,
+                    "Frame every (ms)",
+                    key="global_anim_grid_step_ms",
+                    min_value=20,
+                    max_value=500,
+                    step=10,
+                    help="How often a frame is emitted along the reading clock. "
+                    "Smaller is smoother and larger to export; the slider scrubs "
+                    "linearly through seconds either way.",
+                )
+                _numeric_slider(
+                    st,
+                    "Max frames",
+                    key="global_anim_max_frames",
+                    min_value=30,
+                    max_value=2000,
+                    step=10,
+                    help="Hard ceiling on the frame count. A long reading coarsens "
+                    "the grid to stay under it rather than emitting thousands of "
+                    "frames (which balloons the GIF/MP4 export).",
+                )
                 anim_info_slot = st.container()
         # Compare is a view mode (toggle here); the second-trial selector renders
         # above the chips in the plot column (compare_slot below), mirroring the
@@ -2335,6 +2397,8 @@ def render_single_trial_tab(
                 compare_participant,
                 compare_trial,
                 playback_speed,
+                grid_step_ms=viz_settings.get("anim_grid_step_ms"),
+                max_frames=viz_settings.get("anim_max_frames"),
             )
 
     with plot_slot:

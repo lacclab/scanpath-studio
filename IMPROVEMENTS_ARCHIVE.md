@@ -9,8 +9,8 @@ working tracker focused on open work.
 - **IDs are stable and preserved** — cite an archived item by the same ID
   (`UX-2`, `ENG-5`, …); it just lives here once signed off. Items stay under
   their original group headings for findability.
-- `Skipped` items are **not** archived — they stay in `IMPROVEMENTS.md` with
-  their rationale.
+- Items closed **without** being implemented are archived here too, with the
+  reason — `IMPROVEMENTS.md` holds only open work.
 
 ### Groups
 [UX & Interaction](#ux--interaction) ·
@@ -188,6 +188,55 @@ letting the strip wrap to two lines. Whatever lands should keep the configurable
 field list (the ✏️ picker, `controls.render_trial_chip_picker`) and the
 condition colouring (`_chip_color`). Related: **UX-19** (the same strip is one of
 the first things to break on a narrow laptop).
+
+---
+
+**UX-7 · Clearer "no data" states — say what's missing and how to fix it** — `Status: Done` *(signed off 2026-07-28)*
+
+Two cases, both terse or generic today.
+
+**(a) Filters / selection produced nothing.** [`app.py`](scanpath_studio/app.py:2051)
+shows one blanket *"No data after filtering. Loosen the Filter trials panel…"*
+for every cause — it doesn't say **which** filter emptied the set (participants,
+condition, favourites/tags, the trial-index window), how many rows each dropped,
+or offer a one-click **clear filters**. Same for a participant×text combo with no
+fixations, and for the raw-gaze-overlay message just above it.
+
+**(b) A public dataset isn't available locally.** Picking a download-on-demand
+corpus (OneStop `public`, PoTeC — `download_onestop` / `download_potec` in
+[`datasets.py`](scanpath_studio/datasets.py:511)) or a `$ONESTOP_DATA_DIR`-backed
+source when the files aren't there surfaces a raw `FileNotFoundError` / loader
+message instead of a first-class state. It should name the dataset, say what's
+missing (files, or an unset `ONESTOP_DATA_DIR`), how big the download is, and put
+the action inline — **Download now**, the env-var instructions, or "you're
+offline". The found-vs-download status check already exists
+([`datasets.py`](scanpath_studio/datasets.py:501)) — surface it *before* the read.
+
+AC: no blank chart and no bare traceback for either case; every empty state names
+the cause and offers the next action.
+
+**Follow-up (2026-07-28), from your review.** Three changes: the count says what
+it counts (*"**0** of the **36 trials** in this dataset get through"*, not
+"dataset has 36"); each named culprit gets its own **Clear** button beside it
+(`controls.clear_trial_filter`, fed by the reset keys `data.diagnose_filters`
+now carries per step — the Narrow-by *Text* multiselect is why they can't be
+derived from the column name); and both states render as **one** bordered,
+amber-tinted panel instead of a warning banner + a grey caption + a body
+paragraph + a button, which read as three unrelated messages.
+
+**UX-10 · Sort trial / reader / text pickers by properties** — `Status: Done` *(signed off 2026-07-28)*
+
+The trial-combo selector (`utils.build_combo_options`) lists combos in data
+order. Add a sort control keyed on reader properties, text properties, and
+trial-level stats (n fixations, reading speed, comprehension correctness) so
+outliers and interesting trials surface without scrolling.
+
+**Follow-up (2026-07-28), from your review.** The ordering was invisible — the
+key lived in the ⇅ popover, so a sorted pool just looked shuffled. Every option
+now ends with that trial's value for the active key (`utils.format_sort_value`:
+thousands separators, one decimal, Yes/No, `—` for missing), on both the
+selectbox and the slider thumb, and the picker's own label names the ordering:
+**Trial ID · by Fixations (n) ↓**. Also `Trial id` → `Trial ID` throughout.
 
 ---
 

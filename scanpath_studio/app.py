@@ -474,36 +474,25 @@ If you use the bundled demo data, also cite
 (Berzak et al., 2025, *Scientific Data*).
 """
             )
-        # UX-20. A bare "built with AI, there may be bugs" is unfalsifiable and
-        # gives the reader nothing to do with it — so this says how the behaviour
-        # was checked, what to do before publishing a number, and what makes a
-        # bug report actionable. Deliberately not a liability disclaimer; the MIT
-        # licence already carries the no-warranty text.
+        # UX-20. A bare "built with AI, there may be bugs" is unfalsifiable, so
+        # this gives the reader something to do with it: one thing they can check
+        # themselves, one thing to do before publishing, one place to report.
+        # Deliberately not a liability disclaimer — MIT already carries that.
         st.divider()
         st.markdown("**🤖 Built with AI assistance**")
-        with st.expander("What that means for your results", expanded=False):
-            st.markdown(
-                f"""
-Much of this code was written with substantial AI assistance. We put real effort
-into validating it, and it's worth knowing exactly what that means:
+        st.markdown(
+            f"""
+A lot of this code was written with AI help, and we've tested it seriously — the
+reading measures are checked against a trial we traced by hand (add
+`?source=synthetic` to this app's URL to see it), and if your export already
+carries EyeLink `IA_*` measures, those win over anything we compute.
 
-- The reading measures are checked against a **hand-traced trial** whose expected
-  values were worked out by hand, measure by measure. You can look at it
-  yourself: add `?source=synthetic` to this app's URL.
-- Where your export already carries EyeLink `IA_*` measures, **those win** over
-  anything this app derives, so on a normal EyeLink report the numbers are your
-  eye-tracker's, not ours.
-- The full load → normalize → measure → plot pipeline runs against the bundled
-  corpus on every change.
-
-That is not the same as being bug-free. **For a number going into a paper,
-cross-check it against your own pipeline or the source export** — the same thing
-a reviewer would ask.
-
-Found something wrong? [Open an issue]({CITATION["url"]}/issues) ↗ and attach the
-JSON from **💾 Save & restore** — it reproduces the exact view you were looking at.
+None of that makes it bug-free. **Before a number goes in a paper, cross-check it
+against your own pipeline.** If something looks off, please
+[tell us]({CITATION["url"]}/issues) ↗ — attach the JSON from **💾 Save &
+restore** and we'll see exactly what you saw.
 """
-            )
+        )
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------

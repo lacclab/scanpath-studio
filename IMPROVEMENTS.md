@@ -133,6 +133,13 @@ that EXPECTED covers every canonical measure, and that a pre-computed EyeLink
 `IA_*` value survives both normalization and `compute_word_metrics` untouched —
 which is what makes "the numbers are your eye-tracker's" true.
 
+**Rewritten 2026-07-29 (your note: shorter, higher level, more human).** The
+first draft argued its case at bullet-list length on all three surfaces. Cut to a
+short paragraph: one thing the reader can check themselves, one thing to do
+before publishing, one place to report. The in-app expander is gone too — at this
+length hiding the note behind a click was the wrong trade. Same three anchors
+(`?source=synthetic`, *cross-check*, the issues link) so the tests still hold.
+
 _Next item: `UX-21`._
 
 ---

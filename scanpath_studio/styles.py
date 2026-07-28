@@ -222,79 +222,23 @@ def get_app_css() -> str:
        The viz controls moved out of the sidebar into a rail beside the plot, so
        the trial's key experiment conditions ride above the plot as a compact
        chip strip and the rail reads as a tidy inspector panel. */
-    /* The chip strip stays on ONE line: it never wraps; the primary
-       identity/condition chips clip at the row edge while the "More" disclosure
-       is pinned. "More" carries the full chip list so any clipped chip is still
-       reachable (tabs._render_trial_condition_chips). */
+    /* UX-11: the chip strip WRAPS. It used to be pinned to one line, clipping
+       whatever didn't fit, with a "More" disclosure that re-listed every chip so
+       the clipped ones stayed reachable — the same facts twice, because which
+       chips fit is a live-width question Python can't answer. Wrapping means
+       nothing is ever cut at any width or sidebar state, so the duplicate list
+       (and the whole floating-dropdown mechanism) is gone; the derived summary
+       stats live in a real "Details" popover beside the strip instead. This is
+       also the first half of UX-19 — the strip was what broke first on a narrow
+       laptop. */
     .sps-trial-chips {
         display: flex;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         align-items: center;
         gap: 0.35rem;
         margin: 0.1rem 0 0.5rem;
     }
-    .sps-chips-primary {
-        display: flex;
-        flex-wrap: nowrap;
-        align-items: center;
-        gap: 0.35rem;
-        min-width: 0;
-        flex: 0 1 auto;
-        overflow: hidden;
-    }
-    .sps-chips-primary .sps-chip { flex: 0 0 auto; }
-    .sps-chip-more { flex: 0 0 auto; }
-    /* Auto-hide "More" when it would be empty — no summary stats AND no chips. */
-    .sps-chip-more:not(:has(.sps-stat)):not(:has(.sps-chip-more-all .sps-chip)) {
-        display: none;
-    }
-    /* Inline "More" disclosure: the chip-styled summary stays on the one-line
-       strip; its body (the not-already-shown summary stats) opens as a floating
-       dropdown so expanding it never reflows the chip row. */
-    .sps-chip-more { display: inline-block; position: relative; }
-    .sps-chip-more-summary {
-        list-style: none;
-        cursor: pointer;
-        user-select: none;
-        font-weight: 600;
-    }
-    .sps-chip-more-summary::-webkit-details-marker { display: none; }
-    .sps-chip-more-summary::after {
-        content: "▾";
-        font-size: 0.78rem;
-        margin-left: 0.4rem;  /* breathing room between "More" and its arrow */
-    }
-    .sps-chip-more[open] .sps-chip-more-summary::after { content: "▴"; }
-    /* The "More" panel: a tidy key→value list of the summary stats, opened as a
-       floating card so it never reflows the chip row. */
-    .sps-chip-more-body {
-        position: absolute;
-        top: calc(100% + 0.3rem);
-        right: 0;
-        z-index: 20;
-        display: flex;
-        flex-direction: column;
-        min-width: 13rem;
-        padding: 0.3rem 0.65rem;
-        background: var(--background-color, #fff);
-        border: 1px solid rgba(0, 0, 0, 0.12);
-        border-radius: 0.6rem;
-        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
-    }
-    /* The full chip list at the top of the dropdown, wrapping freely so every
-       chip is reachable even when the inline strip clipped some. Empty = hidden. */
-    .sps-chip-more-all {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.35rem;
-    }
-    .sps-chip-more-all:empty { display: none; }
-    /* A divider between the chip list and the summary stats. */
-    .sps-chip-more-all:has(.sps-chip) + .sps-stat {
-        margin-top: 0.45rem;
-        padding-top: 0.55rem;
-        border-top: 1px solid rgba(0, 0, 0, 0.12);
-    }
+    .sps-trial-chips .sps-chip { flex: 0 0 auto; }
     .sps-stat {
         display: flex;
         align-items: baseline;
@@ -321,15 +265,24 @@ def get_app_css() -> str:
         color: #212529;
         border: 1px solid rgba(0, 0, 0, 0.06);
     }
-    /* Inline ✏️ Edit-chips popover trigger: shrink it to chip size and pull it
-       closer to the "More" disclosure on its left (counter the column gap). */
-    .st-key-chip_edit_box { margin-left: -0.5rem; }
-    .st-key-chip_edit_box button {
+    /* The two chip-strip controls — "Details" (summary stats) and ✏️ (edit
+       chips). Both are shrunk to chip size and nudged down onto the first chip
+       row's baseline: the strip now wraps, so the columns are TOP-aligned (a
+       centred control would drift to the middle of a tall strip), and this
+       offset is the strip's own top margin. UX-11 also fixed the ✏️ sitting
+       visibly high — it was pulled sideways with a negative margin and centred
+       against a one-line strip. */
+    .st-key-chip_edit_box,
+    .st-key-chip_details_box { margin-top: 0.1rem; }
+    .st-key-chip_edit_box { margin-left: -0.6rem; }
+    .st-key-chip_edit_box button,
+    .st-key-chip_details_box button {
         min-height: 0 !important;
-        padding: 0.1rem 0.5rem !important;
+        padding: 0.1rem 0.65rem !important;
         border-radius: 999px !important;
         font-size: 0.9rem !important;
         line-height: 1.55 !important;
+        white-space: nowrap;
     }
     /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
        `__num_hi`) exists for typing an *exact* value — the slider beside it
@@ -431,6 +384,94 @@ def get_app_css() -> str:
     [data-testid="stExpander"] summary p,
     div[data-testid="stTooltipContent"] p {
         font-size: 0.92rem !important;
+    }
+
+    /* ── UX-19: width breakpoints ────────────────────────────────────────────
+       Every layout decision above was fixed-width — the only @media rule in this
+       file was `prefers-color-scheme` — so on an ordinary laptop (a 13" screen,
+       or a half-width window on a big display) the controls, chips and plot
+       column crowded or overlapped. These target ≥1280px down to ~1024px.
+
+       The scanpath plot itself needs nothing here: `tabs._render_true_scale_chart`
+       renders at the figure's exact pixel size and CSS-scales the whole block
+       *uniformly* to the column, capped at 1×. It only ever shrinks, and a
+       uniform transform can't distort — so the true-to-scale guarantee holds at
+       every width by construction. What actually broke is chrome: the chip strip
+       (fixed by UX-11's wrapping strip), the rail's no-wrap labels, the header
+       nav, and the page's generous side padding. */
+
+    /* First: reclaim the page's horizontal padding, which is the cheapest way to
+       give the plot + rail split more room before anything has to reflow. */
+    @media (max-width: 1400px) {
+        .stMainBlockContainer,
+        section.main > div.block-container {
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+        /* The pinned section-header sizes (see the heading-level rules above)
+           are what push the narrow rail's headers to two lines first. */
+        #view-modes, #visualization, #scope, #figures, #also-include {
+            font-size: 18px !important; line-height: 22px !important;
+        }
+    }
+
+    /* Then: let the rail's labels wrap. They are `nowrap` above so short labels
+       don't break mid-word in the rail's normal width — but below ~1200px the
+       rail is narrow enough that no-wrap means the text simply runs out of the
+       card. Wrapping at spaces (never mid-word) is the lesser evil, and is what
+       keeps the AC's "no overlap or clipping" true. */
+    @media (max-width: 1200px) {
+        .st-key-scanpath_rail h5,
+        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p {
+            white-space: normal;
+            word-break: normal;
+            overflow-wrap: normal;
+        }
+        .st-key-scanpath_rail { padding-left: 0.6rem; padding-right: 0.6rem; }
+        /* A button label must never break mid-word ("Scanp/ath"). */
+        .st-key-scanpath_rail button p {
+            word-break: normal;
+            overflow-wrap: normal;
+        }
+        /* Which leaves the two side-by-side Quick-view buttons: "Scanpath" and
+           "Heatmap" are single words that can't wrap, and at half of a ~170px
+           rail they don't fit — so that row stacks. Scoped to *that* row via
+           :has(), NOT to every column row in the rail: the per-layer popovers'
+           contents are rail DOM children even while closed, so a blanket rule
+           would also stack UX-9's slider + number box back onto two lines. */
+        .st-key-scanpath_rail
+            [data-testid="stHorizontalBlock"]:has(.st-key-viz_view_scanpath) {
+            flex-wrap: wrap;
+        }
+        .st-key-scanpath_rail
+            [data-testid="stHorizontalBlock"]:has(.st-key-viz_view_scanpath)
+            > [data-testid="stColumn"] {
+            min-width: 100%;
+        }
+        /* Same for the header nav button, whose label is the longest in the app. */
+        .st-key-header_buttons button p { white-space: normal; }
+        /* The typed boxes beside each slider (UX-9) give up width first — the
+           slider is the primary control. */
+        div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputContainer"] {
+            max-width: 4rem;
+        }
+    }
+
+    /* Last resort at the bottom of the target range: nothing may overflow its
+       container, even a long unbroken id or a translated label. */
+    @media (max-width: 1024px) {
+        .stMainBlockContainer,
+        section.main > div.block-container {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p,
+        .sps-chip { overflow-wrap: anywhere; }
+        /* A figure that somehow can't scale down far enough scrolls rather than
+           being squeezed out of true scale (the one guarantee that must hold). */
+        [data-testid="stElementContainer"]:has(iframe[title*="components.html"]) {
+            overflow-x: auto;
+        }
     }
     </style>
     """

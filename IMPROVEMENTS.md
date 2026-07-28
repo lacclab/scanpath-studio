@@ -35,7 +35,8 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
 **UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-10**
-(sortable trial picker), **VIZ-15** (marker shape), **VIZ-18** (selectable
+(sortable trial picker), **UX-11** (chip-strip redesign), **UX-19**
+(responsive breakpoints), **VIZ-15** (marker shape), **VIZ-18** (selectable
 palettes), **EXP-1** (export path patterns), **EXP-2** (figure titles &
 captions), **BUG-7** (sentinel flag columns), **BUG-11** (word-box
 boundaries) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
@@ -109,7 +110,7 @@ order. Add a sort control keyed on reader properties, text properties, and
 trial-level stats (n fixations, reading speed, comprehension correctness) so
 outliers and interesting trials surface without scrolling.
 
-**UX-11 · Redesign the trial chip strip** — `Status: Planned`
+**UX-11 · Redesign the trial chip strip** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 The `Field = Value` chip strip above the plot
 (`tabs._render_trial_condition_chips` [`tabs.py`](scanpath_studio/tabs.py:1803))
@@ -157,7 +158,7 @@ where data goes / privacy → **DATA-12**).
 
 
 
-**UX-19 · Layout breaks on smaller laptop screens** — `Status: Planned`
+**UX-19 · Layout breaks on smaller laptop screens** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 On ordinary laptop widths (not phones — think a 13" screen or a half-width
 window) the app looks bad: controls, chips and the plot column crowd or overlap

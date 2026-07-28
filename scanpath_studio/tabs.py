@@ -1822,19 +1822,27 @@ def _render_trial_condition_chips(
     trial_fixations: pd.DataFrame,
     participant: Optional[str],
     fields,
-) -> None:
-    """Render a compact, glanceable strip of ``Field = Value`` chips above the
-    plot — the trial's identity, experiment conditions, and summary stats, so the
-    key "what am I looking at" facts are visible at a glance (these chips replaced
-    the Trial Info subtab).
+) -> list[tuple[str, str]]:
+    """Render the ``Field = Value`` chip strip above the plot — the trial's
+    identity and experiment conditions, so "what am I looking at" is answered at
+    a glance (these chips replaced the Trial Info subtab).
 
-    ``fields`` is the configurable list of fields to surface (the inline ✏️ Edit
-    chips popover). The strip — identity/condition chips + an inline **More**
-    disclosure — stays on **one line** (clipping at the edge); **More** is the
-    complete view: the full chip list (so chips clipped at any width are still
-    reachable) plus the computed summary stats. A data column that varies within
-    the trial is shown (first value) but flagged with ⚠️. Skips silently when
-    nothing resolves."""
+    **UX-11.** The strip used to be pinned to one line, clipping whatever didn't
+    fit, with a **More** disclosure that re-listed *every* chip so the clipped
+    ones stayed reachable — the same facts shown twice, because which chips fit
+    is a live-width question Python can't answer. The fix is to stop asking: the
+    strip is a wrapping flex row, so nothing is ever cut at any width or sidebar
+    state, and the duplicate list has no reason to exist. What's left is split by
+    *kind* rather than by what happened to fit — conditions inline here, the
+    computed summary stats in the **Details** popover the caller renders from the
+    returned list.
+
+    ``fields`` is the configurable list of fields to surface (the ✏️ Edit chips
+    popover). A data column that varies within the trial is shown (first value)
+    but flagged with ⚠️.
+
+    Returns the ``(label, value)`` summary stats for the Details popover; empty
+    when the user has no summary chips selected."""
     primary: list[tuple[str, str]] = []  # identity + conditions (inline)
     summary: list[tuple[str, str]] = []  # computed stats (inside "More")
     summary_lookup: Optional[dict] = None  # computed once, only if a summary chip
@@ -1866,47 +1874,42 @@ def _render_trial_condition_chips(
         label = _chip_field_label(col)
         prefix = "" if trial_level else "⚠️ "
         primary.append((f"{prefix}{label} = {value_str}", _chip_color(col, value_str)))
-    if not primary and not summary:
+    if primary:
+        st.markdown(
+            '<div class="sps-trial-chips">'
+            + "".join(
+                f'<span class="sps-chip" style="background:{bg};">'
+                f"{html.escape(lbl)}</span>"
+                for lbl, bg in primary
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+    return summary
+
+
+def _render_trial_details_popover(summary: list[tuple[str, str]], host) -> None:
+    """The **Details** popover beside the chip strip: the computed summary stats.
+
+    UX-11 split the strip by *kind*: conditions are chips (short, colour-coded,
+    scannable), while reading time / word count / fixation counts are derived
+    numbers that read far better as a key→value list — and are the "on demand"
+    half of the strip's job. Renders nothing when the user has no summary chips
+    selected, so the control never appears empty.
+    """
+    if not summary:
         return
-
-    def _spans(items: list[tuple[str, str]]) -> str:
-        return "".join(
-            f'<span class="sps-chip" style="background:{bg};">{html.escape(lbl)}</span>'
-            for lbl, bg in items
+    with host.popover("Details", width="content", help="Summary stats for this trial."):
+        st.markdown(
+            "".join(
+                '<div class="sps-stat">'
+                f'<span class="sps-stat-name">{html.escape(name)}</span>'
+                f'<span class="sps-stat-val">{html.escape(value)}</span>'
+                "</div>"
+                for name, value in summary
+            ),
+            unsafe_allow_html=True,
         )
-
-    def _stat_rows(items: list[tuple[str, str]]) -> str:
-        # Summary stats read as a tidy key→value list (not squeezed pills).
-        return "".join(
-            f'<div class="sps-stat">'
-            f'<span class="sps-stat-name">{html.escape(name)}</span>'
-            f'<span class="sps-stat-val">{html.escape(value)}</span>'
-            "</div>"
-            for name, value in items
-        )
-
-    # The inline strip clips to one line; the **More** dropdown is the complete
-    # view — the FULL chip list (so any chip clipped at the edge is always
-    # reachable, at any width / sidebar state) plus the computed summary stats.
-    # Whether a given chip fits the line depends on the live width (and the
-    # sidebar), which Streamlit's layout makes unreliable to measure client-side,
-    # so More just always carries everything. Auto-hides via CSS (:has) when empty.
-    more_html = ""
-    if primary or summary:
-        more_html = (
-            '<details class="sps-chip-more">'
-            '<summary class="sps-chip sps-chip-more-summary">More</summary>'
-            '<div class="sps-chip-more-body">'
-            f'<div class="sps-chip-more-all">{_spans(primary)}</div>'
-            f"{_stat_rows(summary)}</div>"
-            "</details>"
-        )
-    st.markdown(
-        '<div class="sps-trial-chips">'
-        f'<span class="sps-chips-primary">{_spans(primary)}</span>'
-        f"{more_html}</div>",
-        unsafe_allow_html=True,
-    )
 
 
 def render_single_trial_tab(
@@ -2256,10 +2259,18 @@ def render_single_trial_tab(
         # Inline "Edit chips" popover at the right end of the chip row (UX-1) —
         # replaces the former sidebar 🏷️ Trial chips picker. Rendered before the
         # strip reads `trial_chip_fields` so an edit/reorder applies the same run.
-        strip_col, edit_col = st.columns([13, 1], vertical_alignment="center")
+        # UX-11: three columns on one row — the wrapping chip strip, then the
+        # two controls. They're top-aligned, not centre-aligned: the strip can
+        # now wrap to several lines, and a centred control would drift to the
+        # middle of a tall strip instead of sitting on the first chip's line.
+        # Kept at the top level rather than nesting the controls in one column,
+        # so no `st.columns` nesting is involved.
+        strip_col, details_col, edit_col = st.columns(
+            [11, 1.6, 0.9], vertical_alignment="top"
+        )
         with edit_col:
             # Keyed container so styles.py can shrink the popover trigger to chip
-            # size and add a little space before it.
+            # size and drop it onto the chip baseline.
             edit_box = st.container(key="chip_edit_box")
             with edit_box.popover(
                 "✏️",
@@ -2269,6 +2280,7 @@ def render_single_trial_tab(
             ):
                 render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
+        details_box = details_col.container(key="chip_details_box")
         with strip_col:
             # When comparing, label each chip strip with its trial id coloured to
             # match the scanpath in the overlay (A = primary colour, B = compared
@@ -2283,7 +2295,7 @@ def render_single_trial_tab(
                     f"{html.escape(str(compare_meta['label_primary']))}</span>",
                     unsafe_allow_html=True,
                 )
-            _render_trial_condition_chips(
+            summary = _render_trial_condition_chips(
                 trial_words, trial_fixations, selected_participant, chip_fields
             )
             if comparing and compare_meta:
@@ -2298,6 +2310,9 @@ def render_single_trial_tab(
                     compare_participant,
                     chip_fields,
                 )
+        # Rendered after the strip so it reads the *primary* trial's stats; the
+        # compared trial's chips stay inline beside its own label.
+        _render_trial_details_popover(summary, details_box)
 
     displayed_fig = None
     save_slug = f"{selected_participant}__{selected_trial}"

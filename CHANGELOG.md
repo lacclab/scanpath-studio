@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation link in the app** (UX-17) — the docs site is now one click away from the sidebar Help group and the About popover.
 
 ### Changed
+- **Trial chip strip redesigned** (UX-11) — the strip wraps instead of clipping at one line, so nothing is ever cut and the **More** disclosure that re-listed every chip is gone; the computed summary stats moved to a **Details** popover, and both it and ✏️ now sit on the chip baseline.
+- **The layout holds down to ~1024 px** (UX-19) — real width breakpoints (there were none): tighter page padding, rail labels that wrap instead of running out of the card, stacked quick-view buttons, and a shrinking number box. The scanpath keeps its true-to-scale guarantee — it only ever scales down, uniformly.
 - **Empty states say what happened** (UX-7) — an empty trial pool now names *which* filter emptied it (or reports that it's the combination), with a one-click **Clear all filters**; a public corpus that isn't on disk gets a main-area panel naming it, the download size and an inline **Download now**, instead of quietly showing demo data.
 - **Fixations default to one colour** (VIZ-17) — marker size already encodes duration, so colour is no longer spent restating it; **Color fixations by** now opts *in* to a second variable. Applies to the app, deep links, `--color-by` and the headless API.
 - **Corpus Analysis is easier to find** (UX-18) — the header toggle is a primary button with a directional cue and a one-line caption naming what's on the other side.

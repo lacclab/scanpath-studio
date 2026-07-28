@@ -34,9 +34,22 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 Implemented, not yet signed off (→ archived on your confirmation):
 **UX-19** (responsive breakpoints), **VIZ-18** (selectable palettes), **VIZ-11**
 (animation slider + the frame-grid controls), **ENG-16** (README assets, now
-rendered from the real pipeline) — all 2026-07-28; **AN-28** (the one gap left
-from the *Analysis & corpus views* epic); **PRE-3** (vertical drift correction —
-*you'll revisit*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
+rendered from the real pipeline) — all 2026-07-28.
+
+**Docs, also 2026-07-28** — six new pages, all in the site nav:
+**DATA-11** (bring your own data), **DATA-12** (privacy), **DATA-13** (the
+security audit — its *fixes* are **DATA-16**), **DATA-14** (contributing a
+dataset), **ENG-13** (corpus analysis), **ENG-18** (agent-facing docs + clearer
+API errors).
+
+**Tests, also 2026-07-28** — **ENG-1** (every `aggregation.py` helper + a figure
+smoke test; found and fixed two real defects), **ENG-2** (the OneStop shard
+fast-path), **ENG-3** (MultiplEYE side data), **ENG-4** (`AppTest` flows; found
+**BUG-12**).
+
+Older: **AN-28** (the one gap left from the *Analysis & corpus views* epic);
+**PRE-3** (vertical drift correction — *you'll revisit*); **ENG-15** (standalone
+desktop app — implemented 2026-07-16).
 
 Signed off 2026-07-28 and archived: **UX-7**, **UX-9**, **UX-10**, **UX-11**,
 **VIZ-15**, **EXP-1**, **EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10**
@@ -366,7 +379,13 @@ OneStop / MultiplEYE / PoTeC in [`datasets.py`](scanpath_studio/datasets.py).
 Feeds **DATA-1**, and exercises **PRE-6** (RTL / multilingual rendering) and
 **VAL-3** (non-English validation).
 
-**DATA-11 · Documented "bring your own dataset" pipeline** — `Status: Backlog`
+**DATA-11 · Documented "bring your own dataset" pipeline** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`docs/bring-your-own-data.md`](docs/bring-your-own-data.md)
+— the minimum the app needs and what degrades without each field, how auto-detection
+works and how to override it, saving and reusing a mapping, worked EyeLink-report
+and plain-CSV examples, and a symptom→cause table for when it goes wrong. Linked
+from the wizard's first screen and from `getting-started` / `data-format`.
 
 An end-to-end path from a raw export to a loaded dataset: what the app minimally
 needs (word boxes + fixations), how to map columns, how to save and reuse a
@@ -374,7 +393,17 @@ mapping, and worked examples for the common export shapes. Docs page + a clear
 entry point from the wizard. Distinct from **DATA-14**, which is about getting a
 dataset *bundled* with the app. Related: **PRE-7** (`.asc` import).
 
-**DATA-12 · Privacy statement — "we don't use your data"** — `Status: Backlog`
+**DATA-12 · Privacy statement — "we don't use your data"** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`docs/privacy.md`](docs/privacy.md), written from the code
+rather than from intent: where an upload actually goes, the three things that
+*do* touch the disk, what a share link and a saved config contain, Streamlit's
+own telemetry, and a per-deployment section (local / desktop / hosted demo). In
+the app, the wizard states where a file goes **before** the uploader and About
+links the page. Two code changes came out of it: the CLI now injects
+`--browser.gatherUsageStats=false` (Streamlit's default is opt-*in*, and
+`.streamlit/config.toml` resolves against the launch directory, so a
+pip-installed run had telemetry on), and the desktop bundle binds loopback.
 
 Make it explicit, in the app and in the docs, that uploaded data isn't retained,
 transmitted, or used for anything beyond the current session, and spell out what
@@ -383,7 +412,15 @@ leave the machine; the hosted Streamlit demo processes uploads in the session
 only. Researchers with participant data need this stated plainly before they
 upload, not inferred. Related: **DATA-13**, **UX-15**.
 
-**DATA-13 · Data security** — `Status: Backlog`
+**DATA-13 · Data security** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`docs/security.md`](docs/security.md) — an evidence-based
+audit citing the `module.py:function` each claim was verified in: on-disk
+residue, deep-link/saved-config leakage, ingest path handling, the desktop
+bundle's bind address, and cross-session cache bleed. 11 findings (S1–S11),
+severity-ranked, each with the exact fix; two accepted with reasons. It
+deliberately changed no code so the fixes land as reviewable commits — tracked as
+**DATA-16**. S1 (the bundle served every interface) is already fixed.
 
 The engineering side of **DATA-12**: audit where uploaded data actually goes
 (`st.cache_data` temp paths, the export zip staging, any on-disk dataset store the
@@ -391,7 +428,15 @@ wizard writes), how long it survives, and what a shared deep link / saved config
 can leak. Document the findings and fix what needs fixing. Would become a
 prerequisite if a hosted multi-user mode is ever built (**ENG-17**).
 
-**DATA-14 · Document how to get a dataset bundled by default** — `Status: Backlog`
+**DATA-14 · Document how to get a dataset bundled by default** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`docs/contributing-a-dataset.md`](docs/contributing-a-dataset.md)
+— the real adapter contract derived from OneStop / MultiplEYE / PoTeC: the
+raw-frames entry point and its signature, canonical-column mapping and
+optional-field registration, registry wiring, licence expectations, bundled vs.
+download-on-demand and the size threshold that decides, expected tests, and PR
+shape, with one existing adapter walked end to end. Linked from `CONTRIBUTING.md`
+and the sidebar data-source picker.
 
 Someone with a public corpus should be able to find out how to make it appear as
 a built-in data source in a future release — what an adapter in
@@ -763,19 +808,75 @@ Lower priority than features, but tracked.
 
 ### Tests
 
-**ENG-1 · Tests for each `aggregation.py` helper + smoke test per new figure** — `Status: Backlog`
+**ENG-1 · Tests for each `aggregation.py` helper + smoke test per new figure** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** Every public helper in `aggregation.py` (36 names, checked by
+an AST walk) is covered by a tiny hand-built tidy frame with hand-computed
+expectations, in [`tests/test_aggregation.py`](tests/test_aggregation.py); the
+figure builders get a structural smoke test each in
+[`tests/test_analysis_figures.py`](tests/test_analysis_figures.py). The old
+`tests/test_analysis_views.py` was **deleted** — 516 lines of
+`assert len(fig.data) >= 1` / `not out.empty` over the same builders; its two
+unique regression cases were re-homed first.
+
+Writing it surfaced **two real defects**, both now fixed:
+`add_normalized_column` filled an undefined z with `0.0`, conflating a
+zero-variance group (where 0 *is* the group mean) with a genuinely missing
+observation — so an unfixated word re-entered the distribution as an
+exactly-average data point and normalizing changed the observation count; and
+`word_rate_profile`'s `n` counted **rows**, so a reader who read a text twice
+cleared a min-readers guard that `cohort_word_profile` correctly rejected — the
+two guards disagreed on the same frame, and the rates were row-weighted.
 
 Pure functions → feed a tiny tidy frame, assert grouped output.
 
-**ENG-2 · Cover the OneStop per-pid shard fast-path** — `Status: Backlog`
+**ENG-2 · Cover the OneStop per-pid shard fast-path** — `Status: Pending approval` *(implemented 2026-07-28)*
 
-Gated on `$ONESTOP_DATA_DIR`.
+**Implemented.** [`tests/test_onestop_shard.py`](tests/test_onestop_shard.py) —
+27 tests, two layers. A synthetic export tree in `tmp_path` (CSV.zip pair +
+`by_pid/{ia,fixations}/<pid>.parquet`) always runs; an agreement check against
+the real corpus is gated on `$ONESTOP_DATA_DIR` with an explicit skip reason.
 
-**ENG-3 · Cover MultiplEYE side-data enrichment** — `Status: Backlog`
+The behaviour worth pinning is the **refusal**: when a participant is named and
+their shard is missing, `load_onestop_server_bundle` must *not* fall back to the
+15 GB read — the link is for one pid, so loading the whole cohort to discover it
+has no data is pure waste. Testing that needs `st.stop()` to actually stop; in
+pytest's bare mode it is a no-op, so the test swaps in a recorder whose `stop()`
+raises. Without that the assertion passes straight through to the slow path and
+still looks green.
+
+Also covers `_onestop_shard_paths` (lowercase + strip), the full-export path,
+`onestop_full_bundle_exists`, `onestop_data_provenance` (which bytes are on
+screen), and `onestop_shard._shard_one` (per-pid write, skip-unless-rebuild,
+named errors). Three mutations were run to confirm the tests discriminate —
+dropping the pid lowercasing, removing the `st.stop()`, and un-lowercasing the
+writer each fail the intended test. The path test exists *because* the
+end-to-end one didn't catch the first: macOS is case-insensitive, so the
+filesystem round-trip accepted the wrong case and only Linux CI would have
+caught it.
+
+**ENG-3 · Cover MultiplEYE side-data enrichment** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`tests/test_multipleye_enrichment.py`](tests/test_multipleye_enrichment.py)
+builds a synthetic MultiplEYE tree in `tmp_path` and covers each side-data kind
+— comprehension questions, reader metadata, per-reader reading measures, stimulus
+images — asserting merged *values* and join keys (no row multiplication), that a
+missing file degrades to an absent column rather than a crash, and that malformed
+side data can't corrupt the canonical columns.
 
 Questions / reader meta / measures / images.
 
-**ENG-4 · Extend `AppTest` coverage** — `Status: Backlog`
+**ENG-4 · Extend `AppTest` coverage** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`tests/test_apptest_flows.py`](tests/test_apptest_flows.py)
+drives multi-step flows through `AppTest`: overriding a column mapping and
+checking the re-derived data, narrowing the pool with the condition + annotation
+filters (including the UX-7 empty state and the per-filter clear), and building
+the bulk-export zip from the Export subtab. Render-level checks stay in
+`test_apptest.py`. It also turned up **BUG-12** — annotation filters skip the
+raw-gaze table, so on the bundled demo the all-three-empty guard never fires and
+the guidance panel is unreachable there; the flow tests use the raw-gaze-free
+synthetic source to work around it.
 
 Column-mapping UI, trial filters, bulk-export zip.
 
@@ -821,7 +922,14 @@ _ENG-9 (auto-detected columns) · ENG-10 (animation-export errors without Chrome
 ENG-11 (versioned Save & restore) · ENG-12 (rendering docs) · ENG-14 (author list)
 are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**ENG-13 · Document the new analysis sections once built** — `Status: Backlog`
+**ENG-13 · Document the new analysis sections once built** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`docs/corpus-analysis.md`](docs/corpus-analysis.md), in the
+site nav under *Using the app*: the three subtabs (Per text · Per reader ·
+Groups), what research question each view answers, how to read it, the caveat
+that matters for each, and the cross-cutting controls (measure picker,
+aggregation & spread, raw vs. z-scored, the min-readers guard, tidy-table
+download) plus how the active filter and viz settings carry in.
 
 Add to `docs/` after AN-* land.
 
@@ -851,7 +959,15 @@ animation before a reader reaches the install line. Show **one** GIF, of a singl
 scanpath, and demote the dual-reader demo to a still (or move it to the docs
 site). Related: **ENG-12**.
 
-**ENG-18 · Agent-facing docs + an agent-friendly API** — `Status: Backlog`
+**ENG-18 · Agent-facing docs + an agent-friendly API** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** [`docs/agents.md`](docs/agents.md) is the counterpart to
+`AGENTS.md` for an agent asked to *use* Scanpath Studio headlessly: canonical
+column names, the minimum input a figure needs, the full parameter set with
+defaults, and runnable end-to-end snippets. On the API side, a caller passing a
+table with the wrong column names now gets a message naming the canonical field
+that couldn't be inferred and the candidates that were tried, instead of a
+`KeyError` from deep inside normalization.
 
 Two halves, both aimed at *users'* coding agents rather than contributors:
 

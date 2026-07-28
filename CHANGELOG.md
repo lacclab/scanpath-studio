@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **About popover** (UX-16) — BibTeX moved into a collapsed **📖 How to cite** expander.
 - **"Snap fixations above words"** (UX-13) moved out of Drift correction into its own *Linear-reading schematic* block.
 
+### Internal
+- **Test coverage** — every `aggregation.py` helper plus a structural smoke test per Corpus Analysis figure (ENG-1), the OneStop per-pid shard fast-path incl. its refusal-to-fall-back (ENG-2), MultiplEYE side-data enrichment (ENG-3), and widget-driven `AppTest` flows for column mapping, trial filters and bulk export (ENG-4).
+
 ### Fixed
 - **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink boxes carry the inter-word space as trailing padding, so every boundary sat a half-space right and a fixation *before* a word went to the previous one. One `measures.word_box_bounds` accessor now feeds all nine consumers — assignment, out-of-text, drawn boxes, the word heatmap, critical spans, landing position, snap-to-word, drift correction, model scanpaths. Glyph-tight corpora (PoTeC / MultiplEYE) are untouched.
 - **Regression flags were True for every word** (BUG-7) — EyeLink writes flags as `'0'`/`'1'`/`'.'` strings and the bool cast took every non-empty string as true. On the demo, `regression_in_flag` went from 3,922 True to 815.

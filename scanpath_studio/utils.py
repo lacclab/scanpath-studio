@@ -167,6 +167,122 @@ def extract_trial(frame: pd.DataFrame, participant_id, trial_id) -> pd.DataFrame
 # Trial selection UI
 # -----------------------------------------------------------------------------
 
+# UX-10 · sorting the trial pool.
+#
+# The picker listed trials in data order, so finding "the slowest reader", "the
+# one with the most fixations" or "the trials this reader got wrong" meant
+# scrolling the whole list. These build a sort key per trial from three sources:
+# computed per-trial stats, reader/text properties, and any trial-level column
+# the dataset carries. Pure and frame-driven, so they're testable without the UI.
+TRIAL_SORT_DEFAULT = "Trial id"
+# Computed stat label → (frame it needs, how to aggregate it per trial).
+# "fixations" / "words" name which frame the aggregation runs on.
+_TRIAL_SORT_STATS = {
+    "Fixations (n)": ("fixations", "size"),
+    "Reading time (s)": ("fixations", "duration_sum_s"),
+    "Mean fixation (ms)": ("fixations", "duration_mean"),
+    "Words (n)": ("words", "size"),
+}
+# Columns worth offering as a sort key when the dataset carries them, in the
+# order they're shown. Reader properties first, then text, then behaviour.
+_TRIAL_SORT_PREFERRED_COLS = (
+    "participant_id",
+    "text_id",
+    "unique_text_id",
+    "paragraph_id",
+    "difficulty_level",
+    "question_preview",
+    "repeated_reading_trial",
+    "is_correct",
+    "genre",
+    "session",
+    "pp_age",
+    "pp_gender",
+    "TRIAL_INDEX",
+    "trial_index",
+)
+
+
+def _per_trial_stat(frame: pd.DataFrame, trial_field: str, how: str) -> pd.Series:
+    """One computed stat per trial id, as a Series indexed by that id."""
+    if frame is None or frame.empty or trial_field not in frame.columns:
+        return pd.Series(dtype=float)
+    grouped = frame.groupby(frame[trial_field].astype(str), sort=False)
+    if how == "size":
+        return grouped.size().astype(float)
+    if "duration_ms" not in frame.columns:
+        return pd.Series(dtype=float)
+    durations = grouped["duration_ms"].agg("sum" if "sum" in how else "mean")
+    return (durations / 1000.0) if how.endswith("_s") else durations.astype(float)
+
+
+def trial_sort_keys(
+    combos: pd.DataFrame,
+    trial_field: str,
+    *,
+    words: Optional[pd.DataFrame] = None,
+    fixations: Optional[pd.DataFrame] = None,
+) -> Dict[str, pd.Series]:
+    """Available sort keys (UX-10): label → Series indexed by trial id.
+
+    Offers a computed stat only when the frame it needs is present, and a column
+    only when it's actually *trial-level* in ``combos`` (one value per trial) —
+    a column that varies within a trial can't order the pool meaningfully.
+    """
+    keys: Dict[str, pd.Series] = {}
+    for label, (which, how) in _TRIAL_SORT_STATS.items():
+        frame = fixations if which == "fixations" else words
+        # The stat is keyed by the *plain* trial id on the data frames; combos may
+        # be keyed by unique_trial_id, so fall back when the field is absent.
+        field = trial_field if (frame is not None and trial_field in frame.columns) else "trial_id"
+        series = _per_trial_stat(frame, field, how)
+        if not series.empty:
+            keys[label] = series
+    if combos is None or combos.empty or trial_field not in combos.columns:
+        return keys
+    ids = combos[trial_field].astype(str)
+    for col in _TRIAL_SORT_PREFERRED_COLS:
+        if col not in combos.columns or col == trial_field:
+            continue
+        series = combos.groupby(ids, sort=False)[col].nunique(dropna=False)
+        if (series > 1).any():  # varies within a trial — not a trial-level key
+            continue
+        values = combos.drop_duplicates(subset=[trial_field]).set_index(ids.unique())[
+            col
+        ]
+        keys[col.replace("_", " ").capitalize()] = values
+    return keys
+
+
+def sort_trial_options(
+    options: List[str],
+    key_series: Optional[pd.Series],
+    *,
+    descending: bool = False,
+) -> List[str]:
+    """Order ``options`` (trial ids) by ``key_series``, ties broken by id.
+
+    Trials the key doesn't cover sort last regardless of direction — an unranked
+    trial is missing information, not an extreme value, so it shouldn't lead.
+    """
+    if key_series is None or key_series.empty:
+        return sorted(options)
+    lookup = key_series.to_dict()
+    ranked = [o for o in options if o in lookup and pd.notna(lookup[o])]
+    unranked = sorted(o for o in options if o not in ranked)
+    ranked.sort(key=lambda o: (_sort_scalar(lookup[o]), o), reverse=descending)
+    return ranked + unranked
+
+
+def _sort_scalar(value):
+    """A comparable key for a cell that may be numeric, boolean or text."""
+    if isinstance(value, bool):
+        return (0, float(value))
+    try:
+        return (0, float(value))
+    except (TypeError, ValueError):
+        return (1, str(value))
+
 
 def _trial_display_label(trial_id) -> str:
     """Human-readable label for a trial id in the pickers.

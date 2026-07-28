@@ -1738,7 +1738,8 @@ Streamlit prints a "Network URL" line announcing it, so the user is at least
 told. The desktop launcher suppresses Streamlit's own output and prints a
 loopback URL instead, which is why it is ranked separately and higher.</p>
 </div>
-<p><strong>Status:</strong> open. <a href="../privacy/">privacy.md</a> states the same thing in user-facing
+<p><strong>Status:</strong> <strong>fixed</strong> 2026-07-28 — <code>desktop/launcher.py</code> now passes
+<code>--server.address=127.0.0.1</code>. <a href="../privacy/">privacy.md</a> states the same thing in user-facing
 terms ("it does not restrict the bind address, so the same LAN exposure
 applies") and tells readers how to set <code>server.address</code> themselves in the
 meantime. When this fix lands, that page needs updating too.</p>
@@ -1794,7 +1795,14 @@ its own docstring says "Enabled by default".)</p>
   resolves outside it, rather than passing the string through
   <code>_resolve_data_dir</code> untouched.</li>
 </ul>
-<p><strong>Status:</strong> open.</p>
+<p><strong>Status:</strong> <strong>fixed</strong> 2026-07-28 — <code>app.local_filesystem_enabled()</code>
+(<code>SCANPATH_LOCAL_FS</code>, default <em>local</em>, so an existing install is unaffected on
+upgrade) gates the path box, the 📁 picker and the ⬇ Download button; a shared
+deployment sets it to <code>0</code> and supplies the corpus location through
+<code>SCANPATH_DATA_ROOT</code>. That variable also acts as an allow-root wherever it is
+set: <code>app._resolve_data_dir</code> compares the <em>resolved</em> path against it, so <code>..</code>
+and symlinks collapse to the root rather than being stat'd or written into.
+Covered by <code>tests/test_deployment_gate.py</code>.</p>
 <div class="admonition danger">
 <p class="admonition-title">Related: the folder picker opens a dialog on the <em>server's</em> screen</p>
 <p><code>app.py:_pick_directory_dialog</code> opens a <code>tkinter.filedialog.askdirectory()</code>.
@@ -1848,7 +1856,7 @@ figure's title and caption (EXP-2), not the per-trial notes. Only the sidebar's
 <strong>💾 Save &amp; restore</strong> download carries the annotation store.</p>
 <p><strong>Assessment.</strong> This is inherent to the feature: a link that reopens a specific
 trial has to identify that trial. The right response is disclosure, not removal,
-and <a href="../privacy/#what-a-share-link-and-a-saved-config-contain">privacy.md</a> already
+and <a href="../privacy/#whats-in-a-link-a-config-file-and-an-export">privacy.md</a> already
 spells out exactly what a link carries. The residual gap is that the Share panel
 itself does not say so at the point of copying.</p>
 <p><strong>Fix.</strong> Add a one-line caption in <code>url_state.py:_render_share_body</code> next to the
@@ -1909,7 +1917,12 @@ written to CSV/Parquet (and in the mega-table), and do the same in
 <code>tabs._render_download_buttons</code> before anyone wires it up. Relativizing to the
 basename keeps the column useful for matching a stimulus without disclosing the
 tree.</p>
-<p><strong>Status:</strong> open.</p>
+<p><strong>Status:</strong> <strong>fixed</strong> 2026-07-28 — <code>export.strip_local_paths</code> reduces
+<code>image_path</code> to its basename at <code>export._write_table</code>, the single chokepoint
+every exported table (per-trial, aggregate, mega-table; CSV and Parquet) passes
+through. The basename is kept so the column still matches a row to its stimulus.
+Covered by <code>tests/test_export.py::TestLocalPathsAreNotExported</code>, which greps
+every zip member the way this audit did.</p>
 <hr />
 <h3 id="s5-medium-frame_fingerprint-does-not-look-at-the-middle-of-a-frame-so-edited-data-can-serve-a-stale-cached-result">S5 · Medium — <code>frame_fingerprint</code> does not look at the middle of a frame, so edited data can serve a stale cached result<a class="headerlink" href="#s5-medium-frame_fingerprint-does-not-look-at-the-middle-of-a-frame-so-edited-data-can-serve-a-stale-cached-result" title="Permanent link">&para;</a></h3>
 <p><code>data.py:frame_fingerprint</code> is the explicit cache key for every <code>@st.cache_data</code>
@@ -1969,7 +1982,19 @@ ends — e.g. hash <code>df.iloc[:: max(1, n // 256)]</code> alongside head and 
 stays O(1) in the row count, costs a few hundred rows, and catches a middle edit.
 Separately, make the last-resort branch return a value that cannot be reused
 (a fresh <code>uuid4</code>, or <code>None</code> meaning "do not cache") rather than <code>0</code>.</p>
-<p><strong>Status:</strong> open.</p>
+<p><strong>Status:</strong> <strong>fixed</strong> 2026-07-28 — <code>data.frame_fingerprint</code> now hashes the
+<strong>whole frame</strong> up to 200,000 rows, so any edit anywhere changes the key
+(measured: ~12 ms at the cap). Above it the key stays a sample — both ends plus a
+stride — because a full hash costs ~237 ms at 5M rows and roughly six
+corpus-sized fingerprints are taken per rerun; that limit is stated on the
+function, with the advice to use <strong>Clear cache</strong> after editing a corpus that
+large. The last-resort branch now returns a <code>uuid4</code> instead of <code>0</code>, so an
+unhashable frame <em>misses</em> the cache rather than matching every frame of its
+shape. Writing the tests surfaced a second collision the audit didn't name: the
+per-row hashes were combined with <code>.sum()</code>, which is order-invariant, so a frame
+and a <code>sort_values</code> of itself — same rows, same index labels — shared a key; they
+are now digested in order. Covered by
+<code>tests/test_data.py::TestFrameFingerprint</code>.</p>
 <hr />
 <h3 id="s6-lowmedium-a-zip-upload-is-decompressed-without-a-size-cap">S6 · Low–Medium — a zip upload is decompressed without a size cap<a class="headerlink" href="#s6-lowmedium-a-zip-upload-is-decompressed-without-a-size-cap" title="Permanent link">&para;</a></h3>
 <p><code>data.py:_read_zipped_table</code> reads every member of an uploaded <code>.zip</code> into memory
@@ -2063,7 +2088,7 @@ rename is what stops a truncated file from being mistaken for a complete one),
 and the content is a public corpus fetched from a fixed URL, not the user's data.</p>
 <p><strong>Assessment.</strong> Accepted risk. It is inherent to <code>imageio</code>'s FFMPEG writer, which
 needs a real path. Documented in
-<a href="../privacy/#where-an-upload-actually-goes">privacy.md</a> so a user on a shared
+<a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a> so a user on a shared
 machine knows.</p>
 <p><strong>Status:</strong> accepted.</p>
 <hr />
@@ -2128,16 +2153,13 @@ wires them up would ship the leak with them.</p>
 <code>download_name</code> at the call sites <em>and</em> strip <code>image_path</code> first (S4).</p>
 <p><strong>Status:</strong> open (correctness, not confidentiality).</p>
 <h2 id="what-is-fixed-and-what-is-accepted">What is fixed, and what is accepted<a class="headerlink" href="#what-is-fixed-and-what-is-accepted" title="Permanent link">&para;</a></h2>
-<p><strong>Fixed: nothing yet, deliberately.</strong> This audit produced no code change — the
-page is the whole artifact, so that the fixes land as reviewable commits with
-their own tests rather than riding in on a docs PR. <code>Status:</code> on each finding is
-the authoritative record, and the file + function named in each one is precise
-enough to apply the fix without re-deriving it.</p>
-<p>Two are one-line changes worth doing first, because they are the only findings a
-stranger on the network can reach at all: <code>--server.address=127.0.0.1</code> in
-<code>desktop/launcher.py:main</code> (S1), and gating the dataset-directory input on a
-local-deployment flag in <code>app.py</code> (S2). Everything else needs someone who can
-already open the app.</p>
+<p><strong>Fixed so far: S1, S2, S4</strong> (2026-07-28), each with its own tests — see the
+<code>Status:</code> line on each finding, which is the authoritative record. The audit
+itself produced no code change; the fixes landed afterwards as reviewable
+commits, tracked as <strong>DATA-16</strong> in <code>IMPROVEMENTS.md</code>.</p>
+<p>S1 and S2 went first because they are the only findings a stranger on the network
+can reach at all. <strong>Still open: S3, S5, S6, S7, S10, S11</strong> — all of which need
+someone who can already open the app.</p>
 <p><strong>Accepted, with the reason:</strong></p>
 <table>
 <thead>
@@ -2149,7 +2171,7 @@ already open the app.</p>
 <tbody>
 <tr>
 <td>S8 · MP4 temp file</td>
-<td>Inherent to <code>imageio</code>'s FFMPEG writer, which needs a real path. Mode <code>0600</code>, unlinked in a <code>finally</code>, survives only a <code>SIGKILL</code>, and holds rendered frames rather than the underlying tables. Documented in <a href="../privacy/#where-an-upload-actually-goes">privacy.md</a> instead.</td>
+<td>Inherent to <code>imageio</code>'s FFMPEG writer, which needs a real path. Mode <code>0600</code>, unlinked in a <code>finally</code>, survives only a <code>SIGKILL</code>, and holds rendered frames rather than the underlying tables. Documented in <a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a> instead.</td>
 </tr>
 <tr>
 <td>S9 · <code>..</code> in a user-typed export pattern</td>
@@ -2281,7 +2303,7 @@ no <code>&lt;</code> can reach it.</p>
   trust.</li>
 <li>Streamlit Community Cloud's platform-side logging, retention and isolation were
   not audited and are not ours to describe. See
-  <a href="../privacy/#the-hosted-demo">privacy.md</a>.</li>
+  <a href="../privacy/#the-online-demo">privacy.md</a>.</li>
 <li>No penetration testing was performed. The findings are the result of reading
   the code and reproducing specific behaviours in scripts, not of probing a
   running deployment.</li>

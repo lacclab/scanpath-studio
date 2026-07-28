@@ -1399,19 +1399,14 @@ on one shared real-time clock.</p>
 
 <div class="admonition info">
 <p class="admonition-title">Built with AI assistance</p>
-<p>Much of this code was written with substantial AI assistance. We put real
-effort into validating it — reading measures are checked against a
-<strong>hand-traced trial</strong> whose expected values were worked out by hand, measure
-by measure (open it in the app with <code>?source=synthetic</code>); where your export
-already carries EyeLink <code>IA_*</code>
-measures <strong>those take precedence</strong> over anything derived here, so on a normal
-EyeLink report the numbers are your eye-tracker's; and the full load →
-normalize → measure → plot pipeline runs against the bundled corpus on every
-change.</p>
-<p>That isn't the same as bug-free. <strong>For a number going into a paper,
-cross-check it against your own pipeline or the source export.</strong> If something
-looks wrong, <a href="https://github.com/lacclab/scanpath-studio/issues">open an issue</a>
-and attach the JSON from <strong>💾 Save &amp; restore</strong> — it reproduces the exact view.</p>
+<p>Much of this code was written with AI assistance. Two things you can check:
+the reading measures are pinned to a ground-truth trial with expected values
+per measure (open it with <code>?source=synthetic</code>), and EyeLink <code>IA_*</code> measures
+already in your export are passed through, not recomputed.</p>
+<p>That is not the same as bug-free. <strong>Cross-check anything you publish against
+your own pipeline.</strong> If something looks wrong,
+<a href="https://github.com/lacclab/scanpath-studio/issues">open an issue</a> with the
+JSON from <strong>💾 Save &amp; restore</strong> — it reproduces the exact view.</p>
 </div>
 <div class="admonition quote">
 <p class="admonition-title">Citing Scanpath Studio</p>

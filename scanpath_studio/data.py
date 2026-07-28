@@ -1151,9 +1151,13 @@ def fill_fixation_xy_from_words(
     missing = fixations["x"].isna() | fixations["y"].isna()
     if not missing.any() or "word_id" not in fixations.columns:
         return fixations
+    from .measures import word_box_bounds
+
+    # BUG-11: place them at the *corrected* box centre, i.e. the glyph centre.
+    x0, y0, x1, y1 = word_box_bounds(words)
     centers = words[["participant_id", "trial_id", "word_id"]].copy()
-    centers["_word_cx"] = words["x"] + words["width"] / 2.0
-    centers["_word_cy"] = words["y"] + words["height"] / 2.0
+    centers["_word_cx"] = (x0 + x1) / 2.0
+    centers["_word_cy"] = (y0 + y1) / 2.0
     centers = centers.drop_duplicates(["participant_id", "trial_id", "word_id"])
     merged = fixations[["participant_id", "trial_id", "word_id"]].merge(
         centers, on=["participant_id", "trial_id", "word_id"], how="left"
@@ -1499,13 +1503,19 @@ def coerce_flag(col: pd.Series) -> pd.Series:
         # Values that didn't parse fall through to the string test below, so a
         # mixed '0'/'1'/'.' column doesn't lose its '.' rows to True.
         parsed = numeric.notna()
-        result = pd.Series(False, index=col.index, dtype=bool)
-        result[parsed] = numeric[parsed] != 0
-        unparsed = ~parsed & col.notna()
+        # Build the boolean array positionally: assigning a bool ndarray into a
+        # bool Series by mask is deprecated in pandas as a dtype-incompatible set.
+        values = (numeric.to_numpy() != 0) & parsed.to_numpy()
+        unparsed = (~parsed & col.notna()).to_numpy()
         if unparsed.any():
-            result[unparsed] = ~col[unparsed].astype(str).str.strip().str.lower().isin(
-                _FALSEY_FLAG_STRINGS
-            )
+            values[unparsed] = ~(
+                col[unparsed]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .isin(_FALSEY_FLAG_STRINGS)
+            ).to_numpy()
+        result = pd.Series(values, index=col.index, dtype=bool)
         return result
     return (
         ~col.fillna("").astype(str).str.strip().str.lower().isin(_FALSEY_FLAG_STRINGS)

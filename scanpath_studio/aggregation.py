@@ -865,6 +865,20 @@ def ensure_fixation_enrichment(
         return fixations
 
 
+def _box_left(
+    words: pd.DataFrame, *, layout: Optional[pd.DataFrame] = None
+) -> np.ndarray:
+    """Corrected AOI left edges (BUG-11) — where "0% into the word" actually is.
+
+    Landing position is a *within-word* measure, so it is exactly what a
+    half-space offset corrupts: measured from the raw box left, every landing
+    reads half a character later than it was.
+    """
+    from .measures import word_box_bounds
+
+    return word_box_bounds(words, layout=layout)[0]
+
+
 def landing_positions(
     words: pd.DataFrame,
     fixations: Optional[pd.DataFrame] = None,
@@ -885,7 +899,7 @@ def landing_positions(
         if participant_id is not None and "participant_id" in wd.columns:
             wd = wd[wd["participant_id"].astype(str) == str(participant_id)]
         ffx = pd.to_numeric(wd.get("first_fix_x"), errors="coerce")
-        left = pd.to_numeric(wd.get("x"), errors="coerce")
+        left = pd.Series(_box_left(wd, layout=words), index=wd.index)
         width = pd.to_numeric(wd.get("width"), errors="coerce")
         dist = ffx - left
         mask = ffx.notna() & left.notna() & width.notna() & (width > 0)
@@ -918,9 +932,10 @@ def landing_positions(
             .rename(columns={"x": "_fx"})
         )
         box_keys = [k for k in keys if k in words.columns]
-        box = words[box_keys + ["x", "width"]].drop_duplicates(box_keys)
+        box = words[box_keys + ["x", "width"]].assign(_left=_box_left(words))
+        box = box.drop_duplicates(box_keys)
         merged = first.merge(box, on=box_keys, how="inner")
-        left = pd.to_numeric(merged["x"], errors="coerce")
+        left = pd.to_numeric(merged["_left"], errors="coerce")
         width = pd.to_numeric(merged["width"], errors="coerce")
         dist = pd.to_numeric(merged["_fx"], errors="coerce") - left
         ok = dist.notna() & width.notna() & (width > 0)

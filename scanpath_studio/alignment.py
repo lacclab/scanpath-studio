@@ -33,7 +33,7 @@ from scipy.cluster.vq import kmeans2
 from scipy.optimize import minimize
 from scipy.stats import norm
 
-from .measures import cluster_word_lines
+from .measures import cluster_word_lines, word_box_bounds
 from .model_scanpaths import _ordered_word_rows
 
 NOTICE = (
@@ -451,13 +451,12 @@ def _line_centers(words: pd.DataFrame) -> np.ndarray:
 def _word_centers_reading_order(words: pd.DataFrame) -> np.ndarray:
     """Word-box centers ``(x_center, y_center)`` in reading order, NaN-geometry dropped."""
     ordered = _ordered_word_rows(words)
-    x = pd.to_numeric(ordered["x"], errors="coerce")
-    y = pd.to_numeric(ordered["y"], errors="coerce")
-    w = pd.to_numeric(ordered["width"], errors="coerce")
-    h = pd.to_numeric(ordered["height"], errors="coerce")
-    finite = x.notna() & y.notna() & w.notna() & h.notna()
-    cx = (x + w / 2.0)[finite].to_numpy(dtype=float)
-    cy = (y + h / 2.0)[finite].to_numpy(dtype=float)
+    # BUG-11: the corrected box centre is the glyph centre — which is what warp /
+    # compare are matching fixations against.
+    x0, y0, x1, y1 = word_box_bounds(ordered, layout=words)
+    finite = np.isfinite(x0) & np.isfinite(y0) & np.isfinite(x1) & np.isfinite(y1)
+    cx = ((x0 + x1) / 2.0)[finite]
+    cy = ((y0 + y1) / 2.0)[finite]
     return np.column_stack([cx, cy]) if len(cx) else np.empty((0, 2))
 
 

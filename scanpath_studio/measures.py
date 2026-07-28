@@ -46,17 +46,6 @@ LINE_MISREGISTRATION_PX = 50.0
 REAL_TIMESTAMP_DWELL_FRAC = 0.5
 
 
-def _within_box(
-    fix_x: pd.Series, fix_y: pd.Series, word_row: pd.Series, pad: float = 0.0
-) -> pd.Series:
-    return (
-        (fix_x >= word_row["x"] - pad)
-        & (fix_x <= word_row["x"] + word_row["width"] + pad)
-        & (fix_y >= word_row["y"] - pad)
-        & (fix_y <= word_row["y"] + word_row["height"] + pad)
-    )
-
-
 def _assign_word_ids_single(
     fix_chunk: pd.DataFrame,
     word_chunk: pd.DataFrame,
@@ -73,14 +62,7 @@ def _assign_word_ids_single(
 
     Returns a float array aligned to ``fix_chunk`` rows (NaN = out of text).
     """
-    wx0 = pd.to_numeric(word_chunk["x"], errors="coerce").to_numpy(dtype=float)
-    wy0 = pd.to_numeric(word_chunk["y"], errors="coerce").to_numpy(dtype=float)
-    wx1 = wx0 + pd.to_numeric(word_chunk["width"], errors="coerce").to_numpy(
-        dtype=float
-    )
-    wy1 = wy0 + pd.to_numeric(word_chunk["height"], errors="coerce").to_numpy(
-        dtype=float
-    )
+    wx0, wy0, wx1, wy1 = word_box_bounds(word_chunk)
     wids = word_chunk["word_id"].to_numpy()
     wcx = (wx0 + wx1) / 2.0
     wcy = (wy0 + wy1) / 2.0
@@ -194,12 +176,45 @@ def word_box_space_px(words: pd.DataFrame) -> float:
     return advance
 
 
+def word_box_bounds(
+    words: pd.DataFrame,
+    *,
+    layout: pd.DataFrame | None = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """``(x0, y0, x1, y1)`` AOI edges with the mid-space correction applied.
+
+    **The** accessor for word-box geometry: anything that tests a point against a
+    box, draws one, or measures a position within one goes through here, so the
+    boundary is in one place instead of re-derived per call site. Pure — it reads
+    ``x``/``y``/``width``/``height`` and returns arrays, never a shifted frame, so
+    it cannot be applied twice by accident (the failure mode that made the first
+    pass at BUG-11 fragile). For a glyph-tight corpus the correction is zero and
+    these are the raw edges.
+
+    Pass ``layout`` when ``words`` is a *subset* of a trial (a highlighted span,
+    the words that got any dwell): tiling is a property of the whole line, and a
+    subset has holes in it, so detection has to run on the full frame or it reads
+    the holes as glyph-tight gaps and silently declines to correct.
+    """
+    if words is None or words.empty:
+        # A column-less empty frame is a legitimate "no words" input.
+        empty = np.empty(0, dtype=float)
+        return empty, empty.copy(), empty.copy(), empty.copy()
+    x = pd.to_numeric(words["x"], errors="coerce").to_numpy(dtype=float)
+    y = pd.to_numeric(words["y"], errors="coerce").to_numpy(dtype=float)
+    w = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
+    h = pd.to_numeric(words["height"], errors="coerce").to_numpy(dtype=float)
+    x0 = x - word_box_space_px(words if layout is None else layout) / 2.0
+    return x0, y, x0 + w, y + h
+
+
 def recentre_word_boxes(words: pd.DataFrame) -> pd.DataFrame:
-    """Shift word boxes so their edges fall mid-space (BUG-11); no-op if not needed.
+    """The :func:`word_box_bounds` correction as a frame, for row-wise consumers.
 
     Returns ``words`` unchanged (the same object) for layouts
     :func:`word_box_space_px` doesn't recognise, so the common case costs one
-    check and no copy.
+    check and no copy. Prefer :func:`word_box_bounds` — this shifts ``x``, so a
+    frame that has been through it must not go through it again.
     """
     space = word_box_space_px(words)
     if space <= 0:
@@ -225,12 +240,12 @@ def assign_fixations_to_words(
     If `overwrite=False` and the fixations already carry word_id values, those
     are kept; only NaN rows get re-assigned.
 
-    Boxes are re-centred first (BUG-11) so a fixation in the whitespace *before*
-    a word is credited to that word rather than the previous one.
+    Box edges come from :func:`word_box_bounds` (BUG-11), so a fixation in the
+    whitespace *before* a word is credited to that word rather than the previous
+    one.
     """
     if fixations.empty or words.empty:
         return fixations
-    words = recentre_word_boxes(words)
 
     out = fixations.copy()
     if "word_id" not in out.columns or overwrite:
@@ -418,20 +433,9 @@ def rebased_fixation_onsets(ordered_fixations: pd.DataFrame) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _box_bounds(
-    words: pd.DataFrame,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Return (x0, y0, x1, y1) arrays for a words frame's bounding boxes."""
-    x0 = words["x"].to_numpy(dtype=float)
-    y0 = words["y"].to_numpy(dtype=float)
-    x1 = x0 + words["width"].to_numpy(dtype=float)
-    y1 = y0 + words["height"].to_numpy(dtype=float)
-    return x0, y0, x1, y1
-
-
 def _in_any_box(fix_chunk: pd.DataFrame, word_chunk: pd.DataFrame) -> np.ndarray:
     """Boolean array (aligned to fix_chunk order): is each fixation inside any box?"""
-    x0, y0, x1, y1 = _box_bounds(word_chunk)
+    x0, y0, x1, y1 = word_box_bounds(word_chunk)
     fx = pd.to_numeric(fix_chunk["x"], errors="coerce").to_numpy(dtype=float)
     fy = pd.to_numeric(fix_chunk["y"], errors="coerce").to_numpy(dtype=float)
     inside = (

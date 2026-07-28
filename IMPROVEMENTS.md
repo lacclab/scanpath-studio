@@ -947,7 +947,27 @@ word-box top (`_line_pitch`, [`plots.py`](scanpath_studio/plots.py:339)) — wit
 floor, so every within-line arc sits above the words regardless of length.
 Related: **BUG-9**, **VIZ-9**.
 
-**BUG-11 · Word box edges don't fall midway between words** — `Status: Pending approval` *(implemented 2026-07-28)*
+**BUG-11 · Word box edges don't fall midway between words** — `Status: Pending approval` *(implemented 2026-07-28; reopened + completed the same day)*
+
+> **Reopened 2026-07-28.** The first pass corrected only
+> `assign_fixations_to_words` and `build_word_boxes` — two of the nine places
+> that read an AOI edge — so the bug was still visible: with the heatmap on, the
+> tinted rects were drawn from the raw frame while the outlines came from the
+> corrected one, half a space apart. **Second pass:** one pure accessor
+> `measures.word_box_bounds(words, *, layout=None)` returns the corrected
+> `(x0, y0, x1, y1)` arrays and *every* consumer goes through it —
+> `_assign_word_ids_single`, `fixation_in_text_mask`, `build_word_boxes`,
+> `_add_word_level_heatmap` (binning) + `_draw_word_value_heatmap` (rects),
+> `build_critical_span_overlay`, `aggregation.landing_positions`,
+> `plots._snap_fixations_to_words`, `alignment._word_centers_reading_order`,
+> `model_scanpaths`, and `data.fill_fixation_xy_from_words`. Returning *arrays*
+> rather than a shifted frame is the point: the frame-shaped
+> `recentre_word_boxes` could be applied twice and silently double-shift, which
+> is what made the first pass fragile. `layout=` covers the subset trap — tiling
+> is a property of the whole line, so a highlighted span or the dwelt-on words
+> must hand the full frame to the detector or the holes read as glyph-tight
+> gaps. Tests in
+> [`tests/test_word_box_geometry.py`](tests/test_word_box_geometry.py) (26).
 
 Word box boundaries should sit in the **middle of the whitespace** between two
 words; they don't — each box carries the *entire* inter-word space as trailing
@@ -1020,7 +1040,14 @@ are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 Add to `docs/` after AN-* land.
 
-**ENG-16 · README: one single-scanpath GIF instead of two** — `Status: Backlog`
+**ENG-16 · README: one single-scanpath GIF instead of two** — `Status: Pending approval` *(implemented 2026-07-28)*
+
+**Implemented.** The README keeps the single-scanpath hero GIF and shows the
+dual-reader demo as a still (`assets/demo_dual_scanpath.png`, 90 KB — the
+animation's final frame, so it shows the *complete* pair of scanpaths rather
+than an empty first frame), captioned with a link to the animated version, which
+now lives on the docs site (`docs/index.md`, under *The app in one paragraph*).
+1.2 MB less animation on page load.
 
 The README embeds two animated GIFs — the hero
 (`assets/scanpath_animation.gif`, a single scanpath) and

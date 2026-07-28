@@ -32,7 +32,7 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
-from .measures import cluster_word_lines
+from .measures import cluster_word_lines, word_box_bounds
 
 
 @dataclass(frozen=True)
@@ -195,10 +195,11 @@ def generate_model_scanpath(
         return _empty_fix_frame()
     n_words = len(ordered)
 
-    x_box = pd.to_numeric(ordered["x"], errors="coerce").to_numpy(dtype=float)
-    y_box = pd.to_numeric(ordered["y"], errors="coerce").to_numpy(dtype=float)
-    w_box = pd.to_numeric(ordered["width"], errors="coerce").to_numpy(dtype=float)
-    h_box = pd.to_numeric(ordered["height"], errors="coerce").to_numpy(dtype=float)
+    # BUG-11: generate inside the corrected boxes, so a model scanpath lands on
+    # the glyphs rather than half a character to their right.
+    x_box, y_box, x_right, y_bottom = word_box_bounds(ordered, layout=words)
+    w_box = x_right - x_box
+    h_box = y_bottom - y_box
     if "text" in ordered.columns:
         text_len = ordered["text"].astype(str).str.len().to_numpy(dtype=float)
     else:

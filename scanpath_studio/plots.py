@@ -653,11 +653,14 @@ def _snap_fixations_to_words(
         wid = pd.to_numeric(
             assign_fixations_to_words(out, words)["word_id"], errors="coerce"
         )
-    wx = pd.to_numeric(words["x"], errors="coerce")
-    ww = pd.to_numeric(words["width"], errors="coerce")
-    wy = pd.to_numeric(words["y"], errors="coerce")
-    cx_by_id = dict(zip(words["word_id"], (wx + ww / 2.0)))
-    top_by_id = dict(zip(words["word_id"], wy))
+    # BUG-11: the *corrected* box centre is the glyph centre. The raw box carries
+    # the inter-word space as trailing padding, so its centre sits half a
+    # character to the right — visibly off-centre once a fixation snaps to it.
+    from .measures import word_box_bounds
+
+    wx0, wy0, wx1, _ = word_box_bounds(words)
+    cx_by_id = dict(zip(words["word_id"], (wx0 + wx1) / 2.0))
+    top_by_id = dict(zip(words["word_id"], wy0))
     snap_x = wid.map(cx_by_id)
     snap_y = wid.map(top_by_id)
     out[x_field] = snap_x.where(snap_x.notna(), out[x_field])
@@ -719,18 +722,16 @@ def _saccade_arrow_markers(
 def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
     """Rectangles for the word interest areas.
 
-    BUG-11: drawn from the *re-centred* boxes, so what's on screen matches what
-    ``measures.assign_fixations_to_words`` actually assigns against. The word
-    *labels* keep the original frame — ``x`` still means "where the glyphs
-    start", which is what keeps the true-to-scale text on top of the stimulus
-    image. For a glyph-tight corpus the recentring is a no-op.
+    BUG-11: drawn from ``measures.word_box_bounds``, so what's on screen is
+    exactly what ``assign_fixations_to_words`` assigns against. The word *labels*
+    keep the original frame — ``x`` still means "where the glyphs start", which is
+    what keeps the true-to-scale text on top of the stimulus image. For a
+    glyph-tight corpus the correction is zero.
     """
-    from .measures import recentre_word_boxes
+    from .measures import word_box_bounds
 
     shapes = []
-    for row in recentre_word_boxes(words).itertuples():
-        x0, y0 = row.x, row.y
-        x1, y1 = row.x + row.width, row.y + row.height
+    for x0, y0, x1, y1 in zip(*word_box_bounds(words)):
         shapes.append(
             dict(
                 type="rect",
@@ -786,10 +787,16 @@ def build_critical_span_overlay(
     line_ids = (y_sorted.diff().fillna(0) > typical_h * 0.5).cumsum()
     span["_line_id"] = line_ids.reindex(span.index)
 
+    # BUG-11: `span` is a subset, so detection runs on the full `words` frame.
+    from .measures import word_box_bounds
+
+    span_x0, _, span_x1, _ = word_box_bounds(span, layout=words)
+    span["_box_x0"], span["_box_x1"] = span_x0, span_x1
+
     shapes = []
     for _, group in span.groupby("_line_id"):
-        x0 = float(group["x"].min())
-        x1 = float((group["x"] + group["width"]).max())
+        x0 = float(group["_box_x0"].min())
+        x1 = float(group["_box_x1"].max())
         y0 = float(group["y"].min())
         y1 = float((group["y"] + group["height"]).max())
         shapes.append(
@@ -1956,10 +1963,12 @@ def _add_word_level_heatmap(
         if weights is not None
         else None
     )
+    # BUG-11: bin against the corrected boxes, so a fixation in the space before a
+    # word counts towards that word — the same boundary the heatmap then draws.
+    from .measures import word_box_bounds
+
     word_values = []
-    for word_row in words.itertuples():
-        wx0, wy0 = word_row.x, word_row.y
-        wx1, wy1 = wx0 + word_row.width, wy0 + word_row.height
+    for wx0, wy0, wx1, wy1 in zip(*word_box_bounds(words)):
         in_word = (fx >= wx0) & (fx <= wx1) & (fy >= wy0) & (fy <= wy1)
         val = (
             float(np.nansum(w_arr[in_word]))
@@ -2028,9 +2037,14 @@ def _draw_word_value_heatmap(
 ) -> None:
     from plotly.colors import sample_colorscale
 
+    from .measures import word_box_bounds
+
     # Nonzero test on the RAW values (a word with no dwell stays uncoloured); the
-    # colour position then maps through the chosen normalization (VIZ-3).
-    nonzero_rows = [(wr, v) for wr, v in zip(words.itertuples(), word_values) if v > 0]
+    # colour position then maps through the chosen normalization (VIZ-3). Boxes
+    # come from word_box_bounds (BUG-11) so the tinted rects sit exactly on the
+    # outlines build_word_boxes draws.
+    boxes = zip(*word_box_bounds(words))
+    nonzero_rows = [(box, v) for box, v in zip(boxes, word_values) if v > 0]
     if not nonzero_rows:
         return
     vals = [v for _, v in nonzero_rows]
@@ -2041,17 +2055,17 @@ def _draw_word_value_heatmap(
     z_span = max(z_max - z_min, 1e-9)
 
     heatmap_shapes = []
-    for wr, v in nonzero_rows:
+    for (x0, y0, x1, y1), v in nonzero_rows:
         tv = float(_apply_heatmap_norm(v, heatmap_norm))
         norm = max(0.0, min(1.0, (tv - z_min) / z_span))
         color = sample_colorscale(heatmap_colorscale, [norm])[0]
         heatmap_shapes.append(
             dict(
                 type="rect",
-                x0=wr.x,
-                y0=wr.y,
-                x1=wr.x + wr.width,
-                y1=wr.y + wr.height,
+                x0=x0,
+                y0=y0,
+                x1=x1,
+                y1=y1,
                 line=dict(width=0),
                 fillcolor=color,
                 opacity=0.5,

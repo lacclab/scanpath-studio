@@ -14,7 +14,9 @@ import pytest
 
 from scanpath_studio.measures import (
     assign_fixations_to_words,
+    fixation_in_text_mask,
     recentre_word_boxes,
+    word_box_bounds,
     word_box_space_px,
 )
 
@@ -185,6 +187,144 @@ class TestAssignment:
         )
         out = assign_fixations_to_words(fixations, words, overwrite=True)
         assert out["word_id"].iloc[0] == 0
+
+
+class TestWordBoxBounds:
+    """`word_box_bounds` is THE accessor — everything that touches AOI geometry
+    goes through it, which is what the first pass at BUG-11 got wrong (it
+    corrected two call sites out of nine)."""
+
+    def test_returns_the_corrected_edges(self):
+        x0, y0, x1, y1 = word_box_bounds(_tiling_words())
+        assert x0[0] == pytest.approx(358.0 - ADVANCE / 2)
+        assert x1[0] == pytest.approx(481.5)
+        assert y0[0] == 100.0 and y1[0] == 130.0
+
+    def test_is_pure_so_it_cannot_be_applied_twice(self):
+        """The frame-shaped `recentre_word_boxes` shifts `x`, so a second pass
+        shifts again. Returning arrays makes that structurally impossible."""
+        words = _tiling_words()
+        first = word_box_bounds(words)
+        second = word_box_bounds(words)
+        assert list(first[0]) == list(second[0])
+        assert list(words["x"]) == list(_tiling_words()["x"])  # caller's frame intact
+
+    def test_a_subset_needs_the_full_layout_to_be_recognised(self):
+        """Tiling is a property of the whole line. A subset has holes, and the
+        holes read as glyph-tight gaps — so detection has to see the full frame."""
+        words = _tiling_words()
+        span = words.iloc[[0, 3]]  # 'Robert' and 'what' — not adjacent
+        assert word_box_bounds(span)[0][0] == pytest.approx(358.0)  # undetected
+        assert word_box_bounds(span, layout=words)[0][0] == pytest.approx(348.5)
+
+    def test_glyph_tight_bounds_are_the_raw_edges(self):
+        words = _glyph_tight_words()
+        x0, _, x1, _ = word_box_bounds(words)
+        assert list(x0) == list(words["x"])
+        assert list(x1) == list(words["x"] + words["width"])
+
+
+class TestInTextMask:
+    def _mask_at(self, words: pd.DataFrame, x: float) -> bool:
+        fixations = pd.DataFrame(
+            [dict(participant_id="p1", trial_id="t1", x=x, y=115.0, duration_ms=200.0)]
+        )
+        return bool(fixation_in_text_mask(fixations, words).iloc[0])
+
+    def test_the_text_starts_half_a_space_before_the_first_glyph(self):
+        """The corrected first box reaches back into the left margin by half a
+        space — a fixation there is on the text, not out of bounds."""
+        words = _tiling_words()
+        assert self._mask_at(words, 352.0) is True
+
+    def test_the_text_ends_half_a_space_after_the_last_glyph(self):
+        """'he' is the last word: its glyphs end at 909 and the raw box ran on to
+        928. Corrected, the line stops at 918.5, so a fixation at 925 — a whole
+        space past the last letter — is off the text, where it used to count."""
+        words = _tiling_words()
+        assert float((words["x"] + words["width"]).max()) == pytest.approx(928.0)
+        assert self._mask_at(words, 925.0) is False
+        assert self._mask_at(words, 915.0) is True
+
+
+class TestDependentConsumers:
+    """Every downstream measure that reads a box edge, not just assignment."""
+
+    def test_the_word_heatmap_rects_sit_on_the_word_box_outlines(self):
+        """The visible symptom: with the heatmap on, the tinted rects were drawn
+        from the raw frame while the outlines came from the corrected one, so
+        every rect was half a space out."""
+        from scanpath_studio import plots
+
+        words = _tiling_words()
+        fixations = pd.DataFrame(
+            [
+                dict(
+                    participant_id="p1",
+                    trial_id="t1",
+                    x=400.0,
+                    y=115.0,
+                    duration_ms=200.0,
+                    timestamp_ms=0.0,
+                )
+            ]
+        )
+        fig = plots.go.Figure()
+        plots._add_word_level_heatmap(
+            fig,
+            words,
+            fixations,
+            x_field="x",
+            y_field="y",
+            weights=None,
+            heatmap_colorscale="Viridis",
+            heatmap_range=None,
+            show_colorbars=False,
+        )
+        outlines = {(s["x0"], s["x1"]) for s in plots.build_word_boxes(words)}
+        rects = {(s.x0, s.x1) for s in fig.layout.shapes if "heatmap" in (s.name or "")}
+        assert rects and rects <= outlines
+
+    def test_the_critical_span_outline_uses_corrected_edges(self):
+        """The span is a *subset* of the words, so this only works if the overlay
+        passes the full frame as the detection layout."""
+        from scanpath_studio import plots
+
+        words = _tiling_words()
+        words["is_in_aspan"] = [False, True, True, False, False]
+        (shape,) = plots.build_critical_span_overlay(words)
+        assert shape["x0"] == pytest.approx(491.0 - ADVANCE / 2)
+
+    def test_snapping_a_fixation_lands_on_the_glyph_centre(self):
+        """The raw box centre is half a character right of the word's visual
+        centre, which reads as a systematic rightward bias in linear-reading mode."""
+        from scanpath_studio import plots
+
+        words = _tiling_words()
+        fixations = pd.DataFrame(
+            [
+                dict(
+                    participant_id="p1",
+                    trial_id="t1",
+                    x=400.0,
+                    y=115.0,
+                    duration_ms=200.0,
+                    word_id=0,
+                )
+            ]
+        )
+        out = plots._snap_fixations_to_words(fixations, words, "x", "y")
+        # 'Robert' glyphs run 358 → 472, so the centre is 415.
+        assert out["x"].iloc[0] == pytest.approx(415.0)
+
+    def test_landing_position_is_measured_from_the_corrected_left_edge(self):
+        from scanpath_studio.aggregation import landing_positions
+
+        words = _tiling_words()
+        words["first_fix_x"] = [400.0] * len(words)
+        got = landing_positions(words, as_fraction=False)
+        # 400 is 51.5 px past 'Robert''s corrected left edge of 348.5.
+        assert got[0] == pytest.approx(51.5)
 
 
 def test_the_bundled_demo_is_recognised_as_a_tiling_layout():

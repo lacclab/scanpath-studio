@@ -28,11 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **"Snap fixations above words"** (UX-13) moved into its own *Linear-reading schematic* block so it no longer reads as a drift-correction option; both it and the Arc saccade mode now name each other.
 
 ### Fixed
-- **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink-style boxes carry the whole inter-word space as trailing padding, so every boundary sat a half-space too far right and a fixation in the space *before* a word was credited to the previous one. Detected per corpus and corrected for both fixation→word assignment and the drawn boxes; glyph-tight AOIs (PoTeC / MultiplEYE) are left alone, and the reading text keeps its glyph origin so the stimulus-image alignment is unchanged.
+- **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink-style boxes carry the whole inter-word space as trailing padding, so every boundary sat a half-space too far right and a fixation in the space *before* a word was credited to the previous one. Detected per corpus and applied through a single `measures.word_box_bounds` accessor, so *everything* that reads an AOI edge agrees: fixation→word assignment, the out-of-text test, the drawn boxes, the word-level heatmap (which was tinting rects half a space off the outlines beside them), the critical-span outline, within-word landing position, snap-to-word, drift-correction word centres, and the model-scanpath generator. Glyph-tight AOIs (PoTeC / MultiplEYE) are left alone, and the reading text keeps its glyph origin so the stimulus-image alignment is unchanged.
 - **Regression flags were True for every word** (BUG-7) — EyeLink writes flag columns as the strings `'0'` / `'1'` / `'.'` (its missing-value sentinel), and the boolean cast read every non-empty string as true. On the bundled demo `regression_in_flag` was `True` for all 3,922 rows; it is now 815.
 - The sidebar's collapse control (UX-8) is always visible and has a proper hit area, so an open sidebar is as easy to dismiss as it is to open.
 - Tutorial card spacing — the ✕ sits a touch lower in the corner, and the Back / Next footer no longer crowds the progress bar.
 - The header's **Corpus Analysis** / **← Scanpath** nav button now lines up exactly with the control rail below it (same width and right edge).
+- **README weight** (ENG-16) — the dual-reader demo is a still instead of a second 1.2 MB GIF, so one animation loads before the install line; the animated version moved to the docs site.
 
 ## [0.25.0] - 2026-07-16
 

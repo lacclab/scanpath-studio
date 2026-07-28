@@ -18,6 +18,7 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_MARKER_SIZE_RANGE,
+    CUSTOM_PALETTE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
@@ -532,13 +533,46 @@ def apply_palette(name: str) -> None:
     cleanly, exactly like ``_apply_view_preset``. Deliberately does *not* touch
     the background colour: that's a canvas/Experimental-Setup choice the user
     makes for their output medium, not part of the mark palette.
+
+    ``CUSTOM_PALETTE`` is a no-op: it names the *absence* of a palette, so
+    re-selecting it must not overwrite the colours the user just set by hand.
     """
+    if name == CUSTOM_PALETTE:
+        return
     for key, value in palette_state(name).items():
         st.session_state[key] = value
 
 
+def _palette_match_key(value):
+    """Normalize a colour for comparison — the pickers hand back lowercase hex."""
+    return value.lower() if isinstance(value, str) and value.startswith("#") else value
+
+
+def _active_palette() -> Optional[str]:
+    """Which palette the live colour keys match, or ``None`` once customized.
+
+    The VIZ-12 rule applied to VIZ-18: a palette is one-way (it writes the
+    ordinary colour keys and never reads them back), so without this the selector
+    keeps reading "Colourblind-safe" after the user has hand-edited one of its
+    colours — naming a property the figure no longer has.
+    """
+    ss = st.session_state
+    for name in PALETTES:
+        wanted = palette_state(name)
+        if all(
+            _palette_match_key(ss.get(key)) == _palette_match_key(value)
+            for key, value in wanted.items()
+        ):
+            return name
+    return None
+
+
 def _on_palette_change() -> None:
-    apply_palette(st.session_state.get("global_palette") or DEFAULT_PALETTE)
+    name = st.session_state.get("global_palette") or DEFAULT_PALETTE
+    if name != CUSTOM_PALETTE:
+        # What "Custom" is a departure *from*, for the caption below.
+        st.session_state["_palette_picked"] = name
+    apply_palette(name)
 
 
 def _popover_selectbox(label: str, options: list, state_key: str, **kwargs):
@@ -1427,10 +1461,13 @@ def _collect_viz_settings(
         # VIZ-17 uniform fixation colour + VIZ-15 marker shape.
         fixation_color=ss.get("global_fixation_color") or DEFAULT_FIXATION_COLOR,
         fixation_symbol=ss.get("global_fixation_symbol") or DEFAULT_FIXATION_SYMBOL,
-        # VIZ-18: the active palette name. The colours it implies are already in
-        # the individual keys above; this rides along so Share / Save & restore
-        # can name it and the picker comes back on the right entry.
-        palette=ss.get("global_palette") or DEFAULT_PALETTE,
+        # VIZ-18: the active palette name — *derived* from the colour keys above
+        # rather than read back from the selector, so a hand-edited figure is
+        # reported as `Custom` on every surface instead of carrying a palette
+        # name it no longer matches. The colours themselves ride in the
+        # individual keys, so `Custom` restores exactly; the name is only there
+        # for the picker to come back on the right entry and for export captions.
+        palette=_active_palette() or CUSTOM_PALETTE,
         fix_index_range=fix_index_range,
         highlight_text_color=ss.get("global_highlight_text_color"),
         text_color=ss.get("global_text_color", WORD_LABEL_COLOR),
@@ -1557,19 +1594,33 @@ def sidebar_controls(
     # VIZ-18: these figures end up in papers — printed, sometimes in black &
     # white — and are read by colourblind viewers, so the colour defaults are a
     # choice rather than a constant. Picking one writes the individual colour
-    # keys, so every per-element picker below still overrides it.
+    # keys, so every per-element picker below still overrides it — and once one
+    # is overridden the selector says **Custom** rather than keeping a name the
+    # figure no longer earns (the same rule the Quick-view buttons follow above).
+    # `Custom` is offered only while it's true, so the list stays the four real
+    # palettes the moment the colours match one again.
+    _active = _active_palette()
+    _palette_options = list(PALETTES) if _active else [CUSTOM_PALETTE, *PALETTES]
+    st.session_state["global_palette"] = _active or CUSTOM_PALETTE
     _palette = viz.selectbox(
         "Palette",
-        options=list(PALETTES),
+        options=_palette_options,
         key="global_palette",
         on_change=_on_palette_change,
         help="Colour defaults for the marks. **Colourblind-safe** uses the "
         "Okabe–Ito hues; **Print / greyscale** drops hue entirely so the figure "
         "survives a black & white print (pair it with a marker shape); **High "
         "contrast** is for projectors. Each one just presets the colour pickers — "
-        "change any of them afterwards.",
+        "change any of them afterwards and this reads **Custom**.",
     )
-    viz.caption(PALETTES[_palette]["description"])
+    if _palette in PALETTES:
+        viz.caption(PALETTES[_palette]["description"])
+    else:
+        _from = st.session_state.get("_palette_picked", DEFAULT_PALETTE)
+        viz.caption(
+            f"Your own colours, edited from **{_from}**. "
+            "Pick a palette to overwrite them."
+        )
 
     viz.divider()
 

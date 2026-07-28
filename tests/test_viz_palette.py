@@ -12,6 +12,7 @@ import pytest
 
 from scanpath_studio import api
 from scanpath_studio.constants import (
+    CUSTOM_PALETTE,
     DEFAULT_PALETTE,
     FIXATION_GLYPH_SYMBOLS,
     FIXATION_SYMBOLS,
@@ -219,6 +220,163 @@ class TestPalettes:
         assert state["global_saccade_class_color_regression"] == "#D55E00"
         # `other` is not user-editable, so it gets no session key.
         assert "global_saccade_class_color_other" not in state
+
+
+class TestTheSelectorStopsClaimingAPalette:
+    """VIZ-18 follow-up. A palette is one-way — it writes the ordinary colour
+    keys and never reads them back — so without a derived "which palette is
+    actually active?" the dropdown keeps reading *Colourblind-safe* after you've
+    hand-edited one of its colours. Same rule VIZ-12 applies to the Quick views."""
+
+    @pytest.fixture
+    def state(self, monkeypatch):
+        """A bare dict standing in for `st.session_state`."""
+        from scanpath_studio import controls
+
+        store: dict = {}
+        monkeypatch.setattr(controls.st, "session_state", store)
+        return store
+
+    @pytest.mark.parametrize("name", list(PALETTES))
+    def test_a_freshly_applied_palette_reports_itself(self, state, name):
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette(name)
+        assert _active_palette() == name
+
+    def test_editing_one_colour_drops_it_to_custom(self, state):
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette("Colourblind-safe")
+        state["global_saccade_color"] = "#123456"
+        assert _active_palette() is None
+
+    def test_editing_a_colorscale_drops_it_to_custom(self, state):
+        """The colourscales are part of the palette too — this is the half of
+        the question that isn't obvious from looking at the figure."""
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette("Print / greyscale")
+        state["global_heatmap_colorscale"] = "Turbo"
+        assert _active_palette() is None
+
+    def test_editing_a_saccade_class_colour_drops_it_to_custom(self, state):
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette("High contrast")
+        state["global_saccade_class_color_regression"] = "#010203"
+        assert _active_palette() is None
+
+    def test_putting_the_colour_back_restores_the_name(self, state):
+        """Custom is derived, not sticky — undo your edit and the palette
+        returns, so the option disappears from the list again."""
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette("Colourblind-safe")
+        original = state["global_saccade_color"]
+        state["global_saccade_color"] = "#123456"
+        assert _active_palette() is None
+        state["global_saccade_color"] = original
+        assert _active_palette() == "Colourblind-safe"
+
+    def test_a_lowercased_hex_still_matches(self, state):
+        """`st.color_picker` hands colours back lowercase; the registry spells
+        the Okabe-Ito hues in caps. Without normalizing, every palette would
+        read Custom the first time its own picker was touched."""
+        from scanpath_studio.controls import _active_palette, apply_palette
+
+        apply_palette("Colourblind-safe")
+        state["global_fixation_color"] = state["global_fixation_color"].lower()
+        assert _active_palette() == "Colourblind-safe"
+
+    def test_empty_state_is_not_silently_a_palette(self, state):
+        from scanpath_studio.controls import _active_palette
+
+        assert _active_palette() is None
+
+    def test_reselecting_custom_does_not_overwrite_your_colours(self, state):
+        """`Custom` names the absence of a palette. Applying it must be a no-op,
+        or picking it would wipe the very colours it stands for."""
+        from scanpath_studio.controls import apply_palette
+
+        apply_palette("Colourblind-safe")
+        state["global_saccade_color"] = "#123456"
+        apply_palette(CUSTOM_PALETTE)
+        assert state["global_saccade_color"] == "#123456"
+
+    def test_custom_is_not_offered_as_a_real_palette(self):
+        """It must stay out of the registry: `--palette`'s choices, the API's
+        expansion and the deep link all iterate PALETTES."""
+        from scanpath_studio.cli import _render_parser
+
+        assert CUSTOM_PALETTE not in PALETTES
+        assert CUSTOM_PALETTE not in _render_parser().format_help()
+
+    def test_viz_settings_report_custom_rather_than_a_stale_name(
+        self, state, normalized_words_df, normalized_fixations_df
+    ):
+        """The name reaches Share, Save & restore and the export caption. It has
+        to be derived there too, or a hand-edited figure is exported labelled
+        with a palette it doesn't use. Goes through the real non-rendering reader
+        (`viz_settings_from_state`) so this covers the path those surfaces use."""
+        from scanpath_studio.controls import apply_palette, viz_settings_from_state
+
+        def settings():
+            return viz_settings_from_state(
+                normalized_fixations_df, 12, words=normalized_words_df
+            )
+
+        apply_palette("Print / greyscale")
+        assert settings()["palette"] == "Print / greyscale"
+        state["global_fixation_color"] = "#ff0000"
+        assert settings()["palette"] == CUSTOM_PALETTE
+
+    @pytest.mark.timeout(120)
+    def test_the_rail_selector_says_custom_after_you_edit_a_colour(self):
+        """End to end through the real rail: the unit tests above pin the
+        derivation, this pins that the *widget* shows it — which is the whole
+        point of the item."""
+        streamlit_testing = pytest.importorskip("streamlit.testing.v1")
+
+        at = streamlit_testing.AppTest.from_file("streamlit_app.py")
+        at.query_params["source"] = "synthetic"
+        at.run(timeout=60)
+
+        def picker():
+            return next(s for s in at.selectbox if s.label == "Palette")
+
+        picker().set_value("Colourblind-safe").run(timeout=60)
+        assert picker().value == "Colourblind-safe"
+        assert CUSTOM_PALETTE not in picker().options
+
+        # Hand-edit one of the palette's colours, exactly as the colour picker
+        # in the Saccades popover would.
+        at.session_state["global_saccade_color"] = "#123456"
+        at.run(timeout=60)
+        assert picker().value == CUSTOM_PALETTE
+        assert CUSTOM_PALETTE in picker().options
+
+    @pytest.mark.parametrize(
+        ("saved", "expect_skipped"),
+        [(CUSTOM_PALETTE, False), ("Colourblind-safe", False), ("Nope", True)],
+    )
+    def test_restoring_a_custom_config_is_not_reported_as_skipped(
+        self, monkeypatch, saved, expect_skipped
+    ):
+        """A config saved from hand-edited colours round-trips through the
+        explicit colour keys, so its `Custom` is a valid value — flagging it as
+        an unknown palette would warn the user about their own good file. A
+        genuinely bad name must still be flagged."""
+        import pandas as pd
+
+        from scanpath_studio import url_state
+
+        monkeypatch.setattr(url_state.st, "session_state", {})
+        monkeypatch.setattr(url_state.st, "toast", lambda *a, **k: None)
+        _, skipped = url_state._restore_plot_config(
+            {"coloring": {"palette": saved}}, pd.DataFrame(), pd.DataFrame()
+        )
+        assert ("palette" in skipped) is expect_skipped
 
 
 class TestSaccadeDirectionMode:

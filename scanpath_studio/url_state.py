@@ -27,6 +27,7 @@ from .constants import (
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
     MULTIPLEYE_BUNDLE_CHOICE,
+    CUSTOM_PALETTE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
     ONESTOP_PUBLIC_CHOICE,
@@ -655,8 +656,11 @@ def _restore_plot_config(
             for state_key, value in palette_state(palette).items():
                 put(state_key, value)
             put("global_palette", palette)
-        else:
+        elif palette != CUSTOM_PALETTE:
             skipped.append("palette")
+        # `Custom` is a legitimate saved value, not a bad one — it means the
+        # config was written from hand-edited colours, which ride in the explicit
+        # colour keys below. Nothing to preset, and nothing to warn about.
     if "heatmap_style" in coloring:
         style = coloring["heatmap_style"]
         put_valid(

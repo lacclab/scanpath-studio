@@ -294,6 +294,13 @@ PALETTES: dict[str, dict] = {
     },
 }
 DEFAULT_PALETTE = "Default"
+# Not a palette — the honest answer when the live colours match none of them.
+# A palette only *presets* the individual colour keys, so the moment one of those
+# pickers is changed the selector would otherwise keep naming a palette the figure
+# no longer uses. Deliberately kept OUT of ``PALETTES`` so the registry stays the
+# set of things that can actually be applied: `--palette` choices, the API's
+# expansion, and the deep link all iterate `PALETTES` and must not offer this.
+CUSTOM_PALETTE = "Custom"
 
 
 def palette_settings(name: str) -> dict:

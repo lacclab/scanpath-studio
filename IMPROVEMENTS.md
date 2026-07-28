@@ -29,7 +29,6 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ### Currently in progress
 - **PERF-1** — Plotly → matplotlib migration ([PR #83](https://github.com/lacclab/scanpath-studio/pull/83), `matplotlib-migration` branch).
 - **DATA-1** — Broaden dataset support (ongoing epic).
-- **VIZ-18** — palettes; the selector still claims a palette after you hand-edit a colour.
 - **DATA-16** — the security audit's fixes (S1/S2/S4/S5 done, S3/S6/S7/S10/S11 next).
 
 ### Awaiting your approval
@@ -39,6 +38,7 @@ Implemented, not yet signed off (→ archived on your confirmation):
   (contributing a dataset), **ENG-13** (corpus analysis). All four rewritten
   2026-07-29 after your "too long / too AI" note.
 - **UX-20** — the AI-assistance disclosure (rewritten shorter 2026-07-29).
+- **VIZ-18** — selectable palettes; the selector now reads *Custom* once you edit one (2026-07-29).
 - Older: **AN-28** (the one gap left from *Analysis & corpus views*); **PRE-3**
   (vertical drift correction — *you'll revisit*); **ENG-15** (standalone desktop
   app, 2026-07-16).
@@ -239,7 +239,7 @@ Add the word text (the word-box hover already does this,
 compare, and animation traces.
 
 
-**VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: In progress`
+**VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Pending approval` *(implemented 2026-07-28, follow-up 2026-07-29)*
 
 Audit the [`constants.py`](scanpath_studio/constants.py) defaults against the ways
 these figures actually get used: on-screen contrast, **printed** in a paper,
@@ -258,15 +258,24 @@ the existing colour controls — it **presets** them, writing into the same
 class. Every picker stays authoritative and editable afterwards; background colour
 is deliberately excluded (canvas, not marks).
 
-**Follow-up (2026-07-29) — the selector lies once you edit a colour.** Because
-`apply_palette` is one-way and fires only on change, picking *Colourblind-safe* and
-then hand-editing one colour leaves the dropdown still reading "Colourblind-safe"
-while the figure no longer is. **VIZ-12** already solved exactly this for quick
-views: `controls._active_quick_view()` derives the active preset from live session
-state and de-emphasises the buttons once you've customised. Give the palette
-selector the same treatment — derive the active palette by comparing the live
-`global_*` values against each palette's settings, show *Custom* when nothing
-matches, and say so in the caption rather than leaving a stale name on screen.
+**Follow-up done (2026-07-29) — the selector no longer claims a palette you've
+edited away from.** `apply_palette` is one-way and fires only on change, so
+picking *Colourblind-safe* and then hand-editing one colour left the dropdown
+still reading "Colourblind-safe" while the figure no longer was. Fixed the way
+**VIZ-12** fixed it for quick views: new `controls._active_palette()` derives the
+active palette by comparing the live `global_*` values against each palette's
+`palette_state` (hex normalized — the pickers hand colours back lowercase), and
+returns `None` once they diverge. `constants.CUSTOM_PALETTE` is then offered as an
+option *only while it's true*, with a caption naming what you drifted from
+("Your own colours, edited from **Colourblind-safe**"); undo the edit and the real
+palette comes back and *Custom* disappears. Deliberately **not** in `PALETTES`, so
+`--palette`'s choices, `api._expand_palette` and `?palette=` still see exactly the
+four applicable palettes. `_collect_viz_settings` derives the name too, so Share,
+Save & restore and the export caption report `Custom` instead of a stale palette;
+`_restore_plot_config` accepts it rather than flagging the user's own valid file.
+Tests in [`tests/test_viz_palette.py`](tests/test_viz_palette.py) — including an
+`AppTest` that drives the real rail — with four mutations run to confirm they
+discriminate.
 
 
 **VIZ-20 · Hand-authored scanpaths + an "Illustration" mode** — `Status: Backlog`

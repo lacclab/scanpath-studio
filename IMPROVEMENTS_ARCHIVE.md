@@ -714,6 +714,24 @@ each with the exact fix; two accepted with reasons. It deliberately changed no
 code so the fixes land as reviewable commits — those are tracked separately as
 **DATA-16**, which is still open (S1/S2/S4/S5 done, S3/S6/S7/S10/S11 next).
 
+**DATA-11 · Documented "bring your own dataset" pipeline** — `Status: Done` *(signed off 2026-07-29)*
+
+[`docs/bring-your-own-data.md`](docs/bring-your-own-data.md) — the end-to-end path
+from a raw export to a loaded dataset: the minimum the app needs (word boxes +
+fixations) and what degrades without each field, how auto-detection works and how
+to override it, saving and reusing a mapping, worked EyeLink-report and plain-CSV
+examples, and a symptom→cause table. Linked from the wizard's first screen and
+from `getting-started` / `data-format`. Distinct from **DATA-14** (getting a
+dataset *bundled* with the app).
+
+Rewritten 2026-07-29, 435 → ~195 lines: the content was right, the shape wasn't.
+It opened with a field-by-field reference and a 12-row candidate-column table
+before saying what to *do*; it now leads with the two-sentence answer (EyeLink
+users are done) and keeps only the omissions that change behaviour. The candidate
+table is gone — it duplicated `data.py` and would rot — replaced by how matching
+works. Worked examples and the symptom→cause list are collapsed, so the page is
+one screen until you need them.
+
 ---
 
 ## Engineering
@@ -869,13 +887,55 @@ wrong column names now gets a message naming the canonical field that couldn't b
 inferred and the candidates that were tried, instead of a `KeyError` from deep
 inside normalization.
 
+**ENG-13 · Document the new analysis sections once built** — `Status: Done` *(signed off 2026-07-29)*
+
+[`docs/corpus-analysis.md`](docs/corpus-analysis.md), in the site nav under *Using
+the app*: the three subtabs (Per text · Per reader · Groups), what research
+question each view answers, how to read it, the caveat that matters for each, and
+the cross-cutting controls (measure picker, aggregation & spread, raw vs.
+z-scored, the min-readers guard, tidy-table download) plus how the active filter
+and viz settings carry in.
+
+Rewritten 2026-07-29 alongside the other doc pages, 534 → ~315 lines. It's a
+reference, meant to be scanned: each view is now Question + what it shows + the
+one caveat that changes how you read it, and the ten-row measure table collapsed
+to two columns (word-level vs fixation-level), which is the distinction that
+actually governs which views accept a measure.
+
+**ENG-15 · Package the app as a standalone desktop application** — `Status: Done` *(signed off 2026-07-29)*
+
+A double-clickable app for Windows / macOS / Linux, so a researcher can use
+Scanpath Studio without a Python toolchain, a terminal, or internet access — and
+so private eye-tracking data never leaves the machine.
+
+Approach per the ADR ([`plans/eng-15-desktop-app.md`](plans/eng-15-desktop-app.md)):
+**PyInstaller onedir + the system default browser** (stlite/WASM rejected —
+scipy/Parquet/Kaleido; Electron/Tauri and briefcase/constructor rejected for v1).
+[`desktop/`](desktop/) holds `launcher.py` (free-port Streamlit server + branded
+theme via `cli._theme_cli_flags` (BUG-6) + health-check browser open +
+`--selfcheck`), `scanpath_studio.spec` (packages the **source** + `sample_data/`
+— Streamlit re-execs `app.py` from disk — plus streamlit/plotly/sortables/kaleido/
+imageio-ffmpeg data; `--global.developmentMode=false` guards frozen Streamlit),
+`smoke_test.py` (frozen selfcheck: sample → figure → HTML + full app-module
+import; then boot + `/_stcore/health` poll + `GET /`), and `make_icons.py` +
+committed `icons/`. CI:
+[`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) — 3-OS matrix on
+`v*` tags + manual dispatch, builds, smoke-tests, uploads artifacts, attaches
+archives to the release.
+
+**Verified on Linux** (507 MB onedir, smoke test green). The other two platforms
+and the v1 rough edges are follow-ups, not part of this item: **ENG-19** (the
+macOS bundle doesn't work), **ENG-20** (Windows console window + first-run
+warning), **ENG-21** (signing / notarization). PNG-GIF export still needing a
+system Chrome is **ENG-10**.
+
 ---
 
 ## Analysis & corpus views
 
-_Signed off 2026-07-28. **AN-28** (thread the active filter + visualization
-settings into Corpus Analysis) is the one piece that did not land and stays open
-in [`IMPROVEMENTS.md`](IMPROVEMENTS.md)._
+_AN-1 … AN-27 signed off 2026-07-28; **AN-28** (thread the active filter +
+visualization settings into Corpus Analysis) landed after and was signed off
+2026-07-29 — it's the last entry in this section._
 
 **Goal:** replace the single *Corpus Analysis → Aggregated Views* subtab with a
 set of analysis sections, each answering one question — *what does a text look
@@ -1040,6 +1100,22 @@ Gray out / warn when a per-word cell is backed by too few observations.
 **AN-27 · Download the underlying tidy table per view** — `Status: Done` *(signed off 2026-07-28)*
 
 Reuse the export plumbing so users can re-plot elsewhere.
+
+**AN-28 · Persist the active filter & visualization controls into Corpus Analysis** — `Status: Done` *(signed off 2026-07-29)*
+
+The trial filters already carried into Corpus Analysis (the view is handed
+`words_filtered`/`fixations_filtered`), but the display options didn't: the
+per-text stimulus figure **hard-coded** heatmap style/metric/colorscale, colorbar
+orientation/font, marker size, label & text styling, fixation-flag highlights and
+the stimulus image, so the same trial looked different either side of the view
+toggle. `render_corpus_analysis_tab` now takes `viz_settings` —
+`app.main` builds it with `controls.viz_settings_from_state`, the non-rendering
+reader of the same `global_*` keys the Scanpath rail writes — and the stimulus
+figure reads the user's choices instead.
+
+The *other* analysis figures (word profiles, distributions, difference profiles)
+still take no colour or colourscale argument at all, and the Corpus view has no
+controls of its own to change what it reads. Both are **AN-29**.
 
 ---
 

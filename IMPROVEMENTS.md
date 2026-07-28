@@ -34,16 +34,16 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
 
-- **Docs** — **DATA-11** (bring your own data), **DATA-12** (privacy), **DATA-14**
-  (contributing a dataset), **ENG-13** (corpus analysis). All four rewritten
-  2026-07-29 after your "too long / too AI" note.
+- **Docs** — **DATA-12** (privacy), **DATA-14** (contributing a dataset). Both
+  rewritten 2026-07-29 after your "too long / too AI" note.
 - **UX-20** — the AI-assistance disclosure (rewritten shorter 2026-07-29).
-- Older: **AN-28** (the one gap left from *Analysis & corpus views*); **PRE-3**
-  (vertical drift correction — *you'll revisit*); **ENG-15** (standalone desktop
-  app, 2026-07-16).
+- Older: **PRE-3** (vertical drift correction — *you'll revisit*).
 
 Signed off **2026-07-29** and archived: **UX-19**, **VIZ-11**, **VIZ-18**,
-**DATA-13**, **ENG-1**, **ENG-2**, **ENG-3**, **ENG-4**, **ENG-16**, **ENG-18**.
+**DATA-11**, **DATA-13**, **AN-28**, **ENG-1**, **ENG-2**, **ENG-3**, **ENG-4**,
+**ENG-13**, **ENG-15**, **ENG-16**, **ENG-18**. ENG-15 signed off on the Linux
+build — **ENG-19** (macOS doesn't work), **ENG-20** (Windows rough edges) and
+**ENG-21** (signing) are now open in their own right.
 Signed off 2026-07-28: **UX-7**, **UX-9**, **UX-10**, **UX-11**, **VIZ-15**,
 **EXP-1**, **EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10** (working as
 intended), **BUG-11**.
@@ -299,31 +299,6 @@ OneStop / MultiplEYE / PoTeC in [`datasets.py`](scanpath_studio/datasets.py).
 Feeds **DATA-1**, and exercises **PRE-6** (RTL / multilingual rendering) and
 **VAL-3** (non-English validation).
 
-**DATA-11 · Documented "bring your own dataset" pipeline** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`docs/bring-your-own-data.md`](docs/bring-your-own-data.md)
-— the minimum the app needs and what degrades without each field, how auto-detection
-works and how to override it, saving and reusing a mapping, worked EyeLink-report
-and plain-CSV examples, and a symptom→cause table for when it goes wrong. Linked
-from the wizard's first screen and from `getting-started` / `data-format`.
-
-**Rewritten 2026-07-29 (your note: too long, nobody will read it).** 435 → ~195
-lines. The content was right, the shape wasn't: it opened with a full field-by-field
-reference and a 12-row table of every candidate column name before saying what to
-*do*. Now it leads with the two-sentence answer (EyeLink users are done), states the
-minimum as prose, and keeps only the omissions that change behaviour. The candidate
-table is gone — it duplicated `data.py` and would rot; the page says how matching
-works instead. The trial-id pre-selection algorithm went from a nested numbered list
-to one sentence plus the caveat that mattered. The worked examples and the
-symptom→cause list are now collapsed (`???`), so the page is one screen until you
-need them.
-
-An end-to-end path from a raw export to a loaded dataset: what the app minimally
-needs (word boxes + fixations), how to map columns, how to save and reuse a
-mapping, and worked examples for the common export shapes. Docs page + a clear
-entry point from the wizard. Distinct from **DATA-14**, which is about getting a
-dataset *bundled* with the app. Related: **PRE-7** (`.asc` import).
-
 **DATA-12 · Privacy statement — "we don't use your data"** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 **Implemented.** [`docs/privacy.md`](docs/privacy.md), written from the code
@@ -428,8 +403,8 @@ they are the only two a stranger on the network can reach at all.
 page — don't reopen them without reading those. Related: **DATA-12**, **ENG-15**
 (desktop), **ENG-17** (a hosted mode would make S2 load-bearing).
 
-_DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) and
-DATA-13 (the security audit) are in
+_DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul), DATA-11
+(bring your own data) and DATA-13 (the security audit) are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-17`._
 
 ---
@@ -452,35 +427,38 @@ so, add a note/warning. If not, close this item.
 
 ## Analysis & corpus views
 
-_The epic is signed off: **AN-1 … AN-27** are in
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Only **AN-28** stays open —
-it's the one thing the epic didn't deliver, and it's a plumbing gap rather than a
-missing view._
+_The epic is signed off: **AN-1 … AN-28** are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). **AN-29** is what AN-28
+left behind._
 
-**AN-28 · Persist the active filter & visualization controls into Corpus Analysis** — `Status: Pending approval`
+**AN-29 · Let the user change things from inside Corpus Analysis** — `Status: Open`
 
-The Aggregated Views subtab (`tabs.render_aggregated_views_tab`
-[`tabs.py`](scanpath_studio/tabs.py:2528)) already receives
-`words_filtered`/`fixations_filtered`, so the **trial filters** (participants, text,
-metadata, favourites/tags via `controls.read_trial_filters`) **do** carry over
-(matching the section goal above). But it does **not** receive `viz_settings`, so
-its per-text heatmap (the `make_scanpath_figure` call around
-[`tabs.py`](scanpath_studio/tabs.py:2647)) **hard-codes** the display options —
-heatmap style/metric/colorscale, colorbar orientation/font, marker size, label &
-text styling, fixation-flag highlights, stimulus image — instead of reading the
-user's `global_*` choices, unlike `render_multiple_comparison_tab`, which threads
-`viz_settings` through. Pass `viz_settings` from `render_corpus_analysis_tab` into
-`render_aggregated_views_tab` and replace the hard-coded figure args with reads
-from it; audit the trend / distribution figures for the same gap. Related:
-**AN-23**, **AN-24**.
+**AN-28** made the Corpus view *read* the visualization settings; it still has no
+way to *change* them. Every control lives in the Scanpath view's right rail, so
+restyling a corpus figure means switching views, adjusting a control that shows a
+scanpath, and switching back to see what it did — and only the per-text stimulus
+figure responds at all.
 
-- **Colour control (added 2026-07-28).** Same gap, stated as a user-facing ask:
-  the Corpus Analysis figures hard-code their colours / colourscales, so a user
-  can't restyle them (for a paper, for print, or for a colourblind-safe scheme).
-  Threading `viz_settings` through covers the heatmap; also expose a colour /
-  colourscale choice for the *other* analysis figures (profiles, distributions,
-  difference plots), which don't read the `global_*` viz keys at all. Related:
-  **VIZ-18**.
+Two halves:
+
+- **Controls in the view.** Whatever subset of the rail actually affects these
+  figures should be reachable from Corpus Analysis, so the loop is
+  change→see→change. `controls.sidebar_controls(host=…)` already renders into an
+  arbitrary container, and `viz_settings_from_state` reads the same `global_*`
+  keys, so the plumbing is in place — the design question is *which* controls
+  belong here (most of the rail is about a single scanpath) and whether a Corpus
+  figure's settings are shared with the Scanpath view or its own.
+- **Colour for the non-stimulus figures.** `make_word_profile_figure`,
+  `make_distribution_figure` and `make_difference_profile_figure`
+  ([`plots.py`](scanpath_studio/plots.py)) take no colour or colourscale argument
+  at all — they can't be restyled for print, greyscale, or a colourblind-safe
+  scheme even from the rail. Give them a colour parameter and feed it from the
+  palette (**VIZ-18**) like the scanpath figures.
+
+Whatever ships needs the deep link / Share, CLI and headless API too (*AGENTS.md
+→ Exposing a feature on every surface*). Related: **AN-23**, **AN-24**, **VIZ-18**.
+
+_Next item: `AN-30`._
 
 ---
 
@@ -794,51 +772,52 @@ concern one layer down).
 ### UX / robustness
 
 _ENG-9 (auto-detected columns) · ENG-10 (animation-export errors without Chrome) ·
-ENG-11 (versioned Save & restore) · ENG-12 (rendering docs) · ENG-14 (author list) ·
-ENG-16 (README assets) · ENG-18 (agent docs) are in
+ENG-11 (versioned Save & restore) · ENG-12 (rendering docs) · ENG-13 (corpus-analysis
+docs) · ENG-14 (author list) · ENG-16 (README assets) · ENG-18 (agent docs) are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-**ENG-13 · Document the new analysis sections once built** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`docs/corpus-analysis.md`](docs/corpus-analysis.md), in the
-site nav under *Using the app*: the three subtabs (Per text · Per reader ·
-Groups), what research question each view answers, how to read it, the caveat
-that matters for each, and the cross-cutting controls (measure picker,
-aggregation & spread, raw vs. z-scored, the min-readers guard, tidy-table
-download) plus how the active filter and viz settings carry in.
-
-**Rewritten 2026-07-29** alongside the other doc pages: 534 → ~315 lines. It's a
-reference, so it's meant to be scanned rather than read — the per-view entries are
-now Question + what it shows + the one caveat that changes how you read it, instead
-of a paragraph of elaboration each. The measure table collapsed from ten rows into
-two columns (word-level vs fixation-level), which is the distinction that actually
-governs which views accept it.
-
-Add to `docs/` after AN-* land.
 
 ### Distribution / packaging
 
-**ENG-15 · Package the app as a standalone desktop application** — `Status: Pending approval`
+_**ENG-15** (the desktop bundle itself) is in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md), signed off 2026-07-29 on
+the Linux build. ENG-19 … ENG-21 are what it left open._
 
-**Implemented (2026-07-16).** Approach per the ADR
-([`plans/eng-15-desktop-app.md`](plans/eng-15-desktop-app.md)): **PyInstaller
-onedir + the system default browser** (stlite/WASM rejected — scipy/Parquet/
-Kaleido; Electron/Tauri and briefcase/constructor rejected for v1). New
-[`desktop/`](desktop/): `launcher.py` (free-port Streamlit server + branded
-theme via `cli._theme_cli_flags` (BUG-6) + health-check browser open +
-`--selfcheck`), `scanpath_studio.spec` (package **source** + `sample_data/`
-collected — Streamlit re-execs `app.py` from disk — plus
-streamlit/plotly/sortables/kaleido/imageio-ffmpeg data;
-`--global.developmentMode=false` guards frozen Streamlit), `smoke_test.py`
-(frozen selfcheck: sample → figure → HTML + full app-module import; then boot +
-`/_stcore/health` poll + `GET /`), `make_icons.py` + committed `icons/`
-(scanpath motif; .png/.ico/.icns). CI:
-[`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) — 3-OS matrix
-on `v*` tags + manual dispatch, builds, smoke-tests, uploads artifacts, and
-attaches archives to the GitHub release. **Verified locally on Linux**: 507 MB
-onedir bundle, smoke test fully green. Known limits (documented): unsigned
-builds (Gatekeeper/SmartScreen warn), PNG/GIF export still needs a system
-Chrome (ENG-10), console window stays visible in v1 (native window = follow-up).
+**ENG-19 · The macOS desktop build doesn't work** — `Status: Open`
+
+Reported by the user (2026-07-29): the macOS bundle from
+[`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) does not run.
+**The failure mode isn't captured yet** — first step is to get the actual
+symptom (Gatekeeper refusal vs. a launcher/PyInstaller error vs. the server
+starting but no browser opening), from a clean machine that never had the repo,
+since a dev Mac hides missing-bundle problems. Only the Linux build was verified
+by hand before release, so treat macOS as unverified rather than regressed. Note
+that the CI matrix *does* run `desktop/smoke_test.py` on `macos-latest` and it
+passes — so whatever this is, the smoke test doesn't cover it, and extending it
+is part of the fix. Related: **ENG-21** (signing) if it turns out to be
+Gatekeeper.
+
+**ENG-20 · Windows desktop build: the rough edges** — `Status: Open`
+
+Two known v1 limits, both documented at release rather than fixed:
+
+- **A console window stays open** behind the app for the life of the session.
+  Closing it kills the server. Options: `console=False` in the spec (loses the
+  crash output the launcher prints), or a native window (pywebview) that owns the
+  lifecycle — the ADR deferred this.
+- **SmartScreen warns on first run** because the build is unsigned — **ENG-21**.
+
+Also unverified: only the Linux build was checked by hand, so the same "does it
+actually run on a clean machine" pass **ENG-19** needs is owed to Windows.
+
+**ENG-21 · Sign and notarize the desktop builds** — `Status: Open`
+
+Unsigned bundles make both non-Linux platforms hostile on first run: macOS
+Gatekeeper blocks (or quarantines) the app, Windows SmartScreen warns. Needs an
+Apple Developer ID + notarization/stapling in the macOS CI job, and an
+Authenticode certificate for Windows — i.e. **paid certificates and secrets in
+the repo**, which is a decision for the user, not just work to schedule. Blocks a
+comfortable install story for the audience the desktop build exists for
+(researchers without a toolchain). Feeds **ENG-19** / **ENG-20**.
 
 **ENG-17 · Hosted online mode: login + remote data backend (Snowflake?)** — `Status: Parked` *(2026-07-28 — may revisit)*
 
@@ -850,31 +829,7 @@ online rather than everyone loading their own copy. The opposite trade-off from
 **DATA-13** (data security) a hard prerequisite. **Parked at the user's request
 (2026-07-28)** — captured so the idea isn't lost, not scoped.
 
-Ship Scanpath Studio as a double-clickable desktop app (Windows / macOS / Linux)
-so non-technical researchers can use it without installing Python or running
-`pip install` + a terminal command. Today the entry points are the PyPI package
-(`scanpath-studio run` via [`cli.py`](scanpath_studio/cli.py)) and the hosted
-Streamlit Community Cloud demo — both assume either a Python toolchain or
-internet access; a desktop build also keeps private eye-tracking data fully
-local. Candidate approaches to evaluate:
-
-- **`streamlit-desktop-app` / PyInstaller** — bundle the Python runtime + app
-  into a single executable that launches the Streamlit server and opens a
-  native window (pywebview). Most direct; watch binary size (Plotly, pandas,
-  scipy) and the `sample_data/` + font assets (`importlib.resources` paths must
-  survive freezing).
-- **Electron/Tauri wrapper** around a bundled server — more moving parts, but
-  proven for Streamlit (e.g. stlite desktop). **stlite (Pyodide/WASM)** itself
-  is likely out: scipy/Parquet/Chrome-based animation export may not run in WASM.
-- **Conda constructor / briefcase** — installer-style distribution instead of a
-  single binary.
-
-Scope: pick an approach (small ADR), a build script + CI job per OS
-(`.github/workflows/`), an app icon, and a smoke test that the frozen build
-boots the bundled demo. Gotchas to verify under freezing: the theme lookup from
-any launch dir (BUG-6), Chrome/kaleido discovery for PNG + animation export
-(ENG-10), and `st.cache_data` temp paths. Related: **DATA-1** (private local
-corpora are the main audience), **PERF-1**.
+_Next item: `ENG-22`._
 
 ---
 

@@ -133,12 +133,14 @@ that EXPECTED covers every canonical measure, and that a pre-computed EyeLink
 `IA_*` value survives both normalization and `compute_word_metrics` untouched —
 which is what makes "the numbers are your eye-tracker's" true.
 
-**Rewritten 2026-07-29 (your note: shorter, higher level, more human).** The
-first draft argued its case at bullet-list length on all three surfaces. Cut to a
-short paragraph: one thing the reader can check themselves, one thing to do
-before publishing, one place to report. The in-app expander is gone too — at this
-length hiding the note behind a click was the wrong trade. Same three anchors
-(`?source=synthetic`, *cross-check*, the issues link) so the tests still hold.
+**Rewritten 2026-07-29 — shorter, and no claims about effort.** Two passes: cut
+the bullet lists to a short paragraph (the in-app expander went with them — at
+that length, hiding it behind a click was the wrong trade), then cut the claims
+about how hard the code was tested. "We put real effort into validating it" /
+"a trial we traced by hand" are things a reader can't check and shouldn't be
+asked to take on faith. What's left is only what they can verify themselves:
+the ground-truth trial at `?source=synthetic`, and `IA_*` passthrough. Same three
+anchors (`?source=synthetic`, *cross-check*, the issues link), so the tests hold.
 
 _Next item: `UX-21`._
 
@@ -229,15 +231,6 @@ pattern / column** (e.g. `{text_id}.png`) so per-trial images resolve without
 embedding them. Local-only (folders aren't reachable on the hosted demo); generalize
 `data._resolve_sample_image_paths` from the bundled `sample_data` dir to a
 user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus.
-
-**VIZ-16 · Show the word text in the fixation hover** — `Status: Backlog`
-
-The fixation hover reads `Fixation # / Duration / Word #`
-([`plots.py`](scanpath_studio/plots.py:1620)) — the word *number*, not the word.
-Add the word text (the word-box hover already does this,
-[`plots.py`](scanpath_studio/plots.py:906)) via `customdata`, for the single,
-compare, and animation traces.
-
 
 **VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Pending approval` *(implemented 2026-07-28, follow-up 2026-07-29)*
 

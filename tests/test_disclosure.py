@@ -1,8 +1,8 @@
 """UX-20: the AI-assistance disclosure, and the claims it makes.
 
-The note tells a researcher three checkable things. Two of them are load-bearing
-enough to pin here: that the hand-traced ground-truth trial really is reachable
-the way the note says, and that pre-computed EyeLink measures really do win over
+The note claims only what a reader can check for themselves, so both claims are
+pinned here: that the ground-truth trial really is reachable the way the note
+says, and that pre-computed EyeLink measures really do take precedence over
 derived ones. A disclosure whose "you can verify this yourself" turns out to be
 wrong is worse than no disclosure.
 """
@@ -71,11 +71,11 @@ class TestTheClaimsHold:
         picker = next(s for s in at.selectbox if s.label.startswith("Trial ID"))
         assert list(picker.options) == ["synthetic_2line_demo"]
 
-    def test_the_hand_traced_expectations_cover_every_canonical_measure(self):
-        """ "Worked out by hand, measure by measure" has to be true of *every*
-        measure, or the note oversells what was checked. (The exhaustive
-        value-by-value assertions live in `tests/test_synthetic.py`; this pins
-        the coverage claim itself.)"""
+    def test_the_expectations_cover_every_canonical_measure(self):
+        """ "Expected values per measure" has to be true of *every* measure, or
+        the note oversells what was checked. (The exhaustive value-by-value
+        assertions live in `tests/test_synthetic.py`; this pins the coverage
+        claim itself.)"""
         from tests.synthetic_data import EXPECTED
 
         assert {

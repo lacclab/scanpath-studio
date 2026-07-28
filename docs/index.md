@@ -133,15 +133,15 @@ reproducible headless through the same pipeline.
 on one shared real-time clock.</p>
 
 !!! info "Built with AI assistance"
-    A lot of this code was written with AI help, and we've tested it seriously —
-    the reading measures are checked against a trial we traced by hand (open it
-    with `?source=synthetic`), and if your export already carries EyeLink `IA_*`
-    measures, those win over anything we compute.
+    Much of this code was written with AI assistance. Two things you can check:
+    the reading measures are pinned to a ground-truth trial with expected values
+    per measure (open it with `?source=synthetic`), and EyeLink `IA_*` measures
+    already in your export are passed through, not recomputed.
 
-    None of that makes it bug-free. **Before a number goes in a paper,
-    cross-check it against your own pipeline.** If something looks off, please
-    [tell us](https://github.com/lacclab/scanpath-studio/issues) — attach the JSON
-    from **💾 Save & restore** and we'll see exactly what you saw.
+    That is not the same as bug-free. **Cross-check anything you publish against
+    your own pipeline.** If something looks wrong,
+    [open an issue](https://github.com/lacclab/scanpath-studio/issues) with the
+    JSON from **💾 Save & restore** — it reproduces the exact view.
 
 !!! quote "Citing Scanpath Studio"
     If you use Scanpath Studio in your research, please cite it — the citation

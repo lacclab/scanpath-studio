@@ -717,8 +717,18 @@ def _saccade_arrow_markers(
 
 
 def build_word_boxes(words: pd.DataFrame, color: str = WORD_BOX_COLOR) -> list:
+    """Rectangles for the word interest areas.
+
+    BUG-11: drawn from the *re-centred* boxes, so what's on screen matches what
+    ``measures.assign_fixations_to_words`` actually assigns against. The word
+    *labels* keep the original frame — ``x`` still means "where the glyphs
+    start", which is what keeps the true-to-scale text on top of the stimulus
+    image. For a glyph-tight corpus the recentring is a no-op.
+    """
+    from .measures import recentre_word_boxes
+
     shapes = []
-    for row in words.itertuples():
+    for row in recentre_word_boxes(words).itertuples():
         x0, y0 = row.x, row.y
         x1, y1 = row.x + row.width, row.y + row.height
         shapes.append(

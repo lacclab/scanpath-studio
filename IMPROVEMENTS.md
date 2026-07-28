@@ -37,7 +37,8 @@ Implemented, not yet signed off (→ archived on your confirmation):
 **UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-10**
 (sortable trial picker), **VIZ-15** (marker shape), **VIZ-18** (selectable
 palettes), **EXP-1** (export path patterns), **EXP-2** (figure titles &
-captions), **BUG-7** (sentinel flag columns) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
+captions), **BUG-7** (sentinel flag columns), **BUG-11** (word-box
+boundaries) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
 corpus views* epic — *you asked to keep this open*); **PRE-3** (vertical drift
 correction — *you'll revisit*); **VIZ-11** (animation slider readout — *you'll
 revisit*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
@@ -945,7 +946,7 @@ word-box top (`_line_pitch`, [`plots.py`](scanpath_studio/plots.py:339)) — wit
 floor, so every within-line arc sits above the words regardless of length.
 Related: **BUG-9**, **VIZ-9**.
 
-**BUG-11 · Word box edges don't fall midway between words** — `Status: Backlog`
+**BUG-11 · Word box edges don't fall midway between words** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 Word box boundaries should sit in the **middle of the whitespace** between two
 words; they don't — each box carries the *entire* inter-word space as trailing

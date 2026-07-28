@@ -110,6 +110,105 @@ def _assign_word_ids_single(
     return np.where(word_idx >= 0, wids[np.clip(word_idx, 0, None)], np.nan)
 
 
+# --- BUG-11 · word-box boundaries that sit mid-space ------------------------
+# An interest-area boundary should fall in the MIDDLE of the whitespace between
+# two words. In EyeLink-style exports it doesn't: each box carries the whole
+# inter-word space as trailing padding, so the boxes tile the line but every
+# boundary sits a half-space too far right — and a fixation landing in the space
+# *before* a word is credited to the previous word. On the bundled demo every
+# box is exactly ``(n_chars + 1) × advance`` px wide and starts at the word's
+# first glyph.
+#
+# The correction has to be conditional: glyph-tight AOIs (PoTeC, MultiplEYE)
+# leave real gaps between boxes and are already centred by construction, so
+# shifting them would introduce the very error this fixes. `word_box_space_px`
+# therefore only reports a padding width when the layout actually looks like
+# "tiling boxes with one trailing space", and returns 0.0 otherwise.
+#
+# Only the BOUNDARY moves. ``x`` keeps meaning "where the glyphs start", so the
+# true-to-scale word labels and the stimulus-image alignment (BUG-3 / VIZ-4) are
+# untouched — the labels are drawn from the original frame, the boundaries from
+# the recentred one.
+_TILING_GAP_TOL_PX = 1.0
+# Box widths are integers in the exports, so `(n_chars + 1) × advance` is only
+# met to within a pixel of rounding; and a stray token (a stripped-out glyph, a
+# joined punctuation mark) shouldn't disqualify an otherwise regular layout.
+_ADVANCE_RESIDUAL_TOL_PX = 1.5
+_ADVANCE_MIN_AGREEMENT = 0.95
+
+
+def _sample_trial_words(words: pd.DataFrame) -> pd.DataFrame:
+    """One trial's words — the layout is a property of the corpus, not a trial.
+
+    Necessary as well as cheap: every trial is drawn at the same screen
+    positions, so clustering lines across a whole corpus would merge different
+    trials' words into one "line" and read their interleaved x as gaps.
+    """
+    keys = [c for c in ("participant_id", "trial_id") if c in words.columns]
+    if not keys:
+        return words
+    first = words[keys].iloc[0]
+    mask = pd.Series(True, index=words.index)
+    for key in keys:
+        mask &= words[key] == first[key]
+    return words[mask]
+
+
+def word_box_space_px(words: pd.DataFrame) -> float:
+    """Width of the trailing inter-word padding baked into each box, or ``0.0``.
+
+    Non-zero only for a monospaced, *tiling* layout whose boxes are consistently
+    ``(n_chars + 1)`` advances wide — the shape that carries the whole space as
+    trailing padding. Anything else (glyph-tight AOIs, proportional fonts,
+    missing text) reports 0.0, i.e. "don't touch this layout".
+    """
+    needed = {"x", "width", "text"}
+    if words is None or words.empty or not needed <= set(words.columns):
+        return 0.0
+    sample = _sample_trial_words(words)
+    x = pd.to_numeric(sample["x"], errors="coerce")
+    width = pd.to_numeric(sample["width"], errors="coerce")
+    chars = sample["text"].astype(str).str.len()
+    ok = x.notna() & width.notna() & (chars > 0) & (width > 0)
+    if ok.sum() < 3:
+        return 0.0
+    # One advance per character plus exactly one for the trailing space.
+    advance = float((width[ok] / (chars[ok] + 1)).median())
+    if advance <= 0:
+        return 0.0
+    residual = (width[ok] - (chars[ok] + 1) * advance).abs()
+    if (residual <= _ADVANCE_RESIDUAL_TOL_PX).mean() < _ADVANCE_MIN_AGREEMENT:
+        return 0.0  # not monospaced-with-one-trailing-space
+    # And the boxes must actually tile: a layout with real gaps is glyph-tight,
+    # so its boundaries already sit in the whitespace.
+    lines = cluster_word_lines(sample)
+    for _, line_words in sample[ok].groupby(lines[ok], sort=False):
+        ordered = line_words.sort_values("x")
+        if len(ordered) < 2:
+            continue
+        left = pd.to_numeric(ordered["x"], errors="coerce").to_numpy()
+        right = left + pd.to_numeric(ordered["width"], errors="coerce").to_numpy()
+        gaps = left[1:] - right[:-1]
+        if len(gaps) and np.nanmax(np.abs(gaps)) > _TILING_GAP_TOL_PX:
+            return 0.0
+    return advance
+
+
+def recentre_word_boxes(words: pd.DataFrame) -> pd.DataFrame:
+    """Shift word boxes so their edges fall mid-space (BUG-11); no-op if not needed.
+
+    Returns ``words`` unchanged (the same object) for layouts
+    :func:`word_box_space_px` doesn't recognise, so the common case costs one
+    check and no copy.
+    """
+    space = word_box_space_px(words)
+    if space <= 0:
+        return words
+    out = words.copy()
+    out["x"] = pd.to_numeric(out["x"], errors="coerce") - space / 2.0
+    return out
+
+
 def assign_fixations_to_words(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
@@ -125,9 +224,13 @@ def assign_fixations_to_words(
 
     If `overwrite=False` and the fixations already carry word_id values, those
     are kept; only NaN rows get re-assigned.
+
+    Boxes are re-centred first (BUG-11) so a fixation in the whitespace *before*
+    a word is credited to that word rather than the previous one.
     """
     if fixations.empty or words.empty:
         return fixations
+    words = recentre_word_boxes(words)
 
     out = fixations.copy()
     if "word_id" not in out.columns or overwrite:

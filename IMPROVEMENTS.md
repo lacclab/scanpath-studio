@@ -7,9 +7,17 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ## How to use this file
 
 - **Status:** `Backlog` (captured, not scheduled) · `Planned` (next-ish, scoped)
-  · `In progress` · `Blocked` · `Pending approval` (implemented, awaiting the
-  user's final sign-off) · `Skipped` (closed without implementing — stays here
-  for the rationale, **not** archived).
+  · `In progress` · `Blocked` · `Parked` (wanted, deliberately deferred — see
+  below) · `Pending approval` (implemented, awaiting the user's final sign-off) ·
+  `Skipped` (closed without implementing — stays here for the rationale, **not**
+  archived).
+- **`Parked` vs. `Backlog` vs. `Skipped`.** `Backlog` is the normal queue —
+  unscheduled, but eligible. `Parked` means *we decided not to pursue this now*:
+  captured so the idea isn't lost, explicitly out of scope until revisited, and
+  not to be picked up as ordinary next work. `Skipped` is closed — we decided
+  **against** it. Park with a date and a one-line reason; unparking is just a
+  status change back to `Backlog`/`Planned`. ("Epic" is a scope label used in an
+  item's title, not a status.)
 - **Approval gate.** When an item's implementation is finished, mark it
   `Pending approval` — **never** jump straight to done. Only after the user gives
   the final confirmation is the item **cut from this file** and written up in
@@ -46,6 +54,7 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 [Performance](#performance) ·
 [Analysis & corpus views](#analysis--corpus-views) ·
 [Preprocessing — eyekit parity](#preprocessing--eyekit-parity) ·
+[Export](#export) ·
 [Validation](#validation) ·
 [Bugs](#bugs) ·
 [Engineering](#engineering)
@@ -54,8 +63,154 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-_No open items. UX-1 … UX-6 are in
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `UX-7`._
+_UX-1 … UX-6 are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+
+**UX-7 · Clearer "no data" states — say what's missing and how to fix it** — `Status: Planned`
+
+Two cases, both terse or generic today.
+
+**(a) Filters / selection produced nothing.** [`app.py`](scanpath_studio/app.py:2051)
+shows one blanket *"No data after filtering. Loosen the Filter trials panel…"*
+for every cause — it doesn't say **which** filter emptied the set (participants,
+condition, favourites/tags, the trial-index window), how many rows each dropped,
+or offer a one-click **clear filters**. Same for a participant×text combo with no
+fixations, and for the raw-gaze-overlay message just above it.
+
+**(b) A public dataset isn't available locally.** Picking a download-on-demand
+corpus (OneStop `public`, PoTeC — `download_onestop` / `download_potec` in
+[`datasets.py`](scanpath_studio/datasets.py:511)) or a `$ONESTOP_DATA_DIR`-backed
+source when the files aren't there surfaces a raw `FileNotFoundError` / loader
+message instead of a first-class state. It should name the dataset, say what's
+missing (files, or an unset `ONESTOP_DATA_DIR`), how big the download is, and put
+the action inline — **Download now**, the env-var instructions, or "you're
+offline". The found-vs-download status check already exists
+([`datasets.py`](scanpath_studio/datasets.py:501)) — surface it *before* the read.
+
+AC: no blank chart and no bare traceback for either case; every empty state names
+the cause and offers the next action.
+
+**UX-8 · Collapsed-sidebar hover expand is hard to dismiss** — `Status: Planned`
+
+With the sidebar collapsed, hovering re-expands it, but moving the pointer back
+out to collapse it again is fiddly — the exit target is too small / the hover
+zone too sticky. Widen the exit affordance (or add a small delay / explicit pin
+toggle) in [`styles.py`](scanpath_studio/styles.py).
+
+**UX-9 · Numeric entry (text box or ± buttons) alongside sliders** — `Status: Planned`
+
+Sliders (marker size, opacity, short/long ms thresholds, line width, font size)
+can't be set to an exact value. Pair the `global_*` sliders in
+[`controls.py`](scanpath_studio/controls.py) with a number input or stepper so a
+precise value can be typed. Purely a widget change — the session keys and every
+downstream surface stay as they are.
+
+**UX-10 · Sort trial / reader / text pickers by properties** — `Status: Planned`
+
+The trial-combo selector (`utils.build_combo_options`) lists combos in data
+order. Add a sort control keyed on reader properties, text properties, and
+trial-level stats (n fixations, reading speed, comprehension correctness) so
+outliers and interesting trials surface without scrolling.
+
+**UX-11 · Redesign the trial chip strip** — `Status: Planned`
+
+The `Field = Value` chip strip above the plot
+(`tabs._render_trial_condition_chips` [`tabs.py`](scanpath_studio/tabs.py:1803))
+is **awkward as it stands and needs a rethink, not a patch** — treat the current
+symptoms as evidence of the wrong shape rather than as the work items:
+
+- The **More** disclosure repeats every chip already visible inline, so the same
+  facts are shown twice. This is deliberate today — the comment at
+  [`tabs.py`](scanpath_studio/tabs.py:1871) argues that which chips fit is a
+  live-width question Python can't answer, so *More* always carries everything —
+  which is exactly the constraint the redesign has to escape.
+- The last chip is clipped by the **More** toggle.
+- The inline ✏️ edit toggle sits too high relative to the chip baseline.
+
+**Approach:** start from what the strip is *for* — "what am I looking at" at a
+glance, plus the full trial detail on demand — and pick a form that survives any
+window width. Options worth weighing: real CSS overflow (a wrapping or
+horizontally-scrolling row, so nothing is silently cut and *More* isn't needed as
+a fallback); a fixed small set of primary chips with everything else behind one
+explicit **Details** control; or dropping the one-line constraint entirely and
+letting the strip wrap to two lines. Whatever lands should keep the configurable
+field list (the ✏️ picker, `controls.render_trial_chip_picker`) and the
+condition colouring (`_chip_color`). Related: **UX-19** (the same strip is one of
+the first things to break on a narrow laptop).
+
+**UX-12 · "Don't show again" for the welcome tour** — `Status: Planned`
+
+The welcome tour reappears every session. Add a **Don't show this again**
+checkbox that persists the dismissal (browser-side, since there's no user
+account), leaving a way to re-launch the tour from the header/help.
+
+**UX-13 · Detach "Snap fixations above words" from Drift correction** — `Status: Planned`
+
+`global_fixation_snap_to_word` is rendered directly under the **Drift
+correction** selectbox in [`controls.py`](scanpath_studio/controls.py:1387), so it
+reads as a drift-correction option. It's an unrelated schematic / "linear
+reading" control (**VIZ-9**, pairs with the Arc saccade mode). Move it into its
+own block (next to the Arc control), and reword the help so the two aren't
+confused.
+
+**UX-14 · Tutorials on the documentation site** — `Status: Backlog`
+
+**Primarily a `docs/` job, not an in-app one.** Write task-shaped tutorials on
+<https://lacclab.github.io/scanpath-studio/> — *load your own data*, *compare two
+readers*, *produce a figure for a paper*, *run it headless from a script* — each
+walking a real task end to end with screenshots and copy-pasteable snippets,
+rather than the feature-by-feature reference the site carries today. Extending the
+in-app welcome tour is a secondary, optional follow-on; the docs are the
+deliverable. Related: **UX-17** (the app has no link to the docs site at all —
+tutorials nobody can find don't help), **UX-15** (FAQ), **DATA-11** (the
+bring-your-own-dataset walkthrough is one of these tutorials), **ENG-12**.
+
+**UX-15 · FAQ (in-app + docs site)** — `Status: Backlog`
+
+Both surfaces: a short in-app FAQ (near the tour/help) and a fuller page on the
+docs site. Content still to be decided — collect the recurring questions first
+(column mapping, why measures differ from EyeLink's, what drift correction does,
+where data goes / privacy → **DATA-12**).
+
+**UX-16 · About popover: collapse the citation by default** — `Status: Planned`
+
+`_render_about_sidebar` ([`app.py`](scanpath_studio/app.py:249)) renders the
+BibTeX block with `st.code(...)` unconditionally, so a tall citation dominates the
+popover and pushes the links below it out of view. Put it behind a collapsed
+expander ("📖 How to cite"), leaving version, authors and the code link visible
+first.
+
+**UX-17 · Link to the documentation site from the app** — `Status: Planned`
+
+Nothing in the app links to <https://lacclab.github.io/scanpath-studio/> — the
+About popover links the lab site, the GitHub repo and the OneStop paper, but not
+the project's own docs, so a user who needs the full reference has to find it
+elsewhere. Add it to the About popover and to the Help group in the sidebar (and
+consider a contextual "learn more" from the tour, **UX-14**).
+
+**UX-18 · Make the Corpus Analysis view more discoverable** — `Status: Planned`
+
+The Corpus⇄Scanpath view toggle ([`url_state.py`](scanpath_studio/url_state.py))
+is easy to miss, so the entire Corpus Analysis half of the app goes unnoticed.
+Give it more visual weight — bolder styling, an arrow or other directional cue,
+clearer labelling of what's on the other side — without turning it into a second
+navigation system. Related: **UX-14** (a tutorial should walk a user there at
+least once).
+
+**UX-19 · Layout breaks on smaller laptop screens** — `Status: Planned`
+
+On ordinary laptop widths (not phones — think a 13" screen or a half-width
+window) the app looks bad: controls, chips and the plot column crowd or overlap
+rather than adapting. [`styles.py`](scanpath_studio/styles.py) has **no width
+breakpoints at all** — the only `@media` rule is `prefers-color-scheme`
+([`styles.py`](scanpath_studio/styles.py:121)) — so every layout decision is
+fixed-width, which is the likely root cause. Establish the target range (say
+≥1280 px down to ~1024 px), find what breaks first (chip strip **UX-11**, the
+control rail, the plot's true-scale sizing at
+[`plots.py`](scanpath_studio/plots.py:166), the header nav), and add real
+breakpoints. AC: no overlap or clipping across the target range; the true-scale
+plot keeps its scale guarantee (it may scroll, never distort).
+
+_Next item: `UX-20`._
 
 ---
 
@@ -67,8 +222,64 @@ styling live in [`controls.py`](scanpath_studio/controls.py:622)
 `_render_compare_saccade_styles`, `_collect_compare_styles`); the overlay figure
 is built in [`plots.py`](scanpath_studio/plots.py).
 
-_No open items. CMP-1 … CMP-4 are in
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `CMP-5`._
+_CMP-1 … CMP-4 are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+
+**CMP-5 · Make the Comparisons subtab legible — what is being compared, and why** — `Status: Backlog`
+
+*(Scope note: the main visualization's "Compare with trial" stays a **two**-scanpath
+overlay — that's not what this item changes.)*
+
+The **Comparisons** subtab (`render_multiple_comparison_tab`
+[`tabs.py`](scanpath_studio/tabs.py:4373)) is hard to follow: it takes the
+scanpath from the *main* trial picker, finds other scanpaths of the same text,
+groups them by a user-chosen column, scores each against the selected one, and —
+when there are more candidates than it can show — silently keeps the
+best-ranked subset ([`tabs.py`](scanpath_studio/tabs.py:4257)). A user landing on
+the tab can't tell which trials are on screen, why *those* ones, what they're
+being compared **against**, or what was dropped.
+
+Make each of those explicit: name the reference scanpath prominently (it comes
+from a picker on a different part of the page — **ENG-8** removed the local one),
+label every panel with the trial it is and the group it belongs to, state the
+grouping column and the ranking rule in the tab itself, and say plainly when
+candidates were truncated (*"showing the 6 most similar of 23"*). Related:
+**CMP-6** (ordering), **UX-7** (empty/partial states should explain themselves).
+
+**CMP-6 · Order candidate trials by similarity (and other orderings)** — `Status: Backlog`
+
+Similarity scoring exists ([`similarity.py`](scanpath_studio/similarity.py),
+`compute_similarity_table`) but only inside the Comparisons subtab, where it ranks
+the table. Use it as an **ordering** wherever a trial is picked — first and
+foremost the **compare-trial (B) selector** in the main visualization
+([`tabs.py`](scanpath_studio/tabs.py:641)), so the candidates for B can be sorted
+by similarity to A instead of in data order, making "now show me the most similar
+reading / the most different one" a scroll rather than a search. Generalize to
+other orderings while there (reading speed, regression rate, fixation count), and
+keep it consistent with the general picker sorting in **UX-10**. Related:
+**CMP-5**.
+
+**CMP-7 · Two-scanpath heatmap (split word boxes)** — `Status: Backlog`
+
+The word-level heatmap is single-scanpath only; in compare mode there's no
+heatmap view. Support two scanpaths in one heatmap by **splitting each word box**
+— e.g. left/top half tinted by reader A's measure, right/bottom half by reader B
+— on a shared colour scale, so per-word differences are readable at a glance
+without a separate difference plot. Renders through the existing
+`layout.shapes` heatmap path in [`plots.py`](scanpath_studio/plots.py). Related:
+**AN-19** (difference word profile), **AN-22** (stacked two-group heatmap).
+
+**CMP-8 · Compare scanpaths across datasets** — `Status: Parked` *(2026-07-28 — not soon)*
+
+Comparison assumes both scanpaths come from the same loaded dataset (and, for the
+overlay, the same text). Allow picking scanpath A and B from **different**
+datasets — the same text read under two corpora, or a reader from one study
+against a reader from another. Hard part isn't the UI: it's reconciling
+coordinate spaces, screen geometry and stimulus layout between corpora, plus
+column sets that only partly overlap (see **DATA-2** — experimental-setup
+parameters would be needed to put two corpora on a common scale). **Parked at the
+user's request (2026-07-28)** — captured, not scoped. Depends on **CMP-5**.
+
+_Next item: `CMP-9`._
 
 ---
 
@@ -135,7 +346,93 @@ embedding them. Local-only (folders aren't reachable on the hosted demo); genera
 `data._resolve_sample_image_paths` from the bundled `sample_data` dir to a
 user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus.
 
-_Next item: `VIZ-15`._
+**VIZ-15 · Fixation marker shape control** — `Status: Planned`
+
+Fixation markers are configurable in size, colour, opacity and hollow/filled, but
+the **symbol** is fixed. Add a shape picker (circle / square / diamond / cross /
+triangle …) as a `global_*` key threaded through `_collect_viz_settings` →
+`make_scanpath_figure`, plus deep link / CLI / headless API per *AGENTS.md →
+Exposing a feature on every surface*. Pairs with **VIZ-17** (a shape becomes a
+second channel once colour stops duplicating size) and **VIZ-18** (shape carries
+the distinction in print / greyscale).
+
+**VIZ-16 · Show the word text in the fixation hover** — `Status: Backlog`
+
+The fixation hover reads `Fixation # / Duration / Word #`
+([`plots.py`](scanpath_studio/plots.py:1620)) — the word *number*, not the word.
+Add the word text (the word-box hover already does this,
+[`plots.py`](scanpath_studio/plots.py:906)) via `customdata`, for the single,
+compare, and animation traces.
+
+**VIZ-17 · Default fixations to one colour (colour vs. size is redundant)** — `Status: Planned`
+
+By default both marker size and marker hue encode fixation duration —
+double-encoding one variable, which wastes the colour channel and makes the plot
+busier than it needs to be. Make the default a single uniform fixation colour,
+with colour-by an explicit opt-in for a *different* variable (surprisal,
+frequency, line, pass index). Changes a default, so check the deep-link/CLI/API
+defaults (`CANONICAL_FIGURE_DEFAULTS`) move with it and note it in the CHANGELOG.
+
+**VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Planned`
+
+Audit the [`constants.py`](scanpath_studio/constants.py) defaults against the ways
+these figures actually get used: on-screen contrast, **printed** in a paper,
+reproduced in **black & white**, and read by **colourblind** viewers. Offer
+selectable palettes (colourblind-safe, print/greyscale-safe, high-contrast) rather
+than only the current one, and prefer a default that survives greyscale
+conversion. Interacts with **VIZ-15** (shape as a redundant channel) and
+**VIZ-17**.
+
+**VIZ-19 · Simpler saccade colouring** — `Status: Planned`
+
+`saccade_color_mode="By type"` splits saccades into five legended sub-traces
+(forward / skip / refixation / return-sweep / regression), which is more than most
+users want and makes the controls heavy. Offer a simpler middle option — e.g.
+just **forward vs. regression** — between "one uniform colour" and the full
+five-way split, and simplify the control surface accordingly.
+
+**VIZ-20 · Hand-authored scanpaths + an "Illustration" mode** — `Status: Backlog`
+
+Two related asks for making *teaching* and *figure* material rather than showing
+recorded data:
+
+- **Author a scanpath by hand.** Place fixations (position + duration) and their
+  saccades directly on a text to build a scanpath from scratch — the canonical
+  "this is what a regression looks like" figure, with no participant data
+  involved. Output should flow through the normal figure/export path, and be
+  saveable/restorable like any other trial.
+- **An "Illustration" preset.** A one-click schematic styling — snapped fixations
+  (`fixation_snap_to_word`), arcing saccades (`saccade_render_mode="Arc"`, see
+  **BUG-9** / **BUG-10**), clean uniform colours (**VIZ-17**), no raw noise — so
+  *recorded* data can also be rendered as a diagram. The preset should compose
+  with the existing controls rather than being a separate renderer.
+
+Note: [`synthetic.py`](scanpath_studio/synthetic.py) already builds a fully
+hand-specified trial (the "Synthetic test trial" data source) — the same
+construction could back the authoring UI.
+
+**VIZ-21 · Audit which control-rail options actually apply in Animate / Compare mode** — `Status: Backlog`
+
+Many rail options silently do nothing (or misbehave) once **Animate** or
+**Compare** is on. The gating is ad-hoc and partial: `controls.py` hides a handful
+of controls behind `if not comparing:`
+([`controls.py`](scanpath_studio/controls.py:1368)) — with a comment conceding
+that colour-by-line "is honoured on the static plot, not the animation/compare"
+([`controls.py`](scanpath_studio/controls.py:1367)) — while **Animate** gates
+nothing at all, so its unsupported settings just have no effect with no
+indication. Drift correction (**PRE-3**), snap-above-words, and by-line colouring
+are known cases; there are likely more.
+
+Do it in three steps: **(1) map** every `global_*` / `single_*` viz setting
+against the three render paths (`make_scanpath_figure`,
+`make_scanpath_animation`, the comparison builders) and record which are honoured;
+**(2) support** what's reasonably supportable in the animation/compare builders;
+**(3) disable** the rest explicitly — greyed out with a reason ("not available
+while animating"), never silently ignored. A short table of the mapping in
+`scanpath_studio/CLAUDE.md` would keep it honest as builders change. Related:
+**CMP-5** (generalizing compare will re-open the same question).
+
+_Next item: `VIZ-22`._
 
 ---
 
@@ -155,8 +452,59 @@ Fold experimental-setup values (screen resolution, viewing distance, DPI, stimul
 font pt, etc.) into the display/data settings so true-to-scale rendering and the
 px↔pt note (**VIZ-1**) can use them directly instead of being implicit.
 
+**DATA-10 · MECO support** — `Status: Backlog`
+
+Add a MECO adapter (the multilingual eye-tracking-while-reading corpus) alongside
+OneStop / MultiplEYE / PoTeC in [`datasets.py`](scanpath_studio/datasets.py).
+Feeds **DATA-1**, and exercises **PRE-6** (RTL / multilingual rendering) and
+**VAL-3** (non-English validation).
+
+**DATA-11 · Documented "bring your own dataset" pipeline** — `Status: Backlog`
+
+An end-to-end path from a raw export to a loaded dataset: what the app minimally
+needs (word boxes + fixations), how to map columns, how to save and reuse a
+mapping, and worked examples for the common export shapes. Docs page + a clear
+entry point from the wizard. Distinct from **DATA-14**, which is about getting a
+dataset *bundled* with the app. Related: **PRE-7** (`.asc` import).
+
+**DATA-12 · Privacy statement — "we don't use your data"** — `Status: Backlog`
+
+Make it explicit, in the app and in the docs, that uploaded data isn't retained,
+transmitted, or used for anything beyond the current session, and spell out what
+that means per deployment: local install and the desktop bundle (**ENG-15**) never
+leave the machine; the hosted Streamlit demo processes uploads in the session
+only. Researchers with participant data need this stated plainly before they
+upload, not inferred. Related: **DATA-13**, **UX-15**.
+
+**DATA-13 · Data security** — `Status: Backlog`
+
+The engineering side of **DATA-12**: audit where uploaded data actually goes
+(`st.cache_data` temp paths, the export zip staging, any on-disk dataset store the
+wizard writes), how long it survives, and what a shared deep link / saved config
+can leak. Document the findings and fix what needs fixing. Would become a
+prerequisite if a hosted multi-user mode is ever built (**ENG-17**).
+
+**DATA-14 · Document how to get a dataset bundled by default** — `Status: Backlog`
+
+Someone with a public corpus should be able to find out how to make it appear as
+a built-in data source in a future release — what an adapter in
+[`datasets.py`](scanpath_studio/datasets.py) has to provide (loader, licence,
+download-on-demand vs. bundled, canonical-column mapping, sample size limits),
+what tests are expected, and how to submit it. Write it up in `CONTRIBUTING.md` /
+the docs site and link it from the wizard's data-source picker.
+
+**DATA-15 · Real raw-gaze samples in the bundled demo** — `Status: Backlog`
+
+The demo's `raw_gaze.{csv,parquet}` is **synthesized** from the fixation report
+(`synthesize_raw_gaze` in
+[`update_sample_data.py`](scanpath_studio/update_sample_data.py:322), seeded) — it
+looks like real eye-tracker output but isn't, so the raw-gaze overlay demos a
+plausible fiction. Either ship genuine OneStop raw samples for the bundled
+trials, or label it unmistakably as synthetic everywhere it's shown (the overlay
+control, the docs, the export).
+
 _DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) are in
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-10`._
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-16`._
 
 ---
 
@@ -359,6 +707,14 @@ user's `global_*` choices, unlike `render_multiple_comparison_tab`, which thread
 from it; audit the trend / distribution figures for the same gap. Related:
 **AN-23**, **AN-24**.
 
+- **Colour control (added 2026-07-28).** Same gap, stated as a user-facing ask:
+  the Corpus Analysis figures hard-code their colours / colourscales, so a user
+  can't restyle them (for a paper, for print, or for a colourblind-safe scheme).
+  Threading `viz_settings` through covers the heatmap; also expose a colour /
+  colourscale choice for the *other* analysis figures (profiles, distributions,
+  difference plots), which don't read the `global_*` viz keys at all. Related:
+  **VIZ-18**.
+
 ---
 
 ## Preprocessing — eyekit parity
@@ -509,6 +865,48 @@ by neither `tabs._build_studio_config` nor read by `url_state._restore_plot_conf
 so a saved plot-config JSON doesn't round-trip the drift setting either (add an
 `alignment` config section + reader). Keep all surfaces in sync. Follows **PRE-3**.
 
+**PRE-10 · Line assignment subtab polish** — `Status: Backlog`
+
+Follow-ups on the 📐 **Line assignment** comparison grid shipped with **PRE-3**:
+
+- **Bigger, and consistent with the main plot.** The grid panels are too small to
+  judge an algorithm; render them larger and match the main scanpath plot's
+  styling and scale so the comparison reads like the plot above it.
+- **Better diff visualization.** Make it obvious *which* fixations an algorithm
+  moved and how far — e.g. only the moved fixations highlighted, with their
+  displacement — instead of leaving the reader to spot the difference between two
+  near-identical panels.
+- **Citations.** Show the source for each algorithm (Carr et al. 2021 plus the
+  original method papers) next to the picker, so a user can cite what they used.
+- *(Parked)* A short recording/animation explaining how `merge` works — worth
+  doing eventually, set aside for now.
+
+---
+
+## Export
+
+Bulk + single-trial export lives in [`export.py`](scanpath_studio/export.py)
+(wired into the Scanpath view's **Export** subtab).
+
+**EXP-1 · Customizable export file / folder names** — `Status: Planned`
+
+Export uses fixed naming, so a zip of many trials lands with names that don't
+match how the user organizes figures. Let the user supply a filename / folder
+**pattern** built from trial fields — e.g.
+`{participant_id}/{trial_id}_{measure}.png` — validated against the available
+fields, with a live preview of the resulting paths and a safe fallback for
+missing or unsafe values.
+
+**EXP-2 · Titles and captions on exports** — `Status: Planned`
+
+Add an optional figure **title** and **caption**, either auto-generated from the
+trial (participant, text, condition, and the settings that produced the figure) or
+hand-written, rendered into the exported image and recorded in the export
+manifest — so a figure pulled into a paper or slide carries its own provenance.
+Related: **EXP-1**, **AN-27** (tidy-table download).
+
+_Next item: `EXP-3`._
+
 ---
 
 ## Validation
@@ -580,7 +978,55 @@ consistent ids ([`update_sample_data.py`](scanpath_studio/update_sample_data.py)
 and/or detect a 1-based offset during normalization. Related: **BUG-7** (same
 discovery pass).
 
-_Next item: `BUG-9`._
+**BUG-9 · Arc saccades: direction arrowheads not aligned with the arc** — `Status: Backlog`
+
+With `saccade_render_mode="Arc"` (**VIZ-9**) the saccade is drawn as an upward
+arch, but the arrowheads still come from the straight chord: `_saccade_arrow_markers`
+([`plots.py`](scanpath_studio/plots.py:650)) places a marker at the segment
+**midpoint** and rotates it along the straight `start → end` heading, so the
+arrowhead floats off the curve and points the wrong way relative to it. Compute
+the marker position on the arc and its angle from the arc's tangent at that point
+(the arch geometry is already known — `arch_frac` / `_ARCH_FRAC`,
+[`plots.py`](scanpath_studio/plots.py:1022)). Affects both the single-trial path
+and the comparison path ([`plots.py`](scanpath_studio/plots.py:3164)).
+
+**BUG-10 · Arcs don't clear the text** — `Status: Backlog`
+
+Arc height is a fraction of saccade **length** (`_ARCH_FRAC`), so short saccades —
+the majority within a line — arch by only a few pixels and stay inside the line of
+text, defeating the point of the mode (the arc should read as a jump *over* the
+words). Derive the arch height from the text geometry instead — line pitch /
+word-box top (`_line_pitch`, [`plots.py`](scanpath_studio/plots.py:339)) — with a
+floor, so every within-line arc sits above the words regardless of length.
+Related: **BUG-9**, **VIZ-9**.
+
+**BUG-11 · Word box edges don't fall midway between words** — `Status: Backlog`
+
+Word box boundaries should sit in the **middle of the whitespace** between two
+words; they don't — each box carries the *entire* inter-word space as trailing
+padding, so every boundary is pushed a half-space to the right and each word sits
+flush against its own left edge with a gap before the next word's glyphs.
+
+**Measured on the bundled demo** (first trial, 19 px/char): every box is exactly
+`(n_chars + 1) × 19` px wide and starts at the word's first glyph — `'Robert'`
+`x0=358 → x1=491` (6 chars = 114 px of glyphs + 19 px of space), with
+`'Myslajek'` starting at exactly `x0=491`. Boxes therefore *tile* the line (0 px
+gaps, which is why this doesn't look obviously broken) but are offset by half a
+space (~9.5 px here) from where they should be. Fixations landing in the space
+before a word are attributed to the *previous* word — this touches
+`measures.assign_fixations_to_words`, not just appearance.
+
+Fix by re-centring the boundary — shift each box to
+`[x - space/2, x + width - space/2]`, deriving the space width from the layout
+(per-line, since it varies with font size) rather than assuming 19 px. Decide
+whether that belongs in `data.normalize_words` (fixes geometry once, so measures
+and export agree) or in `build_word_boxes`
+([`plots.py`](scanpath_studio/plots.py:696)) (appearance only, cheaper, but leaves
+assignment wrong). Check the other corpora too — PoTeC / MultiplEYE ship
+glyph-tight AOIs and may need the opposite adjustment. Related: **PRE-5** (custom
+interest areas), **VAL-1** (validate against the EyeLink-rendered image).
+
+_Next item: `BUG-12`._
 
 ---
 
@@ -627,6 +1073,30 @@ are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 Add to `docs/` after AN-* land.
 
+**ENG-16 · README: one single-scanpath GIF instead of two** — `Status: Backlog`
+
+The README embeds two animated GIFs — the hero
+(`assets/scanpath_animation.gif`, a single scanpath) and
+`assets/demo_dual_scanpath.gif` (two readers on a shared clock) — ~3 MB of
+animation before a reader reaches the install line. Show **one** GIF, of a single
+scanpath, and demote the dual-reader demo to a still (or move it to the docs
+site). Related: **ENG-12**.
+
+**ENG-18 · Agent-facing docs + an agent-friendly API** — `Status: Backlog`
+
+Two halves, both aimed at *users'* coding agents rather than contributors:
+
+1. **Docs an agent can act on.** `AGENTS.md` / `CLAUDE.md` today describe how to
+   *develop* Scanpath Studio. Add the counterpart for an agent asked to *use* it —
+   the headless surface ([`api.py`](scanpath_studio/api.py) + the `render` CLI):
+   canonical column names, the minimal input a figure needs, the parameter set and
+   its defaults, and worked end-to-end snippets, in a file an agent will find and
+   read.
+2. **An agent-friendly API surface.** Audit `api.py` for the things that make
+   scripted use awkward — errors that don't say which column was missing,
+   parameters that only exist in the UI (drift correction, **PRE-9**), defaults
+   that drift from the app's. Related: **ENG-12**, **DATA-11**.
+
 ### Distribution / packaging
 
 **ENG-15 · Package the app as a standalone desktop application** — `Status: Pending approval`
@@ -650,6 +1120,16 @@ attaches archives to the GitHub release. **Verified locally on Linux**: 507 MB
 onedir bundle, smoke test fully green. Known limits (documented): unsigned
 builds (Gatekeeper/SmartScreen warn), PNG/GIF export still needs a system
 Chrome (ENG-10), console window stays visible in v1 (native window = follow-up).
+
+**ENG-17 · Hosted online mode: login + remote data backend (Snowflake?)** — `Status: Parked` *(2026-07-28 — may revisit)*
+
+A deployed multi-user mode: authentication (`st.login` / OIDC), per-user datasets
+that persist between sessions, and optionally a warehouse backend (Snowflake via
+`st.connection`) instead of local files — so a lab could keep a shared corpus
+online rather than everyone loading their own copy. The opposite trade-off from
+**ENG-15** (the desktop bundle keeps everything local), and it would make
+**DATA-13** (data security) a hard prerequisite. **Parked at the user's request
+(2026-07-28)** — captured so the idea isn't lost, not scoped.
 
 Ship Scanpath Studio as a double-clickable desktop app (Windows / macOS / Linux)
 so non-technical researchers can use it without installing Python or running

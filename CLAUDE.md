@@ -45,8 +45,10 @@ you work under `scanpath_studio/`); contributor setup is in
 ## Tracking work
 
 - Open work lives in [`IMPROVEMENTS.md`](IMPROVEMENTS.md): grouped sections with
-  stable IDs (e.g. `CMP-3`) and a `Status`. When an item is signed off, mark it
-  `Done` and move it to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
+  stable IDs (e.g. `CMP-3`) and a `Status`. When an item is signed off, **cut it
+  from that file** and write it up as `Done` in
+  [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md) — `IMPROVEMENTS.md` lists
+  only open work (plus a one-line per-section pointer to the archive).
 - **Notice an unrelated issue?** Fix it on the spot if it's small; otherwise add
   it to `IMPROVEMENTS.md` so it doesn't get lost.
 

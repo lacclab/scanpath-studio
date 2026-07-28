@@ -8,14 +8,13 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 
 - **Status:** `Backlog` (captured, not scheduled) · `Planned` (next-ish, scoped)
   · `In progress` · `Blocked` · `Pending approval` (implemented, awaiting the
-  user's final sign-off) · `Done` (signed off — moved to the archive) ·
-  `Skipped` (closed without implementing — stays here for the rationale, **not**
-  archived).
+  user's final sign-off) · `Skipped` (closed without implementing — stays here
+  for the rationale, **not** archived).
 - **Approval gate.** When an item's implementation is finished, mark it
-  `Pending approval` — **never** jump straight to `Done`. Only after the user
-  gives the final confirmation does it become `Done` **and move to**
+  `Pending approval` — **never** jump straight to done. Only after the user gives
+  the final confirmation is the item **cut from this file** and written up in
   [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md), so this file stays scoped
-  to open and recently-finished work. `Skipped` items are **not** archived.
+  to open work. `Skipped` items are **not** archived.
 - **IDs are stable.** Don't renumber when an item is finished. New items get the
   next free number in their group; archived items keep their ID over there.
 - **Composite asks are split** into sub-items so they can land independently.
@@ -25,19 +24,8 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 - **PERF-1** — Plotly → matplotlib migration ([PR #83](https://github.com/lacclab/scanpath-studio/pull/83), `matplotlib-migration` branch).
 - **DATA-1** — Broaden dataset support (ongoing epic).
 
-### Signed off 2026-07-03 (moved to the archive)
-Released in **v0.24.0**: **VIZ-1** (px-vs-pt note) · **VIZ-2** (larger small fonts)
-· **VIZ-3** (heatmap Linear/Log) · **VIZ-4** (image stimuli: upload override +
-align-to-text + generalized) · **VIZ-5** (separable-layer export + empty-data fix)
-· **VIZ-8** (saccade-by-type colours + optional legend) · **VIZ-9** ("linear
-reading" arcs + snap) · **VIZ-10** (animation autoplay) · **BUG-3** (MultiplEYE
-text alignment) · **BUG-5** (upload-size guard) · **BUG-6** (theme from any launch
-dir) · **DATA-3** (OneStop public + shareable) · **DATA-9** (Data-sidebar reorg) ·
-**ENG-8** (Comparisons subtab) · **ENG-11** (versioned Save & restore) · **ENG-12**
-(rendering docs) · **ENG-14** (author list).
-
 ### Awaiting your approval
-Implemented, not yet signed off (→ `Done` + archive on your confirmation):
+Implemented, not yet signed off (→ archived on your confirmation):
 **AN-1 … AN-28** (the *Analysis & corpus views* epic — *you asked to keep this
 open*); **PRE-3** (vertical drift correction — *you'll revisit*); **VIZ-11**
 (animation slider readout — *you'll revisit*); **ENG-15** (standalone desktop
@@ -66,19 +54,8 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-_UX-1 · UX-1a · UX-2 · UX-2a · UX-3 signed off & archived — see
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-**UX-4 · Replace the same-text ★ marker in trial selectors with a text-like icon** — `Status: Done (signed off 2026-06-25)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**UX-5 · Keep the main Filter-by + trial selectors stable; move extra filter columns under "More"** — `Status: Done (signed off 2026-06-26)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**UX-6 · Mark annotation state (favorites ★ / tags / notes) in the trial selector** — `Status: Done (signed off 2026-06-26)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-_Next item: `UX-7`._
+_No open items. UX-1 … UX-6 are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `UX-7`._
 
 ---
 
@@ -90,38 +67,15 @@ styling live in [`controls.py`](scanpath_studio/controls.py:622)
 `_render_compare_saccade_styles`, `_collect_compare_styles`); the overlay figure
 is built in [`plots.py`](scanpath_studio/plots.py).
 
-**CMP-1 · CMP-2 · CMP-3 · CMP-4** — `Status: Done (signed off 2026-06-23)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Selector moved above
-the chips and made to mirror the main picker (trial id + ★/👤 markers, `index/N ·
-id` slider); config moved into the rail **⚙️ Compare** popover; optional A/B legend
-+ figure titles removed; per-scanpath colours fixed (incl. the "fixations turn black"
-bug); and **Color fixations by** restored in compare mode.
+_No open items. CMP-1 … CMP-4 are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `CMP-5`._
 
 ---
 
 ## Visualization & display
 
-**VIZ-1 · Warn that font sizes are px, not pt** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-2 · Increase font size across the app where possible** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-3 · Alternative heatmap normalization** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-4 · Improve image-based stimuli support** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-5 · Export the plot as separable layers** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-6 · Replace the "hollow" fixation marker style with an opacity control** — `Status: Done (signed off 2026-06-23)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-7 · Fixation-index range selector on the main scanpath plot** — `Status: Done (signed off 2026-06-23)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-8 · Color saccades by saccade type** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-9 · "Linear reading" view — saccades as arcs, fixations above the words** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-10 · Animate: autoplay on by default + a start/stop autoplay control** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
+_VIZ-1 … VIZ-10, VIZ-12, VIZ-13 are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Pending approval`
 
@@ -169,12 +123,6 @@ set each step `label` to `f"{t / 1000:.1f} / {total / 1000:.1f}s"`.
 
 Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-10**, **CMP-4**.
 
-**VIZ-12 · Quick views: show which preset is active (Scanpath selected by default)** — `Status: Done (signed off 2026-06-25)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**VIZ-13 · Improve word-hover tooltip text + add a configurable measure (TFD by default)** — `Status: Done (signed off 2026-06-25)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
 **VIZ-14 · Per-trial stimulus images from a folder + naming pattern** — `Status: Backlog`
 
 Split out of VIZ-4 (2026-07-03). The `image_path` / `image_x` / `image_y` column
@@ -207,36 +155,8 @@ Fold experimental-setup values (screen resolution, viewing distance, DPI, stimul
 font pt, etc.) into the display/data settings so true-to-scale rendering and the
 px↔pt note (**VIZ-1**) can use them directly instead of being implicit.
 
-**DATA-3 · Broaden OneStop public-dataset support (all regimes · all parts · public + LaCC lab)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). *(Public source + variant/regime/parts now shareable via `?source=onestop_public`.)*
-
-### Data-source UI overhaul (DATA-4 … DATA-7)
-
-Cross-cutting goal: make the **data-source picker** clear and pretty as the public
-corpus list grows toward ~40, while keeping **load a local private dataset** the
-primary, most prominent path. All four touch the sidebar source UI
-(`app.render_sidebar_data_source` [`app.py`](scanpath_studio/app.py:995), the
-`PUBLIC_DATASET_REGISTRY` + `_load_public_dataset`
-[`app.py`](scanpath_studio/app.py:513), and the per-corpus loaders
-`_load_potec_source` / `_load_multipleye_source` / `_load_onestop_public_source`).
-
-**DATA-4 · Public-datasets browser that scales to ~40 corpora** — `Status: Done (signed off 2026-06-26)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**DATA-5 · Drop the per-source participant/text filtering from the loaders** — `Status: Done (signed off 2026-06-26)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**DATA-6 · Surface the expected file names / directory structure per corpus** — `Status: Done (signed off 2026-06-26)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**DATA-7 · Rework the download + mapping flow (button, not a checkbox)** — `Status: Done (signed off 2026-06-26)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**DATA-8 · Show the column-mapping override for the Bundled Demo too** — `Status: Done (signed off 2026-07-02)` →
-moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**DATA-9 · Reorganize the Data sidebar to be intuitive (merge source + selection, nest setup/mapping)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-_Next item: `DATA-10`._
+_DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-10`._
 
 ---
 
@@ -612,10 +532,8 @@ and feeds **DATA-1**.
 
 ## Bugs
 
-_BUG-1, BUG-2 signed off & archived — see
+_BUG-1, BUG-2, BUG-3, BUG-5, BUG-6 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-**BUG-3 · MultiplEYE: stimulus text renders misaligned (fixations + image are fine)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). *(Residual sub-pixel offset = BUG-4.)*
 
 **BUG-4 · MultiplEYE: residual small text-vs-image mismatch** — `Status: Backlog`
 
@@ -634,10 +552,6 @@ Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
 ([`plots.py`](scanpath_studio/plots.py:339)), MultiplEYE font stamping
 (`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
 in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
-
-**BUG-5 · Upload crashes on Streamlit Community Cloud (works locally)** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**BUG-6 · Accent color differs: blue locally vs. red on the deployed app** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 **BUG-7 · EyeLink `'.'`-sentinel flag columns normalize to all-True** — `Status: Backlog`
 
@@ -694,8 +608,8 @@ Column-mapping UI, trial filters, bulk-export zip.
 
 ### Code quality
 
-_ENG-5 (decompose `app.py`) · ENG-7 (`watchdog`) signed off & archived — see
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+_ENG-5 (decompose `app.py`) · ENG-7 (`watchdog`) · ENG-8 (Comparisons subtab) are
+in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **ENG-6 · Centralize `st.session_state` keys** — `Status: Skipped`
 
@@ -703,23 +617,15 @@ Skipped at the user's request (2026-06-23): the app has hundreds of keys and
 deep-links seed many pre-widget, so a full typed migration is high-risk for low
 payoff right now.
 
-**ENG-8 · Resolve / promote the "Generations (WIP)" tab** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
 ### UX / robustness
 
-_ENG-9 (surface auto-detected columns) · ENG-10 (animation-export errors when
-Chrome is missing) signed off & archived — see
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-**ENG-11 · Version saved plot-config JSON + migration path** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
-
-**ENG-12 · Document the true-to-scale text rendering model** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
+_ENG-9 (auto-detected columns) · ENG-10 (animation-export errors without Chrome) ·
+ENG-11 (versioned Save & restore) · ENG-12 (rendering docs) · ENG-14 (author list)
+are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **ENG-13 · Document the new analysis sections once built** — `Status: Backlog`
 
 Add to `docs/` after AN-* land.
-
-**ENG-14 · Replace the provisional/TBD author list with the real co-authors** — `Status: Done (signed off 2026-07-03)` → moved to [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
 
 ### Distribution / packaging
 

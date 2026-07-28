@@ -7,7 +7,7 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -1924,6 +1924,55 @@ def filter_to_keys(
         return df[idx.isin(keys)]
 
     return _restrict(words), _restrict(fixations)
+
+
+def count_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
+    """How many distinct ``(participant_id, trial_id)`` trials the frames hold.
+
+    Counts across both frames, so a words-only or fixations-only dataset is
+    measured just as well as a paired one.
+    """
+    keys: set = set()
+    for df in (words, fixations):
+        if df is None or df.empty:
+            continue
+        if "participant_id" not in df.columns or "trial_id" not in df.columns:
+            continue
+        keys.update(zip(df["participant_id"].astype(str), df["trial_id"].astype(str)))
+    return len(keys)
+
+
+def diagnose_filters(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    steps: Sequence[Tuple[str, Callable]],
+) -> List[Dict]:
+    """Attribute an empty trial pool to the filter(s) that caused it (UX-7).
+
+    ``steps`` is ``(label, apply)`` pairs, where ``apply(words, fixations)``
+    returns the frames with *only that one* filter applied. Each step is measured
+    against the **unfiltered** frames, so the result says what each filter does on
+    its own — which is the question a user staring at an empty plot is asking.
+    A step that alone leaves nothing is the culprit; if every step leaves
+    something but the combination doesn't, it's their intersection, and the caller
+    can say so.
+
+    Returns one dict per step: ``{"label", "kept", "dropped", "empties"}``.
+    """
+    total = count_trials(words, fixations)
+    report: List[Dict] = []
+    for label, apply in steps:
+        w, f = apply(words, fixations)
+        kept = count_trials(w, f)
+        report.append(
+            {
+                "label": label,
+                "kept": kept,
+                "dropped": total - kept,
+                "empties": total > 0 and kept == 0,
+            }
+        )
+    return report
 
 
 def filter_raw_gaze(

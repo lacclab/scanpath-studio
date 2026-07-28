@@ -78,14 +78,18 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    clear_trial_filters,
     column_mapping_ui,
     data_dictionary_help_text,
+    has_active_trial_filters,
     read_trial_filters,
     viz_settings_from_state,
 )
 from scanpath_studio.data import (
     compute_canvas_size,
+    count_trials,
     default_filters,
+    diagnose_filters,
     empty_fixations_frame,
     empty_words_frame,
     filter_data,
@@ -257,6 +261,123 @@ def _render_about_panel() -> None:
 # Base URL for the DiLi Lab (UZH) people pages — three co-author links hang off
 # it, so it's factored out rather than repeated in the About markdown.
 _DILI = "https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people"
+
+
+# Human labels for the trial-filter groups, used by the UX-7 empty-state report.
+_FILTER_GROUP_LABELS = {
+    "participants": "Participant",
+    "favorites": "★ Favorites only",
+    "required_tags": "Required tags",
+    "excluded_tags": "Excluded tags",
+}
+
+
+def _filter_diagnosis_steps(trial_filters: dict) -> list:
+    """``(label, apply)`` pairs for :func:`data.diagnose_filters` — one per
+    *active* trial filter, each applying only itself (UX-7).
+
+    Condition filters get one step each (named by the column) rather than being
+    lumped together, since "which of my six narrowings emptied this?" is exactly
+    the question the blanket warning used to leave unanswered.
+    """
+    steps: list = []
+    if trial_filters.get("participants"):
+        chosen = trial_filters["participants"]
+        steps.append(
+            (
+                f"{_FILTER_GROUP_LABELS['participants']} ({len(chosen)} selected)",
+                lambda w, f, p=chosen: filter_trials(w, f, participants=p),
+            )
+        )
+    for col, allowed in (trial_filters.get("metadata") or {}).items():
+        label = f"{col.replace('_', ' ').capitalize()} = {', '.join(sorted(map(str, allowed))[:4])}"
+        if len(allowed) > 4:
+            label += ", …"
+        steps.append(
+            (
+                label,
+                lambda w, f, c=col, a=allowed: filter_trials(w, f, metadata={c: a}),
+            )
+        )
+
+    def _annotation_step(name: str, **kwargs):
+        def _apply(w, f):
+            frame = w if f.empty else f
+            if frame.empty:
+                return w, f
+            present = {
+                (str(p), str(t))
+                for p, t in zip(frame["participant_id"], frame["trial_id"])
+            }
+            return filter_to_keys(w, f, set(filter_keys(list(present), **kwargs)))
+
+        steps.append((name, _apply))
+
+    if trial_filters.get("favorites_only"):
+        _annotation_step(_FILTER_GROUP_LABELS["favorites"], favorites_only=True)
+    if trial_filters.get("required_tags"):
+        tags = trial_filters["required_tags"]
+        _annotation_step(
+            f"{_FILTER_GROUP_LABELS['required_tags']}: {', '.join(tags)}",
+            required_tags=tags,
+        )
+    if trial_filters.get("excluded_tags"):
+        tags = trial_filters["excluded_tags"]
+        _annotation_step(
+            f"{_FILTER_GROUP_LABELS['excluded_tags']}: {', '.join(tags)}",
+            excluded_tags=tags,
+        )
+    return steps
+
+
+def _render_empty_after_filtering(
+    words_all: pd.DataFrame, fixations_all: pd.DataFrame, trial_filters: dict
+) -> None:
+    """UX-7(a): say *which* filter emptied the pool, and offer a way out.
+
+    The old message was one blanket "No data after filtering" for every cause,
+    which left the user to bisect their own filters by hand. This measures each
+    active filter against the unfiltered dataset, names the one(s) that leave
+    nothing on their own (or reports the combination when each is individually
+    fine), and puts a one-click **Clear all filters** next to it.
+    """
+    total = count_trials(words_all, fixations_all)
+    if not has_active_trial_filters():
+        # Nothing is filtering, so the dataset itself is empty — a different
+        # problem, and telling the user to loosen filters would be a wild goose
+        # chase.
+        st.warning(
+            "This dataset has no trials to show. Pick another **Data source** in "
+            "the sidebar, or check the column mapping under **Data Inspection**."
+        )
+        return
+
+    st.warning(f"No trials match the current filters (dataset has {total:,}).")
+    report = diagnose_filters(
+        words_all, fixations_all, _filter_diagnosis_steps(trial_filters)
+    )
+    culprits = [row for row in report if row["empties"]]
+    if culprits:
+        st.markdown(
+            "**On its own, this leaves no trials:**\n"
+            + "\n".join(f"- {row['label']}" for row in culprits)
+        )
+    elif report:
+        st.markdown(
+            "Each filter keeps some trials on its own — it's the **combination** "
+            "that leaves none:\n"
+            + "\n".join(
+                f"- {row['label']} — keeps {row['kept']:,} of {total:,}"
+                for row in report
+            )
+        )
+    st.button(
+        "✕ Clear all filters",
+        key="clear_all_trial_filters",
+        type="primary",
+        on_click=clear_trial_filters,
+        help="Reset every Narrow-by, condition and annotation filter.",
+    )
 
 
 def _render_about_sidebar() -> None:
@@ -486,6 +607,78 @@ def _dataset_dir_input(
     return _resolve_data_dir(raw)
 
 
+# UX-7(b): session slot describing a data source the user selected but that
+# isn't available locally. Written by `_dataset_access_status` (and the bundle
+# sources) on the run it happens, read + cleared by `_render_dataset_unavailable`
+# in the main area. Kept out of the loader return value so the loaders can keep
+# falling back to the demo corpus and the app stays usable.
+_UNAVAILABLE_KEY = "_dataset_unavailable"
+
+
+def _note_dataset_unavailable(
+    *,
+    label: str,
+    reason: str,
+    action: str,
+    root: Optional[str] = None,
+    size_hint: str = "",
+    download: Optional[Callable[[str], None]] = None,
+    key_prefix: str = "",
+) -> None:
+    """Record that ``label`` couldn't be loaded, for the main-area empty state."""
+    st.session_state[_UNAVAILABLE_KEY] = dict(
+        label=label,
+        reason=reason,
+        action=action,
+        root=root,
+        size_hint=size_hint,
+        download=download,
+        key_prefix=key_prefix,
+    )
+
+
+def _render_dataset_unavailable() -> None:
+    """UX-7(b): a first-class "this corpus isn't here yet" state in the main area.
+
+    Picking a download-on-demand corpus whose files aren't present used to change
+    nothing visible except a sidebar line — the loaders quietly fall back to the
+    bundled demo, so the plot showed *demo* scanpaths as though the choice had
+    taken effect. This names the dataset, says what's missing and how big the
+    download is, offers the action inline, and states plainly that the demo is
+    what's on screen meanwhile.
+    """
+    note = st.session_state.pop(_UNAVAILABLE_KEY, None)
+    if not note:
+        return
+    st.warning(
+        f"**{note['label']}** isn't available yet — {note['reason']} "
+        f"Showing the bundled demo corpus until it is."
+    )
+    if note["root"]:
+        st.caption(f"Looking in `{note['root']}`")
+    download = note["download"]
+    if download is None:
+        st.markdown(note["action"])
+        return
+    size = f" ({note['size_hint']})" if note["size_hint"] else ""
+    st.markdown(f"{note['action']}{size}")
+    if st.button(
+        "⬇ Download now",
+        key=f"{note['key_prefix']}_download_main",
+        type="primary",
+    ):
+        try:
+            with st.spinner(f"Downloading into {note['root']} …"):
+                download(note["root"])
+        except (OSError, ValueError) as exc:
+            st.error(
+                f"Download failed: {exc}\n\nIf you're offline, download the files "
+                "on another machine and point the folder above at them."
+            )
+            return
+        st.rerun()
+
+
 def _dataset_access_status(
     cfg,
     *,
@@ -494,6 +687,7 @@ def _dataset_access_status(
     download: Optional[Callable[[str], None]] = None,
     size_hint: str = "",
     key_prefix: str = "",
+    label: str = "This dataset",
 ) -> bool:
     """Found / missing status + an optional **Download** button.
 
@@ -501,7 +695,11 @@ def _dataset_access_status(
     it's missing and ``download`` is given, renders a Download button that
     fetches the files then reruns — the next run loads from disk with no
     re-download (replaces the old always-on "Download if missing" checkbox, so
-    an already-downloaded corpus never re-checks the network)."""
+    an already-downloaded corpus never re-checks the network).
+
+    A missing corpus is also recorded for the main-area empty state (UX-7): the
+    sidebar line alone is easy to miss when the plot keeps rendering demo data.
+    """
     if present:
         cfg.success(f"Found in `{root}`")
         return True
@@ -509,8 +707,24 @@ def _dataset_access_status(
         cfg.warning(
             f"No data found in `{root}` — point at a folder with the files above."
         )
+        _note_dataset_unavailable(
+            label=label,
+            reason="its files aren't in the folder you pointed at.",
+            action="Set **Data location** in the sidebar to a folder holding the "
+            "files listed under **Expected files**.",
+            root=root,
+        )
         return False
     cfg.info(f"Not downloaded yet{f' ({size_hint})' if size_hint else ''}.")
+    _note_dataset_unavailable(
+        label=label,
+        reason="it hasn't been downloaded yet.",
+        action="Fetch it once and it's cached on disk for every later load",
+        root=root,
+        size_hint=size_hint,
+        download=download,
+        key_prefix=key_prefix,
+    )
     if cfg.button("⬇ Download", key=f"{key_prefix}_download", type="primary"):
         try:
             with st.spinner(f"Downloading into {root} …"):
@@ -569,6 +783,7 @@ def _load_potec_source(
         download=datasets.download_potec,
         size_hint="~45 MB",
         key_prefix="potec",
+        label="PoTeC — Potsdam Textbook Corpus",
     )
     if not ready:
         return load_sample_data()
@@ -643,7 +858,11 @@ def _load_multipleye_source(
     # MultiplEYE ships no public download URL — present means the local folder
     # holds a recognizable session set, otherwise fall back to the demo.
     ready = _dataset_access_status(
-        loc, root=root, present=bool(sessions_all), key_prefix="multipleye"
+        loc,
+        root=root,
+        present=bool(sessions_all),
+        key_prefix="multipleye",
+        label="MultiplEYE — multilingual reading",
     )
     if not ready:
         return load_sample_data()
@@ -753,6 +972,7 @@ def _load_onestop_public_source(
         ),
         size_hint="OSF reports, tens–hundreds MB per part",
         key_prefix=f"onestop_{variant}",
+        label=f"OneStop Eye Movements ({ONESTOP_VARIANT_LABELS[variant]})",
     )
     if not ready:
         return load_sample_data()
@@ -944,16 +1164,30 @@ def load_words_and_fixations(
     if data_choice == ONESTOP_CHOICE:
         words, fixations = load_onestop_server_bundle(participant=participant)
         if words.empty or fixations.empty:
-            st.sidebar.warning(
-                "OneStop bundle unavailable — falling back to demo data."
+            _note_dataset_unavailable(
+                label="OneStop server bundle",
+                reason=(
+                    "`$ONESTOP_DATA_DIR` isn't set."
+                    if onestop_data_dir() is None
+                    else "the export files aren't in `$ONESTOP_DATA_DIR`."
+                ),
+                action="Point the `ONESTOP_DATA_DIR` environment variable at a "
+                "OneStop export folder and restart the app, or pick **Public "
+                "datasets → OneStop** to download the reports instead.",
+                root=str(onestop_data_dir() or ""),
             )
             return load_sample_data()
         return words, fixations
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
         words, fixations = load_multipleye_server_bundle(participant=participant)
         if words.empty or fixations.empty:
-            st.sidebar.warning(
-                "MultiplEYE bundle unavailable — falling back to demo data."
+            _note_dataset_unavailable(
+                label="MultiplEYE bundle",
+                reason="its session folders weren't found.",
+                action="Point `MULTIPLEYE_DATA_DIR` at a MultiplEYE session set "
+                "and restart the app, or load it from **Public datasets → "
+                "MultiplEYE**.",
+                root=str(multipleye_bundle_dir() or ""),
             )
             return load_sample_data()
         return words, fixations
@@ -1995,6 +2229,11 @@ def main() -> None:
     if raw_gaze_df is None:
         raw_gaze_df = load_raw_gaze_data(data_choice)
 
+    # UX-7(b): if the selected corpus isn't on disk, say so here — in the main
+    # area, where the (demo) plot the user is actually looking at is — rather than
+    # leaving it to a sidebar line they've likely scrolled past.
+    _render_dataset_unavailable()
+
     # Whole-dataset frames, captured BEFORE the sidebar "Filter trials" panel —
     # the Bulk Export tab's "Export the whole dataset" option exports these,
     # ignoring the current filters (TODO 1.7).
@@ -2066,10 +2305,7 @@ def main() -> None:
     # (words-only / fixations-only / raw-gaze-only datasets); all empty means the
     # filters removed everything.
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
-        st.warning(
-            "No data after filtering. Loosen the **Filter trials** panel "
-            "(participants, condition, or annotation filters) in the sidebar."
-        )
+        _render_empty_after_filtering(words_all, fixations_all, trial_filters)
         return
 
     # Build trial combinations for selection UI — from fixations normally, then

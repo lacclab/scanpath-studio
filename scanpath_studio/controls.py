@@ -2271,6 +2271,38 @@ def read_trial_filters() -> Dict:
     return dict(st.session_state.get("_trial_filters", _EMPTY_TRIAL_FILTERS))
 
 
+def clear_trial_filters() -> None:
+    """Reset every trial filter to "no constraint" (UX-7's one-click escape).
+
+    All of them — the Narrow-by multiselects, the More-popover condition filters,
+    and the annotation filters — live under the ``filter_`` key prefix, so
+    dropping those keys is the whole reset: each widget re-seeds to its own empty
+    default (an empty multiselect means *no* narrowing) on the next render. The
+    derived results and the cross-view mirror are cleared with them so the same
+    run already sees an unfiltered pool.
+
+    Safe to call as a button ``on_click``: callbacks run before the rerun
+    instantiates the widgets, so removing their keys doesn't trip Streamlit's
+    "set after instantiation" guard.
+    """
+    for key in [k for k in st.session_state if str(k).startswith("filter_")]:
+        del st.session_state[key]
+    st.session_state.pop("_trial_filters", None)
+    st.session_state.pop("_trial_filters_raw", None)
+
+
+def has_active_trial_filters() -> bool:
+    """Whether any trial filter is currently narrowing the pool."""
+    f = read_trial_filters()
+    return bool(
+        f.get("participants")
+        or f.get("metadata")
+        or f.get("favorites_only")
+        or f.get("required_tags")
+        or f.get("excluded_tags")
+    )
+
+
 # --- Trial summary chips (the "Field = Value" strip above the plot) ----------
 _CHIP_TEXT_ID_COLS = (
     "unique_text_id",

@@ -48,6 +48,19 @@ If you add a user-facing feature, expose it on **every** surface — not just
 visually, but also the deep link / Share, the CLI, and the headless API. See
 *Exposing a feature on every surface* in [AGENTS.md](AGENTS.md).
 
+## Adding a public dataset
+
+Corpora like OneStop, PoTeC, and MultiplEYE are built in: one entry in the
+app's data-source picker, one `load_*` in the headless API, backed by an
+adapter in [`scanpath_studio/datasets.py`](scanpath_studio/datasets.py).
+Adding another is a documented contract — the loader entry points, the
+canonical-column mapping, how it's registered, licence expectations,
+download-on-demand vs. bundling, and the tests expected — written up in
+[`docs/contributing-a-dataset.md`](docs/contributing-a-dataset.md).
+
+Loading data you already have needs no code at all; that's
+[`docs/bring-your-own-data.md`](docs/bring-your-own-data.md).
+
 ## Versioning
 
 The version lives in **one** place — `__version__` in

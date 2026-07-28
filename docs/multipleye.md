@@ -9,14 +9,11 @@ and [`data.py`](https://github.com/lacclab/scanpath-studio/blob/main/scanpath_st
 
 ## Enabling it
 
-MultiplEYE is exposed as a **Public dataset**. Public datasets are currently
-behind a feature flag:
+MultiplEYE is exposed as a **Public dataset**, which is on by default. To hide
+the public-dataset sources (e.g. on a deployment that should only take uploads),
+set `SCANPATH_PUBLIC_DATASETS=0`.
 
-```bash
-SCANPATH_PUBLIC_DATASETS=1 streamlit run streamlit_app.py
-```
-
-Then pick **Public datasets → MultiplEYE**, point *Data directory* at a session
+Pick **Public datasets → MultiplEYE**, point *Data directory* at a session
 set (the *Expected files* panel lists the layout it looks for), and choose the
 **fixation source** (`scanpaths` or `fixations`). The whole session set loads —
 use the **Narrow by** trial filters to focus on specific readers or stimuli. A

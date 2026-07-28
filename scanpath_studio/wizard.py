@@ -1072,6 +1072,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "Name your dataset, upload your tables, then map a few columns — only "
             "the step you still need to fill stays open."
         )
+        st.caption(
+            "First time? [Bring your own data ↗]"
+            "(https://lacclab.github.io/scanpath-studio/bring-your-own-data/) "
+            "covers the minimum your export needs, worked EyeLink and plain-CSV "
+            "examples, and what each failure symptom means."
+        )
         # Step-by-step guide: a bottom-right card that auto-opens once per session
         # and is replayable via the button. Arm it (auto/first-visit) then render
         # the card early so it streams before the heavy upload/normalize work.
@@ -1193,6 +1199,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # Streamlit freezes the half-reconciled DOM and leaves the pre-shift copy of
     # the whole upload group on screen as a greyed-out ghost (BUG-2).
     intro = body.container()
+    # Say where an upload goes *before* the uploader, not after — a researcher
+    # with participant data needs it stated, not inferred. Rendered
+    # unconditionally: `intro` is always created, and adding a *conditional*
+    # child here is exactly the element-tree shift the comment above describes.
+    intro.caption(
+        "🔒 Your file is parsed in memory on the machine running this app — it "
+        "isn't written to disk or sent anywhere else. "
+        "[Where your data goes ↗](https://lacclab.github.io/scanpath-studio/privacy/)"
+    )
     if active and not already_uploaded:
         intro.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
         intro.markdown(

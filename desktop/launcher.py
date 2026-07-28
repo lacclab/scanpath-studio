@@ -136,6 +136,11 @@ def main() -> None:
             # test).
             "--server.headless=true",
             f"--server.port={port}",
+            # Loopback only. Streamlit's server.address default is unset and
+            # falls back to 0.0.0.0, so without this the desktop bundle serves
+            # the user's loaded corpus to every host on the LAN — and the app
+            # has no authentication of any kind (DATA-13 S1).
+            "--server.address=127.0.0.1",
             # No hot reload in a frozen app; the watcher only costs threads.
             "--server.fileWatcherType=none",
             "--browser.gatherUsageStats=false",

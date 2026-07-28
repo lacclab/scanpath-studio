@@ -454,6 +454,8 @@ University of Zurich · ³ University of Potsdam
 📚 [Documentation]({CITATION["docs_url"]}) ↗ ·
 💻 [Code]({CITATION["url"]}) ↗ (MIT)
 
+🔒 [Privacy]({CITATION["docs_url"]}privacy/) ↗ — where your data goes (and doesn't)
+
 🧪 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/) ↗
 """
         )
@@ -1769,6 +1771,10 @@ def render_sidebar_data_source() -> str:
         key="add_data_btn",
         on_click=_enter_add_data_wizard,
         help="Upload your own eye-tracking tables.",
+    )
+    source.caption(
+        "Have a public corpus? "
+        f"[Get it built in ↗]({CITATION['docs_url']}contributing-a-dataset/)"
     )
     # Resolve a public-corpus token back to the canonical PUBLIC_DATASETS_CHOICE so
     # every downstream consumer (load dispatch, monitor, filter/col-map reset keys)

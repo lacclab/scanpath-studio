@@ -399,7 +399,13 @@ def add_normalized_column(
         if hasattr(std, "replace")
         else ((vals - mean) / (std or np.nan))
     )
-    out[out_col] = z.fillna(0.0)
+    # `fillna(0.0)` alone conflates two different undefined-z cases: a
+    # zero-variance or singleton group (where 0 *is* the group mean, so 0 is
+    # right) and a genuinely missing observation, which would re-enter the
+    # distribution as an exactly-average data point. Keep the first, restore NaN
+    # for the second — so normalizing doesn't change how many observations there
+    # are (ENG-1).
+    out[out_col] = z.fillna(0.0).where(vals.notna())
     return out
 
 
@@ -599,6 +605,22 @@ def word_rate_profile(
             work[dst] = np.nan
     if "text" in sub.columns:
         work["word_text"] = sub["text"].to_numpy()
+    # Collapse to one row per (word, reader) FIRST, the way per_reader_word_measure
+    # does. Without it `n` counts rows, so a reader who read the text twice counts
+    # as two readers and clears a min_readers guard they shouldn't — and the rates
+    # below are row-weighted, over-counting whoever re-read (ENG-1).
+    if "participant_id" in sub.columns:
+        work["participant_id"] = sub["participant_id"].to_numpy()
+        text_by_word = (
+            work.groupby("word_id")["word_text"].first()
+            if "word_text" in work.columns
+            else None
+        )
+        work = work.groupby(["word_id", "participant_id"], as_index=False).mean(
+            numeric_only=True
+        )
+        if text_by_word is not None:
+            work["word_text"] = work["word_id"].map(text_by_word)
     grouped = work.groupby("word_id")
     out = grouped.agg(
         skip_rate=("skip_rate", "mean"),

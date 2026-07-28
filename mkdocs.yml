@@ -62,16 +62,22 @@ nav:
       - Getting started: getting-started.md
       - Desktop app: desktop.md
       - Data format: data-format.md
+      - Bring your own data: bring-your-own-data.md
+      - Corpus analysis: corpus-analysis.md
       - Export & troubleshooting: export-troubleshooting.md
+      - Privacy: privacy.md
   - Headless:
       - Python API: api.md
       - CLI reference: cli.md
+      - For coding agents: agents.md
   - Datasets:
       - OneStop: onestop.md
       - MultiplEYE: multipleye.md
+      - Contributing a dataset: contributing-a-dataset.md
   - Internals:
       - True-to-scale rendering: rendering.md
       - Architecture: architecture.md
+      - Security audit: security.md
 
 plugins:
   - search

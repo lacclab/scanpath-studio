@@ -62,9 +62,26 @@ def launch_app(extra_args: List[str]) -> None:
         if any(str(arg).startswith("--theme") for arg in extra_args)
         else _theme_cli_flags()
     )
+    # Streamlit's usage stats default to ON, and `.streamlit/config.toml` is
+    # resolved against the *launch* directory — which for a pip-installed
+    # `scanpath-studio` is wherever the user happened to be. Opt out explicitly,
+    # same override rule as the theme: an explicit flag from the caller wins
+    # (DATA-12). The desktop launcher already passes this.
+    stats_args = (
+        []
+        if any(str(arg).startswith("--browser.gatherUsageStats") for arg in extra_args)
+        else ["--browser.gatherUsageStats=false"]
+    )
     app_resource = resources.files(__package__).joinpath("app.py")
     with resources.as_file(app_resource) as app_path:
-        sys.argv = ["streamlit", "run", str(app_path), *theme_args, *extra_args]
+        sys.argv = [
+            "streamlit",
+            "run",
+            str(app_path),
+            *theme_args,
+            *stats_args,
+            *extra_args,
+        ]
         sys.exit(stcli.main())
 
 

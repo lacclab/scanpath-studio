@@ -44,22 +44,12 @@ def get_app_css() -> str:
         opacity: 1 !important;
     }
     /* Header button row (the Corpus Analysis ⇄ Scanpath view toggle): right-align
-       the trigger so it lines up with the page content's right edge. UX-18 stacks
-       a one-line "what's over there" caption under the button, so this is a
-       column, not a row; the caption is centred on the button and muted so it
-       reads as a subtitle rather than a second control. */
+       the content-sized trigger so it lines up with the page content's right edge. */
     .st-key-header_buttons {
-        flex-direction: column;
-        justify-content: center;
-        align-items: stretch;
-        gap: 0.15rem;
-    }
-    .st-key-header_buttons div[data-testid="stCaptionContainer"] p {
-        margin: 0 !important;
-        text-align: center;
-        font-size: 0.72rem;
-        line-height: 1.2;
-        opacity: 0.75;
+        flex-direction: row;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
     }
     .st-key-header_buttons button p { white-space: nowrap; }
     /* === UX-8: make leaving the sidebar as easy as entering it ==============

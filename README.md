@@ -16,7 +16,7 @@ It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / snake-case
 columns) and ships with a small [OneStop][onestop-paper] demo, so you can try it
 with zero setup.
 
-> **Authors:** Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jacobi,
+> **Authors:** Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jakobi,
 > David Reiche, Lena Jäger, and Yevgeni Berzak — LACC Lab (Technion) and
 > DiLi Lab (University of Zurich; David Reiche also University of Potsdam).
 

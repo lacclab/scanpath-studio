@@ -63,7 +63,8 @@ Canonical measures (per `AGENTS.md`): **FFD** (`first_fixation_ms`), **FPRT**
 
 ## UX & Interaction
 
-_UX-1 … UX-6 are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+_UX-1 … UX-6, UX-8, UX-12, UX-13 are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **UX-7 · Clearer "no data" states — say what's missing and how to fix it** — `Status: Planned`
 
@@ -88,13 +89,6 @@ offline". The found-vs-download status check already exists
 
 AC: no blank chart and no bare traceback for either case; every empty state names
 the cause and offers the next action.
-
-**UX-8 · Collapsed-sidebar hover expand is hard to dismiss** — `Status: Planned`
-
-With the sidebar collapsed, hovering re-expands it, but moving the pointer back
-out to collapse it again is fiddly — the exit target is too small / the hover
-zone too sticky. Widen the exit affordance (or add a small delay / explicit pin
-toggle) in [`styles.py`](scanpath_studio/styles.py).
 
 **UX-9 · Numeric entry (text box or ± buttons) alongside sliders** — `Status: Planned`
 
@@ -136,21 +130,6 @@ letting the strip wrap to two lines. Whatever lands should keep the configurable
 field list (the ✏️ picker, `controls.render_trial_chip_picker`) and the
 condition colouring (`_chip_color`). Related: **UX-19** (the same strip is one of
 the first things to break on a narrow laptop).
-
-**UX-12 · "Don't show again" for the welcome tour** — `Status: Planned`
-
-The welcome tour reappears every session. Add a **Don't show this again**
-checkbox that persists the dismissal (browser-side, since there's no user
-account), leaving a way to re-launch the tour from the header/help.
-
-**UX-13 · Detach "Snap fixations above words" from Drift correction** — `Status: Planned`
-
-`global_fixation_snap_to_word` is rendered directly under the **Drift
-correction** selectbox in [`controls.py`](scanpath_studio/controls.py:1387), so it
-reads as a drift-correction option. It's an unrelated schematic / "linear
-reading" control (**VIZ-9**, pairs with the Arc saccade mode). Move it into its
-own block (next to the Arc control), and reword the help so the two aren't
-confused.
 
 **UX-14 · Tutorials on the documentation site** — `Status: Backlog`
 

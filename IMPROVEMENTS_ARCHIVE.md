@@ -81,6 +81,40 @@ since `filter_cols` *is* the More field list). Test:
 `test_filter_col_component_dropped_from_cascade`
 ([`tests/test_composite_selection.py`](tests/test_composite_selection.py)).
 
+**UX-8 · Collapsed-sidebar hover expand is hard to dismiss** — `Status: Done` *(signed off 2026-07-28)*
+
+The real obstacle wasn't the hover zone: Streamlit's only exit from an open
+sidebar is the `«` collapse control, and it ships `visibility: hidden` until the
+pointer is already inside the sidebar — so dismissing one meant hunting for a
+target that was both invisible and icon-small. [`styles.py`](scanpath_studio/styles.py)
+now pins `[data-testid="stSidebarCollapseButton"]` visible (muted at 0.6 opacity,
+full on hover) and gives it — and the matching `»` expand control in the header —
+a 2.4 rem hit area with a brand-tinted hover, so the pair reads as one toggle.
+
+**UX-12 · "Don't show again" for the welcome tour** — `Status: Done` *(signed off 2026-07-28)*
+
+A **Don't show this again** checkbox on the welcome and final tour steps, backed
+by a first-party `sps_tour_optout` cookie (`tour.TOUR_OPTOUT_COOKIE`) rather than
+session state: there are no accounts, session state dies with the tab, and a
+cookie is the one browser-side store Python can also *read*
+(`st.context.cookies`) — `localStorage` would need a bidirectional custom
+component to get the value back to the server. The box writes it from a
+same-origin script (`_tour_optout_script`); `tour_opted_out()` gates both
+`spotlight_tour_pending` and `maybe_show_welcome_tour`. The sidebar's **🎓 Show
+tutorial** deliberately ignores the opt-out and renders the box pre-ticked, so
+the choice is reversible from the same place. Tests: `TestTourOptOut`
+([`tests/test_tour.py`](tests/test_tour.py)).
+
+**UX-13 · Detach "Snap fixations above words" from Drift correction** — `Status: Done` *(signed off 2026-07-28)*
+
+`global_fixation_snap_to_word` sat flush under the **Drift correction** selectbox,
+which made it read as a drift-correction option — it is not; it's the fixation
+half of the VIZ-9 linear-reading schematic. It keeps its home under **Fixations**
+(it moves fixations, and VIZ-9 sign-off put it there deliberately) but now sits in
+its own divider-separated *Linear-reading schematic* block, and the help spells
+out the contrast: schematic layout vs. nudging raw coordinates onto their true
+line. The Saccade **Line shape → Arc** control and this one now name each other.
+
 **UX-6 · Mark annotation state (favorites ★ / tags / notes) in the trial selector** — `Status: Done` *(signed off 2026-06-26)*
 
 New `utils.annotation_markers(participant, trial)` returns composable markers —

@@ -229,9 +229,9 @@ def _render_about_panel() -> None:
     #
     # UX-18: this button is the *only* door to the whole Corpus Analysis half of
     # the app, and as a plain secondary button it was routinely missed. Outbound
-    # it renders `primary` with a → cue and a one-line caption naming what's on
-    # the other side; the return trip stays quiet (secondary, ← cue) so the two
-    # don't compete. Still one button, not a second navigation system.
+    # it renders `primary` with a → cue; the return trip stays quiet (secondary,
+    # ← cue) so the two don't compete. Still one button, not a second navigation
+    # system.
     button_row = buttons_col.container(key="header_buttons")
     with button_row:
         if _active_view() == _VIEW_CORPUS:
@@ -242,7 +242,6 @@ def _render_about_panel() -> None:
                 width="stretch",
                 help="Back to the single-trial scanpath visualization.",
             )
-            st.caption("One trial at a time")
         else:
             st.button(
                 "📊 Corpus Analysis →",
@@ -253,7 +252,11 @@ def _render_about_panel() -> None:
                 help="Switch to the corpus-level half of the app: aggregate "
                 "across readers, texts and groups instead of one trial at a time.",
             )
-            st.caption("Across readers & texts")
+
+
+# Base URL for the DiLi Lab (UZH) people pages — three co-author links hang off
+# it, so it's factored out rather than repeated in the About markdown.
+_DILI = "https://www.cl.uzh.ch/en/research-groups/digital-linguistics/people"
 
 
 def _render_about_sidebar() -> None:
@@ -265,11 +268,10 @@ def _render_about_sidebar() -> None:
     the current trial/view."""
     from scanpath_studio import __version__
 
-    docs_label = CITATION["docs_url"].removeprefix("https://").rstrip("/")
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Lion, Ella and "
-        'Jacobi, Deborah and Reiche, David and J{\\"a}ger, Lena and '
+        'Jakobi, Deborah and Reiche, David and J{\\"a}ger, Lena and '
         "Berzak, Yevgeni},\n"
         "license = {MIT},\n"
         "month = jun,\n"
@@ -286,30 +288,30 @@ def _render_about_sidebar() -> None:
 movements in reading.
 
 Developed by [Omer Shubi](https://omershubi.github.io/)¹,
-[Keren Gruteke Klein](https://kerengruteke.github.io/)¹, Ella Lion¹,
-Deborah Jacobi², David Reiche²ʼ³, Lena Jäger², and
+[Keren Gruteke Klein](https://kerengruteke.github.io/)¹,
+[Ella Lion](https://ella-lion.github.io/)¹,
+[Deborah Jakobi]({_DILI}/lab-members/jakobi.html)²,
+[David Reiche]({_DILI}/lab-members/reich.html)²ʼ³,
+[Lena Jäger]({_DILI}/group-leader/jaeger.html)², and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/)¹.
 
 ¹ [LaCC Lab]({CITATION["lab_url"]}), Technion ·
 ² [DiLi Lab](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html),
 University of Zurich · ³ University of Potsdam
 
-📚 **Documentation** — [{docs_label}]({CITATION["docs_url"]}) —
-guides, the column-mapping reference, and the Python API.
+📚 [Documentation]({CITATION["docs_url"]}) ↗ ·
+💻 [Code]({CITATION["url"]}) ↗ (MIT)
 
-💻 **Code** — [github.com/lacclab/scanpath-studio]({CITATION["url"]})
-(MIT). Issues and contributions are welcome.
-
-🧪 **More Works from Our Labs** —
-[Language, Computation and Cognition (LaCC) Lab](https://lacclab.github.io/) ·
-[Digital Linguistics](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html) ·
-[ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/)
+🧪 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/) ↗
 """
         )
-        # UX-16: the BibTeX block is tall enough to push everything above out of
-        # view, so it opens on demand rather than always being rendered.
-        with st.expander("📖 How to cite", expanded=False):
-            st.markdown("A paper is in preparation; until then:")
+        # UX-16: the BibTeX block is tall enough to push everything above it out
+        # of view, so it opens on demand — but it stays a named section of its
+        # own (divider + bold label) rather than a footnote, since "how do I cite
+        # this?" is the single most common reason to open About.
+        st.divider()
+        st.markdown("**📖 Citing Scanpath Studio** — a paper is in preparation.")
+        with st.expander("Show BibTeX", expanded=False):
             st.code(bibtex, language="bibtex", wrap_lines=True)
             st.markdown(
                 """
@@ -2239,11 +2241,14 @@ def main() -> None:
     render_tour_replay_button()
     # UX-17: the docs site is the full reference — link it directly here, not
     # only from inside the About popover.
+    # The "↗" marks it as leaving the app — a link_button opens a new browser tab,
+    # unlike every other control in the sidebar.
     st.sidebar.link_button(
-        "📚 Documentation",
+        "📚 Documentation ↗",
         CITATION["docs_url"],
         width="stretch",
-        help="Guides, the column-mapping reference, and the Python API.",
+        help="Guides, the column-mapping reference, and the Python API. Opens in "
+        "a new tab.",
     )
     _render_about_sidebar()
 

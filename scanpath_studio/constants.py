@@ -326,7 +326,7 @@ APP_THEME_DARK = {
 
 CITATION = {
     "authors": (
-        "Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jacobi, "
+        "Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jakobi, "
         "David Reiche, Lena Jäger, Yevgeni Berzak"
     ),
     "title": "Scanpath Studio",

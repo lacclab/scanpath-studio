@@ -36,7 +36,8 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 Implemented, not yet signed off (→ archived on your confirmation):
 **UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-10**
 (sortable trial picker), **VIZ-15** (marker shape), **VIZ-18** (selectable
-palettes) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
+palettes), **EXP-1** (export path patterns), **EXP-2** (figure titles &
+captions) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
 corpus views* epic — *you asked to keep this open*); **PRE-3** (vertical drift
 correction — *you'll revisit*); **VIZ-11** (animation slider readout — *you'll
 revisit*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
@@ -832,7 +833,7 @@ Follow-ups on the 📐 **Line assignment** comparison grid shipped with **PRE-3*
 Bulk + single-trial export lives in [`export.py`](scanpath_studio/export.py)
 (wired into the Scanpath view's **Export** subtab).
 
-**EXP-1 · Customizable export file / folder names** — `Status: Planned`
+**EXP-1 · Customizable export file / folder names** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 Export uses fixed naming, so a zip of many trials lands with names that don't
 match how the user organizes figures. Let the user supply a filename / folder
@@ -841,7 +842,7 @@ match how the user organizes figures. Let the user supply a filename / folder
 fields, with a live preview of the resulting paths and a safe fallback for
 missing or unsafe values.
 
-**EXP-2 · Titles and captions on exports** — `Status: Planned`
+**EXP-2 · Titles and captions on exports** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 Add an optional figure **title** and **caption**, either auto-generated from the
 trial (participant, text, condition, and the settings that produced the figure) or

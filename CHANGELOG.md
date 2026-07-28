@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Export path patterns** (EXP-1) — name the files and folders in the export zip from the trial's own fields (e.g. `{participant_id}/{trial_id}_{artifact}.{ext}`), validated with a live preview.
+- **Titles and captions on exported figures** (EXP-2) — auto-generated from the trial (or hand-written) using the same fields plus a `{settings}` summary; rendered into the image and recorded in the plot config. The plot itself isn't scaled down — the figure grows to make room.
 - **Sort the trial picker** (UX-10) — a ⇅ popover beside the picker orders the pool by a computed stat (fixation count, reading time, mean fixation) or any trial-level reader / text / condition column, ascending or descending.
 - **Selectable colour palettes** (VIZ-18) — **Colourblind-safe** (Okabe–Ito), **Print / greyscale** (hue-free, survives a B&W print) and **High contrast**, alongside the default. A palette presets the ordinary colour pickers, so anything can still be overridden.
 - **Fixation marker shape** (VIZ-15) — circle / square / diamond / triangle / cross / X / star / hexagon / heart; a channel that reads in black & white.

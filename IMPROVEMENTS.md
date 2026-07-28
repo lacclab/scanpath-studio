@@ -34,16 +34,15 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
 
-- **Docs** — **DATA-12** (privacy), **DATA-14** (contributing a dataset). Both
-  rewritten 2026-07-29 after your "too long / too AI" note.
-- **UX-20** — the AI-assistance disclosure (rewritten shorter 2026-07-29).
-- Older: **PRE-3** (vertical drift correction — *you'll revisit*).
+- **PRE-3** — vertical drift correction (*you'll revisit*). Nothing else is
+  waiting on you.
 
-Signed off **2026-07-29** and archived: **UX-19**, **VIZ-11**, **VIZ-18**,
-**DATA-11**, **DATA-13**, **AN-28**, **ENG-1**, **ENG-2**, **ENG-3**, **ENG-4**,
-**ENG-13**, **ENG-15**, **ENG-16**, **ENG-18**. ENG-15 signed off on the Linux
-build — **ENG-19** (macOS doesn't work), **ENG-20** (Windows rough edges) and
-**ENG-21** (signing) are now open in their own right.
+Signed off **2026-07-29** and archived: **UX-19**, **UX-20**, **VIZ-11**,
+**VIZ-18**, **DATA-11**, **DATA-12**, **DATA-13**, **DATA-14**, **AN-28**,
+**ENG-1**, **ENG-2**, **ENG-3**, **ENG-4**, **ENG-13**, **ENG-15**, **ENG-16**,
+**ENG-18**. ENG-15 signed off on the Linux build — **ENG-19** (macOS doesn't
+work), **ENG-20** (Windows rough edges) and **ENG-21** (signing) are now open in
+their own right.
 Signed off 2026-07-28: **UX-7**, **UX-9**, **UX-10**, **UX-11**, **VIZ-15**,
 **EXP-1**, **EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10** (working as
 intended), **BUG-11**.
@@ -65,7 +64,7 @@ intended), **BUG-11**.
 
 ## UX & Interaction
 
-_UX-1 … UX-6, UX-8, UX-9, UX-11, UX-12, UX-13, UX-16, UX-17, UX-18 are in
+_UX-1 … UX-6, UX-8, UX-9, UX-11, UX-12, UX-13, UX-16 … UX-20 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **UX-14 · Tutorials on the documentation site** — `Status: Planned`
@@ -87,59 +86,6 @@ docs site. Content still to be decided — collect the recurring questions first
 (column mapping, why measures differ from EyeLink's, what drift correction does,
 where data goes / privacy → **DATA-12**).
 
-
-**UX-20 · Disclose that the code was written with AI assistance** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-Say plainly, where a user will see it, that Scanpath Studio was built with
-substantial AI assistance; that we made a real effort to validate behaviour but
-bugs are possible; and that we want to hear about them.
-
-**What the note should also say** — a bare "there may be bugs" is unfalsifiable
-and gives the reader nothing to do with it. Three additions carry the weight:
-
-1. **How the behaviour *was* validated**, concretely, so the claim is checkable
-   rather than reassuring: a hand-traced synthetic trial with expected values for
-   every measure ([`tests/synthetic_data.py`](tests/synthetic_data.py) — also
-   loadable in-app as *Synthetic test trial*, so a user can eyeball it); the
-   full pipeline exercised against the bundled sample; and — the strongest point
-   — **pre-computed EyeLink `IA_*` measures take precedence over the ones this
-   app derives**, so on a normal EyeLink export the numbers *are* the vendor's.
-2. **What to do before publishing a number.** For results going into a paper,
-   cross-check against your own pipeline or the source export. That is the honest
-   ask for a research tool, and it's what a reviewer would ask anyway.
-3. **Where to report** — a direct link to GitHub issues, with the one thing that
-   makes a report actionable: the deep link / saved config (💾 Save & restore),
-   which reproduces the exact view.
-
-Worth *not* saying: anything that reads as a liability disclaimer. The MIT
-licence already carries the no-warranty text; this note's job is to be useful.
-
-**Where it goes** — the same three places the citation lives: the About popover
-([`app.py`](scanpath_studio/app.py) `_render_about_sidebar`, in a collapsed
-expander so it doesn't push the citation out of view), the README, and
-`docs/index.md`. Related: **UX-16** (About layout), **DATA-12** (privacy — the
-other "what you should know before trusting this" note), **UX-15** (FAQ).
-
-**Implemented.** All three surfaces, plus
-[`tests/test_disclosure.py`](tests/test_disclosure.py) — because a disclosure
-whose "you can check this yourself" turns out to be wrong is worse than none. The
-tests pin the note's own claims: that it appears on every surface with the
-actionable half intact, that it carries no liability-disclaimer language, that
-`?source=synthetic` really does load the hand-traced trial (drafting caught this
-— the note first said "pick it in the data-source picker", but the synthetic
-source is deliberately *not* offered fresh, so the deep link is the only route),
-that EXPECTED covers every canonical measure, and that a pre-computed EyeLink
-`IA_*` value survives both normalization and `compute_word_metrics` untouched —
-which is what makes "the numbers are your eye-tracker's" true.
-
-**Rewritten 2026-07-29 — shorter, and no claims about effort.** Two passes: cut
-the bullet lists to a short paragraph (the in-app expander went with them — at
-that length, hiding it behind a click was the wrong trade), then cut the claims
-about how hard the code was tested. "We put real effort into validating it" /
-"a trial we traced by hand" are things a reader can't check and shouldn't be
-asked to take on faith. What's left is only what they can verify themselves:
-the ground-truth trial at `?source=synthetic`, and `IA_*` passthrough. Same three
-anchors (`?source=synthetic`, *cross-check*, the issues link), so the tests hold.
 
 _Next item: `UX-21`._
 
@@ -216,8 +162,9 @@ _Next item: `CMP-9`._
 
 ## Visualization & display
 
-_VIZ-1 … VIZ-13, VIZ-15, VIZ-17, VIZ-18, VIZ-19 are in
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+_VIZ-1 … VIZ-13 and VIZ-15 … VIZ-19 are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md) — VIZ-16 as `Dropped`, the
+rest signed off._
 
 **VIZ-14 · Per-trial stimulus images from a folder + naming pattern** — `Status: Backlog`
 
@@ -299,68 +246,6 @@ OneStop / MultiplEYE / PoTeC in [`datasets.py`](scanpath_studio/datasets.py).
 Feeds **DATA-1**, and exercises **PRE-6** (RTL / multilingual rendering) and
 **VAL-3** (non-English validation).
 
-**DATA-12 · Privacy statement — "we don't use your data"** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`docs/privacy.md`](docs/privacy.md), written from the code
-rather than from intent: where an upload actually goes, the three things that
-*do* touch the disk, what a share link and a saved config contain, Streamlit's
-own telemetry, and a per-deployment section (local / desktop / hosted demo). In
-the app, the wizard states where a file goes **before** the uploader and About
-links the page. Two code changes came out of it: the CLI now injects
-`--browser.gatherUsageStats=false` (Streamlit's default is opt-*in*, and
-`.streamlit/config.toml` resolves against the launch directory, so a
-pip-installed run had telemetry on), and the desktop bundle binds loopback.
-
-**Rewritten 2026-07-29 (your note: over-confident, too detailed, terms you don't
-know).** 436 → ~170 lines, and the diagnosis was right — the draft was written for
-someone who already knows what `uuid4`, `SIGKILL`, `SameSite=Lax` and a CSRF
-double-submit token are, which is not the audience for a privacy page. Rewritten in
-plain language: the answer first ("nowhere"), then the one setting that actually
-matters on a shared network, then what's in a link / a config / an export, then what
-we didn't check. Every internal class name is gone; the technical version already
-exists as [`docs/security.md`](docs/security.md) and is linked.
-
-The rewrite also caught **three claims that had gone stale** since **DATA-16**
-landed — the page still said the desktop bundle serves the whole network (fixed by
-S1), that a pip install has Streamlit telemetry on (fixed: the CLI injects
-`--browser.gatherUsageStats=false`), and that exports carry an absolute local path
-(fixed by S4's `strip_local_paths`). A privacy page describing vulnerabilities that
-no longer exist is its own kind of wrong.
-
-Make it explicit, in the app and in the docs, that uploaded data isn't retained,
-transmitted, or used for anything beyond the current session, and spell out what
-that means per deployment: local install and the desktop bundle (**ENG-15**) never
-leave the machine; the hosted Streamlit demo processes uploads in the session
-only. Researchers with participant data need this stated plainly before they
-upload, not inferred. Related: **DATA-13**, **UX-15**.
-
-**DATA-14 · Document how to get a dataset bundled by default** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`docs/contributing-a-dataset.md`](docs/contributing-a-dataset.md)
-— the real adapter contract derived from OneStop / MultiplEYE / PoTeC: the
-raw-frames entry point and its signature, canonical-column mapping and
-optional-field registration, registry wiring, licence expectations, bundled vs.
-download-on-demand and the size threshold that decides, expected tests, and PR
-shape, with one existing adapter walked end to end. Linked from `CONTRIBUTING.md`
-and the sidebar data-source picker.
-
-**Rewritten 2026-07-29 (your note: too long).** 497 → ~240 lines. It's a
-contributor page, so the reader is technical — but it still opened with three
-sections of preamble before the question that decides everything, which is *do you
-need an adapter at all?* That's now first, as a table of what each existing adapter
-actually solves. The six-part contract is one scannable list with the schema detail
-collapsed; the ten-step PoTeC walkthrough became one paragraph naming the functions
-to read in order; the tests table became prose keeping the two rules that matter
-(never hit the network, hand-compute expectations) and the one trap that bites
-(add your `<CORPUS>_DEFAULT_DIR` to the monkeypatched tuple).
-
-Someone with a public corpus should be able to find out how to make it appear as
-a built-in data source in a future release — what an adapter in
-[`datasets.py`](scanpath_studio/datasets.py) has to provide (loader, licence,
-download-on-demand vs. bundled, canonical-column mapping, sample size limits),
-what tests are expected, and how to submit it. Write it up in `CONTRIBUTING.md` /
-the docs site and link it from the wizard's data-source picker.
-
 **DATA-15 · Real raw-gaze samples in the bundled demo** — `Status: Backlog`
 
 The demo's `raw_gaze.{csv,parquet}` is **synthesized** from the fixation report
@@ -403,9 +288,10 @@ they are the only two a stranger on the network can reach at all.
 page — don't reopen them without reading those. Related: **DATA-12**, **ENG-15**
 (desktop), **ENG-17** (a hosted mode would make S2 load-bearing).
 
-_DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul), DATA-11
-(bring your own data) and DATA-13 (the security audit) are in
-[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-17`._
+_DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) and
+DATA-11 … DATA-14 (bring your own data, privacy, security, contributing a
+dataset) are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md).
+Next item: `DATA-17`._
 
 ---
 
@@ -665,7 +551,7 @@ _BUG-1, BUG-2, BUG-3, BUG-5, BUG-6, BUG-7, BUG-10, BUG-11 are in
 
 **BUG-4 · MultiplEYE: residual small text-vs-image mismatch** — `Status: Backlog`
 
-Follow-up to **BUG-3** (now `Pending approval`). After the BUG-3 fixes (real
+Follow-up to **BUG-3** (signed off 2026-07-03, archived). After the BUG-3 fixes (real
 `FONT_SIZE`/`FONT` threaded through, line-pitch-based `scale_text_to_boxes`,
 script-aware width cap) the MultiplEYE true-to-scale word text lines up *much*
 better, but a **small** residual offset between the rendered text layer and the

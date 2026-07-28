@@ -246,6 +246,33 @@ fixed-width. Added real breakpoints across ≥1280 px down to ~1024 px for the c
 strip (**UX-11**), the control rail and the header nav. The true-to-scale plot
 keeps its scale guarantee: it may scroll, never distort.
 
+**UX-20 · Disclose that the code was written with AI assistance** — `Status: Done` *(signed off 2026-07-29)*
+
+Said plainly where a user will see it — the three places the citation lives: the
+About popover (`app._render_about_sidebar`), the README, and `docs/index.md`.
+
+The design constraint took two rounds to get right. A bare "built with AI, there
+may be bugs" is unfalsifiable, so the first draft backed it with detail — how the
+measures were validated, what to do before publishing, where to report. That was
+argued at bullet-list length on all three surfaces, and it also made claims about
+*effort* ("we put real effort into validating it", "a trial we traced by hand")
+that a reader has no way to check. Both got cut. What shipped is a short paragraph
+holding only what a reader can verify for themselves — the ground-truth trial at
+`?source=synthetic`, and that pre-computed EyeLink `IA_*` measures are passed
+through rather than recomputed — plus the ask (cross-check anything you publish)
+and the issues link with the 💾 Save & restore JSON that reproduces the view.
+Deliberately not a liability disclaimer: MIT already carries the no-warranty text.
+
+[`tests/test_disclosure.py`](tests/test_disclosure.py) pins the note's own claims,
+because a disclosure whose "you can check this yourself" turns out to be wrong is
+worse than none: that it's on every surface with the actionable half intact, that
+it carries no disclaimer language, that `?source=synthetic` really does load the
+ground-truth trial (drafting caught this — the note first said "pick it in the
+data-source picker", but that source is deliberately not offered there, so the
+deep link is the only route), that `EXPECTED` covers every canonical measure, and
+that an `IA_*` value survives both normalization and `compute_word_metrics`
+untouched — which is what makes the passthrough claim true.
+
 ---
 
 ## Compare mode
@@ -460,6 +487,16 @@ computes that without building the figure. All four surfaces: the two
 (clamped via `_URL_BOUNDED`) and the saved config's `animation` section,
 `--anim-grid-step-ms` / `--anim-max-frames` on `render`, and the same two names as
 `animate_scanpath` overrides. Defaults unchanged.
+
+**VIZ-16 · Show the word text in the fixation hover** — `Status: Dropped` *(2026-07-29)*
+
+The fixation hover reads `Fixation # / Duration / Word #` — the word *number*, not
+the word. The proposal was to add the word text (as the word-box hover already
+does) via `customdata`, on the single, compare and animation traces.
+
+**Dropped at the user's request, never implemented** — kept here so the idea and
+its reasoning aren't lost, not because it shipped. Nothing in the code changed;
+`VIZ-16` stays retired rather than being reused for something else.
 
 **VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Done` *(signed off 2026-07-29)*
 
@@ -731,6 +768,53 @@ users are done) and keeps only the omissions that change behaviour. The candidat
 table is gone — it duplicated `data.py` and would rot — replaced by how matching
 works. Worked examples and the symptom→cause list are collapsed, so the page is
 one screen until you need them.
+
+**DATA-12 · Privacy statement — "we don't use your data"** — `Status: Done` *(signed off 2026-07-29)*
+
+Researchers with participant data need to know where an upload goes *before* they
+upload, not to infer it. [`docs/privacy.md`](docs/privacy.md) was written from the
+code rather than from intent: where an upload actually goes, the three things that
+*do* touch the disk, what a share link and a saved config contain, Streamlit's own
+telemetry, and a per-deployment section (local / desktop / hosted demo). In the
+app, the wizard states where a file goes above the uploader and About links the
+page.
+
+Writing it from the code changed the code twice: the CLI now injects
+`--browser.gatherUsageStats=false` (Streamlit's default is opt-*in*, and
+`.streamlit/config.toml` resolves against the launch directory, so a pip-installed
+run had telemetry on), and the desktop bundle binds loopback.
+
+Rewritten 2026-07-29, 436 → ~170 lines. The draft assumed a reader who knows what
+`uuid4`, `SIGKILL`, `SameSite=Lax` and a CSRF double-submit token are — not the
+audience for a privacy page. Now: the answer first ("nowhere"), then the one
+setting that matters on a shared network, then what's in a link / a config / an
+export, then what wasn't checked. Internal class names are gone; the technical
+version is [`docs/security.md`](docs/security.md), linked. The rewrite also caught
+**three claims that had gone stale** since **DATA-16** landed — that the desktop
+bundle serves the whole network (fixed by S1), that a pip install has telemetry on
+(fixed by the CLI flag), and that exports carry an absolute local path (fixed by
+S4's `strip_local_paths`). A privacy page describing vulnerabilities that no longer
+exist is its own kind of wrong.
+
+**DATA-14 · Document how to get a dataset bundled by default** — `Status: Done` *(signed off 2026-07-29)*
+
+[`docs/contributing-a-dataset.md`](docs/contributing-a-dataset.md) — the real
+adapter contract, derived from OneStop / MultiplEYE / PoTeC rather than invented:
+the raw-frames entry point and its signature, canonical-column mapping and
+optional-field registration, registry wiring, licence expectations, bundled vs.
+download-on-demand and the size threshold that decides, expected tests, and PR
+shape, with one existing adapter walked end to end. Linked from `CONTRIBUTING.md`
+and the data-source picker. Distinct from **DATA-11** (loading your own data in
+the app).
+
+Rewritten 2026-07-29, 497 → ~240 lines. The reader is technical, but the page
+still opened with three sections of preamble before the question that decides
+everything — *do you need an adapter at all?* That's now first, as a table of what
+each existing adapter solves. The six-part contract is one scannable list with the
+schema detail collapsed; the ten-step PoTeC walkthrough became a paragraph naming
+the functions to read in order; the tests table became prose keeping the two rules
+that matter (never hit the network, hand-compute expectations) and the one trap
+that bites (add your `<CORPUS>_DEFAULT_DIR` to the monkeypatched tuple).
 
 ---
 

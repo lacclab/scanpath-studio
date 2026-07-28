@@ -271,7 +271,7 @@ def _render_about_sidebar() -> None:
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Lion, Ella and "
-        'Jakobi, Deborah and Reiche, David and J{\\"a}ger, Lena and '
+        'Jakobi, Deborah and Reich, David and J{\\"a}ger, Lena and '
         "Berzak, Yevgeni},\n"
         "license = {MIT},\n"
         "month = jun,\n"
@@ -291,7 +291,7 @@ Developed by [Omer Shubi](https://omershubi.github.io/)¹,
 [Keren Gruteke Klein](https://kerengruteke.github.io/)¹,
 [Ella Lion](https://ella-lion.github.io/)¹,
 [Deborah Jakobi]({_DILI}/lab-members/jakobi.html)²,
-[David Reiche]({_DILI}/lab-members/reich.html)²ʼ³,
+[David Reich]({_DILI}/lab-members/reich.html)²ʼ³,
 [Lena Jäger]({_DILI}/group-leader/jaeger.html)², and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/)¹.
 

@@ -29,31 +29,25 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 ### Currently in progress
 - **PERF-1** — Plotly → matplotlib migration ([PR #83](https://github.com/lacclab/scanpath-studio/pull/83), `matplotlib-migration` branch).
 - **DATA-1** — Broaden dataset support (ongoing epic).
+- **VIZ-18** — palettes; the selector still claims a palette after you hand-edit a colour.
+- **DATA-16** — the security audit's fixes (S1/S2/S4/S5 done, S3/S6/S7/S10/S11 next).
 
 ### Awaiting your approval
 Implemented, not yet signed off (→ archived on your confirmation):
-**UX-19** (responsive breakpoints), **VIZ-18** (selectable palettes), **VIZ-11**
-(animation slider + the frame-grid controls), **ENG-16** (README assets, now
-rendered from the real pipeline) — all 2026-07-28.
 
-**Docs, also 2026-07-28** — six new pages, all in the site nav:
-**DATA-11** (bring your own data), **DATA-12** (privacy), **DATA-13** (the
-security audit — its *fixes* are **DATA-16**), **DATA-14** (contributing a
-dataset), **ENG-13** (corpus analysis), **ENG-18** (agent-facing docs + clearer
-API errors).
+- **Docs** — **DATA-11** (bring your own data), **DATA-12** (privacy), **DATA-14**
+  (contributing a dataset), **ENG-13** (corpus analysis). All four rewritten
+  2026-07-29 after your "too long / too AI" note.
+- **UX-20** — the AI-assistance disclosure (rewritten shorter 2026-07-29).
+- Older: **AN-28** (the one gap left from *Analysis & corpus views*); **PRE-3**
+  (vertical drift correction — *you'll revisit*); **ENG-15** (standalone desktop
+  app, 2026-07-16).
 
-**Tests, also 2026-07-28** — **ENG-1** (every `aggregation.py` helper + a figure
-smoke test; found and fixed two real defects), **ENG-2** (the OneStop shard
-fast-path), **ENG-3** (MultiplEYE side data), **ENG-4** (`AppTest` flows; found
-**BUG-12**).
-
-Older: **AN-28** (the one gap left from the *Analysis & corpus views* epic);
-**PRE-3** (vertical drift correction — *you'll revisit*); **ENG-15** (standalone
-desktop app — implemented 2026-07-16).
-
-Signed off 2026-07-28 and archived: **UX-7**, **UX-9**, **UX-10**, **UX-11**,
-**VIZ-15**, **EXP-1**, **EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10**
-(working as intended), **BUG-11**.
+Signed off **2026-07-29** and archived: **UX-19**, **VIZ-11**, **DATA-13**,
+**ENG-1**, **ENG-2**, **ENG-3**, **ENG-4**, **ENG-16**, **ENG-18**.
+Signed off 2026-07-28: **UX-7**, **UX-9**, **UX-10**, **UX-11**, **VIZ-15**,
+**EXP-1**, **EXP-2**, **AN-1 … AN-27**, **BUG-7**, **BUG-10** (working as
+intended), **BUG-11**.
 
 ### Groups
 [UX & Interaction](#ux--interaction) ·
@@ -75,7 +69,7 @@ Signed off 2026-07-28 and archived: **UX-7**, **UX-9**, **UX-10**, **UX-11**,
 _UX-1 … UX-6, UX-8, UX-9, UX-11, UX-12, UX-13, UX-16, UX-17, UX-18 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**UX-14 · Tutorials on the documentation site** — `Status: Backlog`
+**UX-14 · Tutorials on the documentation site** — `Status: Planned`
 
 **Primarily a `docs/` job, not an in-app one.** Write task-shaped tutorials on
 <https://lacclab.github.io/scanpath-studio/> — *load your own data*, *compare two
@@ -87,27 +81,13 @@ deliverable. Related: **UX-17** (the app has no link to the docs site at all —
 tutorials nobody can find don't help), **UX-15** (FAQ), **DATA-11** (the
 bring-your-own-dataset walkthrough is one of these tutorials), **ENG-12**.
 
-**UX-15 · FAQ (in-app + docs site)** — `Status: Backlog`
+**UX-15 · FAQ (in-app + docs site)** — `Status: Planned`
 
 Both surfaces: a short in-app FAQ (near the tour/help) and a fuller page on the
 docs site. Content still to be decided — collect the recurring questions first
 (column mapping, why measures differ from EyeLink's, what drift correction does,
 where data goes / privacy → **DATA-12**).
 
-
-**UX-19 · Layout breaks on smaller laptop screens** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-On ordinary laptop widths (not phones — think a 13" screen or a half-width
-window) the app looks bad: controls, chips and the plot column crowd or overlap
-rather than adapting. [`styles.py`](scanpath_studio/styles.py) has **no width
-breakpoints at all** — the only `@media` rule is `prefers-color-scheme`
-([`styles.py`](scanpath_studio/styles.py:121)) — so every layout decision is
-fixed-width, which is the likely root cause. Establish the target range (say
-≥1280 px down to ~1024 px), find what breaks first (chip strip **UX-11**, the
-control rail, the plot's true-scale sizing at
-[`plots.py`](scanpath_studio/plots.py:166), the header nav), and add real
-breakpoints. AC: no overlap or clipping across the target range; the true-scale
-plot keeps its scale guarantee (it may scroll, never distort).
 
 **UX-20 · Disclose that the code was written with AI assistance** — `Status: Pending approval` *(implemented 2026-07-28)*
 
@@ -228,69 +208,8 @@ _Next item: `CMP-9`._
 
 ## Visualization & display
 
-_VIZ-1 … VIZ-10, VIZ-12, VIZ-13, VIZ-15 are in
+_VIZ-1 … VIZ-13, VIZ-15 are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
-
-**VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Pending approval`
-
-**Follow-up (2026-07-28), from your review.** The grid was decided *for* the user
-in two module constants, and worse, the cap coarsened the requested step
-**silently** — on the bundled demo the default 100 ms grid is quietly widened to
-110 ms, which is exactly the kind of invisible decision that makes a setting feel
-arbitrary. Both knobs are now visible in the Animate ⚙ Playback popover —
-**Frame every (ms)** (smoothness) and **Max frames** (the ceiling that bounds the
-GIF/MP4) — and the info box states what the choice actually produced:
-*"361 frames · one every 110 ms of reading — coarsened from 100 ms to stay under
-the 360-frame cap"*. New pure helper `plots.animation_timeline_summary` computes
-that without building the figure. All four surfaces: the two `global_anim_*`
-keys, `anim_grid_step_ms` / `anim_max_frames` in the deep link (clamped via
-`_URL_BOUNDED`) and the saved config's new `animation` section,
-`--anim-grid-step-ms` / `--anim-max-frames` on `render`, and — free, since the
-allow-list is derived from the builder's signature — the same two names as
-`animate_scanpath` overrides. Defaults unchanged, so nothing moves until someone
-moves it.
-
-**Implemented (2026-07-02).** Frames now sit on a uniform time grid
-(`plots._anim_timeline` → `_ANIM_GRID_STEP_MS` / `_ANIM_MAX_FRAMES`, returning
-`(frame_times, frame_duration_ms, reading_span_ms)`); the slider
-(`_animation_time_slider(frame_times, total_ms)`) labels each step `elapsed /
-total s` and dropped the `Elapsed:` prefix. Uniform per-frame duration keeps the
-GIF/MP4 export bounded. Display-only (no deep-link/CLI/API surface). Tests in
-[`tests/test_plots.py`](tests/test_plots.py) (`TestScanpathAnimation` /
-`TestDualScanpathAnimation` / `TestAnimationPlaybackTiming`).
-
-Improve the animation time slider so its readout and stepping are **time-based**
-rather than fixation-onset-based, and the readout shows elapsed **out of total**
-seconds — e.g. **"1.2 / 30.0s"** instead of the current bare **"Elapsed: X.Xs"**.
-
-**Why not fixation index:** the obvious "Fixation N / TOTAL" readout breaks for a
-**comparison** animation (two overlaid scanpaths). In Plotly the slider's stops
-*are* the frames, and frames are currently emitted at every distinct fixation
-*onset across all scanpaths* (`_anim_timeline`
-[`plots.py`](scanpath_studio/plots.py:1745)), so with two readers the steps are
-the *union* of both onset sets — no single fixation index is meaningful, and the
-slider steps bunch wherever fixations cluster instead of scrubbing linearly.
-
-**Plan — switch the frame grid from onsets to uniform time.** Generate one frame
-every fixed interval (≈100 ms) instead of one per onset; the per-frame *content*
-logic already works unchanged (`searchsorted(onsets, t)` shows every fixation
-whose onset ≤ t — `make_scanpath_animation` [`plots.py`](scanpath_studio/plots.py:2283)).
-This makes the slider a linear time scrubber, makes the readout naturally
-time-based for **any** number of scanpaths (the two-scanpath problem disappears),
-and simplifies playback (uniform per-frame duration — the variable-duration
-bookkeeping in `_anim_timeline` mostly goes away). In `_animation_time_slider`
-([`plots.py`](scanpath_studio/plots.py:1896)) drop the `prefix="Elapsed: "` and
-set each step `label` to `f"{t / 1000:.1f} / {total / 1000:.1f}s"`.
-- **Bound the frame count:** an adaptive grid `step = max(100ms, span / MAX_FRAMES)`
-  (cap ~300–400 frames) so a long reading gets a coarser grid instead of thousands
-  of frames — otherwise the GIF/MP4 export (`animation_export.export_animation`)
-  balloons. Quantization is ≤ one grid-step (a 0.13 s onset shows at the 0.2 s
-  frame); negligible at 100 ms.
-- **Single-scanpath bonus:** when exactly one scanpath is animated the fixation
-  index *is* unambiguous, so optionally append it there only —
-  `Fixation 5 / 42 · 1.2 / 30.0s` — and omit it in comparison mode.
-
-Display-only; no deep-link/CLI/API surface needed. Related: **VIZ-10**, **CMP-4**.
 
 **VIZ-14 · Per-trial stimulus images from a folder + naming pattern** — `Status: Backlog`
 
@@ -313,7 +232,7 @@ Add the word text (the word-box hover already does this,
 compare, and animation traces.
 
 
-**VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: Pending approval` *(implemented 2026-07-28)*
+**VIZ-18 · Rethink the default palette (contrast, print, greyscale, colourblind)** — `Status: In progress`
 
 Audit the [`constants.py`](scanpath_studio/constants.py) defaults against the ways
 these figures actually get used: on-screen contrast, **printed** in a paper,
@@ -322,6 +241,25 @@ selectable palettes (colourblind-safe, print/greyscale-safe, high-contrast) rath
 than only the current one, and prefer a default that survives greyscale
 conversion. Interacts with **VIZ-15** (shape as a redundant channel) and
 **VIZ-17**.
+
+**Implemented (2026-07-28).** `constants.PALETTES` + `palette_settings`, applied by
+`controls.apply_palette` as the selector's `on_change`. A palette does not *replace*
+the existing colour controls — it **presets** them, writing into the same
+`global_*` keys the ordinary pickers own: `global_fixation_color`,
+`global_fixation_colorscale`, `global_heatmap_colorscale`, `global_saccade_color`,
+`global_text_color`, `global_highlight_text_color` and one key per editable saccade
+class. Every picker stays authoritative and editable afterwards; background colour
+is deliberately excluded (canvas, not marks).
+
+**Follow-up (2026-07-29) — the selector lies once you edit a colour.** Because
+`apply_palette` is one-way and fires only on change, picking *Colourblind-safe* and
+then hand-editing one colour leaves the dropdown still reading "Colourblind-safe"
+while the figure no longer is. **VIZ-12** already solved exactly this for quick
+views: `controls._active_quick_view()` derives the active preset from live session
+state and de-emphasises the buttons once you've customised. Give the palette
+selector the same treatment — derive the active palette by comparing the live
+`global_*` values against each palette's settings, show *Custom* when nothing
+matches, and say so in the caption rather than leaving a stale name on screen.
 
 
 **VIZ-20 · Hand-authored scanpaths + an "Illustration" mode** — `Status: Backlog`
@@ -344,7 +282,7 @@ Note: [`synthetic.py`](scanpath_studio/synthetic.py) already builds a fully
 hand-specified trial (the "Synthetic test trial" data source) — the same
 construction could back the authoring UI.
 
-**VIZ-21 · Audit which control-rail options actually apply in Animate / Compare mode** — `Status: Backlog`
+**VIZ-21 · Audit which control-rail options actually apply in Animate / Compare mode** — `Status: Planned`
 
 Many rail options silently do nothing (or misbehave) once **Animate** or
 **Compare** is on. The gating is ad-hoc and partial: `controls.py` hides a handful
@@ -425,22 +363,6 @@ leave the machine; the hosted Streamlit demo processes uploads in the session
 only. Researchers with participant data need this stated plainly before they
 upload, not inferred. Related: **DATA-13**, **UX-15**.
 
-**DATA-13 · Data security** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`docs/security.md`](docs/security.md) — an evidence-based
-audit citing the `module.py:function` each claim was verified in: on-disk
-residue, deep-link/saved-config leakage, ingest path handling, the desktop
-bundle's bind address, and cross-session cache bleed. 11 findings (S1–S11),
-severity-ranked, each with the exact fix; two accepted with reasons. It
-deliberately changed no code so the fixes land as reviewable commits — tracked as
-**DATA-16**. S1 (the bundle served every interface) is already fixed.
-
-The engineering side of **DATA-12**: audit where uploaded data actually goes
-(`st.cache_data` temp paths, the export zip staging, any on-disk dataset store the
-wizard writes), how long it survives, and what a shared deep link / saved config
-can leak. Document the findings and fix what needs fixing. Would become a
-prerequisite if a hosted multi-user mode is ever built (**ENG-17**).
-
 **DATA-14 · Document how to get a dataset bundled by default** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 **Implemented.** [`docs/contributing-a-dataset.md`](docs/contributing-a-dataset.md)
@@ -500,7 +422,8 @@ they are the only two a stranger on the network can reach at all.
 page — don't reopen them without reading those. Related: **DATA-12**, **ENG-15**
 (desktop), **ENG-17** (a hosted mode would make S2 load-bearing).
 
-_DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) are in
+_DATA-3 … DATA-9 (OneStop public source + the data-source UI overhaul) and
+DATA-13 (the security audit) are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). Next item: `DATA-17`._
 
 ---
@@ -774,7 +697,7 @@ Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
 (`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
 in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
 
-**BUG-8 · Bundled-demo fixation `word_id` is 1-based vs. words `IA_ID` 0-based** — `Status: Backlog`
+**BUG-8 · Bundled-demo fixation `word_id` is 1-based vs. words `IA_ID` 0-based** — `Status: Planned`
 
 The demo fixation report's word column runs `1..N` while `ia.csv`'s `IA_ID`
 runs `0..N-1`, so each fixation's pre-assigned `word_id` points at the **next**
@@ -823,86 +746,15 @@ _Next item: `BUG-13`._
 
 Lower priority than features, but tracked.
 
-### Tests
-
-**ENG-1 · Tests for each `aggregation.py` helper + smoke test per new figure** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** Every public helper in `aggregation.py` (36 names, checked by
-an AST walk) is covered by a tiny hand-built tidy frame with hand-computed
-expectations, in [`tests/test_aggregation.py`](tests/test_aggregation.py); the
-figure builders get a structural smoke test each in
-[`tests/test_analysis_figures.py`](tests/test_analysis_figures.py). The old
-`tests/test_analysis_views.py` was **deleted** — 516 lines of
-`assert len(fig.data) >= 1` / `not out.empty` over the same builders; its two
-unique regression cases were re-homed first.
-
-Writing it surfaced **two real defects**, both now fixed:
-`add_normalized_column` filled an undefined z with `0.0`, conflating a
-zero-variance group (where 0 *is* the group mean) with a genuinely missing
-observation — so an unfixated word re-entered the distribution as an
-exactly-average data point and normalizing changed the observation count; and
-`word_rate_profile`'s `n` counted **rows**, so a reader who read a text twice
-cleared a min-readers guard that `cohort_word_profile` correctly rejected — the
-two guards disagreed on the same frame, and the rates were row-weighted.
-
-Pure functions → feed a tiny tidy frame, assert grouped output.
-
-**ENG-2 · Cover the OneStop per-pid shard fast-path** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`tests/test_onestop_shard.py`](tests/test_onestop_shard.py) —
-27 tests, two layers. A synthetic export tree in `tmp_path` (CSV.zip pair +
-`by_pid/{ia,fixations}/<pid>.parquet`) always runs; an agreement check against
-the real corpus is gated on `$ONESTOP_DATA_DIR` with an explicit skip reason.
-
-The behaviour worth pinning is the **refusal**: when a participant is named and
-their shard is missing, `load_onestop_server_bundle` must *not* fall back to the
-15 GB read — the link is for one pid, so loading the whole cohort to discover it
-has no data is pure waste. Testing that needs `st.stop()` to actually stop; in
-pytest's bare mode it is a no-op, so the test swaps in a recorder whose `stop()`
-raises. Without that the assertion passes straight through to the slow path and
-still looks green.
-
-Also covers `_onestop_shard_paths` (lowercase + strip), the full-export path,
-`onestop_full_bundle_exists`, `onestop_data_provenance` (which bytes are on
-screen), and `onestop_shard._shard_one` (per-pid write, skip-unless-rebuild,
-named errors). Three mutations were run to confirm the tests discriminate —
-dropping the pid lowercasing, removing the `st.stop()`, and un-lowercasing the
-writer each fail the intended test. The path test exists *because* the
-end-to-end one didn't catch the first: macOS is case-insensitive, so the
-filesystem round-trip accepted the wrong case and only Linux CI would have
-caught it.
-
-**ENG-3 · Cover MultiplEYE side-data enrichment** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`tests/test_multipleye_enrichment.py`](tests/test_multipleye_enrichment.py)
-builds a synthetic MultiplEYE tree in `tmp_path` and covers each side-data kind
-— comprehension questions, reader metadata, per-reader reading measures, stimulus
-images — asserting merged *values* and join keys (no row multiplication), that a
-missing file degrades to an absent column rather than a crash, and that malformed
-side data can't corrupt the canonical columns.
-
-Questions / reader meta / measures / images.
-
-**ENG-4 · Extend `AppTest` coverage** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`tests/test_apptest_flows.py`](tests/test_apptest_flows.py)
-drives multi-step flows through `AppTest`: overriding a column mapping and
-checking the re-derived data, narrowing the pool with the condition + annotation
-filters (including the UX-7 empty state and the per-filter clear), and building
-the bulk-export zip from the Export subtab. Render-level checks stay in
-`test_apptest.py`. It also turned up **BUG-12** — annotation filters skip the
-raw-gaze table, so on the bundled demo the all-three-empty guard never fires and
-the guidance panel is unreachable there; the flow tests use the raw-gaze-free
-synthetic source to work around it.
-
-Column-mapping UI, trial filters, bulk-export zip.
+_ENG-1 … ENG-4 (the test-coverage batch) are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 ### Code quality
 
 _ENG-5 (decompose `app.py`) · ENG-7 (`watchdog`) · ENG-8 (Comparisons subtab) are
 in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
-**ENG-6 · Centralize `st.session_state` keys** — `Status: Backlog`
+**ENG-6 · Centralize `st.session_state` keys** — `Status: Planned`
 
 *(Was `Skipped` 2026-06-23 — reopened 2026-07-28.)* **273 distinct literal key
 strings across 445 occurrences** — 112 in `tabs.py`, 68 in `controls.py`, 42 in
@@ -936,8 +788,9 @@ concern one layer down).
 ### UX / robustness
 
 _ENG-9 (auto-detected columns) · ENG-10 (animation-export errors without Chrome) ·
-ENG-11 (versioned Save & restore) · ENG-12 (rendering docs) · ENG-14 (author list)
-are in [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
+ENG-11 (versioned Save & restore) · ENG-12 (rendering docs) · ENG-14 (author list) ·
+ENG-16 (README assets) · ENG-18 (agent docs) are in
+[`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md)._
 
 **ENG-13 · Document the new analysis sections once built** — `Status: Pending approval` *(implemented 2026-07-28)*
 
@@ -949,55 +802,6 @@ aggregation & spread, raw vs. z-scored, the min-readers guard, tidy-table
 download) plus how the active filter and viz settings carry in.
 
 Add to `docs/` after AN-* land.
-
-**ENG-16 · README: one single-scanpath GIF instead of two** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** The README keeps the single-scanpath hero GIF and shows the
-dual-reader demo as a still (`assets/demo_dual_scanpath.png`, 197 KB), captioned
-with a link to the animated version, which now lives on the docs site
-(`docs/index.md`, under *The app in one paragraph*). 1.2 MB less animation before
-the install line.
-
-**Both assets re-rendered from the real pipeline (2026-07-28, your note).** The
-originals were hand-made and didn't correspond to any actual reading. New script
-[`assets/render_dual_scanpath.py`](assets/render_dual_scanpath.py) builds them
-from the bundled demo — two readers of `2_1_1_Ele`, 305 fixations — through
-`plots.make_comparison_figure` and `make_scanpath_animation` +
-`animation_export.export_animation`, i.e. exactly what the app draws. Committed
-alongside its output, following the `project_map.dot` → `.png` precedent, so the
-assets can be regenerated rather than rotting. Word boxes are off (212 AOI
-outlines fight the scanpaths at README width) and both are palette-quantized:
-the still 1.0 MB → 197 KB, the GIF 2.49 MB → 1.36 MB, visually unchanged.
-
-The README embeds two animated GIFs — the hero
-(`assets/scanpath_animation.gif`, a single scanpath) and
-`assets/demo_dual_scanpath.gif` (two readers on a shared clock) — ~3 MB of
-animation before a reader reaches the install line. Show **one** GIF, of a single
-scanpath, and demote the dual-reader demo to a still (or move it to the docs
-site). Related: **ENG-12**.
-
-**ENG-18 · Agent-facing docs + an agent-friendly API** — `Status: Pending approval` *(implemented 2026-07-28)*
-
-**Implemented.** [`docs/agents.md`](docs/agents.md) is the counterpart to
-`AGENTS.md` for an agent asked to *use* Scanpath Studio headlessly: canonical
-column names, the minimum input a figure needs, the full parameter set with
-defaults, and runnable end-to-end snippets. On the API side, a caller passing a
-table with the wrong column names now gets a message naming the canonical field
-that couldn't be inferred and the candidates that were tried, instead of a
-`KeyError` from deep inside normalization.
-
-Two halves, both aimed at *users'* coding agents rather than contributors:
-
-1. **Docs an agent can act on.** `AGENTS.md` / `CLAUDE.md` today describe how to
-   *develop* Scanpath Studio. Add the counterpart for an agent asked to *use* it —
-   the headless surface ([`api.py`](scanpath_studio/api.py) + the `render` CLI):
-   canonical column names, the minimal input a figure needs, the parameter set and
-   its defaults, and worked end-to-end snippets, in a file an agent will find and
-   read.
-2. **An agent-friendly API surface.** Audit `api.py` for the things that make
-   scripted use awkward — errors that don't say which column was missing,
-   parameters that only exist in the UI (drift correction, **PRE-9**), defaults
-   that drift from the app's. Related: **ENG-12**, **DATA-11**.
 
 ### Distribution / packaging
 

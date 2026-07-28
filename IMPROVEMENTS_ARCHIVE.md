@@ -238,6 +238,14 @@ thousands separators, one decimal, Yes/No, `—` for missing), on both the
 selectbox and the slider thumb, and the picker's own label names the ordering:
 **Trial ID · by Fixations (n) ↓**. Also `Trial id` → `Trial ID` throughout.
 
+**UX-19 · Layout breaks on smaller laptop screens** — `Status: Done` *(signed off 2026-07-29)*
+
+[`styles.py`](scanpath_studio/styles.py) had **no width breakpoints at all** — the
+only `@media` rule was `prefers-color-scheme` — so every layout decision was
+fixed-width. Added real breakpoints across ≥1280 px down to ~1024 px for the chip
+strip (**UX-11**), the control rail and the header nav. The true-to-scale plot
+keeps its scale guarantee: it may scroll, never distort.
+
 ---
 
 ## Compare mode
@@ -433,6 +441,25 @@ triangle …) as a `global_*` key threaded through `_collect_viz_settings` →
 Exposing a feature on every surface*. Pairs with **VIZ-17** (a shape becomes a
 second channel once colour stops duplicating size) and **VIZ-18** (shape carries
 the distinction in print / greyscale).
+
+**VIZ-11 · Animate slider: uniform time grid + "elapsed / total seconds" readout** — `Status: Done` *(signed off 2026-07-29)*
+
+Animation frames sit on a **uniform time grid** rather than one per fixation onset,
+so the slider is a linear time scrubber and its readout (`elapsed / total s`) means
+the same thing for one scanpath or two — the fixation-index readout was ambiguous
+in compare mode, where the steps are the union of both onset sets.
+
+The grid was initially decided *for* the user in two module constants, and the
+frame cap coarsened the requested step **silently** (on the bundled demo a 100 ms
+request became 110 ms). Both knobs are now visible in the Animate ⚙ Playback
+popover — **Frame every (ms)** and **Max frames** — and the info box states what
+the choice produced: *"361 frames · one every 110 ms of reading — coarsened from
+100 ms to stay under the 360-frame cap"*. `plots.animation_timeline_summary`
+computes that without building the figure. All four surfaces: the two
+`global_anim_*` keys, `anim_grid_step_ms` / `anim_max_frames` in the deep link
+(clamped via `_URL_BOUNDED`) and the saved config's `animation` section,
+`--anim-grid-step-ms` / `--anim-max-frames` on `render`, and the same two names as
+`animate_scanpath` overrides. Defaults unchanged.
 
 ---
 
@@ -644,9 +671,77 @@ native 📁 Browse folder picker (`_pick_directory_dialog`); relative-path ancho
 to the project root (`_resolve_data_dir`); Save & restore split to its own
 top-level section.
 
+**DATA-13 · Data security** — `Status: Done` *(signed off 2026-07-29)*
+
+[`docs/security.md`](docs/security.md) — an evidence-based audit citing the
+`module.py:function` each claim was verified in: on-disk residue,
+deep-link/saved-config leakage, ingest path handling, the desktop bundle's bind
+address, and cross-session cache bleed. 11 findings (S1–S11), severity-ranked,
+each with the exact fix; two accepted with reasons. It deliberately changed no
+code so the fixes land as reviewable commits — those are tracked separately as
+**DATA-16**, which is still open (S1/S2/S4/S5 done, S3/S6/S7/S10/S11 next).
+
 ---
 
 ## Engineering
+
+### Tests
+
+**ENG-1 · Tests for each `aggregation.py` helper + smoke test per new figure** — `Status: Done` *(signed off 2026-07-29)*
+
+Every public helper in `aggregation.py` (36 names, checked by an AST walk) is
+covered by a tiny hand-built tidy frame with hand-computed expectations, in
+[`tests/test_aggregation.py`](tests/test_aggregation.py); the figure builders get
+a structural smoke test each in
+[`tests/test_analysis_figures.py`](tests/test_analysis_figures.py). The old
+`tests/test_analysis_views.py` was **deleted** — 516 lines of
+`assert len(fig.data) >= 1` / `not out.empty` over the same builders; its two
+unique regression cases were re-homed first.
+
+Writing it surfaced **two real defects**, both fixed: `add_normalized_column`
+filled an undefined z with `0.0`, conflating a zero-variance group (where 0 *is*
+the mean) with a genuinely missing observation — so an unfixated word re-entered
+the distribution as an exactly-average point and normalizing changed the
+observation count; and `word_rate_profile`'s `n` counted **rows**, so a reader who
+read a text twice cleared a min-readers guard that `cohort_word_profile` correctly
+rejected — the two guards disagreed on the same frame, and the rates were
+row-weighted.
+
+**ENG-2 · Cover the OneStop per-pid shard fast-path** — `Status: Done` *(signed off 2026-07-29)*
+
+[`tests/test_onestop_shard.py`](tests/test_onestop_shard.py) — 27 tests, two
+layers. A synthetic export tree in `tmp_path` (CSV.zip pair +
+`by_pid/{ia,fixations}/<pid>.parquet`) always runs; an agreement check against the
+real corpus is gated on `$ONESTOP_DATA_DIR` with an explicit skip reason.
+
+The behaviour worth pinning is the **refusal**: when a participant is named and
+their shard is missing, `load_onestop_server_bundle` must *not* fall back to the
+15 GB read. Testing that needs `st.stop()` to actually stop; in pytest's bare mode
+it is a no-op, so the test swaps in a recorder whose `stop()` raises — without
+that the assertion passes straight through to the slow path and still looks green.
+Three mutations confirmed the tests discriminate. The separate path-construction
+test exists *because* the end-to-end one didn't catch the first mutation: macOS is
+case-insensitive, so the filesystem round-trip accepted the wrong case and only
+Linux CI would have caught it.
+
+**ENG-3 · Cover MultiplEYE side-data enrichment** — `Status: Done` *(signed off 2026-07-29)*
+
+[`tests/test_multipleye_enrichment.py`](tests/test_multipleye_enrichment.py)
+builds a synthetic MultiplEYE tree in `tmp_path` and covers each side-data kind —
+comprehension questions, reader metadata, per-reader reading measures, stimulus
+images — asserting merged *values* and join keys (no row multiplication), that a
+missing file degrades to an absent column rather than a crash, and that malformed
+side data can't corrupt the canonical columns.
+
+**ENG-4 · Extend `AppTest` coverage** — `Status: Done` *(signed off 2026-07-29)*
+
+[`tests/test_apptest_flows.py`](tests/test_apptest_flows.py) drives multi-step
+flows: overriding a column mapping and checking the re-derived data, narrowing the
+pool with the condition + annotation filters (including the UX-7 empty state and
+the per-filter clear), and building the bulk-export zip. Render-level checks stay
+in `test_apptest.py`. It turned up **BUG-12** — annotation filters skip the
+raw-gaze table, so on the bundled demo the all-three-empty guard never fires; the
+flow tests use the raw-gaze-free synthetic source to work around it.
 
 ### Code quality
 
@@ -712,6 +807,34 @@ Full author list + affiliations in order (Shubi · Gruteke Klein · Lion — LAC
 Technion · Jacobi · Reiche [also U Potsdam] · Jäger — DiLi Lab, UZH · Berzak)
 across `CITATION.cff`, the README, the About panel (BibTeX + credits), and
 `constants.CITATION`.
+
+**ENG-16 · README: one single-scanpath GIF instead of two** — `Status: Done` *(signed off 2026-07-29)*
+
+The README embedded ~3 MB of animation before a reader reached the install line.
+It now keeps the single-scanpath hero GIF and shows the dual-reader demo as a
+still (`assets/demo_dual_scanpath.png`, 197 KB), captioned with a link to the
+animated version on the docs site.
+
+**Both assets are rendered from the real pipeline** — the originals were hand-made
+and didn't correspond to any actual reading.
+[`assets/render_dual_scanpath.py`](assets/render_dual_scanpath.py) builds them
+from the bundled demo (two readers of `2_1_1_Ele`, 305 fixations) through
+`plots.make_comparison_figure` and `make_scanpath_animation` +
+`animation_export.export_animation` — exactly what the app draws. Committed
+alongside its output, following the `project_map.dot` → `.png` precedent, so the
+assets can be regenerated rather than rotting. Word boxes are off (212 AOI
+outlines fight the scanpaths at README width) and both are palette-quantized: the
+still 1.0 MB → 197 KB, the GIF 2.49 MB → 1.36 MB, visually unchanged.
+
+**ENG-18 · Agent-facing docs + an agent-friendly API** — `Status: Done` *(signed off 2026-07-29)*
+
+[`docs/agents.md`](docs/agents.md) is the counterpart to `AGENTS.md` for an agent
+asked to *use* Scanpath Studio headlessly rather than develop it: canonical column
+names, the minimum input a figure needs, the full parameter set with defaults, and
+runnable end-to-end snippets. On the API side, a caller passing a table with the
+wrong column names now gets a message naming the canonical field that couldn't be
+inferred and the candidates that were tried, instead of a `KeyError` from deep
+inside normalization.
 
 ---
 

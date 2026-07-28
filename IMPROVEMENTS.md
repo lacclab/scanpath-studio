@@ -27,7 +27,6 @@ stable **ID** (e.g. `UX-1`) you can cite in chat ("let's do `CMP-3`"), a
 - When implementing an item, ask for clarification as needed before starting.
 
 ### Currently in progress
-- **PERF-1** — Plotly → matplotlib migration ([PR #83](https://github.com/lacclab/scanpath-studio/pull/83), `matplotlib-migration` branch).
 - **DATA-1** — Broaden dataset support (ongoing epic).
 - **DATA-16** — the security audit's fixes (S1/S2/S4/S5 done, S3/S6/S7/S10/S11 next).
 
@@ -297,11 +296,16 @@ Next item: `DATA-17`._
 
 ## Performance
 
-**PERF-1 · Replace Plotly with matplotlib (or lighter renderer) for speed** — `Status: In progress`
+**PERF-1 · Replace Plotly with matplotlib (or lighter renderer) for speed** — `Status: Parked` *(2026-07-29 — may revisit)*
 
 Interactivity isn't essential for the core spatial plot; a static renderer should
-be much faster. Tracked in [PR #83](https://github.com/lacclab/scanpath-studio/pull/83)
-(`matplotlib-migration` branch). Keep the spatial plot on the true-scale path.
+be much faster. Keep the spatial plot on the true-scale path.
+
+**Parked at the user's request (2026-07-29).** The work in progress is not lost:
+[PR #83](https://github.com/lacclab/scanpath-studio/pull/83) on the
+`matplotlib-migration` branch is where it stopped, so unparking means picking that
+branch back up rather than starting over. Not to be picked up as ordinary next
+work until then.
 
 **PERF-2 · Investigate (and warn about) slowdowns from keeping many fields** — `Status: Backlog`
 
@@ -317,7 +321,7 @@ _The epic is signed off: **AN-1 … AN-28** are in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md). **AN-29** is what AN-28
 left behind._
 
-**AN-29 · Let the user change things from inside Corpus Analysis** — `Status: Open`
+**AN-29 · Let the user change things from inside Corpus Analysis** — `Status: Backlog`
 
 **AN-28** made the Corpus view *read* the visualization settings; it still has no
 way to *change* them. Every control lives in the Scanpath view's right rail, so
@@ -668,7 +672,7 @@ _**ENG-15** (the desktop bundle itself) is in
 [`IMPROVEMENTS_ARCHIVE.md`](IMPROVEMENTS_ARCHIVE.md), signed off 2026-07-29 on
 the Linux build. ENG-19 … ENG-21 are what it left open._
 
-**ENG-19 · The macOS desktop build doesn't work** — `Status: Open`
+**ENG-19 · The macOS desktop build doesn't work** — `Status: Backlog`
 
 Reported by the user (2026-07-29): the macOS bundle from
 [`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) does not run.
@@ -682,7 +686,7 @@ passes — so whatever this is, the smoke test doesn't cover it, and extending i
 is part of the fix. Related: **ENG-21** (signing) if it turns out to be
 Gatekeeper.
 
-**ENG-20 · Windows desktop build: the rough edges** — `Status: Open`
+**ENG-20 · Windows desktop build: the rough edges** — `Status: Backlog`
 
 Two known v1 limits, both documented at release rather than fixed:
 
@@ -695,7 +699,7 @@ Two known v1 limits, both documented at release rather than fixed:
 Also unverified: only the Linux build was checked by hand, so the same "does it
 actually run on a clean machine" pass **ENG-19** needs is owed to Windows.
 
-**ENG-21 · Sign and notarize the desktop builds** — `Status: Open`
+**ENG-21 · Sign and notarize the desktop builds** — `Status: Backlog`
 
 Unsigned bundles make both non-Linux platforms hostile on first run: macOS
 Gatekeeper blocks (or quarantines) the app, Windows SmartScreen warns. Needs an

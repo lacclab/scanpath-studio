@@ -99,6 +99,85 @@ class TestDiagnoseFilters:
     def test_no_steps_is_an_empty_report(self, pool):
         assert diagnose_filters(*pool, []) == []
 
+    def test_a_step_carries_the_session_keys_that_reset_it(self, pool):
+        """So the panel can offer "clear just this filter" — the report is the
+        only place that knows which filter a given row *is*."""
+        words, fixations = pool
+        (row,) = diagnose_filters(
+            words,
+            fixations,
+            [
+                (
+                    "Participant",
+                    lambda w, f: filter_trials(w, f, participants=["p1"]),
+                    ("filter_participants",),
+                )
+            ],
+        )
+        assert row["keys"] == ("filter_participants",)
+
+    def test_a_step_without_keys_still_works(self, pool):
+        (row,) = diagnose_filters(
+            *pool, [("A", lambda w, f: filter_trials(w, f, participants=["p1"]))]
+        )
+        assert row["keys"] == ()
+
+
+class TestClearOneTrialFilter:
+    """UX-7 follow-up: clearing a single culprit, not everything."""
+
+    def test_drops_only_the_named_key(self):
+        import streamlit as st
+
+        from scanpath_studio.controls import clear_trial_filter
+
+        st.session_state["filter_participants"] = ["p1"]
+        st.session_state["filter_difficulty_level"] = ["Adv"]
+        st.session_state["_trial_filters"] = {"participants": ["p1"]}
+
+        clear_trial_filter("filter_participants")
+
+        assert "filter_participants" not in st.session_state
+        assert st.session_state["filter_difficulty_level"] == ["Adv"]
+        # The derived cache must go too, or the same run keeps filtering.
+        assert "_trial_filters" not in st.session_state
+
+    def test_an_absent_key_is_not_an_error(self):
+        from scanpath_studio.controls import clear_trial_filter
+
+        clear_trial_filter("filter_never_set")  # must not raise
+
+
+class TestFilterResetKeys:
+    """The Narrow-by *Text* multiselect lands in `metadata` under the text
+    column but lives under `filter_text_id` — so the reset key can't be derived
+    from the column name, and the filter result has to carry it."""
+
+    def test_metadata_keys_maps_each_column_to_its_widget_key(self):
+        import streamlit as st
+
+        from scanpath_studio.app import _filter_diagnosis_steps
+
+        st.session_state.clear()
+        steps = _filter_diagnosis_steps(
+            {
+                "participants": ["p1"],
+                "metadata": {"paragraph_id": {"1"}, "difficulty_level": {"Adv"}},
+                "metadata_keys": {"paragraph_id": "filter_text_id"},
+                "favorites_only": True,
+                "required_tags": ["good"],
+                "excluded_tags": ["bad"],
+            }
+        )
+        assert [s[2] for s in steps] == [
+            ("filter_participants",),
+            ("filter_text_id",),  # NOT filter_paragraph_id
+            ("filter_difficulty_level",),  # falls back to the column name
+            ("filter_favorites",),
+            ("filter_req_tags",),
+            ("filter_exc_tags",),
+        ]
+
 
 class TestClearTrialFilters:
     def test_drops_every_filter_key_and_the_derived_results(self):

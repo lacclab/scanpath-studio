@@ -2296,6 +2296,21 @@ def clear_trial_filters() -> None:
     st.session_state.pop("_trial_filters_raw", None)
 
 
+def clear_trial_filter(*keys: str) -> None:
+    """Reset *one* trial filter (UX-7) — the same mechanism as the reset-all.
+
+    Deleting the widget's key is the correct reset for every filter shape here,
+    because each re-seeds to its own "no constraint" default on the next render:
+    an empty multiselect for Narrow-by, *all* values selected for a condition,
+    unchecked for Favorites. Safe as a button ``on_click`` for the same reason
+    :func:`clear_trial_filters` is.
+    """
+    for key in keys:
+        st.session_state.pop(key, None)
+    st.session_state.pop("_trial_filters", None)
+    st.session_state.pop("_trial_filters_raw", None)
+
+
 def has_active_trial_filters() -> bool:
     """Whether any trial filter is currently narrowing the pool."""
     f = read_trial_filters()
@@ -2547,6 +2562,11 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
     result: Dict = {
         "participants": None,
         "metadata": {},
+        # column -> the session key holding it, so "clear just this filter"
+        # (UX-7) can reset one widget. Not derivable from the column name: the
+        # Narrow-by Text multiselect lands in `metadata` under the *text column*
+        # but lives under `filter_text_id`.
+        "metadata_keys": {},
         "favorites_only": False,
         "required_tags": [],
         "excluded_tags": [],
@@ -2572,6 +2592,7 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
         sel = st.session_state.get("filter_text_id")
         if sel and len(text_vals) > 1 and len(sel) < len(text_vals):
             result["metadata"][text_field] = set(sel)
+            result["metadata_keys"][text_field] = "filter_text_id"
     for col in _filter_fields_for(words, fixations):
         frame = words if col in words.columns else fixations
         if col not in frame.columns:
@@ -2587,6 +2608,7 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
             )
             if vals is not None:
                 result["metadata"][col] = vals
+                result["metadata_keys"][col] = f"filter_{col}"
         else:
             values = _column_unique_strs(
                 frame, col, cache_key=(frame_fingerprint(frame), col)
@@ -2594,6 +2616,7 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
             sel = st.session_state.get(f"filter_{col}")
             if sel and len(values) > 1 and len(sel) < len(values):
                 result["metadata"][col] = set(sel)
+                result["metadata_keys"][col] = f"filter_{col}"
     result["favorites_only"] = bool(st.session_state.get("filter_favorites", False))
     result["required_tags"] = list(st.session_state.get("filter_req_tags") or [])
     result["excluded_tags"] = list(st.session_state.get("filter_exc_tags") or [])

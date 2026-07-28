@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Trial chip strip wraps instead of clipping** (UX-11) — no truncation, so the duplicate **More** list is gone; summary stats moved to a **Details** popover.
 - **The layout holds down to ~1024 px** (UX-19) — real width breakpoints, where there were none. The scanpath still only ever scales down, uniformly.
-- **Empty states say what happened** (UX-7) — names the filter that emptied the pool, or the missing corpus and its download, instead of a blank chart.
+- **Empty states say what happened** (UX-7) — one panel naming the filter that emptied the pool (with a **Clear** beside each culprit) or the missing corpus and its download, instead of a blank chart.
 - **Fixations default to one colour** (VIZ-17) — size already encodes duration; **Color fixations by** now opts *in* to a second variable. All four surfaces.
 - **Corpus Analysis is easier to find** (UX-18) — the header toggle is a primary button with a directional cue.
 - **About popover** (UX-16) — BibTeX moved into a collapsed **📖 How to cite** expander.

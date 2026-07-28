@@ -78,6 +78,7 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
     data_dictionary_help_text,
@@ -287,8 +288,10 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
             (
                 f"{_FILTER_GROUP_LABELS['participants']} ({len(chosen)} selected)",
                 lambda w, f, p=chosen: filter_trials(w, f, participants=p),
+                ("filter_participants",),
             )
         )
+    keys_by_col = trial_filters.get("metadata_keys") or {}
     for col, allowed in (trial_filters.get("metadata") or {}).items():
         label = f"{col.replace('_', ' ').capitalize()} = {', '.join(sorted(map(str, allowed))[:4])}"
         if len(allowed) > 4:
@@ -297,10 +300,11 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
             (
                 label,
                 lambda w, f, c=col, a=allowed: filter_trials(w, f, metadata={c: a}),
+                (keys_by_col.get(col, f"filter_{col}"),),
             )
         )
 
-    def _annotation_step(name: str, **kwargs):
+    def _annotation_step(name: str, keys: tuple, **kwargs):
         def _apply(w, f):
             frame = w if f.empty else f
             if frame.empty:
@@ -311,20 +315,26 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
             }
             return filter_to_keys(w, f, set(filter_keys(list(present), **kwargs)))
 
-        steps.append((name, _apply))
+        steps.append((name, _apply, keys))
 
     if trial_filters.get("favorites_only"):
-        _annotation_step(_FILTER_GROUP_LABELS["favorites"], favorites_only=True)
+        _annotation_step(
+            _FILTER_GROUP_LABELS["favorites"],
+            ("filter_favorites",),
+            favorites_only=True,
+        )
     if trial_filters.get("required_tags"):
         tags = trial_filters["required_tags"]
         _annotation_step(
             f"{_FILTER_GROUP_LABELS['required_tags']}: {', '.join(tags)}",
+            ("filter_req_tags",),
             required_tags=tags,
         )
     if trial_filters.get("excluded_tags"):
         tags = trial_filters["excluded_tags"]
         _annotation_step(
             f"{_FILTER_GROUP_LABELS['excluded_tags']}: {', '.join(tags)}",
+            ("filter_exc_tags",),
             excluded_tags=tags,
         )
     return steps
@@ -339,45 +349,66 @@ def _render_empty_after_filtering(
     which left the user to bisect their own filters by hand. This measures each
     active filter against the unfiltered dataset, names the one(s) that leave
     nothing on their own (or reports the combination when each is individually
-    fine), and puts a one-click **Clear all filters** next to it.
+    fine), and offers to clear **that filter alone** as well as all of them.
+
+    Rendered as one bordered panel: the previous version stacked an `st.warning`
+    banner, a markdown list and a button as three visually unrelated blocks, so
+    the diagnosis didn't read as belonging to the message above it.
     """
     total = count_trials(words_all, fixations_all)
     if not has_active_trial_filters():
         # Nothing is filtering, so the dataset itself is empty — a different
         # problem, and telling the user to loosen filters would be a wild goose
         # chase.
-        st.warning(
-            "This dataset has no trials to show. Pick another **Data source** in "
-            "the sidebar, or check the column mapping under **Data Inspection**."
-        )
+        with st.container(border=True, key="empty_state_panel"):
+            st.markdown("#### This dataset has no trials to show")
+            st.markdown(
+                "Pick another **Data source** in the sidebar, or check the column "
+                "mapping under **Data Inspection**."
+            )
         return
 
-    st.warning(f"No trials match the current filters (dataset has {total:,}).")
     report = diagnose_filters(
         words_all, fixations_all, _filter_diagnosis_steps(trial_filters)
     )
     culprits = [row for row in report if row["empties"]]
-    if culprits:
+    with st.container(border=True, key="empty_state_panel"):
         st.markdown(
-            "**On its own, this leaves no trials:**\n"
-            + "\n".join(f"- {row['label']}" for row in culprits)
+            f"#### No trials match your filters\n"
+            f"**0** of the **{total:,} trials** in this dataset get through."
         )
-    elif report:
-        st.markdown(
-            "Each filter keeps some trials on its own — it's the **combination** "
-            "that leaves none:\n"
-            + "\n".join(
-                f"- {row['label']} — keeps {row['kept']:,} of {total:,}"
-                for row in report
+        rows = culprits or report
+        if culprits:
+            st.markdown(
+                "On its own, this leaves nothing:"
+                if len(culprits) == 1
+                else "Each of these leaves nothing on its own:"
             )
+        elif report:
+            st.markdown(
+                "Every filter keeps something on its own — it's the "
+                "**combination** that leaves nothing:"
+            )
+        for i, row in enumerate(rows):
+            text_col, clear_col = st.columns([5, 1], vertical_alignment="center")
+            kept = "" if row["empties"] else f" — keeps {row['kept']:,} of {total:,}"
+            text_col.markdown(f"{row['label']}{kept}")
+            if row["keys"]:
+                clear_col.button(
+                    "Clear",
+                    key=f"clear_one_filter_{i}",
+                    on_click=clear_trial_filter,
+                    args=tuple(row["keys"]),
+                    help=f"Reset only this filter — {row['label']}.",
+                    width="stretch",
+                )
+        st.button(
+            "✕ Clear all filters",
+            key="clear_all_trial_filters",
+            type="primary",
+            on_click=clear_trial_filters,
+            help="Reset every Narrow-by, condition and annotation filter.",
         )
-    st.button(
-        "✕ Clear all filters",
-        key="clear_all_trial_filters",
-        type="primary",
-        on_click=clear_trial_filters,
-        help="Reset every Narrow-by, condition and annotation filter.",
-    )
 
 
 def _render_about_sidebar() -> None:
@@ -650,33 +681,38 @@ def _render_dataset_unavailable() -> None:
     note = st.session_state.pop(_UNAVAILABLE_KEY, None)
     if not note:
         return
-    st.warning(
-        f"**{note['label']}** isn't available yet — {note['reason']} "
-        f"Showing the bundled demo corpus until it is."
-    )
-    if note["root"]:
-        st.caption(f"Looking in `{note['root']}`")
     download = note["download"]
-    if download is None:
-        st.markdown(note["action"])
-        return
-    size = f" ({note['size_hint']})" if note["size_hint"] else ""
-    st.markdown(f"{note['action']}{size}")
-    if st.button(
-        "⬇ Download now",
-        key=f"{note['key_prefix']}_download_main",
-        type="primary",
-    ):
-        try:
-            with st.spinner(f"Downloading into {note['root']} …"):
-                download(note["root"])
-        except (OSError, ValueError) as exc:
-            st.error(
-                f"Download failed: {exc}\n\nIf you're offline, download the files "
-                "on another machine and point the folder above at them."
-            )
+    size = f" · {note['size_hint']}" if note["size_hint"] else ""
+    # One panel, not four stacked blocks. The first version was an st.warning
+    # banner + an st.caption + a body paragraph + a button — three type colours
+    # and three background colours for what is a single message.
+    with st.container(border=True, key="dataset_unavailable_panel"):
+        st.markdown(
+            f"#### 📦 {note['label']} isn't here yet\n"
+            f"{note['reason'].rstrip('.')} — **showing the bundled demo corpus** "
+            f"meanwhile."
+        )
+        details = [f"{note['action'].rstrip('.')}{size}"]
+        if note["root"]:
+            details.append(f"Looking in `{note['root']}`")
+        st.markdown("\n".join(f"- {line}" for line in details))
+        if download is None:
             return
-        st.rerun()
+        if st.button(
+            "⬇ Download now",
+            key=f"{note['key_prefix']}_download_main",
+            type="primary",
+        ):
+            try:
+                with st.spinner(f"Downloading into {note['root']} …"):
+                    download(note["root"])
+            except (OSError, ValueError) as exc:
+                st.error(
+                    f"Download failed: {exc}\n\nIf you're offline, download the "
+                    "files on another machine and point the folder above at them."
+                )
+                return
+            st.rerun()
 
 
 def _dataset_access_status(

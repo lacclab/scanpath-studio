@@ -7,7 +7,7 @@ import os
 import re
 import zipfile
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -1992,23 +1992,26 @@ def count_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
 def diagnose_filters(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    steps: Sequence[Tuple[str, Callable]],
+    steps: Sequence[Tuple],
 ) -> List[Dict]:
     """Attribute an empty trial pool to the filter(s) that caused it (UX-7).
 
-    ``steps`` is ``(label, apply)`` pairs, where ``apply(words, fixations)``
-    returns the frames with *only that one* filter applied. Each step is measured
-    against the **unfiltered** frames, so the result says what each filter does on
-    its own — which is the question a user staring at an empty plot is asking.
-    A step that alone leaves nothing is the culprit; if every step leaves
-    something but the combination doesn't, it's their intersection, and the caller
-    can say so.
+    ``steps`` is ``(label, apply)`` or ``(label, apply, keys)``, where
+    ``apply(words, fixations)`` returns the frames with *only that one* filter
+    applied and ``keys`` is the session-state key(s) that filter is stored under
+    (so the caller can offer "clear just this one"). Each step is measured against
+    the **unfiltered** frames, so the result says what each filter does on its
+    own — which is the question a user staring at an empty plot is asking. A step
+    that alone leaves nothing is the culprit; if every step leaves something but
+    the combination doesn't, it's their intersection, and the caller can say so.
 
-    Returns one dict per step: ``{"label", "kept", "dropped", "empties"}``.
+    Returns one dict per step: ``{"label", "kept", "dropped", "empties", "keys"}``.
     """
     total = count_trials(words, fixations)
     report: List[Dict] = []
-    for label, apply in steps:
+    for step in steps:
+        label, apply = step[0], step[1]
+        keys = tuple(step[2]) if len(step) > 2 else ()
         w, f = apply(words, fixations)
         kept = count_trials(w, f)
         report.append(
@@ -2017,6 +2020,7 @@ def diagnose_filters(
                 "kept": kept,
                 "dropped": total - kept,
                 "empties": total > 0 and kept == 0,
+                "keys": keys,
             }
         )
     return report

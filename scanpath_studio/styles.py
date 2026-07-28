@@ -152,6 +152,32 @@ def get_app_css() -> str:
         .stApp { --sps-code-fg: #8fc7f5; }
     }
 
+    /* UX-7 empty-state panels — "no trials match" and "this corpus isn't here
+       yet". Both used to be a warning banner + a caption + a body paragraph +
+       a button: four blocks, three background colours, one message. They are now
+       a single amber-tinted card, so the diagnosis visibly belongs to the
+       headline above it. Amber (not red) on purpose: nothing is broken, the user
+       just has to choose something. */
+    .st-key-empty_state_panel,
+    .st-key-dataset_unavailable_panel {
+        background: rgba(240, 173, 78, 0.09);
+        border-color: rgba(240, 173, 78, 0.42) !important;
+        border-radius: 0.6rem;
+    }
+    .st-key-empty_state_panel [data-testid="stHeading"] h4,
+    .st-key-dataset_unavailable_panel [data-testid="stHeading"] h4 {
+        margin-top: 0;
+        padding-top: 0;
+        font-weight: 700;
+    }
+    /* The per-filter Clear buttons sit in a right-hand column; keep them quiet
+       so the primary "Clear all filters" stays the obvious escape hatch. */
+    .st-key-empty_state_panel div[class*="st-key-clear_one_filter_"] button {
+        padding: 0.15rem 0.5rem;
+        min-height: 1.9rem;
+        font-size: 0.8rem;
+    }
+
     /* Page title: a restrained brand-blue gradient + tighter tracking. One <h1>
        exists (st.title in the header), so this scopes cleanly to it. */
     [data-testid="stHeading"] h1 {

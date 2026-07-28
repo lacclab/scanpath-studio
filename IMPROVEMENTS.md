@@ -96,6 +96,15 @@ offline". The found-vs-download status check already exists
 AC: no blank chart and no bare traceback for either case; every empty state names
 the cause and offers the next action.
 
+**Follow-up (2026-07-28), from your review.** Three changes: the count says what
+it counts (*"**0** of the **36 trials** in this dataset get through"*, not
+"dataset has 36"); each named culprit gets its own **Clear** button beside it
+(`controls.clear_trial_filter`, fed by the reset keys `data.diagnose_filters`
+now carries per step — the Narrow-by *Text* multiselect is why they can't be
+derived from the column name); and both states render as **one** bordered,
+amber-tinted panel instead of a warning banner + a grey caption + a body
+paragraph + a button, which read as three unrelated messages.
+
 **UX-10 · Sort trial / reader / text pickers by properties** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 The trial-combo selector (`utils.build_combo_options`) lists combos in data
@@ -774,7 +783,22 @@ assignment wrong). Check the other corpora too — PoTeC / MultiplEYE ship
 glyph-tight AOIs and may need the opposite adjustment. Related: **PRE-5** (custom
 interest areas), **VAL-1** (validate against the EyeLink-rendered image).
 
-_Next item: `BUG-12`._
+**BUG-12 · Annotation filters don't reach the raw-gaze table** — `Status: Backlog`
+
+`data.filter_raw_gaze` narrows by participant + trial, but the annotation
+filters (favorites / tags) are applied to the words + fixations frames only —
+so a raw-gaze row for an unstarred trial survives ⭐ *Favorites only*. Visible
+consequence on the bundled demo: with nothing starred, `words_filtered` and
+`fixations_filtered` are both empty but `raw_gaze_filtered` isn't, so
+[`app.py`](scanpath_studio/app.py:2343)'s all-three-empty guard doesn't fire and
+the UX-7 guidance panel is never reached — the user gets a half-empty view with
+generic per-subtab "no data" messages instead. Found while writing the ENG-4
+AppTest flows (which work around it by using the raw-gaze-free synthetic
+source — see the comment in
+[`tests/test_apptest_flows.py`](tests/test_apptest_flows.py)). Fix by applying
+the same trial-key filter to raw gaze. Related: **UX-7**.
+
+_Next item: `BUG-13`._
 
 ---
 

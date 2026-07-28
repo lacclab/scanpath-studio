@@ -37,7 +37,7 @@ Implemented, not yet signed off (→ archived on your confirmation):
 **UX-7** (empty states), **UX-9** (numeric entry beside sliders), **UX-10**
 (sortable trial picker), **VIZ-15** (marker shape), **VIZ-18** (selectable
 palettes), **EXP-1** (export path patterns), **EXP-2** (figure titles &
-captions) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
+captions), **BUG-7** (sentinel flag columns) — all implemented 2026-07-28; **AN-1 … AN-28** (the *Analysis &
 corpus views* epic — *you asked to keep this open*); **PRE-3** (vertical drift
 correction — *you'll revisit*); **VIZ-11** (animation slider readout — *you'll
 revisit*); **ENG-15** (standalone desktop app — implemented 2026-07-16).
@@ -896,7 +896,7 @@ Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`
 (`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap
 in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**.
 
-**BUG-7 · EyeLink `'.'`-sentinel flag columns normalize to all-True** — `Status: Backlog`
+**BUG-7 · EyeLink `'.'`-sentinel flag columns normalize to all-True** — `Status: Pending approval` *(implemented 2026-07-28)*
 
 `IA_REGRESSION_IN` / `IA_REGRESSION_OUT` in the bundled demo (and any LaCC-style
 export) hold **strings** `'0'` / `'1'` / `'.'`; normalization casts them by

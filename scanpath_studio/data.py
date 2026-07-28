@@ -1475,6 +1475,43 @@ def dropped_columns(
     return sorted(c for c in raw.columns if c not in keep)
 
 
+# EyeLink writes a missing value as the string ``'.'`` and booleans as ``'0'`` /
+# ``'1'``, so a whole flag column arrives as *strings* (BUG-7). A plain
+# ``astype(bool)`` then reads every non-empty string as True — including ``'0'``
+# and ``'.'`` — and `regression_in_flag` came out True for every row in the
+# bundled demo. Anything a reader would write for "false" or "missing" has to be
+# recognised before the cast.
+_FALSEY_FLAG_STRINGS = {"", ".", "0", "0.0", "false", "f", "no", "n", "na", "nan", "-"}
+
+
+def coerce_flag(col: pd.Series) -> pd.Series:
+    """Coerce a flag-like column to real booleans (BUG-7).
+
+    Numbers go by ``!= 0``; strings are matched against the sentinels above
+    (case-insensitively) rather than by truthiness. NaN / missing is ``False``,
+    which is what every downstream flag consumer already assumed.
+    """
+    if pd.api.types.is_bool_dtype(col):
+        return col.fillna(False).astype(bool)
+    numeric = pd.to_numeric(col, errors="coerce")
+    if numeric.notna().any():
+        # A numeric-looking column ('0'/'1', 0/1, 0.0/1.0): non-zero is True.
+        # Values that didn't parse fall through to the string test below, so a
+        # mixed '0'/'1'/'.' column doesn't lose its '.' rows to True.
+        parsed = numeric.notna()
+        result = pd.Series(False, index=col.index, dtype=bool)
+        result[parsed] = numeric[parsed] != 0
+        unparsed = ~parsed & col.notna()
+        if unparsed.any():
+            result[unparsed] = ~col[unparsed].astype(str).str.strip().str.lower().isin(
+                _FALSEY_FLAG_STRINGS
+            )
+        return result
+    return (
+        ~col.fillna("").astype(str).str.strip().str.lower().isin(_FALSEY_FLAG_STRINGS)
+    ).astype(bool)
+
+
 def _apply_optional_fields(
     df: pd.DataFrame, source: pd.DataFrame, registry: list, keep: Optional[set]
 ) -> set:
@@ -1495,7 +1532,7 @@ def _apply_optional_fields(
         elif kind == "string":
             df[dest] = col.astype(str)
         elif kind == "boolean":
-            df[dest] = col.fillna(False).astype(bool)
+            df[dest] = coerce_flag(col)
         else:
             df[dest] = col
     return emitted
@@ -2150,7 +2187,11 @@ def _compute_word_metrics_cached(
         )
     for col in ["skip_flag", "regression_in_flag", "regression_out_flag"]:
         if col in metrics.columns:
-            metrics[col] = metrics[col].fillna(False).astype(bool)
+            # BUG-7: same sentinel-aware coercion as normalization — a frame can
+            # reach here carrying raw `'0'` / `'.'` strings (a pre-computed IA
+            # measure joined straight in), and a truthiness cast would flag every
+            # row True.
+            metrics[col] = coerce_flag(metrics[col])
     return metrics
 
 

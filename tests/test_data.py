@@ -686,6 +686,79 @@ class TestComputeWordMetrics:
         assert "first_fixation_ms" in result.columns
 
 
+class TestCoerceFlag:
+    """BUG-7: EyeLink writes flags as strings ``'0'`` / ``'1'`` / ``'.'`` (its
+    missing-value sentinel), so a truthiness cast made every row True."""
+
+    def test_the_eyelink_sentinel_column_is_not_all_true(self):
+        from scanpath_studio.data import coerce_flag
+
+        col = pd.Series(["0", "1", ".", "1", "0"])
+        assert list(coerce_flag(col)) == [False, True, False, True, False]
+
+    def test_plain_numbers_go_by_non_zero(self):
+        from scanpath_studio.data import coerce_flag
+
+        assert list(coerce_flag(pd.Series([0, 1, 2, 0]))) == [
+            False,
+            True,
+            True,
+            False,
+        ]
+
+    def test_real_booleans_pass_through(self):
+        from scanpath_studio.data import coerce_flag
+
+        col = pd.Series([True, False, None], dtype="object")
+        assert list(coerce_flag(col)) == [True, False, False]
+
+    def test_missing_values_are_false(self):
+        from scanpath_studio.data import coerce_flag
+
+        assert list(coerce_flag(pd.Series([float("nan"), 1.0]))) == [False, True]
+
+    def test_word_sentinels_are_recognised(self):
+        from scanpath_studio.data import coerce_flag
+
+        col = pd.Series(["yes", "no", "NA", "true", "False", "-"])
+        assert list(coerce_flag(col)) == [True, False, False, True, False, False]
+
+    def test_normalize_words_applies_it_to_measure_flags(self):
+        """The whole point: the canonical flag columns come out of normalization
+        with real values, not True everywhere."""
+        raw = pd.DataFrame(
+            {
+                "RECORDING_SESSION_LABEL": ["p1"] * 4,
+                "TRIAL_INDEX": [1] * 4,
+                "IA_ID": [0, 1, 2, 3],
+                "IA_LABEL": list("abcd"),
+                "IA_LEFT": [0, 10, 20, 30],
+                "IA_RIGHT": [10, 20, 30, 40],
+                "IA_TOP": [0, 0, 0, 0],
+                "IA_BOTTOM": [10, 10, 10, 10],
+                "IA_REGRESSION_IN": ["0", "1", ".", "0"],
+            }
+        )
+        schema = propose_word_schema(raw)
+        out = normalize_words(raw, schema)
+        assert list(out["regression_in_flag"]) == [False, True, False, False]
+
+    def test_the_bundled_demo_no_longer_flags_every_row(self):
+        """Regression guard for the reported repro (2026-07-03): the demo's
+        IA_REGRESSION_* columns carry 1191 `'.'` rows that all read as True."""
+        from scanpath_studio.data import (
+            infer_word_schema,
+            load_sample_data,
+            normalize_words,
+        )
+
+        words_raw, _ = load_sample_data()
+        words = normalize_words(words_raw, infer_word_schema(words_raw))
+        for col in ("regression_in_flag", "regression_out_flag"):
+            assert words[col].any(), f"{col} is all False"
+            assert not words[col].all(), f"{col} is all True (BUG-7)"
+
+
 class TestDefaultFilters:
     """Tests for default_filters function."""
 

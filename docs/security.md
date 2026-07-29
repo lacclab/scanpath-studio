@@ -28,7 +28,7 @@ too. Nothing here is inferred from documentation alone.
 | --- | --- |
 | On-disk residue from loaded data | Clean, with one narrow exception (S8) |
 | `@st.cache_data` persistence to disk | **Clean** — no `persist="disk"` anywhere |
-| Share links / saved configs carrying identifiers | Participant + trial ids ride in the URL, and the saved config also carries your notes (S3) |
+| Share links / saved configs carrying identifiers | Participant + trial ids ride in the URL, and the saved config also carries your notes (S3 — the link's ids are now opt-out-able; the saved config is not) |
 | Share links / saved configs carrying local file paths | **Clean** — no path in either |
 | Exported figures carrying local file paths | **Clean** — images are inlined as `data:` URIs |
 | Exported *tables* carrying local file paths | **Leaks an absolute path** (S4) |
@@ -40,7 +40,7 @@ too. Nothing here is inferred from documentation alone.
 | Cross-session bleed / staleness via the analysis caches | Real collision, by construction (S5) |
 | Cross-session sharing via the corpus-directory caches | Shared, but keyed on the path — same key means same files (see *What is clean*) |
 | Code-execution surface (`eval` / `exec` / `pickle` / `subprocess` / `df.query`) | **Clean** — none in the shipped package |
-| Data interpolated into raw HTML | One unescaped site (S7) |
+| Data interpolated into raw HTML | One unescaped site (S7 — now escaped) |
 
 ## Findings
 
@@ -228,7 +228,21 @@ a toggle that drops `participant` / `trial_id` and shares view settings only. Sa
 the same thing next to the **💾 Save & restore** download button, naming the
 annotation notes.
 
-**Status:** open (documentation-level mitigation already in place).
+**Status:** **fixed** 2026-07-29 — the Share panel now has a **What the link
+includes** picker (`url_state._SHARE_IDENTITY_MODES`, read by
+`_share_identity_flags`) offering *Participant + trial* (the default — a link
+that reopens one trial has to identify it, so this is opt-*out*, not opt-in),
+*Trial only* and *Settings only*; `_build_share_query` takes matching
+`include_participant` / `include_trial` keywords. Under the link,
+`_share_identity_caution` prints what that link actually names and where URLs
+end up. *Trial only* still lands on the exact trial: `_restore_selection`
+falls through to a trial-id-alone match when `participant` is absent. Covered
+by `tests/test_security_fixes.py::TestShareLinkIdentityIsOptOut`. The
+**💾 Save & restore** download (`tabs._render_save_restore_expander`) now
+carries a matching caption naming what the file holds — the selected
+participant/trial *and* the text of every annotation note. **Not addressed:**
+that file still has no opt-out, only the disclosure; and the CLI / headless API
+have no equivalent flag, because neither builds a link.
 
 ---
 
@@ -281,14 +295,15 @@ checking that `fig.to_json()` holds a `data:image/png;base64,…` payload and no
 `/Users/`.
 
 **Latent, not live: the Data Inspection download buttons.**
-`tabs._render_download_buttons` feeds the raw frames straight to
-`_frame_to_csv_bytes` / `_frame_to_parquet_bytes` and would leak the column the
-same way — but it is currently **unreachable**. Its only caller is
-`tabs._render_paginated_dataframe`, which calls it under
+`tabs._render_download_buttons` fed the raw frames straight to
+`_frame_to_csv_bytes` / `_frame_to_parquet_bytes` and would have leaked the
+column the same way — but it was **unreachable**. Its only caller was
+`tabs._render_paginated_dataframe`, which called it under
 `if download_name and not df.empty`, and none of that function's four call sites
 (`render_metrics_tab`, `render_fixations_tab`, `render_raw_gaze_tab`,
-`render_stimuli_tab`) passes `download_name`. So the tab renders tables with no
-download button at all, and the leak there is latent. See S11.
+`render_stimuli_tab`) passed `download_name`. So the tab rendered tables with no
+download button at all, and the leak there was latent. It has since been deleted
+outright — see S11.
 
 **Fix.** In `export.bulk_export`, drop or relativize `image_path` on the frames
 written to CSV/Parquet (and in the mega-table), and do the same in
@@ -419,7 +434,21 @@ attacker: an honest multi-gigabyte corpus does the same thing.
 intends to read and raise a clear `ValueError` above a threshold before opening
 any of them, rather than discovering the size by exhausting RAM.
 
-**Status:** open.
+**Status:** **fixed** 2026-07-29 — `data._check_zip_limits` runs before any
+member is opened, checking the declared `ZipInfo.file_size` values against
+`ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES` (4 GB), `ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES`
+(8 GB) and `ZIP_MAX_COMPRESSION_RATIO` (200×, applied only once the total
+uncompressed size reaches `ZIP_RATIO_CHECK_MIN_BYTES` = 256 MB, so a small
+very-repetitive table isn't punished). Each raises a clear user-facing
+`ValueError`.
+
+A declared-size check alone is forgeable — the central directory is attacker-
+controlled — so `_read_zipped_table` additionally reads each member with
+`inner.read(remaining + 1)` against a running byte budget and raises if the
+actual payload overruns it. The absolute caps are deliberately generous because
+real eye-tracking exports are genuinely large; the **ratio** is what actually
+discriminates a zip bomb. `UPLOAD_SIZE_WARN_BYTES` (25 MB, compressed) is
+unchanged and still only warns.
 
 ---
 
@@ -473,7 +502,17 @@ f"<b>{html.escape(_humanize_field(col))}:</b></span> "
 f"{html.escape(span_str)}{note}"
 ```
 
-**Status:** open.
+**Status:** **fixed** 2026-07-29 — the markup moved into a pure
+`tabs._span_summary_html(col, span_str, bg, note)` helper (testable without a
+Streamlit runtime) which `html.escape`s both data-derived values with the
+default `quote=True`. `note` stays raw (tool-generated markup) and `bg` stays
+raw (a `_SPAN_BG_PALETTE` constant). The other six `unsafe_allow_html=True`
+sites in `tabs.py` were re-checked and deliberately left alone: `tabs.py:932`
+interpolates words already escaped by `_render_paragraph_with_spans`,
+`tabs.py:1079` is a literal spacer `<div>`, and `tabs.py:1921` / `1946` /
+`2358` / `2367` already call `html.escape`. Escaping changes nothing about how
+ordinary text renders. Covered by
+`tests/test_security_fixes.py::TestStimulusTextIsEscaped`.
 
 ---
 
@@ -572,7 +611,15 @@ and is swallowed by the handler's bare `except`.
 state — e.g. skip if any root handler is already a `_SessionStateHandler` — so at
 most one exists per process.
 
-**Status:** open (correctness / resource, not confidentiality).
+**Status:** **fixed** 2026-07-29 — `install_log_capture` now guards on
+`any(isinstance(h, _SessionStateHandler) for h in logging.getLogger().handlers)`
+and the `_HANDLER_FLAG` session-state key is gone, so the guard's scope matches
+the logger's: exactly one handler per process, however many sessions the process
+serves. Records are still filed per session — `_SessionStateHandler.emit`
+resolves `st.session_state` through the calling thread's script-run context —
+so one handler means one copy of each record in the right session's buffer,
+and the 500-record ring buffer keeps its full history. Covered by
+`tests/test_security_fixes.py::TestLogCaptureIsProcessGlobal`.
 
 ---
 
@@ -594,18 +641,29 @@ wires them up would ship the leak with them.
 **Fix.** Either delete the helper and the `download_name` parameter, or pass
 `download_name` at the call sites *and* strip `image_path` first (S4).
 
-**Status:** open (correctness, not confidentiality).
+**Status:** **fixed** 2026-07-29 — deleted. `_render_download_buttons`,
+`_frame_to_csv_bytes`, `_frame_to_parquet_bytes` and the
+`_EAGER_DOWNLOAD_MAX_ROWS` threshold are gone, along with
+`_render_paginated_dataframe`'s `download_name` parameter; a repo-wide grep
+(including `tests/`) confirmed nothing referenced them. Bulk export
+(`export.bulk_export`) remains the supported way to get the tables out, and it
+strips `image_path` at `export._write_table` (S4), so wiring the buttons back
+up is now the deliberate act it should have been. A comment on
+`_render_paginated_dataframe` records why the tab has no download button.
+Covered by
+`tests/test_security_fixes.py::TestDataInspectionDownloadHelperIsGone`.
 
 ## What is fixed, and what is accepted
 
-**Fixed so far: S1, S2, S4** (2026-07-28), each with its own tests — see the
-`Status:` line on each finding, which is the authoritative record. The audit
-itself produced no code change; the fixes landed afterwards as reviewable
-commits, tracked as **DATA-16** in `IMPROVEMENTS.md`.
+**Fixed so far: S1, S2, S4, S5** (2026-07-28) and **S3, S6, S7, S10, S11**
+(2026-07-29), each with its own tests — see the `Status:` line on each finding,
+which is the authoritative record. The audit itself produced no code change; the
+fixes landed afterwards as reviewable commits, tracked as **DATA-16** in
+`tracker/data.js`.
 
 S1 and S2 went first because they are the only findings a stranger on the network
-can reach at all. **Still open: S3, S5, S6, S7, S10, S11** — all of which need
-someone who can already open the app.
+can reach at all. **Nothing from this audit is still open** — every finding is
+either fixed above or accepted below with its reason.
 
 **Accepted, with the reason:**
 
@@ -710,8 +768,9 @@ repo's config or the app's launch flags disables either.
 
 **HTML escaping is right almost everywhere.** Thirteen sites in the package pass
 `unsafe_allow_html=True` — seven in `tabs.py`, three in `tour.py`, two in
-`app.py`, one in `debug_log.py`. All but S7 either escape their data
-(`html.escape` in `tabs.py` at 914, 1882, 1906-1907, 2295, 2304; `debug_log._escape`
+`app.py`, one in `debug_log.py`. All of them now either escape their data
+(`html.escape` in `tabs.py` at 914, 1882, 1906-1907, 2295, 2304, and — since the
+S7 fix — in `_span_summary_html`; `debug_log._escape`
 for log messages) or interpolate only tool-controlled constants (`app.py` emits
 the stylesheet and a spacer `<div>`; `tour.py` emits `<style>` blocks built from
 module constants and a theme-derived colour pair). The share widget's client-side
@@ -721,14 +780,18 @@ no `<` can reach it.
 ## Deployment guidance that follows from this
 
 - **A machine holding participant data should not run this app on an
-  untrusted network.** Until S1 lands, pass `--server.address=127.0.0.1`
-  explicitly, or bind to loopback and use an SSH tunnel for remote access.
-- **A shared/hosted deployment should set `SCANPATH_PUBLIC_DATASETS=0`** until
-  S2 is fixed, which removes the directory input, the path oracle and the
-  download-to-arbitrary-path button.
-- **Do not treat a share link as non-identifying.** It names a participant and a
-  trial (S3). A saved plot config additionally carries every annotation note you
-  have typed, for every trial — read it before sending it to a collaborator.
+  untrusted network.** The desktop bundle now binds loopback (S1), but
+  `scanpath-studio run` and a bare `streamlit run` still bind `0.0.0.0` — pass
+  `--server.address=127.0.0.1` explicitly, or bind to loopback and use an SSH
+  tunnel for remote access.
+- **A shared/hosted deployment should set `SCANPATH_LOCAL_FS=0`** and supply the
+  corpus location through `SCANPATH_DATA_ROOT` (S2), which removes the directory
+  input, the folder picker and the download-to-arbitrary-path button.
+- **A share link is identifying by default.** It names a participant and a trial
+  unless you change **What the link includes** in the Share panel to *Trial only*
+  or *Settings only* (S3). A saved plot config has no such control: it carries the
+  selection *and* every annotation note you have typed, for every trial — read it
+  before sending it to a collaborator.
 - **Check exported tables before publishing them.** Drop the `image_path` column
   if it is present (S4).
 - **Re-upload with a changed row count, or clear the cache, after correcting a

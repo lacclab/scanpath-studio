@@ -82,6 +82,13 @@ measures = sps.compute_word_metrics(words, fixations)
 See the full [Python API](api.md) and the [CLI reference](cli.md) for the
 headless equivalents.
 
+## Where next
+
+- **[Tutorials](tutorials/index.md)** — four task-shaped walkthroughs: load your
+  own data, compare two readers, produce a figure for a paper, run it headless
+  from a script.
+- **[FAQ](faq.md)** — the recurring questions, with short answers.
+
 ## Run the tests
 
 ```bash

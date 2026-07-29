@@ -1122,11 +1122,28 @@ def _render_paragraph_panel(
                 continue
             note = _span_fixated_note(trial_words, trial_fixations, col)
             st.markdown(
-                f'<span style="background-color:{span_bg[col]};'
-                f'color:{_HIGHLIGHT_TEXT_COLOR};padding:0 4px;border-radius:2px;">'
-                f"<b>{_humanize_field(col)}:</b></span> {span_str}{note}",
+                _span_summary_html(col, span_str, span_bg[col], note),
                 unsafe_allow_html=True,
             )
+
+
+def _span_summary_html(col: str, span_str: str, bg: str, note: str) -> str:
+    """Markup for one "<span label>: <span text>" line in the stimulus panel.
+
+    Split out of ``_render_paragraph_panel`` so the escaping is testable without
+    a Streamlit runtime. Both data-derived values — the column name and the
+    stimulus text joined out of the words table — are HTML-escaped (S7): this
+    goes through ``unsafe_allow_html=True`` and Streamlit's markdown path runs
+    no sanitizer, so a corpus containing markup would otherwise inject it into
+    the page. ``note`` is tool-generated markup and ``bg`` comes from the fixed
+    ``_SPAN_BG_PALETTE``, so both stay raw.
+    """
+    return (
+        f'<span style="background-color:{bg};'
+        f'color:{_HIGHLIGHT_TEXT_COLOR};padding:0 4px;border-radius:2px;">'
+        f"<b>{html.escape(_humanize_field(col))}:</b></span> "
+        f"{html.escape(span_str)}{note}"
+    )
 
 
 def _in_text_fixation_value(
@@ -1463,6 +1480,13 @@ def _render_save_restore_expander(
             mime="application/json",
             key="plot_config_download",
             width="stretch",
+        )
+        # S3: unlike the Share link — which now lets you drop the ids — this
+        # file always carries the selected participant/trial AND every note you
+        # have typed, for every annotated trial. Say so before it is mailed on.
+        st.caption(
+            "⚠️ The file names the selected participant and trial, and includes "
+            "the text of every annotation note you've written."
         )
         st.file_uploader(
             "Restore from JSON",
@@ -4756,14 +4780,18 @@ def _render_paginated_dataframe(
     page_size: int,
     key: str,
     caption: Optional[str] = None,
-    download_name: Optional[str] = None,
     show_info: bool = True,
 ) -> None:
-    """Render a dataframe with pagination, optional caption + download buttons.
+    """Render a dataframe with pagination and an optional caption.
 
-    ``caption`` and ``download_name`` are skipped when falsy, and ``show_info``
-    suppresses the blue "Showing N rows with pagination" banner — the Data
-    Inspection tab uses this to keep the raw tables uncluttered.
+    ``caption`` is skipped when falsy, and ``show_info`` suppresses the blue
+    "Showing N rows with pagination" banner — the Data Inspection tab uses this
+    to keep the raw tables uncluttered.
+
+    There is deliberately no download button here: the Data Inspection tables
+    are the *raw* frames, which carry passthrough columns like ``image_path``
+    that hold an absolute local path. Bulk export is the supported way out, and
+    it strips those at its single chokepoint (``export.strip_local_paths``).
     """
     total_rows = len(df)
     total_pages = max(1, (total_rows + page_size - 1) // page_size)
@@ -4791,71 +4819,6 @@ def _render_paginated_dataframe(
     st.dataframe(display_df, hide_index=True, width="stretch")
     if caption:
         st.caption(caption)
-
-    if download_name and not df.empty:
-        _render_download_buttons(df, key, download_name)
-
-
-# Above this many rows, serializing the *whole* frame for the download buttons
-# on every rerun (st.download_button evaluates its ``data`` eagerly) is a top
-# cost on large corpora — a multi-million-row CSV/Parquet rebuilt each render.
-# Past the threshold we defer it behind an explicit button instead.
-_EAGER_DOWNLOAD_MAX_ROWS = 50_000
-
-
-@st.cache_data(show_spinner="Preparing download…")
-def _frame_to_csv_bytes(_df: pd.DataFrame, cache_key) -> bytes:
-    return _df.to_csv(index=False).encode("utf-8")
-
-
-@st.cache_data(show_spinner="Preparing download…")
-def _frame_to_parquet_bytes(_df: pd.DataFrame, cache_key) -> Optional[bytes]:
-    import io as _io
-
-    buf = _io.BytesIO()
-    try:
-        _df.to_parquet(buf, index=False)
-        return buf.getvalue()
-    except Exception:
-        return None
-
-
-def _render_download_buttons(df: pd.DataFrame, key: str, download_name: str) -> None:
-    """CSV/Parquet download buttons whose serialization is cached and (for large
-    frames) deferred behind a button, so it isn't rebuilt on every rerun."""
-    fp = frame_fingerprint(df)
-    prepared_key = f"{key}_download_ready"
-    if len(df) > _EAGER_DOWNLOAD_MAX_ROWS and not st.session_state.get(prepared_key):
-        st.button(
-            f"Prepare downloads ({len(df):,} rows)",
-            key=f"{key}_prepare_download",
-            help="Serialize the full table to CSV/Parquet for download.",
-            on_click=lambda: st.session_state.__setitem__(prepared_key, True),
-        )
-        st.caption(
-            "Large table — downloads are prepared on demand to keep the app responsive."
-        )
-        return
-
-    col_csv, col_parquet, _ = st.columns([1, 1, 4])
-    with col_csv:
-        st.download_button(
-            "Download CSV",
-            data=_frame_to_csv_bytes(df, cache_key=fp),
-            file_name=f"{download_name}.csv",
-            mime="text/csv",
-            key=f"{key}_csv_download",
-        )
-    with col_parquet:
-        parquet_bytes = _frame_to_parquet_bytes(df, cache_key=fp)
-        if parquet_bytes is not None:
-            st.download_button(
-                "Download Parquet",
-                data=parquet_bytes,
-                file_name=f"{download_name}.parquet",
-                mime="application/octet-stream",
-                key=f"{key}_parquet_download",
-            )
 
 
 def render_metrics_tab(

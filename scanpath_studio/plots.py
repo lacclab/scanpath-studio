@@ -543,6 +543,18 @@ _ARCH_FRAC = 0.28
 _ARCH_SAMPLES = 20
 
 
+def _arch_control_point(
+    x0: float, y0: float, x1: float, y1: float, frac: float
+) -> Tuple[float, float]:
+    """Control point of the quadratic Bézier arch drawn between two fixations.
+
+    Single source of truth for the arch geometry: ``_arch_points`` samples the
+    curve it defines and ``_arch_point_and_tangent`` (the arrowheads, BUG-9)
+    evaluates the same curve, so the marker can never drift off the drawn line.
+    Screen y grows downward, so the control point sits *above* the chord."""
+    return (x0 + x1) / 2.0, min(y0, y1) - frac * abs(x1 - x0)
+
+
 def _arch_points(
     x0: float, y0: float, x1: float, y1: float, frac: float, n: int = _ARCH_SAMPLES
 ) -> Tuple[list, list]:
@@ -551,9 +563,7 @@ def _arch_points(
     Screen y grows downward, so the control point is *above* the chord (smaller
     y). Returns (xs, ys) of length ``n`` including both endpoints. A NaN endpoint
     propagates to NaN samples, which Plotly simply skips."""
-    rise = frac * abs(x1 - x0)
-    cx = (x0 + x1) / 2.0
-    cy = min(y0, y1) - rise
+    cx, cy = _arch_control_point(x0, y0, x1, y1, frac)
     ts = np.linspace(0.0, 1.0, n)
     xs = ((1 - ts) ** 2) * x0 + 2 * (1 - ts) * ts * cx + (ts**2) * x1
     ys = ((1 - ts) ** 2) * y0 + 2 * (1 - ts) * ts * cy + (ts**2) * y1
@@ -672,9 +682,39 @@ def _snap_fixations_to_words(
 # direction arrow — their heading is sub-pixel noise (refixations on one word).
 _ARROW_MIN_LEN_FRAC = 0.005
 
+# Bézier parameter at which the arrowhead sits on an arched saccade (BUG-9).
+_ARROW_ARCH_T = 0.5
+
+
+def _arch_point_and_tangent(
+    x0: float, y0: float, x1: float, y1: float, frac: float, t: float = _ARROW_ARCH_T
+) -> Tuple[float, float, float, float]:
+    """Point on the drawn arch at Bézier parameter ``t``, plus the curve's tangent.
+
+    Evaluates the very curve ``_arch_points`` samples (same
+    ``_arch_control_point``), so an arrowhead placed here lands exactly on the
+    rendered line. Returns ``(x, y, dx, dy)`` where ``(dx, dy)`` is the
+    (unnormalized) tangent B'(t).
+
+    Note the quadratic's identity at ``t=0.5``: B'(0.5) == P1 - P0, i.e. the
+    tangent at the parameter midpoint is parallel to the chord regardless of the
+    control point. So arcing a saccade moves the arrowhead *up onto* the curve
+    (the visible defect) without rotating it — which is exactly right, the curve
+    really is chord-parallel there."""
+    cx, cy = _arch_control_point(x0, y0, x1, y1, frac)
+    u = 1.0 - t
+    px = u * u * x0 + 2 * u * t * cx + t * t * x1
+    py = u * u * y0 + 2 * u * t * cy + t * t * y1
+    tx = 2 * u * (cx - x0) + 2 * t * (x1 - cx)
+    ty = 2 * u * (cy - y0) + 2 * t * (y1 - cy)
+    return px, py, tx, ty
+
 
 def _saccade_arrow_markers(
-    fix_df: pd.DataFrame, x_col: str, y_col: str
+    fix_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    arch_frac: Optional[float] = None,
 ) -> Tuple[list, list, list]:
     """Arrowhead position + rotation for each saccade, for a marker trace.
 
@@ -683,6 +723,12 @@ def _saccade_arrow_markers(
     direction. Angles follow Plotly's ``marker.angle`` convention (degrees
     clockwise from "up") and account for the reversed y-axis — data y grows
     downward on screen — so they read correctly on the plot.
+
+    ``arch_frac`` (BUG-9) must be the same value the segment builders got: in Arc
+    mode (VIZ-9) the marker moves to the *arch's* midpoint and takes the arc's
+    tangent there, instead of floating below the curve at the straight chord's
+    midpoint. ``None`` (the default everywhere) keeps the straight-chord
+    placement.
     """
     if len(fix_df) < 2:
         return [], [], []
@@ -711,11 +757,15 @@ def _saccade_arrow_markers(
         seg_len = float(np.hypot(dx, dy))
         if seg_len == 0.0 or seg_len < min_len:
             continue
-        mid_x.append((x0 + x1) / 2.0)
-        mid_y.append((y0 + y1) / 2.0)
+        if arch_frac is None:
+            mx, my, hx, hy = (x0 + x1) / 2.0, (y0 + y1) / 2.0, dx, dy
+        else:
+            mx, my, hx, hy = _arch_point_and_tangent(x0, y0, x1, y1, arch_frac)
+        mid_x.append(mx)
+        mid_y.append(my)
         # marker.angle is clockwise from up; screen-up is decreasing data y
-        # (the y-axis is drawn reversed), so negate dy.
-        angles.append(float(np.degrees(np.arctan2(dx, -dy))))
+        # (the y-axis is drawn reversed), so negate the heading's dy.
+        angles.append(float(np.degrees(np.arctan2(hx, -hy))))
     return mid_x, mid_y, angles
 
 
@@ -1125,7 +1175,9 @@ def _add_saccade_layer(
                 )
             )
     if show_arrows:
-        amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field)
+        # BUG-9: same arch_frac as the segments above, so the arrowheads sit on
+        # the drawn line (arched or straight) instead of on the chord.
+        amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field, arch_frac)
         if amx:
             fig.add_trace(
                 go.Scatter(
@@ -3332,8 +3384,11 @@ def _add_comparison_fixation_trace(
         else:
             fig.add_trace(trace)
 
+    # Comparison figures always draw straight connectors (no Arc mode here); bind
+    # it once so the segments and the arrowheads can never disagree (BUG-9).
+    arch_frac: Optional[float] = None
     if show_saccades and len(trial_fix) > 1:
-        sx, sy = _saccade_segments(trial_fix, "x", "y")
+        sx, sy = _saccade_segments(trial_fix, "x", "y", arch_frac)
         if sx:
             _add(
                 go.Scatter(
@@ -3350,7 +3405,7 @@ def _add_comparison_fixation_trace(
                 )
             )
     if show_saccade_arrows and len(trial_fix) > 1:
-        amx, amy, aang = _saccade_arrow_markers(trial_fix, "x", "y")
+        amx, amy, aang = _saccade_arrow_markers(trial_fix, "x", "y", arch_frac)
         if amx:
             _add(
                 go.Scatter(

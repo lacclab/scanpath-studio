@@ -43,12 +43,20 @@ Mechanics worth knowing before editing:
   component to get the value back to the server. The checkbox writes it via a
   same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
   The replay button ignores the opt-out entirely, so the tour is never lost.
+- **The FAQ (UX-15)** is the other half of the sidebar's Help group: a short
+  ``st.dialog`` of recurring questions (``render_faq_button``), deliberately
+  kept to a handful of answers with the complete version on the docs site
+  (``docs/faq.md``). Unlike the tour it opens straight from the button's return
+  value — a dialog can't be opened from an ``on_click`` callback, and a single
+  call site keeps ``app.main``'s wiring to one line.
 """
 
 from __future__ import annotations
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+from .constants import CITATION
 
 # UX-12: name of the first-party cookie holding the "don't show the welcome tour
 # again" opt-out ("1" = opted out). One year, path=/, SameSite=Lax — no personal
@@ -748,6 +756,135 @@ def render_tour_replay_button() -> None:
         help="Replay the quick intro tour.",
         on_click=_arm_tour,
     )
+
+
+# -----------------------------------------------------------------------------
+# FAQ (UX-15) — the handful of questions that come up over and over, answered
+# in-app so nobody has to leave to find out that (say) their measures are their
+# eye-tracker's, not ours. Deliberately SHORT: the canonical, complete version
+# is docs/faq.md on the docs site, linked from the bottom of the dialog. Keep
+# these answers in sync with that page when either changes.
+# -----------------------------------------------------------------------------
+
+DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
+DOCS_TUTORIALS_URL = f"{CITATION['docs_url']}tutorials/"
+
+# (question, markdown answer). Two-to-four lines each — anything longer belongs
+# on the docs page.
+_FAQ_ITEMS = [
+    (
+        "Why don't the measures match my eye-tracker's?",
+        "Usually they do — because they **are** your eye-tracker's. Pre-computed "
+        "EyeLink `IA_*` columns on your words table take precedence over anything "
+        "this app would compute, matched by **exact column name**. A renamed "
+        "export loses that match and falls back to the app's own computation "
+        "(bounding-box fixation→word assignment, Rayner 1998 / Inhoff & Radach "
+        "1998 definitions).",
+    ),
+    (
+        "A column was mapped to the wrong field. Where do I fix it?",
+        "🔎 **Data Inspection → Column mapping** — an editable form that "
+        "re-derives everything in place, no re-upload. It can only offer columns "
+        "that survived the import; anything dropped needs a re-upload.",
+    ),
+    (
+        "What counts as a “trial”?",
+        "One reading event — one participant reading one text once — and it is "
+        "whatever your **Trial ID** mapping says it is. EyeLink's `TRIAL_INDEX` "
+        "only identifies a trial *within* a reader, and the text id falls back to "
+        "the trial id, so map your item column as **Text ID** if trial order was "
+        "randomised.",
+    ),
+    (
+        "What does drift correction do?",
+        "It reassigns each fixation to the text **line** it most likely belongs "
+        "to and snaps it there — the ten algorithms from Carr et al. (2021). It "
+        "changes the figure, not your data. Apply one via **Fixations ⚙️ → Drift "
+        "correction**, or compare all ten in the **📐 Line assignment** subtab.",
+    ),
+    (
+        "Where does my data go?",
+        "Nowhere. No accounts, no database, no analytics — files are read into "
+        "memory and disappear when the session ends. Two caveats: a plain "
+        "`streamlit run` listens on your whole network with no login (start it "
+        "with `--server.address=127.0.0.1`), and the online demo runs on a server "
+        "operated by Streamlit, not by us.",
+    ),
+    (
+        "My uploaded data vanished after a refresh.",
+        "Expected — uploads, wizard datasets and annotations live in session "
+        "state, which dies with the session. Use **💾 Save & restore** for the "
+        "plot config + annotations, and **⬇️ Download setup (JSON)** in the "
+        "wizard for the column mapping; both are re-importable.",
+    ),
+    (
+        "PNG / SVG / PDF export fails but HTML works.",
+        "Static image export goes through Kaleido, which drives a headless "
+        "Chrome that `pip install` doesn't provide. Run `plotly_get_chrome -y` "
+        "once. **HTML** export is browser-free and always available.",
+    ),
+    (
+        "How do I cite Scanpath Studio?",
+        "See the **ℹ️ About** panel in this sidebar (and `CITATION.cff` in the "
+        "repository). Cite the bundled demo data as OneStop Eye Movements too, "
+        "and Carr et al. (2021) if you used the drift-correction algorithms.",
+    ),
+]
+
+
+@st.dialog("❓ Frequently asked questions", width="large")
+def _faq_dialog() -> None:
+    """The in-app FAQ: short answers in expanders + links to the full docs.
+
+    Kept short on purpose — this is the "before you file an issue" list, not a
+    manual. The docs site carries the complete version (``docs/faq.md``), and
+    the link buttons at the bottom are also the app's route into the docs from
+    a help context.
+    """
+    st.caption(
+        "Short answers to the questions that come up most. The full version — "
+        "with the long explanations — lives on the documentation site."
+    )
+    for question, answer in _FAQ_ITEMS:
+        with st.expander(question):
+            st.markdown(answer)
+
+    st.divider()
+    docs_col, tutorials_col, close_col = st.columns(3)
+    docs_col.link_button(
+        "📚 Full FAQ ↗",
+        DOCS_FAQ_URL,
+        width="stretch",
+        help="Every question, with the long answers. Opens in a new tab.",
+    )
+    tutorials_col.link_button(
+        "🎓 Tutorials ↗",
+        DOCS_TUTORIALS_URL,
+        width="stretch",
+        help="Task-by-task walkthroughs: load your own data, compare two "
+        "readers, make a paper figure, run it headless. Opens in a new tab.",
+    )
+    if close_col.button("✓ Close", key="faq_close", width="stretch", type="primary"):
+        _close_dialog_clientside()
+
+
+def render_faq_button() -> None:
+    """Sidebar button that opens the in-app FAQ dialog.
+
+    Sits in the sidebar's Help group next to :func:`render_tour_replay_button`.
+    Unlike the tour — which is armed from an ``on_click`` callback so the early
+    ``maybe_show_welcome_tour`` call can serve it before the heavy data / plot
+    work — the FAQ opens straight from the button's return value: dialogs can't
+    be opened from a callback, and one call site keeps the wiring to a single
+    line in ``app.main``.
+    """
+    if st.sidebar.button(
+        "❓ FAQ",
+        key="faq_open",
+        width="stretch",
+        help="Short answers to common questions, plus a link to the full docs.",
+    ):
+        _faq_dialog()
 
 
 # -----------------------------------------------------------------------------

@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI-assistance disclosure** (UX-20) — in About, the README and the docs: what was checked, cross-check before publishing, and how to file a reproducible report.
 - **Animation frame grid is now yours to set** (VIZ-11) — **Frame every (ms)** and **Max frames** in the Animate ⚙ popover, with a readout of the frames they produce and whether the cap coarsened your step. All four surfaces.
 - **Six new documentation pages** — bring your own data (DATA-11), privacy (DATA-12), a code-cited security audit (DATA-13), contributing a dataset (DATA-14), corpus analysis (ENG-13), and a headless-usage guide for coding agents (ENG-18).
+- **Tutorials on the docs site** (UX-14) — four task-shaped walkthroughs (load your own data, compare two readers, produce a figure for a paper, run it headless), placed ahead of the reference pages. Every snippet and CLI command in them was executed against the bundled demo before publication.
+- **FAQ** (UX-15) — a **❓ FAQ** dialog in the sidebar Help group answering the recurring questions, plus the full version at `docs/faq.md`.
+- **Share links can leave the participant out** (DATA-16 / S3) — a **What the link includes** picker: *Participant + trial* (default), *Trial only* (still lands on the exact trial), or *Settings only*.
+- **A wire-format contract for the session keys that carry one** (ENG-6) — `session_keys.py` names the share-link and saved-config keys, and a test pins them against a frozen list so a rename fails CI instead of someone's old link.
 
 ### Changed
 - **Trial chip strip wraps instead of clipping** (UX-11) — no truncation, so the duplicate **More** list is gone; summary stats moved to a **Details** popover.
@@ -29,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Corpus Analysis is easier to find** (UX-18) — the header toggle is a primary button with a directional cue.
 - **About popover** (UX-16) — BibTeX moved into a collapsed **📖 How to cite** expander.
 - **"Snap fixations above words"** (UX-13) moved out of Drift correction into its own *Linear-reading schematic* block.
+- **Rail controls the active mode ignores now say so** (VIZ-21) — greyed with a stated reason instead of silently doing nothing; **Animate** previously gated nothing at all. Disabling never rewrites the stored value, so deep links and Save & restore survive a mode toggle. The full setting → render-path map lives in `scanpath_studio/CLAUDE.md`.
+- **A `.zip` upload is bounded before decompression** (DATA-16 / S6) — rejected past a per-member, total, or compression-ratio limit, instead of being read with no ceiling.
 
 ### Internal
 - **Test coverage** — every `aggregation.py` helper plus a structural smoke test per Corpus Analysis figure (ENG-1), the OneStop per-pid shard fast-path incl. its refusal-to-fall-back (ENG-2), MultiplEYE side-data enrichment (ENG-3), and widget-driven `AppTest` flows for column mapping, trial filters and bulk export (ENG-4).
@@ -36,10 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink boxes carry the inter-word space as trailing padding, so every boundary sat a half-space right and a fixation *before* a word went to the previous one. One `measures.word_box_bounds` accessor now feeds all nine consumers — assignment, out-of-text, drawn boxes, the word heatmap, critical spans, landing position, snap-to-word, drift correction, model scanpaths. Glyph-tight corpora (PoTeC / MultiplEYE) are untouched.
 - **Regression flags were True for every word** (BUG-7) — EyeLink writes flags as `'0'`/`'1'`/`'.'` strings and the bool cast took every non-empty string as true. On the demo, `regression_in_flag` went from 3,922 True to 815.
+- **Arc saccades: arrowheads sit on the arc** (BUG-9) — with `saccade_render_mode="Arc"` they were placed at the straight chord's midpoint, floating off the drawn arch.
+- **Annotation filters reach the raw-gaze table** (BUG-12) — an unstarred trial's gaze samples survived ⭐ *Favorites only*, which also kept the UX-7 "filters removed everything" panel from ever appearing.
+- **Fixation `word_id` numbered from 1 is detected and shifted** (BUG-8) — against 0-based word boxes (the bundled demo's shape) every fixation pointed at the *next* word, so measures computed from raw fixations attached one word to the right. Masked in normal use only because pre-computed IA measures take precedence.
 - The sidebar collapse control (UX-8) is always visible and has a real hit area.
 - Tutorial card spacing — the ✕ and the Back / Next footer no longer crowd the progress bar.
 - The header nav button lines up with the control rail below it.
-- **Security** (DATA-16, from the `docs/security.md` audit) — the desktop bundle binds loopback instead of every network interface (S1); the corpus **Data directory** box, folder picker and ⬇ Download are gated behind `SCANPATH_LOCAL_FS` and confined by `SCANPATH_DATA_ROOT`, so a shared deployment is no longer a path oracle and an arbitrary-directory write (S2); exported tables no longer carry an absolute local path, which leaked the OS username into any fixations CSV attached to a paper (S4). Cache keys now hash the whole frame up to 200k rows and respect row order, so editing a value mid-table and reloading no longer serves the pre-edit results (S5).
+- **Security** (DATA-16, from the `docs/security.md` audit) — the desktop bundle binds loopback instead of every network interface (S1); the corpus **Data directory** box, folder picker and ⬇ Download are gated behind `SCANPATH_LOCAL_FS` and confined by `SCANPATH_DATA_ROOT`, so a shared deployment is no longer a path oracle and an arbitrary-directory write (S2); exported tables no longer carry an absolute local path, which leaked the OS username into any fixations CSV attached to a paper (S4). Cache keys now hash the whole frame up to 200k rows and respect row order, so editing a value mid-table and reloading no longer serves the pre-edit results (S5). Stimulus text and column names are HTML-escaped before reaching `unsafe_allow_html`, so a crafted corpus can't inject markup (S7); the debug-log handler is installed once per *process* instead of once per session, which was leaking every session's records into every other session's log view (S10); and an unreachable Data Inspection download helper was deleted rather than left to be wired up later (S11). **Every finding from the audit is now either fixed or accepted with a recorded reason.**
 - **README weight** (ENG-16) — the dual-reader demo is a still, not a second GIF; the animation moved to the docs site. Both are now rendered from the real pipeline against the bundled demo (`assets/render_dual_scanpath.py`) instead of being hand-made, and palette-quantized (still 197 KB, GIF 1.36 MB).
 
 ## [0.25.0] - 2026-07-16

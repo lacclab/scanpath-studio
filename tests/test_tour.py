@@ -145,3 +145,48 @@ def test_welcome_tour_text_is_concise():
         assert len(step["body"]) <= 240, f"spotlight step too long: {step['body']!r}"
     for _title, body in _WIZARD_GUIDE_STEPS:
         assert len(body) <= 280, f"wizard guide step too long: {body!r}"
+
+
+# -----------------------------------------------------------------------------
+# FAQ (UX-15)
+# -----------------------------------------------------------------------------
+
+
+def _faq_app():
+    from scanpath_studio.tour import render_faq_button
+
+    render_faq_button()
+
+
+class TestFaq:
+    """The in-app FAQ dialog (UX-15) and its links out to the docs site."""
+
+    def test_button_opens_a_dialog_with_every_item(self):
+        from scanpath_studio.tour import _FAQ_ITEMS
+
+        at = AppTest.from_function(_faq_app)
+        at.run()
+        assert any(b.key == "faq_open" for b in at.sidebar.button)
+        assert not at.error
+
+        at.sidebar.button(key="faq_open").click().run()
+        assert not at.error
+        assert len(at.expander) == len(_FAQ_ITEMS)
+
+    def test_docs_links_point_at_the_published_pages(self):
+        """The FAQ is the app's help-context route into the docs — if these
+        drift from the mkdocs nav the buttons 404."""
+        from scanpath_studio.constants import CITATION
+        from scanpath_studio.tour import DOCS_FAQ_URL, DOCS_TUTORIALS_URL
+
+        assert DOCS_FAQ_URL == f"{CITATION['docs_url']}faq/"
+        assert DOCS_TUTORIALS_URL == f"{CITATION['docs_url']}tutorials/"
+
+    def test_answers_stay_short(self):
+        """Same rule as the tour steps: the long version lives in docs/faq.md."""
+        from scanpath_studio.tour import _FAQ_ITEMS
+
+        assert _FAQ_ITEMS, "the FAQ must not be empty"
+        for question, answer in _FAQ_ITEMS:
+            assert question.endswith(("?", ".")), f"not a question: {question!r}"
+            assert len(answer) <= 480, f"FAQ answer too long: {question!r}"

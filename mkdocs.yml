@@ -58,6 +58,12 @@ extra:
 
 nav:
   - Home: index.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - 1 · Load your own data: tutorials/load-your-own-data.md
+      - 2 · Compare two readers: tutorials/compare-two-readers.md
+      - 3 · Produce a figure for a paper: tutorials/figure-for-a-paper.md
+      - 4 · Run it headless from a script: tutorials/run-it-headless.md
   - Using the app:
       - Getting started: getting-started.md
       - Desktop app: desktop.md
@@ -65,6 +71,7 @@ nav:
       - Bring your own data: bring-your-own-data.md
       - Corpus analysis: corpus-analysis.md
       - Export & troubleshooting: export-troubleshooting.md
+      - FAQ: faq.md
       - Privacy: privacy.md
   - Headless:
       - Python API: api.md

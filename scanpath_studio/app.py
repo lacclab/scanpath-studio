@@ -94,6 +94,7 @@ from scanpath_studio.data import (
     empty_fixations_frame,
     empty_words_frame,
     filter_data,
+    filter_frame_to_keys,
     filter_raw_gaze,
     filter_to_keys,
     filter_trials,
@@ -115,6 +116,7 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_table,
     read_tables,
+    trial_keys,
     trial_mapping_columns,
     upload_exceeds_limit,
     uploaded_files_total_bytes,
@@ -132,6 +134,7 @@ from scanpath_studio.tabs import (
 )
 from scanpath_studio.tour import (
     maybe_show_welcome_tour,
+    render_faq_button,
     render_spotlight_tour,
     render_tour_replay_button,
     spotlight_tour_pending,
@@ -2391,18 +2394,24 @@ def main() -> None:
         participants=trial_filters["participants"],
         metadata=trial_filters["metadata"],
     )
+    # BUG-12: the raw-gaze samples table has to travel through the same
+    # annotation filter as words + fixations, or a sample row for an unstarred
+    # trial survives "⭐ Favorites only" — which also kept the all-three-empty
+    # guard below from ever firing, leaving the UX-7 guidance panel unreachable.
+    raw_gaze_scoped = raw_gaze_df
     if (
         trial_filters["favorites_only"]
         or trial_filters["required_tags"]
         or trial_filters["excluded_tags"]
-    ) and not (fixations_df.empty and words_df.empty):
-        # Trials live in fixations normally; for words-only datasets fall back
-        # to the words frame.
-        keys_frame = words_df if fixations_df.empty else fixations_df
-        present_keys = {
-            (str(p), str(t))
-            for p, t in zip(keys_frame["participant_id"], keys_frame["trial_id"])
-        }
+    ) and not (fixations_df.empty and words_df.empty and raw_gaze_scoped.empty):
+        # Trials live in fixations normally; for words-only datasets the words
+        # frame carries them, and for raw-gaze-only ones the samples table —
+        # union all three so every frame's trials get judged by the filter.
+        present_keys = (
+            trial_keys(words_df)
+            | trial_keys(fixations_df)
+            | trial_keys(raw_gaze_scoped)
+        )
         kept = set(
             filter_keys(
                 list(present_keys),
@@ -2412,19 +2421,20 @@ def main() -> None:
             )
         )
         words_df, fixations_df = filter_to_keys(words_df, fixations_df, kept)
+        raw_gaze_scoped = filter_frame_to_keys(raw_gaze_scoped, kept)
 
     # Apply filters (participant/trial/text selection). For a raw-gaze-only
     # dataset (no words/fixations) derive the participant/trial options from the
     # raw gaze so it isn't filtered away (filter_raw_gaze drops on empty lists).
     filters = default_filters(
-        words_df, fixations_df if not fixations_df.empty else raw_gaze_df
+        words_df, fixations_df if not fixations_df.empty else raw_gaze_scoped
     )
     words_filtered, fixations_filtered = filter_data(words_df, fixations_df, filters)
 
     # Filter raw gaze data to match selected participants/trials
-    if not raw_gaze_df.empty:
+    if not raw_gaze_scoped.empty:
         raw_gaze_filtered = filter_raw_gaze(
-            raw_gaze_df,
+            raw_gaze_scoped,
             filters.get("participants", []),
             filters.get("trials", []),
         )
@@ -2614,6 +2624,9 @@ def main() -> None:
     # the About popover (moved here from the header).
     _sidebar_group("❓ Help")
     render_tour_replay_button()
+    # UX-15: a handful of recurring questions answered in-app, linking out to the
+    # full FAQ / tutorials on the docs site for anything longer.
+    render_faq_button()
     # UX-17: the docs site is the full reference — link it directly here, not
     # only from inside the About popover.
     # The "↗" marks it as leaving the app — a link_button opens a new browser tab,

@@ -19,6 +19,7 @@ replay layered on top. Publication-ready figures included.
 <div class="sps-buttons" markdown>
 [:material-play-circle: Try the live demo](https://scanpath-studio.streamlit.app){ .md-button .md-button--primary }
 [:material-rocket-launch: Get started](getting-started.md){ .md-button }
+[:material-school: Tutorials](tutorials/index.md){ .md-button }
 [:material-download: Desktop app](desktop.md){ .md-button }
 </div>
 

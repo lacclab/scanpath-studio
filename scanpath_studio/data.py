@@ -4,6 +4,7 @@ import glob
 import hashlib
 import importlib.resources as resources
 import io
+import logging
 import os
 import re
 import uuid
@@ -16,6 +17,8 @@ import pandas as pd
 import streamlit as st
 
 from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME
+
+_LOGGER = logging.getLogger(__name__)
 
 # DATA-16 / audit S5. Up to this many rows the fingerprint hashes the WHOLE
 # frame, so any edit anywhere changes the key. Measured on a 4-column frame:
@@ -889,6 +892,67 @@ def _tag_and_concat(
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
+# DATA-16 (security review S6): bound zip decompression. `_read_zipped_table`
+# used to `read()` every member with no ceiling, so a small archive of highly
+# compressible CSV could expand to many gigabytes and OOM-kill the process — on
+# the ~1 GB hosted demo that takes every concurrent visitor's session with it.
+# The limits are deliberately generous: real eye-tracking exports are large (the
+# OneStop reports are hundreds of MB to a few GB of CSV per zipped table), so the
+# absolute caps only catch the honestly-enormous case, and the *ratio* is what
+# actually distinguishes a zip bomb from a big corpus.
+ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES = 4 * 1024**3  # 4 GB for any single member
+ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES = 8 * 1024**3  # 8 GB across the whole archive
+ZIP_MAX_COMPRESSION_RATIO = 200.0  # uncompressed / compressed
+# Below this the ratio is not checked at all: a small but very repetitive table
+# can legitimately compress 1000×, and expanding it costs nothing.
+ZIP_RATIO_CHECK_MIN_BYTES = 256 * 1024 * 1024
+
+
+def _format_bytes(n: float) -> str:
+    """Human-readable byte size for a user-facing error message."""
+    for unit in ("B", "KB", "MB", "GB"):
+        if abs(n) < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024.0
+    return f"{n:.1f} GB"
+
+
+def _check_zip_limits(infos: List[zipfile.ZipInfo]) -> None:
+    """Reject an archive that would decompress past the DATA-16 limits.
+
+    Checks the *declared* sizes (``ZipInfo.file_size``) before a single member is
+    opened, so an oversized archive fails fast instead of being discovered by
+    exhausting RAM. Declared sizes can be forged, so :func:`_read_zipped_table`
+    additionally reads each member under a hard byte budget.
+    """
+    total = sum(int(i.file_size) for i in infos)
+    compressed = sum(int(i.compress_size) for i in infos)
+    for info in infos:
+        if int(info.file_size) > ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES:
+            raise ValueError(
+                f"{info.filename!r} in the zip archive expands to "
+                f"{_format_bytes(info.file_size)}, above the per-file limit of "
+                f"{_format_bytes(ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES)}. Unzip it "
+                "and load the table directly, or split it into smaller files."
+            )
+    if total > ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES:
+        raise ValueError(
+            f"the zip archive expands to {_format_bytes(total)}, above the "
+            f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} decompression "
+            "limit. Unzip it and load the tables directly, or split the archive."
+        )
+    if total >= ZIP_RATIO_CHECK_MIN_BYTES:
+        ratio = total / max(compressed, 1)
+        if ratio > ZIP_MAX_COMPRESSION_RATIO:
+            raise ValueError(
+                f"the zip archive expands {ratio:.0f}× (to "
+                f"{_format_bytes(total)}), above the "
+                f"{ZIP_MAX_COMPRESSION_RATIO:.0f}× limit — it doesn't look like "
+                "a normal data export. Unzip it and load the tables directly if "
+                "this is genuine."
+            )
+
+
 def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
     """Read table(s) from a ``.zip`` archive (e.g. ``data.csv.zip``).
 
@@ -898,20 +962,34 @@ def _read_zipped_table(file_like_or_path) -> pd.DataFrame:
     ``source_file``. pandas infers compression only from string paths, not from
     uploaded file-like objects, so we open the archive ourselves. Raises
     ``ValueError`` if the archive holds no data file (macOS ``__MACOSX``/dotfile
-    cruft is ignored)."""
+    cruft is ignored), or if it would decompress past the DATA-16 size limits
+    (``ZIP_MAX_*``) — both the declared sizes and the bytes actually read are
+    bounded, so a forged header can't slip past."""
     with zipfile.ZipFile(file_like_or_path) as zf:
-        members = [
-            m
-            for m in zf.namelist()
-            if not m.endswith("/") and not Path(m).name.startswith((".", "__"))
+        infos = [
+            i
+            for i in zf.infolist()
+            if not i.is_dir() and not Path(i.filename).name.startswith((".", "__"))
         ]
-        if not members:
+        if not infos:
             raise ValueError("the zip archive contains no readable table files")
+        _check_zip_limits(infos)
+        remaining = ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES
         frames, labels = [], []
-        for member in members:
-            with zf.open(member) as inner:
-                buf = io.BytesIO(inner.read())
-            frames.append(_read_by_extension(buf, member.lower()))
+        for info in infos:
+            member = info.filename
+            with zf.open(info) as inner:
+                # Read one byte past the budget: if we get it, the member lied
+                # about its declared size and the archive is rejected.
+                payload = inner.read(remaining + 1)
+            if len(payload) > remaining:
+                raise ValueError(
+                    f"{member!r} in the zip archive decompresses past the "
+                    f"{_format_bytes(ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES)} limit "
+                    "(its declared size was wrong). Refusing to read it."
+                )
+            remaining -= len(payload)
+            frames.append(_read_by_extension(io.BytesIO(payload), member.lower()))
             labels.append(Path(member).stem)
     return _tag_and_concat(frames, labels, SOURCE_FILE_COLUMN)
 
@@ -1246,17 +1324,126 @@ def _reconcile_participant_asymmetry(
     return words
 
 
+_WORD_ID_AGGS = ["min", "max", "nunique"]
+
+
+def _key_frame(frame: pd.DataFrame, ids: pd.Series) -> pd.DataFrame:
+    """``(participant_id, trial_id, _id)`` view of ``frame``, aligned to ``ids``.
+
+    ``ids`` is a NaN-dropped numeric word-id series taken from ``frame``, so the
+    id columns are re-indexed onto its (subset) index.
+    """
+    return pd.DataFrame(
+        {
+            "participant_id": frame["participant_id"].reindex(ids.index),
+            "trial_id": frame["trial_id"].reindex(ids.index),
+            "_id": ids,
+        }
+    )
+
+
+def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
+    """Detect a 1-based fixation ``word_id`` against 0-based word boxes (BUG-8).
+
+    Some exports (the bundled OneStop demo among them) number the fixation
+    report's word column ``1..N`` while the interest-area table numbers its rows
+    ``0..N-1``, so every fixation's pre-assigned ``word_id`` points at the *next*
+    word. ``measures.assign_fixations_to_words`` keeps existing ids, so the
+    computed reading measures then attach to the wrong words.
+
+    Returns the offset to **subtract** from the fixation word ids: ``1`` when the
+    shift is unambiguous, ``0`` (by far the common case) otherwise. A false
+    positive silently corrupts a correct dataset, so the test is deliberately
+    strict — every condition below must hold across the whole dataset:
+
+    * both frames carry whole-number ``word_id`` values,
+    * the words ids start at ``0`` and the fixation ids start at ``1``,
+    * *every* trial present in both frames has 0-based, gap-free word ids and no
+      fixation id below ``1`` or more than one past its last word, and
+    * at least one trial actually overflows by exactly one
+      (``max fixation id == max word id + 1``) — without that there is no
+      evidence of a shift, just a reader who never looked at the first word.
+    """
+    if words is None or fixations is None or words.empty or fixations.empty:
+        return 0
+    keys = ["participant_id", "trial_id"]
+    needed = set(keys) | {"word_id"}
+    if not needed.issubset(words.columns) or not needed.issubset(fixations.columns):
+        return 0
+    w_ids = pd.to_numeric(words["word_id"], errors="coerce").dropna()
+    f_ids = pd.to_numeric(fixations["word_id"], errors="coerce").dropna()
+    if w_ids.empty or f_ids.empty:
+        return 0
+    # Fractional ids (character-level indices, say) aren't a word numbering we
+    # can reason about.
+    if not (w_ids % 1 == 0).all() or not (f_ids % 1 == 0).all():
+        return 0
+    if float(w_ids.min()) != 0.0 or float(f_ids.min()) != 1.0:
+        return 0
+    # Project onto (keys + id) rather than .assign()-ing onto the source frames:
+    # the OneStop words/fixations tables are wide, and this runs on every load.
+    w_stats = (
+        _key_frame(words, w_ids).groupby(keys, sort=False)["_id"].agg(_WORD_ID_AGGS)
+    )
+    f_stats = (
+        _key_frame(fixations, f_ids)
+        .groupby(keys, sort=False)["_id"]
+        .agg(["min", "max"])
+    )
+    joined = w_stats.join(f_stats, how="inner", lsuffix="_w", rsuffix="_f")
+    if joined.empty:
+        return 0
+    zero_based = joined["min_w"] == 0
+    gap_free = joined["nunique"] == joined["max_w"] + 1
+    in_range = joined["min_f"] >= 1
+    overflow = joined["max_f"] == joined["max_w"] + 1
+    runaway = joined["max_f"] > joined["max_w"] + 1
+    if not (zero_based.all() and gap_free.all() and in_range.all()):
+        return 0
+    if runaway.any() or not overflow.any():
+        return 0
+    return 1
+
+
+def correct_word_id_offset(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> pd.DataFrame:
+    """Shift fixation ``word_id`` back onto the words table when it's 1-based.
+
+    No-op unless :func:`detect_word_id_offset` finds an unambiguous shift.
+    Renumbering someone's ids is never silent — it's logged at WARNING, which
+    `debug_log.install_log_capture` surfaces in the in-app 🐛 Debug panel as
+    well as the server terminal. A `st.warning` would be wrong here: the bundled
+    demo corpus trips this on *every* load, so the banner would be permanent
+    furniture on the default landing view rather than a signal.
+    """
+    offset = detect_word_id_offset(words, fixations)
+    if not offset:
+        return fixations
+    fixations = fixations.copy()
+    fixations["word_id"] = pd.to_numeric(fixations["word_id"], errors="coerce") - offset
+    _LOGGER.warning(
+        "BUG-8: the fixation report's word ids are numbered from 1 while the word "
+        "boxes are numbered from 0, so every fixation pointed at the next word. "
+        "Shifted the fixation word ids down by %d to line the two tables up.",
+        offset,
+    )
+    return fixations
+
+
 def harmonize_frames(
     words: pd.DataFrame, fixations: pd.DataFrame
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Cross-frame fixups applied right after normalization.
 
     Broadcast stimulus-level words across participants, reconcile a
-    participant-less fixations table with participant-bearing words, then fill
-    missing fixation coordinates from word-box centers. Call whenever both frames
-    are available (the API and the app both route through this)."""
+    participant-less fixations table with participant-bearing words, correct a
+    1-based fixation ``word_id`` (BUG-8), then fill missing fixation coordinates
+    from word-box centers. Call whenever both frames are available (the API and
+    the app both route through this)."""
     words = broadcast_stimulus_words(words, fixations)
     words = _reconcile_participant_asymmetry(words, fixations)
+    fixations = correct_word_id_offset(words, fixations)
     fixations = fill_fixation_xy_from_words(fixations, words)
     return words, fixations
 
@@ -1997,6 +2184,42 @@ def filter_trials(
     return w, f
 
 
+def trial_keys(frame: pd.DataFrame) -> set:
+    """The distinct ``(participant_id, trial_id)`` string keys a frame carries.
+
+    Deduplicates before materializing the tuples, so it stays cheap on a
+    sample-level table (raw gaze) where every trial spans thousands of rows.
+    A missing/empty frame, or one without both id columns, yields an empty set.
+    """
+    if frame is None or frame.empty:
+        return set()
+    if "participant_id" not in frame.columns or "trial_id" not in frame.columns:
+        return set()
+    pairs = frame[["participant_id", "trial_id"]].drop_duplicates()
+    return {
+        (str(p), str(t)) for p, t in zip(pairs["participant_id"], pairs["trial_id"])
+    }
+
+
+def filter_frame_to_keys(frame: pd.DataFrame, keys: set) -> pd.DataFrame:
+    """Keep only rows whose ``(participant_id, trial_id)`` is in ``keys``.
+
+    Single-frame counterpart of :func:`filter_to_keys`. BUG-12: the raw-gaze
+    samples table has to be narrowed by the annotation filters (favorites /
+    tags) exactly like the words and fixations frames, or a sample row for an
+    unstarred trial survives "⭐ Favorites only". Vectorized via a MultiIndex
+    membership test so it stays fast on large tables.
+    """
+    if frame is None or frame.empty:
+        return frame
+    if "participant_id" not in frame.columns or "trial_id" not in frame.columns:
+        return frame
+    idx = pd.MultiIndex.from_arrays(
+        [frame["participant_id"].astype(str), frame["trial_id"].astype(str)]
+    )
+    return frame[idx.isin(keys)]
+
+
 def filter_to_keys(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -2007,16 +2230,7 @@ def filter_to_keys(
     ``keys`` is a set of ``(str, str)`` tuples. Used to apply annotation-based
     filtering (favorites / tags). Vectorized via a MultiIndex membership test so
     it stays fast on large fixation tables."""
-
-    def _restrict(df: pd.DataFrame) -> pd.DataFrame:
-        if df.empty:
-            return df
-        idx = pd.MultiIndex.from_arrays(
-            [df["participant_id"].astype(str), df["trial_id"].astype(str)]
-        )
-        return df[idx.isin(keys)]
-
-    return _restrict(words), _restrict(fixations)
+    return filter_frame_to_keys(words, keys), filter_frame_to_keys(fixations, keys)
 
 
 def count_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> int:

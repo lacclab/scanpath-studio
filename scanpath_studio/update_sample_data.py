@@ -116,6 +116,13 @@ FIXATION_KEEP_COLUMNS = [
     "CURRENT_FIX_DURATION",
     "CURRENT_FIX_X",
     "CURRENT_FIX_Y",
+    # BUG-8: in the OneStop fixation report this column is numbered 1..N while
+    # ia.csv's IA_ID runs 0..N-1, so a fixation's pre-assigned word id points at
+    # the *next* word. It is copied through verbatim (the bundled sample is a
+    # faithful subset of the source export, offset and all); the fix lives on the
+    # normalization side — data.correct_word_id_offset detects the 1-based range
+    # and shifts it down. Don't "fix" it here: doing so would make the bundled
+    # sample disagree with the corpus it is a subset of.
     "CURRENT_FIX_INTEREST_AREA_ID",
     "CURRENT_FIX_INTEREST_AREA_LABEL",
     "CURRENT_FIX_VALIDITY",

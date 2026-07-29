@@ -105,19 +105,30 @@ deployed demo. If you launch via `streamlit run` yourself, add
 `gatherUsageStats = false` under `[browser]` in `~/.streamlit/config.toml`.
 
 This matters more than it sounds: with those statistics on, Streamlit's telemetry
-receives the page URL — and a Scanpath Studio share link has a participant ID in
-it.
+receives the page URL — and a Scanpath Studio share link can carry a participant
+ID in it (see below for how to leave it out).
 
 ## What's in a link, a config file, and an export
 
 These are the things you hand to other people, so here's exactly what's in them.
 
 **A share link** (🔗 Share) carries your view settings, which data source to
-open, and — this is the one to notice — **the participant ID and trial ID,
-verbatim from your data**, plus the names of any columns you picked. In most
-corpora a participant ID is a pseudonym, but it still names one person. It does
-*not* contain fixations, durations, word text or measures; if your data came from
-an upload, the recipient has to load it themselves.
+open, and — this is the one to notice — by default **the participant ID and trial
+ID, verbatim from your data**, plus the names of any columns you picked. In most
+corpora a participant ID is a pseudonym, but it still names one person, and a
+link lands in browser history, server logs and chat previews.
+
+The Share panel's **What the link includes** picker decides how much identity
+travels:
+
+| Mode | The link carries | Opens on |
+| --- | --- | --- |
+| **Participant + trial** (default) | Both ids | The exact trial |
+| **Trial only** | The trial id, no participant | The same trial — it falls back to matching on the trial id alone |
+| **Settings only** | Neither id | Whatever trial the recipient already has selected |
+
+A link never contains fixations, durations, word text or measures; if your data
+came from an upload, the recipient has to load it themselves.
 
 **A saved config** (💾 Save & restore → Download JSON) has all of that plus your
 column names and **all your notes** — the free text you typed about each trial.

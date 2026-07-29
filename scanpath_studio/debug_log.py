@@ -24,7 +24,6 @@ import streamlit as st
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
 _BUFFER_KEY = "_debug_log_records"
-_HANDLER_FLAG = "_debug_log_handler_installed"
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 _LEVEL_COLOR = {
@@ -51,6 +50,13 @@ class _SessionStateHandler(logging.Handler):
     The handler is attached to the root logger, so it captures every module's
     ``logging`` output. It never raises into the logging machinery: a failure to
     record a log line must not break the thing being logged.
+
+    One instance serves the whole process (see ``install_log_capture``): the
+    buffer it appends to is resolved through ``st.session_state`` at emit time,
+    which Streamlit binds to the *calling* thread's script-run context, so a
+    record logged during a session's run lands in that session's buffer and
+    nowhere else. A record emitted from a thread with no context raises inside
+    ``_buffer`` and is swallowed here rather than being misfiled.
     """
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -71,21 +77,26 @@ class _SessionStateHandler(logging.Handler):
 
 
 def install_log_capture(level: int = logging.INFO) -> None:
-    """Attach the session-state handler to the root logger (once per session).
+    """Attach the session-state handler to the root logger (once per *process*).
 
-    Idempotent: guarded by a session_state flag so repeated Streamlit reruns
-    don't stack duplicate handlers. Call this early in ``main()``.
+    Idempotent, and idempotent at the right scope: the guard reads the root
+    logger's own handler list, not ``st.session_state``. The root logger is
+    process-wide while session state is not, so a session-scoped flag let every
+    new session add another handler — N sessions meant N handlers, each record
+    appended N times to whichever session's buffer was live, and handlers piling
+    up for the process's lifetime (S10). One handler is enough: it resolves the
+    buffer per script-run context, so each session still sees only its own
+    records. Call this early in ``main()``.
     """
-    if st.session_state.get(_HANDLER_FLAG):
-        return
-    handler = _SessionStateHandler()
-    handler.setLevel(logging.DEBUG)
     root = logging.getLogger()
     # Make sure records at INFO actually propagate to handlers.
     if root.level > level:
         root.setLevel(level)
+    if any(isinstance(h, _SessionStateHandler) for h in root.handlers):
+        return
+    handler = _SessionStateHandler()
+    handler.setLevel(logging.DEBUG)
     root.addHandler(handler)
-    st.session_state[_HANDLER_FLAG] = True
 
 
 def debug_enabled() -> bool:

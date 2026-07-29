@@ -22,7 +22,8 @@ docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
 ```text
 scanpath_studio/
 ├─ app.py            entry point: page config, data load, trial filters, dispatch to tabs
-├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link + Corpus⇄Scanpath view toggle (split from app.py)
+├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link, incl. the DATA-16/S3 "What the link includes" identity picker (`_SHARE_IDENTITY_MODES` → `_build_share_query(include_participant=, include_trial=)`) + Corpus⇄Scanpath view toggle (split from app.py)
+├─ session_keys.py   the session-state keys / URL params that are a wire format (share links + saved configs), as constants + frozen groupings — pinned by tests/test_session_key_contract.py so a rename fails a test instead of a user's old link (ENG-6)
 ├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
 ├─ tabs.py           tab implementations (Scanpath Visualization [Annotations + Stimulus & questions + Comparisons (same-text scanpaths grouped by a chosen column, scored by similarity) + Line assignment (drift-correction grid) + Export subtabs — all top-level, no nesting; Export folds in single-trial + bulk export], Corpus Analysis [Per text · Per reader · Groups (one cohort, or two behind a Compare toggle) subtabs — the question-oriented analysis sections, AN-1..28], Data Inspection)
 ├─ aggregation.py    pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry + per-reader/cohort word profiles, word-vs-feature, rates, reader distributions/summary/landing, group masks + difference/effect-size; plus the legacy trial-index/fixation-index trends)

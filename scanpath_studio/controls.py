@@ -209,15 +209,21 @@ def _uploaded_image_data_uri(uploaded) -> Optional[str]:
 _ALIGN_OPTIONS = ["Off", *(a.title() for a in ALIGN_ALGORITHMS)]
 
 
-# --- VIZ-21: which rail controls actually apply in Animate / Compare ----------
+# --- VIZ-21/23: which rail controls actually apply in Animate / Compare -------
 # The rail hosts ONE set of controls for THREE render paths —
 # `plots.make_scanpath_figure` (static), `plots.make_scanpath_animation`
 # (Animate) and the comparison builders (Compare). Not every setting reaches
-# every builder: the animation has no heatmap / raw-gaze / span-highlight layer
-# and draws saccades uniformly; the comparison overlay uses the per-scanpath
-# `cmp*_` styling instead of the global fixation/saccade appearance and has no
-# stimulus-image layer. Those controls used to be either hidden (`if not
-# comparing:`) or — for Animate — silently ignored.
+# every builder: the animation has no heatmap / raw-gaze / arc-and-snap layer and
+# draws saccades in one colour; the comparison overlay uses the per-scanpath
+# `cmp*_` styling instead of the global fixation/saccade appearance and has
+# neither a heatmap nor a colour-by-line path. Those controls used to be either
+# hidden (`if not comparing:`) or — for Animate — silently ignored.
+#
+# VIZ-23 then closed most of the gap rather than papering over it: drift
+# correction, direction arrows, the fixation flags, the word-label colour /
+# span-text marking / hover measure, the marker shape, the stimulus image and the
+# colour-bar styling all reach the builders that used to drop them, so those
+# widgets are LIVE again. Un-gating is the fix; disabling is the fallback.
 #
 # So each affected widget now declares which paths honour it and is rendered
 # DISABLED with the reason when the active mode isn't one of them. Disabling is
@@ -436,8 +442,8 @@ def _render_fixclass_category(
     is given, a ms threshold number input; when Highlight, a marker + colour picker.
     All values ride ``global_fixclass_{key_prefix}_*`` keys (seeded in
     ``_VIZ_WIDGET_DEFAULTS``). ``disabled``/``reason`` come from
-    :func:`_mode_gate` — the flags are a `make_scanpath_figure`-only feature
-    (VIZ-21)."""
+    :func:`_mode_gate` — since VIZ-23 the flags reach the static figure *and* the
+    animated replay, but no comparison builder takes them."""
     mode = st.radio(
         label,
         options=_FIXCLASS_MODES,
@@ -477,8 +483,11 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
     inside the ⚙ Fixation style popover. Viz-only: highlight or discard, with
     customizable short/long thresholds, all on the spot.
 
-    Only the static figure builder consumes ``fixation_flags``, so the whole
-    block renders disabled (with the reason) in Animate / Compare (VIZ-21)."""
+    ``make_scanpath_figure`` and ``make_scanpath_animation`` both consume
+    ``fixation_flags`` (VIZ-23 — *Discard* drops the rows before the replay's
+    frames are built, *Highlight* overlays them as the trail reaches them); the
+    comparison builders take no flags argument, so the whole block renders
+    disabled (with the reason) in Compare only."""
     st.divider()
     st.caption("Classify fixations (visual only)")
     for prefix, label, threshold in (
@@ -1577,7 +1586,9 @@ def _collect_viz_settings(
         word_hover_measure=ss.get(
             "global_word_hover_measure", "total_fixation_duration_ms"
         ),
-        # PRE-3: in-place drift correction (applied in tabs.py on the static plot).
+        # PRE-3: in-place drift correction. `tabs._drift_corrected` applies it once
+        # above the render-mode split, so it reaches all three builders (VIZ-23);
+        # only the connector layer is still static-figure-only.
         align_algorithm=ss.get("global_align_algorithm") or "Off",
         align_connectors=bool(ss.get("global_align_connectors"))
         and (ss.get("global_align_algorithm") or "Off") != "Off",
@@ -1727,13 +1738,14 @@ def sidebar_controls(
     # function) route the figure through different builders, and each ignores a
     # different slice of these controls. Read both flags and gate every affected
     # widget through `_mode_gate` — greyed with a reason, never silently ignored,
-    # and never with its stored value rewritten.
+    # and never with its stored value rewritten. VIZ-23 then made a batch of them
+    # live in Animate / Compare, so what remains gated below is the genuinely
+    # builder-less set (see CLAUDE.md's setting → render-path table).
     comparing = bool(st.session_state.get("single_compare_toggle"))
     animating = bool(st.session_state.get("single_animate"))
-    # Handy shorthands for the three recurring gates.
+    # Handy shorthands for the two recurring gates.
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
-    _no_animation = dict(in_animation=False)
 
     # --- Fixations --------------------------------------------------------
     # The Fixations toggle is a `make_scanpath_figure`-only layer: the animated
@@ -1796,51 +1808,47 @@ def sidebar_controls(
                 )
             # VIZ-15: marker shape — a channel that survives greyscale printing,
             # so a figure stays readable where hue doesn't (see the Palette
-            # picker's **Print / greyscale** option). The comparison builder
-            # hardcodes round markers.
-            _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+            # picker's **Print / greyscale** option). VIZ-23 gave the comparison
+            # builder `fixation_symbol` too, so shape is now a true global: it is
+            # the one marker property Compare does NOT override per scanpath
+            # (colour / size / opacity / hollow still come from `cmp{idx}_*`).
             st.selectbox(
                 "Marker shape",
                 options=list(FIXATION_SYMBOLS),
                 format_func=lambda s: FIXATION_SYMBOLS[s],
                 key="global_fixation_symbol",
-                disabled=_dis,
-                help=_gated_help(
-                    "Shape of the fixation markers. Unlike colour, shape "
-                    "still reads in black & white.",
-                    _reason,
-                ),
+                help="Shape of the fixation markers. Unlike colour, shape "
+                "still reads in black & white. Applies on all three render "
+                "paths, including both compared scanpaths.",
             )
             # PRE-3: vertical drift correction. Snap each fixation to its assigned
             # text line using one of the Carr et al. (2021) algorithms; "Off"
-            # leaves the raw coordinates. Applied by `tabs.py` on the STATIC
-            # branch only — neither the animation nor the comparison figure sees
-            # the corrected frame (VIZ-21).
-            align_disabled, align_reason = _mode_gate(
+            # leaves the raw coordinates. VIZ-23 hoisted the correction above the
+            # render-mode split in `tabs.py`, so the *algorithm* now applies on all
+            # three paths. The CONNECTORS don't: only `make_scanpath_figure` has a
+            # connector layer, and drawing a full-length "original position" layer
+            # from frame zero would misread as part of the replay's trail.
+            static_disabled, static_reason = _mode_gate(
                 animating, comparing, **_static_only
             )
             align_algo = st.selectbox(
                 "Drift correction",
                 options=_ALIGN_OPTIONS,
                 key="global_align_algorithm",
-                disabled=align_disabled,
-                help=_gated_help(
-                    "Snap fixations to their assigned text line using a "
-                    "vertical drift-correction algorithm (Carr et al., 2021). "
-                    "'Off' shows the raw fixations. See also the 📐 Line "
-                    "assignment subtab to compare all algorithms side by side.",
-                    align_reason,
-                ),
+                help="Snap fixations to their assigned text line using a "
+                "vertical drift-correction algorithm (Carr et al., 2021). "
+                "'Off' shows the raw fixations. See also the 📐 Line "
+                "assignment subtab to compare all algorithms side by side.",
             )
             if align_algo != "Off":
                 st.checkbox(
                     "Show drift connectors",
                     key="global_align_connectors",
-                    disabled=align_disabled,
+                    disabled=static_disabled,
                     help=_gated_help(
                         "Draw a faint line from each fixation's original "
                         "position to its corrected (snapped) position.",
-                        align_reason,
+                        static_reason,
                     ),
                 )
             # UX-13: "Snap fixations above words" used to sit flush under the
@@ -1852,10 +1860,12 @@ def sidebar_controls(
             # so the two are never confused.
             st.divider()
             st.caption("Linear-reading schematic")
+            # Still `make_scanpath_figure`-only (VIZ-9's `fixation_snap_to_word`),
+            # unlike the drift correction above it — hence its own gate.
             st.checkbox(
                 "Snap fixations above words",
                 key="global_fixation_snap_to_word",
-                disabled=align_disabled,
+                disabled=static_disabled,
                 help=_gated_help(
                     "Schematic layout, **not** drift correction: every "
                     "fixation is redrawn at the top-centre of the word it landed "
@@ -1863,7 +1873,7 @@ def sidebar_controls(
                     "recorded gaze. Drift correction (above) instead nudges the "
                     "raw coordinates onto their true text line. Pairs with "
                     "Saccades → ⚙️ Saccade style → Line shape → **Arc**.",
-                    align_reason,
+                    static_reason,
                 ),
             )
             # Fixation-index window (VIZ-7): restrict which fixations (and their
@@ -1964,9 +1974,12 @@ def sidebar_controls(
                     "smaller). Default 10.",
                 )
             # Fixation classification (PRE-2): short / long / out-of-bounds, each
-            # highlight-or-discard with on-the-spot thresholds. `fixation_flags`
-            # reaches `make_scanpath_figure` only, so it greys out in both modes.
-            _render_fixation_cleaning(disabled=align_disabled, reason=align_reason)
+            # highlight-or-discard with on-the-spot thresholds. VIZ-23 taught the
+            # replay `fixation_flags` (Discard drops the rows before the frames are
+            # built, Highlight overlays them as the trail reaches them); the
+            # comparison builder still takes no flags argument.
+            _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
+            _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
             # When comparing two trials, the per-scanpath fixation styling lives
             # here (under the Fixation settings), not in a separate panel.
             if comparing:
@@ -1976,17 +1989,15 @@ def sidebar_controls(
     show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
     if show_saccades:
         with viz.popover("⚙️ Saccade style", width="stretch"):
-            # Arrows reach the static figure and the comparison overlay, but
-            # `make_scanpath_animation` has no arrow layer (VIZ-21).
-            _dis, _reason = _mode_gate(animating, comparing, **_no_animation)
+            # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
+            # (each arrowhead un-masks with the saccade it belongs to), so
+            # direction arrows now reach all three builders.
             st.checkbox(
                 "Direction arrows",
                 key="global_show_saccade_arrows",
-                disabled=_dis,
-                help=_gated_help(
-                    "Draw an arrowhead on each saccade pointing in the gaze direction.",
-                    _reason,
-                ),
+                help="Draw an arrowhead on each saccade pointing in the gaze "
+                "direction. In **Animate** each arrow appears with its own "
+                "saccade rather than all at once.",
             )
             # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-regression
             # split, or the full reading-class breakdown. Reading-class colouring
@@ -2134,23 +2145,22 @@ def sidebar_controls(
             else:
                 st.session_state.setdefault("global_highlight_span_mode", "Mark text")
 
-            # The span overlay is a `make_scanpath_figure` layer: neither the
-            # animation nor the comparison builder is given `highlight_column` /
-            # `critical_span_style`, so the whole block greys out there (VIZ-21).
-            # Note the *values* still round-trip — the derived writes below are
-            # unchanged, so a deep link / saved config keeps its span settings.
-            span_disabled, span_reason = _mode_gate(
+            # VIZ-23: the span's *text*-marking channel now reaches all three
+            # builders — the animation and the comparison figure take
+            # `highlight_column` + `highlight_text_color` and recolour the word
+            # labels. Neither has a border-overlay layer, though, so **Mark
+            # border** stays a `make_scanpath_figure` feature and only its colour
+            # picker is gated (`tabs._marked_text_column` hands the other two
+            # builders `None` under that style, so nothing is marked there rather
+            # than silently falling back to text marking).
+            border_disabled, border_reason = _mode_gate(
                 animating, comparing, **_static_only
             )
             span_on = st.toggle(
                 "Highlight a span",
                 key="global_highlight_span_on",
                 on_change=_on_span_toggle,
-                disabled=span_disabled,
-                help=_gated_help(
-                    "Highlight a per-word span (e.g. the answer span) on the text.",
-                    span_reason,
-                ),
+                help="Highlight a per-word span (e.g. the answer span) on the text.",
             )
             if span_on:
                 # Which column defines the span first, then how to mark it.
@@ -2159,12 +2169,8 @@ def sidebar_controls(
                         "Highlight words by",
                         options=highlight_options,
                         key="global_highlight_column",
-                        disabled=span_disabled,
-                        help=_gated_help(
-                            "Which per-word column to highlight on the text (words "
-                            "where it is true). Defaults to the OneStop answer span.",
-                            span_reason,
-                        ),
+                        help="Which per-word column to highlight on the text (words "
+                        "where it is true). Defaults to the OneStop answer span.",
                     )
                 critical_span_style = st.radio(
                     "Style",
@@ -2172,11 +2178,15 @@ def sidebar_controls(
                     horizontal=True,
                     key="global_highlight_span_mode",
                     on_change=_on_span_mode,
-                    disabled=span_disabled,
-                    help=_gated_help(
-                        "Mark text: colour the span's words. Mark border: draw a "
-                        "thin outline around the span.",
-                        span_reason,
+                    help="Mark text: colour the span's words. Mark border: draw a "
+                    "thin outline around the span."
+                    + (
+                        "\n\n⚠️ **Mark border** draws on the static plot only — "
+                        "the replay and the comparison figure have no border "
+                        "layer, so the span shows unmarked there. Use **Mark "
+                        "text** in those modes."
+                        if border_disabled
+                        else ""
                     ),
                 )
             else:
@@ -2186,21 +2196,17 @@ def sidebar_controls(
                 st.color_picker(
                     "Highlighted text color",
                     key="global_highlight_text_color",
-                    disabled=span_disabled,
-                    help=_gated_help(
-                        "Colour of the highlighted reading text (used with "
-                        "'Mark text').",
-                        span_reason,
-                    ),
+                    help="Colour of the highlighted reading text (used with "
+                    "'Mark text').",
                 )
             elif critical_span_style == "Mark border":
                 st.color_picker(
                     "Border color",
                     key="global_span_border_color",
-                    disabled=span_disabled,
+                    disabled=border_disabled,
                     help=_gated_help(
                         "Colour of the span outline (used with 'Mark border').",
-                        span_reason,
+                        border_reason,
                     ),
                 )
 
@@ -2213,17 +2219,19 @@ def sidebar_controls(
                 "n_fixations": "Fixation count",
                 None: "Off",
             }
-            # `word_hover_measure` only reaches the static figure's word-label
-            # hover template.
+            # `word_hover_measure` reaches the static figure's and (VIZ-23) the
+            # replay's word-label hover template; the comparison builders call
+            # `_add_word_label_trace` without it.
+            _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
             st.selectbox(
                 "Hover: show measure",
                 options=list(_HOVER_MEASURE_OPTIONS),
                 format_func=lambda k: _HOVER_MEASURE_OPTIONS[k],
                 key="global_word_hover_measure",
-                disabled=span_disabled,
+                disabled=_hover_dis,
                 help=_gated_help(
                     "Reading measure shown when hovering over a word on the plot.",
-                    span_reason,
+                    _hover_reason,
                 ),
             )
 
@@ -2337,24 +2345,20 @@ def sidebar_controls(
     upload_uri = _uploaded_image_data_uri(uploaded_img)
     st.session_state["_stimulus_image_upload_uri"] = upload_uri
     can_show_image = has_stimulus_image or upload_uri is not None
-    # The stimulus-image layer reaches the static figure and the animation
-    # (`background_image*` are parameters of both), but `make_comparison_figure`
-    # has no image layer at all (VIZ-21).
-    img_disabled, img_reason = _mode_gate(animating, comparing, **_no_compare)
+    # VIZ-23: `background_image*` are now parameters of all three builders — the
+    # comparison figure places one `layout.image` per panel in the split layouts —
+    # so the whole stimulus-image group is live in every mode.
     viz.toggle(
         "**Stimulus image**",
-        help=_gated_help(
-            "Show a stimulus page behind the scanpath — the dataset's rendered "
-            "page (exact coordinates; sidesteps CJK / RTL font issues) or an image "
-            "you upload below (stretched to fill the monitor). "
-            + (
-                ""
-                if can_show_image
-                else "(Upload one below, or load a dataset with images)"
-            ),
-            img_reason,
+        help="Show a stimulus page behind the scanpath — the dataset's rendered "
+        "page (exact coordinates; sidesteps CJK / RTL font issues) or an image "
+        "you upload below (stretched to fill the monitor). "
+        + (
+            ""
+            if can_show_image
+            else "(Upload one below, or load a dataset with images)"
         ),
-        disabled=not can_show_image or img_disabled,
+        disabled=not can_show_image,
         key="global_show_stimulus_image",
     )
     with viz.popover("⚙️ Stimulus image", width="stretch"):
@@ -2362,15 +2366,11 @@ def sidebar_controls(
             "Upload a stimulus image",
             type=["png", "jpg", "jpeg", "gif", "webp"],
             key="global_stimulus_image_upload",
-            disabled=img_disabled,
-            help=_gated_help(
-                "Use a screenshot of the reading screen as the background for "
-                "any dataset. An upload **overrides** a dataset's built-in image and "
-                "is stretched to fill the monitor; use the **Align to text** controls "
-                "below to position/scale it. Not carried by Share links (upload it on "
-                "the other end).",
-                img_reason,
-            ),
+            help="Use a screenshot of the reading screen as the background for "
+            "any dataset. An upload **overrides** a dataset's built-in image and "
+            "is stretched to fill the monitor; use the **Align to text** controls "
+            "below to position/scale it. Not carried by Share links (upload it on "
+            "the other end).",
         )
         _numeric_slider(
             st,
@@ -2380,12 +2380,8 @@ def sidebar_controls(
             max_value=1.0,
             step=0.05,
             number_format="%.2f",
-            disabled=img_disabled,
-            help=_gated_help(
-                "Dim the stimulus image so the fixations, saccades and word "
-                "boxes stand out over it (1.0 = fully opaque).",
-                img_reason,
-            ),
+            help="Dim the stimulus image so the fixations, saccades and word "
+            "boxes stand out over it (1.0 = fully opaque).",
         )
         # VIZ-4: manual alignment. The text was shown at some position on the
         # screen; when the data's coordinates don't match the image exactly, nudge
@@ -2397,20 +2393,13 @@ def sidebar_controls(
             "Image X offset (px)",
             step=5.0,
             key="global_stimulus_image_offset_x",
-            disabled=img_disabled,
-            help=_gated_help(
-                "Shift the image horizontally to line it up with the text.",
-                img_reason,
-            ),
+            help="Shift the image horizontally to line it up with the text.",
         )
         off_cols[1].number_input(
             "Image Y offset (px)",
             step=5.0,
             key="global_stimulus_image_offset_y",
-            disabled=img_disabled,
-            help=_gated_help(
-                "Shift the image vertically to line it up with the text.", img_reason
-            ),
+            help="Shift the image vertically to line it up with the text.",
         )
         _numeric_slider(
             st,
@@ -2420,12 +2409,8 @@ def sidebar_controls(
             max_value=3.0,
             step=0.05,
             number_format="%.2f",
-            disabled=img_disabled,
-            help=_gated_help(
-                "Scale the image up/down so its text matches the word boxes "
-                "(1.0 = the image's native / dataset size).",
-                img_reason,
-            ),
+            help="Scale the image up/down so its text matches the word boxes "
+            "(1.0 = the image's native / dataset size).",
         )
     # Raw gaze is a `make_scanpath_figure`-only overlay.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
@@ -2450,11 +2435,14 @@ def sidebar_controls(
     )
     show_colorbars = axes.checkbox("Show color bars", key="global_show_colorbars")
     if show_colorbars:
-        # `show_colorbars` itself reaches all three builders, but only
-        # `make_scanpath_figure` threads the colour-bar *styling* through
-        # (`_colorbar_dict`); the animation and comparison figures build a plain
-        # colorbar (VIZ-21).
-        cb_disabled, cb_reason = _mode_gate(animating, comparing, **_static_only)
+        # VIZ-23: all three builders now route their colour bar through
+        # `_colorbar_dict`, so the styling below applies wherever a colour bar is
+        # actually drawn. The one mode without one is the DUAL animation (Animate
+        # + Compare) — there the flat A/B colours replace metric colouring
+        # entirely, so there is no bar to style. Same gate as "Color fixations by".
+        cb_disabled, cb_reason = _mode_gate(
+            animating, comparing, in_animation=not comparing
+        )
         axes.radio(
             "Color bar orientation",
             options=["Vertical", "Horizontal"],

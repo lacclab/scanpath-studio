@@ -267,7 +267,7 @@ plus replay-only knobs — `figure_options("animation")` is the full list).
 | `hollow_fixations` | `False` | yes |
 | `marker_size_range` | `(8, 24)` | yes |
 | `fixation_snap_to_word` | `False` | no |
-| `fixation_flags` | `None` | no |
+| `fixation_flags` | `None` | yes |
 | `order_font_size` | `10` | yes |
 | `order_font_color` | `'#111111'` | yes |
 
@@ -307,7 +307,7 @@ fixations yourself.
 | `saccade_class_colors` | `None` | no |
 | `saccade_type_legend` | `True` | no |
 | `saccade_render_mode` | `'Straight'` | no |
-| `show_saccade_arrows` | `False` | no |
+| `show_saccade_arrows` | `False` | yes |
 
 `saccade_color_mode` is `"Uniform"`, `"Forward / regression"` (the two-way fold)
 or `"By type"` (forward / skip / refixation / return sweep / regression, each a
@@ -335,14 +335,14 @@ colours. `saccade_render_mode="Arc"` draws the linear-reading schematic.
 
 | Option | Default | Anim |
 |--------|---------|------|
-| `text_color` | `'#343a40'` | no |
-| `highlight_column` | `'is_in_aspan'` | no |
-| `highlight_text_color` | `'#C8097C'` | no |
+| `text_color` | `'#343a40'` | yes |
+| `highlight_column` | `'is_in_aspan'` | yes |
+| `highlight_text_color` | `'#C8097C'` | yes |
 | `critical_span_style` | `'Mark text'` | no |
 | `span_border_color` | `'#000000'` | no |
 | `line_spacing` | `3.0` | yes |
 | `scale_text_to_boxes` | `True` | yes |
-| `word_hover_measure` | `'total_fixation_duration_ms'` | no |
+| `word_hover_measure` | `'total_fixation_duration_ms'` | yes |
 
 `highlight_column` is a boolean words column (OneStop's critical span by
 default); it is ignored when the column isn't there.
@@ -369,9 +369,9 @@ coordinates — see [Rendering](rendering.md).
 | Option | Default | Anim |
 |--------|---------|------|
 | `show_colorbars` | `False` | yes |
-| `colorbar_orientation` | `'Vertical'` | no |
-| `colorbar_tickangle` | `0` | no |
-| `colorbar_tickfont_size` | `12` | no |
+| `colorbar_orientation` | `'Vertical'` | yes |
+| `colorbar_tickangle` | `0` | yes |
+| `colorbar_tickfont_size` | `12` | yes |
 
 `palette=` is a shorthand that sets a whole group of the colours above at once —
 `"Default"`, `"Colourblind-safe"`, `"Print / greyscale"` or `"High contrast"`

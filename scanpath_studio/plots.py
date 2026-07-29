@@ -570,6 +570,35 @@ def _arch_points(
     return xs.tolist(), ys.tolist()
 
 
+def _arch_apex_y(x0: float, y0: float, x1: float, y1: float, frac: float) -> float:
+    """Topmost (smallest) ``y`` reached by the drawn arch — its true apex (BUG-13).
+
+    Minimises ``y(t)`` over the SAME quadratic ``_arch_points`` samples and
+    ``_arch_point_and_tangent`` evaluates, instead of reading off one sampled
+    parameter. Writing the curve as ``y(t) = y0 + 2t(cy - y0) + t^2 * d`` with
+    ``d = y0 - 2*cy + y1`` gives the closed-form extremum ``t* = (y0 - cy)/d`` and
+    the value ``y0 - (y0 - cy)^2 / d``. The control point is at or above both
+    endpoints (``cy <= min(y0, y1)``), so ``d >= 0`` and ``t*`` always lands in
+    ``[0, 1]``.
+
+    For a level saccade the peak is at ``t = 0.5`` (the old estimate), but as the
+    endpoints diverge in ``y`` it slides toward the higher one and rises well
+    above the ``t = 0.5`` point — which is why a wide, steeply-sloped arc used to
+    clip against the top of the view.
+    """
+    _, cy = _arch_control_point(x0, y0, x1, y1, frac)
+    denom = y0 - 2.0 * cy + y1
+    if denom <= 0.0:
+        # Degenerate: zero rise and level endpoints — the "arch" is a flat line.
+        return min(y0, y1)
+    t = (y0 - cy) / denom
+    if t <= 0.0:
+        return y0
+    if t >= 1.0:
+        return y1
+    return y0 - (y0 - cy) ** 2 / denom
+
+
 def _extend_segment(
     xs: list, ys: list, x0, y0, x1, y1, arch_frac: Optional[float]
 ) -> None:
@@ -710,6 +739,61 @@ def _arch_point_and_tangent(
     return px, py, tx, ty
 
 
+def _saccade_arrow_rows(
+    fix_df: pd.DataFrame,
+    x_col: str,
+    y_col: str,
+    arch_frac: Optional[float] = None,
+) -> Tuple[list, list, list, list]:
+    """:func:`_saccade_arrow_markers` plus each arrowhead's saccade index.
+
+    Returns ``(mid_x, mid_y, angle_deg, segment_index)``. Arrowheads are dropped
+    for micro/degenerate saccades, so the arrays are shorter than the saccade
+    count and the position alone doesn't say which saccade an arrow belongs to —
+    ``segment_index[j]`` is the index of the departing fixation, which is what
+    lets the animated replay reveal each arrow with its own saccade (VIZ-23).
+    """
+    if len(fix_df) < 2:
+        return [], [], [], []
+    ordered = fix_df.sort_values("timestamp_ms")
+    xv = pd.to_numeric(ordered[x_col], errors="coerce").to_numpy()
+    yv = pd.to_numeric(ordered[y_col], errors="coerce").to_numpy()
+    # Suppress arrowheads on micro-saccades: a sub-pixel refixation has a
+    # well-defined midpoint but its direction is just noise, so a full-size
+    # arrow would point a random way. Threshold scales with the data extent so
+    # it's dataset-agnostic.
+    finite = np.isfinite(xv) & np.isfinite(yv)
+    if finite.any():
+        x_ext = float(np.nanmax(xv[finite]) - np.nanmin(xv[finite]))
+        y_ext = float(np.nanmax(yv[finite]) - np.nanmin(yv[finite]))
+        min_len = np.hypot(x_ext, y_ext) * _ARROW_MIN_LEN_FRAC
+    else:
+        min_len = 0.0
+    mid_x: list = []
+    mid_y: list = []
+    angles: list = []
+    seg_index: list = []
+    for i in range(len(ordered) - 1):
+        x0, y0, x1, y1 = xv[i], yv[i], xv[i + 1], yv[i + 1]
+        if not np.isfinite((x0, y0, x1, y1)).all():
+            continue
+        dx, dy = x1 - x0, y1 - y0
+        seg_len = float(np.hypot(dx, dy))
+        if seg_len == 0.0 or seg_len < min_len:
+            continue
+        if arch_frac is None:
+            mx, my, hx, hy = (x0 + x1) / 2.0, (y0 + y1) / 2.0, dx, dy
+        else:
+            mx, my, hx, hy = _arch_point_and_tangent(x0, y0, x1, y1, arch_frac)
+        mid_x.append(mx)
+        mid_y.append(my)
+        # marker.angle is clockwise from up; screen-up is decreasing data y
+        # (the y-axis is drawn reversed), so negate the heading's dy.
+        angles.append(float(np.degrees(np.arctan2(hx, -hy))))
+        seg_index.append(i)
+    return mid_x, mid_y, angles, seg_index
+
+
 def _saccade_arrow_markers(
     fix_df: pd.DataFrame,
     x_col: str,
@@ -730,42 +814,7 @@ def _saccade_arrow_markers(
     midpoint. ``None`` (the default everywhere) keeps the straight-chord
     placement.
     """
-    if len(fix_df) < 2:
-        return [], [], []
-    ordered = fix_df.sort_values("timestamp_ms")
-    xv = pd.to_numeric(ordered[x_col], errors="coerce").to_numpy()
-    yv = pd.to_numeric(ordered[y_col], errors="coerce").to_numpy()
-    # Suppress arrowheads on micro-saccades: a sub-pixel refixation has a
-    # well-defined midpoint but its direction is just noise, so a full-size
-    # arrow would point a random way. Threshold scales with the data extent so
-    # it's dataset-agnostic.
-    finite = np.isfinite(xv) & np.isfinite(yv)
-    if finite.any():
-        x_ext = float(np.nanmax(xv[finite]) - np.nanmin(xv[finite]))
-        y_ext = float(np.nanmax(yv[finite]) - np.nanmin(yv[finite]))
-        min_len = np.hypot(x_ext, y_ext) * _ARROW_MIN_LEN_FRAC
-    else:
-        min_len = 0.0
-    mid_x: list = []
-    mid_y: list = []
-    angles: list = []
-    for i in range(len(ordered) - 1):
-        x0, y0, x1, y1 = xv[i], yv[i], xv[i + 1], yv[i + 1]
-        if not np.isfinite((x0, y0, x1, y1)).all():
-            continue
-        dx, dy = x1 - x0, y1 - y0
-        seg_len = float(np.hypot(dx, dy))
-        if seg_len == 0.0 or seg_len < min_len:
-            continue
-        if arch_frac is None:
-            mx, my, hx, hy = (x0 + x1) / 2.0, (y0 + y1) / 2.0, dx, dy
-        else:
-            mx, my, hx, hy = _arch_point_and_tangent(x0, y0, x1, y1, arch_frac)
-        mid_x.append(mx)
-        mid_y.append(my)
-        # marker.angle is clockwise from up; screen-up is decreasing data y
-        # (the y-axis is drawn reversed), so negate the heading's dy.
-        angles.append(float(np.degrees(np.arctan2(hx, -hy))))
+    mid_x, mid_y, angles, _ = _saccade_arrow_rows(fix_df, x_col, y_col, arch_frac)
     return mid_x, mid_y, angles
 
 
@@ -1077,6 +1126,76 @@ def _png_pixel_size(src: Optional[str]) -> Optional[Tuple[int, int]]:
     return None
 
 
+def _background_image_spec(
+    background_image: Optional[str],
+    background_image_size: Optional[Tuple[float, float]],
+    background_image_origin: Optional[Tuple[float, float]],
+    background_image_opacity: float = 1.0,
+) -> Optional[dict]:
+    """The ``layout.image`` dict for the stimulus-page background (VIZ-4).
+
+    The rendered page sits at data coordinates ``(origin_x, origin_y)`` →
+    ``(+image_w, +image_h)`` UNDER every other layer; the coords are where the
+    (centered) stimulus appeared on the monitor, so the image aligns exactly and
+    sidesteps CJK/RTL font rendering. ``background_image_origin`` defaults to
+    ``(0, 0)``; ``yanchor="top"`` + the reversed y-axis put the image's top-left
+    there. ``background_image_opacity`` dims a busy stimulus so the AOIs/scanpath
+    read over it (1.0 = opaque). Returns ``None`` when there is nothing to draw
+    (no image, no size, or an unreadable path), so callers can just skip it.
+    """
+    if not (background_image and background_image_size):
+        return None
+    uri = _image_to_data_uri(background_image)
+    if not uri:
+        return None
+    image_w, image_h = background_image_size
+    origin_x, origin_y = background_image_origin or (0.0, 0.0)
+    return dict(
+        source=uri,
+        xref="x",
+        yref="y",
+        x=origin_x,
+        y=origin_y,
+        sizex=image_w,
+        sizey=image_h,
+        sizing="stretch",
+        layer="below",
+        xanchor="left",
+        yanchor="top",
+        opacity=float(background_image_opacity),
+    )
+
+
+def _add_background_image(
+    fig: go.Figure,
+    background_image: Optional[str],
+    background_image_size: Optional[Tuple[float, float]],
+    background_image_origin: Optional[Tuple[float, float]],
+    background_image_opacity: float = 1.0,
+    *,
+    row: Optional[int] = None,
+    col: Optional[int] = None,
+) -> bool:
+    """Add the stimulus-page background image to ``fig``; True when one was added.
+
+    ``row``/``col`` bind it to one subplot's axes (the split comparison figure);
+    without them it goes on the figure's single axis pair.
+    """
+    spec = _background_image_spec(
+        background_image,
+        background_image_size,
+        background_image_origin,
+        background_image_opacity,
+    )
+    if spec is None:
+        return False
+    if row is not None and col is not None:
+        fig.add_layout_image(spec, row=row, col=col)
+    else:
+        fig.add_layout_image(spec)
+    return True
+
+
 def _add_saccade_layer(
     fig: go.Figure,
     fixations: pd.DataFrame,
@@ -1243,6 +1362,69 @@ def _add_raw_gaze_layer(
     return True
 
 
+# PRE-2 fixation classification (viz-only): SHORT / LONG / OUT-OF-BOUNDS, each
+# Off / Highlight / Discard. Thresholds come from the caller's flags dict; these
+# are the fallbacks the app's own controls default to.
+_FIX_FLAG_SHORT_MS = 80.0
+_FIX_FLAG_LONG_MS = 800.0
+_FIX_FLAG_CATEGORIES = ("short", "long", "oob")
+_FIX_FLAG_LABELS = {"short": "Short", "long": "Long", "oob": "Out of bounds"}
+
+
+def _fixation_flag_masks(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    flags: Optional[dict],
+    *,
+    spatial_axes: bool = True,
+) -> Dict[str, pd.Series]:
+    """Boolean mask per PRE-2 fixation-flag category, over ``fixations``' index.
+
+    ``{"short": …, "long": …, "oob": …}``, or ``{}`` when nothing is flagged.
+    Out-of-bounds needs word boxes on spatial axes — without them no fixation
+    counts as out of bounds. Shared by the static figure and the animated replay
+    so the two classify identically (VIZ-23).
+    """
+    if not flags or fixations.empty:
+        return {}
+    dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
+    oob = pd.Series(False, index=fixations.index)
+    if spatial_axes and not words.empty:
+        from .measures import fixation_in_text_mask
+
+        oob = ~fixation_in_text_mask(fixations, words)
+    short_ms = float(flags.get("short", {}).get("threshold_ms", _FIX_FLAG_SHORT_MS))
+    long_ms = float(flags.get("long", {}).get("threshold_ms", _FIX_FLAG_LONG_MS))
+    return {
+        "short": (dur < short_ms).fillna(False).astype(bool),
+        "long": (dur > long_ms).fillna(False).astype(bool),
+        "oob": oob.fillna(False).astype(bool),
+    }
+
+
+def _discard_flagged_fixations(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    flags: Optional[dict],
+    *,
+    spatial_axes: bool = True,
+) -> pd.DataFrame:
+    """Drop the fixations whose PRE-2 flag mode is *Discard* (viz-only).
+
+    Changes only what is DRAWN — the returned frame feeds the markers, the
+    fixation-index labels and the marker-size scaling; reading measures and
+    exports are untouched. Returns ``fixations`` itself when nothing is dropped.
+    """
+    masks = _fixation_flag_masks(fixations, words, flags, spatial_axes=spatial_axes)
+    if not masks:
+        return fixations
+    drop = pd.Series(False, index=fixations.index)
+    for category, mask in masks.items():
+        if (flags or {}).get(category, {}).get("mode") == "Discard":
+            drop = drop | mask
+    return fixations[~drop] if bool(drop.any()) else fixations
+
+
 def make_scanpath_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -1361,44 +1543,24 @@ def make_scanpath_figure(
             x0, y0, x1, y1 = fxv[i], fyv[i], fxv[i + 1], fyv[i + 1]
             if not np.isfinite((x0, y0, x1, y1)).all():
                 continue
-            # Bézier value at t=0.5 for a control point raised by the arch rise.
-            apex = min(
-                apex,
-                0.25 * (y0 + y1) + 0.5 * (min(y0, y1) - _ARCH_FRAC * abs(x1 - x0)),
-            )
+            # BUG-13: the curve's true peak, not its t=0.5 point — for endpoints
+            # that differ in y the parabola crests higher than the midpoint
+            # sample, and a wide top-line arc then clipped.
+            apex = min(apex, _arch_apex_y(x0, y0, x1, y1, _ARCH_FRAC))
         if np.isfinite(apex):
             margin = 0.02 * abs(y_range[0] - y_range[1])
             y_range = [y_range[0], min(y_range[1], apex - margin)]
 
-    # Stimulus-page background image (MultiplEYE): the rendered page sits at data
-    # coordinates (origin_x, origin_y)-(+image_w, +image_h) UNDER every other layer.
-    # The coords are placed where the centered stimulus appeared on the monitor, so
-    # the image — drawn at the same origin — aligns exactly and sidesteps CJK/RTL
-    # font rendering. ``background_image_origin`` defaults to (0,0); yanchor="top"
-    # + the reversed y-axis put the image's top-left at that origin.
-    if spatial_axes and background_image and background_image_size:
-        uri = _image_to_data_uri(background_image)
-        if uri:
-            image_w, image_h = background_image_size
-            origin_x, origin_y = background_image_origin or (0.0, 0.0)
-            fig.add_layout_image(
-                dict(
-                    source=uri,
-                    xref="x",
-                    yref="y",
-                    x=origin_x,
-                    y=origin_y,
-                    sizex=image_w,
-                    sizey=image_h,
-                    sizing="stretch",
-                    layer="below",
-                    xanchor="left",
-                    yanchor="top",
-                    # VIZ-4: dim a busy stimulus image so the AOIs / scanpath read
-                    # over it (1.0 = opaque, the default).
-                    opacity=float(background_image_opacity),
-                )
-            )
+    # Stimulus-page background image (MultiplEYE / VIZ-4) — see
+    # `_background_image_spec` for the placement contract.
+    if spatial_axes:
+        _add_background_image(
+            fig,
+            background_image,
+            background_image_size,
+            background_image_origin,
+            background_image_opacity,
+        )
 
     # Fix the display size up front so the data->screen scale is known: word
     # labels are then sized in that scale (true-to-scale text), and the same
@@ -1652,23 +1814,9 @@ def make_scanpath_figure(
         # This changes only what's DRAWN; reading measures and exports are untouched.
         flags = fixation_flags or {}
         if flags:
-            from .measures import fixation_in_text_mask
-
-            _dur = pd.to_numeric(ordered.get("duration_ms"), errors="coerce")
-            _oob = pd.Series(False, index=ordered.index)
-            if spatial_axes and not words.empty:
-                _oob = ~fixation_in_text_mask(ordered, words)
-            _cat_mask = {
-                "short": _dur < float(flags.get("short", {}).get("threshold_ms", 80)),
-                "long": _dur > float(flags.get("long", {}).get("threshold_ms", 800)),
-                "oob": _oob,
-            }
-            _discard = pd.Series(False, index=ordered.index)
-            for _cat, _mask in _cat_mask.items():
-                if flags.get(_cat, {}).get("mode") == "Discard":
-                    _discard = _discard | _mask.fillna(False)
-            if _discard.any():
-                ordered = ordered[~_discard]
+            ordered = _discard_flagged_fixations(
+                ordered, words, flags, spatial_axes=spatial_axes
+            )
         # "Color by line" overrides the chosen color field: each fixation is
         # tinted by the text line it lands on (lines inferred from word
         # geometry). Rendered as discrete categories so the legend reads
@@ -1847,29 +1995,15 @@ def make_scanpath_figure(
         # recomputed on the (post-discard) `ordered`; out-of-bounds needs word
         # boxes + spatial axes, short/long are duration-based and apply anywhere.
         if flags:
-            _hdur = pd.to_numeric(ordered.get("duration_ms"), errors="coerce")
-            _in_text = (
-                fixation_in_text_mask(ordered, words)
-                if spatial_axes and not words.empty
-                else pd.Series(True, index=ordered.index)
+            _overlay = _fixation_flag_masks(
+                ordered, words, flags, spatial_axes=spatial_axes
             )
-            _overlay = {
-                "short": (
-                    "Short",
-                    _hdur < float(flags.get("short", {}).get("threshold_ms", 80)),
-                ),
-                "long": (
-                    "Long",
-                    _hdur > float(flags.get("long", {}).get("threshold_ms", 800)),
-                ),
-                "oob": ("Out of bounds", ~_in_text),
-            }
-            for _cat in ("short", "long", "oob"):
+            for _cat in _FIX_FLAG_CATEGORIES:
                 _spec = flags.get(_cat, {})
                 if _spec.get("mode") != "Highlight":
                     continue
-                _name, _mask = _overlay[_cat]
-                hits = ordered[_mask.fillna(False)]
+                _name = _FIX_FLAG_LABELS[_cat]
+                hits = ordered[_overlay[_cat]]
                 if hits.empty:
                     continue
                 legend_active = True
@@ -2483,6 +2617,21 @@ def _revealed_saccade_xy(all_x, all_y, kk):
     return sx, sy
 
 
+def _revealed_arrow_xy(all_x, all_y, seg_index, kk):
+    """Constant-length saccade-arrow positions for the first ``kk`` fixations.
+
+    An arrowhead belongs to the saccade leaving fixation ``seg_index[j]``, so it
+    appears exactly when :func:`_revealed_saccade_xy` draws that segment — the
+    arrows reveal *with* their saccades instead of all standing there from frame
+    zero. Hidden arrows are masked to ``None`` rather than dropped, keeping the
+    array (and its ``marker.angle``) the same length every frame, which is what
+    the ``redraw=False`` playback needs.
+    """
+    xs = [x if seg_index[j] < kk - 1 else None for j, x in enumerate(all_x)]
+    ys = [y if seg_index[j] < kk - 1 else None for j, y in enumerate(all_y)]
+    return xs, ys
+
+
 def animation_playback_ms(
     fixations_list, playback_speed, *, grid_step_ms=None, max_frames=None
 ):
@@ -2741,6 +2890,7 @@ def make_scanpath_animation(
     show_words: bool = True,
     show_word_labels: bool = True,
     show_saccades: bool = True,
+    show_saccade_arrows: bool = False,
     show_order: bool = True,
     marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
     order_font_size: int = 10,
@@ -2749,7 +2899,11 @@ def make_scanpath_animation(
     color_by_line: bool = False,
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
     fixation_color_range: Optional[Tuple[float, float]] = None,
+    fixation_flags: Optional[dict] = None,
     show_colorbars: bool = False,
+    colorbar_orientation: str = "Vertical",
+    colorbar_tickangle: int = 0,
+    colorbar_tickfont_size: int = 12,
     saccade_color: str = SACCADE_COLOR,
     saccade_style: str = "solid",
     saccade_width: float = DEFAULT_SACCADE_WIDTH,
@@ -2757,6 +2911,10 @@ def make_scanpath_animation(
     fixation_opacity: float = 1.0,
     fixation_color: Optional[str] = None,
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
+    text_color: str = WORD_LABEL_COLOR,
+    highlight_column: Optional[str] = None,
+    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
+    word_hover_measure: Optional[str] = None,
     background_color: Optional[str] = None,
     fixations_b: Optional[pd.DataFrame] = None,
     words_b: Optional[pd.DataFrame] = None,
@@ -2797,8 +2955,21 @@ def make_scanpath_animation(
     :func:`make_scanpath_figure`: ``color_by`` (numeric → ``fixation_colorscale``
     pinned to the whole trial's range so colours stay stable as the trail grows,
     categorical → discrete palette + legend), ``color_by_line``, and an optional
-    colorbar. The dual overlay ignores them — there the flat A/B colours are
-    what tells the two readings apart.
+    colorbar (styled by ``colorbar_orientation`` / ``colorbar_tickangle`` /
+    ``colorbar_tickfont_size``, like the static figure). The dual overlay ignores
+    them — there the flat A/B colours are what tells the two readings apart.
+
+    VIZ-23 brought the remaining word-label, arrow and flag options across from
+    the static figure, each defaulting to the replay's previous behaviour:
+
+    - the word labels take ``text_color`` / ``highlight_column`` /
+      ``highlight_text_color`` / ``word_hover_measure`` (``highlight_column`` is
+      the *text*-marking channel — there is no border-overlay style here);
+    - ``show_saccade_arrows`` adds the direction arrowheads, each revealed with
+      the saccade it belongs to rather than all at frame zero;
+    - ``fixation_flags`` applies the PRE-2 short/long/out-of-bounds
+      classification: *Discard* drops those fixations from the replay entirely,
+      *Highlight* overlays them in their flag marker as the replay reaches them.
 
     With ``autoplay`` (default on, VIZ-10) the returned figure is stamped so any
     HTML-embedding surface auto-starts the replay on load *at the configured
@@ -2835,15 +3006,49 @@ def make_scanpath_animation(
 
     shapes = build_word_boxes(words) if show_words and not words.empty else []
     if show_word_labels and not words.empty:
-        _add_word_label_trace(fig, words, label_font_px, font_settings["family"])
+        _add_word_label_trace(
+            fig,
+            words,
+            label_font_px,
+            font_settings["family"],
+            highlight_column=highlight_column,
+            text_color=text_color,
+            highlight_text_color=highlight_text_color,
+            word_hover_measure=word_hover_measure,
+        )
 
-    specs = _scanpath_anim_specs(
-        [
-            (fixations, COMPARISON_PALETTE[0], label_a),
-            (fixations_b, COMPARISON_PALETTE[1], label_b),
-        ],
-        marker_size_range,
-    )
+    # PRE-2 fixation flags (VIZ-23), mirroring the static figure: *Discard* drops
+    # the flagged rows before the specs are built, so they vanish from the trail,
+    # the saccade polyline, the index labels and the marker-size scaling. Applied
+    # AFTER the axis ranges above, exactly as in `make_scanpath_figure` — the view
+    # is framed on the trial as recorded, not on what survives the filter.
+    flags = fixation_flags or {}
+    # B is flagged against its own word boxes when it brought them, else against
+    # A's (the overlay draws A's boxes, and two readings of one text share them).
+    entry_words = [
+        words,
+        words_b if (words_b is not None and not words_b.empty) else words,
+    ]
+    if flags:
+        fixations = _discard_flagged_fixations(fixations, entry_words[0], flags)
+        if fixations_b is not None:
+            fixations_b = _discard_flagged_fixations(fixations_b, entry_words[1], flags)
+
+    entries = [
+        (fixations, COMPARISON_PALETTE[0], label_a),
+        (fixations_b, COMPARISON_PALETTE[1], label_b),
+    ]
+    specs = _scanpath_anim_specs(entries, marker_size_range)
+    # The words frame each surviving scanpath is flagged against (the highlight
+    # overlay's out-of-bounds test). `_scanpath_anim_specs` skips empty
+    # scanpaths, so apply the same skip rule here to stay aligned with `specs`.
+    surviving_words = [
+        w
+        for (fix_df, _color, _label), w in zip(entries, entry_words)
+        if fix_df is not None and not fix_df.empty
+    ]
+    for spec, spec_words in zip(specs, surviving_words):
+        spec["words"] = spec_words
     dual = len(specs) > 1
     if not dual and specs:
         # A lone scanpath always wears the canonical single-replay colour,
@@ -2894,21 +3099,29 @@ def make_scanpath_animation(
                     float(color_data.min()),
                     float(color_data.max()),
                 )
+                # VIZ-23: the same styled colorbar the static figure builds, so
+                # orientation / tick angle / tick size apply here too.
+                colorbar = None
+                if show_colorbars:
+                    colorbar = _colorbar_dict(
+                        color_label.replace("_", " ").title(),
+                        orientation=colorbar_orientation,
+                        tickangle=colorbar_tickangle,
+                        tickfont_size=colorbar_tickfont_size,
+                    )
+                    if colorbar_orientation == "Horizontal":
+                        # `_colorbar_dict` parks a horizontal bar just under the
+                        # plot — which is where the transport controls live here,
+                        # so drop it below them (y is a fraction of plot height).
+                        colorbar["y"] = -(
+                            (_CONTROLS_MARGIN_PX + 12) / max(float(fitted_h), 1.0)
+                        )
                 specs[0]["marker_extra"] = dict(
                     colorscale=fixation_colorscale,
                     cmin=rng[0],
                     cmax=rng[1],
                     showscale=show_colorbars,
-                    colorbar=dict(
-                        title=color_label.replace("_", " ").title(),
-                        x=1.12,
-                        lenmode="fraction",
-                        len=COLORBAR_LEN_FRACTION,
-                        y=0.5,
-                        yanchor="middle",
-                    )
-                    if show_colorbars
-                    else None,
+                    colorbar=colorbar,
                 )
 
     def _trail_marker(s):
@@ -3033,6 +3246,40 @@ def make_scanpath_animation(
             )
         else:
             s["idx_sac"] = None
+        # Saccade direction arrowheads (VIZ-23). Same marker as the static
+        # figure's, but each arrow is revealed with its own saccade (its position
+        # un-masks when `_revealed_saccade_xy` draws that segment) rather than the
+        # whole set standing there from frame zero. Angles are stated once at full
+        # length and never change, so `redraw=False` still applies.
+        arrow_x, arrow_y, arrow_angle, arrow_seg = (
+            _saccade_arrow_rows(ordered, "x", "y")
+            if (show_saccades and show_saccade_arrows)
+            else ([], [], [], [])
+        )
+        s["arrow_x"], s["arrow_y"], s["arrow_seg"] = arrow_x, arrow_y, arrow_seg
+        s["idx_arrow"] = None
+        if arrow_x:
+            ax0, ay0 = _revealed_arrow_xy(arrow_x, arrow_y, arrow_seg, 1)
+            s["idx_arrow"] = len(fig.data)
+            fig.add_trace(
+                go.Scatter(
+                    x=ax0,
+                    y=ay0,
+                    mode="markers",
+                    marker=dict(
+                        symbol="arrow",
+                        size=12,
+                        angle=arrow_angle,
+                        angleref="up",
+                        color=s["sac_color"],
+                        line=dict(width=0),
+                    ),
+                    showlegend=False,
+                    legendgroup=s["label"],
+                    hoverinfo="skip",
+                    name="saccade direction",
+                )
+            )
         s["idx_curr"] = len(fig.data)
         fig.add_trace(
             go.Scatter(
@@ -3049,6 +3296,54 @@ def make_scanpath_animation(
                 hoverinfo="skip",
             )
         )
+        # PRE-2 *Highlight* overlays (VIZ-23): one trace per flagged category, in
+        # that category's marker + colour, drawn over the trail. Full-length like
+        # every animated trace — fixations that aren't flagged are masked out
+        # permanently, the rest un-mask as the replay reaches them.
+        s["flag_overlays"] = []
+        if flags:
+            overlay_masks = _fixation_flag_masks(ordered, s["words"], flags)
+            for category in _FIX_FLAG_CATEGORIES:
+                spec_flags = flags.get(category, {})
+                if spec_flags.get("mode") != "Highlight":
+                    continue
+                hit = overlay_masks[category].to_numpy()
+                if not hit.any():
+                    continue
+                hx = [all_x[j] if hit[j] else None for j in range(n_total)]
+                hy = [all_y[j] if hit[j] else None for j in range(n_total)]
+                label = _FIX_FLAG_LABELS[category]
+                name = f"{s['label']} · {label}" if dual else label
+                fx0, fy0 = _revealed_xy(hx, hy, 1)
+                s["flag_overlays"].append(
+                    dict(
+                        idx=len(fig.data),
+                        x=hx,
+                        y=hy,
+                        marker=dict(
+                            symbol=spec_flags.get("symbol") or "x",
+                            size=13,
+                            color=spec_flags.get("color") or OUT_OF_TEXT_COLOR,
+                            line=dict(color="#ffffff", width=1),
+                        ),
+                        name=name,
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=fx0,
+                        y=fy0,
+                        mode="markers",
+                        marker=s["flag_overlays"][-1]["marker"],
+                        name=name,
+                        legendgroup=s["label"],
+                        showlegend=True,
+                        hovertemplate=(
+                            f"{label} fixation<br>x %{{x:.0f}}, y %{{y:.0f}}"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
 
     # Categorical colour legend (single replay), as in the static figure. These
     # dummy traces sit AFTER the per-scanpath traces so the frame indices
@@ -3154,6 +3449,15 @@ def make_scanpath_animation(
                 )
                 traces_idx_in_frame.append(s["idx_sac"])
 
+            if s["idx_arrow"] is not None:
+                # Arrowheads reveal with the saccades above: same constant-length
+                # array, only the mask moves (angles are set on the base trace).
+                arw_x, arw_y = _revealed_arrow_xy(
+                    s["arrow_x"], s["arrow_y"], s["arrow_seg"], kk
+                )
+                traces_in_frame.append(go.Scatter(x=arw_x, y=arw_y, mode="markers"))
+                traces_idx_in_frame.append(s["idx_arrow"])
+
             ci = kk - 1
             traces_in_frame.append(
                 go.Scatter(
@@ -3168,6 +3472,14 @@ def make_scanpath_animation(
                 )
             )
             traces_idx_in_frame.append(s["idx_curr"])
+
+            for overlay in s["flag_overlays"]:
+                # A flagged fixation's highlight appears with the fixation itself.
+                ox_f, oy_f = _revealed_xy(overlay["x"], overlay["y"], kk)
+                traces_in_frame.append(
+                    go.Scatter(x=ox_f, y=oy_f, mode="markers", marker=overlay["marker"])
+                )
+                traces_idx_in_frame.append(overlay["idx"])
 
         frames.append(
             go.Frame(data=traces_in_frame, name=str(k), traces=traces_idx_in_frame)
@@ -3201,41 +3513,34 @@ def make_scanpath_animation(
     # for fitted_h (text-too-large bug). _CONTROLS_MARGIN_PX is that reserve.
     # A single-replay numeric colorbar gets the same treatment on the right
     # (the dual-overlay legend overlays the plot, so it needs no reserve).
+    # A HORIZONTAL colorbar (VIZ-23) instead sits below the transport controls,
+    # so it takes bottom reserve rather than right — same trade `_decoration_margins`
+    # makes for the static figure.
     anim_colorbar = bool(specs and specs[0].get("marker_extra", {}).get("showscale"))
-    right_reserve = _COLORBAR_RESERVE_PX if anim_colorbar else 0
+    horizontal_colorbar = anim_colorbar and colorbar_orientation == "Horizontal"
+    right_reserve = (
+        _COLORBAR_RESERVE_PX if (anim_colorbar and not horizontal_colorbar) else 0
+    )
+    bottom_reserve = _CONTROLS_MARGIN_PX + (
+        _COLORBAR_BOTTOM_PX if horizontal_colorbar else 0
+    )
     # Stimulus-page background image (MultiplEYE) — same layout image as
     # make_scanpath_figure: placed at its (centered) origin, UNDER every trace,
     # and persisting across frames (a layout image, not per-frame data). Lets the
     # animated replay show the rendered page exactly like the static plot.
-    bg_images = []
-    if background_image and background_image_size:
-        uri = _image_to_data_uri(background_image)
-        if uri:
-            image_w, image_h = background_image_size
-            origin_x, origin_y = background_image_origin or (0.0, 0.0)
-            bg_images.append(
-                dict(
-                    source=uri,
-                    xref="x",
-                    yref="y",
-                    x=origin_x,
-                    y=origin_y,
-                    sizex=image_w,
-                    sizey=image_h,
-                    sizing="stretch",
-                    layer="below",
-                    xanchor="left",
-                    yanchor="top",
-                    # VIZ-4: dim a busy stimulus image (1.0 = opaque, the default).
-                    opacity=float(background_image_opacity),
-                )
-            )
+    bg_spec = _background_image_spec(
+        background_image,
+        background_image_size,
+        background_image_origin,
+        background_image_opacity,
+    )
+    bg_images = [bg_spec] if bg_spec else []
     layout = dict(
-        height=fitted_h + _CONTROLS_MARGIN_PX + _CONTROLS_SAFETY_PX,
+        height=fitted_h + bottom_reserve + _CONTROLS_SAFETY_PX,
         width=fitted_w + right_reserve,
         autosize=False,
         images=bg_images,
-        margin=dict(l=0, r=right_reserve, t=0, b=_CONTROLS_MARGIN_PX),
+        margin=dict(l=0, r=right_reserve, t=0, b=bottom_reserve),
         xaxis=dict(
             showticklabels=False,
             showgrid=False,
@@ -3264,7 +3569,10 @@ def make_scanpath_animation(
         sliders=sliders,
         updatemenus=updatemenus,
     )
-    if dual or category_legend:
+    # The PRE-2 highlight overlays carry legend entries too, so they get the same
+    # floating key as the A/B and colour-category legends.
+    flag_legend = any(s.get("flag_overlays") for s in specs)
+    if dual or category_legend or flag_legend:
         layout["legend"] = dict(
             orientation="h",
             yanchor="top",
@@ -3354,6 +3662,8 @@ def _add_comparison_fixation_trace(
     colorscale: str = DEFAULT_FIXATION_COLORSCALE,
     color_range: Optional[Tuple[float, float]] = None,
     show_colorbar: bool = False,
+    colorbar_style: Optional[dict] = None,
+    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
     row: Optional[int] = None,
     col: Optional[int] = None,
 ) -> None:
@@ -3370,6 +3680,11 @@ def _add_comparison_fixation_trace(
     scanpaths) and the per-scanpath flat colour becomes the marker **outline**, so
     the readings stay distinguishable while still showing the metric. Order numbers
     are tinted to the per-scanpath colour either way.
+
+    ``fixation_symbol`` (VIZ-15/23) sets the marker shape — shape is the channel
+    that survives a greyscale print, which is exactly what comparison figures get
+    used for. The glyph shapes the static figure draws as text fall back to the
+    default symbol here (:func:`_marker_symbol`).
     """
     if trial_fix.empty:
         return
@@ -3437,15 +3752,21 @@ def _add_comparison_fixation_trace(
         and color_by in trial_fix.columns
         and pd.api.types.is_numeric_dtype(trial_fix[color_by])
     )
+    symbol = _marker_symbol(fixation_symbol)
     if metric_color:
         marker = dict(
             size=sizes,
+            symbol=symbol,
             color=trial_fix[color_by],
             colorscale=colorscale,
             cmin=color_range[0] if color_range else None,
             cmax=color_range[1] if color_range else None,
             showscale=bool(show_colorbar),
-            colorbar=dict(title=color_by.replace("_", " ").title())
+            # VIZ-23: the same styled colorbar the static figure builds, so the
+            # orientation / tick-angle / tick-size controls reach Compare too.
+            colorbar=_colorbar_dict(
+                color_by.replace("_", " ").title(), **(colorbar_style or {})
+            )
             if show_colorbar
             else None,
             line=dict(color=fix_color, width=1.4),
@@ -3453,6 +3774,7 @@ def _add_comparison_fixation_trace(
     else:
         marker = dict(
             size=sizes,
+            symbol=symbol,
             color=fix_color,
             line=dict(color=FIX_MARKER_OUTLINE, width=0.5),
         )
@@ -3488,6 +3810,23 @@ def _add_comparison_fixation_trace(
     )
 
 
+def _comparison_metric_colorbar(
+    fixations: pd.DataFrame, color_by: Optional[str], show_colorbars: bool
+) -> bool:
+    """Whether a comparison figure will actually draw a metric colorbar.
+
+    Same test :func:`_add_comparison_fixation_trace` makes per trace, hoisted so
+    the layout can reserve room for a horizontal bar below the plot (VIZ-23).
+    """
+    return bool(
+        show_colorbars
+        and color_by
+        and color_by != "line"
+        and color_by in fixations.columns
+        and pd.api.types.is_numeric_dtype(fixations[color_by])
+    )
+
+
 def _make_split_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -3512,18 +3851,36 @@ def _make_split_comparison_figure(
     color_by: Optional[str] = None,
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
     fixation_color_range: Optional[Tuple[float, float]] = None,
+    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
     show_colorbars: bool = False,
+    colorbar_orientation: str = "Vertical",
+    colorbar_tickangle: int = 0,
+    colorbar_tickfont_size: int = 12,
     text_color: str = WORD_LABEL_COLOR,
+    highlight_column: Optional[str] = None,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    background_image: Optional[str] = None,
+    background_image_size: Optional[Tuple[float, float]] = None,
+    background_image_origin: Optional[Tuple[float, float]] = None,
+    background_image_opacity: float = 1.0,
     fit_to_monitor: bool = False,
 ) -> go.Figure:
-    """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked)."""
+    """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
+
+    The stimulus-image background (VIZ-4) is added to **both** panels — the two
+    readings are of the same text, so the same page sits under each.
+    """
     from plotly.subplots import make_subplots
 
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    cb_style = dict(
+        orientation=colorbar_orientation,
+        tickangle=colorbar_tickangle,
+        tickfont_size=colorbar_tickfont_size,
+    )
     is_stacked = orientation == "stacked"
     # Per-panel pixel size (approx; subplot spacing/titles shave a little) used to
     # size word labels true-to-scale within each panel.
@@ -3622,6 +3979,18 @@ def _make_split_comparison_figure(
             fit_to_monitor=fit_to_monitor,
         )
 
+        # Stimulus-page background image (VIZ-4/23), one per panel, UNDER every
+        # trace — `row`/`col` bind it to this panel's axes.
+        _add_background_image(
+            fig,
+            background_image,
+            background_image_size,
+            background_image_origin,
+            background_image_opacity,
+            row=row,
+            col=col,
+        )
+
         if show_words and not trial_words.empty:
             for box in build_word_boxes(trial_words, color=spec["color"]):
                 box = dict(box)
@@ -3658,6 +4027,8 @@ def _make_split_comparison_figure(
             colorscale=fixation_colorscale,
             color_range=metric_range,
             show_colorbar=show_colorbars and idx == 0,
+            colorbar_style=cb_style,
+            fixation_symbol=fixation_symbol,
             row=row,
             col=col,
         )
@@ -3680,6 +4051,7 @@ def _make_split_comparison_figure(
                 font_settings["family"],
                 row=row,
                 col=col,
+                highlight_column=highlight_column,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
             )
@@ -3722,13 +4094,23 @@ def _make_split_comparison_figure(
     else:  # side-by-side
         total_width = panel_w * 2
         total_height = panel_h
+    # A horizontal colorbar (VIZ-23) sits under the panels, so it gets its own
+    # reserved band instead of overlapping them. Vertical keeps today's layout.
+    bottom_px = (
+        _COLORBAR_BOTTOM_PX
+        if (
+            colorbar_orientation == "Horizontal"
+            and _comparison_metric_colorbar(fixations, color_by, show_colorbars)
+        )
+        else 0
+    )
     fig.update_layout(
-        height=total_height,
+        height=total_height + bottom_px,
         width=total_width,
         autosize=False,
         # The t=40 band was the (now-removed) title; keep a slim band only for the
         # optional legend.
-        margin=dict(l=0, r=0, t=24 if show_legend else 0, b=0),
+        margin=dict(l=0, r=0, t=24 if show_legend else 0, b=bottom_px),
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
         template="plotly_white",
         plot_bgcolor=background_color,
@@ -3764,14 +4146,31 @@ def make_comparison_figure(
     color_by: Optional[str] = None,
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
     fixation_color_range: Optional[Tuple[float, float]] = None,
+    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
     show_colorbars: bool = False,
+    colorbar_orientation: str = "Vertical",
+    colorbar_tickangle: int = 0,
+    colorbar_tickfont_size: int = 12,
     text_color: str = WORD_LABEL_COLOR,
+    highlight_column: Optional[str] = None,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     background_color: Optional[str] = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    background_image: Optional[str] = None,
+    background_image_size: Optional[Tuple[float, float]] = None,
+    background_image_origin: Optional[Tuple[float, float]] = None,
+    background_image_opacity: float = 1.0,
     fit_to_monitor: bool = False,
 ) -> go.Figure:
+    """Two scanpaths on one canvas — overlaid, side by side, or stacked.
+
+    VIZ-23 brought the shared viz controls the overlay used to drop across, each
+    defaulting to the previous behaviour: ``fixation_symbol`` (shape is the
+    channel a greyscale print keeps), ``highlight_column`` (without it the
+    already-accepted ``highlight_text_color`` could never take effect), the
+    ``background_image*`` stimulus layer, and the ``colorbar_*`` styling.
+    """
     if layout in {"side_by_side", "stacked"}:
         return _make_split_comparison_figure(
             words,
@@ -3796,12 +4195,21 @@ def make_comparison_figure(
             color_by=color_by,
             fixation_colorscale=fixation_colorscale,
             fixation_color_range=fixation_color_range,
+            fixation_symbol=fixation_symbol,
             show_colorbars=show_colorbars,
+            colorbar_orientation=colorbar_orientation,
+            colorbar_tickangle=colorbar_tickangle,
+            colorbar_tickfont_size=colorbar_tickfont_size,
             text_color=text_color,
+            highlight_column=highlight_column,
             highlight_text_color=highlight_text_color,
             background_color=background_color,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
+            background_image=background_image,
+            background_image_size=background_image_size,
+            background_image_origin=background_image_origin,
+            background_image_opacity=background_image_opacity,
             fit_to_monitor=fit_to_monitor,
         )
 
@@ -3831,7 +4239,20 @@ def make_comparison_figure(
 
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
+    cb_style = dict(
+        orientation=colorbar_orientation,
+        tickangle=colorbar_tickangle,
+        tickfont_size=colorbar_tickfont_size,
+    )
     overrides = (style_a, style_b)
+    # Stimulus-page background image (VIZ-4/23), UNDER both scanpaths.
+    _add_background_image(
+        fig,
+        background_image,
+        background_image_size,
+        background_image_origin,
+        background_image_opacity,
+    )
 
     trial_specs = []
     for idx, trial in enumerate([trial_a, trial_b]):
@@ -3893,6 +4314,8 @@ def make_comparison_figure(
             color_range=metric_range,
             # One shared colorbar (on the first scanpath only) for the metric.
             show_colorbar=show_colorbars and _idx == 0,
+            colorbar_style=cb_style,
+            fixation_symbol=fixation_symbol,
         )
         if show_words:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
@@ -3912,6 +4335,7 @@ def make_comparison_figure(
                     scale_text_to_boxes=scale_text_to_boxes,
                 ),
                 font_settings["family"],
+                highlight_column=highlight_column,
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
             )
@@ -3936,12 +4360,22 @@ def make_comparison_figure(
     # The top band is now only needed for the optional A/B legend (the "Overlay
     # comparison" title was removed); reclaim it fully when the legend is hidden.
     top_px = _OVERLAY_TOP_PX if show_legend else 0
+    # A horizontal colorbar (VIZ-23) sits below the plot, so reserve a band for
+    # it; a vertical one keeps today's layout (it hangs off the right edge).
+    bottom_px = (
+        _COLORBAR_BOTTOM_PX
+        if (
+            colorbar_orientation == "Horizontal"
+            and _comparison_metric_colorbar(fixations, color_by, show_colorbars)
+        )
+        else 0
+    )
     fig.update_layout(
-        height=fitted_h + top_px,
+        height=fitted_h + top_px + bottom_px,
         width=fitted_w,
         autosize=False,
         showlegend=show_legend,
-        margin=dict(l=0, r=0, t=top_px, b=0),
+        margin=dict(l=0, r=0, t=top_px, b=bottom_px),
         xaxis=dict(
             showticklabels=False,
             showgrid=False,

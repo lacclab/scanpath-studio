@@ -31,6 +31,7 @@ scanpath-studio render --sample --list-trials              # what's available
 scanpath-studio render --sample -o scanpath.html           # interactive HTML
 scanpath-studio render --words ia.csv --fixations fix.csv -p p1 -t t3 -o figure.png
 scanpath-studio render --sample --animate -o replay.html   # animated replay (HTML)
+scanpath-studio render --sample --drift-correction warp --drift-connectors -o fixed.html
 ```
 
 ### Input
@@ -68,7 +69,9 @@ scanpath-studio render --sample --animate -o replay.html   # animated replay (HT
 | `--no-saccade-type-legend` | With `--saccade-color-by-type`: hide the saccade-type colour key (the coloured lines still draw). |
 | `--saccade-arcs` | Draw saccades as upward arcs (the linear-reading diagram) instead of straight connectors. |
 | `--snap-fixations` | Snap each fixation above the word it lands on instead of its raw gaze point. |
-| `--color-by FIELD` | Fixation color field (default: `duration_ms`). |
+| `--drift-correction ALGORITHM` | Correct vertical drift: snap each fixation to its assigned text line and colour the fixations by line (default: no correction). `ALGORITHM` is one of the ten [Carr et al. (2021)](https://doi.org/10.3758/s13428-021-01554-0) line-assignment algorithms — `attach`, `chain`, `cluster`, `compare`, `merge`, `regress`, `segment`, `split`, `stretch`, `warp`. Static figures only (not honored with `--animate`). |
+| `--drift-connectors` | With `--drift-correction`: draw a faint line from each fixation's original `y` to its corrected one, so the size of the shift stays visible. |
+| `--color-by FIELD` | Fixation color field, e.g. `duration_ms` or `gpt2_surprisal` (default: `(uniform)` — one flat colour, since marker size already shows duration). |
 | `--heatmap-metric {duration_ms,counts}` | Heatmap weighting (default: `duration_ms`). |
 | `--heatmap-norm {linear,log}` | Heatmap colour scaling (default: `linear`); `log` compresses heavy-tailed dwell times. |
 | `--canvas WxH` | Monitor size in px, e.g. `2560x1440` (default: estimated from data; the bundled sample uses `2560x1440`). |

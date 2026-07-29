@@ -35,6 +35,25 @@ from .constants import (
 )
 
 
+def _drift_algorithm(value: str) -> str:
+    """Validate ``--drift-correction`` against :data:`alignment.ALGORITHMS`.
+
+    Used as an argparse ``type=`` callable so the alignment import (which pulls
+    in scipy, ~0.7 s) is paid only when the flag is actually passed — plain
+    ``render`` and ``render --help`` stay instant. An unknown name raises
+    ``ArgumentTypeError``, so argparse exits non-zero listing the valid ones
+    instead of forwarding the string to the API.
+    """
+    from .alignment import ALGORITHMS
+
+    name = str(value).strip().lower()
+    if name not in ALGORITHMS:
+        raise argparse.ArgumentTypeError(
+            f"unknown algorithm {value!r}; choose one of {', '.join(ALGORITHMS)}."
+        )
+    return name
+
+
 def _theme_cli_flags() -> List[str]:
     """The branded theme as ``--theme.*`` CLI flags (BUG-6).
 
@@ -317,6 +336,31 @@ def _render_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Snap each fixation above the word it lands on instead of its raw "
         "gaze point (VIZ-9).",
+    )
+    # PRE-3: vertical drift correction. The algorithm list below is spelled out
+    # for `--help`; `alignment.ALGORITHMS` stays the source of truth (the flag
+    # validates against it via _drift_algorithm, and a test pins the two lists
+    # together).
+    viz.add_argument(
+        "--drift-correction",
+        metavar="ALGORITHM",
+        type=_drift_algorithm,
+        default=None,
+        help="Correct vertical drift before plotting (PRE-3): snap each "
+        "fixation to its assigned text line and colour the fixations by line, "
+        "exactly like the app's Fixations ⚙️ → Drift correction. ALGORITHM is "
+        "one of the ten Carr et al. (2021) line-assignment algorithms: attach, "
+        "chain, cluster, compare, merge, regress, segment, split, stretch, "
+        "warp (default: no correction). Static figures only — not honored with "
+        "--animate.",
+    )
+    viz.add_argument(
+        "--drift-connectors",
+        dest="drift_connectors",
+        action="store_true",
+        help="With --drift-correction: draw a faint line from each fixation's "
+        "original y to its corrected one, so the size of the shift stays "
+        "visible (PRE-3).",
     )
     viz.add_argument(
         "--palette",
@@ -642,6 +686,15 @@ def render(argv: List[str]) -> None:
             "(GIF/MP4 are available via the Python API: "
             "animation_export.export_animation)."
         )
+    # PRE-3: the connectors draw *between* the original and corrected y, so on
+    # their own there is nothing to connect. Warn rather than fail — the render
+    # is still valid, just uncorrected.
+    if args.drift_connectors and not args.drift_correction:
+        print(
+            "Warning: --drift-connectors has no effect without "
+            "--drift-correction ALGORITHM; ignoring it.",
+            file=sys.stderr,
+        )
 
     from . import api
 
@@ -837,6 +890,12 @@ def render(argv: List[str]) -> None:
                 )
                 if key in overrides
             ]
+            # PRE-3 drift correction is a plot_scanpath-only parameter (the
+            # animation builder has no line-snapping path), so name it here too.
+            if args.drift_correction:
+                ignored.append("drift_correction")
+            if args.drift_connectors:
+                ignored.append("drift_connectors")
             if ignored:
                 print(
                     f"Warning: not supported with --animate, ignoring: "
@@ -869,7 +928,17 @@ def render(argv: List[str]) -> None:
             )
         else:
             fig = api.plot_scanpath(
-                words, fixations, participant, trial, **overrides, **common
+                words,
+                fixations,
+                participant,
+                trial,
+                # PRE-3: explicit plot_scanpath parameters, not figure
+                # overrides. Defaults (None / False) reproduce the raw
+                # fixations exactly.
+                drift_correction=args.drift_correction,
+                drift_connectors=args.drift_connectors,
+                **overrides,
+                **common,
             )
         out = api.save_figure(
             fig, args.output, scale=args.scale, width=args.width, height=args.height

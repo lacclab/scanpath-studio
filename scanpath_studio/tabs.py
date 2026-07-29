@@ -534,6 +534,47 @@ def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
     return fix
 
 
+def _drift_corrected(
+    fix: pd.DataFrame, words: pd.DataFrame, algorithm: Optional[str]
+) -> pd.DataFrame:
+    """PRE-3 vertical drift correction for one scanpath, or a true no-op.
+
+    Returns the very same frame **object** whenever no algorithm is selected
+    (``None`` / ``"Off"`` — the default), or when there is nothing to correct
+    (empty fixations or empty words). That identity matters: the caller uses
+    ``result is fix`` to tell "corrected" from "untouched", and it guarantees the
+    default path costs nothing and leaves every figure / cache key byte-identical.
+
+    Otherwise :func:`alignment.correct` snaps each fixation's ``y`` to its
+    assigned text line and a *copy* comes back — ``fix`` is never mutated, so the
+    raw frame stays available for the connector layer and the panels."""
+    if (
+        not algorithm
+        or str(algorithm) == "Off"
+        or fix is None
+        or fix.empty
+        or words is None
+        or words.empty
+    ):
+        return fix
+    corrected, _ = alignment.correct(fix, words, method=str(algorithm).lower())
+    return corrected
+
+
+def _marked_text_column(viz_settings: dict) -> Optional[str]:
+    """The critical-span column for builders whose only marking channel is *text*.
+
+    ``make_scanpath_figure`` takes both ``highlight_column`` and
+    ``critical_span_style`` and decides internally: "Mark text" recolours the word
+    labels, "Mark border" instead draws a box overlay. The animation and
+    comparison builders have no overlay layer, so they take ``highlight_column``
+    alone — and must be handed ``None`` under any other style, or "Mark border"
+    would silently turn into text marking there (VIZ-23)."""
+    if viz_settings.get("critical_span_style", "Mark text") != "Mark text":
+        return None
+    return viz_settings.get("highlight_column", "is_in_aspan")
+
+
 def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) -> dict:
     """Convert viz_settings to figure-compatible settings dict."""
     return dict(
@@ -1651,13 +1692,19 @@ def _build_and_render_animation(
     playback_speed: float,
     line_spacing: float,
     scale_text_to_boxes: bool,
+    drift_corrected: bool = False,
     background_image: Optional[str] = None,
     background_image_size: Optional[Tuple[float, float]] = None,
     background_image_origin: Optional[Tuple[float, float]] = None,
     background_image_opacity: float = 1.0,
 ):
     """Build + render the animation figure (single or dual co-animation) in the
-    main column. Returns ``(fig, playback_ms, save_slug, file_stem)``."""
+    main column. Returns ``(fig, playback_ms, save_slug, file_stem)``.
+
+    ``trial_fixations`` / ``fixations_b`` arrive already drift-corrected (PRE-3 is
+    applied once by the caller for all three render paths); ``drift_corrected``
+    just says so, so the single replay can force colour-by-line the way the static
+    figure does. There is no connector layer here — see the note at the hoist."""
     dual = fixations_b is not None and not fixations_b.empty
     grid_step_ms = viz_settings.get("anim_grid_step_ms")
     max_frames = viz_settings.get("anim_max_frames")
@@ -1680,15 +1727,22 @@ def _build_and_render_animation(
         show_words=viz_settings["show_words"],
         show_word_labels=viz_settings["show_labels"],
         show_saccades=viz_settings["show_saccades"],
+        show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
         show_order=viz_settings["show_order"],
         marker_size_range=viz_settings["marker_size_range"],
         order_font_size=viz_settings["order_font_size"],
         order_font_color=viz_settings["order_font_color"],
         color_by=viz_settings["color_by"],
-        color_by_line=viz_settings.get("color_by_line", False),
+        # Drift correction colours the replay by assigned line, exactly as the
+        # static figure does once an algorithm is picked.
+        color_by_line=bool(viz_settings.get("color_by_line", False) or drift_corrected),
         fixation_colorscale=viz_settings["fixation_colorscale"],
         fixation_color_range=viz_settings["fixation_color_range"],
+        fixation_flags=viz_settings.get("fixation_flags"),
         show_colorbars=viz_settings["show_colorbars"],
+        colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
+        colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
+        colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
         saccade_color=viz_settings.get("saccade_color", SACCADE_COLOR),
         saccade_style=SACCADE_DASH_OPTIONS.get(
             viz_settings.get("saccade_style", "Solid"), "solid"
@@ -1698,6 +1752,17 @@ def _build_and_render_animation(
         fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
         fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
         fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
+        text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
+        # The replay marks the critical span in the word *labels* only — it has no
+        # border-overlay layer — so gate on "Mark text" exactly as
+        # `make_scanpath_figure` does internally for its text channel.
+        highlight_column=_marked_text_column(viz_settings),
+        highlight_text_color=viz_settings.get(
+            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
+        ),
+        word_hover_measure=viz_settings.get(
+            "word_hover_measure", "total_fixation_duration_ms"
+        ),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_legend=viz_settings.get("show_compare_legend", False),
@@ -2338,6 +2403,46 @@ def render_single_trial_tab(
     fig_fixations = _slice_fix_range(trial_fixations, fix_range)
     fig_compare_fix = _slice_fix_range(compare_fix, fix_range)
 
+    # PRE-3 drift correction (VIZ-23) — hoisted ABOVE the render-mode split, so the
+    # two Drift-correction controls apply on ALL THREE paths instead of the static
+    # figure alone. Each scanpath is corrected against its OWN words frame, on the
+    # already-windowed fixations (so the algorithm sees exactly what is drawn, as
+    # the static path always did). What each builder can then do with it:
+    #   • static     — snapped y + colour-by-line + optional original→corrected
+    #                  connectors (it is the only builder with a connector layer);
+    #   • animation  — snapped y + colour-by-line on the single replay. No
+    #                  connectors: the replay reveals one growing trail, and a
+    #                  full-length static "original position" layer standing there
+    #                  from frame zero would misread as part of the scanpath.
+    #   • comparison — snapped y for both scanpaths; that builder has neither a
+    #                  colour-by-line nor a connector layer, so correction is the
+    #                  whole of it.
+    # "Off" (the default) is a genuine no-op — `_drift_corrected` hands back the
+    # same frame object, so no path changes and no figure cache entry is busted.
+    align_algorithm = viz_settings.get("align_algorithm", "Off")
+    plot_fixations = _drift_corrected(fig_fixations, trial_words, align_algorithm)
+    drift_corrected_primary = plot_fixations is not fig_fixations
+    plot_compare_fix = fig_compare_fix
+    if comparing and compare_meta is not None:
+        plot_compare_fix = _drift_corrected(
+            fig_compare_fix, compare_meta["words"], align_algorithm
+        )
+    # `make_comparison_figure` pulls exactly the two selected trials out of the
+    # frame it is handed (its shared colour range included), so a frame holding
+    # just those two corrected scanpaths is equivalent to patching the whole
+    # filtered corpus — and far cheaper. Untouched when correction is off.
+    cmp_fixations = fixations_filtered
+    if comparing and (
+        drift_corrected_primary or plot_compare_fix is not fig_compare_fix
+    ):
+        if (str(compare_participant), str(compare_trial)) == (
+            str(selected_participant),
+            str(selected_trial),
+        ):
+            cmp_fixations = plot_fixations
+        else:
+            cmp_fixations = pd.concat([plot_fixations, plot_compare_fix])
+
     # Condition chips above the plot — configurable via the sidebar picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
     # a second labelled strip shows the compared trial too.
@@ -2440,9 +2545,9 @@ def render_single_trial_tab(
                 displayed_fig, anim_playback_ms, save_slug, anim_file_stem = (
                     _build_and_render_animation(
                         trial_words,
-                        fig_fixations,
+                        plot_fixations,
                         compare_meta["words"] if dual_anim else None,
-                        fig_compare_fix if dual_anim else None,
+                        plot_compare_fix if dual_anim else None,
                         selected_participant,
                         selected_trial,
                         compare_participant,
@@ -2455,6 +2560,7 @@ def render_single_trial_tab(
                         playback_speed=playback_speed,
                         line_spacing=line_spacing,
                         scale_text_to_boxes=scale_text_to_boxes,
+                        drift_corrected=drift_corrected_primary,
                         background_image=figure_settings.get("background_image"),
                         background_image_size=figure_settings.get(
                             "background_image_size"
@@ -2476,7 +2582,7 @@ def render_single_trial_tab(
             displayed_fig = _render_comparison_figure(
                 combos,
                 words_filtered,
-                fixations_filtered,
+                cmp_fixations,
                 selected_participant,
                 selected_trial,
                 selected_text,
@@ -2491,29 +2597,26 @@ def render_single_trial_tab(
                 line_spacing=line_spacing,
                 scale_text_to_boxes=scale_text_to_boxes,
                 fix_index_range=fix_range,
+                background_image=figure_settings.get("background_image"),
+                background_image_size=figure_settings.get("background_image_size"),
+                background_image_origin=figure_settings.get("background_image_origin"),
+                background_image_opacity=figure_settings.get(
+                    "background_image_opacity", 1.0
+                ),
             )
             save_slug = (
                 f"{selected_participant}__{selected_trial}__vs__"
                 f"{compare_participant}__{compare_trial}"
             )
         else:
-            # PRE-3: in-place vertical drift correction. When an algorithm is
-            # picked, snap each fixation to its assigned text line, colour by line,
-            # and (optionally) draw original→corrected connectors. The corrected
+            # PRE-3: the corrected frame (`plot_fixations`) was built above and is
+            # shared with the animation + comparison paths. Only the static figure
+            # can colour by line *and* draw the faint original→corrected
+            # connectors, so those two overrides are derived here. The corrected
             # frame's snapped y already busts the figure cache; the extra kwargs
             # keep the key varying when only the algorithm/connectors change.
-            plot_fixations = fig_fixations
             extra_settings: dict = {}
-            align_algo = viz_settings.get("align_algorithm", "Off")
-            if (
-                align_algo != "Off"
-                and not fig_fixations.empty
-                and not trial_words.empty
-            ):
-                corrected, _ = alignment.correct(
-                    fig_fixations, trial_words, method=align_algo.lower()
-                )
-                plot_fixations = corrected
+            if drift_corrected_primary:
                 extra_settings["color_by_line"] = True
                 if viz_settings.get("align_connectors"):
                     extra_settings["show_connectors"] = True
@@ -2750,11 +2853,21 @@ def _render_comparison_figure(
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
     fix_index_range=None,
+    background_image: Optional[str] = None,
+    background_image_size: Optional[Tuple[float, float]] = None,
+    background_image_origin: Optional[Tuple[float, float]] = None,
+    background_image_opacity: float = 1.0,
 ):
     """Render comparison figure for two trials.
 
     ``fix_index_range`` (VIZ-7) windows both scanpaths to a ``(start, end)``
-    ``order_in_trial`` range; ``None`` shows the full readings."""
+    ``order_in_trial`` range; ``None`` shows the full readings. The
+    ``background_image*`` group is the VIZ-4 stimulus-page layer, resolved by the
+    caller (dataset image vs. upload, plus the manual nudge) and shared with the
+    static + animation paths (VIZ-23).
+
+    ``fixations_filtered`` may already carry PRE-3 drift-corrected ``y`` values —
+    correction happens once, upstream of the render-mode split."""
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     # Window both compared trials to the chosen fixation-index range. Slicing the
     # whole frame is fine — make_comparison_figure only extracts the two trials.
@@ -2808,14 +2921,28 @@ def _render_comparison_figure(
             "fixation_colorscale", DEFAULT_FIXATION_COLORSCALE
         ),
         fixation_color_range=viz_settings.get("fixation_color_range"),
+        # Marker *shape* is a global (the channel a greyscale print keeps); the
+        # per-scanpath cmp{idx}_* styles own colour / size / opacity / hollow and
+        # keep overriding the globals inside the builder.
+        fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
         show_colorbars=viz_settings.get("show_colorbars", False),
+        colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
+        colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
+        colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
         text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
+        # No border-overlay layer here either — text marking only (see
+        # `_marked_text_column`). Without it `highlight_text_color` was inert.
+        highlight_column=_marked_text_column(viz_settings),
         highlight_text_color=viz_settings.get(
             "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
         ),
         background_color=viz_settings.get("background_color"),
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
+        background_image=background_image,
+        background_image_size=background_image_size,
+        background_image_origin=background_image_origin,
+        background_image_opacity=background_image_opacity,
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
     )
     _render_true_scale_chart(fig_compare, key="compare")

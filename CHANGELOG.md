@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Six new documentation pages** — bring your own data (DATA-11), privacy (DATA-12), a code-cited security audit (DATA-13), contributing a dataset (DATA-14), corpus analysis (ENG-13), and a headless-usage guide for coding agents (ENG-18).
 - **Tutorials on the docs site** (UX-14) — four task-shaped walkthroughs (load your own data, compare two readers, produce a figure for a paper, run it headless), placed ahead of the reference pages. Every snippet and CLI command in them was executed against the bundled demo before publication.
 - **FAQ** (UX-15) — a **❓ FAQ** dialog in the sidebar Help group answering the recurring questions, plus the full version at `docs/faq.md`.
+- **The animated replay honours the rest of the rail** (VIZ-23) — word-label colour, text highlighting, hover measure, saccade direction arrows (each revealing with its own saccade) and the short/long/out-of-bounds fixation flags.
+- **Comparison figures honour marker shape, text highlighting and the stimulus image** (VIZ-23) — shape is the channel that survives greyscale print, and these are the figures that reach papers. The image works on the overlay and both split layouts.
+- **Drift correction from the command line** (ENG-22) — `render --drift-correction ALGORITHM [--drift-connectors]`, validated against the ten algorithm names.
 - **Share links can leave the participant out** (DATA-16 / S3) — a **What the link includes** picker: *Participant + trial* (default), *Trial only* (still lands on the exact trial), or *Settings only*.
 - **A wire-format contract for the session keys that carry one** (ENG-6) — `session_keys.py` names the share-link and saved-config keys, and a test pins them against a frozen list so a rename fails CI instead of someone's old link.
 
@@ -34,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **About popover** (UX-16) — BibTeX moved into a collapsed **📖 How to cite** expander.
 - **"Snap fixations above words"** (UX-13) moved out of Drift correction into its own *Linear-reading schematic* block.
 - **Rail controls the active mode ignores now say so** (VIZ-21) — greyed with a stated reason instead of silently doing nothing; **Animate** previously gated nothing at all. Disabling never rewrites the stored value, so deep links and Save & restore survive a mode toggle. The full setting → render-path map lives in `scanpath_studio/CLAUDE.md`.
+- **Drift correction applies while animating and comparing** (VIZ-23) — it was computed on the static figure only, so the two Drift-correction controls were inert in the other two modes. Both scanpaths are corrected in Compare. Connectors stay static-only; no other builder has that layer.
+- **The animation's and comparison figure's colour bars are styled like the static one** (VIZ-23) — orientation, tick angle and tick font now apply; a horizontal bar takes reserved margin instead of overlapping the transport controls.
 - **A `.zip` upload is bounded before decompression** (DATA-16 / S6) — rejected past a per-member, total, or compression-ratio limit, instead of being read with no ceiling.
 
 ### Internal
@@ -42,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink boxes carry the inter-word space as trailing padding, so every boundary sat a half-space right and a fixation *before* a word went to the previous one. One `measures.word_box_bounds` accessor now feeds all nine consumers — assignment, out-of-text, drawn boxes, the word heatmap, critical spans, landing position, snap-to-word, drift correction, model scanpaths. Glyph-tight corpora (PoTeC / MultiplEYE) are untouched.
 - **Regression flags were True for every word** (BUG-7) — EyeLink writes flags as `'0'`/`'1'`/`'.'` strings and the bool cast took every non-empty string as true. On the demo, `regression_in_flag` went from 3,922 True to 815.
+- **Arc saccades no longer clip the top line** (BUG-13) — the reserved headroom used the curve's midpoint rather than its true peak, so a wide, sloped arc could arch out of frame.
 - **Arc saccades: arrowheads sit on the arc** (BUG-9) — with `saccade_render_mode="Arc"` they were placed at the straight chord's midpoint, floating off the drawn arch.
 - **Annotation filters reach the raw-gaze table** (BUG-12) — an unstarred trial's gaze samples survived ⭐ *Favorites only*, which also kept the UX-7 "filters removed everything" panel from ever appearing.
 - **Fixation `word_id` numbered from 1 is detected and shifted** (BUG-8) — against 0-based word boxes (the bundled demo's shape) every fixation pointed at the *next* word, so measures computed from raw fixations attached one word to the right. Masked in normal use only because pre-computed IA measures take precedence.

@@ -73,3 +73,18 @@ you work under `scanpath_studio/`); contributor setup is in
 See *Releasing* in `@AGENTS.md`: bump `__version__` in
 `scanpath_studio/__init__.py` **and** `version` + `date-released` in
 `CITATION.cff` (a test enforces version parity).
+
+## Repo automation (`.claude/`)
+
+- **Skills** — `/release`, `/track`, `/new-feature`, `/preflight`,
+  `/paper-figs` package the workflows above; invoke them instead of
+  re-deriving the steps.
+- **Hook** — every edited `.py` file is auto-run through `ruff format` +
+  `ruff check` (`.claude/hooks/ruff-on-edit.sh`); fix what it reports
+  immediately rather than batching.
+- **Subagents** — `surface-parity-reviewer` (four-surface rule, wire-format
+  keys, true-scale chart path) and `perf-reviewer` (`@st.cache_data` +
+  `frame_fingerprint` conventions) review a diff; run both before setting a
+  tracker item to *Pending approval*.
+- **Guardrails** — edits to `uv.lock`, `site/`, and `*.egg-info` are denied
+  in `.claude/settings.json`; they are generated artifacts.

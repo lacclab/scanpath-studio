@@ -31,7 +31,8 @@ so grep `scanpath_studio`, not just `streamlit`).
 ## Before you open a PR
 
 ```bash
-pytest                            # run the test suite
+pytest -n auto                    # run the test suite (parallel — the AppTest
+                                  # boots dominate runtime; CI runs it this way)
 ruff check --exclude other_vis .  # lint
 ruff format --exclude other_vis . # auto-format
 ```
@@ -47,6 +48,26 @@ Fixed, not a per-tweak log.
 If you add a user-facing feature, expose it on **every** surface — not just
 visually, but also the deep link / Share, the CLI, and the headless API. See
 *Exposing a feature on every surface* in [AGENTS.md](AGENTS.md).
+
+Work items are tracked in [`tracker/data.js`](tracker/data.js) (open
+[`tracker/index.html`](tracker/index.html) in a browser to read it) — if your
+PR corresponds to a tracker item, update its status and write-up; the
+conventions are in the tracker's *How this works* panel and `CLAUDE.md` →
+*Tracking work*.
+
+### Docs site
+
+User-facing docs live in `docs/` (MkDocs Material, published to GitHub Pages
+on push to `main` by `.github/workflows/docs.yml`):
+
+```bash
+pip install -e ".[docs]"
+mkdocs serve                 # local preview
+mkdocs build --strict        # the CI gate — fails on warnings and bad refs
+```
+
+A new page also needs a nav entry in [`mkdocs.yml`](mkdocs.yml). The API
+reference is generated from `api.py` docstrings, so keep those current.
 
 ## Adding a public dataset
 
@@ -85,14 +106,21 @@ The version lives in **one** place — `__version__` in
    (`tests/test_citation.py` enforces version parity, so a mismatch fails CI).
 4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
    `.github/workflows/publish.yml` builds and publishes to PyPI via trusted
-   publishing.
+   publishing, and `.github/workflows/desktop.yml` builds the per-OS
+   standalone desktop bundles and attaches them to the GitHub release for
+   the tag — check both workflows succeeded.
 5. Optionally create a GitHub Release with the changelog notes.
 
-## Regenerating the demo GIF
+## Regenerating the demo assets
+
+Both scripts render through Kaleido, which needs a Chrome/Chromium binary
+(`plotly_get_chrome -y` once, locally):
 
 ```bash
-pip install matplotlib            # asset-generation only, not a runtime dep
-python scripts/make_demo_gif.py   # writes assets/demo_dual_scanpath.gif
+python assets/render_dual_scanpath.py   # README dual-reader still
+                                        # (assets/demo_dual_scanpath.png) +
+                                        # docs GIF (docs/assets/demo_dual_scanpath.gif)
+python scripts/make_hero_gif.py         # README hero GIF (assets/scanpath_animation.gif)
 ```
 
 ## License

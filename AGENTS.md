@@ -29,9 +29,16 @@ scanpath_studio/
 ├─ aggregation.py    pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry + per-reader/cohort word profiles, word-vs-feature, rates, reader distributions/summary/landing, group masks + difference/effect-size; plus the legacy trial-index/fixation-index trends)
 ├─ controls.py       sidebar viz controls + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
+├─ datasets.py       ready-made loaders for public corpora (PoTeC, MultiplEYE, OneStop) feeding the app's data sources + the headless API
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions) + geometry helpers (line clustering, in-text test)
+├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3)
+├─ similarity.py     scanpath similarity metrics (NLD etc.) scoring the Comparisons subtab
+├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (Comparisons placeholder data)
 ├─ plots.py          Plotly figure builders (scanpath, animation, comparison, bar, histogram); background color, by-line fixation colouring, `Linear`/`Log` heatmap colour scaling (`heatmap_norm`, all three heatmap styles), the `fixation_flags` short/long/out-of-bounds highlight-or-discard classification (viz-only — `make_scanpath_figure`), adjustable fixation-marker opacity (`fixation_opacity`; hollow markers still supported via `hollow_fixations`), dashed/dotted + adjustable-width saccades — one uniform colour or, in `saccade_color_mode="By type"`, one legended sub-trace per reading class (forward/skip/refixation/return-sweep/regression, classified at render time via `measures.classify_saccades`); a "linear reading" mode (`saccade_render_mode="Arc"` arches the saccades, `fixation_snap_to_word` snaps fixations above their word); animation `autoplay` (VIZ-10 — stamps `fig.layout.meta` so `tabs._render_true_scale_chart` / `api.save_figure` kick off `Plotly.animate` at the configured speed via `animation_autoplay_post_script`); image-stimulus `background_image_opacity` (VIZ-4); `split_scanpath_layers` (VIZ-5 — one registered figure per layer for separable export, each element tagged by layer); base + highlighted text colors, and per-scanpath comparison styling with an optional A/B legend (the comparison builders honor the fixation/saccade viz controls, not just text/boxes)
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
+├─ animation_export.py rasterize the animated scanpath to GIF/MP4 (warm-Kaleido frame render + Pillow/imageio-ffmpeg encode)
+├─ tour.py           first-visit welcome tutorial (spotlight/dialog styles), replayable from the sidebar
+├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
 ├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source)
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
@@ -41,6 +48,8 @@ scanpath_studio/
 ├─ cli.py            console entry: `run` launches the app, `render` builds figures headless via api.py
 ├─ __main__.py       `python -m scanpath_studio` → cli.main
 ├─ __init__.py       exposes __version__, main(), and lazy re-exports of the api.py surface
+├─ onestop_shard.py  one-shot prep: shard the ~15 GB OneStop lacclab CSVs into per-pid Parquet
+├─ update_sample_data.py regenerate the bundled demo subset (+ synthesized raw-gaze overlay) from the full OneStop CSVs
 └─ sample_data/      bundled demo corpus (CSV + Parquet)
 ```
 
@@ -56,13 +65,15 @@ uploaded/sample table(s) → infer_*_schema → normalize_* → canonical column
 
 After `normalize_words` / `normalize_fixations`:
 
-- **Words**: `participant_id`, `trial_id`, `paragraph_id` (and `unique_*` when
-  present), `word_id`, `text`, `line_idx`, `x`, `y`, `width`, `height`. Plus
-  EyeLink IA columns (`IA_*` renamed to `first_fixation_ms`, etc.) and
-  linguistic features when shipped.
-- **Fixations**: `participant_id`, `trial_id`, `paragraph_id`, `x`, `y`,
-  `duration_ms`, `timestamp_ms`, `word_id`, `pass_index`, `saccade_type`,
-  `saccade_amplitude`, `eye`, `noise_flag`, `order_in_trial`.
+- **Words**: `participant_id`, `trial_id`, `text_id` (canonical name — was
+  `paragraph_id`; `unique_*` variants kept when present), `word_id`, `text`,
+  `line_idx`, `x`, `y`, `width`, `height`. Plus EyeLink IA columns (`IA_*`
+  renamed to `first_fixation_ms`, etc.) and linguistic features when shipped.
+- **Fixations**: `participant_id`, `trial_id`, `text_id`, `x`, `y`,
+  `duration_ms`, `timestamp_ms`, `fixation_id` (synthesized per trial when
+  absent), `word_id`, `pass_index`, `saccade_type`, `saccade_amplitude`,
+  `eye`, `order_in_trial`. (`noise_flag` was removed — it silently dropped
+  fixations.)
 
 ### Reading measures
 
@@ -81,7 +92,8 @@ from the data's word bounding boxes, supplied either as `(x, y, width, height)`
 or as EyeLink's `(IA_LEFT, IA_RIGHT, IA_TOP, IA_BOTTOM)` (which `normalize_words`
 converts to `x/y/width/height`). The only thing derived from geometry is the
 **fixation→word assignment** in `measures.assign_fixations_to_words`: bounding-box
-containment, then nearest word-center within 50 px, else `word_id = NaN`. That
+containment, then nearest word-center within 50 px
+(`measures.LINE_MISREGISTRATION_PX`), else `word_id = NaN`. That
 assignment feeds the reading measures and the "out-of-text" flag
 (`measures.fixation_in_text_mask`); "color by line" derives visual lines from
 word-box `y` clustering (`measures.cluster_word_lines`) because `line_idx` is
@@ -91,7 +103,8 @@ often a constant in IA exports.
 
 `annotations.py` keeps per-trial favorites / tags / notes in session state
 (keyed by `(participant_id, trial_id)`), with a pure serialize/deserialize core
-and JSON download/restore in the sidebar. `controls.sidebar_trial_filters` +
+and JSON download/restore in the sidebar. `controls.render_trial_filters` (read back via
+`controls.read_trial_filters`) +
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition
 (Hunting/Gathering via `question_preview`, difficulty, repeated reading,
 correctness) and by annotation state (favorites / tags) before `build_combo_options`.
@@ -175,16 +188,20 @@ lint+format checks on every pull request.
 ## Adding a new column convention
 
 Update the candidate lists in `data.py` (e.g. `WORD_X_CANDIDATES`,
-`FIX_SACCADE_AMPLITUDE_CANDIDATES`). `pick_column` walks the list and picks the
-first existing column.
+`FIX_DURATION_CANDIDATES`). `pick_column` walks the list and picks the
+first existing column. Optional passthrough columns (e.g. `saccade_amplitude`,
+IA measures) go through the `WORD_OPTIONAL_FIELDS` / `FIX_OPTIONAL_FIELDS`
+tuple tables instead, applied by `_apply_optional_fields` during
+normalization.
 
 ## Adding a new reading measure
 
 1. Compute it in `measures.compute_per_word_measures` per trial.
-2. Add it to `metric_map` in `data.normalize_words` if it can come pre-computed
+2. Add it to `WORD_OPTIONAL_FIELDS` in `data.py` if it can come pre-computed
    from EyeLink IA columns.
-3. Surface it in `controls.preferred_color_fields` (if useful for coloring) and
-   in `tabs._MEASURE_OPTIONS` (so the bar plot picker shows it).
+3. Surface it in `controls.color_field_options` (if useful for coloring) and
+   register it in `aggregation.MEASURES` (surfaced via
+   `aggregation.available_measures`, which feeds the measure pickers).
 4. Add a test under `tests/test_measures.py`.
 
 ## Adding a new figure type

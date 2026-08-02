@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruff:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(uv run:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Edit(uv.lock)",
+      "Write(uv.lock)",
+      "Edit(site/**)",
+      "Write(site/**)",
+      "Edit(scanpath_studio.egg-info/**)",
+      "Write(scanpath_studio.egg-info/**)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ruff-on-edit.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

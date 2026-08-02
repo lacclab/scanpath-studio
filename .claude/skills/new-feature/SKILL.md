@@ -15,10 +15,11 @@ just the UI. Follow the matching recipe, then close out with the checklist.
 
 **New reading measure**
 1. Compute it in `measures.compute_per_word_measures` per trial.
-2. Add it to `metric_map` in `data.normalize_words` if it can come
+2. Add it to `WORD_OPTIONAL_FIELDS` in `data.py` if it can come
    pre-computed from EyeLink IA columns.
-3. Surface it in `controls.preferred_color_fields` (if useful for coloring)
-   and in `tabs._MEASURE_OPTIONS` (bar plot picker).
+3. Surface it in `controls.color_field_options` (if useful for coloring)
+   and register it in `aggregation.MEASURES` (feeds the measure pickers via
+   `aggregation.available_measures`).
 4. Add a test under `tests/test_measures.py`.
 
 **New figure type**
@@ -31,8 +32,9 @@ just the UI. Follow the matching recipe, then close out with the checklist.
 
 **New column convention**
 Update the candidate lists in `data.py` (e.g. `WORD_X_CANDIDATES`,
-`FIX_SACCADE_AMPLITUDE_CANDIDATES`); `pick_column` picks the first existing
-column.
+`FIX_DURATION_CANDIDATES`); `pick_column` picks the first existing column.
+Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
+`FIX_OPTIONAL_FIELDS` tables instead.
 
 **New toggle / option / parameter** — go straight to the surface checklist.
 

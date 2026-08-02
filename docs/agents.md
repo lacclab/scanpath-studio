@@ -65,7 +65,8 @@ are carried through under their canonical / original names when present.
 | `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. |
 | `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. Nothing recomputes it at load time; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it. |
 | `order_in_trial` | 1-based fixation index, added during normalization. |
-| `fixation_id`, `saccade_type`, `saccade_amplitude`, `eye`, `pass_index` | Passed through when the source has them. |
+| `fixation_id` | Always present — mapped from the source when it has one, otherwise synthesized as a per-trial running index (1, 2, 3, …). |
+| `saccade_type`, `saccade_amplitude`, `eye`, `pass_index` | Passed through when the source has them. |
 
 Column matching is case- and separator-insensitive: `IA_LEFT`, `ia_left` and
 `Ia Left` are the same name. See [Data format](data-format.md) for the full
@@ -411,10 +412,18 @@ scanpath-studio render --sample --animate --playback-speed 4 -o replay.html
 Flags carry the API's option names: layers are `--no-words` / `--no-labels` /
 `--no-fixations` / `--no-order` / `--no-saccades` / `--no-heatmap`, plus
 `--color-by`, `--heatmap-metric`, `--heatmap-norm`, `--palette`, `--canvas WxH`,
-`--separable-layers`. Without `-p` / `-t` it renders the first available trial
-instead of raising. The Python API is the larger surface — check
-`scanpath-studio render --help` (or the [CLI reference](cli.md)) before assuming
-a keyword has a flag.
+`--separable-layers`. Drift correction is on the CLI too:
+`--drift-correction ALGORITHM` (any of the ten names) and
+`--drift-connectors`. So are the public corpora — `--potec DIR`,
+`--onestop DIR` (+ `--onestop-regime` / `--onestop-part` /
+`--onestop-variant`), `--source multipleye --export DIR` — plus styling and
+output controls (`--fixation-symbol`, `--saccade-arcs`, `--snap-fixations`,
+`--saccade-color-by-type` / `-by-direction`, the `--stimulus-image*` family,
+`--width` / `--height` / `--scale`, `--anim-grid-step-ms` /
+`--anim-max-frames`, `--no-autoplay`). Without `-p` / `-t` it renders the
+first available trial instead of raising. Most `plot_scanpath` keywords have
+a flag; check `scanpath-studio render --help` (or the
+[CLI reference](cli.md)) before assuming one doesn't.
 
 ## Errors and what they mean
 
@@ -476,10 +485,26 @@ for method in ALGORITHMS:
 
 ## What the API doesn't cover
 
-Three things the app can do have no `api.py` entry point. They are still
+Several things the app can do have no `api.py` entry point. They are still
 reachable through the internal modules — on the same normalized frames, but
 without the API layer's conveniences: no trial resolution, no
 `CANONICAL_FIGURE_DEFAULTS`, and canvas/font settings you must pass yourself.
+Besides the three shown below, two more are worth knowing about:
+
+- **Scanpath similarity** (`scanpath_studio.similarity`) — the Comparisons
+  tab's scoring surface: `compute_similarity_table`,
+  `normalized_levenshtein`, `aoi_sequence`, `nld_by_fixation_index`,
+  `nld_by_time`.
+- **Corpus-level aggregation** (`scanpath_studio.aggregation`) — the
+  `MEASURES` registry and the per-reader/cohort profile, rate, and
+  group-comparison helpers behind the Corpus Analysis view; see
+  [Corpus analysis](corpus-analysis.md).
+
+There is also no entry point that *normalizes* a raw-gaze table
+(`propose_schema(df, "raw_gaze")` gives you the schema, but
+`data.normalize_raw_gaze` is its only consumer); a normalized raw-gaze frame
+can then be passed to `plot_scanpath(raw_gaze=…)`, which filters it to the
+trial and switches the layer on.
 
 **Two-scanpath comparison** (the app's Compare mode). Takes the whole frames and
 two `(participant_id, trial_id)` tuples, not per-trial frames:

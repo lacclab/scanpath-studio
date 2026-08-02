@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
+from streamlit.errors import StreamlitAPIException
 from streamlit_sortables import sort_items
 
 from .alignment import ALGORITHMS as ALIGN_ALGORITHMS
@@ -1183,7 +1184,44 @@ def _clamped_pair(val, lo: float, hi: float) -> Optional[tuple]:
 _COMPARE_SCANPATHS = ((0, "Scanpath 1"), (1, "Scanpath 2"))
 
 
-def _seed_compare_styles() -> None:
+def _pin(key: str, default, *, rewrite: bool) -> None:
+    """Seed ``key``; with ``rewrite`` also RE-ASSERT the stored value (BUG-15).
+
+    The rewrite is load-bearing and must not be "simplified" back to
+    ``setdefault``. Streamlit only pushes a session-state value down to the
+    browser on the run where the key was written *programmatically* — that is
+    what sets ``set_value`` on the widget's proto. A widget that first renders
+    on a **later** run (its layer toggle was off at load, from a deep link or a
+    restored config, and the popover holding it never rendered) arrives with no
+    ``set_value`` and shows its *proto* default instead of the live setting: the
+    segmented controls show nothing pressed at all — their proto default is
+    empty — and a colour picker shows black while the figure draws the linked
+    colour. Re-asserting the same value each run keeps the widget honest
+    whenever it mounts, and is a no-op for everything else, including a click
+    made earlier in the same run (session state already holds the new value).
+
+    ``rewrite=False`` for callers that run **after** the widgets: ``app.main``
+    re-reads the settings once the rail has rendered, and writing a widget key
+    then raises. ``sidebar_controls`` seeds before it renders, so it rewrites —
+    but a few keys in the shared defaults table belong to widgets ``tabs.py``
+    renders *earlier* in the same run (⚙ Compare options / ⚙ Playback). Those
+    refuse the write and don't need it: their widget has already been created
+    this run, so it is already carrying the value. Hence the narrow catch rather
+    than a hand-kept exclusion list that would rot the next time the rail moves.
+
+    Safe only because no viz widget passes ``value=``/``index=`` (see
+    ``_seed_viz_state``); adding one would also start logging Streamlit's
+    "default value but also set via Session State API" warning.
+    """
+    if not rewrite and key in st.session_state:
+        return
+    try:
+        st.session_state[key] = st.session_state.get(key, default)
+    except StreamlitAPIException:
+        pass
+
+
+def _seed_compare_styles(*, rewrite: bool) -> None:
     """Seed the per-scanpath comparison styling keys (so the collected dicts have
     values even when the relevant layer popover isn't open this run).
 
@@ -1193,19 +1231,20 @@ def _seed_compare_styles() -> None:
     first appearance, then writes that black back on the next interaction (the
     "fixations turn black when making changes" bug). Those pickers instead pass an
     explicit ``value=`` (see ``_render_compare_fix_styles`` /
-    ``_render_compare_saccade_styles``)."""
+    ``_render_compare_saccade_styles``). Everything else goes through ``_pin``,
+    which re-asserts the stored value each run — these widgets only ever appear
+    once Compare is toggled on, i.e. always on a later run than the one that
+    seeded them, which is exactly the desync BUG-15 describes."""
     for idx, _ in _COMPARE_SCANPATHS:
-        st.session_state.setdefault(f"cmp{idx}_saccade_style", "Solid")
-        st.session_state.setdefault(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH)
-        st.session_state.setdefault(
-            f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE
-        )
+        _pin(f"cmp{idx}_saccade_style", "Solid", rewrite=rewrite)
+        _pin(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH, rewrite=rewrite)
+        _pin(f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE, rewrite=rewrite)
         # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath hollow
         # checkbox). Default 0.7 matches the single-trial default so overlapping
         # fixations show through. `cmp{idx}_hollow` kept seeded for saved-config /
         # deep-link backward compatibility (no widget renders it anymore).
-        st.session_state.setdefault(f"cmp{idx}_opacity", 0.7)
-        st.session_state.setdefault(f"cmp{idx}_hollow", False)
+        _pin(f"cmp{idx}_opacity", 0.7, rewrite=rewrite)
+        _pin(f"cmp{idx}_hollow", False, rewrite=rewrite)
 
 
 def _render_compare_fix_styles() -> None:
@@ -1356,6 +1395,8 @@ def _seed_viz_state(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
     words: Optional[pd.DataFrame],
+    *,
+    rewrite: bool = False,
 ) -> tuple[List[str], List[str], List[str]]:
     """Seed every viz widget's session_state default (pure — renders nothing).
 
@@ -1365,19 +1406,24 @@ def _seed_viz_state(
     consumers can't drift. The widgets render WITHOUT a ``value=``/``index=``
     argument and rely on these defaults, which keeps their keys programmatically
     settable (deep links / plot-config restore) without Streamlit's "default
-    value but also set via Session State API" warning. ``setdefault`` leaves any
-    URL-preset / restored value in place. Returns ``(color_fields,
+    value but also set via Session State API" warning.
+
+    ``rewrite=True`` (only from ``sidebar_controls``, which seeds *before* it
+    renders) additionally re-asserts each stored value so a widget appearing for
+    the first time on this run still receives it — see ``_pin`` / BUG-15. The
+    reader must leave it False: ``app.main`` calls it again *after* the rail has
+    rendered, where writing a widget key raises. Returns ``(color_fields,
     numeric_fields, highlight_options)`` for the caller to reuse.
     """
     for _key, _default in _VIZ_WIDGET_DEFAULTS.items():
-        st.session_state.setdefault(_key, _default)
-    st.session_state.setdefault("global_marker_size_range", (8, 24))
-    _seed_compare_styles()
+        _pin(_key, _default, rewrite=rewrite)
+    _pin("global_marker_size_range", (8, 24), rewrite=rewrite)
+    _seed_compare_styles(rewrite=rewrite)
 
     color_fields = color_field_options(trial_fixations)
     _drop_stale("global_color_by", color_fields)
     # VIZ-17: one flat colour by default — see `color_field_options`.
-    st.session_state.setdefault("global_color_by", UNIFORM_COLOR_FIELD)
+    _pin("global_color_by", UNIFORM_COLOR_FIELD, rewrite=rewrite)
 
     numeric_fields = numeric_field_options(trial_fixations)
     if numeric_fields:
@@ -1388,9 +1434,9 @@ def _seed_viz_state(
             else numeric_fields[min(1, len(numeric_fields) - 1)]
         )
         _drop_stale("global_x_field", numeric_fields)
-        st.session_state.setdefault("global_x_field", x_default)
+        _pin("global_x_field", x_default, rewrite=rewrite)
         _drop_stale("global_y_field", numeric_fields)
-        st.session_state.setdefault("global_y_field", y_default)
+        _pin("global_y_field", y_default, rewrite=rewrite)
 
     # Highlight-column default + stale-clear run every time (even when the Text
     # styling popover isn't rendered this run) so a restored config on data with
@@ -1398,11 +1444,12 @@ def _seed_viz_state(
     highlight_options = highlight_column_options(words)
     _drop_stale("global_highlight_column", highlight_options)
     if highlight_options:
-        st.session_state.setdefault(
+        _pin(
             "global_highlight_column",
             "is_in_aspan"
             if "is_in_aspan" in highlight_options
             else highlight_options[0],
+            rewrite=rewrite,
         )
     return color_fields, numeric_fields, highlight_options
 
@@ -1649,8 +1696,10 @@ def sidebar_controls(
     count). When omitted, the slider isn't rendered (e.g. the non-rendering
     Corpus reader, which never windows).
     """
+    # rewrite=True: this is the one caller that seeds *before* rendering, so it
+    # can re-push the stored values to the browser (BUG-15 — see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
-        trial_fixations, base_font_size, words
+        trial_fixations, base_font_size, words, rewrite=True
     )
     if not numeric_fields:
         st.error("No numeric fields found in fixations to map axes.")

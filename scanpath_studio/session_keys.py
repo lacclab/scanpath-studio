@@ -63,6 +63,9 @@ GLOBAL_X_FIELD = "global_x_field"
 GLOBAL_Y_FIELD = "global_y_field"
 GLOBAL_SACCADE_STYLE = "global_saccade_style"
 GLOBAL_SACCADE_RENDER_MODE = "global_saccade_render_mode"
+# PRE-3 vertical drift correction (ENG-23 put it on the link + the config).
+GLOBAL_ALIGN_ALGORITHM = "global_align_algorithm"
+GLOBAL_ALIGN_CONNECTORS = "global_align_connectors"
 GLOBAL_FIXATION_SYMBOL = "global_fixation_symbol"
 GLOBAL_FIXATION_COLOR = "global_fixation_color"
 GLOBAL_PALETTE = "global_palette"
@@ -187,6 +190,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_saccade_arrows": GLOBAL_SHOW_SACCADE_ARROWS,
         "saccade_type_legend": GLOBAL_SACCADE_TYPE_LEGEND,
         "snap_fixations": GLOBAL_FIXATION_SNAP_TO_WORD,
+        "align_connectors": GLOBAL_ALIGN_CONNECTORS,
         "anim_autoplay": GLOBAL_ANIM_AUTOPLAY,
         "show_heatmap": GLOBAL_SHOW_HEATMAP,
         "show_raw_gaze": GLOBAL_SHOW_RAW_GAZE,
@@ -209,6 +213,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "y_field": GLOBAL_Y_FIELD,
         "saccade_style": GLOBAL_SACCADE_STYLE,
         "saccade_render_mode": GLOBAL_SACCADE_RENDER_MODE,
+        "align_algorithm": GLOBAL_ALIGN_ALGORITHM,
         "fixation_symbol": GLOBAL_FIXATION_SYMBOL,
         "fixation_color": GLOBAL_FIXATION_COLOR,
         "palette": GLOBAL_PALETTE,
@@ -419,6 +424,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_CLASS_COLOR_RETURN_SWEEP,
         GLOBAL_SACCADE_CLASS_COLOR_REGRESSION,
         GLOBAL_FIXATION_SNAP_TO_WORD,
+        GLOBAL_ALIGN_ALGORITHM,
+        GLOBAL_ALIGN_CONNECTORS,
         GLOBAL_FIXATION_SYMBOL,
         GLOBAL_FIXATION_COLOR,
         GLOBAL_HOLLOW_FIXATIONS,

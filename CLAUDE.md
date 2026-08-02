@@ -53,6 +53,12 @@ you work under `scanpath_studio/`); contributor setup is in
   [`tracker/index.html`](tracker/index.html) in a browser to read it (search,
   status/group filters, cross-referenced IDs, `#ID` deep links). It replaces the
   old `IMPROVEMENTS.md` / `IMPROVEMENTS_ARCHIVE.md` pair.
+- **Write-up shape.** Four bold-led paragraphs in this order — **Request** (what
+  was asked, in the asker's terms) · **What was done** · **What's left** (or
+  "Nothing" — say it either way, and link the follow-up when the remainder was
+  split out) · **Background (technical)** (anchors, design calls, gotchas,
+  related IDs). A Backlog item has only *Request* + *Background*. The tracker's
+  *How this works* panel carries the same convention.
 - **Approval gate.** Finished implementing → `Status: Pending approval`; **never**
   jump straight to `Done`. On the user's sign-off, set `"status": "Done"` **and**
   `"archived": true` (same for an item closed without being implemented — record

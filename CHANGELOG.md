@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-08-02
+
 ### Added
+- **Manuscript scripts ship with the software** (`paper/`) — every figure and number in the Scanpath Studio paper is produced by a script in the repo, so an archived release reproduces them on its own. Output goes to `paper/figures/`, or to `$PAPER_FIGURES_DIR`.
 - **Export path patterns** (EXP-1) — name files and folders in the export zip from the trial's own fields, with a live preview.
 - **Titles and captions on exported figures** (EXP-2) — auto-generated from the trial or hand-written; the figure grows to make room rather than shrinking the plot.
 - **Sort the trial picker** (UX-10) — order the pool by a computed stat or any trial-level column, either direction. Each option shows its value for the active key, and the picker label names the ordering.
@@ -20,11 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI-assistance disclosure** (UX-20) — in About, the README and the docs: what was checked, cross-check before publishing, and how to file a reproducible report.
 - **Animation frame grid is now yours to set** (VIZ-11) — **Frame every (ms)** and **Max frames** in the Animate ⚙ popover, with a readout of the frames they produce and whether the cap coarsened your step. All four surfaces.
 - **Six new documentation pages** — bring your own data (DATA-11), privacy (DATA-12), a code-cited security audit (DATA-13), contributing a dataset (DATA-14), corpus analysis (ENG-13), and a headless-usage guide for coding agents (ENG-18).
-- **Tutorials on the docs site** (UX-14) — four task-shaped walkthroughs (load your own data, compare two readers, produce a figure for a paper, run it headless), placed ahead of the reference pages. Every snippet and CLI command in them was executed against the bundled demo before publication.
+- **Tutorials on the docs site** (UX-14) — six task-shaped walkthroughs (load your own data, compare two readers, produce a figure for a paper, run it headless, correct vertical drift, export a batch), placed ahead of the reference pages. Every snippet and CLI command in them was executed against the bundled demo before publication; the two newest tab their **In the app / Python / CLI** variants.
 - **FAQ** (UX-15) — a **❓ FAQ** dialog in the sidebar Help group answering the recurring questions, plus the full version at `docs/faq.md`.
 - **The animated replay honours the rest of the rail** (VIZ-23) — word-label colour, text highlighting, hover measure, saccade direction arrows (each revealing with its own saccade) and the short/long/out-of-bounds fixation flags.
 - **Comparison figures honour marker shape, text highlighting and the stimulus image** (VIZ-23) — shape is the channel that survives greyscale print, and these are the figures that reach papers. The image works on the overlay and both split layouts.
 - **Drift correction from the command line** (ENG-22) — `render --drift-correction ALGORITHM [--drift-connectors]`, validated against the ten algorithm names.
+- **Drift correction rides share links and saved configs** (ENG-23) — `?align_algorithm=Warp&align_connectors=1` (any casing) and `coloring.drift_correction` in the 💾 Save & restore JSON, so a corrected view can finally be linked to and restored. Completes the four-surface contract for PRE-3.
 - **Share links can leave the participant out** (DATA-16 / S3) — a **What the link includes** picker: *Participant + trial* (default), *Trial only* (still lands on the exact trial), or *Settings only*.
 - **A wire-format contract for the session keys that carry one** (ENG-6) — `session_keys.py` names the share-link and saved-config keys, and a test pins them against a frozen list so a rename fails CI instead of someone's old link.
 
@@ -45,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test coverage** — every `aggregation.py` helper plus a structural smoke test per Corpus Analysis figure (ENG-1), the OneStop per-pid shard fast-path incl. its refusal-to-fall-back (ENG-2), MultiplEYE side-data enrichment (ENG-3), and widget-driven `AppTest` flows for column mapping, trial filters and bulk export (ENG-4).
 
 ### Fixed
+- **Rail controls showed a stale value when their popover first rendered late** (BUG-15) — with the saccade layer off at load (a deep link or a restored config), turning it on showed **no** line style or line shape selected and a black colour picker, while the figure drew the real settings. Streamlit only pushes a stored value to the browser on the run it was written, so a widget appearing later missed it; the settings are now re-asserted each run.
+- **Export crashed on a missing image path** (BUG-14) — `strip_local_paths` raised `AttributeError: 'float' object has no attribute 'replace'` when a path column held a NaN, because pandas 3's `astype(str)` no longer stringifies missing values.
 - **Word-box boundaries now fall mid-space** (BUG-11) — EyeLink boxes carry the inter-word space as trailing padding, so every boundary sat a half-space right and a fixation *before* a word went to the previous one. One `measures.word_box_bounds` accessor now feeds all nine consumers — assignment, out-of-text, drawn boxes, the word heatmap, critical spans, landing position, snap-to-word, drift correction, model scanpaths. Glyph-tight corpora (PoTeC / MultiplEYE) are untouched.
 - **Regression flags were True for every word** (BUG-7) — EyeLink writes flags as `'0'`/`'1'`/`'.'` strings and the bool cast took every non-empty string as true. On the demo, `regression_in_flag` went from 3,922 True to 815.
 - **Arc saccades no longer clip the top line** (BUG-13) — the reserved headroom used the curve's midpoint rather than its true peak, so a wide, sloped arc could arch out of frame.
@@ -56,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The header nav button lines up with the control rail below it.
 - **Security** (DATA-16, from the `docs/security.md` audit) — the desktop bundle binds loopback instead of every network interface (S1); the corpus **Data directory** box, folder picker and ⬇ Download are gated behind `SCANPATH_LOCAL_FS` and confined by `SCANPATH_DATA_ROOT`, so a shared deployment is no longer a path oracle and an arbitrary-directory write (S2); exported tables no longer carry an absolute local path, which leaked the OS username into any fixations CSV attached to a paper (S4). Cache keys now hash the whole frame up to 200k rows and respect row order, so editing a value mid-table and reloading no longer serves the pre-edit results (S5). Stimulus text and column names are HTML-escaped before reaching `unsafe_allow_html`, so a crafted corpus can't inject markup (S7); the debug-log handler is installed once per *process* instead of once per session, which was leaking every session's records into every other session's log view (S10); and an unreachable Data Inspection download helper was deleted rather than left to be wired up later (S11). **Every finding from the audit is now either fixed or accepted with a recorded reason.**
 - **README weight** (ENG-16) — the dual-reader demo is a still, not a second GIF; the animation moved to the docs site. Both are now rendered from the real pipeline against the bundled demo (`assets/render_dual_scanpath.py`) instead of being hand-made, and palette-quantized (still 197 KB, GIF 1.36 MB).
+- The narrow-screen horizontal-scroll fallback for the scanpath figure matched an iframe title Streamlit no longer uses, so a figure that couldn't scale down far enough was clipped instead of scrolling.
 
 ## [0.25.0] - 2026-07-16
 

@@ -495,7 +495,10 @@ def get_app_css() -> str:
         .sps-chip { overflow-wrap: anywhere; }
         /* A figure that somehow can't scale down far enough scrolls rather than
            being squeezed out of true scale (the one guarantee that must hold). */
-        [data-testid="stElementContainer"]:has(iframe[title*="components.html"]) {
+        /* Match both iframe titles: Streamlit titles these "st.iframe" now,
+           "components.html" on the older API (see `_embed_html_iframe`). */
+        [data-testid="stElementContainer"]:has(iframe[title*="components.html"]),
+        [data-testid="stElementContainer"]:has(iframe[title*="st.iframe"]) {
             overflow-x: auto;
         }
     }

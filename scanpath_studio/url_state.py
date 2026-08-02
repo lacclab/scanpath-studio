@@ -41,6 +41,7 @@ from .constants import (
     SYNTHETIC_CHOICE,
 )
 from .controls import (
+    _ALIGN_OPTIONS,
     _FIXCLASS_MODES,
     _OUT_OF_TEXT_MARKERS,
     color_field_options,
@@ -72,6 +73,22 @@ def _parse_int_range(v) -> tuple:
 def _parse_float_range(v) -> tuple:
     a, b = (float(x) for x in str(v).split(",")[:2])
     return (min(a, b), max(a, b))
+
+
+def _parse_align_algorithm(v) -> str:
+    """PRE-3 drift-correction algorithm name → the picker's exact spelling.
+
+    The widget stores ``"Off"`` or a title-cased algorithm (``"Warp"``), and the
+    selectbox raises if session state holds anything else — so an unknown name
+    must be rejected here (the caller turns a ``ValueError`` into the "Ignored
+    bad URL param" warning) rather than wedging the rail. Matching is
+    case-insensitive, as ``cli.render --drift-correction`` is (ENG-22).
+    """
+    name = str(v).strip()
+    for option in _ALIGN_OPTIONS:
+        if option.lower() == name.lower():
+            return option
+    raise ValueError(f"unknown drift-correction algorithm {name!r}")
 
 
 # --- Share-link identity (S3) ----------------------------------------------
@@ -140,6 +157,10 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     # VIZ-8: saccade-type colour key (default on, so always emitted).
     "saccade_type_legend": "global_saccade_type_legend",
     "snap_fixations": "global_fixation_snap_to_word",
+    # PRE-3 / ENG-23: the drift-correction connector layer. Its algorithm rides
+    # in `_SHARE_VALUE_PARAMS` below — both, or a shared corrected view reopens
+    # uncorrected.
+    "align_connectors": "global_align_connectors",
     # VIZ-10: autoplay the animated replay on load (default on, so always emitted).
     "anim_autoplay": "global_anim_autoplay",
     "show_heatmap": "global_show_heatmap",
@@ -159,6 +180,10 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "y_field": "global_y_field",
     "saccade_style": "global_saccade_style",
     "saccade_render_mode": "global_saccade_render_mode",
+    # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
+    # algorithm). Since VIZ-23 it applies on all three render paths, so a link
+    # that dropped it reopened a visibly different figure.
+    "align_algorithm": "global_align_algorithm",
     # VIZ-15 marker shape · VIZ-17 uniform fixation colour · VIZ-18 palette. The
     # palette is a *preset* — the colours it implies ride in the individual params
     # below — so it's expanded first and any explicit colour in the same link
@@ -221,6 +246,10 @@ _URL_PRESETS = {
     **{k: (s, float) for k, s in _SHARE_FLOAT_PARAMS.items()},
     **{k: (s, _parse_int_range) for k, s in _SHARE_INT_RANGE_PARAMS.items()},
     **{k: (s, _parse_float_range) for k, s in _SHARE_FLOAT_RANGE_PARAMS.items()},
+    # Validated choice (must come after the generic `str` sweep above, which
+    # covers the same param): the drift-correction picker rejects any value
+    # outside its options, so the link's spelling is checked here (ENG-23).
+    "align_algorithm": ("global_align_algorithm", _parse_align_algorithm),
 }
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
@@ -775,6 +804,17 @@ def _restore_plot_config(
         )
     if "fixation_snap_to_word" in coloring:
         put("global_fixation_snap_to_word", bool(coloring["fixation_snap_to_word"]))
+    # PRE-3 / ENG-23: vertical drift correction. Validated like the deep link —
+    # an algorithm the build no longer ships must not reach the selectbox.
+    if "drift_correction" in coloring:
+        put_valid(
+            coloring["drift_correction"] in _ALIGN_OPTIONS,
+            "global_align_algorithm",
+            coloring["drift_correction"],
+            "drift correction",
+        )
+    if "drift_connectors" in coloring:
+        put("global_align_connectors", bool(coloring["drift_connectors"]))
     # VIZ-8: colour-by-reading-type mode + per-class palette + optional legend.
     mode = coloring.get("saccade_color_mode")
     if mode is not None:

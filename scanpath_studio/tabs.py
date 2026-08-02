@@ -1338,6 +1338,10 @@ def _build_studio_config(
             "fixation_snap_to_word": bool(
                 viz_settings.get("fixation_snap_to_word", False)
             ),
+            # PRE-3 drift correction (ENG-23): saved as the picker's own
+            # spelling ("Off" or a title-cased algorithm) so it restores 1:1.
+            "drift_correction": str(viz_settings.get("align_algorithm", "Off")),
+            "drift_connectors": bool(viz_settings.get("align_connectors", False)),
             "hollow_fixations": bool(viz_settings.get("hollow_fixations", False)),
             "fixation_opacity": float(viz_settings.get("fixation_opacity", 1.0)),
             # VIZ-17 uniform fixation colour · VIZ-15 marker shape · VIZ-18 palette

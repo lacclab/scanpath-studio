@@ -260,11 +260,15 @@ def test_deep_link_seeds_frozen_state_keys():
         sk.PARAM_ONESTOP_PARTS: ",".join(list(ONESTOP_PART_LABELS)[:2]),
     }
     # Plausible values per encoding — a bad one would be dropped with a warning
-    # (asserted empty below), which would hide a missing key.
+    # (asserted empty below), which would hide a missing key. A param whose
+    # reader validates against a closed domain needs its own real value here.
+    validated = {"align_algorithm": "Warp"}
     for param in sk.SHARE_TOGGLE_PARAMS:
         query[param] = "1"
     for param in sk.SHARE_VALUE_PARAMS:
-        query[param] = "Blues" if "colorscale" in param else "Default"
+        query[param] = validated.get(
+            param, "Blues" if "colorscale" in param else "Default"
+        )
     for param in sk.SHARE_INT_PARAMS:
         query[param] = "50"
     for param in sk.SHARE_FLOAT_PARAMS:
@@ -407,6 +411,8 @@ def _restore_config_app():
             "saccade_type_legend": True,
             "saccade_class_colors": {c: "#445566" for c in SACCADE_CLASS_EDITABLE},
             "fixation_snap_to_word": True,
+            "drift_correction": "Warp",
+            "drift_connectors": True,
             "fixation_symbol": "circle",
             "fixation_color": "#778899",
             "hollow_fixations": True,

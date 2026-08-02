@@ -98,7 +98,15 @@
   .facet h2 {
     font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
     color: var(--ink-faint); margin: 0 0 8px; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
   }
+  .bulk { margin-left: auto; display: flex; gap: 4px; }
+  button.mini {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+    padding: 1px 6px; border-radius: 6px; color: var(--ink-faint);
+    background: none; border: 1px solid var(--line);
+  }
+  button.mini:hover { background: var(--panel-2); color: var(--ink); }
   .chip {
     display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
     border: 0; background: none; padding: 4px 7px; border-radius: 7px; color: var(--ink-dim); font-size: 13.2px;
@@ -199,7 +207,12 @@
       <div class="meta" id="progressText"></div>
     </div>
     <div class="facet">
-      <h2>Status</h2>
+      <h2>Status
+        <span class="bulk">
+          <button class="mini" id="statusAll" title="Select every status">all</button>
+          <button class="mini" id="statusNone" title="Clear the status filter (shows every status)">none</button>
+        </span>
+      </h2>
       <div id="statuses"></div>
     </div>
     <div class="facet">
@@ -235,6 +248,23 @@
     <li><b>Pending approval</b> — implemented, awaiting the user's final sign-off.</li>
     <li><b>Done</b> / <b>Dropped</b> — set <code>"archived": true</code> at the same time.</li>
   </ul>
+
+  <h4>Write-up shape</h4>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Four bold-led paragraphs, in this
+    order, so the ask stays legible next to what shipped (there are no headings —
+    the renderer is deliberately tiny):</p>
+  <ul>
+    <li><b>Request</b> — what was asked for, in the asker's terms.</li>
+    <li><b>What was done</b> — what actually shipped.</li>
+    <li><b>What's left</b> — what remains, or <i>Nothing</i>. Say it either way, and
+      link the follow-up item when the remainder was split out.</li>
+    <li><b>Background (technical)</b> — code anchors, design calls, gotchas, related
+      IDs. The internal half, kept out of the first three.</li>
+  </ul>
+  <p style="font-size:13.4px;color:var(--ink-dim)">A <b>Backlog</b> item has only
+    <i>Request</i> (plus <i>Background</i>) — the other two appear once there is work
+    behind it. An implemented item keeps its status line as the leading
+    <code>&gt;</code> quote.</p>
 
   <h4>Rules</h4>
   <ul>
@@ -453,6 +483,18 @@
   });
 
   document.querySelector("aside").addEventListener("click", e => {
+    const mini = e.target.closest("button.mini");
+    if (mini) {
+      // "all" lights every status present (so you can then untick one or two);
+      // "none" clears the selection, which is the unfiltered state.
+      if (mini.id === "statusAll") {
+        visiblePool().forEach(i => state.status.add(i.status));
+      } else {
+        state.status.clear();
+      }
+      persist(); render();
+      return;
+    }
     const chip = e.target.closest(".chip");
     if (!chip) return;
     if (chip.dataset.status) {

@@ -1832,11 +1832,15 @@ says so. Full flag list in the <a href="../../cli/">CLI reference</a>.</p>
 <td><strong>Yes</strong></td>
 </tr>
 <tr>
+<td><strong>Export → Multiple trials</strong> — the <em>figures</em></td>
+<td><strong>Yes</strong> — each trial is corrected with the same algorithm before its figure is rebuilt (coloured by line, like the on-screen figure), and <code>plot_config.json</code> records which one (<code>coloring.drift_correction</code>)</td>
+</tr>
+<tr>
 <td><code>plot_scanpath(..., drift_correction=…)</code> / <code>render --drift-correction</code></td>
 <td><strong>Yes</strong></td>
 </tr>
 <tr>
-<td>Reading measures (<code>compute_word_metrics</code>), the fixation tables, <strong>Export → Multiple trials</strong></td>
+<td>Reading measures (<code>compute_word_metrics</code>) and the exported <em>tables</em> (fixations, measures, mega-table — bulk export included)</td>
 <td><strong>No</strong> — computed from the recorded coordinates</td>
 </tr>
 </tbody>

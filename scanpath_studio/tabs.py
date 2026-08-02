@@ -59,6 +59,7 @@ from scanpath_studio.constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
+    DEMO_CHOICE,
     HIGHLIGHTED_TEXT_COLOR,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
@@ -125,6 +126,7 @@ from scanpath_studio.similarity import (
     nld_by_time,
 )
 from scanpath_studio.utils import (
+    SAME_TEXT_MARKER,
     build_comparison_options,
     compute_trial_stats,
     extract_trial,
@@ -678,6 +680,146 @@ def _cached_scanpath_figure(
     return make_scanpath_figure(_words, _fixations, **_build_kwargs)
 
 
+# CMP-6: how many same-text candidates the "Most similar / different" orderings
+# score at most (NLD is O(len_A·len_B) per candidate; the cap bounds a
+# high-cardinality corpus). Unscored candidates keep their default order after
+# the scored ones, and a caption says so.
+_CMP_MAX_SCORE = 100
+# The candidate orderings for the compare-trial (B) selector. "Same text first"
+# is the historical default (📄 group, then 👤, then the rest, in data order).
+_CMP_ORDER_OPTIONS = (
+    "Same text first",
+    "Most similar",
+    "Most different",
+    "Most fixations",
+    "Longest reading",
+)
+
+
+@st.cache_data(show_spinner=False)
+def _c_compare_trial_stats(_fixations: pd.DataFrame, fingerprint) -> dict:
+    """Per-(participant, trial) fixation count + total reading time (ms).
+
+    Backs the CMP-6 "Most fixations" / "Longest reading" candidate orderings.
+    Keyed by ``fingerprint`` (the filtered fixations' frame fingerprint), so it
+    recomputes only when the trial pool changes."""
+    if _fixations.empty or not {
+        "participant_id",
+        "trial_id",
+        "duration_ms",
+    } <= set(_fixations.columns):
+        return {}
+    agg = _fixations.groupby(["participant_id", "trial_id"], sort=False)[
+        "duration_ms"
+    ].agg(["size", "sum"])
+    return {
+        (str(p), str(t)): (int(row["size"]), float(row["sum"]))
+        for (p, t), row in agg.iterrows()
+    }
+
+
+@st.cache_data(show_spinner="Scoring candidate similarity…")
+def _c_compare_nld(
+    _fixations: pd.DataFrame,
+    _trial_words: pd.DataFrame,
+    fingerprint,
+    words_fingerprint,
+    participant: str,
+    trial: str,
+    candidates: tuple,
+) -> dict:
+    """NLD of each same-text candidate scanpath against the selected one (CMP-6).
+
+    ``candidates`` is a tuple of ``(participant_id, trial_id)`` pairs, all
+    reading the SAME text as the selected trial, so the selected trial's word
+    boxes serve as the shared AOI frame — exactly how the Comparisons subtab
+    scores its grid (``compute_similarity_table``). Returns
+    ``{(pid, tid): nld}`` with NaN where a sequence is empty. Cache key: the
+    pool + word-box fingerprints + the selection + the candidate set."""
+    from .similarity import normalized_levenshtein, ordered_word_ids
+
+    ref_fix = extract_trial(_fixations, participant, trial)
+    ref_seq = [int(w) for w in ordered_word_ids(ref_fix, _trial_words) if pd.notna(w)]
+    scores: dict = {}
+    for pid, tid in candidates:
+        cand_fix = extract_trial(_fixations, pid, tid)
+        cand_seq = [
+            int(w) for w in ordered_word_ids(cand_fix, _trial_words) if pd.notna(w)
+        ]
+        if not ref_seq and not cand_seq:
+            scores[(pid, tid)] = float("nan")
+        else:
+            scores[(pid, tid)] = normalized_levenshtein(ref_seq, cand_seq)
+    return scores
+
+
+def _order_compare_options(
+    options: list,
+    order: str,
+    fixations_filtered: pd.DataFrame,
+    trial_words: pd.DataFrame,
+    selected_participant: str,
+    selected_trial: str,
+) -> tuple[list, Optional[str]]:
+    """Reorder the compare-B candidate list per the CMP-6 ordering choice.
+
+    Returns ``(options, note)`` where ``note`` is an optional caption explaining
+    what the ordering did (e.g. that only same-text candidates carry a
+    similarity score, or that scoring was capped). "Same text first" (the
+    default) returns the list untouched."""
+    if order == "Same text first" or len(options) < 2:
+        return options, None
+    fingerprint = frame_fingerprint(fixations_filtered)
+    if order in ("Most similar", "Most different"):
+        # NLD is only meaningful between readings of the same text, so score the
+        # 📄 group and leave everyone else after it in default order.
+        same_text = [o for o in options if SAME_TEXT_MARKER in o[3]]
+        rest = [o for o in options if SAME_TEXT_MARKER not in o[3]]
+        if not same_text:
+            return options, "No same-text candidates to score — default order."
+        scored = same_text[:_CMP_MAX_SCORE]
+        overflow = same_text[_CMP_MAX_SCORE:]
+        scores = _c_compare_nld(
+            fixations_filtered,
+            trial_words,
+            fingerprint,
+            frame_fingerprint(trial_words),
+            str(selected_participant),
+            str(selected_trial),
+            tuple((str(o[0]), str(o[1])) for o in scored),
+        )
+
+        def _score(opt) -> float:
+            v = scores.get((str(opt[0]), str(opt[1])))
+            return float("nan") if v is None else v
+
+        reverse = order == "Most different"
+        # NaN-scored candidates go last within the scored group either way.
+        scored = sorted(
+            scored,
+            key=lambda o: (
+                pd.isna(_score(o)),
+                -_score(o) if (reverse and pd.notna(_score(o))) else _score(o),
+            ),
+        )
+        note = f"Same-text trials ordered by NLD ({order.lower()} to A first)"
+        if overflow:
+            note += f"; scored the first {_CMP_MAX_SCORE} of {len(same_text)}"
+        if rest:
+            note += "; other-text trials follow unscored"
+        return scored + overflow + rest, note + "."
+    if order in ("Most fixations", "Longest reading"):
+        stats = _c_compare_trial_stats(fixations_filtered, fingerprint)
+        idx = 0 if order == "Most fixations" else 1
+
+        def _stat(opt) -> float:
+            v = stats.get((str(opt[0]), str(opt[1])))
+            return float(v[idx]) if v else -1.0
+
+        return sorted(options, key=_stat, reverse=True), None
+    return options, None
+
+
 def _render_compare_selector(
     combos: pd.DataFrame,
     selection_mode: str,
@@ -685,20 +827,65 @@ def _render_compare_selector(
     selected_trial: str,
     selected_text: Optional[str],
     animate: bool = False,
+    fixations_filtered: Optional[pd.DataFrame] = None,
+    trial_words: Optional[pd.DataFrame] = None,
 ) -> tuple[Optional[str], Optional[str]]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
     Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ 📄/👤
     markers) and a scrubbing ``select_slider`` showing ``"index/TOTAL · <trial
-    id>"``, plus ◀ ▶ step buttons. The overlay layout + A/B-legend config now live
-    in the rail's **⚙️ Compare** popover (under the Compare toggle). Returns
-    ``(participant, trial)``."""
+    id>"``, plus ◀ ▶ step buttons, plus a CMP-6 **Order by** picker that can
+    rank the candidates by similarity to the selected trial (NLD), fixation
+    count, or total reading time instead of data order. The overlay layout +
+    A/B-legend config now live in the rail's **⚙️ Compare** popover (under the
+    Compare toggle). Returns ``(participant, trial)``."""
     options = build_comparison_options(
         combos, selection_mode, selected_participant, selected_trial, selected_text
     )
     if not options:
         st.info("No other trials available for comparison.")
         return None, None
+
+    # CMP-6: the candidate ordering shares the picker row (leftmost column) and
+    # renders before the selectbox/slider, so a change applies to the list they
+    # show on the same run. UI-only — it orders a picker, never travels in a
+    # deep link or saved config (same call as `share_identity_mode`, DATA-16/S3).
+    n = len(options)
+    orderable = n > 2 and fixations_filtered is not None and trial_words is not None
+    order_note = None
+    order_col = None
+    if n > 1:
+        if orderable:
+            order_col, sel_col, slider_col, prev_col, next_col = st.columns(
+                [1.9, 2.8, 3.9, 0.55, 0.55], vertical_alignment="bottom"
+            )
+        else:
+            sel_col, slider_col, prev_col, next_col = st.columns(
+                [3, 5, 0.55, 0.55], vertical_alignment="bottom"
+            )
+    else:
+        sel_col = st
+
+    if orderable and order_col is not None:
+        order = order_col.selectbox(
+            "Order candidates by",
+            options=list(_CMP_ORDER_OPTIONS),
+            key="single_compare_order",
+            label_visibility="collapsed",
+            help="Order the candidate trials (B): **Same text first** — the "
+            "default data order; **Most similar / Most different** — by NLD on "
+            "the fixated-word sequence against the selected trial A (same-text "
+            "trials only, others follow unscored); **Most fixations** / "
+            "**Longest reading** — by size of the reading.",
+        )
+        options, order_note = _order_compare_options(
+            options,
+            order,
+            fixations_filtered,
+            trial_words,
+            selected_participant,
+            selected_trial,
+        )
 
     labels = [opt[2] for opt in options]
     label_to_trial = {opt[2]: (opt[0], opt[1]) for opt in options}
@@ -710,7 +897,6 @@ def _render_compare_selector(
     if current not in labels:
         current = labels[0]
         st.session_state[sel_key] = current
-    n = len(labels)
 
     if n > 1:
         idx_of = {lbl: i for i, lbl in enumerate(labels)}
@@ -727,12 +913,7 @@ def _render_compare_selector(
                 pos = 0
             st.session_state[sel_key] = labels[max(0, min(pos + delta, n - 1))]
 
-        sel_col, slider_col, prev_col, next_col = st.columns(
-            [3, 5, 0.55, 0.55], vertical_alignment="bottom"
-        )
         current_idx = labels.index(current)
-    else:
-        sel_col = st
 
     selected_compare_label = sel_col.selectbox(
         "Compare with trial (B)",
@@ -774,6 +955,8 @@ def _render_compare_selector(
             width="stretch",
         )
 
+    if order_note:
+        st.caption(order_note)
     if selected_compare_label:
         return label_to_trial[selected_compare_label]
     return None, None
@@ -1859,6 +2042,12 @@ def _render_export_panel(
     bulk_settings = _build_figure_settings(viz_settings, False)
     bulk_settings["line_spacing"] = line_spacing
     bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
+    # EXP-4 / VIZ-24: the bulk export rebuilds every figure from scratch, so the
+    # PRE-3 drift correction must ride along or the batch silently differs from
+    # the corrected figure on screen. Applied per trial inside `bulk_export`
+    # (figures only — the exported tables stay uncorrected by design).
+    bulk_settings["align_algorithm"] = viz_settings.get("align_algorithm", "Off")
+    bulk_settings["align_connectors"] = bool(viz_settings.get("align_connectors"))
     _render_bulk_export(
         combos,
         words_filtered,
@@ -2331,6 +2520,10 @@ def render_single_trial_tab(
                 selected_trial,
                 selected_text,
                 animate=animate,
+                # CMP-6: lets the selector order candidates by similarity to the
+                # selected trial (NLD), fixation count, or reading time.
+                fixations_filtered=fixations_filtered,
+                trial_words=trial_words,
             )
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
@@ -4563,6 +4756,35 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
     return sorted(cols, key=_rank)
 
 
+def _n_readings(fix: pd.DataFrame) -> int:
+    """How many distinct (participant, trial) readings a generation group holds.
+
+    CMP-5: a high-level grouping column (a condition, a regime) can lump several
+    readings into one "generation"; the panels say so instead of drawing the
+    concatenation as if it were one scanpath."""
+    if {"participant_id", "trial_id"} <= set(fix.columns):
+        return int(len(fix[["participant_id", "trial_id"]].drop_duplicates()))
+    return 1
+
+
+def _panel_identity(fix: pd.DataFrame, gen_col: str, k: int) -> str:
+    """CMP-5 panel suffix naming the trial(s) behind a generation panel.
+
+    ``k`` is the group's reading count (from ``_n_readings``, computed once per
+    rerun by the tab). A single-reading group is labelled with its
+    ``participant · trial`` identity (unless the grouping column IS one of
+    those, where the group label already says it); a multi-reading group is
+    flagged with its reading count."""
+    if k > 1:
+        return f" · ⚠️ {k} readings"
+    if gen_col in ("participant_id", "trial_id"):
+        return ""
+    if {"participant_id", "trial_id"} <= set(fix.columns) and not fix.empty:
+        row = fix.iloc[0]
+        return f" · {row['participant_id']} · {row['trial_id']}"
+    return ""
+
+
 def _collect_generations(
     fixations_pool: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -4725,9 +4947,12 @@ def render_multiple_comparison_tab(
             prefix="Selected scanpath:",
         )
         if scored_capped:
+            # CMP-5: say exactly what was dropped and how the kept ones were
+            # chosen — the cap keeps the first _GEN_MAX_SCORE in label order.
             st.caption(
-                f"{n_total} scanpaths of this text; scoring the first "
-                f"{len(generations)} (capped)."
+                f"{n_total} scanpaths of this text — more than the scoring "
+                f"budget. Scoring the first {len(generations)} by "
+                f"**{gen_col}** label order; the rest are not shown."
             )
 
     # Reuse the user's viz toggles but force a clean, comparable spatial view: the
@@ -4768,7 +4993,12 @@ def render_multiple_comparison_tab(
     sliced_gens = generations
 
     with col_main:
-        st.markdown("#### Selected scanpath")
+        # CMP-5: name the reference prominently — it comes from the main trial
+        # picker on a different part of the page, so the tab must say which
+        # reading everything below is scored against.
+        st.markdown(
+            f"#### Selected scanpath — `{selected_participant}` · `{selected_trial}`"
+        )
         real_fig = _make_fig(sliced_real, real_settings)
         _render_true_scale_chart(real_fig, key="multi_real")
 
@@ -4793,10 +5023,28 @@ def render_multiple_comparison_tab(
         grid_capped = len(sliced_gens) > _GEN_MAX_PANELS
 
         st.markdown("#### Other scanpaths")
+        # CMP-5: state the grouping and the ranking rule in the tab itself —
+        # one panel per value of the chosen column, ranked by similarity.
+        rank_note = (
+            f"One panel per **{gen_col}** value over the same text, ranked by "
+            "NLD similarity to the selected scanpath above (most similar first)."
+        )
         if grid_capped:
+            rank_note += (
+                f" Showing the **{_GEN_MAX_PANELS} most similar** of "
+                f"{len(sliced_gens)} scored."
+            )
+        st.caption(rank_note)
+        # CMP-5: a value that groups several readings draws them concatenated in
+        # one panel — flag it rather than letting it pass as one scanpath. The
+        # counts are computed once per rerun and reused by the panel captions.
+        reading_counts = {name: _n_readings(g) for name, g in sliced_gens.items()}
+        if any(k > 1 for k in reading_counts.values()):
             st.caption(
-                f"Showing the **{_GEN_MAX_PANELS} most similar** of "
-                f"{len(sliced_gens)} scored scanpaths (by NLD)."
+                "⚠️ A value grouping **several readings** (marked on its panel) "
+                "shows them concatenated and scores them as one sequence — pick "
+                "a finer comparison column (e.g. `participant_id`) to see them "
+                "separately."
             )
         # Estimate a uniform cell height from the figure aspect + column count so
         # panels line up and don't leave a tall whitespace band below each.
@@ -4814,10 +5062,17 @@ def render_multiple_comparison_tab(
                 with cell:
                     fix = sliced_gens[name]
                     nld = nld_by_gen.get(name)
+                    # CMP-5: every panel names its group value AND the trial it
+                    # is (or its reading count when the value lumps several).
+                    identity = _panel_identity(
+                        fix, gen_col, reading_counts.get(name, 1)
+                    )
                     if nld is not None and pd.notna(nld):
-                        st.caption(f"**{name}** · NLD {nld:.2f} · {len(fix)} fix")
+                        st.caption(
+                            f"**{name}** · NLD {nld:.2f} · {len(fix)} fix{identity}"
+                        )
                     else:
-                        st.caption(f"**{name}** · {len(fix)} fix")
+                        st.caption(f"**{name}** · {len(fix)} fix{identity}")
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
@@ -4975,6 +5230,13 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
     if raw_gaze_filtered.empty:
         st.info("No raw gaze data available after filtering.")
         return
+    # DATA-15: the bundled demo's raw gaze is synthesized from the fixation
+    # report — a table that looks like recorded samples must say it isn't.
+    if st.session_state.get("data_source_choice") == DEMO_CHOICE:
+        st.caption(
+            "⚠️ The demo's raw gaze is **synthesized** from its fixations for "
+            "illustration — it is not recorded eye-tracker output."
+        )
     _render_paginated_dataframe(
         raw_gaze_filtered, 1000, "raw_gaze_page", show_info=False
     )

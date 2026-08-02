@@ -21,6 +21,7 @@ from .constants import (
     DEFAULT_MARKER_SIZE_RANGE,
     CUSTOM_PALETTE,
     DEFAULT_PALETTE,
+    DEMO_CHOICE,
     DEFAULT_SACCADE_WIDTH,
     FIXATION_SYMBOLS,
     HIGHLIGHTED_TEXT_COLOR,
@@ -2473,6 +2474,18 @@ def sidebar_controls(
         disabled=not has_raw_gaze or raw_disabled,
         key="global_show_raw_gaze",
     )
+    # DATA-15: the bundled demo's raw gaze is SYNTHESIZED from the fixation
+    # report (OneStop ships no sample-level gaze) — it looks like eye-tracker
+    # output and isn't, so say so wherever it can be switched on.
+    if (
+        has_raw_gaze
+        and st.session_state.get("data_source_choice") == DEMO_CHOICE
+        and st.session_state.get("global_show_raw_gaze")
+    ):
+        viz.caption(
+            "⚠️ The demo's raw gaze is **synthesized** from its fixations for "
+            "illustration — it is not recorded eye-tracker output."
+        )
 
     # --- Axes & color bars (global plot settings, rarely changed) ---------
     axes = viz.expander("Axes & color bars", expanded=False)

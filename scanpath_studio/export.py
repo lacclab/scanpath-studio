@@ -483,6 +483,41 @@ def _figure_renderer(enabled: bool):
                 pass
 
 
+def _drift_corrected_for_figure(
+    fix: pd.DataFrame, words: pd.DataFrame, settings: dict
+) -> tuple[pd.DataFrame, Optional[tuple]]:
+    """PRE-3 drift correction for one exported figure (EXP-4 / VIZ-24).
+
+    Returns ``(figure_fixations, connector_y)``. When no algorithm is selected
+    (``align_algorithm`` absent / ``"Off"`` — the default) or there is nothing to
+    correct, hands back the very same frame object and ``None`` — a true no-op,
+    mirroring ``tabs._drift_corrected``. Otherwise the returned frame has each
+    fixation's ``y`` snapped to its assigned text line, and ``connector_y``
+    carries the *original* y values when ``align_connectors`` is on (the faint
+    original→corrected connector layer).
+
+    Deliberate asymmetry: this feeds the **figure only** — the exported tables
+    (fixations, measures, mega-table) stay uncorrected, because the correction
+    is a view on the data, not a rewrite of it."""
+    algorithm = settings.get("align_algorithm")
+    if (
+        not algorithm
+        or str(algorithm) == "Off"
+        or fix is None
+        or fix.empty
+        or words is None
+        or words.empty
+    ):
+        return fix, None
+    from .alignment import correct  # local: pulls in scipy only when used
+
+    corrected, _ = correct(fix, words, method=str(algorithm).lower())
+    connector_y = None
+    if settings.get("align_connectors") and "y" in fix.columns:
+        connector_y = tuple(pd.to_numeric(fix["y"], errors="coerce"))
+    return corrected, connector_y
+
+
 def _plot_config_dict(
     participant: str,
     trial: str,
@@ -491,6 +526,8 @@ def _plot_config_dict(
     x_field: str,
     y_field: str,
     settings: dict,
+    *,
+    drift_applied: bool = False,
 ) -> dict:
     return {
         "selection": {"participant_id": participant, "trial_id": trial},
@@ -518,6 +555,16 @@ def _plot_config_dict(
             "fixation_color": settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
             "fixation_symbol": settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
             "saccade_color_mode": settings.get("saccade_color_mode", "Uniform"),
+            # EXP-4 / VIZ-24: which PRE-3 drift correction produced the exported
+            # figure ("Off" = none). The exported tables stay uncorrected — the
+            # manifest is where that split is recorded. Same keys as the 💾 Save
+            # & restore config (ENG-23). `color_by_line` records the EFFECTIVE
+            # value: a corrected figure is force-coloured by line, like the
+            # on-screen static path.
+            "drift_correction": str(settings.get("align_algorithm", "Off") or "Off"),
+            "drift_connectors": bool(settings.get("align_connectors", False)),
+            "color_by_line": bool(settings.get("color_by_line", False))
+            or drift_applied,
         },
         "sizing": {
             "marker_size_range": list(settings.get("marker_size_range", [])),
@@ -1025,9 +1072,23 @@ def bulk_export(
             if options.needs_figure():
                 fig = None
                 try:
+                    # EXP-4 / VIZ-24: apply the PRE-3 drift correction to the
+                    # figure's fixations (a no-op when "Off"), so the batch
+                    # matches the corrected figure on screen. `trial_fix` itself
+                    # stays uncorrected — the tables below export the recording.
+                    fig_fix, connector_y = _drift_corrected_for_figure(
+                        trial_fix, trial_words, settings
+                    )
                     fig = make_scanpath_figure(
                         trial_words,
-                        trial_fix,
+                        fig_fix,
+                        show_connectors=connector_y is not None,
+                        connector_y=connector_y,
+                        # A corrected figure colours by line, exactly as the
+                        # on-screen static path forces it (tabs.py PRE-3
+                        # overrides) — else the batch differs in colouring.
+                        color_by_line=bool(settings.get("color_by_line", False))
+                        or fig_fix is not trial_fix,
                         canvas_width=int(canvas_width),
                         canvas_height=int(canvas_height),
                         base_font_size=int(base_font_size),
@@ -1060,7 +1121,6 @@ def bulk_export(
                             "heatmap_colorscale", "Oranges"
                         ),
                         background_color=settings.get("background_color"),
-                        color_by_line=settings.get("color_by_line", False),
                         fixation_flags=settings.get("fixation_flags"),
                         saccade_color=settings.get("saccade_color", SACCADE_COLOR),
                         saccade_style=settings.get("saccade_style", "solid"),
@@ -1149,6 +1209,15 @@ def bulk_export(
                         progress.errors.append(f"{slug}: layer export failed ({exc})")
 
             if options.include_plot_config:
+                # Same guard as _drift_corrected_for_figure: correction runs
+                # when an algorithm is set and the trial has both frames.
+                algorithm = settings.get("align_algorithm")
+                drift_applied = (
+                    bool(algorithm)
+                    and str(algorithm) != "Off"
+                    and not trial_fix.empty
+                    and not trial_words.empty
+                )
                 cfg = _plot_config_dict(
                     participant,
                     trial,
@@ -1157,6 +1226,7 @@ def bulk_export(
                     x_field,
                     y_field,
                     settings,
+                    drift_applied=drift_applied,
                 )
                 # EXP-2: the title/caption are part of how the figure looked, so
                 # the manifest records them verbatim alongside the settings.

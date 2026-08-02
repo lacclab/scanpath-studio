@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Claude Code skills** (`.claude/skills/`) — `/release`, `/track`, `/new-feature`, `/preflight`, and `/paper-figs` package the release checklist, tracker conventions, every-surface scaffold, pre-commit gate, and manuscript-figure pipeline as repo-shipped skills.
+- **Claude Code hooks, guardrails and review subagents** (`.claude/`) — every edited `.py` file is auto-run through ruff (PostToolUse hook); edits to `uv.lock` / `site/` / `*.egg-info` are denied; `surface-parity-reviewer` + `perf-reviewer` subagents check a diff against the four-surface rule and the caching conventions; shared permission allowlist for ruff/pytest/uv.
+- **Agent-docs refresh** — AGENTS.md (9 missing modules added to the tree, 5 stale symbol references fixed, canonical columns updated to `text_id`), `scanpath_studio/CLAUDE.md` (bullets for `aggregation`/`similarity`/`model_scanpaths`/`debug_log`, pre-redesign leftovers fixed), `docs/agents.md` (CLI drift-correction + corpus flags, `raw_gaze=`, similarity/aggregation pointers), `tests/README.md` rewritten for the 53-file suite, CONTRIBUTING (docs-site build, tracker pointer, real demo-asset scripts, desktop workflow on release).
+- **Order the compare-trial candidates** (CMP-6) — an **Order by** picker on the compare-B selector: same-text-first (default), most similar / most different to the selected trial (NLD), most fixations, or longest reading.
+
+### Changed
+- **The Comparisons subtab says what it's showing** (CMP-5) — the reference scanpath is named in the heading, every panel names its trial (or flags how many readings its group lumps together), and the grouping, ranking and truncation rules are stated in the tab.
+- **The demo's raw gaze is labelled as synthetic** (DATA-15) — under the Raw-gaze toggle, atop the Data Inspection raw-gaze table, and in the getting-started docs: it is synthesized from the fixation report, not recorded eye-tracker output.
+
+### Fixed
+- **Bulk-exported figures now honour drift correction** (EXP-4 / VIZ-24) — **Export → Multiple trials** silently exported uncorrected figures even when the on-screen plot was drift-corrected. Each trial is now corrected with the active algorithm (connectors included), `plot_config.json` records it, and the exported tables deliberately stay uncorrected.
 
 ## [0.26.0] - 2026-08-02
 

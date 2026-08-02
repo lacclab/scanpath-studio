@@ -59,6 +59,12 @@ A 3-participant [OneStop](https://github.com/lacclab/OneStop-Eye-Movements) demo
 is preloaded, so the app works with zero setup. Switch to **➕ Add data** to
 upload your own tables — see [Data format](data-format.md).
 
+!!! note "The demo's raw gaze is synthetic"
+    OneStop ships no sample-level gaze, so the demo's **raw gaze** overlay is
+    *synthesized* from its fixation report for illustration — it looks like
+    eye-tracker output but is not a recording. The demo's words, fixations, and
+    reading measures are real.
+
 ## Your first figure (Python)
 
 ```python

@@ -177,8 +177,9 @@ This is the part worth being precise about:
 | --- | --- |
 | The on-screen figure (static, animation, comparison) | **Yes** |
 | **Export → This trial** (it saves the figure on screen) | **Yes** |
+| **Export → Multiple trials** — the *figures* | **Yes** — each trial is corrected with the same algorithm before its figure is rebuilt (coloured by line, like the on-screen figure), and `plot_config.json` records which one (`coloring.drift_correction`) |
 | `plot_scanpath(..., drift_correction=…)` / `render --drift-correction` | **Yes** |
-| Reading measures (`compute_word_metrics`), the fixation tables, **Export → Multiple trials** | **No** — computed from the recorded coordinates |
+| Reading measures (`compute_word_metrics`) and the exported *tables* (fixations, measures, mega-table — bulk export included) | **No** — computed from the recorded coordinates |
 
 So a corrected figure and an exported measures table can disagree, by design:
 the correction is a *view* on the data, not a preprocessing step that rewrites

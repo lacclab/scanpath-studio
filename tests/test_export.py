@@ -255,6 +255,134 @@ class TestBulkExport:
         assert seen == [1, 2]
 
 
+class TestBulkDriftCorrection:
+    """EXP-4 / VIZ-24: bulk-exported figures honour the PRE-3 drift correction;
+    the exported tables deliberately stay uncorrected."""
+
+    @pytest.fixture
+    def two_line_words(self):
+        # Two text lines (centers y=70 and y=170) so the correction has
+        # somewhere to snap to — a single-line trial is a no-op by design.
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4,
+                "trial_id": ["t1"] * 4,
+                "text_id": ["para1"] * 4,
+                "word_id": [1, 2, 3, 4],
+                "text": ["the", "cat", "sat", "down"],
+                "line_idx": [1, 1, 2, 2],
+                "x": [100, 200, 100, 200],
+                "y": [50, 50, 150, 150],
+                "width": [80, 80, 80, 80],
+                "height": [40, 40, 40, 40],
+            }
+        )
+
+    @pytest.fixture
+    def drifted_fixations(self):
+        # y values sit off the line centers (70 / 170), so a successful
+        # correction must change them.
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4,
+                "trial_id": ["t1"] * 4,
+                "text_id": ["para1"] * 4,
+                "x": [140, 240, 140, 240],
+                "y": [78.0, 85.0, 158.0, 179.0],
+                "duration_ms": [200, 250, 220, 230],
+                "timestamp_ms": [0, 200, 450, 700],
+                "order_in_trial": [1, 2, 3, 4],
+            }
+        )
+
+    def test_off_is_identity(self, two_line_words, drifted_fixations):
+        from scanpath_studio.export import _drift_corrected_for_figure
+
+        for settings in ({}, {"align_algorithm": "Off"}, {"align_algorithm": None}):
+            fix, connector_y = _drift_corrected_for_figure(
+                drifted_fixations, two_line_words, settings
+            )
+            assert fix is drifted_fixations  # same object — a true no-op
+            assert connector_y is None
+
+    def test_correction_snaps_y_and_reports_connectors(
+        self, two_line_words, drifted_fixations
+    ):
+        from scanpath_studio.export import _drift_corrected_for_figure
+
+        fix, connector_y = _drift_corrected_for_figure(
+            drifted_fixations,
+            two_line_words,
+            {"align_algorithm": "Chain", "align_connectors": True},
+        )
+        assert fix is not drifted_fixations
+        # Every corrected y sits on a line center; the originals did not.
+        assert set(fix["y"]) <= {70.0, 170.0}
+        assert list(drifted_fixations["y"]) == [78.0, 85.0, 158.0, 179.0]
+        # Connectors carry the ORIGINAL y per fixation.
+        assert connector_y == tuple(drifted_fixations["y"])
+
+    def test_bulk_export_corrects_figure_but_not_tables(
+        self,
+        minimal_combos,
+        two_line_words,
+        drifted_fixations,
+        base_settings,
+        monkeypatch,
+    ):
+        import scanpath_studio.export as export_mod
+
+        # Spy on the figure builder to see exactly what fixations it is handed.
+        captured: dict = {}
+        real_builder = export_mod.make_scanpath_figure
+
+        def spy(words, fix, **kwargs):
+            captured["y"] = list(fix["y"])
+            captured["color_by_line"] = kwargs.get("color_by_line")
+            return real_builder(words, fix, **kwargs)
+
+        monkeypatch.setattr(export_mod, "make_scanpath_figure", spy)
+
+        combos = minimal_combos[minimal_combos["trial_id"] == "t1"]
+        settings = dict(base_settings, align_algorithm="Chain", align_connectors=False)
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_html=True,
+            include_plot_config=True,
+            include_fixations=True,
+            table_format="csv",
+        )
+        zip_bytes, progress = bulk_export(
+            combos,
+            two_line_words,
+            drifted_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=settings,
+            options=opts,
+        )
+        assert progress.errors == []
+        # The figure was built from snapped fixations, coloured by line — the
+        # same override the on-screen static path forces when correcting…
+        assert set(captured["y"]) <= {70.0, 170.0}
+        assert captured["color_by_line"] is True
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            # The manifest records which correction produced the batch, and the
+            # effective (forced) line colouring.
+            cfg = json.loads(zf.read("per_trial/p1__t1/plot_config.json"))
+            assert cfg["coloring"]["drift_correction"] == "Chain"
+            assert cfg["coloring"]["drift_connectors"] is False
+            assert cfg["coloring"]["color_by_line"] is True
+            # …while the exported fixations table keeps the recorded y values.
+            table = pd.read_csv(io.BytesIO(zf.read("per_trial/p1__t1/fixations.csv")))
+            assert list(table["y"]) == [78.0, 85.0, 158.0, 179.0]
+
+
 class TestSeparableLayers:
     """VIZ-5: the per-layer figure breakdown dropped under `layers/`."""
 

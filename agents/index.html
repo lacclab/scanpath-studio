@@ -2147,7 +2147,11 @@ are carried through under their canonical / original names when present.</p>
 <td>1-based fixation index, added during normalization.</td>
 </tr>
 <tr>
-<td><code>fixation_id</code>, <code>saccade_type</code>, <code>saccade_amplitude</code>, <code>eye</code>, <code>pass_index</code></td>
+<td><code>fixation_id</code></td>
+<td>Always present — mapped from the source when it has one, otherwise synthesized as a per-trial running index (1, 2, 3, …).</td>
+</tr>
+<tr>
+<td><code>saccade_type</code>, <code>saccade_amplitude</code>, <code>eye</code>, <code>pass_index</code></td>
 <td>Passed through when the source has them.</td>
 </tr>
 </tbody>
@@ -2726,10 +2730,18 @@ fixations and word boxes.</p>
 <p>Flags carry the API's option names: layers are <code>--no-words</code> / <code>--no-labels</code> /
 <code>--no-fixations</code> / <code>--no-order</code> / <code>--no-saccades</code> / <code>--no-heatmap</code>, plus
 <code>--color-by</code>, <code>--heatmap-metric</code>, <code>--heatmap-norm</code>, <code>--palette</code>, <code>--canvas WxH</code>,
-<code>--separable-layers</code>. Without <code>-p</code> / <code>-t</code> it renders the first available trial
-instead of raising. The Python API is the larger surface — check
-<code>scanpath-studio render --help</code> (or the <a href="../cli/">CLI reference</a>) before assuming
-a keyword has a flag.</p>
+<code>--separable-layers</code>. Drift correction is on the CLI too:
+<code>--drift-correction ALGORITHM</code> (any of the ten names) and
+<code>--drift-connectors</code>. So are the public corpora — <code>--potec DIR</code>,
+<code>--onestop DIR</code> (+ <code>--onestop-regime</code> / <code>--onestop-part</code> /
+<code>--onestop-variant</code>), <code>--source multipleye --export DIR</code> — plus styling and
+output controls (<code>--fixation-symbol</code>, <code>--saccade-arcs</code>, <code>--snap-fixations</code>,
+<code>--saccade-color-by-type</code> / <code>-by-direction</code>, the <code>--stimulus-image*</code> family,
+<code>--width</code> / <code>--height</code> / <code>--scale</code>, <code>--anim-grid-step-ms</code> /
+<code>--anim-max-frames</code>, <code>--no-autoplay</code>). Without <code>-p</code> / <code>-t</code> it renders the
+first available trial instead of raising. Most <code>plot_scanpath</code> keywords have
+a flag; check <code>scanpath-studio render --help</code> (or the
+<a href="../cli/">CLI reference</a>) before assuming one doesn't.</p>
 <h2 id="errors-and-what-they-mean">Errors and what they mean<a class="headerlink" href="#errors-and-what-they-mean" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2829,10 +2841,26 @@ looping by hand.</p>
 <a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>    <span class="n">sps</span><span class="o">.</span><span class="n">save_figure</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;aligned_</span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">.html&quot;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="what-the-api-doesnt-cover">What the API doesn't cover<a class="headerlink" href="#what-the-api-doesnt-cover" title="Permanent link">&para;</a></h2>
-<p>Three things the app can do have no <code>api.py</code> entry point. They are still
+<p>Several things the app can do have no <code>api.py</code> entry point. They are still
 reachable through the internal modules — on the same normalized frames, but
 without the API layer's conveniences: no trial resolution, no
-<code>CANONICAL_FIGURE_DEFAULTS</code>, and canvas/font settings you must pass yourself.</p>
+<code>CANONICAL_FIGURE_DEFAULTS</code>, and canvas/font settings you must pass yourself.
+Besides the three shown below, two more are worth knowing about:</p>
+<ul>
+<li><strong>Scanpath similarity</strong> (<code>scanpath_studio.similarity</code>) — the Comparisons
+  tab's scoring surface: <code>compute_similarity_table</code>,
+  <code>normalized_levenshtein</code>, <code>aoi_sequence</code>, <code>nld_by_fixation_index</code>,
+  <code>nld_by_time</code>.</li>
+<li><strong>Corpus-level aggregation</strong> (<code>scanpath_studio.aggregation</code>) — the
+  <code>MEASURES</code> registry and the per-reader/cohort profile, rate, and
+  group-comparison helpers behind the Corpus Analysis view; see
+  <a href="../corpus-analysis/">Corpus analysis</a>.</li>
+</ul>
+<p>There is also no entry point that <em>normalizes</em> a raw-gaze table
+(<code>propose_schema(df, "raw_gaze")</code> gives you the schema, but
+<code>data.normalize_raw_gaze</code> is its only consumer); a normalized raw-gaze frame
+can then be passed to <code>plot_scanpath(raw_gaze=…)</code>, which filters it to the
+trial and switches the layer on.</p>
 <p><strong>Two-scanpath comparison</strong> (the app's Compare mode). Takes the whole frames and
 two <code>(participant_id, trial_id)</code> tuples, not per-trial frames:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="kn">import</span> <span class="n">plots</span>

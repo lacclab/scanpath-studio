@@ -2,94 +2,102 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/agents/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/api/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/architecture/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/bring-your-own-data/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/cli/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/contributing-a-dataset/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/corpus-analysis/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/data-format/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/desktop/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/export-troubleshooting/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/faq/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/getting-started/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/multipleye/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/onestop/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/privacy/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/rendering/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/security/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/batch-export/</loc>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/compare-two-readers/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/figure-for-a-paper/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
+    </url>
+    <url>
+         <loc>https://lacclab.github.io/scanpath-studio/tutorials/line-assignment/</loc>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/load-your-own-data/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
     <url>
          <loc>https://lacclab.github.io/scanpath-studio/tutorials/run-it-headless/</loc>
-         <lastmod>2026-07-29</lastmod>
+         <lastmod>2026-08-02</lastmod>
     </url>
 </urlset>

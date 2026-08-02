@@ -16,7 +16,7 @@
         <link rel="prev" href="../figure-for-a-paper/">
       
       
-        <link rel="next" href="../../getting-started/">
+        <link rel="next" href="../line-assignment/">
       
       
         
@@ -449,6 +449,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -748,6 +752,62 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../line-assignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    5 · Correct vertical drift
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../batch-export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    6 · Export a batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1652,8 +1712,13 @@
 <p><strong>Goal:</strong> get the app's output — figures, replays, reading measures — out of a
 script instead of a browser, so a corpus can be re-rendered with one command
 and a paper's figures are reproducible from source.</p>
-<p><strong>You need:</strong> the bundled demo works for everything here. PNG/SVG/PDF and
-GIF/MP4 need Chrome (<code>plotly_get_chrome -y</code>); HTML, CSV and Parquet don't.</p>
+<p><strong>You need:</strong> the bundled demo works for everything here.</p>
+<div class="admonition tip">
+<p class="admonition-title">Static image export needs a browser</p>
+<p>HTML, CSV and Parquet output is browser-free. <strong>PNG / SVG / PDF</strong> and
+<strong>GIF / MP4</strong> go through <a href="https://github.com/plotly/Kaleido">Kaleido</a>,
+which drives a headless Chrome — run <code>plotly_get_chrome -y</code> once.</p>
+</div>
 <hr />
 <h2 id="1-the-whole-pipeline-in-ten-lines">1. The whole pipeline in ten lines<a class="headerlink" href="#1-the-whole-pipeline-in-ten-lines" title="Permanent link">&para;</a></h2>
 <p>Everything the app draws is reachable through the package's public functions,
@@ -1860,6 +1925,8 @@ the <a href="../../cli/">CLI reference</a>.</p>
 <hr />
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
+<li>Figures <em>and</em> tables for many trials in one zip →
+  <strong><a href="../batch-export/">Export a batch</a></strong></li>
 <li>Every function signature → <strong><a href="../../api/">Python API</a></strong></li>
 <li>Every <code>render</code> flag → <strong><a href="../../cli/">CLI reference</a></strong></li>
 <li>Working <em>with</em> a coding agent on this repo → <strong><a href="../../agents/">For coding agents</a></strong></li>
@@ -1919,13 +1986,13 @@ the <a href="../../cli/">CLI reference</a>.</p>
         
         
           
-          <a href="../../getting-started/" class="md-footer__link md-footer__link--next" aria-label="Next: Getting started">
+          <a href="../line-assignment/" class="md-footer__link md-footer__link--next" aria-label="Next: 5 · Correct vertical drift">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Getting started
+                5 · Correct vertical drift
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -1,8 +1,7 @@
 # Tutorials
 
-The rest of the docs describe *what each control does*. These four walk a real
-task from start to finish — every control name, CLI flag and Python call below
-was run against the shipping app, so you can copy-paste your way through.
+Six walkthroughs, each following one task from start to finish. Unless a
+tutorial says otherwise, it runs on the bundled demo.
 
 <div class="grid cards" markdown>
 
@@ -42,6 +41,24 @@ was run against the shipping app, so you can copy-paste your way through.
 
     *~15 minutes · Python or shell*
 
+- :material-format-align-middle:{ .lg .middle } **[Correct vertical drift](line-assignment.md)**
+
+    ---
+
+    Assign fixations to text lines: compare the ten algorithms on your own
+    trial, apply one, and know what it does and doesn't change.
+
+    *~10 minutes · works on the bundled demo*
+
+- :material-folder-zip:{ .lg .middle } **[Export a batch](batch-export.md)**
+
+    ---
+
+    Figures and tables for many trials in one zip — scoping, file naming, and
+    the same run as a script.
+
+    *~10 minutes · needs Chrome for PNG/SVG/PDF*
+
 </div>
 
 ## Before you start
@@ -57,20 +74,3 @@ If that works you're set — a 3-participant [OneStop](../onestop.md) demo is
 preloaded, and each tutorial says up front whether it runs on the demo or needs
 your own export. Full install options (conda, source checkout, the desktop
 build) are in [Getting started](../getting-started.md).
-
-!!! tip "Static image export needs a browser"
-    Interactive **HTML** export is browser-free. **PNG / SVG / PDF** (and GIF /
-    MP4) go through [Kaleido](https://github.com/plotly/Kaleido), which drives a
-    headless Chrome — run `plotly_get_chrome -y` once. Tutorials 3 and 4 need
-    it; 1 and 2 don't.
-
-## Where to go afterwards
-
-| You want | Read |
-| --- | --- |
-| Every column name the loader recognises | [Data format](../data-format.md) |
-| A mapping that went wrong | [Bring your own data](../bring-your-own-data.md) |
-| Corpus-level questions (per text / per reader / groups) | [Corpus analysis](../corpus-analysis.md) |
-| The full function signatures | [Python API](../api.md) |
-| Every `render` flag | [CLI reference](../cli.md) |
-| Short answers to recurring questions | [FAQ](../faq.md) |

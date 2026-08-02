@@ -153,8 +153,14 @@ def test_welcome_tour_text_is_concise():
 
 
 def _faq_app():
-    from scanpath_studio.tour import render_faq_button
+    """Mirrors app.main's ordering: serve the dialog early, render the button late.
 
+    The button only arms the dialog (``on_click``) so the modal doesn't wait on
+    the heavy data/plot work it renders after — see ``tour.maybe_show_faq``.
+    """
+    from scanpath_studio.tour import maybe_show_faq, render_faq_button
+
+    maybe_show_faq()
     render_faq_button()
 
 
@@ -172,6 +178,27 @@ class TestFaq:
         at.sidebar.button(key="faq_open").click().run()
         assert not at.error
         assert len(at.expander) == len(_FAQ_ITEMS)
+
+    def test_button_only_arms_the_dialog(self):
+        """The click must set a flag, not open the dialog from its return value.
+
+        The button renders at the bottom of ``app.main``; opening the dialog
+        there made it wait out the whole rerun (~10 s of plot embeds). Rendering
+        the button *alone* must therefore produce no dialog — the early
+        ``maybe_show_faq`` call is what serves it.
+        """
+
+        def _button_only():
+            from scanpath_studio.tour import render_faq_button
+
+            render_faq_button()
+
+        at = AppTest.from_function(_button_only)
+        at.run()
+        at.sidebar.button(key="faq_open").click().run()
+        assert not at.error
+        assert not at.expander, "the button opened the dialog itself"
+        assert at.session_state["_faq_dialog_requested"] is True
 
     def test_docs_links_point_at_the_published_pages(self):
         """The FAQ is the app's help-context route into the docs — if these

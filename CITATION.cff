@@ -10,31 +10,31 @@ type: software
 authors:
   - given-names: Omer
     family-names: Shubi
-    affiliation: "LACC Lab, Technion – Israel Institute of Technology"
+    affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
   - given-names: Keren
     family-names: "Gruteke Klein"
-    affiliation: "LACC Lab, Technion – Israel Institute of Technology"
+    affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
   - given-names: Ella
     family-names: Lion
-    affiliation: "LACC Lab, Technion – Israel Institute of Technology"
-  - given-names: Deborah
+    affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
+  - given-names: "Deborah N."
     family-names: Jakobi
-    affiliation: "DiLi Lab, University of Zurich"
-  - given-names: David
+    affiliation: "Department of Computational Linguistics, University of Zurich"
+  - given-names: "David R."
     family-names: Reich
-    affiliation: "DiLi Lab, University of Zurich; University of Potsdam"
+    affiliation: "Department of Computational Linguistics, University of Zurich"
   - given-names: Lena
     family-names: Jäger
-    affiliation: "DiLi Lab, University of Zurich"
+    affiliation: "Department of Computational Linguistics, University of Zurich"
   - given-names: Yevgeni
     family-names: Berzak
-    affiliation: "LACC Lab, Technion – Israel Institute of Technology"
+    affiliation: "Data and Decision Sciences, Technion – Israel Institute of Technology"
 # NOTE: a paper is in preparation.
 repository-code: "https://github.com/lacclab/scanpath-studio"
 url: "https://scanpath-studio.streamlit.app"
 license: MIT
-version: 0.25.0
-date-released: "2026-07-16"
+version: 0.26.0
+date-released: "2026-08-02"
 keywords:
   - eye-tracking
   - scanpath

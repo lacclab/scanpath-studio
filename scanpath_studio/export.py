@@ -409,10 +409,15 @@ def strip_local_paths(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for column in present:
         values = out[column]
+        # `na_action="ignore"` is load-bearing: pandas evaluates the `other`
+        # argument of `.where` eagerly, over every row including the missing
+        # ones, and since pandas 3 `astype(str)` leaves NaN as a float instead
+        # of stringifying it to "nan" — so the lambda would see a float.
         out[column] = values.where(
             values.isna(),
             values.astype(str).map(
-                lambda text: PurePosixPath(text.replace("\\", "/")).name
+                lambda text: PurePosixPath(text.replace("\\", "/")).name,
+                na_action="ignore",
             ),
         )
     return out

@@ -133,6 +133,7 @@ from scanpath_studio.tabs import (
     render_single_trial_tab,
 )
 from scanpath_studio.tour import (
+    maybe_show_faq,
     maybe_show_welcome_tour,
     render_faq_button,
     render_spotlight_tour,
@@ -426,7 +427,7 @@ def _render_about_sidebar() -> None:
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
         "author = {Shubi, Omer and Gruteke Klein, Keren and Lion, Ella and "
-        'Jakobi, Deborah and Reich, David and J{\\"a}ger, Lena and '
+        'Jakobi, Deborah N. and Reich, David R. and J{\\"a}ger, Lena and '
         "Berzak, Yevgeni},\n"
         "license = {MIT},\n"
         "month = jun,\n"
@@ -445,14 +446,14 @@ movements in reading.
 Developed by [Omer Shubi](https://omershubi.github.io/)¹,
 [Keren Gruteke Klein](https://kerengruteke.github.io/)¹,
 [Ella Lion](https://ella-lion.github.io/)¹,
-[Deborah Jakobi]({_DILI}/lab-members/jakobi.html)²,
-[David Reich]({_DILI}/lab-members/reich.html)²ʼ³,
+[Deborah N. Jakobi]({_DILI}/lab-members/jakobi.html)²,
+[David R. Reich]({_DILI}/lab-members/reich.html)²,
 [Lena Jäger]({_DILI}/group-leader/jaeger.html)², and
 [Yevgeni Berzak](https://dds.technion.ac.il/people/academic-staff/yevgeni-berzak/)¹.
 
-¹ [LaCC Lab]({CITATION["lab_url"]}), Technion ·
-² [DiLi Lab](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html),
-University of Zurich · ³ University of Potsdam
+¹ [Data and Decision Sciences]({CITATION["lab_url"]}), Technion ·
+² [Department of Computational Linguistics](https://www.cl.uzh.ch/en/research-groups/digital-linguistics.html),
+University of Zurich
 
 📚 [Documentation]({CITATION["docs_url"]}) ↗ ·
 💻 [Code]({CITATION["url"]}) ↗ (MIT)
@@ -2175,6 +2176,10 @@ def main() -> None:
     # on_click callback, which runs before this point in the rerun.
     maybe_show_welcome_tour()
     render_spotlight_tour()
+    # UX-15: same deal for the FAQ dialog — the sidebar button that arms it
+    # renders at the bottom of this function, so serving it here is what keeps
+    # the modal from waiting out the whole rerun.
+    maybe_show_faq()
 
     # Active top-level view (set by the header Corpus⇄Scanpath button). Read here
     # so the dispatch below renders only the active page.
@@ -2625,7 +2630,8 @@ def main() -> None:
     _sidebar_group("❓ Help")
     render_tour_replay_button()
     # UX-15: a handful of recurring questions answered in-app, linking out to the
-    # full FAQ / tutorials on the docs site for anything longer.
+    # full FAQ / tutorials on the docs site for anything longer. Like the tour
+    # button it only arms the dialog; maybe_show_faq (above) opens it.
     render_faq_button()
     # UX-17: the docs site is the full reference — link it directly here, not
     # only from inside the About popover.

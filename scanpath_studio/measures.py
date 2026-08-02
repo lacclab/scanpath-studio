@@ -94,12 +94,17 @@ def _assign_word_ids_single(
 
 # --- BUG-11 · word-box boundaries that sit mid-space ------------------------
 # An interest-area boundary should fall in the MIDDLE of the whitespace between
-# two words. In EyeLink-style exports it doesn't: each box carries the whole
-# inter-word space as trailing padding, so the boxes tile the line but every
-# boundary sits a half-space too far right — and a fixation landing in the space
-# *before* a word is credited to the previous word. On the bundled demo every
-# box is exactly ``(n_chars + 1) × advance`` px wide and starts at the word's
-# first glyph.
+# two words. In some corpora it doesn't. Interest areas are defined by the
+# *experiment*, not by the tracker — EyeLink Data Viewer just measures against
+# whatever rectangles the IAS file gives it — and a stimulus generator that
+# tiles a monospaced line hands every box the whole following inter-word space
+# as trailing padding. The boxes then tile with no gaps, but every boundary sits
+# a half-space too far right, and a fixation landing in the space *before* a
+# word is credited to the previous word. On the bundled demo every box is
+# exactly ``(n_chars + 1) × advance`` px wide and starts at the word's first
+# glyph (checked against the corpus's own stimulus images: per line the ink
+# starts within 3 px of the first box's left edge and stops ~1 advance short of
+# the last box's right edge).
 #
 # The correction has to be conditional: glyph-tight AOIs (PoTeC, MultiplEYE)
 # leave real gaps between boxes and are already centred by construction, so

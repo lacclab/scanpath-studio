@@ -343,8 +343,8 @@ APP_THEME_DARK = {
 
 CITATION = {
     "authors": (
-        "Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jakobi, "
-        "David Reich, Lena Jäger, Yevgeni Berzak"
+        "Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah N. Jakobi, "
+        "David R. Reich, Lena Jäger, Yevgeni Berzak"
     ),
     "title": "Scanpath Studio",
     "url": "https://github.com/lacclab/scanpath-studio",

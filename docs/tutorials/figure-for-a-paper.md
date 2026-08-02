@@ -4,10 +4,14 @@
 legible at column width, greyscale-safe, and (if you want) split into layers
 you can restyle in Illustrator or Inkscape.
 
-**You need:** the bundled demo is enough. PNG / SVG / PDF go through
-[Kaleido](https://github.com/plotly/Kaleido), which drives a headless Chrome —
-run `plotly_get_chrome -y` once if you haven't. Interactive **HTML** needs no
-browser.
+**You need:** the bundled demo is enough, plus a browser for the static formats.
+
+!!! tip "Static image export needs a browser"
+    Interactive **HTML** export is browser-free. **PNG / SVG / PDF** — and the
+    GIF / MP4 in §6 — go through
+    [Kaleido](https://github.com/plotly/Kaleido), which drives a headless
+    Chrome: run `plotly_get_chrome -y` once. Everything else on this page works
+    without it.
 
 ---
 
@@ -226,5 +230,7 @@ the Python API. Details in
 ## Next
 
 - Do this for every trial → **[Run it headless from a script](run-it-headless.md)**
+- Figures *and* tables for many trials in one zip →
+  **[Export a batch](batch-export.md)**
 - Chrome / ffmpeg problems → **[Export & troubleshooting](../export-troubleshooting.md)**
 - Why the text is that size → **[True-to-scale rendering](../rendering.md)**

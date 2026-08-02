@@ -46,9 +46,11 @@ Mechanics worth knowing before editing:
 - **The FAQ (UX-15)** is the other half of the sidebar's Help group: a short
   ``st.dialog`` of recurring questions (``render_faq_button``), deliberately
   kept to a handful of answers with the complete version on the docs site
-  (``docs/faq.md``). Unlike the tour it opens straight from the button's return
-  value — a dialog can't be opened from an ``on_click`` callback, and a single
-  call site keeps ``app.main``'s wiring to one line.
+  (``docs/faq.md``). It is armed exactly like the tour — the button's
+  ``on_click`` sets a request flag that ``maybe_show_faq`` serves early in
+  ``main()`` — because the button renders at the *bottom* of ``main()``:
+  opening the dialog from its return value made the modal wait out the whole
+  rerun (~10 s of plot embeds) before appearing.
 """
 
 from __future__ import annotations
@@ -868,23 +870,45 @@ def _faq_dialog() -> None:
         _close_dialog_clientside()
 
 
+def _arm_faq() -> None:
+    """``on_click`` callback for the FAQ button: request the dialog.
+
+    Dialogs can't be opened from a callback, so this only sets a flag that
+    :func:`maybe_show_faq` — called early in ``main()`` — serves. Callbacks run
+    *before* the rerun, so the request is picked up within the same run.
+    """
+    st.session_state["_faq_dialog_requested"] = True
+
+
+def maybe_show_faq() -> None:
+    """Open the FAQ dialog if the sidebar button armed it.
+
+    Call from ``main()`` next to :func:`maybe_show_welcome_tour`, BEFORE the
+    heavy data / plot work. The button sits at the *bottom* of ``main()``, so
+    opening the dialog from its return value meant the modal only streamed to
+    the browser after the whole rerun — including the ~10 s plot embeds — had
+    finished. Served here it appears immediately and overlays whatever renders
+    after it.
+    """
+    if st.session_state.pop("_faq_dialog_requested", False):
+        _faq_dialog()
+
+
 def render_faq_button() -> None:
     """Sidebar button that opens the in-app FAQ dialog.
 
-    Sits in the sidebar's Help group next to :func:`render_tour_replay_button`.
-    Unlike the tour — which is armed from an ``on_click`` callback so the early
-    ``maybe_show_welcome_tour`` call can serve it before the heavy data / plot
-    work — the FAQ opens straight from the button's return value: dialogs can't
-    be opened from a callback, and one call site keeps the wiring to a single
-    line in ``app.main``.
+    Sits in the sidebar's Help group next to :func:`render_tour_replay_button`,
+    and is armed the same way: an ``on_click`` callback sets a request flag that
+    the early :func:`maybe_show_faq` call serves, so the modal doesn't wait on
+    the heavy data / plot work this button renders after.
     """
-    if st.sidebar.button(
+    st.sidebar.button(
         "❓ FAQ",
         key="faq_open",
         width="stretch",
         help="Short answers to common questions, plus a link to the full docs.",
-    ):
-        _faq_dialog()
+        on_click=_arm_faq,
+    )
 
 
 # -----------------------------------------------------------------------------

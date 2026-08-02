@@ -16,9 +16,9 @@ It is **dataset-agnostic** (auto-detects EyeLink / Gazepoint / snake-case
 columns) and ships with a small [OneStop][onestop-paper] demo, so you can try it
 with zero setup.
 
-> **Authors:** Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah Jakobi,
-> David Reich, Lena Jäger, and Yevgeni Berzak — LACC Lab (Technion) and
-> DiLi Lab (University of Zurich; David Reich also University of Potsdam).
+> **Authors:** Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah N. Jakobi,
+> David R. Reich, Lena Jäger, and Yevgeni Berzak — Data and Decision Sciences
+> (Technion) and Department of Computational Linguistics (University of Zurich).
 
 ![A reading scanpath replayed fixation by fixation](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/scanpath_animation.gif)
 

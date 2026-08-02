@@ -84,9 +84,10 @@ headless equivalents.
 
 ## Where next
 
-- **[Tutorials](tutorials/index.md)** — four task-shaped walkthroughs: load your
-  own data, compare two readers, produce a figure for a paper, run it headless
-  from a script.
+- **[Tutorials](tutorials/index.md)** — walkthroughs that follow one task from
+  start to finish: load your own data, compare two readers, produce a figure for
+  a paper, run it headless from a script, correct vertical drift, export a
+  batch.
 - **[FAQ](faq.md)** — the recurring questions, with short answers.
 
 ## Run the tests

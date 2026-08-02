@@ -233,6 +233,7 @@ Multiple files per table work here too: pass several paths or a quoted glob
   **[Compare two readers](compare-two-readers.md)**
 - Turn one of these trials into a figure →
   **[Produce a figure for a paper](figure-for-a-paper.md)**
+- Fixations sitting between lines → **[Correct vertical drift](line-assignment.md)**
 - Something didn't map → **[Bring your own data](../bring-your-own-data.md)**
 - Want your corpus to load with zero setup →
   **[Contributing a dataset](../contributing-a-dataset.md)**

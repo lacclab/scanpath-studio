@@ -4,8 +4,12 @@
 script instead of a browser, so a corpus can be re-rendered with one command
 and a paper's figures are reproducible from source.
 
-**You need:** the bundled demo works for everything here. PNG/SVG/PDF and
-GIF/MP4 need Chrome (`plotly_get_chrome -y`); HTML, CSV and Parquet don't.
+**You need:** the bundled demo works for everything here.
+
+!!! tip "Static image export needs a browser"
+    HTML, CSV and Parquet output is browser-free. **PNG / SVG / PDF** and
+    **GIF / MP4** go through [Kaleido](https://github.com/plotly/Kaleido),
+    which drives a headless Chrome — run `plotly_get_chrome -y` once.
 
 ---
 
@@ -265,6 +269,8 @@ the [CLI reference](../cli.md).
 
 ## Next
 
+- Figures *and* tables for many trials in one zip →
+  **[Export a batch](batch-export.md)**
 - Every function signature → **[Python API](../api.md)**
 - Every `render` flag → **[CLI reference](../cli.md)**
 - Working *with* a coding agent on this repo → **[For coding agents](../agents.md)**

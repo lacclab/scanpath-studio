@@ -64,6 +64,8 @@ nav:
       - 2 · Compare two readers: tutorials/compare-two-readers.md
       - 3 · Produce a figure for a paper: tutorials/figure-for-a-paper.md
       - 4 · Run it headless from a script: tutorials/run-it-headless.md
+      - 5 · Correct vertical drift: tutorials/line-assignment.md
+      - 6 · Export a batch: tutorials/batch-export.md
   - Using the app:
       - Getting started: getting-started.md
       - Desktop app: desktop.md

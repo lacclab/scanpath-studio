@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Claude Code skills** (`.claude/skills/`) — `/release`, `/track`, `/new-feature`, `/preflight`, and `/paper-figs` package the release checklist, tracker conventions, every-surface scaffold, pre-commit gate, and manuscript-figure pipeline as repo-shipped skills.
+
 ## [0.26.0] - 2026-08-02
 
 ### Added

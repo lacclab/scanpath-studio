@@ -71,6 +71,7 @@ def _numeric_slider(
     number_format: Optional[str] = None,
     help: Optional[str] = None,
     disabled: bool = False,
+    on_change=None,
 ) -> None:
     """A single-value slider plus a number box bound to the same setting.
 
@@ -88,6 +89,8 @@ def _numeric_slider(
 
     def _apply() -> None:
         st.session_state[key] = st.session_state[num_key]
+        if on_change is not None:
+            on_change()
 
     # A narrow box on the same line as the slider: the box is for typing an
     # exact value, so it only needs room for the number itself (the CSS drops its
@@ -102,6 +105,7 @@ def _numeric_slider(
         key=key,
         help=help,
         disabled=disabled,
+        on_change=on_change,
     )
     num_col.number_input(
         label,
@@ -128,6 +132,7 @@ def _range_slider(
     number_format: Optional[str] = None,
     help: Optional[str] = None,
     disabled: bool = False,
+    on_change=None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
 
@@ -144,6 +149,8 @@ def _range_slider(
     def _apply() -> None:
         lo, hi = st.session_state[lo_key], st.session_state[hi_key]
         st.session_state[key] = (min(lo, hi), max(lo, hi))
+        if on_change is not None:
+            on_change()
 
     slider_col, lo_col, hi_col = host.columns(
         [5, 1.5, 1.5], vertical_alignment="bottom"
@@ -157,6 +164,7 @@ def _range_slider(
         key=key,
         help=help,
         disabled=disabled,
+        on_change=on_change,
     )
     fmt = number_format if number_format is not None else slider_format
     for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
@@ -481,8 +489,10 @@ def _render_fixclass_category(
 
 
 def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> None:
-    """The PRE-2 'Classify fixations' block (short / long / out-of-bounds), rendered
-    inside the ⚙ Fixation style popover. Viz-only: highlight or discard, with
+    """PRE-2 short / long / out-of-bounds visual filtering controls.
+
+    VIZ-27 gives this its own popover instead of burying data inclusion under
+    marker styling. Viz-only: highlight or discard, with
     customizable short/long thresholds, all on the spot.
 
     ``make_scanpath_figure`` and ``make_scanpath_animation`` both consume
@@ -490,8 +500,7 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
     frames are built, *Highlight* overlays them as the trail reaches them); the
     comparison builders take no flags argument, so the whole block renders
     disabled (with the reason) in Compare only."""
-    st.divider()
-    st.caption("Classify fixations (visual only)")
+    st.caption("Highlight or hide classes on the plot only")
     for prefix, label, threshold in (
         ("short", "Short fixations", "Short threshold (ms)"),
         ("long", "Long fixations", "Long threshold (ms)"),
@@ -530,6 +539,22 @@ def _collect_fixation_flags() -> Dict:
             "color": ss.get("global_fixclass_oob_color") or OUT_OF_TEXT_COLOR,
         },
     }
+
+
+def _fixation_filter_badge() -> str:
+    """Compact VIZ-27 badge summarising active visual filters."""
+    active = [
+        st.session_state.get(f"global_fixclass_{name}_mode", "Off")
+        for name in ("short", "long", "oob")
+    ]
+    n_active = sum(mode != "Off" for mode in active)
+    n_discard = sum(mode == "Discard" for mode in active)
+    if not n_active:
+        return ""
+    detail = f"{n_active} active"
+    if n_discard:
+        detail += f", {n_discard} hidden"
+    return f" · {detail}"
 
 
 # Quick-view presets: one click sets the *layer* toggles to a focused subset, so
@@ -914,6 +939,8 @@ def column_mapping_ui(
     only_keys: Optional[List[str]] = None,
     header: bool = True,
     detected_label: str = "auto-detected",
+    on_change=None,
+    on_change_args=(),
 ) -> Dict[str, Optional[str]]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -941,6 +968,8 @@ def column_mapping_ui(
             index=index,
             key=f"{state_key_prefix}_{field_key}",
             help=help_text,
+            on_change=on_change,
+            args=on_change_args,
         )
         # Surface what auto-detection found for this field (ENG-9) — and flag when
         # the user has overridden it — so the mapping isn't silently inferred.
@@ -998,6 +1027,8 @@ def column_mapping_ui(
                     key=fmt_key,
                     horizontal=True,
                     label_visibility="collapsed",
+                    on_change=on_change,
+                    args=on_change_args,
                 )
                 # Always emit all eight box keys; only the active format's four
                 # get a column, the rest stay None.
@@ -1027,6 +1058,8 @@ def column_mapping_ui(
                     options=list(df.columns),
                     key=state_key,
                     help=spec.get("help"),
+                    on_change=on_change,
+                    args=on_change_args,
                 )
                 if default and default in df.columns:
                     st.caption(f"✨ {detected_label} `{default}`")
@@ -1110,6 +1143,45 @@ def color_field_options(trial_fixations: pd.DataFrame) -> List[str]:
     return [UNIFORM_COLOR_FIELD] + fields + ["line"]
 
 
+def hover_field_options(
+    frame: Optional[pd.DataFrame], *, words: bool = False
+) -> List[str]:
+    """Scalar columns that can be added to a VIZ-26 hover tooltip."""
+    if frame is None or frame.empty:
+        return []
+    preferred = (
+        [
+            "text",
+            "word_id",
+            "line_idx",
+            "total_fixation_duration_ms",
+            "first_fixation_ms",
+            "first_pass_gaze_duration_ms",
+            "regression_path_duration_ms",
+            "n_fixations",
+        ]
+        if words
+        else [
+            "order_in_trial",
+            "duration_ms",
+            "word_id",
+            "timestamp_ms",
+            "pass_index",
+            "eye",
+            "saccade_type",
+            "saccade_amplitude",
+        ]
+    )
+    available = list(frame.columns)
+    if words and {"x", "y", "height"} <= set(frame.columns):
+        available.append("line_idx")  # geometry-derived in plots._add_word_label_trace
+    result: List[str] = []
+    for column in [*preferred, *available]:
+        if column in available and column != "image_path" and column not in result:
+            result.append(column)
+    return result
+
+
 def numeric_field_options(trial_fixations: pd.DataFrame) -> List[str]:
     """Numeric columns offered as X/Y axis fields."""
     return [
@@ -1146,6 +1218,17 @@ def _drop_stale(state_key: str, options: list) -> None:
     instead of raising. Mirrors the guard in ``utils._select_trial_composite_mode``."""
     if state_key in st.session_state and st.session_state[state_key] not in options:
         del st.session_state[state_key]
+
+
+def _drop_stale_multi(state_key: str, options: list) -> None:
+    """Keep only still-valid values in a persisted multiselect list."""
+    value = st.session_state.get(state_key)
+    if isinstance(value, (list, tuple)):
+        filtered = [item for item in value if item in options]
+        if list(value) != filtered:
+            st.session_state[state_key] = filtered
+    elif value is not None:
+        st.session_state.pop(state_key, None)
 
 
 def _clamp_range(state_key: str, lo: float, hi: float) -> None:
@@ -1226,17 +1309,12 @@ def _seed_compare_styles(*, rewrite: bool) -> None:
     """Seed the per-scanpath comparison styling keys (so the collected dicts have
     values even when the relevant layer popover isn't open this run).
 
-    The two COLOUR keys (``cmp{idx}_fix_color`` / ``cmp{idx}_saccade_color``) are
-    intentionally NOT seeded here: a conditionally-rendered ``st.color_picker``
-    that relies on a pre-seeded key (no ``value=``) desyncs to **black** on its
-    first appearance, then writes that black back on the next interaction (the
-    "fixations turn black when making changes" bug). Those pickers instead pass an
-    explicit ``value=`` (see ``_render_compare_fix_styles`` /
-    ``_render_compare_saccade_styles``). Everything else goes through ``_pin``,
-    which re-asserts the stored value each run — these widgets only ever appear
-    once Compare is toggled on, i.e. always on a later run than the one that
-    seeded them, which is exactly the desync BUG-15 describes."""
+    BUG-15's ``_pin`` mechanism now owns the colour keys too, replacing the two
+    older explicit-value workarounds. Every conditionally-rendered comparison
+    widget therefore follows the same late-mount synchronization rule."""
     for idx, _ in _COMPARE_SCANPATHS:
+        _pin(f"cmp{idx}_fix_color", compare_palette_color(idx), rewrite=rewrite)
+        _pin(f"cmp{idx}_saccade_color", compare_palette_color(idx), rewrite=rewrite)
         _pin(f"cmp{idx}_saccade_style", "Solid", rewrite=rewrite)
         _pin(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH, rewrite=rewrite)
         _pin(f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE, rewrite=rewrite)
@@ -1254,13 +1332,9 @@ def _render_compare_fix_styles() -> None:
     fixation controls."""
     st.caption("Per-scanpath (comparison)")
     for idx, name in _COMPARE_SCANPATHS:
-        key = f"cmp{idx}_fix_color"
-        # Explicit value= (not a pre-seed) so a conditionally-rendered colour
-        # picker shows its real colour instead of desyncing to black.
         st.color_picker(
             f"{name} — fixation color",
-            value=st.session_state.get(key, compare_palette_color(idx)),
-            key=key,
+            key=f"cmp{idx}_fix_color",
         )
         _range_slider(
             st,
@@ -1287,11 +1361,9 @@ def _render_compare_saccade_styles() -> None:
     st.caption("Per-scanpath (comparison)")
     style_labels = list(SACCADE_DASH_OPTIONS.keys())
     for idx, name in _COMPARE_SCANPATHS:
-        key = f"cmp{idx}_saccade_color"
         st.color_picker(
             f"{name} — saccade color",
-            value=st.session_state.get(key, compare_palette_color(idx)),
-            key=key,
+            key=f"cmp{idx}_saccade_color",
         )
         st.selectbox(
             f"{name} — line style", options=style_labels, key=f"cmp{idx}_saccade_style"
@@ -1372,20 +1444,38 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
         # plot isn't filtered by a window the slider can no longer show.
         if st.session_state.get("single_fix_range") is not None:
             st.session_state["single_fix_range"] = None
+        st.session_state["single_fix_range_user_set"] = False
         return
     stored = st.session_state.get("single_fix_range")
-    if isinstance(stored, (tuple, list)) and len(stored) == 2:
+    user_set = st.session_state.get("single_fix_range_user_set")
+    if stored is None:
+        st.session_state["single_fix_range"] = (1, max_fix)
+        st.session_state["single_fix_range_user_set"] = False
+    elif user_set is False:
+        # BUG-16: an untouched auto-default follows the selected trial and always
+        # expands to its full range. Only a widget interaction freezes a window.
+        st.session_state["single_fix_range"] = (1, max_fix)
+    elif isinstance(stored, (tuple, list)) and len(stored) == 2:
+        # A value supplied before this widget first renders (test seam, restored
+        # session, or future deep link) is explicit and should be preserved.
+        st.session_state.setdefault("single_fix_range_user_set", True)
         lo = max(1, min(int(stored[0]), max_fix))
         hi = max(lo, min(int(stored[1]), max_fix))
         st.session_state["single_fix_range"] = (lo, hi)
     else:
         st.session_state["single_fix_range"] = (1, max_fix)
+        st.session_state["single_fix_range_user_set"] = False
+
+    def _mark_fix_range_user_set() -> None:
+        st.session_state["single_fix_range_user_set"] = True
+
     _range_slider(
         st,
         "Fixation index range",
         key="single_fix_range",
         min_value=1,
         max_value=max_fix,
+        on_change=_mark_fix_range_user_set,
         help="Draw only fixations whose index falls in this range (their "
         "saccades follow). The chips and panels still describe the full trial; "
         "the bulk (multiple-trial) export is unaffected.",
@@ -1451,6 +1541,48 @@ def _seed_viz_state(
             if "is_in_aspan" in highlight_options
             else highlight_options[0],
             rewrite=rewrite,
+        )
+
+    # VIZ-26: arbitrary multi-field word/fixation hover. The legacy one-measure
+    # key remains as a fallback for old links/configs, but new surfaces write the
+    # explicit lists.
+    word_hover_options = hover_field_options(words, words=True)
+    fix_hover_options = hover_field_options(trial_fixations)
+    _drop_stale_multi("global_word_hover_fields", word_hover_options)
+    _drop_stale_multi("global_fixation_hover_fields", fix_hover_options)
+    if "global_word_hover_fields" not in st.session_state:
+        legacy = st.session_state.get(
+            "global_word_hover_measure", "total_fixation_duration_ms"
+        )
+        default_word_hover = ["text", "word_id", "line_idx"]
+        if legacy:
+            default_word_hover.append(legacy)
+        _pin(
+            "global_word_hover_fields",
+            [field for field in default_word_hover if field in word_hover_options],
+            rewrite=rewrite,
+        )
+    elif rewrite:
+        _pin(
+            "global_word_hover_fields",
+            st.session_state["global_word_hover_fields"],
+            rewrite=True,
+        )
+    if "global_fixation_hover_fields" not in st.session_state:
+        _pin(
+            "global_fixation_hover_fields",
+            [
+                field
+                for field in ("order_in_trial", "duration_ms", "word_id")
+                if field in fix_hover_options
+            ],
+            rewrite=rewrite,
+        )
+    elif rewrite:
+        _pin(
+            "global_fixation_hover_fields",
+            st.session_state["global_fixation_hover_fields"],
+            rewrite=True,
         )
     return color_fields, numeric_fields, highlight_options
 
@@ -1634,6 +1766,8 @@ def _collect_viz_settings(
         word_hover_measure=ss.get(
             "global_word_hover_measure", "total_fixation_duration_ms"
         ),
+        word_hover_fields=list(ss.get("global_word_hover_fields") or []),
+        fixation_hover_fields=list(ss.get("global_fixation_hover_fields") or []),
         # PRE-3: in-place drift correction. `tabs._drift_corrected` applies it once
         # above the render-mode split, so it reaches all three builders (VIZ-23);
         # only the connector layer is still static-figure-only.
@@ -1791,8 +1925,16 @@ def sidebar_controls(
     # and never with its stored value rewritten. VIZ-23 then made a batch of them
     # live in Animate / Compare, so what remains gated below is the genuinely
     # builder-less set (see CLAUDE.md's setting → render-path table).
-    comparing = bool(st.session_state.get("single_compare_toggle"))
-    animating = bool(st.session_state.get("single_animate"))
+    comparing = bool(
+        st.session_state.get(
+            "_resolved_comparing", st.session_state.get("single_compare_toggle")
+        )
+    )
+    animating = bool(
+        st.session_state.get(
+            "_resolved_animating", st.session_state.get("single_animate")
+        )
+    )
     # Handy shorthands for the two recurring gates.
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
@@ -1926,11 +2068,6 @@ def sidebar_controls(
                     static_reason,
                 ),
             )
-            # Fixation-index window (VIZ-7): restrict which fixations (and their
-            # saccades) are drawn on the main plot. Shared across single + compare
-            # (it's a data window, not appearance), so it sits above the
-            # appearance controls. The max is this trial's fixation count.
-            _render_fix_range_slider(fix_range_fixations)
             # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
             # / `cmp*_opacity` always override the global values there).
             _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
@@ -2023,17 +2160,41 @@ def sidebar_controls(
                     "then scaled to fit the column, so on-screen it is a touch "
                     "smaller). Default 10.",
                 )
-            # Fixation classification (PRE-2): short / long / out-of-bounds, each
-            # highlight-or-discard with on-the-spot thresholds. VIZ-23 taught the
-            # replay `fixation_flags` (Discard drops the rows before the frames are
-            # built, Highlight overlays them as the trail reaches them); the
-            # comparison builder still takes no flags argument.
-            _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
-            _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
+            _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
+            st.multiselect(
+                "Hover fields",
+                options=hover_field_options(trial_fixations),
+                key="global_fixation_hover_fields",
+                disabled=_hover_dis,
+                help=_gated_help(
+                    "Fields shown when hovering a fixation. Choose any retained "
+                    "fixation column; order here is tooltip order.",
+                    _hover_reason,
+                ),
+            )
             # When comparing two trials, the per-scanpath fixation styling lives
             # here (under the Fixation settings), not in a separate panel.
             if comparing:
                 _render_compare_fix_styles()
+
+    # VIZ-27: filtering decides which fixations are visible; it is not marker
+    # appearance. Keep it beside the fixation layer as a first-class popover and
+    # show a local badge so an active Discard cannot be forgotten. A chip in the
+    # trial-fact strip was rejected because this is a view setting, not trial data.
+    _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
+    with viz.popover(
+        f"🧹 Fixation filter{_fixation_filter_badge()}",
+        width="stretch",
+        help=_gated_help(
+            "Highlight or hide short, long, and out-of-bounds fixations.",
+            _flag_reason,
+        ),
+    ):
+        # VIZ-27 follow-up: the index window removes fixations just like the
+        # short/long/OOB rules, so it belongs here rather than under marker style.
+        # The max follows the selected trial (BUG-16).
+        _render_fix_range_slider(fix_range_fixations)
+        _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
     show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
@@ -2089,23 +2250,11 @@ def sidebar_controls(
                 )
                 swatches = st.columns(len(classes))
                 for col, cls_name in zip(swatches, classes):
-                    # VIZ-8: pass an explicit ``value=`` seeded from session
-                    # state and write the pick back, rather than a bare
-                    # ``key=``. A keyed color_picker first painted inside a
-                    # (closed-until-clicked) popover shows its intrinsic
-                    # default #000000 instead of the seeded class colour — the
-                    # same popover-first-open quirk noted for the colorscale
-                    # selectbox. Seeding ``value=`` makes the first paint the
-                    # real colour; the write-back keeps deep-link / restore
-                    # (which set the session key pre-render) round-tripping.
                     state_key = f"global_saccade_class_color_{cls_name}"
-                    picked = col.color_picker(
+                    col.color_picker(
                         SACCADE_CLASS_LABELS[cls_name],
-                        value=st.session_state.get(
-                            state_key, SACCADE_CLASS_COLORS[cls_name]
-                        ),
+                        key=state_key,
                     )
-                    st.session_state[state_key] = picked
                 st.checkbox(
                     "Show legend",
                     key="global_saccade_type_legend",
@@ -2261,26 +2410,15 @@ def sidebar_controls(
                 )
 
             st.divider()
-            _HOVER_MEASURE_OPTIONS = {
-                "total_fixation_duration_ms": "Total fixation duration",
-                "first_fixation_ms": "FFD",
-                "first_pass_gaze_duration_ms": "FPRT",
-                "regression_path_duration_ms": "RPD",
-                "n_fixations": "Fixation count",
-                None: "Off",
-            }
-            # `word_hover_measure` reaches the static figure's and (VIZ-23) the
-            # replay's word-label hover template; the comparison builders call
-            # `_add_word_label_trace` without it.
             _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
-            st.selectbox(
-                "Hover: show measure",
-                options=list(_HOVER_MEASURE_OPTIONS),
-                format_func=lambda k: _HOVER_MEASURE_OPTIONS[k],
-                key="global_word_hover_measure",
+            st.multiselect(
+                "Hover fields",
+                options=hover_field_options(words, words=True),
+                key="global_word_hover_fields",
                 disabled=_hover_dis,
                 help=_gated_help(
-                    "Reading measure shown when hovering over a word on the plot.",
+                    "Fields shown when hovering a word: identity, any reading "
+                    "measure, linguistic feature, or retained metadata column.",
                     _hover_reason,
                 ),
             )

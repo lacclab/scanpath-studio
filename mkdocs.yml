@@ -58,35 +58,40 @@ extra:
 
 nav:
   - Home: index.md
+  - Get started: getting-started.md
   - Tutorials:
-      - Overview: tutorials/index.md
-      - 1 · Load your own data: tutorials/load-your-own-data.md
-      - 2 · Compare two readers: tutorials/compare-two-readers.md
-      - 3 · Produce a figure for a paper: tutorials/figure-for-a-paper.md
-      - 4 · Run it headless from a script: tutorials/run-it-headless.md
-      - 5 · Correct vertical drift: tutorials/line-assignment.md
-      - 6 · Export a batch: tutorials/batch-export.md
-  - Using the app:
-      - Getting started: getting-started.md
-      - Desktop app: desktop.md
-      - Data format: data-format.md
-      - Bring your own data: bring-your-own-data.md
-      - Corpus analysis: corpus-analysis.md
-      - Export & troubleshooting: export-troubleshooting.md
-      - FAQ: faq.md
-      - Privacy: privacy.md
-  - Headless:
+      - Choose a tutorial: tutorials/index.md
+      - Data collection: tutorials/data-collection.md
+      - Data filtering: tutorials/data-filtering.md
+      - Exporting figures: tutorials/exporting-figures.md
+      - Corpus analysis: tutorials/corpus-analysis.md
+  - Feature guides:
+      - Choose a guide: guides/index.md
+      - Scanpath visualization: guides/scanpath-visualization.md
+      - Loading public and own data: guides/loading-data.md
+      - Corpus workspace: guides/corpus-workspace.md
+      - Outputs and sharing: guides/outputs-sharing.md
+  - Automation & reference:
+      - Overview: automation.md
       - Python API: api.md
       - CLI reference: cli.md
-      - For coding agents: agents.md
-  - Datasets:
-      - OneStop: onestop.md
-      - MultiplEYE: multipleye.md
-      - Contributing a dataset: contributing-a-dataset.md
-  - Internals:
-      - True-to-scale rendering: rendering.md
-      - Architecture: architecture.md
-      - Security audit: security.md
+      - Data format: data-format.md
+      - Desktop app: desktop.md
+      - Export troubleshooting: export-troubleshooting.md
+      - FAQ: faq.md
+      - Privacy: privacy.md
+      - Public corpora:
+          - OneStop: onestop.md
+          - MultiplEYE: multipleye.md
+      - Development:
+          - Contributing a dataset: contributing-a-dataset.md
+          - Architecture: architecture.md
+          - For coding agents: agents.md
+          - True-to-scale rendering: rendering.md
+          - Security audit: security.md
+
+hooks:
+  - scripts/mkdocs_hooks.py
 
 plugins:
   - search

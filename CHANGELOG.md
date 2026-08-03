@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Order the compare-trial candidates** (CMP-6) — an **Order by** picker on the compare-B selector: same-text-first (default), most similar / most different to the selected trial (NLD), most fixations, or longest reading.
 
 ### Changed
+- **Documentation follows four research workflows** (UX-23) — the site now separates four compact use-case tutorials from four feature guides, with leaner Getting started, automation, API/CLI, FAQ, and privacy pages and forwarding pages in place of repeated legacy tutorials.
 - **The Comparisons subtab says what it's showing** (CMP-5) — the reference scanpath is named in the heading, every panel names its trial (or flags how many readings its group lumps together), and the grouping, ranking and truncation rules are stated in the tab.
 - **The demo's raw gaze is labelled as synthetic** (DATA-15) — under the Raw-gaze toggle, atop the Data Inspection raw-gaze table, and in the getting-started docs: it is synthesized from the fixation report, not recorded eye-tracker output.
 

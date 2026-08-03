@@ -255,6 +255,18 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Hide fixation index labels.",
     )
     viz.add_argument(
+        "--word-hover-fields",
+        metavar="FIELDS",
+        help="Comma-separated word columns shown on hover (e.g. "
+        "text,word_id,gpt2_surprisal).",
+    )
+    viz.add_argument(
+        "--fixation-hover-fields",
+        metavar="FIELDS",
+        help="Comma-separated fixation columns shown on hover (e.g. "
+        "order_in_trial,duration_ms,eye).",
+    )
+    viz.add_argument(
         "--no-saccades",
         dest="show_saccades",
         action="store_false",
@@ -776,6 +788,18 @@ def render(argv: List[str]) -> None:
             "show_saccade_arrows",
         )
     }
+    if args.word_hover_fields is not None:
+        overrides["word_hover_fields"] = [
+            field.strip()
+            for field in args.word_hover_fields.split(",")
+            if field.strip()
+        ]
+    if args.fixation_hover_fields is not None:
+        overrides["fixation_hover_fields"] = [
+            field.strip()
+            for field in args.fixation_hover_fields.split(",")
+            if field.strip()
+        ]
     # VIZ-18: the palette rides along as an override; api._expand_palette turns
     # it into colour kwargs and lets any explicit --*-color below win.
     if args.palette:
@@ -914,6 +938,13 @@ def render(argv: List[str]) -> None:
                 "background_image_opacity",
             )
             anim_kwargs.update({k: overrides[k] for k in image_keys if k in overrides})
+            anim_kwargs.update(
+                {
+                    k: overrides[k]
+                    for k in ("word_hover_fields", "fixation_hover_fields")
+                    if k in overrides
+                }
+            )
             fig = api.animate_scanpath(
                 words,
                 fixations,

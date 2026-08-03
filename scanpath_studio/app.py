@@ -50,6 +50,8 @@ if __package__ is None or __package__ == "":
 from scanpath_studio.annotations import (
     filter_keys,
 )
+from scanpath_studio.experimental_setup import font_pt_to_px, pixels_per_degree
+from scanpath_studio.persistence import restore_local_state, save_local_state
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     BACKGROUND_PRESETS,
@@ -2006,6 +2008,45 @@ def render_sidebar_canvas_controls(
         help="Use the real monitor height in pixels to keep coordinates true to scale.",
         key="global_canvas_height",
     )
+    # DATA-2: physical setup values live beside the pixel canvas they explain.
+    # They are persisted with the plot config and immediately yield a px/degree
+    # scale for downstream saccade/reporting work.
+    st.session_state.setdefault("global_monitor_width_mm", 597.0)
+    monitor_width_mm = display.number_input(
+        "Monitor physical width (mm)",
+        min_value=100.0,
+        max_value=3000.0,
+        step=1.0,
+        key="global_monitor_width_mm",
+        help="Width of the visible display area, not the diagonal size.",
+    )
+    st.session_state.setdefault("global_viewing_distance_mm", 800.0)
+    viewing_distance_mm = display.number_input(
+        "Viewing distance (mm)",
+        min_value=100.0,
+        max_value=3000.0,
+        step=10.0,
+        key="global_viewing_distance_mm",
+        help="Eye-to-screen distance during the experiment.",
+    )
+    derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
+    st.session_state.setdefault("global_display_dpi", round(derived_dpi, 2))
+    display_dpi = display.number_input(
+        "Display DPI",
+        min_value=20.0,
+        max_value=1000.0,
+        step=1.0,
+        key="global_display_dpi",
+        help="Used for point-to-pixel stimulus font conversion. The physical "
+        f"width above implies {derived_dpi:.1f} DPI.",
+    )
+    px_per_degree = pixels_per_degree(
+        float(viewing_distance_mm), float(canvas_width), float(monitor_width_mm)
+    )
+    display.caption(
+        f"Geometry: **{px_per_degree:.1f} px/degree** · "
+        f"{1.0 / px_per_degree:.4f}° per pixel."
+    )
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
@@ -2030,6 +2071,27 @@ def render_sidebar_canvas_controls(
         "and one below each text line, so the box spans 3 line heights → 3.",
     )
     st.session_state.setdefault("global_base_font_size", 16)
+    st.session_state.setdefault("global_stimulus_font_pt", 12.0)
+    st.session_state.setdefault("global_use_stimulus_font_pt", False)
+    use_stimulus_font_pt = display.checkbox(
+        "Use stimulus font size in points",
+        key="global_use_stimulus_font_pt",
+        disabled=scale_text_to_boxes,
+        help="Convert the original stimulus point size with the DPI above. "
+        "Scale-to-boxes still takes precedence when enabled.",
+    )
+    stimulus_font_pt = display.number_input(
+        "Stimulus font size (pt)",
+        min_value=4.0,
+        max_value=144.0,
+        step=0.5,
+        key="global_stimulus_font_pt",
+        disabled=scale_text_to_boxes or not use_stimulus_font_pt,
+    )
+    if not scale_text_to_boxes and use_stimulus_font_pt:
+        st.session_state["global_base_font_size"] = int(
+            min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
+        )
     base_font_size = display.number_input(
         "Figure font size (px)",
         min_value=6,
@@ -2039,6 +2101,7 @@ def render_sidebar_canvas_controls(
         "figure. Used for the reading text when 'Scale text to boxes' is off or "
         "the data has no word boxes, and always for axis/legend chrome.",
         key="global_base_font_size",
+        disabled=not scale_text_to_boxes and use_stimulus_font_pt,
     )
     # VIZ-1: every font-size control here is in pixels, but stimulus typography
     # is usually specified in points. Spell out the difference + the conversion.
@@ -2154,6 +2217,16 @@ def main() -> None:
     # `?source=...&participant=...&trial=...&...` to land on a specific trial
     # with the reviewer's preferred viz settings.
     url_source = _apply_url_preset()
+    # ENG-26: desktop/localhost installs remember uploaded datasets, annotations,
+    # mappings and view settings across browser refreshes and process restarts.
+    # Public deployments never opt in implicitly (there is no user identity with
+    # which to isolate the cache). URL presets are applied first and therefore
+    # win over restored settings; an explicit ?source= also wins over the stored
+    # data-source choice.
+    app_url = str(getattr(st.context, "url", "") or "")
+    restore_local_state(
+        st.session_state, app_url, protect_data_source=url_source is not None
+    )
     if url_source == "onestop" and onestop_data_dir() is not None:
         st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
     elif url_source == "multipleye" and multipleye_bundle_dir() is not None:
@@ -2649,6 +2722,10 @@ def main() -> None:
     # Developer debug panel — hidden unless the URL carries ?debug=1, which
     # reveals a "🐛 Debug mode" toggle that opens the captured-log view.
     render_debug_panel()
+
+    # Persist after all view/sidebar widgets have written their current values.
+    # The helper fingerprints the session and is a no-op on unchanged reruns.
+    save_local_state(st.session_state, app_url)
 
 
 if __name__ == "__main__":

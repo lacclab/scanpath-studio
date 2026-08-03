@@ -10,7 +10,6 @@ from typing import Callable, Optional, Tuple
 import numpy as np
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 from scanpath_studio import alignment
 from scanpath_studio.aggregation import (
@@ -96,7 +95,9 @@ from scanpath_studio.export import (
     bulk_export,
     render_export_options,
 )
+from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.plots import (
+    _discard_flagged_fixations,
     _png_pixel_size,
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
@@ -145,18 +146,8 @@ def _safe_filename(text: str) -> str:
 
 
 def _embed_html_iframe(html: str, *, height: int) -> None:
-    """Render an HTML string (scripts included) inside a sandboxed iframe.
-
-    ``st.iframe`` (Streamlit >= 1.56) supersedes ``st.components.v1.html``, which
-    is deprecated and scheduled for removal. We need an *iframe* — not
-    ``st.html`` — because the embedded block runs ``<script>`` (Plotly from the
-    CDN plus the fit/scale script), which ``st.html`` strips. Fall back to the
-    old API on older Streamlit so the app still runs against the pinned baseline.
-    """
-    if hasattr(st, "iframe"):
-        st.iframe(html, height=height)
-    else:
-        components.html(html, height=height, scrolling=False)
+    """Backward-compatible local alias for the shared iframe helper."""
+    embed_html_iframe(html, height=height)
 
 
 def _render_true_scale_chart(
@@ -635,6 +626,8 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         word_hover_measure=viz_settings.get(
             "word_hover_measure", "total_fixation_duration_ms"
         ),
+        word_hover_fields=viz_settings.get("word_hover_fields"),
+        fixation_hover_fields=viz_settings.get("fixation_hover_fields"),
     )
 
 
@@ -846,9 +839,9 @@ def _render_compare_selector(
         st.info("No other trials available for comparison.")
         return None, None
 
-    # CMP-6: the candidate ordering shares the picker row (leftmost column) and
-    # renders before the selectbox/slider, so a change applies to the list they
-    # show on the same run. UI-only — it orders a picker, never travels in a
+    # CMP-6: the candidate ordering is visually LAST in the picker row, after the
+    # step buttons. It still executes before the selectbox/slider below, so a
+    # change applies to their list on the same run. UI-only — it never travels in a
     # deep link or saved config (same call as `share_identity_mode`, DATA-16/S3).
     n = len(options)
     orderable = n > 2 and fixations_filtered is not None and trial_words is not None
@@ -856,8 +849,8 @@ def _render_compare_selector(
     order_col = None
     if n > 1:
         if orderable:
-            order_col, sel_col, slider_col, prev_col, next_col = st.columns(
-                [1.9, 2.8, 3.9, 0.55, 0.55], vertical_alignment="bottom"
+            sel_col, slider_col, prev_col, next_col, order_col = st.columns(
+                [2.8, 3.9, 0.55, 0.55, 1.9], vertical_alignment="bottom"
             )
         else:
             sel_col, slider_col, prev_col, next_col = st.columns(
@@ -1466,6 +1459,21 @@ def _build_studio_config(
             "trial_id": selected_trial,
         },
         "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
+        "experimental_setup": {
+            "monitor_width_mm": float(
+                st.session_state.get("global_monitor_width_mm", 597.0)
+            ),
+            "viewing_distance_mm": float(
+                st.session_state.get("global_viewing_distance_mm", 800.0)
+            ),
+            "display_dpi": float(st.session_state.get("global_display_dpi", 96.0)),
+            "stimulus_font_pt": float(
+                st.session_state.get("global_stimulus_font_pt", 12.0)
+            ),
+            "use_stimulus_font_pt": bool(
+                st.session_state.get("global_use_stimulus_font_pt", False)
+            ),
+        },
         "axes": {"x_field": x_field, "y_field": y_field},
         "layers": {
             "words": figure_settings["show_words"],
@@ -1573,6 +1581,10 @@ def _build_studio_config(
             ),
             "font_family": font_family,
             "text_color": figure_settings.get("text_color", WORD_LABEL_COLOR),
+            "word_hover_fields": list(viz_settings.get("word_hover_fields") or []),
+            "fixation_hover_fields": list(
+                viz_settings.get("fixation_hover_fields") or []
+            ),
         },
         "highlighting": {
             "critical_span_style": figure_settings.get(
@@ -1792,6 +1804,12 @@ _ANIM_SPEED_LABELS = [
 # Default playback speed — brisk enough for quick review (real-time ÷ 4) but
 # still legible; the Playback popover's speed slider slows it down (to ×0.25).
 _ANIM_DEFAULT_SPEED = 4.0
+_ANIM_QUALITY_PRESETS = {
+    # Fast enough for trial browsing and compact GIF/MP4 drafts.
+    "Coarse": (300, 120),
+    # High-fidelity review/export: noticeably smoother than the old 100 ms grid.
+    "Fine": (40, 900),
+}
 
 
 def _render_anim_info_box(
@@ -1950,6 +1968,8 @@ def _build_and_render_animation(
         word_hover_measure=viz_settings.get(
             "word_hover_measure", "total_fixation_duration_ms"
         ),
+        word_hover_fields=viz_settings.get("word_hover_fields"),
+        fixation_hover_fields=viz_settings.get("fixation_hover_fields"),
         background_color=viz_settings.get("background_color"),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_legend=viz_settings.get("show_compare_legend", False),
@@ -2422,6 +2442,43 @@ def render_single_trial_tab(
                 # are made of. It used to be decided for the user in two module
                 # constants, and the cap coarsened the grid silently.
                 st.caption("**Frame grid**")
+
+                def _apply_anim_quality() -> None:
+                    preset = _ANIM_QUALITY_PRESETS.get(
+                        st.session_state.get("global_anim_quality")
+                    )
+                    if preset is not None:
+                        (
+                            st.session_state["global_anim_grid_step_ms"],
+                            st.session_state["global_anim_max_frames"],
+                        ) = preset
+
+                current_grid = (
+                    int(st.session_state.get("global_anim_grid_step_ms", 100)),
+                    int(st.session_state.get("global_anim_max_frames", 360)),
+                )
+                inferred_quality = next(
+                    (
+                        name
+                        for name, values in _ANIM_QUALITY_PRESETS.items()
+                        if values == current_grid
+                    ),
+                    "Custom",
+                )
+                st.session_state["global_anim_quality"] = inferred_quality
+                st.segmented_control(
+                    "Animation quality",
+                    options=["Coarse", "Fine", "Custom"],
+                    key="global_anim_quality",
+                    on_change=_apply_anim_quality,
+                    help="**Coarse** — 300 ms / 120 frames for fast drafts. "
+                    "**Fine** — 40 ms / 900 frames for high-fidelity review. The "
+                    "sliders remain editable; changing either makes the mode Custom.",
+                )
+
+                def _mark_anim_quality_custom() -> None:
+                    st.session_state["global_anim_quality"] = "Custom"
+
                 _numeric_slider(
                     st,
                     "Frame every (ms)",
@@ -2429,6 +2486,7 @@ def render_single_trial_tab(
                     min_value=20,
                     max_value=500,
                     step=10,
+                    on_change=_mark_anim_quality_custom,
                     help="How often a frame is emitted along the reading clock. "
                     "Smaller is smoother and larger to export; the slider scrubs "
                     "linearly through seconds either way.",
@@ -2440,6 +2498,7 @@ def render_single_trial_tab(
                     min_value=30,
                     max_value=2000,
                     step=10,
+                    on_change=_mark_anim_quality_custom,
                     help="Hard ceiling on the frame count. A long reading coarsens "
                     "the grid to stay under it rather than emitting thousands of "
                     "frames (which balloons the GIF/MP4 export).",
@@ -2458,6 +2517,21 @@ def render_single_trial_tab(
                 else "Overlay another trial's scanpath or view them side by side."
             ),
         )
+        # ENG-24: controls must gate against the mode the renderer can actually
+        # enter, not merely the raw toggle. Compare needs at least one candidate;
+        # Animate is resolved independently because it remains a distinct empty-
+        # state when the selected trial has no fixations.
+        st.session_state["_resolved_comparing"] = bool(
+            compare_enabled
+            and build_comparison_options(
+                combos,
+                selection_mode,
+                selected_participant,
+                selected_trial,
+                selected_text,
+            )
+        )
+        st.session_state["_resolved_animating"] = bool(animate)
         # Compare config in the rail (moved out of the inline selector): the
         # overlay/side-by-side/stacked layout + the show-A/B-legend toggle. The
         # layout reaches the figure via session_state (`single_compare_layout`),
@@ -2713,11 +2787,28 @@ def render_single_trial_tab(
     # Animation info box, in its slot inside the rail's Playback popover.
     if animate and not fig_fixations.empty and anim_info_slot is not None:
         with anim_info_slot:
+            # VIZ-25: quote the same timeline the replay draws. The animation
+            # builder drops Discard-mode fixation classes internally; apply the
+            # shared classifier here too so the info box cannot count hidden rows.
+            info_fixations = _discard_flagged_fixations(
+                fig_fixations,
+                trial_words,
+                viz_settings.get("fixation_flags"),
+            )
+            info_compare_fix = (
+                _discard_flagged_fixations(
+                    fig_compare_fix,
+                    compare_meta["words"],
+                    viz_settings.get("fixation_flags"),
+                )
+                if dual_anim
+                else None
+            )
             _render_anim_info_box(
                 trial_words,
-                fig_fixations,
+                info_fixations,
                 compare_meta["words"] if dual_anim else None,
-                fig_compare_fix if dual_anim else None,
+                info_compare_fix,
                 selected_participant,
                 selected_trial,
                 compare_participant,

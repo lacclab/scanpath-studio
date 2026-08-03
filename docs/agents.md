@@ -269,6 +269,7 @@ plus replay-only knobs — `figure_options("animation")` is the full list).
 | `marker_size_range` | `(8, 24)` | yes |
 | `fixation_snap_to_word` | `False` | no |
 | `fixation_flags` | `None` | yes |
+| `fixation_hover_fields` | `['order_in_trial', 'duration_ms', 'word_id']` | yes |
 | `order_font_size` | `10` | yes |
 | `order_font_color` | `'#111111'` | yes |
 
@@ -344,6 +345,7 @@ colours. `saccade_render_mode="Arc"` draws the linear-reading schematic.
 | `line_spacing` | `3.0` | yes |
 | `scale_text_to_boxes` | `True` | yes |
 | `word_hover_measure` | `'total_fixation_duration_ms'` | yes |
+| `word_hover_fields` | `['text', 'word_id', 'line_idx', 'total_fixation_duration_ms']` | yes |
 
 `highlight_column` is a boolean words column (OneStop's critical span by
 default); it is ignored when the column isn't there.

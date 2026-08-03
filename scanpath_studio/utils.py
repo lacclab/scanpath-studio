@@ -102,9 +102,12 @@ def _build_combo_options_cached(
         if col in fixations.columns and col not in combo_cols:
             combo_cols.append(col)
 
-    combos = (
-        fixations[combo_cols].drop_duplicates().rename(columns={trial_col: "trial_id"})
-    )
+    # UX-24: preserve each trial's first appearance before the historical
+    # participant/id sort. The visible pool may still default to Trial ID, but
+    # the ⇅ menu can now reconstruct source-file order exactly.
+    combos = fixations[combo_cols].drop_duplicates().copy()
+    combos["_data_order"] = np.arange(len(combos), dtype=int)
+    combos = combos.rename(columns={trial_col: "trial_id"})
     if "text_id" not in combos.columns:
         combos["text_id"] = (
             combos[text_col] if text_col is not None else combos["trial_id"]
@@ -179,6 +182,7 @@ TRIAL_SORT_DEFAULT = "Trial ID"
 # Computed stat label → (frame it needs, how to aggregate it per trial).
 # "fixations" / "words" name which frame the aggregation runs on.
 _TRIAL_SORT_STATS = {
+    "Min timestamp in trial": ("fixations", "timestamp_min"),
     "Fixations (n)": ("fixations", "size"),
     "Reading time (s)": ("fixations", "duration_sum_s"),
     "Mean fixation (ms)": ("fixations", "duration_mean"),
@@ -211,6 +215,12 @@ def _per_trial_stat(frame: pd.DataFrame, trial_field: str, how: str) -> pd.Serie
     grouped = frame.groupby(frame[trial_field].astype(str), sort=False)
     if how == "size":
         return grouped.size().astype(float)
+    if how == "timestamp_min":
+        if "timestamp_ms" not in frame.columns:
+            return pd.Series(dtype=float)
+        return pd.to_numeric(grouped["timestamp_ms"].min(), errors="coerce").astype(
+            float
+        )
     if "duration_ms" not in frame.columns:
         return pd.Series(dtype=float)
     durations = grouped["duration_ms"].agg("sum" if "sum" in how else "mean")
@@ -231,6 +241,18 @@ def trial_sort_keys(
     a column that varies within a trial can't order the pool meaningfully.
     """
     keys: Dict[str, pd.Series] = {}
+    # This rank was captured before build_combo_options' canonical sort.
+    if (
+        combos is not None
+        and not combos.empty
+        and trial_field in combos.columns
+        and "_data_order" in combos.columns
+    ):
+        deduped = combos.drop_duplicates(subset=[trial_field])
+        keys["Data order"] = pd.Series(
+            deduped["_data_order"].to_numpy(),
+            index=deduped[trial_field].astype(str).to_numpy(),
+        )
     for label, (which, how) in _TRIAL_SORT_STATS.items():
         frame = fixations if which == "fixations" else words
         # The stat is keyed by the *plain* trial id on the data frames; combos may

@@ -56,7 +56,7 @@ Mechanics worth knowing before editing:
 from __future__ import annotations
 
 import streamlit as st
-import streamlit.components.v1 as components
+from scanpath_studio.html_embed import embed_html_iframe
 
 from .constants import CITATION
 
@@ -115,10 +115,10 @@ def _close_dialog_clientside() -> None:
     embeds, so the modal lingered ~10 s after Skip/Done. Instead, run inside
     the (fast) dialog-fragment rerun and click the dialog's close button:
     the modal hides client-side immediately and Streamlit's normal dismiss
-    handling syncs state in the background. ``components.html`` iframes are
+    handling syncs state in the background. ``st.iframe`` embeds are
     same-origin, so the script can reach the parent document.
     """
-    components.html(
+    embed_html_iframe(
         """<script>
         window.parent.document
             .querySelector('div[role="dialog"] button[aria-label="Close"]')
@@ -147,7 +147,7 @@ def tour_opted_out() -> bool:
 def _tour_optout_script(opted_out: bool) -> str:
     """A same-origin script that writes (or clears) the opt-out cookie.
 
-    ``components.html`` iframes share the app's origin, so the parent document's
+    ``st.iframe`` embeds share the app's origin, so the parent document's
     ``cookie`` is writable from here — the only way to persist a preference
     browser-side without a user account.
     """
@@ -170,7 +170,7 @@ def _render_tour_optout() -> None:
         help="Skip the tour on future visits. **🎓 Show tutorial** in the sidebar "
         "always brings it back.",
     )
-    components.html(_tour_optout_script(opted_out), height=0)
+    embed_html_iframe(_tour_optout_script(opted_out), height=0)
 
 
 def _step_back() -> None:
@@ -552,7 +552,7 @@ def render_spotlight_tour() -> None:
         # Make Done / ✕ hide the tour instantly, even while the app's first
         # run is still loading (the Streamlit click alone would only take
         # effect once that ~10 s run finishes). See _dismiss_listener_script.
-        components.html(_dismiss_listener_script(step["selector"]), height=0)
+        embed_html_iframe(_dismiss_listener_script(step["selector"]), height=0)
 
         if step["selector"]:
             # Bring the highlighted section into view. Same-origin iframe
@@ -584,7 +584,7 @@ def render_spotlight_tour() -> None:
                 bool(step["selector"])
                 and step["selector"].startswith(".st-key-tour_grp_"),
             )
-            components.html(
+            embed_html_iframe(
                 f"""<script>
                 (function () {{
                     const doc = window.parent.document;
@@ -645,7 +645,7 @@ def render_spotlight_tour() -> None:
             # state overrides it for returning tabs — so also click the
             # collapse control. Retries because a click during initial React
             # hydration is silently lost. The first sidebar step reopens it.
-            components.html(
+            embed_html_iframe(
                 """<script>
                 (function () {
                     const doc = window.parent.document;
@@ -1047,7 +1047,7 @@ def render_spotlight_wizard_guide() -> None:
             )
         # Hide the card instantly on Skip/Done, even while the wizard's first run
         # is still loading (see _dismiss_listener_script).
-        components.html(
+        embed_html_iframe(
             _dismiss_listener_script(
                 None, exit_keys=("wizard_sp_exit", "wizard_sp_done")
             ),

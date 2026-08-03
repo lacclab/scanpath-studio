@@ -53,6 +53,9 @@ you work under `scanpath_studio/`); contributor setup is in
   [`tracker/index.html`](tracker/index.html) in a browser to read it (search,
   status/group filters, cross-referenced IDs, `#ID` deep links). It replaces the
   old `IMPROVEMENTS.md` / `IMPROVEMENTS_ARCHIVE.md` pair.
+- **New items get `"added": "<today's date>"`**, set once at creation and never
+  edited afterwards — even when `note`/`date` (which track a later status
+  milestone, e.g. implemented/signed-off) stay empty.
 - **Write-up shape.** Four bold-led paragraphs in this order — **Request** (what
   was asked, in the asker's terms) · **What was done** · **What's left** (or
   "Nothing" — say it either way, and link the follow-up when the remainder was

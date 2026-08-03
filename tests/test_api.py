@@ -544,6 +544,14 @@ def test_figure_options_cover_every_builder_keyword():
         api.figure_options("gif")
 
 
+def test_figure_options_returns_independent_mutable_defaults():
+    options = api.figure_options()
+    options["word_hover_fields"].append("caller_only")
+
+    assert "caller_only" not in api.figure_options()["word_hover_fields"]
+    assert "caller_only" not in api.CANONICAL_FIGURE_DEFAULTS["word_hover_fields"]
+
+
 def test_agent_guide_option_tables_match_the_code():
     """docs/agents.md documents every option and default — keep it honest."""
     guide = (Path(__file__).resolve().parents[1] / "docs" / "agents.md").read_text()

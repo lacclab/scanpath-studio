@@ -104,6 +104,21 @@ class TestSafeDatasetName:
         assert wizard._safe_dataset_name("  My data  ") == "My data"
 
 
+class TestWizardStepExpansion:
+    def test_mapping_change_keeps_completed_step_open_once(self):
+        state = {"_wizard_keep_open": "Fixations"}
+        flow = {"claimed": False}
+        assert wizard._wizard_step_expanded("Fixations", True, flow, state)
+        assert "_wizard_keep_open" not in state
+        assert not wizard._wizard_step_expanded("Fixations", True, flow, state)
+
+    def test_first_unfinished_step_claims_auto_advance(self):
+        state = {}
+        flow = {"claimed": False}
+        assert wizard._wizard_step_expanded("Trial identifier", False, flow, state)
+        assert not wizard._wizard_step_expanded("Fixations", False, flow, state)
+
+
 def _seed_overwrite_app():
     import streamlit as st
 

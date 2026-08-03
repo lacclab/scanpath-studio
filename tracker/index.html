@@ -89,7 +89,17 @@
     border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer;
   }
   button:hover { background: var(--panel-2); }
+  button:disabled { opacity: .55; cursor: not-allowed; }
   button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  button.primary:hover { filter: brightness(1.08); }
+  .connection {
+    display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink-dim); font-size: 12px;
+  }
+  .connection::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); }
+  .connection.on::before { background: #22c55e; }
+  .connection.error::before { background: #ef4444; }
 
   /* ---------- layout ---------- */
   .wrap { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 26px; padding: 22px; max-width: 1240px; margin: 0 auto; align-items: start; }
@@ -101,6 +111,18 @@
     display: flex; align-items: center; gap: 8px;
   }
   .bulk { margin-left: auto; display: flex; gap: 4px; }
+  details.facet { margin-bottom: 8px; border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; }
+  details.facet > summary {
+    display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none;
+    padding: 7px; border-radius: 7px; color: var(--ink-dim); font-size: 12px;
+    font-weight: 650; text-transform: uppercase; letter-spacing: .06em;
+  }
+  details.facet > summary::-webkit-details-marker { display: none; }
+  details.facet > summary::before { content: "›"; color: var(--ink-faint); font-size: 17px; line-height: 1; transition: transform .15s ease; }
+  details.facet[open] > summary::before { transform: rotate(90deg); }
+  details.facet > summary:hover { background: var(--panel-2); }
+  details.facet > div { padding: 3px 0 5px; }
+  .summary-meta { margin-left: auto; color: var(--ink-faint); font-size: 10.5px; text-transform: none; letter-spacing: 0; font-weight: 450; }
   button.mini {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
     padding: 1px 6px; border-radius: 6px; color: var(--ink-faint);
@@ -154,6 +176,12 @@
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; margin-top: 1px;
     background: var(--panel-2); color: var(--ink-dim); border: 1px solid var(--line-soft);
   }
+  .priority {
+    flex: none; font-size: 10.5px; padding: 2px 7px; border-radius: 999px;
+    white-space: nowrap; margin-top: 1px; border: 1px solid var(--line-soft); color: var(--ink-dim);
+  }
+  .priority-high { background: color-mix(in srgb, #ef4444 13%, var(--panel)); color: #b91c1c; }
+  .priority-low { background: var(--panel-2); color: var(--ink-faint); }
   .body { padding: 2px 15px 15px 15px; border-top: 1px solid var(--line-soft); }
   .body > *:first-child { margin-top: .8em; }
   .body p, .body ul, .body ol, .body blockquote, .body table, .body pre { margin: .65em 0; }
@@ -167,6 +195,33 @@
   .body th { background: var(--panel-2); font-weight: 600; }
   .ref { font-weight: 600; }
   .empty { color: var(--ink-faint); padding: 40px 0; text-align: center; }
+  .implementation-brief {
+    margin: .8em 0; padding: 10px 12px; border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0; background: var(--accent-soft); white-space: pre-wrap;
+  }
+  .implementation-brief strong { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 3px; }
+  .editor {
+    margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 9px;
+    background: var(--panel-2);
+  }
+  .editor-title { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 9px; }
+  .editor-grid { display: grid; grid-template-columns: 160px 130px minmax(0, 1fr); gap: 10px; align-items: start; }
+  .editor label { display: block; color: var(--ink-dim); font-size: 12px; }
+  .editor select, .editor textarea {
+    display: block; width: 100%; margin-top: 4px; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; font: inherit; font-size: 13px;
+  }
+  .editor textarea { resize: vertical; min-height: 88px; line-height: 1.45; }
+  .editor textarea:focus, .editor select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .editor-help { margin: 7px 0 0; color: var(--ink-faint); font-size: 11.5px; }
+  .editor-actions { display: flex; align-items: center; gap: 9px; margin-top: 10px; }
+  .item-save-state { color: var(--ink-faint); font-size: 11.5px; }
+  .offline {
+    max-width: 680px; margin: 60px auto; padding: 24px; border: 1px solid var(--line);
+    border-radius: 12px; background: var(--panel); box-shadow: var(--shadow);
+  }
+  .offline h2 { margin: 0 0 8px; font-size: 18px; }
+  .offline p { color: var(--ink-dim); }
 
   dialog {
     border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink);
@@ -177,10 +232,24 @@
   dialog h4 { margin: 18px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); }
   dialog ul { padding-left: 1.2em; font-size: 13.6px; }
   .close { position: absolute; top: 14px; right: 16px; }
+  .task-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .task-form .wide { grid-column: 1 / -1; }
+  .task-form label { color: var(--ink-dim); font-size: 12px; }
+  .task-form input, .task-form select, .task-form textarea {
+    display: block; width: 100%; margin-top: 4px; padding: 8px 9px; border: 1px solid var(--line);
+    border-radius: 7px; background: var(--panel); color: var(--ink); font: inherit; font-size: 13px;
+  }
+  .task-form textarea { min-height: 120px; resize: vertical; }
+  .id-preview { margin-top: 4px; padding: 8px 9px; border-radius: 7px; background: var(--panel-2); color: var(--ink-dim); }
+  .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 9px; margin-top: 16px; }
+  .form-error { margin-right: auto; color: #ef4444; font-size: 12px; }
 
   @media (max-width: 860px) {
     .wrap { grid-template-columns: 1fr; }
     aside { position: static; }
+    .editor-grid { grid-template-columns: 1fr; }
+    .task-form { grid-template-columns: 1fr; }
+    .task-form .wide { grid-column: auto; }
   }
 </style>
 </head>
@@ -193,6 +262,8 @@
       <span class="sub">Scanpath Studio</span>
     </div>
     <input id="q" class="search" type="search" placeholder="Search id, title, text…  (/)">
+    <span class="connection" id="connection" aria-live="polite">Connecting…</span>
+    <button class="primary" id="newTask" disabled>＋ New task</button>
     <button id="expand">Expand all</button>
     <button id="help">How this works</button>
     <button id="theme" title="Toggle theme">◐</button>
@@ -206,37 +277,80 @@
       <div class="progress"><span id="bar"></span></div>
       <div class="meta" id="progressText"></div>
     </div>
-    <div class="facet">
-      <h2>Status
-        <span class="bulk">
-          <button class="mini" id="statusAll" title="Select every status">all</button>
-          <button class="mini" id="statusNone" title="Clear the status filter (shows every status)">none</button>
-        </span>
-      </h2>
+    <details class="facet" open>
+      <summary>Status<span class="summary-meta" id="statusSummary">All</span></summary>
       <div id="statuses"></div>
-    </div>
-    <div class="facet">
-      <h2>Group</h2>
+    </details>
+    <details class="facet">
+      <summary>Priority<span class="summary-meta" id="prioritySummary">All</span></summary>
+      <div id="priorities"></div>
+    </details>
+    <details class="facet">
+      <summary>Group<span class="summary-meta" id="groupSummary">All</span></summary>
       <div id="groups"></div>
-    </div>
-    <div class="facet">
-      <h2>View</h2>
+    </details>
+    <details class="facet">
+      <summary>View<span class="summary-meta" id="viewSummary">Open</span></summary>
+      <div>
       <button class="chip" id="toggleArchive"><span class="dot" style="background:var(--ink-faint)"></span>Show archived<span class="n" id="archN"></span></button>
       <button class="chip" id="reset">Reset filters</button>
-    </div>
+      </div>
+    </details>
   </aside>
 
-  <main id="list"></main>
+  <main id="list"><div class="empty">Starting tracker…</div></main>
 </div>
+
+<dialog id="newTaskBox">
+  <button class="close" type="button" onclick="newTaskBox.close()">✕</button>
+  <h3>Create a task</h3>
+  <p style="font-size:13px;color:var(--ink-dim)">The ID is assigned from the selected prefix. New tasks start in Backlog.</p>
+  <form id="newTaskForm">
+    <div class="task-form">
+      <label class="wide">Title
+        <input id="taskTitle" required maxlength="300" placeholder="A short, outcome-focused title">
+      </label>
+      <label>Group<select id="taskGroup" required></select></label>
+      <label>Assigned ID<div class="id-preview mono" id="taskIdPreview"></div></label>
+      <label>Priority
+        <select id="taskPriority"><option>High</option><option selected>Normal</option><option>Low</option></select>
+      </label>
+      <label class="wide">Instructions for implementation
+        <textarea id="taskBrief" placeholder="What should be built? Include constraints and acceptance checks."></textarea>
+      </label>
+    </div>
+    <div class="dialog-actions">
+      <span class="form-error" id="taskError" aria-live="polite"></span>
+      <button type="button" onclick="newTaskBox.close()">Cancel</button>
+      <button class="primary" type="submit">Create task</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="helpBox">
   <button class="close" onclick="helpBox.close()">✕</button>
   <h3>How this tracker works</h3>
   <p style="font-size:13.6px;color:var(--ink-dim)">
     Every item has a stable <b>ID</b> you can cite in chat ("let's do <code>CMP-3</code>"),
-    a <b>status</b>, and a short write-up with code anchors. The data lives in
-    <code>tracker/data.js</code> — edit that file; this page just reads it.
+    a <b>status</b>, and a short write-up with code anchors. Expand an item to change
+    its status or leave an implementation brief. Changes are saved directly into
+    <code>tracker/state.json</code>; the original catalogue stays in <code>tracker/data.js</code>.
   </p>
+
+  <h4>Editing tasks</h4>
+  <ul>
+    <li>Expand a task, choose a status, and describe the outcome, constraints, or
+      acceptance checks in the <b>Implementation brief</b>.</li>
+    <li>A task is <b>Ready to implement</b> when it is Planned and has an implementation
+      brief. Use the quick view in the sidebar to see that queue.</li>
+    <li>Use <b>New task</b> to capture work without editing the catalogue by hand.</li>
+    <li>Start the live tracker by double-clicking <code>tracker/start.command</code>,
+      or run <code>python3 tracker/server.py</code>. Keep that terminal window open.</li>
+    <li>Each save writes to the project immediately. No downloads or file permissions
+      are involved, and concurrent browser tabs are protected from overwriting each other.</li>
+    <li><b>Done</b> and <b>Dropped</b> archive an item automatically. Moving it to any
+      active status restores it to the open list.</li>
+  </ul>
 
   <h4>Status</h4>
   <ul>
@@ -285,34 +399,30 @@
   <div id="nextIds" class="mono" style="font-size:12.5px;color:var(--ink-dim);line-height:1.9"></div>
 
   <h4>Adding an item</h4>
-  <p style="font-size:13.4px;color:var(--ink-dim)">Append to <code>items</code> in
-    <code>tracker/data.js</code>. <code>body</code> is an array of markdown lines
-    (one entry per source line, so diffs stay line-by-line):</p>
-  <pre><code>{
- "id": "VIZ-22",
- "prefix": "VIZ", "num": 22, "sub": "",
- "title": "Short imperative title",
- "status": "Backlog", "note": "", "date": "",
- "group": "Visualization &amp; display", "subgroup": "",
- "archived": false,
- "body": ["First line of the write-up.", "Second line — **VIZ-4** cross-refs auto-link."]
-}</code></pre>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Use <b>New task</b>. The tracker assigns
+    the next stable ID for the chosen prefix and stores the new item in
+    <code>tracker/state.json</code>.</p>
 </dialog>
 
 <script src="data.js"></script>
 <script>
 (() => {
   const DATA = window.TRACKER;
+  const STATE = { version: 2, revision: 0, items: {}, createdItems: [] };
+  const EDITS = {};
   const ITEMS = DATA.items;
   const BY_ID = new Map(ITEMS.map(i => [i.id, i]));
   const ORDER = ["In progress", "Pending approval", "Blocked", "Planned", "Backlog",
-                 "Partly done", "Decided", "Parked", "Done", "Dropped"];
+                 "Parked", "Done", "Dropped"];
   const COLOR = {
     "In progress": "#3b82f6", "Pending approval": "#a855f7", "Blocked": "#ef4444",
-    "Planned": "#0ea5e9", "Backlog": "#94a3b8", "Partly done": "#14b8a6",
-    "Decided": "#8b5cf6", "Parked": "#f59e0b", "Done": "#22c55e", "Dropped": "#64748b",
+    "Planned": "#0ea5e9", "Backlog": "#94a3b8", "Parked": "#f59e0b",
+    "Done": "#22c55e", "Dropped": "#64748b",
   };
+  const PRIORITIES = ["High", "Normal", "Low"];
+  const PRIORITY_RANK = { High: 0, Normal: 1, Low: 2 };
   const color = s => COLOR[s] || "#94a3b8";
+  const TERMINAL = new Set(["Done", "Dropped"]);
 
   /* ---------- tiny markdown ---------- */
   const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -389,11 +499,12 @@
   /* ---------- state ---------- */
   const saved = JSON.parse(localStorage.getItem("tracker-ui") || "{}");
   const state = {
-    q: "", status: new Set(saved.status || []), group: saved.group || null,
-    archive: !!saved.archive, expandAll: false,
+    q: "", status: new Set(saved.status || []), priority: new Set(saved.priority || []),
+    group: saved.group || null, archive: !!saved.archive, ready: !!saved.ready, expandAll: false,
   };
   const persist = () => localStorage.setItem("tracker-ui",
-    JSON.stringify({ status: [...state.status], group: state.group, archive: state.archive }));
+    JSON.stringify({ status: [...state.status], priority: [...state.priority], group: state.group,
+      archive: state.archive, ready: state.ready }));
   const openIds = new Set();
 
   const visiblePool = () => ITEMS.filter(i => state.archive ? true : !i.archived);
@@ -401,9 +512,13 @@
   function matches(it) {
     if (!state.archive && it.archived) return false;
     if (state.status.size && !state.status.has(it.status)) return false;
+    if (state.priority.size && !state.priority.has(it.priority || "Normal")) return false;
     if (state.group && it.group !== state.group) return false;
+    if (state.ready && !(it.status === "Planned" && (it.implementationBrief || "").trim())) return false;
     if (state.q) {
-      const hay = (it.id + " " + it.title + " " + it.status + " " + it.note + " " + it.body.join(" ")).toLowerCase();
+      const hay = (it.id + " " + it.title + " " + it.status + " " + it.note + " "
+        + (it.priority || "Normal") + " " + (it.implementationBrief || "") + " "
+        + it.added + " " + it.body.join(" ")).toLowerCase();
       if (!state.q.split(/\s+/).every(t => hay.includes(t))) return false;
     }
     return true;
@@ -421,6 +536,17 @@
         <span class="dot" style="background:${color(s)}"></span>${s}<span class="n">${counts[s]}</span>
       </button>`).join("");
 
+    const priorityCounts = {};
+    pool.forEach(i => {
+      const priority = i.priority || "Normal";
+      priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+    });
+    el("priorities").innerHTML = PRIORITIES.map(priority => `
+      <button class="chip ${state.priority.has(priority) ? "on" : ""}" data-priority="${priority}">
+        <span class="dot" style="background:${priority === "High" ? "#ef4444" : priority === "Low" ? "#94a3b8" : "#0ea5e9"}"></span>
+        ${priority}<span class="n">${priorityCounts[priority] || 0}</span>
+      </button>`).join("");
+
     const gc = {};
     pool.forEach(i => gc[i.group] = (gc[i.group] || 0) + 1);
     el("groups").innerHTML = DATA.groups.filter(g => gc[g.name]).map(g => `
@@ -429,15 +555,39 @@
       </button>`).join("");
 
     const done = ITEMS.filter(i => i.archived).length;
+    const ready = ITEMS.filter(i => !i.archived && i.status === "Planned" && (i.implementationBrief || "").trim()).length;
     el("bar").style.width = Math.round(done / ITEMS.length * 100) + "%";
-    el("progressText").textContent = `${done} archived · ${ITEMS.length - done} open · ${ITEMS.length} total`;
+    el("progressText").textContent = `${done} archived · ${ITEMS.length - done} open · ${ready} ready`;
     el("archN").textContent = done;
+    el("readyN").textContent = ready;
     el("toggleArchive").classList.toggle("on", state.archive);
+    el("toggleReady").classList.toggle("on", state.ready);
   }
 
   function itemHTML(it) {
     const open = state.expandAll || openIds.has(it.id);
-    const sub = [it.subgroup, it.note].filter(Boolean).join(" · ");
+    const sub = [it.subgroup, it.note, it.implementationBrief ? "implementation brief added" : "",
+      it.added ? `added ${it.added}` : ""].filter(Boolean).join(" · ");
+    const options = ORDER.map(s => `<option${s === it.status ? " selected" : ""}>${s}</option>`).join("");
+    const priority = it.priority || "Normal";
+    const priorityOptions = PRIORITIES.map(p => `<option${p === priority ? " selected" : ""}>${p}</option>`).join("");
+    const note = it.implementationBrief
+      ? `<div class="implementation-brief"><strong>Implementation brief</strong>${esc(it.implementationBrief)}</div>` : "";
+    const editor = `<div class="editor" data-editor="${it.id}">
+      <div class="editor-title">Edit task</div>
+      <div class="editor-grid">
+        <label>Status<select class="edit-status">${options}</select></label>
+        <label>Priority<select class="edit-priority">${priorityOptions}</select></label>
+        <label>Implementation brief
+          <textarea class="edit-note" placeholder="Describe what to build, important constraints, and how you will know it is done.">${esc(it.implementationBrief || "")}</textarea>
+        </label>
+      </div>
+      <p class="editor-help">Saved as project data so any coding agent can use the brief later without you repeating it in chat. Press ⌘/Ctrl + Enter to save.</p>
+      <div class="editor-actions">
+        <button class="save-item primary" data-save-item="${it.id}">Save changes</button>
+        <span class="item-save-state" aria-live="polite"></span>
+      </div>
+    </div>`;
     return `<article class="item ${open ? "open" : ""} ${it.archived ? "archived" : ""}" id="${it.id}">
       <button class="head" data-id="${it.id}">
         <span class="idbadge">${it.id}</span>
@@ -445,9 +595,10 @@
           <span class="ttl">${inline(it.title)}</span>
           ${sub ? `<div class="sub">${inline(sub)}</div>` : ""}
         </span>
+        ${priority !== "Normal" ? `<span class="priority priority-${priority.toLowerCase()}">${priority}</span>` : ""}
         <span class="status"><span class="dot" style="background:${color(it.status)}"></span>${it.status}</span>
       </button>
-      ${open ? `<div class="body">${markdown(it.body)}</div>` : ""}
+      ${open ? `<div class="body">${note}${markdown(it.body)}${editor}</div>` : ""}
     </article>`;
   }
 
@@ -457,7 +608,9 @@
     const rank = s => { const i = ORDER.indexOf(s); return i < 0 ? 99 : i; };
     const html = DATA.groups.map(g => {
       const mine = shown.filter(i => i.group === g.name)
-        .sort((a, b) => rank(a.status) - rank(b.status) || a.prefix.localeCompare(b.prefix)
+        .sort((a, b) => rank(a.status) - rank(b.status)
+          || PRIORITY_RANK[a.priority || "Normal"] - PRIORITY_RANK[b.priority || "Normal"]
+          || a.prefix.localeCompare(b.prefix)
           || a.num - b.num || a.sub.localeCompare(b.sub));
       if (!mine.length) return "";
       const blurb = g.blurb.length && !state.q ? `<div class="blurb">${markdown(g.blurb)}</div>` : "";
@@ -471,8 +624,186 @@
     el("list").innerHTML = html || `<div class="empty">Nothing matches those filters.</div>`;
   }
 
+  /* ---------- editable task persistence ---------- */
+  const API_PATH = "api/state";
+  let serverConnected = false;
+  let unsavedChanges = false;
+
+  function setConnection(message, kind = "") {
+    el("connection").textContent = message;
+    el("connection").className = `connection ${kind}`.trim();
+  }
+
+  function applyEdits() {
+    ITEMS.forEach(it => {
+      const edit = EDITS[it.id];
+      if (!edit) return;
+      if (typeof edit.status === "string") it.status = edit.status;
+      if (typeof edit.priority === "string") it.priority = edit.priority;
+      if (typeof edit.implementationBrief === "string") it.implementationBrief = edit.implementationBrief;
+      if (typeof edit.archived === "boolean") it.archived = edit.archived;
+    });
+  }
+
+  function statePayload() {
+    const items = Object.fromEntries(Object.keys(EDITS).sort().map(id => [id, EDITS[id]]));
+    return { version: STATE.version, revision: STATE.revision, items, createdItems: STATE.createdItems };
+  }
+
+  function renderOffline(message) {
+    setConnection("Server unavailable", "error");
+    el("list").innerHTML = `<div class="offline">
+      <h2>Start the live tracker</h2>
+      <p>${esc(message)}</p>
+      <p>Double-click <code>tracker/start.command</code>, or run:</p>
+      <pre><code>python3 tracker/server.py</code></pre>
+      <p>The tracker will open at <code>http://127.0.0.1:8765/tracker/</code> and save changes directly into the project.</p>
+    </div>`;
+  }
+
+  async function initializePersistence() {
+    if (!/^https?:$/.test(location.protocol)) {
+      renderOffline("This tracker now runs as a local site instead of a standalone file.");
+      return false;
+    }
+    try {
+      const response = await fetch(API_PATH, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok || !payload.state) throw new Error(payload.error || "Tracker server did not respond.");
+      STATE.version = payload.state.version;
+      STATE.revision = payload.state.revision;
+      STATE.createdItems = payload.state.createdItems || [];
+      STATE.createdItems.forEach(item => {
+        if (BY_ID.has(item.id)) return;
+        ITEMS.push(item);
+        BY_ID.set(item.id, item);
+      });
+      Object.assign(EDITS, payload.state.items || {});
+      applyEdits();
+      serverConnected = true;
+      el("newTask").disabled = false;
+      setConnection("Live · saved to project", "on");
+      return true;
+    } catch (error) {
+      renderOffline(error?.message || "Could not connect to the tracker server.");
+      return false;
+    }
+  }
+
+  function localDateStamp() {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  }
+
+  function stageEditor(editor) {
+    const id = editor.dataset.editor;
+    const status = editor.querySelector(".edit-status").value;
+    const priority = editor.querySelector(".edit-priority").value;
+    const implementationBrief = editor.querySelector(".edit-note").value.trim();
+    const archived = TERMINAL.has(status);
+    const updated = localDateStamp();
+    Object.assign(BY_ID.get(id), { status, priority, implementationBrief, archived });
+    EDITS[id] = { status, priority, implementationBrief, archived, updated };
+    return id;
+  }
+
+  function markDirty(editor) {
+    stageEditor(editor);
+    unsavedChanges = true;
+    setConnection("Unsaved changes", "");
+    editor.querySelector(".item-save-state").textContent = "Unsaved";
+  }
+
+  async function saveState() {
+    if (!serverConnected) return { ok: false, error: "Tracker server is not connected." };
+    setConnection("Saving…", "");
+    try {
+      const response = await fetch(API_PATH, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(statePayload()),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not save tracker changes.");
+      STATE.revision = payload.state.revision;
+      unsavedChanges = false;
+      setConnection("Live · saved to project", "on");
+      return { ok: true };
+    } catch (error) {
+      setConnection("Save failed", "error");
+      return { ok: false, error: error?.message || "Could not save tracker changes." };
+    }
+  }
+
+  async function saveItem(button) {
+    const editor = button.closest(".editor");
+    stageEditor(editor);
+    editor.querySelector(".item-save-state").textContent = "Saving…";
+    const result = await saveState();
+    if (result.ok) render();
+    else editor.querySelector(".item-save-state").textContent = result.error;
+  }
+
+  function openNewTask() {
+    el("newTaskForm").reset();
+    el("taskError").textContent = "";
+    el("taskGroup").innerHTML = DATA.groups.map(g => `<option>${esc(g.name)}</option>`).join("");
+    const prefixes = [...new Set(ITEMS.map(i => i.prefix))].sort();
+    el("taskPrefix").innerHTML = prefixes.map(prefix => `<option>${prefix}</option>`).join("");
+    el("newTaskBox").showModal();
+    el("taskTitle").focus();
+  }
+
+  async function createTask(event) {
+    event.preventDefault();
+    const previouslyUnsaved = unsavedChanges;
+    const title = el("taskTitle").value.trim();
+    const group = el("taskGroup").value;
+    const prefix = el("taskPrefix").value;
+    const priority = el("taskPriority").value;
+    const implementationBrief = el("taskBrief").value.trim();
+    const num = Math.max(0, ...ITEMS.filter(i => i.prefix === prefix).map(i => i.num)) + 1;
+    const id = `${prefix}-${num}`;
+    const added = localDateStamp();
+    const item = {
+      id, prefix, num, sub: "", title, status: "Backlog", priority, implementationBrief,
+      group, subgroup: "", archived: false, added, body: [`**Request.** ${title}`],
+    };
+
+    if (!title) { el("taskError").textContent = "Add a title first."; return; }
+    STATE.createdItems.push(item);
+    ITEMS.push(item);
+    BY_ID.set(id, item);
+    unsavedChanges = true;
+    setConnection("Saving…", "");
+    const result = await saveState();
+    if (!result.ok) {
+      STATE.createdItems.pop();
+      ITEMS.splice(ITEMS.indexOf(item), 1);
+      BY_ID.delete(id);
+      unsavedChanges = previouslyUnsaved;
+      el("taskError").textContent = result.error;
+      return;
+    }
+
+    el("newTaskBox").close();
+    state.group = group;
+    state.status.clear();
+    state.priority.clear();
+    state.ready = false;
+    state.archive = false;
+    state.q = "";
+    el("q").value = "";
+    openIds.add(id);
+    persist();
+    render();
+    document.getElementById(id)?.scrollIntoView({ block: "center" });
+  }
+
   /* ---------- events ---------- */
-  el("list").addEventListener("click", e => {
+  el("list").addEventListener("click", async e => {
+    const save = e.target.closest(".save-item");
+    if (save) { await saveItem(save); return; }
     const head = e.target.closest(".head");
     if (!head) return;
     const id = head.dataset.id;
@@ -482,15 +813,27 @@
     document.getElementById(id)?.scrollIntoView({ block: "nearest" });
   });
 
+  el("list").addEventListener("input", e => {
+    if (!e.target.matches(".edit-note")) return;
+    markDirty(e.target.closest(".editor"));
+  });
+
+  el("list").addEventListener("change", e => {
+    if (!e.target.matches(".edit-status, .edit-priority")) return;
+    markDirty(e.target.closest(".editor"));
+  });
+
   document.querySelector("aside").addEventListener("click", e => {
     const mini = e.target.closest("button.mini");
     if (mini) {
-      // "all" lights every status present (so you can then untick one or two);
-      // "none" clears the selection, which is the unfiltered state.
       if (mini.id === "statusAll") {
         visiblePool().forEach(i => state.status.add(i.status));
-      } else {
+      } else if (mini.id === "statusNone") {
         state.status.clear();
+      } else if (mini.id === "priorityAll") {
+        PRIORITIES.forEach(priority => state.priority.add(priority));
+      } else if (mini.id === "priorityNone") {
+        state.priority.clear();
       }
       persist(); render();
       return;
@@ -500,12 +843,17 @@
     if (chip.dataset.status) {
       const s = chip.dataset.status;
       state.status.has(s) ? state.status.delete(s) : state.status.add(s);
+    } else if (chip.dataset.priority) {
+      const priority = chip.dataset.priority;
+      state.priority.has(priority) ? state.priority.delete(priority) : state.priority.add(priority);
     } else if (chip.dataset.group) {
       state.group = state.group === chip.dataset.group ? null : chip.dataset.group;
+    } else if (chip.id === "toggleReady") {
+      state.ready = !state.ready;
     } else if (chip.id === "toggleArchive") {
       state.archive = !state.archive;
     } else if (chip.id === "reset") {
-      state.status.clear(); state.group = null; state.archive = false;
+      state.status.clear(); state.priority.clear(); state.group = null; state.archive = false; state.ready = false;
       el("q").value = ""; state.q = "";
     }
     persist(); render();
@@ -525,6 +873,9 @@
     render();
   });
 
+  el("newTask").addEventListener("click", openNewTask);
+  el("newTaskForm").addEventListener("submit", createTask);
+
   el("help").addEventListener("click", () => {
     const next = {};
     ITEMS.forEach(i => next[i.prefix] = Math.max(next[i.prefix] || 0, i.num));
@@ -542,8 +893,18 @@
   document.documentElement.dataset.theme = localStorage.getItem("tracker-theme") || "";
 
   document.addEventListener("keydown", e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      const editor = document.activeElement?.closest?.(".editor");
+      if (editor) { e.preventDefault(); editor.querySelector(".save-item").click(); }
+    }
     if (e.key === "/" && document.activeElement !== el("q")) { e.preventDefault(); el("q").focus(); }
     if (e.key === "Escape" && document.activeElement === el("q")) { el("q").value = ""; state.q = ""; render(); }
+  });
+
+  window.addEventListener("beforeunload", e => {
+    if (!unsavedChanges) return;
+    e.preventDefault();
+    e.returnValue = "";
   });
 
   function jumpToHash() {
@@ -561,8 +922,11 @@
   }
   window.addEventListener("hashchange", jumpToHash);
 
-  render();
-  jumpToHash();
+  initializePersistence().then(ready => {
+    if (!ready) return;
+    render();
+    jumpToHash();
+  });
 })();
 </script>
 </body>

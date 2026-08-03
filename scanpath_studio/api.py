@@ -28,6 +28,7 @@ from __future__ import annotations
 import difflib
 import inspect
 import logging
+from copy import deepcopy
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -146,6 +147,10 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     background_image_size=None,
     background_image_origin=None,
     background_image_opacity=1.0,
+    # VIZ-26: None preserves the classic tooltip; pass an ordered field list to
+    # choose the exact word/fixation rows shown on hover.
+    word_hover_fields=["text", "word_id", "line_idx", "total_fixation_duration_ms"],
+    fixation_hover_fields=["order_in_trial", "duration_ms", "word_id"],
 )
 
 
@@ -792,7 +797,10 @@ def figure_options(kind: str = "static") -> dict:
     options = {}
     for name in sorted(params):
         if name in defaults:
-            options[name] = defaults[name]
+            # Some public defaults are ordered field lists. Return an independent
+            # value so callers can edit the option reference without changing the
+            # canonical defaults used by every later plot.
+            options[name] = deepcopy(defaults[name])
         else:
             fallback = signature.parameters[name].default
             options[name] = None if fallback is inspect.Parameter.empty else fallback

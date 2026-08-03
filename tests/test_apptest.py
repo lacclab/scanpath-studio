@@ -1783,7 +1783,10 @@ class TestMultiplEYEUploadPreset:
         at.run(timeout=60)
         finalize = [b for b in at.button if b.key == "wizard_finalize"]
         assert finalize, "Add dataset button missing"
-        finalize[0].click().run()
+        # Finalizing renders the complete app and may build the host's font cache;
+        # use the same explicit budget as the initial preset render instead of
+        # AppTest's three-second default.
+        finalize[0].click().run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The dataset was stored and reselected — it renders without re-mapping.

@@ -219,7 +219,31 @@ def _enter_add_data_wizard() -> None:
     _reset_wizard_widgets()
 
 
-def _map_section(raw, specs, proposed, prefix, host, keys) -> Dict:
+def _keep_wizard_step_open(title: str) -> None:
+    """Widget callback: keep its mapping expander open across this rerun."""
+    st.session_state["_wizard_keep_open"] = title
+
+
+def _wizard_step_expanded(title: str, done: bool, flow: dict, state) -> bool:
+    """Resolve wizard auto-advance while preserving the step being edited.
+
+    A widget callback stamps ``_wizard_keep_open`` before Streamlit reruns. The
+    matching completed step consumes that one-shot marker and reopens, so picking
+    a second field does not make the expander disappear (DATA-19). Otherwise the
+    first unfinished step retains the historical auto-advance behaviour.
+    """
+    if state.get("_wizard_keep_open") == title:
+        state.pop("_wizard_keep_open", None)
+        return True
+    if done:
+        return False
+    expanded = not flow["claimed"]
+    if expanded:
+        flow["claimed"] = True
+    return expanded
+
+
+def _map_section(raw, specs, proposed, prefix, host, keys, *, step_title) -> Dict:
     """Render a subset of a table's mapping fields (the wizard renders the core
     fields in grouped, ordered steps). Returns the partial mapping for ``keys``."""
     if raw is None or getattr(raw, "empty", True):
@@ -234,6 +258,8 @@ def _map_section(raw, specs, proposed, prefix, host, keys) -> Dict:
         use_expander=False,
         only_keys=keys,
         header=False,
+        on_change=_keep_wizard_step_open,
+        on_change_args=(step_title,),
     )
 
 
@@ -304,6 +330,7 @@ def _render_unified_identifier(
     has_fix,
     common_cols: list,
     default_cols: list,
+    step_title: str,
 ) -> None:
     """Shared identifier picker for trial / participant / text.
 
@@ -344,6 +371,8 @@ def _render_unified_identifier(
             help="Most datasets name it the same way in every table, so one "
             "shared mapping is used. Turn this on only if Words and Fixations "
             "name it differently.",
+            on_change=_keep_wizard_step_open,
+            args=(step_title,),
         )
 
     if per_table:
@@ -360,6 +389,8 @@ def _render_unified_identifier(
                 key=fix_key,
                 help=help_text,
                 label_visibility="collapsed",
+                on_change=_keep_wizard_step_open,
+                args=(step_title,),
             )
             fix_schema[field_key] = _mapping(chosen_f)
         if has_words:
@@ -373,6 +404,8 @@ def _render_unified_identifier(
                 key=words_key,
                 help=help_text,
                 label_visibility="collapsed",
+                on_change=_keep_wizard_step_open,
+                args=(step_title,),
             )
             word_schema[field_key] = _mapping(chosen_w)
     else:
@@ -401,7 +434,12 @@ def _render_unified_identifier(
             if len(valid) != len(stored):
                 st.session_state[unified_key] = valid or list(default_cols)
         chosen = body.multiselect(
-            label, options=common_cols, key=unified_key, help=help_text
+            label,
+            options=common_cols,
+            key=unified_key,
+            help=help_text,
+            on_change=_keep_wizard_step_open,
+            args=(step_title,),
         )
         mapping = _mapping(chosen)
         if has_fix:
@@ -559,6 +597,7 @@ def _wizard_trial_step(
         has_fix,
         common_cols,
         default_trial,
+        "Trial identifier",
     )
 
     # Per-table trial-id sets. Equal → one clean count. Differing but overlapping
@@ -617,6 +656,7 @@ def _wizard_participant_text_step(
     fix_schema,
     has_words,
     has_fix,
+    step_title: str,
 ) -> None:
     """Optional participant- or text-identifier step, in the same shape as the
     Trial identifier (unified picker + per-table toggle + composite support),
@@ -640,6 +680,7 @@ def _wizard_participant_text_step(
         has_fix,
         common_cols,
         default_cols,
+        step_title,
     )
     pp, pp_schema = (raw_fix, fix_schema) if has_fix else (raw_words, word_schema)
     n = _distinct_id_count(pp, pp_schema.get(field_key))
@@ -1107,12 +1148,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             body.markdown(f"**{title}**")
             return body
         if expanded is None:
-            if done:
-                expanded = False
-            else:
-                expanded = not flow["claimed"]
-                if expanded:
-                    flow["claimed"] = True
+            expanded = _wizard_step_expanded(title, done, flow, st.session_state)
         return body.expander(title, expanded=expanded)
 
     def subsection(title: str, number: Optional[int] = None) -> None:
@@ -1204,8 +1240,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # unconditionally: `intro` is always created, and adding a *conditional*
     # child here is exactly the element-tree shift the comment above describes.
     intro.caption(
-        "🔒 Your file is parsed in memory on the machine running this app — it "
-        "isn't written to disk or sent anywhere else. "
+        "🔒 Your file is parsed on the machine running this app and never sent "
+        "elsewhere. Local/desktop installs keep a private recovery cache after "
+        "you add the dataset; the hosted demo remains memory-only. "
         "[Where your data goes ↗](https://lacclab.github.io/scanpath-studio/privacy/)"
     )
     if active and not already_uploaded:
@@ -1271,7 +1308,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
         noun="words",
         expanded=True,
     )
-
     if raw_words.empty and raw_fix.empty and raw_gaze.empty:
         # The "upload to begin" prompt now lives at the top of this subsection.
         return _UploadResult(
@@ -1350,6 +1386,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
+            "Participants (optional)",
         )
 
     # Texts (optional).
@@ -1373,6 +1410,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
+            "Texts (optional)",
         )
 
     # Column mapping: Fixations — required fields (coordinates + duration) plus
@@ -1390,6 +1428,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "col_map_fix",
                 fbox,
                 ["x", "y", "duration", "fixation_id"],
+                step_title="Fixations",
             )
         )
         fbox.caption(
@@ -1411,6 +1450,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "col_map_words",
                 wbox,
                 ["word_id", "text", "box"],
+                step_title="Text & Interest Areas",
             )
         )
         wbox.toggle(
@@ -1426,7 +1466,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
         mtbox = toggle("More text mappings (optional)", done=True)
         word_schema.update(
             _map_section(
-                raw_words, WORD_FIELD_SPECS, prop_w, "col_map_words", mtbox, ["line"]
+                raw_words,
+                WORD_FIELD_SPECS,
+                prop_w,
+                "col_map_words",
+                mtbox,
+                ["line"],
+                step_title="More text mappings (optional)",
             )
         )
         mtbox.caption("Line index enables colouring fixations/words by reading line.")
@@ -1442,6 +1488,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "col_map_fix",
                 mfbox,
                 ["word_id", "timestamp"],
+                step_title="More fixation mappings (optional)",
             )
         )
 
@@ -1465,6 +1512,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "col_map_raw_gaze",
             rgbox,
             ["participant", "trial", "x", "y", "timestamp", "text"],
+            step_title=(
+                "Raw gaze overlay" if rg_required else "Raw gaze overlay (optional)"
+            ),
         )
     else:
         raw_gaze_schema = {}

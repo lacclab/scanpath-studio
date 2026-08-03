@@ -1017,6 +1017,50 @@ _HOVER_MEASURE_LABELS: dict[str, str] = {
 }
 
 
+def _hover_label(field: str) -> str:
+    """Readable label for an arbitrary hover column."""
+    aliases = {
+        "text": "Word",
+        "word_id": "Word #",
+        "line_idx": "Line #",
+        "order_in_trial": "Fixation #",
+        "duration_ms": "Duration",
+        "timestamp_ms": "Timestamp",
+    }
+    return aliases.get(
+        field, _HOVER_MEASURE_LABELS.get(field, field.replace("_", " ").title())
+    )
+
+
+def _hover_payload(
+    frame: pd.DataFrame,
+    fields: Sequence[str],
+    *,
+    line_display: Optional[pd.Series] = None,
+) -> tuple[Optional[np.ndarray], str]:
+    """Plotly customdata + template for a user-selected field list (VIZ-26)."""
+    valid = [
+        field
+        for field in fields
+        if field in frame.columns or (field == "line_idx" and line_display is not None)
+    ]
+    if not valid:
+        return None, "<extra></extra>"
+    values: list[pd.Series] = []
+    rows: list[str] = []
+    for idx, field in enumerate(valid):
+        series = (
+            line_display
+            if field == "line_idx" and line_display is not None
+            else frame[field]
+        )
+        values.append(series)
+        suffix = " ms" if field.endswith("_ms") else ""
+        rows.append(f"{_hover_label(field)}: %{{customdata[{idx}]}}{suffix}")
+    customdata = pd.concat(values, axis=1).to_numpy(dtype=object)
+    return customdata, "<br>".join(rows) + "<extra></extra>"
+
+
 def _add_word_label_trace(
     fig: go.Figure,
     words: pd.DataFrame,
@@ -1028,6 +1072,7 @@ def _add_word_label_trace(
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = _CRITICAL_TEXT_COLOR,
     word_hover_measure: Optional[str] = None,
+    word_hover_fields: Optional[Sequence[str]] = None,
 ) -> None:
     if words.empty or "text" not in words.columns:
         return
@@ -1041,15 +1086,24 @@ def _add_word_label_trace(
         # word-box geometry — same clustering the by-line coloring uses — and
         # show it 1-based.
         line_display = (cluster_word_lines(words) + 1).rename("line")
-        customdata_parts: list[pd.Series] = [words["word_id"], line_display]
-        hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
-        if word_hover_measure and word_hover_measure in words.columns:
-            label = _HOVER_MEASURE_LABELS.get(word_hover_measure, word_hover_measure)
-            suffix = " ms" if word_hover_measure.endswith("_ms") else ""
-            hover += f"<br>{label}: %{{customdata[2]:.0f}}{suffix}"
-            customdata_parts.append(words[word_hover_measure])
-        hover += "<extra></extra>"
-        customdata = pd.concat(customdata_parts, axis=1)
+        if word_hover_fields is not None:
+            customdata, hover = _hover_payload(
+                words, word_hover_fields, line_display=line_display
+            )
+        else:
+            # Legacy API/deep-link behaviour: the three fixed identity lines plus
+            # the old single optional measure.
+            customdata_parts: list[pd.Series] = [words["word_id"], line_display]
+            hover = "Word: %{text}<br>Word #%{customdata[0]}<br>Line #%{customdata[1]}"
+            if word_hover_measure and word_hover_measure in words.columns:
+                label = _HOVER_MEASURE_LABELS.get(
+                    word_hover_measure, word_hover_measure
+                )
+                suffix = " ms" if word_hover_measure.endswith("_ms") else ""
+                hover += f"<br>{label}: %{{customdata[2]}}{suffix}"
+                customdata_parts.append(words[word_hover_measure])
+            hover += "<extra></extra>"
+            customdata = pd.concat(customdata_parts, axis=1)
     # Per-word text color: the highlight colour for highlighted words when the
     # caller asks for "Mark text" (``highlight_column`` set), the base text
     # colour otherwise. Both are configurable from the sidebar.
@@ -1489,6 +1543,8 @@ def make_scanpath_figure(
     word_heatmap_col: Optional[str] = None,
     word_heatmap_title: Optional[str] = None,
     word_hover_measure: Optional[str] = "total_fixation_duration_ms",
+    word_hover_fields: Optional[Sequence[str]] = None,
+    fixation_hover_fields: Optional[Sequence[str]] = None,
     show_connectors: bool = False,
     connector_y: Optional[Sequence[float]] = None,
 ) -> go.Figure:
@@ -1612,6 +1668,7 @@ def make_scanpath_figure(
                 text_color=text_color,
                 highlight_text_color=highlight_text_color,
                 word_hover_measure=word_hover_measure,
+                word_hover_fields=word_hover_fields,
             )
 
     if _add_raw_gaze_layer(fig, raw_gaze, show_raw_gaze=show_raw_gaze):
@@ -1872,19 +1929,12 @@ def make_scanpath_figure(
         )
         if hollow_fixations:
             marker = _make_hollow(marker)
-        customdata = np.stack(
-            [
-                ordered["order_in_trial"],
-                ordered["duration_ms"],
-                ordered.get("word_id", pd.Series([np.nan] * len(ordered))),
-            ],
-            axis=1,
+        hover_fields = (
+            ["order_in_trial", "duration_ms", "word_id"]
+            if fixation_hover_fields is None
+            else list(fixation_hover_fields)
         )
-        hovertemplate = (
-            "Fixation #%{customdata[0]}<br>"
-            "Duration %{customdata[1]} ms<br>"
-            "Word #%{customdata[2]}<extra></extra>"
-        )
+        customdata, hovertemplate = _hover_payload(ordered, hover_fields)
         glyph = FIXATION_GLYPH_SYMBOLS.get(fixation_symbol or "")
         if glyph:
             # VIZ-15: a shape Plotly's marker enum doesn't carry (♥). Draw it as
@@ -2915,6 +2965,8 @@ def make_scanpath_animation(
     highlight_column: Optional[str] = None,
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
     word_hover_measure: Optional[str] = None,
+    word_hover_fields: Optional[Sequence[str]] = None,
+    fixation_hover_fields: Optional[Sequence[str]] = None,
     background_color: Optional[str] = None,
     fixations_b: Optional[pd.DataFrame] = None,
     words_b: Optional[pd.DataFrame] = None,
@@ -3015,6 +3067,7 @@ def make_scanpath_animation(
             text_color=text_color,
             highlight_text_color=highlight_text_color,
             word_hover_measure=word_hover_measure,
+            word_hover_fields=word_hover_fields,
         )
 
     # PRE-2 fixation flags (VIZ-23), mirroring the static figure: *Discard* drops
@@ -3172,7 +3225,12 @@ def make_scanpath_animation(
         s["all_x"] = all_x
         s["all_y"] = all_y
         s["n_total"] = n_total
-        s["customdata"] = ordered["duration_ms"].tolist()
+        hover_fields = (
+            ["order_in_trial", "duration_ms"]
+            if fixation_hover_fields is None
+            else list(fixation_hover_fields)
+        )
+        s["customdata"], s["hovertemplate"] = _hover_payload(ordered, hover_fields)
         s["order_text"] = [str(j + 1) for j in range(n_total)]
         s["text_color"] = s["color"] if dual else order_font_color
         s["sac_color"] = s["color"] if dual else saccade_color
@@ -3194,10 +3252,8 @@ def make_scanpath_animation(
                 showlegend=dual and show_legend,
                 name=s["label"],
                 legendgroup=s["label"],
-                hovertemplate=(
-                    (s["label"] + "<br>" if dual else "")
-                    + "Fixation #%{text}<br>Duration %{customdata} ms<extra></extra>"
-                ),
+                hovertemplate=(s["label"] + "<br>" if dual else "")
+                + s["hovertemplate"],
                 customdata=s["customdata"],
             )
         )

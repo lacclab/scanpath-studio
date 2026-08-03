@@ -1,0 +1,73 @@
+{
+  "version": 2,
+  "revision": 11,
+  "items": {
+    "CMP-5": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "CMP-6": {
+      "status": "Closed",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "UX-21": {
+      "status": "Closed",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "UX-22": {
+      "status": "Closed",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "UX-23": {
+      "status": "In progress",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-03"
+    },
+    "UX-24": {
+      "status": "Closed",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "VIZ-25": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "VIZ-26": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "VIZ-27": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "VIZ-28": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    }
+  },
+  "createdItems": []
+}

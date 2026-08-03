@@ -85,6 +85,8 @@ GLOBAL_BG_CHOICE = "global_bg_choice"
 GLOBAL_BG_CUSTOM = "global_bg_custom"
 GLOBAL_FONT_FAMILY = "global_font_family"
 GLOBAL_WORD_HOVER_MEASURE = "global_word_hover_measure"
+GLOBAL_WORD_HOVER_FIELDS = "global_word_hover_fields"
+GLOBAL_FIXATION_HOVER_FIELDS = "global_fixation_hover_fields"
 GLOBAL_ORDER_FONT_SIZE = "global_order_font_size"
 GLOBAL_ANIM_GRID_STEP_MS = "global_anim_grid_step_ms"
 GLOBAL_ANIM_MAX_FRAMES = "global_anim_max_frames"
@@ -105,6 +107,11 @@ GLOBAL_FIT_TO_MONITOR = "global_fit_to_monitor"
 GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
 GLOBAL_CANVAS_WIDTH = "global_canvas_width"
 GLOBAL_CANVAS_HEIGHT = "global_canvas_height"
+GLOBAL_MONITOR_WIDTH_MM = "global_monitor_width_mm"
+GLOBAL_VIEWING_DISTANCE_MM = "global_viewing_distance_mm"
+GLOBAL_DISPLAY_DPI = "global_display_dpi"
+GLOBAL_STIMULUS_FONT_PT = "global_stimulus_font_pt"
+GLOBAL_USE_STIMULUS_FONT_PT = "global_use_stimulus_font_pt"
 GLOBAL_COLORBAR_ORIENTATION = "global_colorbar_orientation"
 GLOBAL_COLORBAR_TICKANGLE = "global_colorbar_tickangle"
 GLOBAL_COLORBAR_TICKFONT_SIZE = "global_colorbar_tickfont_size"
@@ -233,6 +240,8 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "bg_custom": GLOBAL_BG_CUSTOM,
         "font_family": GLOBAL_FONT_FAMILY,
         "word_hover_measure": GLOBAL_WORD_HOVER_MEASURE,
+        "word_hover_fields": GLOBAL_WORD_HOVER_FIELDS,
+        "fixation_hover_fields": GLOBAL_FIXATION_HOVER_FIELDS,
     }
 )
 
@@ -448,6 +457,11 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         # canvas_px + axes
         GLOBAL_CANVAS_WIDTH,
         GLOBAL_CANVAS_HEIGHT,
+        GLOBAL_MONITOR_WIDTH_MM,
+        GLOBAL_VIEWING_DISTANCE_MM,
+        GLOBAL_DISPLAY_DPI,
+        GLOBAL_STIMULUS_FONT_PT,
+        GLOBAL_USE_STIMULUS_FONT_PT,
         GLOBAL_X_FIELD,
         GLOBAL_Y_FIELD,
         # text
@@ -455,6 +469,8 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_LINE_SPACING,
         GLOBAL_FONT_FAMILY,
         GLOBAL_TEXT_COLOR,
+        GLOBAL_WORD_HOVER_FIELDS,
+        GLOBAL_FIXATION_HOVER_FIELDS,
         # highlighting
         GLOBAL_CRITICAL_SPAN_STYLE,
         GLOBAL_HIGHLIGHT_COLUMN,

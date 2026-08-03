@@ -16,7 +16,7 @@ from urllib.parse import parse_qsl, urlencode
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+from scanpath_studio.html_embed import embed_html_iframe
 
 from .annotations import restore_records
 from .constants import (
@@ -73,6 +73,11 @@ def _parse_int_range(v) -> tuple:
 def _parse_float_range(v) -> tuple:
     a, b = (float(x) for x in str(v).split(",")[:2])
     return (min(a, b), max(a, b))
+
+
+def _parse_field_list(v) -> list[str]:
+    """Comma-separated hover fields carried by a Share link (VIZ-26)."""
+    return [part.strip() for part in str(v).split(",") if part.strip()]
 
 
 def _parse_align_algorithm(v) -> str:
@@ -208,6 +213,8 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "bg_custom": "global_bg_custom",
     "font_family": "global_font_family",
     "word_hover_measure": "global_word_hover_measure",
+    "word_hover_fields": "global_word_hover_fields",
+    "fixation_hover_fields": "global_fixation_hover_fields",
 }
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -250,6 +257,8 @@ _URL_PRESETS = {
     # covers the same param): the drift-correction picker rejects any value
     # outside its options, so the link's spelling is checked here (ENG-23).
     "align_algorithm": ("global_align_algorithm", _parse_align_algorithm),
+    "word_hover_fields": ("global_word_hover_fields", _parse_field_list),
+    "fixation_hover_fields": ("global_fixation_hover_fields", _parse_field_list),
 }
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
@@ -977,6 +986,55 @@ def _restore_plot_config(
             canvas["height"], "global_canvas_height", *_CANVAS_BOUNDS, "canvas height"
         )
 
+    setup = section("experimental_setup")
+    # DATA-2: write all five keys even for a pre-experimental-setup config. This
+    # keeps schema-1/2 restores deterministic and makes the saved-state contract
+    # explicit (rather than hiding the key names behind a dynamic loop).
+    setup_context = isinstance(config.get("experimental_setup"), dict) or isinstance(
+        config.get("canvas_px"), dict
+    )
+    if setup_context:
+        monitor_width = number(setup.get("monitor_width_mm", 597.0))
+        put_valid(
+            monitor_width is not None,
+            "global_monitor_width_mm",
+            max(100.0, min(float(monitor_width), 3000.0))
+            if monitor_width is not None
+            else 597.0,
+            "monitor width",
+        )
+        viewing_distance = number(setup.get("viewing_distance_mm", 800.0))
+        put_valid(
+            viewing_distance is not None,
+            "global_viewing_distance_mm",
+            max(100.0, min(float(viewing_distance), 3000.0))
+            if viewing_distance is not None
+            else 800.0,
+            "viewing distance",
+        )
+        display_dpi = number(setup.get("display_dpi", 96.0))
+        put_valid(
+            display_dpi is not None,
+            "global_display_dpi",
+            max(20.0, min(float(display_dpi), 1000.0))
+            if display_dpi is not None
+            else 96.0,
+            "display DPI",
+        )
+        stimulus_font = number(setup.get("stimulus_font_pt", 12.0))
+        put_valid(
+            stimulus_font is not None,
+            "global_stimulus_font_pt",
+            max(4.0, min(float(stimulus_font), 144.0))
+            if stimulus_font is not None
+            else 12.0,
+            "stimulus font",
+        )
+        put(
+            "global_use_stimulus_font_pt",
+            bool(setup.get("use_stimulus_font_pt", False)),
+        )
+
     axes = section("axes")
     numeric = numeric_field_options(fixations)
     for cfg_key, state_key, label in (
@@ -1001,6 +1059,26 @@ def _restore_plot_config(
     tc = text.get("text_color")
     if isinstance(tc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", tc):
         put("global_text_color", tc)
+    word_hover_fields = text.get(
+        "word_hover_fields",
+        ["text", "word_id", "line_idx", "total_fixation_duration_ms"]
+        if isinstance(config.get("text"), dict)
+        else None,
+    )
+    if isinstance(word_hover_fields, list) and all(
+        isinstance(field, str) for field in word_hover_fields
+    ):
+        put("global_word_hover_fields", word_hover_fields)
+    fixation_hover_fields = text.get(
+        "fixation_hover_fields",
+        ["order_in_trial", "duration_ms", "word_id"]
+        if isinstance(config.get("text"), dict)
+        else None,
+    )
+    if isinstance(fixation_hover_fields, list) and all(
+        isinstance(field, str) for field in fixation_hover_fields
+    ):
+        put("global_fixation_hover_fields", fixation_hover_fields)
 
     highlighting = section("highlighting")
     if "critical_span_style" in highlighting:
@@ -1234,7 +1312,11 @@ def _build_share_query(
     for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
         value = st.session_state.get(state_key)
         if value not in (None, ""):
-            params[url_key] = str(value)
+            params[url_key] = (
+                ",".join(str(item) for item in value)
+                if isinstance(value, (list, tuple))
+                else str(value)
+            )
     for url_key, state_key in _SHARE_FLOAT_PARAMS.items():
         value = st.session_state.get(state_key)
         if value is not None:
@@ -1256,7 +1338,7 @@ def _build_share_query(
 def _render_share_link_widget(query: str) -> None:
     """Render the copyable share link (read-only field + Copy button).
 
-    A same-origin ``components.html`` iframe (same trick as the tour — see
+    A same-origin ``st.iframe`` embed (same trick as the tour — see
     ``tour.render_spotlight_tour``) composes the full URL from the *live* address:
     ``window.parent.location.origin + pathname`` + the query string built
     server-side. Doing the origin/path join client-side means the link is correct
@@ -1265,7 +1347,7 @@ def _render_share_link_widget(query: str) -> None:
     Clipboard API with a ``document.execCommand`` fallback for insecure contexts.
     """
     payload = json.dumps(query)
-    components.html(
+    embed_html_iframe(
         f"""
         <div class="sps-share">
           <div class="sps-share-row">

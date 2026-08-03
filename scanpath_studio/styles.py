@@ -496,7 +496,7 @@ def get_app_css() -> str:
         /* A figure that somehow can't scale down far enough scrolls rather than
            being squeezed out of true scale (the one guarantee that must hold). */
         /* Match both iframe titles: Streamlit titles these "st.iframe" now,
-           "components.html" on the older API (see `_embed_html_iframe`). */
+           "components.html" on historical builds. */
         [data-testid="stElementContainer"]:has(iframe[title*="components.html"]),
         [data-testid="stElementContainer"]:has(iframe[title*="st.iframe"]) {
             overflow-x: auto;

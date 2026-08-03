@@ -25,10 +25,24 @@ STATUSES = {
     "Backlog",
     "Planned",
     "In progress",
+    "On hold",
     "Review",
     "Closed",
 }
 PRIORITIES = {"High", "Normal", "Low"}
+GROUP_PREFIXES = {
+    "UX & Interaction": "UX",
+    "Compare mode": "CMP",
+    "Visualization & display": "VIZ",
+    "Datasets & ingestion": "DATA",
+    "Performance": "PERF",
+    "Analysis & corpus views": "AN",
+    "Preprocessing — eyekit parity": "PRE",
+    "Export": "EXP",
+    "Validation": "VAL",
+    "Bugs": "BUG",
+    "Engineering": "ENG",
+}
 EDIT_FIELDS = ("status", "priority", "implementationBrief", "archived", "updated")
 CREATED_FIELDS = {
     "id",
@@ -80,6 +94,8 @@ def _validate_created_item(value: Any, known_ids: set[str]) -> dict[str, Any]:
         raise ValueError(f"Invalid status or priority for {item_id}.")
     if value["group"] not in _known_groups():
         raise ValueError(f"Invalid group for {item_id}.")
+    if GROUP_PREFIXES.get(value["group"]) != prefix:
+        raise ValueError(f"Invalid prefix for {value['group']}.")
     if not isinstance(value["implementationBrief"], str):
         raise ValueError(f"Invalid implementation brief for {item_id}.")
     if not isinstance(value["archived"], bool):

@@ -114,12 +114,13 @@ correctness) and by annotation state (favorites / tags) before `build_combo_opti
 `tracker/data.js` is the original task catalogue. User-authored status changes and
 implementation instructions live in `tracker/state.json` and override the matching
 items by stable ID. When the user asks to work from the tracker, apply those
-overrides first and treat each `implementationBrief` as the task-specific handoff;
-this lets the user scope work in the tracker without repeating it in chat. Run the
-editable site with `python3 tracker/server.py` (or `tracker/start.command`). A task
-is ready for implementation when it is `Planned` and has a non-empty brief;
-`priority` orders work within a status. Tasks created in the UI live under
-`createdItems` in the same state file.
+overrides first and treat each `implementationBrief` as the task-specific work
+instructions; this lets the user scope work in the tracker without repeating it in
+chat. Run the editable site with `python3 tracker/server.py` (or
+`tracker/start.command`). The live workflow has six statuses: `Backlog`, `Planned`,
+`In progress`, `On hold`, `Review`, and `Closed`; `priority` orders work within a status. Tasks
+created in the UI live under `createdItems` in the same state file, and their prefix
+is derived from their group.
 
 ## Build / Lint / Test
 

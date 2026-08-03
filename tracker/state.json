@@ -1,7 +1,14 @@
 {
   "version": 2,
-  "revision": 11,
+  "revision": 17,
   "items": {
+    "BUG-15": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
     "CMP-5": {
       "status": "Closed",
       "priority": "Normal",
@@ -11,6 +18,34 @@
     },
     "CMP-6": {
       "status": "Closed",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "DATA-17": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "DATA-2": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "ENG-24": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-03"
+    },
+    "ENG-25": {
+      "status": "Closed",
+      "priority": "Normal",
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-03"
@@ -38,6 +73,13 @@
       "status": "Closed",
       "implementationBrief": "",
       "archived": true,
+      "updated": "2026-08-03"
+    },
+    "VIZ-22": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
       "updated": "2026-08-03"
     },
     "VIZ-25": {

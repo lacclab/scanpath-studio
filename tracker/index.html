@@ -110,7 +110,6 @@
     color: var(--ink-faint); margin: 0 0 8px; font-weight: 600;
     display: flex; align-items: center; gap: 8px;
   }
-  .bulk { margin-left: auto; display: flex; gap: 4px; }
   details.facet { margin-bottom: 8px; border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; }
   details.facet > summary {
     display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none;
@@ -123,12 +122,6 @@
   details.facet > summary:hover { background: var(--panel-2); }
   details.facet > div { padding: 3px 0 5px; }
   .summary-meta { margin-left: auto; color: var(--ink-faint); font-size: 10.5px; text-transform: none; letter-spacing: 0; font-weight: 450; }
-  button.mini {
-    font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
-    padding: 1px 6px; border-radius: 6px; color: var(--ink-faint);
-    background: none; border: 1px solid var(--line);
-  }
-  button.mini:hover { background: var(--panel-2); color: var(--ink); }
   .chip {
     display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
     border: 0; background: none; padding: 4px 7px; border-radius: 7px; color: var(--ink-dim); font-size: 13.2px;
@@ -304,7 +297,7 @@
 <dialog id="newTaskBox">
   <button class="close" type="button" onclick="newTaskBox.close()">✕</button>
   <h3>Create a task</h3>
-  <p style="font-size:13px;color:var(--ink-dim)">The ID is assigned from the selected prefix. New tasks start in Backlog.</p>
+  <p style="font-size:13px;color:var(--ink-dim)">The group determines the ID prefix; the next number is assigned automatically. New tasks start in Backlog.</p>
   <form id="newTaskForm">
     <div class="task-form">
       <label class="wide">Title
@@ -333,34 +326,32 @@
   <p style="font-size:13.6px;color:var(--ink-dim)">
     Every item has a stable <b>ID</b> you can cite in chat ("let's do <code>CMP-3</code>"),
     a <b>status</b>, and a short write-up with code anchors. Expand an item to change
-    its status or leave an implementation brief. Changes are saved directly into
+    its status or leave implementation instructions. Changes are saved directly into
     <code>tracker/state.json</code>; the original catalogue stays in <code>tracker/data.js</code>.
   </p>
 
   <h4>Editing tasks</h4>
   <ul>
     <li>Expand a task, choose a status, and describe the outcome, constraints, or
-      acceptance checks in the <b>Implementation brief</b>.</li>
-    <li>A task is <b>Ready to implement</b> when it is Planned and has an implementation
-      brief. Use the quick view in the sidebar to see that queue.</li>
+      acceptance checks in <b>Instructions for implementation</b>. These are saved in
+      the repository and become the task handoff for whichever coding agent works next.</li>
     <li>Use <b>New task</b> to capture work without editing the catalogue by hand.</li>
     <li>Start the live tracker by double-clicking <code>tracker/start.command</code>,
       or run <code>python3 tracker/server.py</code>. Keep that terminal window open.</li>
     <li>Each save writes to the project immediately. No downloads or file permissions
       are involved, and concurrent browser tabs are protected from overwriting each other.</li>
-    <li><b>Done</b> and <b>Dropped</b> archive an item automatically. Moving it to any
-      active status restores it to the open list.</li>
+    <li><b>Closed</b> archives an item automatically. Moving it to any active status
+      restores it to the open list.</li>
   </ul>
 
   <h4>Status</h4>
   <ul>
-    <li><b>Backlog</b> — captured, not scheduled, but eligible.</li>
-    <li><b>Planned</b> — next-ish, scoped.</li>
-    <li><b>In progress</b> · <b>Blocked</b>.</li>
-    <li><b>Parked</b> — deliberately deferred; <i>not</i> to be picked up as ordinary next
-      work. Park with a date and a one-line reason; unparking is just a status change.</li>
-    <li><b>Pending approval</b> — implemented, awaiting the user's final sign-off.</li>
-    <li><b>Done</b> / <b>Dropped</b> — set <code>"archived": true</code> at the same time.</li>
+    <li><b>Backlog</b> — captured, not scheduled.</li>
+    <li><b>Planned</b> — scoped and intended as upcoming work.</li>
+    <li><b>In progress</b> — actively being implemented.</li>
+    <li><b>On hold</b> — intentionally paused or waiting on something.</li>
+    <li><b>Review</b> — implemented and waiting for your sign-off.</li>
+    <li><b>Closed</b> — finished or no longer active; it is archived automatically.</li>
   </ul>
 
   <h4>Write-up shape</h4>
@@ -375,17 +366,18 @@
     <li><b>Background (technical)</b> — code anchors, design calls, gotchas, related
       IDs. The internal half, kept out of the first three.</li>
   </ul>
-  <p style="font-size:13.4px;color:var(--ink-dim)">A <b>Backlog</b> item has only
-    <i>Request</i> (plus <i>Background</i>) — the other two appear once there is work
-    behind it. An implemented item keeps its status line as the leading
+  <p style="font-size:13.4px;color:var(--ink-dim)">An item with no implementation
+    behind it has only <i>Request</i> (plus <i>Background</i>), whether it is Backlog,
+    Planned, or On hold. The other two appear once work exists. An implemented item
+    keeps its status line as the leading
     <code>&gt;</code> quote.</p>
 
   <h4>Rules</h4>
   <ul>
     <li><b>Approval gate.</b> When implementation is finished, mark it
-      <code>Pending approval</code> — never jump straight to <code>Done</code>. Only after the
-      user signs off does it become <code>Done</code> + <code>archived: true</code>. An item
-      closed <i>without</i> being implemented is archived the same way, with the reason.</li>
+      <code>Review</code> — never jump straight to <code>Closed</code>. Only after the
+      user signs off does it become <code>Closed</code> + <code>archived: true</code>. Work
+      closed without implementation should say why in its instructions or write-up.</li>
     <li><b>IDs are stable.</b> Never renumber. New items take the next free number in their
       prefix (see below); archived items keep their ID.</li>
     <li><b>Composite asks are split</b> into sub-items so they can land independently.</li>
@@ -400,7 +392,7 @@
 
   <h4>Adding an item</h4>
   <p style="font-size:13.4px;color:var(--ink-dim)">Use <b>New task</b>. The tracker assigns
-    the next stable ID for the chosen prefix and stores the new item in
+    the group's prefix and next stable ID, then stores the new item in
     <code>tracker/state.json</code>.</p>
 </dialog>
 
@@ -412,17 +404,23 @@
   const EDITS = {};
   const ITEMS = DATA.items;
   const BY_ID = new Map(ITEMS.map(i => [i.id, i]));
-  const ORDER = ["In progress", "Pending approval", "Blocked", "Planned", "Backlog",
-                 "Parked", "Done", "Dropped"];
+  const ORDER = ["In progress", "Review", "Planned", "On hold", "Backlog", "Closed"];
   const COLOR = {
-    "In progress": "#3b82f6", "Pending approval": "#a855f7", "Blocked": "#ef4444",
-    "Planned": "#0ea5e9", "Backlog": "#94a3b8", "Parked": "#f59e0b",
-    "Done": "#22c55e", "Dropped": "#64748b",
+    "In progress": "#3b82f6", "Review": "#a855f7", "Planned": "#0ea5e9",
+    "On hold": "#f59e0b", "Backlog": "#94a3b8", "Closed": "#22c55e",
+  };
+  const STATUS_ALIASES = {
+    "Pending approval": "Review", Done: "Closed", Dropped: "Closed",
+    Blocked: "On hold", Parked: "On hold", "Partly done": "In progress", Decided: "Closed",
   };
   const PRIORITIES = ["High", "Normal", "Low"];
   const PRIORITY_RANK = { High: 0, Normal: 1, Low: 2 };
   const color = s => COLOR[s] || "#94a3b8";
-  const TERMINAL = new Set(["Done", "Dropped"]);
+  const TERMINAL = new Set(["Closed"]);
+  ITEMS.forEach(it => {
+    it.status = STATUS_ALIASES[it.status] || it.status;
+    if (it.status === "Closed") it.archived = true;
+  });
 
   /* ---------- tiny markdown ---------- */
   const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -500,11 +498,11 @@
   const saved = JSON.parse(localStorage.getItem("tracker-ui") || "{}");
   const state = {
     q: "", status: new Set(saved.status || []), priority: new Set(saved.priority || []),
-    group: saved.group || null, archive: !!saved.archive, ready: !!saved.ready, expandAll: false,
+    group: saved.group || null, archive: !!saved.archive, expandAll: false,
   };
   const persist = () => localStorage.setItem("tracker-ui",
     JSON.stringify({ status: [...state.status], priority: [...state.priority], group: state.group,
-      archive: state.archive, ready: state.ready }));
+      archive: state.archive }));
   const openIds = new Set();
 
   const visiblePool = () => ITEMS.filter(i => state.archive ? true : !i.archived);
@@ -514,7 +512,6 @@
     if (state.status.size && !state.status.has(it.status)) return false;
     if (state.priority.size && !state.priority.has(it.priority || "Normal")) return false;
     if (state.group && it.group !== state.group) return false;
-    if (state.ready && !(it.status === "Planned" && (it.implementationBrief || "").trim())) return false;
     if (state.q) {
       const hay = (it.id + " " + it.title + " " + it.status + " " + it.note + " "
         + (it.priority || "Normal") + " " + (it.implementationBrief || "") + " "
@@ -535,6 +532,7 @@
       <button class="chip ${state.status.has(s) ? "on" : ""}" data-status="${s}">
         <span class="dot" style="background:${color(s)}"></span>${s}<span class="n">${counts[s]}</span>
       </button>`).join("");
+    el("statusSummary").textContent = state.status.size ? `${state.status.size} selected` : "All";
 
     const priorityCounts = {};
     pool.forEach(i => {
@@ -546,6 +544,7 @@
         <span class="dot" style="background:${priority === "High" ? "#ef4444" : priority === "Low" ? "#94a3b8" : "#0ea5e9"}"></span>
         ${priority}<span class="n">${priorityCounts[priority] || 0}</span>
       </button>`).join("");
+    el("prioritySummary").textContent = state.priority.size ? `${state.priority.size} selected` : "All";
 
     const gc = {};
     pool.forEach(i => gc[i.group] = (gc[i.group] || 0) + 1);
@@ -553,36 +552,35 @@
       <button class="chip ${state.group === g.name ? "on" : ""}" data-group="${g.name}">
         ${g.name}<span class="n">${gc[g.name]}</span>
       </button>`).join("");
+    el("groupSummary").textContent = state.group || "All";
 
     const done = ITEMS.filter(i => i.archived).length;
-    const ready = ITEMS.filter(i => !i.archived && i.status === "Planned" && (i.implementationBrief || "").trim()).length;
     el("bar").style.width = Math.round(done / ITEMS.length * 100) + "%";
-    el("progressText").textContent = `${done} archived · ${ITEMS.length - done} open · ${ready} ready`;
+    el("progressText").textContent = `${done} closed · ${ITEMS.length - done} open · ${ITEMS.length} total`;
     el("archN").textContent = done;
-    el("readyN").textContent = ready;
     el("toggleArchive").classList.toggle("on", state.archive);
-    el("toggleReady").classList.toggle("on", state.ready);
+    el("viewSummary").textContent = state.archive ? "All tasks" : "Open";
   }
 
   function itemHTML(it) {
     const open = state.expandAll || openIds.has(it.id);
-    const sub = [it.subgroup, it.note, it.implementationBrief ? "implementation brief added" : "",
+    const sub = [it.subgroup, it.note, it.implementationBrief ? "work instructions added" : "",
       it.added ? `added ${it.added}` : ""].filter(Boolean).join(" · ");
     const options = ORDER.map(s => `<option${s === it.status ? " selected" : ""}>${s}</option>`).join("");
     const priority = it.priority || "Normal";
     const priorityOptions = PRIORITIES.map(p => `<option${p === priority ? " selected" : ""}>${p}</option>`).join("");
     const note = it.implementationBrief
-      ? `<div class="implementation-brief"><strong>Implementation brief</strong>${esc(it.implementationBrief)}</div>` : "";
+      ? `<div class="implementation-brief"><strong>Instructions for implementation</strong>${esc(it.implementationBrief)}</div>` : "";
     const editor = `<div class="editor" data-editor="${it.id}">
       <div class="editor-title">Edit task</div>
       <div class="editor-grid">
         <label>Status<select class="edit-status">${options}</select></label>
         <label>Priority<select class="edit-priority">${priorityOptions}</select></label>
-        <label>Implementation brief
+        <label>Instructions for implementation
           <textarea class="edit-note" placeholder="Describe what to build, important constraints, and how you will know it is done.">${esc(it.implementationBrief || "")}</textarea>
         </label>
       </div>
-      <p class="editor-help">Saved as project data so any coding agent can use the brief later without you repeating it in chat. Press ⌘/Ctrl + Enter to save.</p>
+      <p class="editor-help">This becomes the handoff a coding agent reads before working on the task. Press ⌘/Ctrl + Enter to save.</p>
       <div class="editor-actions">
         <button class="save-item primary" data-save-item="${it.id}">Save changes</button>
         <span class="item-save-state" aria-live="polite"></span>
@@ -638,7 +636,7 @@
     ITEMS.forEach(it => {
       const edit = EDITS[it.id];
       if (!edit) return;
-      if (typeof edit.status === "string") it.status = edit.status;
+      if (typeof edit.status === "string") it.status = STATUS_ALIASES[edit.status] || edit.status;
       if (typeof edit.priority === "string") it.priority = edit.priority;
       if (typeof edit.implementationBrief === "string") it.implementationBrief = edit.implementationBrief;
       if (typeof edit.archived === "boolean") it.archived = edit.archived;
@@ -744,12 +742,25 @@
     else editor.querySelector(".item-save-state").textContent = result.error;
   }
 
+  function taskIdentityForGroup(group) {
+    const counts = {};
+    ITEMS.filter(item => item.group === group).forEach(item => {
+      counts[item.prefix] = (counts[item.prefix] || 0) + 1;
+    });
+    const prefix = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))[0];
+    const num = Math.max(0, ...ITEMS.filter(item => item.prefix === prefix).map(item => item.num)) + 1;
+    return { prefix, num, id: `${prefix}-${num}` };
+  }
+
+  function updateTaskIdPreview() {
+    el("taskIdPreview").textContent = taskIdentityForGroup(el("taskGroup").value).id;
+  }
+
   function openNewTask() {
     el("newTaskForm").reset();
     el("taskError").textContent = "";
     el("taskGroup").innerHTML = DATA.groups.map(g => `<option>${esc(g.name)}</option>`).join("");
-    const prefixes = [...new Set(ITEMS.map(i => i.prefix))].sort();
-    el("taskPrefix").innerHTML = prefixes.map(prefix => `<option>${prefix}</option>`).join("");
+    updateTaskIdPreview();
     el("newTaskBox").showModal();
     el("taskTitle").focus();
   }
@@ -759,11 +770,9 @@
     const previouslyUnsaved = unsavedChanges;
     const title = el("taskTitle").value.trim();
     const group = el("taskGroup").value;
-    const prefix = el("taskPrefix").value;
+    const { prefix, num, id } = taskIdentityForGroup(group);
     const priority = el("taskPriority").value;
     const implementationBrief = el("taskBrief").value.trim();
-    const num = Math.max(0, ...ITEMS.filter(i => i.prefix === prefix).map(i => i.num)) + 1;
-    const id = `${prefix}-${num}`;
     const added = localDateStamp();
     const item = {
       id, prefix, num, sub: "", title, status: "Backlog", priority, implementationBrief,
@@ -790,7 +799,6 @@
     state.group = group;
     state.status.clear();
     state.priority.clear();
-    state.ready = false;
     state.archive = false;
     state.q = "";
     el("q").value = "";
@@ -824,20 +832,6 @@
   });
 
   document.querySelector("aside").addEventListener("click", e => {
-    const mini = e.target.closest("button.mini");
-    if (mini) {
-      if (mini.id === "statusAll") {
-        visiblePool().forEach(i => state.status.add(i.status));
-      } else if (mini.id === "statusNone") {
-        state.status.clear();
-      } else if (mini.id === "priorityAll") {
-        PRIORITIES.forEach(priority => state.priority.add(priority));
-      } else if (mini.id === "priorityNone") {
-        state.priority.clear();
-      }
-      persist(); render();
-      return;
-    }
     const chip = e.target.closest(".chip");
     if (!chip) return;
     if (chip.dataset.status) {
@@ -848,12 +842,10 @@
       state.priority.has(priority) ? state.priority.delete(priority) : state.priority.add(priority);
     } else if (chip.dataset.group) {
       state.group = state.group === chip.dataset.group ? null : chip.dataset.group;
-    } else if (chip.id === "toggleReady") {
-      state.ready = !state.ready;
     } else if (chip.id === "toggleArchive") {
       state.archive = !state.archive;
     } else if (chip.id === "reset") {
-      state.status.clear(); state.priority.clear(); state.group = null; state.archive = false; state.ready = false;
+      state.status.clear(); state.priority.clear(); state.group = null; state.archive = false;
       el("q").value = ""; state.q = "";
     }
     persist(); render();
@@ -875,6 +867,7 @@
 
   el("newTask").addEventListener("click", openNewTask);
   el("newTaskForm").addEventListener("submit", createTask);
+  el("taskGroup").addEventListener("change", updateTaskIdPreview);
 
   el("help").addEventListener("click", () => {
     const next = {};

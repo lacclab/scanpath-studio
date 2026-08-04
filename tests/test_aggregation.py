@@ -44,11 +44,13 @@ from scanpath_studio.aggregation import (
     per_participant_trend,
     per_reader_word_measure,
     progressive_regressive_counts,
+    reader_summary_table,
     reader_summary,
     reader_vs_cohort_values,
     saccade_vs_duration,
     spread_bounds,
     text_read_counts,
+    trial_summary_table,
     two_group_values,
     two_group_word_profiles,
     word_box_aggregate,
@@ -813,6 +815,32 @@ class TestMeasureValues:
 
 
 class TestReaderViews:
+    def test_trial_summary_table_includes_runs_and_reading_splits(self):
+        words = _tidy_words().copy()
+        words["is_correct"] = [True, True, True, False, False, False, True]
+        table = trial_summary_table(words, _tidy_fixations())
+        p1 = table[table.participant_id == "p1"].iloc[0]
+        assert p1["n_fixations"] == 3
+        assert p1["total_fixation_ms"] == pytest.approx(380.0)
+        assert p1["mean_forward_saccade_px"] == pytest.approx(3.0)
+        assert p1["nrun"] == 3
+        assert p1["first_pass_ms"] == pytest.approx(250.0)
+        assert p1["rereading_ms"] == pytest.approx(130.0)
+        assert p1["refixation_rate"] == pytest.approx(0.0)
+        assert p1["regression_in_rate"] == pytest.approx(1 / 3)
+        assert p1["question_correct"] == 1.0
+
+    def test_reader_summary_table_aggregates_trial_table_fields(self):
+        words = _tidy_words().copy()
+        words["is_correct"] = [True, True, True, False, False, False, True]
+        table = reader_summary_table(words, _tidy_fixations())
+        p1 = table[table.participant_id == "p1"].iloc[0]
+        assert p1["total_fixation_ms"] == pytest.approx(380.0)
+        assert p1["first_pass_ms"] == pytest.approx(250.0)
+        assert p1["rereading_ms"] == pytest.approx(130.0)
+        assert p1["n_question_correct"] == 1.0
+        assert p1["comprehension_accuracy"] == 1.0
+
     def test_reader_vs_cohort_values(self):
         groups = reader_vs_cohort_values(_tidy_fixations(), "p1", MEASURES["fix_dur"])
         assert set(groups) == {"This reader", "Cohort"}

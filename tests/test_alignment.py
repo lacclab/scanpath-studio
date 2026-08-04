@@ -71,6 +71,25 @@ def test_unknown_method_raises():
         alignment.assign_lines(_FIX_XY, _LINE_Y, method="nope")
 
 
+def test_slice_keeps_a_locally_drifted_fixation_with_its_reading_run():
+    """Slice uses run coherence where nearest-line attachment would split it."""
+    fixation_xy = np.array(
+        [[100, 100], [200, 132], [300, 101], [100, 160], [300, 160]], dtype=float
+    )
+    line_y = np.array([100.0, 160.0])
+    word_xy = np.array(
+        [[100, 100], [200, 100], [300, 100], [100, 160], [300, 160]], dtype=float
+    )
+
+    attached = alignment.assign_lines(fixation_xy, line_y, method="attach")
+    sliced = alignment.assign_lines(
+        fixation_xy, line_y, word_XY=word_xy, method="slice"
+    )
+
+    assert attached.tolist() == [0, 1, 0, 1, 1]
+    assert sliced.tolist() == [0, 0, 0, 1, 1]
+
+
 # --- DataFrame wrapper `correct` on the shared synthetic trial ----------------
 
 _LINE_CENTERS = {110.0, 210.0}  # the synthetic 2-line trial's line centers

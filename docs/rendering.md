@@ -104,3 +104,17 @@ export bumps the raster `scale` to stay crisp; SVG/PDF are vector and need no bu
 
 If you add a new spatial figure, keep it on `_render_true_scale_chart` — never
 `st.plotly_chart` — or the reading text will drift from the boxes.
+
+## Duration mass and illustration disclosure
+
+The **Duration mass** heatmap spreads each fixation's duration over nearby
+character centres with a Gaussian kernel. Its sigma is expressed in characters,
+so the setting remains meaningful across display resolutions and fonts. It uses
+the same linear/log normalization and colour controls as the other heatmaps.
+
+Geometry-changing views—snapped fixations, arced saccades, drift correction,
+discarded/subset paths, synthetic data, or a hand-authored scanpath—can be
+marked **Illustration** automatically. The annotation is part of the Plotly
+figure and export metadata, so it survives PNG/SVG and layered export. Use the
+manual Show/Hide override only when the publication context already supplies
+an equivalent disclosure.

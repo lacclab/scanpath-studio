@@ -543,7 +543,13 @@ window.TRACKER = {
     "— on a shared colour scale, so per-word differences are readable at a glance",
     "without a separate difference plot. Renders through the existing",
     "`layout.shapes` heatmap path in [`plots.py`](scanpath_studio/plots.py). Related:",
-    "**AN-19** (difference word profile), **AN-22** (stacked two-group heatmap)."
+  "**AN-19** (difference word profile), **AN-22** (stacked two-group heatmap).",
+  "",
+  "**What was done.** Compare mode now supports split-half, side-by-side, and stacked word heatmaps for readers A/B with one shared colour scale and colour bar.",
+  "",
+  "**What's left.** User approval and final visual selection of the preferred default layout.",
+  "",
+  "**Background (technical).** Both halves use the existing word-box shape pipeline and the same metric range, avoiding misleading reader-specific normalization."
    ]
   },
   {
@@ -592,7 +598,13 @@ window.TRACKER = {
     "pattern / column** (e.g. `{text_id}.png`) so per-trial images resolve without",
     "embedding them. Local-only (folders aren't reachable on the hosted demo); generalize",
     "`data._resolve_sample_image_paths` from the bundled `sample_data` dir to a",
-    "user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus."
+    "user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus.",
+    "",
+    "**What was done.** Added local folder/pattern controls, a safe resolver, API arguments, and CLI flags for per-row stimulus-image lookup.",
+    "",
+    "**What's left.** User approval and validation against the user's real folder convention.",
+    "",
+    "**Background (technical).** Resolved paths must remain beneath the selected root; missing files preserve any existing image path instead of failing the dataset."
    ]
   },
   {
@@ -625,7 +637,13 @@ window.TRACKER = {
     "",
     "Note: [`synthetic.py`](scanpath_studio/synthetic.py) already builds a fully",
     "hand-specified trial (the \"Synthetic test trial\" data source) — the same",
-    "construction could back the authoring UI."
+    "construction could back the authoring UI.",
+    "",
+    "**What was done.** Added deterministic text layout, editable fixation events, JSON save/restore, a first-class authored source, and an Illustration preset that flows through normal plotting/export.",
+    "",
+    "**What's left.** User approval and optional refinement of the initial authored event defaults.",
+    "",
+    "**Background (technical).** Authored scanpaths use the canonical word/fixation tables, so deep links, CLI/API rendering, and exports do not need a parallel renderer."
    ]
   },
   {
@@ -733,7 +751,13 @@ window.TRACKER = {
     "",
     "Related: **VIZ-20** (an *Illustration* preset would switch this on by definition),",
     "**VIZ-21** (auditing which settings actually apply per render path overlaps with",
-    "auditing which ones distort), **DATA-15**, **PRE-3**, **PRE-9**."
+    "auditing which ones distort), **DATA-15**, **PRE-3**, **PRE-9**.",
+    "",
+    "**What was done.** Added automatic reason detection, Auto/Show/Hide controls, an exported figure annotation, metadata, deep-link/save support, CLI flags, and API parameters.",
+    "",
+    "**What's left.** User approval of the label wording and placement.",
+    "",
+    "**Background (technical).** Only semantic geometry/data changes trigger disclosure; palette and other cosmetic styling do not."
    ]
   },
   {
@@ -1041,7 +1065,13 @@ window.TRACKER = {
   "body": [
     "**Request.** Hypothesis: selecting many columns/measures/metadata fields slows the app.",
     "**First verify** whether it's actually true (profile a wide vs narrow frame); if",
-    "so, add a note/warning. If not, close this item."
+    "so, add a note/warning. If not, close this item.",
+    "",
+    "**What was done.** Profiled wide-frame normalization/hashing and added a setup warning at 50 extra fields or five million cells.",
+    "",
+    "**What's left.** User approval; the warning remains advisory because research metadata may be necessary.",
+    "",
+    "**Background (technical).** The measured wide case was materially slower, so the threshold uses both schema width and total cell count rather than file size alone."
    ]
   },
   {
@@ -1081,7 +1111,13 @@ window.TRACKER = {
     "  palette (**VIZ-18**) like the scanpath figures.",
     "",
     "Whatever ships needs the deep link / Share, CLI and headless API too (*AGENTS.md",
-    "→ Exposing a feature on every surface*). Related: **AN-23**, **AN-24**, **VIZ-18**."
+  "→ Exposing a feature on every surface*). Related: **AN-23**, **AN-24**, **VIZ-18**.",
+  "",
+  "**What was done.** Added focused Corpus Analysis styling controls, shared palette state, colour-aware profile/distribution/difference builders, plus a public corpus-figure API and CLI table surface.",
+  "",
+  "**What's left.** User approval and visual review with the target manuscript palette.",
+  "",
+  "**Background (technical).** The controls reuse the existing global visualization state, so scanpath and corpus views share reproducible settings without duplicating a second state contract."
    ]
   },
   {
@@ -1130,7 +1166,13 @@ window.TRACKER = {
     "corrections keep the original. New **\"Preprocessing\"** panel, `global_preproc_*`",
     "keys, off by default, with a recompute trigger. Fold preproc settings into the",
     "cache key (don't break the OneStop `frame_fingerprint`/`st.cache_data` fast path).",
-    "AC: disabled = byte-identical output to today."
+    "AC: disabled = byte-identical output to today.",
+    "",
+    "**What was done.** Added a cached optional stage with soft exclusions, original-value preservation, preprocessing controls, recompute, share/save state, API and CLI access, and disabled-path identity tests.",
+    "",
+    "**What's left.** User approval and validation on a dataset with real cleaning decisions.",
+    "",
+    "**Background (technical).** Disabled preprocessing returns the original dataframe object; enabled processing retains every row and records reasons instead of hard-dropping data."
    ]
   },
   {
@@ -1255,7 +1297,13 @@ window.TRACKER = {
     "has only the boolean flag); `second_pass_duration`; `single_fixation_duration`",
     "(FFD when exactly one first-pass fixation). Audit that the app's",
     "`regression_path_duration` == eyekit `go_past_duration`. Surface in per-word",
-    "export, color-by options, corpus aggregation; keep IA_* pre-aggregated precedence."
+    "export, color-by options, corpus aggregation; keep IA_* pre-aggregated precedence.",
+    "",
+    "**What was done.** Added initial landing position/distance, integer regression-in count, second-pass duration, and single-fixation duration to computation, aggregation, display, and export.",
+    "",
+    "**What's left.** User approval and literature-facing naming review.",
+    "",
+    "**Background (technical).** Existing pre-aggregated values continue to win field-by-field, while missing measures are computed from the materialized visits."
    ]
   },
   {
@@ -1317,7 +1365,13 @@ window.TRACKER = {
     "  wrong rather than merely untested.",
     "- Label anchoring / bidi shaping and the VIZ-9 arc schematic are still unverified.",
     "",
-    "Verified against v0.26; the manuscript's Discussion states the same caveat."
+    "Verified against v0.26; the manuscript's Discussion states the same caveat.",
+    "",
+    "**What was done.** Added automatic per-trial direction detection, RTL-aware landing calculations, direction metadata, a multilingual font-stack option, and Hebrew/Arabic character-grid tests.",
+    "",
+    "**What's left.** User approval and visual checks on representative Arabic shaping and mixed-script stimuli.",
+    "",
+    "**Background (technical).** Word IDs remain the canonical reading order; only direction-sensitive geometry is reversed, avoiding regressions in already-correct assignment and saccade logic."
    ]
   },
   {
@@ -1360,7 +1414,13 @@ window.TRACKER = {
     "word/density/interpolated): spread each fixation's duration across nearby",
     "characters via a Gaussian (sigma in chars) instead of hard word assignment. New",
     "style + sigma param in the existing heatmap control; render through the existing",
-    "heatmap path in [`plots.py`](scanpath_studio/plots.py). Related to **VIZ-3**."
+    "heatmap path in [`plots.py`](scanpath_studio/plots.py). Related to **VIZ-3**.",
+    "",
+    "**What was done.** Added a Duration mass style and sigma-in-characters control across the UI, deep links/save, CLI, API, and figure builder.",
+    "",
+    "**What's left.** User approval and visual tuning of the default sigma on target stimuli.",
+    "",
+    "**Background (technical).** Fixation duration is distributed over character centres with a Gaussian kernel, then normalized through the existing linear/log heatmap pipeline."
    ]
   },
   {
@@ -1431,7 +1491,13 @@ window.TRACKER = {
     "- **Citations.** Show the source for each algorithm (Carr et al. 2021 plus the",
     "  original method papers) next to the picker, so a user can cite what they used.",
     "- *(Parked)* A short recording/animation explaining how `merge` works — worth",
-    "  doing eventually, set aside for now."
+    "  doing eventually, set aside for now.",
+    "",
+    "**What was done.** Enlarged and simplified the comparison grid, highlighted moved fixations and displacement, reported mean correction and measure sensitivity, and added method citations.",
+    "",
+    "**What's left.** User approval; the parked recording remains outside this implementation.",
+    "",
+    "**Background (technical).** Panels use the same true-scale renderer and styling inputs as the main plot so visual differences represent algorithms rather than layout."
    ]
   },
   {
@@ -1485,7 +1551,13 @@ window.TRACKER = {
   "archived": false,
   "body": [
     "**Request.** Smoke-test loading/rendering on non-English corpora. Surfaces RTL needs (**PRE-6**)",
-    "and feeds **DATA-1**."
+    "and feeds **DATA-1**.",
+    "",
+    "**What was done.** Validation ownership was assigned to MECO in the tracker brief; this implementation batch added RTL-aware measures and multilingual rendering support but did not claim the external dataset check.",
+    "",
+    "**What's left.** MECO should run and record the non-English corpus smoke tests, then close or return the item with reproducible findings.",
+    "",
+    "**Background (technical).** Keep dataset validation separate from feature implementation so a passing synthetic Hebrew unit test is not mistaken for corpus-level evidence."
    ]
   },
   {
@@ -1743,7 +1815,13 @@ window.TRACKER = {
     "that the CI matrix *does* run `desktop/smoke_test.py` on `macos-latest` and it",
     "passes — so whatever this is, the smoke test doesn't cover it, and extending it",
     "is part of the fix. Related: **ENG-21** (signing) if it turns out to be",
-    "Gatekeeper."
+  "Gatekeeper.",
+  "",
+  "**What was done.** Added ad-hoc signing and signature verification to macOS release CI, extended the desktop smoke test, and documented quarantine removal and right-click Open recovery.",
+  "",
+  "**What's left.** User approval and a clean-Mac download check; notarization remains deliberately out of scope.",
+  "",
+  "**Background (technical).** Ad-hoc signing guarantees bundle integrity but not Apple identity, so Gatekeeper may still require the documented local trust step."
    ]
   },
   {
@@ -4890,7 +4968,13 @@ window.TRACKER = {
     "Sentence is the level most reading papers actually report at, and it is the biggest",
     "single hole in the measure set. Related: **PRE-4**, **PRE-16**, **AN-30**.",
     "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
+  "",
+  "**What was done.** Added sentence-ID inference and a per-sentence table covering run/reread, regression, first-pass, go-past, forward/reread, lookback, lookfrom, duration, fixation count, and reading-rate measures.",
+  "",
+  "**What's left.** User approval; sparse datasets intentionally expose only fields supported by their inputs.",
+  "",
+  "**Background (technical).** Sentence measures share the materialized run structure and are exposed through Data Inspection, API/CLI analysis, and the full-family export."
    ]
   },
   {
@@ -4924,7 +5008,13 @@ window.TRACKER = {
     "Amplitude in degrees is the unit saccade findings are reported in; pixels are not",
     "comparable across setups. Related: **DATA-2**, **DATA-15**, **EXP-3**.",
     "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
+    "",
+    "**What was done.** Added a first-class saccade table with endpoints, deltas, duration, angle, pixel and optional degree amplitudes, raw-gaze peak velocity, blink flags, line/word endpoints, and launch/landing letters; fixations also carry incoming/outgoing angles.",
+    "",
+    "**What's left.** User approval; sparse datasets intentionally expose only fields supported by their inputs.",
+    "",
+    "**Background (technical).** Screen calibration supplies degrees and optional raw gaze supplies peak velocity; unsupported physical fields remain missing rather than inventing values."
    ]
   },
   {
@@ -4952,6 +5042,12 @@ window.TRACKER = {
     "fourth class in the **PRE-2** fixation flags (Off / Highlight / **Discard**), a real",
     "`excluded` reason once **PRE-1** exists, and a per-trial blink count in the trial /",
     "reader summaries (**AN-30**). Related: **PRE-1**, **PRE-2**, **PRE-7**, **AN-30**.",
+    "",
+    "**What was done.** Added detection of shipped blink columns, before/after flags, optional soft exclusion, plot highlighting/discard support, saccade flags, and trial/reader blink counts.",
+    "",
+    "**What's left.** User approval; parsing native EyeLink blink events remains with PRE-7.",
+    "",
+    "**Background (technical).** Blink-adjacent cleaning records excluded_reason and preserves the original row, so measures and QA share one auditable decision.",
     "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
@@ -4984,6 +5080,12 @@ window.TRACKER = {
     "threshold and the distance in character widths (not pixels, so it travels across",
     "fonts). Related: **PRE-1**, **PRE-2**, **PRE-19** (character widths).",
     "",
+    "**What was done.** Added Merge, Merge then discard, and Discard policies with configurable duration and character-distance thresholds and preserved original durations.",
+    "",
+    "**What's left.** User approval and corpus-specific threshold selection.",
+    "",
+    "**Background (technical).** A merged source row is soft-excluded while its duration is transferred to the closest temporal neighbour within the character-width bound.",
+    "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
   },
@@ -5015,6 +5117,12 @@ window.TRACKER = {
     "user can silently drop a third of a trial's fixations and nothing on screen says so.",
     "Related: **PRE-2**, **PRE-14**, **PRE-18**, **VAL-1**.",
     "",
+    "**What was done.** Added per-trial before/excluded counts and percentages, reason/policy counts, suspicious word-load detection, in-app warnings/captions, API tables, and export sidecars.",
+    "",
+    "**What's left.** User approval and tuning of the suspicious-load threshold on larger corpora.",
+    "",
+    "**Background (technical).** QA is derived from retained rows and exclusion reasons, so the displayed report can be reproduced from the exported fixation table.",
+    "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
   },
@@ -5044,6 +5152,12 @@ window.TRACKER = {
     "pass over this word is this fixation part of?* — which today cannot be asked; (c) it",
     "gives Corpus Analysis a first-pass / rereading split, which is how reading-time effects",
     "are usually decomposed. Related: **PRE-4**, **PRE-11**, **AN-30**.",
+    "",
+    "**What was done.** Materialized run, line-run, word visit ID, visit number, fixation-within-visit, run count, and reread columns on enriched fixations.",
+    "",
+    "**What's left.** User approval and possible color-by presets for run structure.",
+    "",
+    "**Background (technical).** The transformation is idempotent and trial-scoped, and now backs second-pass, sentence, and summary calculations.",
     "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
@@ -5077,6 +5191,12 @@ window.TRACKER = {
     "at, and that is a better confidence signal than any single algorithm's output. Related:",
     "**PRE-3**, **PRE-10**, **PRE-18**.",
     "",
+    "**What was done.** Added slice and consensus to the alignment registry, majority-vote assignments, per-fixation agreement, UI selection, CLI/API compatibility, and tests.",
+    "",
+    "**What's left.** User approval and evaluation against hand-labelled noisy trials.",
+    "",
+    "**Background (technical).** Consensus votes across the classic native algorithms; agreement records the winning vote share rather than hiding disagreement.",
+    "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
   },
@@ -5107,6 +5227,12 @@ window.TRACKER = {
     "is carrying them through `compute_per_word_measures` and reporting the spread. Also",
     "surface `average_y_correction` as a per-trial QA number (a trial needing a large mean",
     "correction deserves a look). Related: **PRE-3**, **PRE-10**, **PRE-15**, **PRE-17**.",
+    "",
+    "**What was done.** Added alignment-sensitivity helpers and UI/API reports for mean correction and measure spread across selected algorithms.",
+    "",
+    "**What's left.** User approval and selection of the default comparison algorithm set.",
+    "",
+    "**Background (technical).** Each assignment is corrected and measured independently; the report retains algorithm-suffixed values and summarizes disagreement without overwriting raw coordinates.",
     "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
@@ -5139,6 +5265,12 @@ window.TRACKER = {
     "`aggregation.landing_positions` a definition that can be made direction-aware for",
     "**PRE-6** — today it measures from `_box_left`, which is the wrong end of an RTL word.",
     "Related: **PRE-4**, **PRE-6**, **PRE-8**, **PRE-14**.",
+    "",
+    "**What was done.** Added an exportable character grid with line/word positions and direction-aware letter landing/launch fields on the saccade table.",
+    "",
+    "**What's left.** User approval and validation against corpora that provide native character AOIs.",
+    "",
+    "**Background (technical).** When only word boxes exist, character centres are deterministically interpolated; explicit direction reverses the within-word letter order.",
     "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
@@ -5204,7 +5336,13 @@ window.TRACKER = {
     "both tables first-class and exportable (**EXP-3**), and have the *Per reader* / *Groups*",
     "views read them instead of recomputing. Related: **PRE-11**, **PRE-16**, **EXP-3**.",
     "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
+    "",
+    "**What was done.** Added first-class trial and reader summaries with fixation, blink, saccade, skip/refixation/regression, run, first-pass/rereading, rate, and comprehension fields; surfaced them in the app, API, CLI, and exports.",
+    "",
+    "**What's left.** User approval; sparse datasets intentionally expose only fields supported by their inputs.",
+    "",
+    "**Background (technical).** Shared aggregation helpers now feed every surface so summary definitions do not drift between the UI and downloaded tables."
    ]
   },
   {
@@ -5311,6 +5449,12 @@ window.TRACKER = {
     "them rather than bolting each on separately, and write the preprocessing + cleaning",
     "settings alongside (**PRE-15**) as the reproducibility record for the numbers in the",
     "zip. Related: **PRE-11**, **PRE-12**, **PRE-15**, **AN-30**.",
+    "",
+    "**What was done.** Added a Full measure family option with per-trial and aggregate saccades, sentence/trial/reader tables, character grids, cleaning QA, and run configuration; added matching API and CLI analysis export.",
+    "",
+    "**What's left.** User approval and a size check on a full production corpus.",
+    "",
+    "**Background (technical).** Existing fixation/word mega-table behavior is unchanged; the new family is opt-in and uses the same CSV/Parquet format selection.",
     "",
     "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
    ]
@@ -5601,13 +5745,109 @@ window.TRACKER = {
     "use recognizable fixation points connected by saccades and remain legible at",
     "small favicon, sidebar, and desktop-app sizes.",
     "",
-    "**Background (technical).** The current web/docs icon is",
+    "Technical context: the current web/docs icon is",
     "[`docs/assets/icon.png`](docs/assets/icon.png). Desktop assets live under",
     "`desktop/icons/` in PNG, ICO, and ICNS formats and can be regenerated with",
     "[`desktop/make_icons.py`](desktop/make_icons.py), so the chosen design should",
     "be produced from one high-resolution source and verified after conversion. Needs",
     "a few scanpath-focused variants tested at real display sizes and on light/dark",
-    "backgrounds before the canonical source and derived formats are replaced."
+    "backgrounds before the canonical source and derived formats are replaced.",
+    "",
+    "**What was done.** Explored scanpath-focused concepts, rebuilt the selected compact design in the deterministic icon generator, regenerated PNG/ICO/ICNS/docs assets, and added format and small-size tests.",
+    "",
+    "**What's left.** User approval of the selected icon.",
+    "",
+    "**Background (technical).** The production asset remains deterministic; bold fixations and a return sweep survive 16 px rendering on light and dark backgrounds."
+   ]
+  },
+  {
+   "id": "ENG-27",
+   "prefix": "ENG",
+   "num": 27,
+   "sub": "",
+   "title": "Rebuild the manuscript planning outline around audiences and evidence",
+   "status": "Pending approval",
+   "note": "implemented 2026-08-04",
+   "date": "2026-08-04",
+   "added": "2026-08-04",
+   "group": "Engineering",
+   "subgroup": "Documentation",
+   "archived": false,
+   "body": [
+    "**Request.** Replace the stale, duplicated `overleaf/structure.tex` outline with",
+    "the best prospective structure for the paper, regardless of the current draft.",
+    "Give every bullet paragraph-level scope, distinguish researchers collecting new",
+    "data from researchers reusing existing datasets, remove project-management notes,",
+    "and leave the file as valid, compilable LaTeX.",
+    "",
+    "**What was done.** Replaced [`overleaf/structure.tex`](../../overleaf/structure.tex)",
+    "with one prospective outline organized as motivation, design goals, system",
+    "capabilities, persona-specific workflows, demonstrations and evaluation, related",
+    "work, discussion, conclusion, and availability. Every bullet now scopes roughly",
+    "one paragraph or two short paragraphs; primary collection and secondary reuse",
+    "remain separate workflows with different quality-assurance decisions. Removed the",
+    "duplicate generated outline, questions, tutorial plan, product notes, TODOs, stray",
+    "Markdown fence, and the unsupported deep list nesting.",
+    "",
+    "**What's left.** Author approval of the proposed structure, followed by a separate",
+    "rewrite of the manuscript to match it. The extracted questions, tutorial ideas, and",
+    "product follow-ups were returned to the author for placement in their preferred",
+    "planning system rather than silently moved into another repository file.",
+    "",
+    "**Background (technical).** The old outline has two competing top-level structures,",
+    "mixes manuscript content with questions/tutorial and product-backlog notes, and",
+    "exceeds LaTeX's supported itemize depth at its experiment-design branch. The new",
+    "outline should use section commands plus shallow paragraph-level lists, while",
+    "preserving quality assurance as a concern with different decisions for primary",
+    "data collection and secondary dataset reuse. The replacement compiles with",
+    "`pdflatex -halt-on-error`; `node --check tracker/data.js` validates this entry."
+   ]
+  },
+  {
+   "id": "ENG-28",
+   "prefix": "ENG",
+   "num": 28,
+   "sub": "",
+   "title": "Pre-release simplification: reduce the app's architecture and code surface",
+   "status": "Backlog",
+   "note": "",
+   "date": "",
+   "added": "2026-08-04",
+   "group": "Engineering",
+   "subgroup": "Code quality",
+   "archived": false,
+   "body": [
+    "**Request.** The app feels too complicated: too many files, too many lines of",
+    "code, too much indirection, and too much historical residue. Run a repository-wide",
+    "simplification pass rather than another local cleanup. The app has not been released,",
+    "so compatibility with obsolete workflows, old deep links/config files/session keys,",
+    "deprecated aliases, and other unreleased behavior is not a requirement. Everything",
+    "may be touched when that produces a smaller, clearer system; preserve the valuable",
+    "current user outcomes, not accidental implementation history.",
+    "",
+    "The pass should inventory first-party LOC, file/module count, dependency direction,",
+    "public surfaces, session-state contracts, and the largest branching/parameter hotspots;",
+    "then delete dead paths, unused assets/dependencies, compatibility shims, migrations,",
+    "duplicate render/export/data flows, and tests that exist only to pin discarded internals.",
+    "Choose module boundaries by cohesive ownership: merge one-use or artificially separated",
+    "files when that reduces navigation, and split oversized files only when the resulting",
+    "interfaces are simpler. Consolidate shared behavior across UI, Share, CLI, API, and",
+    "export instead of maintaining parallel plumbing by hand.",
+    "",
+    "Source comments should explain non-obvious invariants and design reasons, not narrate",
+    "closed tracker items or retain implementation archaeology. Historical TODO numbers and",
+    "long closed-task explanations belong in the tracker/changelog and may be removed from",
+    "the code. Rewrite tests around intentionally retained behavior and end-to-end outcomes;",
+    "remove compatibility tests for contracts the product no longer promises.",
+    "",
+    "**Background (technical).** Treat this as an engineering epic with an explicit target",
+    "architecture before bulk edits. Report before/after LOC, module count, dependency cycles,",
+    "session-key/config surface, and the largest files/functions; expect a meaningful net",
+    "reduction, but do not optimize line count at the expense of clarity. Keep the application,",
+    "headless API, CLI, exports, desktop build, and tests coherent for the product behavior we",
+    "choose to retain, update the architecture/contributor documentation, and finish with the",
+    "full lint/test/docs/desktop smoke gates. Related: **ENG-5**, **ENG-6**, **ENG-11**,",
+    "**ENG-18**, **ENG-24**."
    ]
   }
  ]

@@ -23,6 +23,7 @@ from .constants import (
     _VIEW_CORPUS,
     _VIEW_SCANPATH,
     BACKGROUND_PRESETS,
+    AUTHOR_CHOICE,
     COLORSCALES,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
@@ -153,6 +154,8 @@ def _share_identity_caution(query: str) -> str:
 # column, axis/color-by fields) self-heal on load via the sidebar's _drop_stale /
 # _clamp_range, so a link opened on a different trial degrades gracefully.
 _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
+    "preproc_enabled": "global_preproc_enabled",
+    "preproc_blink_adjacent": "global_preproc_blink_adjacent",
     "show_words": "global_show_words",
     "show_labels": "global_show_labels",
     "show_fixations": "global_show_fix",
@@ -175,6 +178,7 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "scale_text_to_boxes": "global_scale_text_to_boxes",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
+    "preproc_short_policy": "global_preproc_short_policy",
     "color_by": "global_color_by",
     "heatmap_style": "global_heatmap_style",
     "heatmap_norm": "global_heatmap_norm",
@@ -185,6 +189,7 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "y_field": "global_y_field",
     "saccade_style": "global_saccade_style",
     "saccade_render_mode": "global_saccade_render_mode",
+    "illustration_label": "global_illustration_label",
     # PRE-3 / ENG-23: vertical drift correction ("Off" or a Carr et al. (2021)
     # algorithm). Since VIZ-23 it applies on all three render paths, so a link
     # that dropped it reopened a visibly different figure.
@@ -224,9 +229,12 @@ _SHARE_INT_PARAMS = {
     "anim_max_frames": "global_anim_max_frames",
 }
 _SHARE_FLOAT_PARAMS = {
+    "preproc_short_threshold_ms": "global_preproc_short_threshold_ms",
+    "preproc_merge_distance_chars": "global_preproc_merge_distance_chars",
     "line_spacing": "global_line_spacing",
     "saccade_width": "global_saccade_width",
     "fixation_opacity": "global_fixation_opacity",
+    "duration_mass_sigma_chars": "global_duration_mass_sigma_chars",
     # VIZ-4: image-stimulus opacity (applies to dataset images too, so worth
     # sharing; the uploaded image itself can't ride a link).
     "stimulus_image_opacity": "global_stimulus_image_opacity",
@@ -268,6 +276,9 @@ _URL_PRESETS = {
 # colour ranges aren't here — the sidebar's `_clamp_range` handles those against
 # the live data.)
 _URL_BOUNDED = {
+    "global_preproc_short_threshold_ms": (1.0, 500.0),
+    "global_preproc_merge_distance_chars": (0.25, 10.0),
+    "global_duration_mass_sigma_chars": (0.25, 10.0),
     "global_line_spacing": (1.0, 10.0),
     "global_saccade_width": SACCADE_WIDTH_BOUNDS,
     "global_order_font_size": (6, 72),
@@ -300,6 +311,7 @@ def _clamp_url_value(state_key: str, value):
 # reconstructed from a link — the Share panel warns and shares the view settings
 # only. Mirrors the `source` handling in `main()`.
 _SHAREABLE_SOURCES = {
+    AUTHOR_CHOICE: "author",
     DEMO_CHOICE: "demo",
     ONESTOP_CHOICE: "onestop",
     MULTIPLEYE_BUNDLE_CHOICE: "multipleye",
@@ -424,6 +436,27 @@ def _apply_url_preset() -> Optional[str]:
         ]
         if parts:
             st.session_state.setdefault("onestop_parts", parts)
+
+    if (qp.get("source") or "").lower() == "author":
+        if "author_text" in qp:
+            st.session_state.setdefault("author_text", str(qp["author_text"]))
+        if "author_events" in qp:
+            try:
+                events = json.loads(str(qp["author_events"]))
+                if not isinstance(events, list):
+                    raise ValueError
+            except (ValueError, TypeError, json.JSONDecodeError):
+                st.warning("Ignored malformed authored-fixation data in the URL.")
+            else:
+                st.session_state.setdefault(
+                    "_authored_events_frame", pd.DataFrame(events)
+                )
+                # Prevent the authoring widget's text-change initializer from
+                # replacing the just-restored events on its first render.
+                st.session_state.setdefault(
+                    "_author_text_for_events",
+                    str(qp.get("author_text", st.session_state.get("author_text", ""))),
+                )
 
     source = qp.get("source")
     return source.lower() if source else None
@@ -682,6 +715,22 @@ def _restore_plot_config(
     applied = 0
     skipped: list = []
 
+    # Older valid configs predate the illustration/preprocessing sections. They
+    # still need deterministic defaults for the newly frozen state keys, while
+    # a document made entirely of wrong-typed sections must remain a true no-op.
+    has_valid_plot_section = any(
+        isinstance(config.get(name), dict)
+        for name in (
+            "layers",
+            "coloring",
+            "sizing",
+            "canvas_px",
+            "axes",
+            "text",
+            "highlighting",
+        )
+    )
+
     def section(name):
         """A config sub-section as a dict — empty if absent or the wrong type,
         so a hand-edited upload with a malformed section can't crash the rest."""
@@ -732,6 +781,59 @@ def _restore_plot_config(
         if cfg_key in layers:
             put(state_key, bool(layers[cfg_key]))
 
+    illustration = section("illustration")
+    if "label_mode" in illustration:
+        put_valid(
+            illustration["label_mode"] in ("Auto", "Show", "Hide"),
+            "global_illustration_label",
+            illustration["label_mode"],
+            "illustration label",
+        )
+    elif "illustration" not in config and has_valid_plot_section:
+        put("global_illustration_label", "Auto")
+
+    preprocessing = section("preprocessing")
+    if "enabled" in preprocessing:
+        put("global_preproc_enabled", bool(preprocessing["enabled"]))
+    if "discard_blink_adjacent" in preprocessing:
+        put(
+            "global_preproc_blink_adjacent",
+            bool(preprocessing["discard_blink_adjacent"]),
+        )
+    if "short_policy" in preprocessing:
+        put_valid(
+            preprocessing["short_policy"]
+            in ("Off", "Merge", "Merge then discard", "Discard"),
+            "global_preproc_short_policy",
+            preprocessing["short_policy"],
+            "short-fixation policy",
+        )
+    if "short_threshold_ms" in preprocessing:
+        put_float(
+            preprocessing["short_threshold_ms"],
+            "global_preproc_short_threshold_ms",
+            1.0,
+            500.0,
+            "short-fixation threshold",
+        )
+    if "merge_distance_chars" in preprocessing:
+        put_float(
+            preprocessing["merge_distance_chars"],
+            "global_preproc_merge_distance_chars",
+            0.25,
+            10.0,
+            "short-fixation merge distance",
+        )
+    elif "preprocessing" not in config and has_valid_plot_section:
+        # Schema-1/2 configs have no preprocessing block; pin the same defaults
+        # used by the controls without treating a malformed explicit block as
+        # permission to overwrite live state.
+        put("global_preproc_enabled", False)
+        put("global_preproc_blink_adjacent", True)
+        put("global_preproc_short_policy", "Off")
+        put("global_preproc_short_threshold_ms", 80.0)
+        put("global_preproc_merge_distance_chars", 1.0)
+
     coloring = section("coloring")
     # VIZ-18: the palette goes FIRST — it presets the individual colour keys, and
     # every explicit colour saved alongside it (below) must overwrite that preset,
@@ -750,11 +852,21 @@ def _restore_plot_config(
     if "heatmap_style" in coloring:
         style = coloring["heatmap_style"]
         put_valid(
-            style in ("Word boxes", "Interpolated"),
+            style in ("Word boxes", "Interpolated", "Duration mass"),
             "global_heatmap_style",
             style,
             "heatmap style",
         )
+    if "duration_mass_sigma_chars" in coloring:
+        put_float(
+            coloring["duration_mass_sigma_chars"],
+            "global_duration_mass_sigma_chars",
+            0.25,
+            10.0,
+            "duration-mass sigma",
+        )
+    elif isinstance(config.get("coloring"), dict):
+        put("global_duration_mass_sigma_chars", 1.0)
     if "heatmap_norm" in coloring:
         put_valid(
             coloring["heatmap_norm"] in ("Linear", "Log"),
@@ -1294,6 +1406,14 @@ def _build_share_query(
             valid = [p for p in parts if p in ONESTOP_PART_LABELS]
             if valid:
                 params["onestop_parts"] = ",".join(valid)
+
+    if data_choice == AUTHOR_CHOICE:
+        params["author_text"] = str(st.session_state.get("author_text", ""))
+        events = st.session_state.get("_authored_events_frame")
+        if isinstance(events, pd.DataFrame):
+            params["author_events"] = json.dumps(
+                events.to_dict("records"), separators=(",", ":")
+            )
 
     selection = st.session_state.get("_share_selection") or {}
     participant = selection.get("participant_id")

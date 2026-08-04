@@ -288,6 +288,39 @@ class TestNormalizeWords:
         assert result["x"].iloc[0] == 100
         assert result["width"].iloc[0] == 50
 
+    def test_sentence_direction_and_preaggregated_new_measures_survive(self):
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial_id": ["t1"],
+                "word_id": [1],
+                "x": [100],
+                "y": [50],
+                "width": [50],
+                "height": [20],
+                "text": ["שלום"],
+                "sentence_id": [7],
+                "right_to_left": [1],
+                "IA_SECOND_RUN_DWELL_TIME": [321],
+                "IA_REGRESSION_IN_COUNT": [4],
+            }
+        )
+        schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "word_id": "word_id",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "height": "height",
+            "text": "text",
+        }
+        result = normalize_words(df, schema)
+        assert result.iloc[0]["sentence_id"] == 7
+        assert bool(result.iloc[0]["right_to_left"])
+        assert result.iloc[0]["second_pass_duration_ms"] == 321
+        assert result.iloc[0]["number_of_regressions_in"] == 4
+
 
 class TestNormalizeFixations:
     """Tests for normalize_fixations function."""
@@ -344,6 +377,27 @@ class TestNormalizeFixations:
         # Should auto-generate timestamps
         assert result["timestamp_ms"].iloc[0] == 0
         assert result["timestamp_ms"].iloc[1] == 1
+
+    def test_blink_alias_survives_as_canonical_boolean(self):
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "x": [100, 200],
+                "y": [150, 250],
+                "duration_ms": [250, 300],
+                "BLINK": ["0", "1"],
+            }
+        )
+        schema = {
+            "participant": "participant_id",
+            "trial": "trial_id",
+            "x": "x",
+            "y": "y",
+            "duration": "duration_ms",
+        }
+        result = normalize_fixations(df, schema)
+        assert result["is_blink"].tolist() == [False, True]
 
 
 class TestNormalizeRawGaze:

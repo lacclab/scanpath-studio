@@ -55,6 +55,7 @@ from scanpath_studio.persistence import restore_local_state, save_local_state
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     BACKGROUND_PRESETS,
+    AUTHOR_CHOICE,
     CITATION,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
@@ -116,8 +117,10 @@ from scanpath_studio.data import (
     propose_fix_schema,
     propose_raw_gaze_schema,
     propose_word_schema,
+    preprocess_fixation_stage,
     read_table,
     read_tables,
+    resolve_stimulus_image_paths,
     trial_keys,
     trial_mapping_columns,
     upload_exceeds_limit,
@@ -1802,6 +1805,8 @@ def render_sidebar_data_source() -> str:
         kinds[MULTIPLEYE_BUNDLE_CHOICE] = "🔒"
     entries.append(DEMO_CHOICE)
     kinds[DEMO_CHOICE] = "🧪"
+    entries.append(AUTHOR_CHOICE)
+    kinds[AUTHOR_CHOICE] = "✏️"
     for name in uploaded:
         entries.append(name)
         kinds[name] = "🔒"
@@ -1985,7 +1990,7 @@ def render_sidebar_canvas_controls(
         st.session_state["_font_seeded_for"] = source_key
 
     # The display-setup panel (``title``, default "Experimental Setup") lives
-    # under the 📂 Data group (TODO 5), rendered into a slot reserved there by
+    # under the 📂 Data group (DATA-9), rendered into a slot reserved there by
     # `main`; falls back to the sidebar when unset. The setup wizard renders the
     # very same controls inline under its own numbered heading (Group A), passing
     # a more specific title so it doesn't echo that heading.
@@ -2113,12 +2118,27 @@ def render_sidebar_canvas_controls(
         "the text from the real geometry and sidesteps the conversion."
     )
     st.session_state.setdefault("global_font_family", FONT_FAMILY)
+    display.button(
+        "Use multilingual font stack",
+        on_click=lambda: st.session_state.update(
+            global_font_family=(
+                "'Noto Sans', 'Noto Sans Hebrew', 'Noto Sans Arabic', "
+                "'Noto Sans CJK SC', 'Arial Unicode MS', sans-serif"
+            )
+        ),
+        help="A CJK/Hebrew/Arabic-capable CSS fallback stack (PRE-6).",
+    )
     font_family = display.text_input(
         "Text font",
         key="global_font_family",
         help="Font for the word labels. Use the exact font from your experiment "
         "(e.g. 'Courier New') or a CSS fallback stack.",
     )
+    if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
+        display.caption(
+            "↔ RTL script detected. Landing positions are measured from the "
+            "logical word start; browser bidi shaping is used for labels."
+        )
     # When the dataset declares its stimulus typeface (MultiplEYE), the overlaid
     # text only lines up with the stimulus image if that exact font is installed
     # on the viewer's machine — we don't bundle it, and the browser otherwise
@@ -2181,6 +2201,129 @@ def render_sidebar_canvas_controls(
 # -----------------------------------------------------------------------------
 
 
+def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Standalone editor whose result joins the ordinary plot/export pipeline."""
+    from scanpath_studio.authoring import (
+        authored_fixations,
+        authoring_json,
+        default_events,
+        layout_text,
+        parse_authoring_json,
+    )
+
+    st.subheader("✏️ Author a scanpath")
+    st.caption(
+        "Write the stimulus, then edit the fixation order, word target, position, "
+        "and duration. Add or delete rows in the table; the finished trial uses "
+        "the same visualization and export tools as imported eye-tracking data."
+    )
+    restored = st.file_uploader(
+        "Restore authoring file",
+        type=["json"],
+        key="author_restore_upload",
+        help="Load a JSON file previously saved from this editor.",
+    )
+    if restored is not None:
+        identity = (restored.name, restored.size)
+        if st.session_state.get("_author_restore_identity") != identity:
+            try:
+                restored_text, restored_events = parse_authoring_json(
+                    restored.getvalue().decode("utf-8")
+                )
+            except (ValueError, UnicodeDecodeError) as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["author_text"] = restored_text
+                st.session_state["_authored_events_frame"] = restored_events
+                st.session_state["_author_text_for_events"] = restored_text
+                st.session_state.pop("author_events_editor", None)
+                st.session_state["_author_restore_identity"] = identity
+
+    text = st.text_area(
+        "Stimulus text",
+        value="Reading unfolds through a sequence of careful eye movements.",
+        key="author_text",
+        height=100,
+    )
+    words = layout_text(text)
+    if st.session_state.get("_author_text_for_events") != text:
+        st.session_state["_authored_events_frame"] = default_events(words)
+        st.session_state.pop("author_events_editor", None)
+        st.session_state["_author_text_for_events"] = text
+    seed = st.session_state.get("_authored_events_frame", default_events(words))
+    events = st.data_editor(
+        seed,
+        key="author_events_editor",
+        num_rows="dynamic",
+        hide_index=True,
+        column_config={
+            "word_id": st.column_config.NumberColumn("Target word", min_value=1),
+            "x": st.column_config.NumberColumn("X (px)"),
+            "y": st.column_config.NumberColumn("Y (px)"),
+            "duration_ms": st.column_config.NumberColumn("Duration (ms)", min_value=1),
+        },
+        width="stretch",
+    )
+    st.session_state["_authored_events_frame"] = events
+    st.download_button(
+        "💾 Save authoring file",
+        data=authoring_json(text, events),
+        file_name="authored-scanpath.json",
+        mime="application/json",
+    )
+    return words, authored_fixations(words, events)
+
+
+def _preprocessing_settings() -> dict:
+    """Render the PRE-1 controls and return their cache-key-safe settings."""
+    with st.sidebar.expander("🧹 Preprocessing", expanded=False):
+        enabled = st.toggle(
+            "Enable preprocessing",
+            key="global_preproc_enabled",
+            value=False,
+            help="Optional and off by default. Original rows remain available; "
+            "excluded rows are soft-marked with a reason.",
+        )
+        policy = st.selectbox(
+            "Short fixations",
+            ["Off", "Merge", "Merge then discard", "Discard"],
+            key="global_preproc_short_policy",
+            disabled=not enabled,
+        )
+        threshold = st.number_input(
+            "Short threshold (ms)",
+            min_value=1.0,
+            max_value=500.0,
+            value=80.0,
+            key="global_preproc_short_threshold_ms",
+            disabled=not enabled or policy == "Off",
+        )
+        distance = st.number_input(
+            "Merge distance (characters)",
+            min_value=0.25,
+            max_value=10.0,
+            value=1.0,
+            step=0.25,
+            key="global_preproc_merge_distance_chars",
+            disabled=not enabled or "Merge" not in policy,
+        )
+        blink = st.toggle(
+            "Exclude blink-adjacent fixations",
+            key="global_preproc_blink_adjacent",
+            value=True,
+            disabled=not enabled,
+        )
+        if st.button("Recompute preprocessing", disabled=not enabled):
+            st.cache_data.clear()
+        return {
+            "enabled": enabled,
+            "short_policy": policy,
+            "short_threshold_ms": threshold,
+            "merge_distance_chars": distance,
+            "discard_blink_adjacent": blink,
+        }
+
+
 def main() -> None:
     """Main application entry point.
 
@@ -2235,6 +2378,8 @@ def main() -> None:
         st.session_state.setdefault("data_source_choice", DEMO_CHOICE)
     elif url_source == "synthetic":
         st.session_state.setdefault("data_source_choice", SYNTHETIC_CHOICE)
+    elif url_source == "author":
+        st.session_state.setdefault("data_source_choice", AUTHOR_CHOICE)
     elif url_source == "onestop_public" and public_datasets_enabled():
         # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
         # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
@@ -2261,6 +2406,8 @@ def main() -> None:
     # Data source selection (sidebar)
     _sidebar_group("📂 Data")
     data_choice = render_sidebar_data_source()
+    st.session_state["_active_data_source"] = data_choice
+    preproc_settings = _preprocessing_settings()
     # Drop a stale share/save selection when the data source changes — its trial
     # id won't exist in the new dataset, so a Share link or saved config must not
     # carry it over. The active view rewrites _share_selection for the new source.
@@ -2370,6 +2517,11 @@ def main() -> None:
         mapping_problems = setup.problems
         if wizard_active:
             return
+    elif data_choice == AUTHOR_CHOICE:
+        words_df, fixations_df = _render_authoring_source()
+        raw_words_df, raw_fixations_df = words_df, fixations_df
+        raw_gaze_df = pd.DataFrame()
+        mapping_problems = []
     elif data_choice in st.session_state.get("_datasets", {}):
         # A dataset the user uploaded earlier and named — its frames were
         # normalized once by the wizard and stored in session, so switching back
@@ -2444,10 +2596,72 @@ def main() -> None:
         _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         return
 
+    # VIZ-14: local/desktop users can attach stimulus screenshots without
+    # adding an image_path column to their data. This intentionally stays out
+    # of public deployments and share links because it contains machine-local
+    # filesystem information; the same resolver is available through the API
+    # and CLI for reproducible headless renders.
+    if local_filesystem_enabled():
+        with data_location_slot.expander("Stimulus images", expanded=False):
+            image_root = st.text_input(
+                "Image folder",
+                key="stimulus_image_root",
+                placeholder="/path/to/stimulus-images",
+                help="Local folder containing one image per text or trial.",
+            ).strip()
+            image_pattern = st.text_input(
+                "Filename pattern",
+                key="stimulus_image_pattern",
+                value="{text_id}.png",
+                help="Use table fields such as {text_id}, {trial_id}, or "
+                "{participant_id}; subfolders are supported.",
+            ).strip()
+            if image_root:
+                try:
+                    words_df = resolve_stimulus_image_paths(
+                        words_df, image_root, image_pattern
+                    )
+                    fixations_df = resolve_stimulus_image_paths(
+                        fixations_df, image_root, image_pattern
+                    )
+                    found = sum(
+                        frame.get("image_path", pd.Series(dtype=object))
+                        .dropna()
+                        .astype(str)
+                        .map(os.path.isfile)
+                        .sum()
+                        for frame in (words_df, fixations_df)
+                    )
+                    st.caption(f"Matched {int(found):,} table rows to local images.")
+                except ValueError as exc:
+                    st.error(str(exc))
+
     # Optional raw gaze: the Upload source already mapped + normalized it above;
     # every other source loads it here (bundled demo sample, OneStop uploader).
     if raw_gaze_df is None:
         raw_gaze_df = load_raw_gaze_data(data_choice)
+
+    if preproc_settings["enabled"]:
+        fixations_df, preproc_report = preprocess_fixation_stage(
+            words_df, fixations_df, preproc_settings
+        )
+        st.session_state["_preprocessing_report"] = preproc_report
+        st.session_state["_preprocessing_settings"] = dict(preproc_settings)
+        suspicious = (
+            preproc_report[
+                preproc_report["suspicious_word_load"].fillna(False).astype(bool)
+            ]
+            if "suspicious_word_load" in preproc_report
+            else preproc_report.iloc[0:0]
+        )
+        if not suspicious.empty:
+            st.warning(
+                f"Data quality: {len(suspicious)} trial(s) put at least 12 "
+                "fixations on one word. Check stimulus alignment or line assignment."
+            )
+    else:
+        st.session_state["_preprocessing_report"] = pd.DataFrame()
+        st.session_state["_preprocessing_settings"] = dict(preproc_settings)
 
     # UX-7(b): if the selected corpus isn't on disk, say so here — in the main
     # area, where the (demo) plot the user is actually looking at is — rather than
@@ -2456,7 +2670,7 @@ def main() -> None:
 
     # Whole-dataset frames, captured BEFORE the sidebar "Filter trials" panel —
     # the Bulk Export tab's "Export the whole dataset" option exports these,
-    # ignoring the current filters (TODO 1.7).
+    # ignoring the current filters.
     words_all, fixations_all = words_df, fixations_df
 
     # Trial-level filtering / grouping: narrow by participant, by condition
@@ -2563,7 +2777,7 @@ def main() -> None:
     if raw_gaze_only and "global_show_raw_gaze" not in st.session_state:
         st.session_state["global_show_raw_gaze"] = True
     # "Experimental Setup" (monitor/font/text-scaling) renders into its reserved
-    # slot under the 📂 Data group (TODO 5), not under 🎨 Visualization.
+    # slot under the 📂 Data group (DATA-9), not under 🎨 Visualization.
     (
         canvas_width,
         canvas_height,
@@ -2591,7 +2805,7 @@ def main() -> None:
     # spotlight tour can target it); the active view fills it later (it needs the
     # live selection + figure settings for the download). See
     # tabs._render_save_restore_expander. This single panel merges the former
-    # Plot-configuration and Annotations sidebar panels (TODO 1.19). DATA-9: it's
+    # Plot-configuration and Annotations sidebar panels. Under DATA-9, it's
     # its own top-level section (a divider separates it from the data-source
     # config above), since saving/restoring plot config + annotations is a global
     # session feature, not part of any one source's setup.

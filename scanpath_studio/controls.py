@@ -319,6 +319,7 @@ _VIZ_WIDGET_DEFAULTS = {
     # straight connectors, and/or snap each fixation above the word it lands on.
     "global_saccade_render_mode": "Straight",
     "global_fixation_snap_to_word": False,
+    "global_illustration_label": "Auto",
     # VIZ-10: autoplay the animated replay on load (default on). The toggle lives
     # in the Animate ⚙ Playback popover (tabs.render_single_trial_tab); the kickoff
     # runs at the configured playback speed (plots.animation_autoplay_post_script).
@@ -354,6 +355,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_align_connectors": False,
     "global_highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
     "global_show_heatmap": False,
+    "global_duration_mass_sigma_chars": 1.0,
     "global_show_raw_gaze": False,
     "global_show_stimulus_image": False,
     # VIZ-4: image-based stimuli. Opacity dims a busy stimulus image so the AOIs /
@@ -403,6 +405,9 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_fixclass_oob_mode": "Off",
     "global_fixclass_oob_symbol": "x",
     "global_fixclass_oob_color": OUT_OF_TEXT_COLOR,
+    "global_fixclass_blink_mode": "Off",
+    "global_fixclass_blink_symbol": "diamond-open",
+    "global_fixclass_blink_color": "#17becf",
     # VIZ-7: single-trial fixation-index window (start, end over `order_in_trial`)
     # for the main scanpath plot. `None` = full trial; the real bounds depend on
     # the selected trial's fixation count, so `sidebar_controls` resolves/clamps
@@ -505,6 +510,7 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
         ("short", "Short fixations", "Short threshold (ms)"),
         ("long", "Long fixations", "Long threshold (ms)"),
         ("oob", "Out-of-bounds fixations", None),
+        ("blink", "Blink / blink-adjacent fixations", None),
     ):
         _render_fixclass_category(
             prefix,
@@ -538,6 +544,11 @@ def _collect_fixation_flags() -> Dict:
             "symbol": ss.get("global_fixclass_oob_symbol") or "x",
             "color": ss.get("global_fixclass_oob_color") or OUT_OF_TEXT_COLOR,
         },
+        "blink": {
+            "mode": ss.get("global_fixclass_blink_mode", "Off"),
+            "symbol": ss.get("global_fixclass_blink_symbol") or "diamond-open",
+            "color": ss.get("global_fixclass_blink_color") or "#17becf",
+        },
     }
 
 
@@ -545,7 +556,7 @@ def _fixation_filter_badge() -> str:
     """Compact VIZ-27 badge summarising active visual filters."""
     active = [
         st.session_state.get(f"global_fixclass_{name}_mode", "Off")
-        for name in ("short", "long", "oob")
+        for name in ("short", "long", "oob", "blink")
     ]
     n_active = sum(mode != "Off" for mode in active)
     n_discard = sum(mode == "Discard" for mode in active)
@@ -562,7 +573,7 @@ def _fixation_filter_badge() -> str:
 # the ``global_show_*`` on/off keys are set — per-layer styling (colours, sizes,
 # colorscales) is deliberately left untouched. Keys not listed in a preset keep
 # their current value, so e.g. "Heatmap" leaves the bounding-box grid off.
-_VIEW_PRESETS: Dict[str, Dict[str, bool]] = {
+_VIEW_PRESETS: Dict[str, Dict[str, object]] = {
     "scanpath": {
         "global_show_fix": True,
         "global_show_saccades": True,
@@ -581,6 +592,20 @@ _VIEW_PRESETS: Dict[str, Dict[str, bool]] = {
         "global_show_order": False,
         "global_show_words": False,
         "global_show_raw_gaze": False,
+    },
+    "illustration": {
+        "global_show_fix": True,
+        "global_show_saccades": True,
+        "global_show_saccade_arrows": False,
+        "global_show_labels": True,
+        "global_show_order": False,
+        "global_show_heatmap": False,
+        "global_show_words": False,
+        "global_show_raw_gaze": False,
+        "global_saccade_render_mode": "Arc",
+        "global_fixation_snap_to_word": True,
+        "global_saccade_color_mode": "Uniform",
+        "global_fixation_opacity": 1.0,
     },
     "reading_order": {
         "global_show_fix": True,
@@ -619,7 +644,7 @@ def _active_quick_view() -> Optional[str]:
     """Return which quick-view preset (scanpath/heatmap) the current layer toggles
     match, or None if the user has customized away from both presets."""
     ss = st.session_state
-    for name in ("scanpath", "heatmap"):
+    for name in ("scanpath", "heatmap", "illustration"):
         if all(ss.get(k) == v for k, v in _VIEW_PRESETS[name].items()):
             return name
     return None
@@ -1689,6 +1714,9 @@ def _collect_viz_settings(
         # falls back instead of propagating None into the figure builders.
         heatmap_style=ss.get("global_heatmap_style") or "Word boxes",
         heatmap_norm=ss.get("global_heatmap_norm") or "Linear",
+        duration_mass_sigma_chars=float(
+            ss.get("global_duration_mass_sigma_chars", 1.0)
+        ),
         show_raw_gaze=bool(ss.get("global_show_raw_gaze")),
         show_stimulus_image=bool(ss.get("global_show_stimulus_image")),
         # VIZ-4: image-stimulus opacity (applies to dataset + uploaded images) and
@@ -1732,6 +1760,7 @@ def _collect_viz_settings(
         # VIZ-9: linear-reading mode (arced saccades + snap fixations above words).
         saccade_render_mode=ss.get("global_saccade_render_mode") or "Straight",
         fixation_snap_to_word=bool(ss.get("global_fixation_snap_to_word")),
+        illustration_label=ss.get("global_illustration_label") or "Auto",
         # VIZ-10: autoplay the animated replay on load (default on).
         anim_autoplay=bool(ss.get("global_anim_autoplay", True)),
         # VIZ-11 follow-up: the animation frame grid (smoothness vs. frame count).
@@ -1800,6 +1829,51 @@ def viz_settings_from_state(
     )
 
 
+def corpus_style_controls(
+    trial_fixations: pd.DataFrame,
+    base_font_size: int,
+    *,
+    words: Optional[pd.DataFrame] = None,
+    host=None,
+) -> Dict:
+    """Focused, shared-key styling controls for Corpus Analysis (AN-29).
+
+    Corpus figures intentionally expose only the palette channels they consume;
+    the single-scanpath layer controls remain in the Scanpath rail. Because these
+    widgets write the same ``global_*`` keys, Share/config restore, the CLI
+    palette, and headless builder parameters stay one contract.
+    """
+    _seed_viz_state(trial_fixations, base_font_size, words, rewrite=True)
+    target = host or st
+    with target.expander("🎨 Corpus figure style", expanded=False):
+        active = _active_palette()
+        options = list(PALETTES) if active else [CUSTOM_PALETTE, *PALETTES]
+        st.session_state["global_palette"] = active or CUSTOM_PALETTE
+        st.selectbox(
+            "Palette",
+            options=options,
+            key="global_palette",
+            on_change=_on_palette_change,
+            help="Shared with the Scanpath view and every saved/shareable figure setting.",
+        )
+        columns = st.columns(2)
+        columns[0].color_picker(
+            "Primary series",
+            key="global_fixation_color",
+            help="First group or profile.",
+        )
+        columns[1].color_picker(
+            "Secondary series", key="global_saccade_color", help="Second group."
+        )
+        st.selectbox(
+            "Heatmap colorscale",
+            options=COLORSCALES,
+            key="global_heatmap_colorscale",
+            help="Used by word matrices and stimulus heatmaps.",
+        )
+    return viz_settings_from_state(trial_fixations, base_font_size, words=words)
+
+
 def sidebar_controls(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
@@ -1849,8 +1923,8 @@ def sidebar_controls(
     )
 
     # --- Quick views ------------------------------------------------------
-    # Two presets only (keeps the rail short); the Reading-order / Everything
-    # presets are still reachable by toggling layers. The remaining preset keys
+    # Focused presets stay one compact row; Reading-order / Everything
+    # are still reachable by toggling layers. The remaining preset keys
     # (`reading_order`, `everything`) stay in `_VIEW_PRESETS` for any deep link.
     viz.caption("Quick views")
     # Side by side to keep the rail short. The active preset (whichever Quick-view
@@ -1858,7 +1932,7 @@ def sidebar_controls(
     # see which view is active at a glance. When neither preset matches (the user
     # has customized layers manually) both buttons render without highlight.
     _active = _active_quick_view()
-    _qv = viz.columns(2)
+    _qv = viz.columns(3)
     _qv[0].button(
         "👁️ Scanpath",
         key="viz_view_scanpath",
@@ -1876,6 +1950,23 @@ def sidebar_controls(
         help="Fixation-density heatmap over the text, nothing else.",
         on_click=_apply_view_preset,
         args=("heatmap",),
+    )
+    _qv[2].button(
+        "✏️ Illustration",
+        key="viz_view_illustration",
+        type="primary" if _active == "illustration" else "secondary",
+        width="stretch",
+        help="A clean schematic: snapped fixations, arced connectors, and a "
+        "uniform visual style.",
+        on_click=_apply_view_preset,
+        args=("illustration",),
+    )
+    viz.selectbox(
+        "Illustration label",
+        options=["Auto", "Show", "Hide"],
+        key="global_illustration_label",
+        help="Auto labels figures when geometry or data is transformed. Show "
+        "forces the label; Hide is an explicit publication override.",
     )
 
     # VIZ-18: these figures end up in papers — printed, sometimes in black &
@@ -2182,19 +2273,20 @@ def sidebar_controls(
     # show a local badge so an active Discard cannot be forgotten. A chip in the
     # trial-fact strip was rejected because this is a view setting, not trial data.
     _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
-    with viz.popover(
-        f"🧹 Fixation filter{_fixation_filter_badge()}",
-        width="stretch",
-        help=_gated_help(
-            "Highlight or hide short, long, and out-of-bounds fixations.",
-            _flag_reason,
-        ),
-    ):
-        # VIZ-27 follow-up: the index window removes fixations just like the
-        # short/long/OOB rules, so it belongs here rather than under marker style.
-        # The max follows the selected trial (BUG-16).
-        _render_fix_range_slider(fix_range_fixations)
-        _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
+    if show_fix or fix_off_disabled:
+        with viz.popover(
+            f"🧹 Fixation filter{_fixation_filter_badge()}",
+            width="stretch",
+            help=_gated_help(
+                "Highlight or hide short, long, and out-of-bounds fixations.",
+                _flag_reason,
+            ),
+        ):
+            # VIZ-27 follow-up: the index window removes fixations just like the
+            # short/long/OOB rules, so it belongs here rather than under marker style.
+            # The max follows the selected trial (BUG-16).
+            _render_fix_range_slider(fix_range_fixations)
+            _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
     show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
@@ -2424,10 +2516,11 @@ def sidebar_controls(
             )
 
     # --- Heatmap ----------------------------------------------------------
-    # The heatmap is a `make_scanpath_figure`-only layer — neither
-    # `make_scanpath_animation` nor the comparison builders take any heatmap
-    # argument — so the whole group greys out in Animate / Compare (VIZ-21).
-    heat_disabled, heat_reason = _mode_gate(animating, comparing, **_static_only)
+    # Compare supports a shared word-box scale: overlay splits each box into
+    # A/B halves; side-by-side and stacked tint their respective full boxes.
+    # Animation remains disabled because a time-varying density layer would
+    # need a distinct frame contract.
+    heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
     show_heatmap = viz.toggle(
         "**Heatmap**",
         key="global_show_heatmap",
@@ -2441,18 +2534,32 @@ def sidebar_controls(
             # with nothing selected on first open.
             st.radio(
                 "Heatmap style",
-                options=["Word boxes", "Interpolated"],
+                options=["Word boxes", "Interpolated", "Duration mass"],
                 horizontal=True,
                 key="global_heatmap_style",
-                disabled=heat_disabled,
+                disabled=heat_disabled or comparing,
                 help=_gated_help(
+                    "Comparison always uses word boxes with one shared scale. "
+                    "In overlay mode each box is split into A/B halves. "
                     "Word boxes: tint each word box by fixation count / duration. "
                     "Interpolated: a smooth Gaussian density over the fixations "
-                    "themselves, independent of the word boxes (classic "
-                    "eye-movement heatmap).",
-                    heat_reason,
+                    "themselves. Duration mass spreads dwell time across nearby "
+                    "characters with a Gaussian.",
+                    "Comparison heatmaps use split word boxes."
+                    if comparing
+                    else heat_reason,
                 ),
             )
+            if st.session_state.get("global_heatmap_style") == "Duration mass":
+                st.number_input(
+                    "Duration-mass sigma (characters)",
+                    min_value=0.25,
+                    max_value=10.0,
+                    step=0.25,
+                    key="global_duration_mass_sigma_chars",
+                    disabled=heat_disabled,
+                    help="Gaussian standard deviation measured in character widths.",
+                )
             _popover_selectbox(
                 "Heatmap colorscale",
                 COLORSCALES,
@@ -2536,7 +2643,7 @@ def sidebar_controls(
     # VIZ-23: `background_image*` are now parameters of all three builders — the
     # comparison figure places one `layout.image` per panel in the split layouts —
     # so the whole stimulus-image group is live in every mode.
-    viz.toggle(
+    show_stim_image = viz.toggle(
         "**Stimulus image**",
         help="Show a stimulus page behind the scanpath — the dataset's rendered "
         "page (exact coordinates; sidesteps CJK / RTL font issues) or an image "
@@ -2549,57 +2656,61 @@ def sidebar_controls(
         disabled=not can_show_image,
         key="global_show_stimulus_image",
     )
-    with viz.popover("⚙️ Stimulus image", width="stretch"):
-        st.file_uploader(
-            "Upload a stimulus image",
-            type=["png", "jpg", "jpeg", "gif", "webp"],
-            key="global_stimulus_image_upload",
-            help="Use a screenshot of the reading screen as the background for "
-            "any dataset. An upload **overrides** a dataset's built-in image and "
-            "is stretched to fill the monitor; use the **Align to text** controls "
-            "below to position/scale it. Not carried by Share links (upload it on "
-            "the other end).",
-        )
-        _numeric_slider(
-            st,
-            "Image opacity",
-            key="global_stimulus_image_opacity",
-            min_value=0.1,
-            max_value=1.0,
-            step=0.05,
-            number_format="%.2f",
-            help="Dim the stimulus image so the fixations, saccades and word "
-            "boxes stand out over it (1.0 = fully opaque).",
-        )
-        # VIZ-4: manual alignment. The text was shown at some position on the
-        # screen; when the data's coordinates don't match the image exactly, nudge
-        # the image (X/Y px) and scale it to line it up with the word boxes and
-        # fixations. Applies to dataset and uploaded images alike.
-        st.caption("**Align to text** — nudge/scale the image to fit the boxes.")
-        off_cols = st.columns(2)
-        off_cols[0].number_input(
-            "Image X offset (px)",
-            step=5.0,
-            key="global_stimulus_image_offset_x",
-            help="Shift the image horizontally to line it up with the text.",
-        )
-        off_cols[1].number_input(
-            "Image Y offset (px)",
-            step=5.0,
-            key="global_stimulus_image_offset_y",
-            help="Shift the image vertically to line it up with the text.",
-        )
-        _numeric_slider(
-            st,
-            "Image scale",
-            key="global_stimulus_image_scale",
-            min_value=0.25,
-            max_value=3.0,
-            step=0.05,
-            number_format="%.2f",
-            help="Scale the image up/down so its text matches the word boxes "
-            "(1.0 = the image's native / dataset size).",
-        )
+    # Keep the popover reachable even while the toggle is off-and-disabled (no
+    # image loaded yet) — its uploader is the only way to get an image in and
+    # enable the toggle in the first place.
+    if show_stim_image or not can_show_image:
+        with viz.popover("⚙️ Stimulus image", width="stretch"):
+            st.file_uploader(
+                "Upload a stimulus image",
+                type=["png", "jpg", "jpeg", "gif", "webp"],
+                key="global_stimulus_image_upload",
+                help="Use a screenshot of the reading screen as the background for "
+                "any dataset. An upload **overrides** a dataset's built-in image and "
+                "is stretched to fill the monitor; use the **Align to text** controls "
+                "below to position/scale it. Not carried by Share links (upload it on "
+                "the other end).",
+            )
+            _numeric_slider(
+                st,
+                "Image opacity",
+                key="global_stimulus_image_opacity",
+                min_value=0.1,
+                max_value=1.0,
+                step=0.05,
+                number_format="%.2f",
+                help="Dim the stimulus image so the fixations, saccades and word "
+                "boxes stand out over it (1.0 = fully opaque).",
+            )
+            # VIZ-4: manual alignment. The text was shown at some position on the
+            # screen; when the data's coordinates don't match the image exactly, nudge
+            # the image (X/Y px) and scale it to line it up with the word boxes and
+            # fixations. Applies to dataset and uploaded images alike.
+            st.caption("**Align to text** — nudge/scale the image to fit the boxes.")
+            off_cols = st.columns(2)
+            off_cols[0].number_input(
+                "Image X offset (px)",
+                step=5.0,
+                key="global_stimulus_image_offset_x",
+                help="Shift the image horizontally to line it up with the text.",
+            )
+            off_cols[1].number_input(
+                "Image Y offset (px)",
+                step=5.0,
+                key="global_stimulus_image_offset_y",
+                help="Shift the image vertically to line it up with the text.",
+            )
+            _numeric_slider(
+                st,
+                "Image scale",
+                key="global_stimulus_image_scale",
+                min_value=0.25,
+                max_value=3.0,
+                step=0.05,
+                number_format="%.2f",
+                help="Scale the image up/down so its text matches the word boxes "
+                "(1.0 = the image's native / dataset size).",
+            )
     # Raw gaze is a `make_scanpath_figure`-only overlay.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
     viz.toggle(

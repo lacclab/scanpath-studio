@@ -506,3 +506,59 @@ def test_render_fixations_only_multifile(tmp_path):
 def test_render_potec_conflicts_with_other_inputs():
     with pytest.raises(SystemExit, match="exactly one input"):
         cli.main(["render", "--potec", "d", "--sample", "-o", "out.html"])
+
+
+def test_render_authoring_json(tmp_path):
+    from scanpath_studio.authoring import authoring_json, default_events, layout_text
+
+    words = layout_text("alpha beta")
+    source = tmp_path / "authored.json"
+    source.write_text(
+        authoring_json("alpha beta", default_events(words)), encoding="utf-8"
+    )
+    output = tmp_path / "authored.html"
+    cli.main(["render", "--authoring", str(source), "-o", str(output)])
+    assert output.is_file()
+
+
+def test_analyze_and_corpus_commands(tmp_path):
+    import pandas as pd
+
+    from scanpath_studio import data as data_module
+
+    words, fixations = data_module.load_sample_data()
+    words_path = tmp_path / "ia.csv"
+    fixations_path = tmp_path / "fixations.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fixations_path, index=False)
+    output_dir = tmp_path / "analysis"
+    cli.main(
+        [
+            "analyze",
+            "--words",
+            str(words_path),
+            "--fixations",
+            str(fixations_path),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    assert (output_dir / "saccades.csv").is_file()
+    assert (output_dir / "sentence_measures.csv").is_file()
+    assert (output_dir / "run_config.json").is_file()
+
+    tidy = tmp_path / "tidy.csv"
+    pd.DataFrame({"value": [100.0, 120.0, 140.0]}).to_csv(tidy, index=False)
+    figure = tmp_path / "corpus.html"
+    cli.main(
+        [
+            "corpus",
+            "--input",
+            str(tidy),
+            "--kind",
+            "distribution",
+            "--output",
+            str(figure),
+        ]
+    )
+    assert figure.is_file()

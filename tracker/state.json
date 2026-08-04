@@ -1,13 +1,34 @@
 {
   "version": 2,
-  "revision": 17,
+  "revision": 87,
   "items": {
+    "AN-29": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "AN-30": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
     "BUG-15": {
       "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-03"
+    },
+    "BUG-4": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-04"
     },
     "CMP-5": {
       "status": "Closed",
@@ -22,6 +43,20 @@
       "archived": true,
       "updated": "2026-08-03"
     },
+    "CMP-7": {
+      "status": "In progress",
+      "priority": "Normal",
+      "implementationBrief": "Doesn't work. I see fixations and no heatmap although fixations are turned off and heatmap is on.",
+      "archived": false,
+      "updated": "2026-08-04"
+    },
+    "DATA-10": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "Use code from eyegenbench",
+      "archived": false,
+      "updated": "2026-08-04"
+    },
     "DATA-17": {
       "status": "Closed",
       "priority": "Normal",
@@ -29,11 +64,39 @@
       "archived": true,
       "updated": "2026-08-03"
     },
+    "DATA-18": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-03"
+    },
     "DATA-2": {
       "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": true,
+      "updated": "2026-08-03"
+    },
+    "ENG-19": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "It is a gatekeeper refusal, address best as can without signing the app etc.",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "ENG-20": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-03"
+    },
+    "ENG-21": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
       "updated": "2026-08-03"
     },
     "ENG-24": {
@@ -49,6 +112,139 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-03"
+    },
+    "ENG-27": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-04"
+    },
+    "EXP-3": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PERF-2": {
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-1": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-10": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-11": {
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-12": {
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-13": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-14": {
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-15": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-16": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-17": {
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-18": {
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-19": {
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-4": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-5": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-04"
+    },
+    "PRE-6": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "PRE-7": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-04"
+    },
+    "PRE-8": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
     },
     "UX-21": {
       "status": "Closed",
@@ -75,12 +271,54 @@
       "archived": true,
       "updated": "2026-08-03"
     },
-    "VIZ-22": {
-      "status": "Planned",
+    "VAL-1": {
+      "status": "On hold",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
+      "updated": "2026-08-04"
+    },
+    "VAL-2": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-04"
+    },
+    "VAL-3": {
+      "status": "In progress",
+      "priority": "Normal",
+      "implementationBrief": "Can be closed by MECO",
+      "archived": false,
       "updated": "2026-08-03"
+    },
+    "VAL-4": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-04"
+    },
+    "VIZ-14": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "VIZ-20": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "Author a scanpath by hand - for starts this can be a standalone screen with a minimal implementation which we can iterate on later on",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "VIZ-22": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
     },
     "VIZ-25": {
       "status": "Closed",
@@ -109,6 +347,13 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-03"
+    },
+    "VIZ-29": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
     }
   },
   "createdItems": []

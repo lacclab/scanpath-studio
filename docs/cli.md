@@ -25,6 +25,9 @@ scanpath-studio render --sample -o scanpath.html
 scanpath-studio render \
   --words ia.csv --fixations fixations.csv \
   --participant p1 --trial t3 --output scanpath.svg
+
+# Render a portable file saved by the in-app scanpath author
+scanpath-studio render --authoring authored-scanpath.json -o authored.html
 ```
 
 HTML is interactive and browser-free. PNG, SVG, and PDF require
@@ -41,6 +44,10 @@ Chrome/Chromium (`plotly_get_chrome -y`).
 | classify saccades | `--saccade-color-by-type` |
 | correct vertical drift | `--drift-correction ALGORITHM` |
 | add the stimulus image | `--stimulus-image PATH` |
+| resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
+| use Gaussian duration mass | `--heatmap-style 'Duration mass' --duration-mass-sigma 1.0` |
+| mark a schematic | `--illustration` or `--illustration-label MODE` |
+| render an authored trial | `--authoring PATH` |
 | export editable layers | `--separable-layers` |
 
 Use the installed command as the authoritative full reference:
@@ -50,5 +57,14 @@ scanpath-studio --help
 scanpath-studio render --help
 ```
 
-The CLI renders one trial per invocation. Use the [Python batch pattern](automation.md#batch-pattern)
-or the app's **Export → Multiple trials** for a corpus.
+The `analyze` command writes the full tabular family without opening the app:
+
+```bash
+scanpath-studio analyze --words ia.csv --fixations fixations.csv --output-dir analysis
+```
+
+This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
+and run-configuration files. `scanpath-studio corpus` produces a tidy
+corpus-analysis table for scripting. The `render` command still renders one
+trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
+or **Export → Multiple trials** for many figures.

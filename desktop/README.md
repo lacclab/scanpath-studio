@@ -17,3 +17,6 @@ python desktop/smoke_test.py                          # selfcheck + boot test
 
 CI builds all three OSes on `v*` tags / manual dispatch and attaches the
 archives to the GitHub release (`.github/workflows/desktop.yml`).
+The macOS leg ad-hoc signs the executable and the smoke test verifies that
+signature. This provides integrity without claiming Apple notarization; users
+still follow the documented Gatekeeper first-launch override.

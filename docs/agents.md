@@ -253,6 +253,7 @@ plus replay-only knobs — `figure_options("animation")` is the full list).
 | `show_raw_gaze` | `False` | no |
 | `show_connectors` | `False` | no |
 | `connector_y` | `None` | no |
+| `illustration_reasons` | `None` | no |
 
 ### Fixations
 
@@ -324,14 +325,16 @@ colours. `saccade_render_mode="Arc"` draws the linear-reading schematic.
 | `heatmap_style` | `'Word boxes'` | no |
 | `heatmap_metric` | `'duration_ms'` | no |
 | `heatmap_norm` | `'Linear'` | no |
+| `duration_mass_sigma_chars` | `1.0` | no |
 | `heatmap_colorscale` | `'Blues'` | no |
 | `heatmap_range` | `None` | no |
 | `word_heatmap_col` | `None` | no |
 | `word_heatmap_title` | `None` | no |
 
-`heatmap_style` is `"Word boxes"`, `"Interpolated"` or `"Density"`;
+`heatmap_style` is `"Word boxes"`, `"Interpolated"` or `"Duration mass"`;
 `heatmap_metric="counts"` weights by fixation count instead of dwell time;
-`heatmap_norm="Log"` compresses heavy-tailed dwell times.
+`heatmap_norm="Log"` compresses heavy-tailed dwell times. Duration mass spreads
+dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
 ### Text & words
 

@@ -24,6 +24,10 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.load_sample_data
 
+::: scanpath_studio.api.build_authored_scanpath
+
+::: scanpath_studio.api.load_authored_scanpath
+
 ::: scanpath_studio.datasets.load_potec
 
 ## Inspect and measure
@@ -32,11 +36,23 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.compute_word_metrics
 
+::: scanpath_studio.api.preprocess_data
+
+::: scanpath_studio.api.analysis_tables
+
+::: scanpath_studio.api.trial_summary
+
+::: scanpath_studio.api.reader_summary
+
+::: scanpath_studio.api.alignment_sensitivity
+
 ## Plot
 
 ::: scanpath_studio.api.plot_scanpath
 
 ::: scanpath_studio.api.animate_scanpath
+
+::: scanpath_studio.api.plot_corpus_figure
 
 ## Save
 

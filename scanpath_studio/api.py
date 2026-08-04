@@ -72,8 +72,43 @@ from .plots import (  # noqa: E402
     animation_autoplay_post_script,
     make_scanpath_animation,
     make_scanpath_figure,
+    make_difference_profile_figure,
+    make_distribution_figure,
+    make_word_profile_figure,
     split_scanpath_layers,
 )
+
+
+def build_authored_scanpath(
+    text: str, events: Optional[pd.DataFrame] = None, **layout_options
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build normalized word/fixation frames from hand-authored reading events.
+
+    When ``events`` is omitted, one centered fixation per laid-out word is used.
+    ``layout_options`` are forwarded to :func:`authoring.layout_text`.
+    """
+    from .authoring import authored_fixations, default_events, layout_text
+
+    words = layout_text(text, **layout_options)
+    if events is None:
+        events = default_events(words)
+    return words, authored_fixations(words, events)
+
+
+def load_authored_scanpath(
+    source: Union[str, Path],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load a VIZ-20 authoring JSON path (or JSON payload) into canonical frames."""
+    from .authoring import parse_authoring_json
+
+    raw = str(source)
+    if raw.lstrip().startswith("{"):
+        payload = raw
+    else:
+        payload = Path(source).read_text(encoding="utf-8")
+    text, events = parse_authoring_json(payload)
+    return build_authored_scanpath(text, events)
+
 
 TableLike = Union[pd.DataFrame, str, Path]
 TablesLike = Union[TableLike, "list[TableLike]"]
@@ -460,6 +495,8 @@ def load_scanpath_data(
     *,
     word_schema: Optional[dict] = None,
     fix_schema: Optional[dict] = None,
+    image_root: Optional[Union[str, Path]] = None,
+    image_pattern: str = "{text_id}.png",
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Load and normalize a words/IA table and/or a fixations table.
 
@@ -513,7 +550,15 @@ def load_scanpath_data(
     else:
         fixations_norm = _data.empty_fixations_frame()
 
-    return _data.harmonize_frames(words_norm, fixations_norm)
+    words_norm, fixations_norm = _data.harmonize_frames(words_norm, fixations_norm)
+    if image_root is not None:
+        words_norm = _data.resolve_stimulus_image_paths(
+            words_norm, image_root, image_pattern
+        )
+        fixations_norm = _data.resolve_stimulus_image_paths(
+            fixations_norm, image_root, image_pattern
+        )
+    return words_norm, fixations_norm
 
 
 def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -533,6 +578,173 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
     _require_normalized(words, "words")
     _require_normalized(fixations, "fixations")
     return _data.compute_word_metrics(words, fixations)
+
+
+def trial_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
+    """Exportable one-row-per-trial reading summary (AN-30)."""
+    from .aggregation import trial_summary_table
+
+    return trial_summary_table(words, fixations)
+
+
+def reader_summary(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
+    """Exportable one-row-per-reader reading summary (AN-30)."""
+    from .aggregation import reader_summary_table
+
+    return reader_summary_table(words, fixations)
+
+
+def preprocess_data(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    enabled: bool = False,
+    short_policy: str = "Off",
+    short_threshold_ms: float = 80.0,
+    merge_distance_chars: float = 1.0,
+    discard_blink_adjacent: bool = False,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Apply the optional preprocessing stage and return words/fixations/QA."""
+    if not enabled:
+        return words, fixations, pd.DataFrame()
+
+    from .measures import assign_fixations_to_words, enrich_fixations
+    from .preprocessing import preprocess_fixations
+
+    assigned = (
+        enrich_fixations(assign_fixations_to_words(fixations, words), words)
+        if not fixations.empty
+        else fixations
+    )
+    processed, report = preprocess_fixations(
+        assigned,
+        words,
+        settings={
+            "enabled": enabled,
+            "short_policy": short_policy,
+            "short_threshold_ms": short_threshold_ms,
+            "merge_distance_chars": merge_distance_chars,
+            "discard_blink_adjacent": discard_blink_adjacent,
+        },
+    )
+    return words, processed, report
+
+
+def analysis_tables(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    pixels_per_degree: Optional[float] = None,
+    raw_gaze: Optional[pd.DataFrame] = None,
+) -> dict[str, pd.DataFrame]:
+    """Full measure family used by EXP-3 bulk/headless exports."""
+    from .measures import assign_fixations_to_words, enrich_fixations
+    from .preprocessing import (
+        character_grid,
+        cleaning_report,
+        saccade_table,
+        sentence_measures,
+    )
+
+    analysis_fixations = (
+        enrich_fixations(assign_fixations_to_words(fixations, words), words)
+        if not fixations.empty and not words.empty
+        else fixations
+    )
+    measured_words = compute_word_metrics(words, fixations)
+    return {
+        "fixations": analysis_fixations,
+        "saccades": saccade_table(
+            analysis_fixations,
+            pixels_per_degree=pixels_per_degree,
+            raw_gaze=raw_gaze,
+            words=words,
+        ),
+        "word_measures": measured_words,
+        "sentence_measures": sentence_measures(measured_words, analysis_fixations),
+        "trial_summary": trial_summary(measured_words, analysis_fixations),
+        "reader_summary": reader_summary(measured_words, analysis_fixations),
+        "characters": character_grid(words),
+        "cleaning_qa": cleaning_report(analysis_fixations),
+    }
+
+
+def alignment_sensitivity(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    methods: Tuple[str, ...] = ("attach", "slice", "consensus"),
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Word-measure sensitivity and correction QA across line algorithms."""
+    from .preprocessing import measure_sensitivity
+
+    return measure_sensitivity(words, fixations, methods)
+
+
+def plot_corpus_figure(
+    data: pd.DataFrame,
+    *,
+    kind: str,
+    measure_label: str = "Value",
+    series_col: str = "series",
+    value_col: str = "value",
+    colors: Optional[Tuple[str, ...]] = None,
+    canvas_width: int = 1000,
+    base_font_size: int = 14,
+    font_family: str = FONT_FAMILY,
+) -> go.Figure:
+    """Headless corpus profile/distribution/difference plot with shared colours.
+
+    ``profile`` expects ``word_id`` plus ``value_col`` (and optional ``lo`` /
+    ``hi``); ``distribution`` expects ``value_col``; ``difference`` expects
+    ``word_id`` and ``diff``. When ``series_col`` is present, it defines the
+    overlaid profile/distribution series. This is the API counterpart of the
+    Corpus Analysis in-view styling controls (AN-29).
+    """
+    kind = str(kind).lower()
+    if kind == "profile":
+        profiles = (
+            {
+                str(name): group.rename(columns={value_col: "value"})
+                for name, group in data.groupby(series_col, sort=False)
+            }
+            if series_col in data
+            else {measure_label: data.rename(columns={value_col: "value"})}
+        )
+        return make_word_profile_figure(
+            profiles,
+            measure_label=measure_label,
+            canvas_width=canvas_width,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            colors=colors,
+        )
+    if kind == "distribution":
+        groups = (
+            {
+                str(name): group[value_col].dropna().to_numpy()
+                for name, group in data.groupby(series_col, sort=False)
+            }
+            if series_col in data
+            else {measure_label: data[value_col].dropna().to_numpy()}
+        )
+        return make_distribution_figure(
+            groups,
+            metric_label=measure_label,
+            canvas_width=canvas_width,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            colors=colors,
+        )
+    if kind == "difference":
+        return make_difference_profile_figure(
+            data,
+            measure_label=measure_label,
+            canvas_width=canvas_width,
+            base_font_size=base_font_size,
+            font_family=font_family,
+            colors=colors,
+        )
+    raise ValueError("kind must be 'profile', 'distribution', or 'difference'.")
 
 
 def list_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
@@ -868,6 +1080,8 @@ def plot_scanpath(
     drift_correction: Optional[str] = None,
     drift_connectors: bool = False,
     fix_index_range: Optional[Tuple[int, int]] = None,
+    illustration: bool = False,
+    illustration_label: str = "auto",
     **figure_overrides,
 ) -> go.Figure:
     """Build the canonical scanpath figure for one trial.
@@ -880,13 +1094,12 @@ def plot_scanpath(
     true to scale. ``raw_gaze`` is a normalized frame (see
     :func:`data.normalize_raw_gaze`) and is filtered to the selected trial.
 
-    ``drift_correction`` (PRE-3) names one of the ten Carr et al. (2021)
-    line-assignment algorithms (``alignment.ALGORITHMS``: ``"attach"``,
-    ``"chain"``, ``"cluster"``, ``"compare"``, ``"merge"``, ``"regress"``,
-    ``"segment"``, ``"split"``, ``"stretch"``, ``"warp"``); each fixation is
-    snapped to its assigned text line and coloured by line, exactly as the app's
-    *Drift correction* control does. ``drift_connectors=True`` also draws a faint
-    line from each fixation's original y to its corrected one.
+    ``drift_correction`` (PRE-3/PRE-17) names a method from
+    ``alignment.ALGORITHMS``: the ten Carr et al. (2021) algorithms plus
+    run-based ``"slice"`` and ``"consensus"``. Each fixation is snapped to its
+    assigned text line and coloured by line, exactly as the app's *Drift
+    correction* control does. ``drift_connectors=True`` also draws a faint line
+    from each fixation's original y to its corrected one.
 
     ``fix_index_range=(start, end)`` (VIZ-7) draws only fixations ``start``
     through ``end`` (1-based, both inclusive) of the trial — the headless form of
@@ -899,12 +1112,35 @@ def plot_scanpath(
     raises a ``TypeError`` naming the closest valid options, and
     :func:`figure_options` lists them all with their defaults.
     """
+    if illustration:
+        figure_overrides = {
+            "show_words": False,
+            "show_word_labels": True,
+            "show_fixations": True,
+            "show_order": False,
+            "show_saccades": True,
+            "show_saccade_arrows": False,
+            "show_heatmap": False,
+            "color_by": UNIFORM_COLOR_FIELD,
+            "saccade_color_mode": "Uniform",
+            "saccade_render_mode": "Arc",
+            "fixation_snap_to_word": True,
+            "fixation_opacity": 1.0,
+            **figure_overrides,
+        }
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
     trial_words, trial_fixations, pid, tid = _select_trial(
         words, fixations, participant, trial
     )
+    full_fix_range = None
+    if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
+        order = pd.to_numeric(
+            trial_fixations["order_in_trial"], errors="coerce"
+        ).dropna()
+        if not order.empty:
+            full_fix_range = (int(order.min()), int(order.max()))
     if canvas_size is None:
         canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
     # Window first, correct second — the app's order (tabs._slice_fix_range runs
@@ -912,6 +1148,19 @@ def plot_scanpath(
     # fixations.
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
     settings = _figure_kwargs(figure_overrides)
+    label_mode = str(illustration_label).capitalize()
+    if label_mode not in {"Auto", "Show", "Hide"}:
+        raise ValueError("illustration_label must be 'auto', 'show', or 'hide'.")
+    if "illustration_reasons" not in figure_overrides:
+        from .illustration import illustration_reasons, resolve_label_reasons
+
+        reasons = illustration_reasons(
+            settings,
+            fix_index_range=fix_index_range,
+            full_fixation_range=full_fix_range,
+            raw_gaze_only=trial_fixations.empty and raw_gaze is not None,
+        )
+        settings["illustration_reasons"] = resolve_label_reasons(label_mode, reasons)
     # Spatial fields are explicit kwargs of make_scanpath_figure, so they can't
     # ride along in **settings without a "multiple values" TypeError.
     x_field = settings.pop("x_field", "x")

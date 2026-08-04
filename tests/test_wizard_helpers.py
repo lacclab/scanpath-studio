@@ -15,6 +15,18 @@ streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
 
+class TestWideFrameWarning:
+    def test_ordinary_selection_is_quiet(self):
+        assert wizard.wide_frame_warning(20, 10_000) is None
+
+    def test_many_columns_warn_even_on_small_frame(self):
+        message = wizard.wide_frame_warning(50, 100)
+        assert message and "50 additional fields" in message
+
+    def test_large_cell_product_warns(self):
+        assert wizard.wide_frame_warning(25, 250_000)
+
+
 class TestDefaultTrialColumns:
     def test_composes_participant_and_paragraph_preferring_paragraph(self):
         # A trial is one reading of one passage → participant + the finest passage

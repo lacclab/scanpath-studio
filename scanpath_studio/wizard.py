@@ -702,6 +702,17 @@ def _clean_multiselect_state(key: str, valid) -> None:
             st.session_state[key] = cleaned
 
 
+def wide_frame_warning(n_extra_fields: int, n_rows: int) -> Optional[str]:
+    """PERF-2 warning for selections large enough to affect rerun latency."""
+    if n_extra_fields < 50 and n_extra_fields * max(n_rows, 0) < 5_000_000:
+        return None
+    return (
+        f"Keeping {n_extra_fields} additional fields across up to {n_rows:,} rows "
+        "can noticeably slow caching, grouping, and browser transfer. Keep only "
+        "the measures and metadata you plan to use; you can revise this mapping later."
+    )
+
+
 def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> Tuple[dict, list]:
     """Render ONE cross-table *Filter trials by* picker (``filter_host``) and ONE
     *Additional fields to keep* picker (``keep_host``) — instead of duplicating
@@ -770,6 +781,15 @@ def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> Tuple[dict,
                 "to retain (to colour or filter by). Fewer columns is faster.",
             )
         )
+        warning = wide_frame_warning(
+            len(chosen_keep),
+            max(
+                (len(raw) for raw, *_ in tables if raw is not None),
+                default=0,
+            ),
+        )
+        if warning:
+            keep_host.warning(warning)
 
     # Map both pickers' choices back to the per-table source columns to keep.
     keep_by_prefix: dict = {prefix: set() for prefix in cat_by_prefix}

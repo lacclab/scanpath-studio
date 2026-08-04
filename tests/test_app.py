@@ -1,5 +1,6 @@
 """Tests for app.py utility functions."""
 
+import json
 from urllib.parse import parse_qs
 
 import pandas as pd
@@ -485,6 +486,19 @@ class TestBuildShareQuery:
         assert "onestop_variant" not in ss  # bogus variant dropped
         assert "onestop_regime" not in ss  # bad regime dropped
         assert ss["onestop_parts"] == ["Paragraph"]  # only the valid part kept
+
+    def test_authored_link_seeds_event_text_guard(self, fake_st):
+        events = [{"word_id": 2, "x": 123, "y": 45, "duration_ms": 456}]
+        fake_st.query_params = {
+            "source": "author",
+            "author_text": "alpha beta",
+            "author_events": json.dumps(events),
+        }
+        assert _apply_url_preset() == "author"
+        ss = fake_st.session_state
+        assert ss["author_text"] == "alpha beta"
+        assert ss["_author_text_for_events"] == "alpha beta"
+        assert ss["_authored_events_frame"].to_dict("records") == events
 
 
 class TestApplyUrlTrialSelection:

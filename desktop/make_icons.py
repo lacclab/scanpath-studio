@@ -1,7 +1,7 @@
 """Generate the desktop app icons (ENG-15).
 
-Draws a scanpath motif — text lines with fixation dots joined by saccade
-segments, including one regression — on a rounded dark tile, then writes the
+Draws a scanpath motif — four fixation dots joined across compact word blocks,
+including a return sweep — on a rounded dark tile, then writes the
 committed icon files:
 
     desktop/icons/icon.png    512x512 master (also the Linux icon)
@@ -24,22 +24,32 @@ from scanpath_studio.constants import APP_THEME_DARK, CURRENT_FIX_OUTLINE
 
 SIZE = 512
 BG = APP_THEME_DARK["backgroundColor"]
-LINE = "#3a4154"  # muted text-line bars (icon-only shade)
+LINE = "#4a5572"  # muted word blocks: stimulus context, not the main silhouette
 SACCADE = APP_THEME_DARK["primaryColor"]
 FIXATION = CURRENT_FIX_OUTLINE
+FIXATION_RING = APP_THEME_DARK["textColor"]
 
-# Fixation centers (x, y, radius) along three "text lines", with a regression
-# from the 5th fixation back up to the 6th.
-TEXT_LINES_Y = (150, 256, 362)
+# VIZ-29: four bold targets form a simple reading/return-sweep silhouette. The
+# previous eight-point path crossed itself and collapsed into noise at 16 px.
 FIXATIONS = (
-    (110, 150, 30),
-    (250, 150, 42),
-    (400, 150, 26),
-    (170, 256, 36),
-    (360, 256, 48),
-    (250, 150, 0),  # regression target: revisit line 1 (no extra dot)
-    (120, 362, 28),
-    (330, 362, 38),
+    (120, 142, 36),
+    (382, 142, 42),
+    (176, 264, 46),
+    (340, 374, 38),
+)
+
+# Short blocks read as words rather than a generic hamburger/menu icon. Gaps
+# stay visible at 16–32 px and keep the scanpath unmistakably in the foreground.
+WORD_BLOCKS = (
+    (70, 130, 180, 154),
+    (208, 130, 318, 154),
+    (344, 130, 442, 154),
+    (70, 252, 144, 276),
+    (170, 252, 282, 276),
+    (308, 252, 442, 276),
+    (70, 362, 198, 386),
+    (226, 362, 310, 386),
+    (336, 362, 442, 386),
 )
 
 
@@ -53,25 +63,24 @@ def draw_icon(size: int = SIZE) -> Image.Image:
 
     draw.rounded_rectangle((0, 0, size - 1, size - 1), radius=s(96), fill=BG)
 
-    # Text lines (the reading stimulus).
-    for y in TEXT_LINES_Y:
-        draw.rounded_rectangle(
-            (s(64), s(y - 16), s(448), s(y + 16)), radius=s(16), fill=LINE
-        )
+    # Word blocks (the reading stimulus), intentionally subordinate.
+    for x0, y0, x1, y1 in WORD_BLOCKS:
+        draw.rounded_rectangle((s(x0), s(y0), s(x1), s(y1)), radius=s(12), fill=LINE)
 
     # Saccades under the fixation dots.
     points = [(s(x), s(y)) for x, y, _ in FIXATIONS]
-    draw.line(points, fill=SACCADE, width=max(1, round(s(14))), joint="curve")
+    draw.line(points, fill=SACCADE, width=max(1, round(s(20))), joint="curve")
 
-    # Fixation dots, sized like duration-scaled markers.
+    # Pale ring survives both the dark tile and light OS icon treatments.
     for x, y, r in FIXATIONS:
-        if r == 0:
-            continue
         draw.ellipse(
             (s(x - r), s(y - r), s(x + r), s(y + r)),
+            fill=FIXATION_RING,
+        )
+        inset = max(2, r * 0.22)
+        draw.ellipse(
+            (s(x - r + inset), s(y - r + inset), s(x + r - inset), s(y + r - inset)),
             fill=FIXATION,
-            outline=BG,
-            width=max(1, round(s(6))),
         )
     return img
 

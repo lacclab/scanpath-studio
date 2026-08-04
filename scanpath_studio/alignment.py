@@ -15,10 +15,12 @@ rather than mutating coordinates, plus DataFrame plumbing for this app); see
 is GPL-3.0 and incompatible with this MIT-licensed, PyPI-distributed project.
 
 Each fixation in a trial is assigned the index of the text line it most likely
-belongs to. ``slice`` (a later eyekit addition outside the 2021 paper) is *not*
-included; this module ships exactly the ten of Carr et al. (2021):
+belongs to. The module ships the ten methods surveyed by Carr et al. (2021), a
+native implementation of the later run-based ``slice`` method, and a consensus
+vote:
 
-    attach, chain, cluster, compare, merge, regress, segment, split, stretch, warp
+    attach, chain, cluster, compare, merge, regress, segment, split, stretch,
+    warp, slice, consensus
 
 Pure functions, no Streamlit.
 """
@@ -44,6 +46,21 @@ NOTICE = (
     "(CC BY 4.0). Adapted/modified."
 )
 
+METHOD_CITATIONS = {
+    "attach": "Carr et al. (2021), nearest-line baseline",
+    "chain": "Carr et al. (2021), chain",
+    "cluster": "Carr et al. (2021), cluster",
+    "compare": "Carr et al. (2021), compare",
+    "merge": "Carr et al. (2021), merge",
+    "regress": "Carr et al. (2021), regress",
+    "segment": "Carr et al. (2021), segment",
+    "split": "Carr et al. (2021), split",
+    "stretch": "Carr et al. (2021), stretch",
+    "warp": "Carr et al. (2021), warp",
+    "slice": "Schroeder (2022), run-based Slice line assignment",
+    "consensus": "Carr et al. (2021), wisdom-of-the-crowd vote",
+}
+
 ALGORITHMS = (
     "attach",
     "chain",
@@ -55,6 +72,8 @@ ALGORITHMS = (
     "split",
     "stretch",
     "warp",
+    "slice",
+    "consensus",
 )
 
 # Deterministic seed for the k-means based algorithms (cluster / split) so the
@@ -387,6 +406,159 @@ def _compare(
     return assignment
 
 
+def _slice(
+    fixation_XY: np.ndarray,
+    line_Y: np.ndarray,
+    word_XY,
+    *,
+    run_y_factor: float = 0.65,
+    run_x_factor: float = 0.60,
+    same_line_factor: float = 0.45,
+    adjacent_factor: float = 1.50,
+) -> np.ndarray:
+    """Assign locally coherent reading runs to lines.
+
+    This is an independent implementation of Slice's published algorithmic
+    idea: split the scanpath at large horizontal/vertical jumps, seed the run
+    with the broadest horizontal coverage, then grow line labels by comparing
+    each run with already labelled fixations at nearby x positions.  The final
+    relative labels are aligned to the absolute stimulus line centres.
+
+    Keeping a run together is the important distinction from ``attach``: a
+    locally drifted fixation does not jump to another line merely because it is
+    a few pixels closer to that line's centre.
+    """
+    n = len(fixation_XY)
+    if n == 0:
+        return np.zeros(0, dtype=int)
+
+    sorted_lines = np.sort(np.asarray(line_Y, dtype=float))
+    line_gaps = np.diff(sorted_lines)
+    line_gaps = line_gaps[np.isfinite(line_gaps) & (line_gaps > 0)]
+    if not len(line_gaps):
+        return np.zeros(n, dtype=int)
+    line_height = float(np.median(line_gaps))
+
+    if word_XY is not None and len(word_XY):
+        text_x = np.asarray(word_XY, dtype=float)[:, 0]
+    else:
+        text_x = fixation_XY[:, 0]
+    text_x = text_x[np.isfinite(text_x)]
+    text_span = float(np.ptp(text_x)) if len(text_x) > 1 else 0.0
+    # A line-height-derived floor keeps narrow stimuli from fragmenting at
+    # ordinary within-line saccades.
+    run_x = max(text_span * run_x_factor, line_height * 3.0)
+    run_y = line_height * run_y_factor
+
+    dx = np.abs(np.diff(fixation_XY[:, 0]))
+    dy = np.abs(np.diff(fixation_XY[:, 1]))
+    boundaries = np.flatnonzero((dx >= run_x) | (dy >= run_y)) + 1
+    runs = [run for run in np.split(np.arange(n), boundaries) if len(run)]
+
+    def horizontal_span(run: np.ndarray) -> float:
+        return float(np.ptp(fixation_XY[run, 0])) if len(run) > 1 else 0.0
+
+    seed = max(range(len(runs)), key=lambda i: (horizontal_span(runs[i]), len(runs[i])))
+    relative: dict[int, int] = {seed: 0}
+
+    def residual(run: np.ndarray, labelled_indices: np.ndarray) -> float:
+        """Mean y offset from the closest-in-x labelled fixation."""
+        labelled = fixation_XY[labelled_indices]
+        offsets = []
+        for point in fixation_XY[run]:
+            nearest = int(np.argmin(np.abs(labelled[:, 0] - point[0])))
+            offsets.append(point[1] - labelled[nearest, 1])
+        return float(np.mean(offsets))
+
+    while len(relative) < len(runs):
+        candidates: list[tuple[float, int, int]] = []
+        for run_i, run in enumerate(runs):
+            if run_i in relative:
+                continue
+            for anchor_label in sorted(set(relative.values())):
+                anchor_runs = [
+                    runs[i] for i, label in relative.items() if label == anchor_label
+                ]
+                anchor_indices = np.concatenate(anchor_runs)
+                offset = residual(run, anchor_indices)
+                if abs(offset) < same_line_factor * line_height:
+                    candidates.append((abs(offset), run_i, anchor_label))
+                elif (
+                    same_line_factor * line_height
+                    <= offset
+                    < adjacent_factor * line_height
+                ):
+                    candidates.append(
+                        (abs(offset - line_height), run_i, anchor_label + 1)
+                    )
+                elif (
+                    -adjacent_factor * line_height
+                    < offset
+                    <= -same_line_factor * line_height
+                ):
+                    candidates.append(
+                        (abs(offset + line_height), run_i, anchor_label - 1)
+                    )
+        if candidates:
+            _, run_i, label = min(candidates)
+            relative[run_i] = label
+            continue
+
+        # A skipped line or unusually large drift can leave no adjacent
+        # candidate. Extend from the closest labelled run by an integer number
+        # of typical line heights, ensuring deterministic forward progress.
+        best: tuple[float, int, int] | None = None
+        for run_i, run in enumerate(runs):
+            if run_i in relative:
+                continue
+            run_mean = float(np.mean(fixation_XY[run, 1]))
+            for anchor_i, anchor_label in relative.items():
+                anchor_mean = float(np.mean(fixation_XY[runs[anchor_i], 1]))
+                delta = (run_mean - anchor_mean) / line_height
+                step = int(np.rint(delta))
+                step = step if step else (1 if delta > 0 else -1)
+                score = abs(delta - step)
+                candidate = (score, run_i, anchor_label + step)
+                if best is None or candidate < best:
+                    best = candidate
+        assert best is not None
+        _, run_i, label = best
+        relative[run_i] = label
+
+    # Slice labels are relative to the seed. Find the vertical shift that best
+    # aligns those labels with the available absolute stimulus lines while
+    # preserving their ordering and spacing.
+    labels = np.array([relative[i] for i in range(len(runs))], dtype=int)
+    unique_labels = np.unique(labels)
+    lowest = int(unique_labels.min())
+    label_range = int(unique_labels.max() - lowest)
+    run_means = np.array([np.mean(fixation_XY[run, 1]) for run in runs])
+    if label_range < len(sorted_lines):
+        fits = []
+        for shift in range(len(sorted_lines) - label_range):
+            absolute = labels - lowest + shift
+            error = float(np.sum((run_means - sorted_lines[absolute]) ** 2))
+            fits.append((error, shift))
+        shift = min(fits)[1]
+        run_assignment = labels - lowest + shift
+    else:
+        # More inferred gaze lines than stimulus lines: merge excess relative
+        # labels into the closest physical line instead of discarding runs.
+        label_means = {
+            label: float(np.mean(run_means[labels == label])) for label in unique_labels
+        }
+        mapping = {
+            label: int(np.argmin(np.abs(sorted_lines - mean_y)))
+            for label, mean_y in label_means.items()
+        }
+        run_assignment = np.array([mapping[label] for label in labels], dtype=int)
+
+    assignment = np.zeros(n, dtype=int)
+    for run, line_i in zip(runs, run_assignment):
+        assignment[run] = int(line_i)
+    return assignment
+
+
 _DISPATCH = {
     "attach": _attach,
     "chain": _chain,
@@ -398,6 +570,7 @@ _DISPATCH = {
     "split": _split,
     "stretch": _stretch,
     "warp": _warp,
+    "slice": _slice,
 }
 
 
@@ -420,7 +593,7 @@ def assign_lines(
     centers in reading order (required by ``warp`` / ``compare``; ignored
     otherwise). Returns an int ``(n,)`` array of line indices.
     """
-    if method not in _DISPATCH:
+    if method not in _DISPATCH and method != "consensus":
         raise ValueError(
             f"unknown alignment method {method!r}; choose from {ALGORITHMS}"
         )
@@ -433,7 +606,23 @@ def assign_lines(
         return np.zeros(n, dtype=int)
     if word_XY is not None:
         word_XY = np.asarray(word_XY, dtype=float)
-    assignment = _DISPATCH[method](fixation_XY, line_Y, word_XY)
+    if method == "consensus":
+        votes = np.vstack(
+            [
+                _DISPATCH[name](fixation_XY, line_Y, word_XY)
+                for name in _DISPATCH
+                if name not in {"slice"}
+            ]
+        )
+        assignment = np.apply_along_axis(
+            lambda column: np.bincount(
+                column.astype(int), minlength=len(line_Y)
+            ).argmax(),
+            0,
+            votes,
+        )
+    else:
+        assignment = _DISPATCH[method](fixation_XY, line_Y, word_XY)
     return np.clip(np.asarray(assignment, dtype=int), 0, len(line_Y) - 1)
 
 
@@ -501,7 +690,7 @@ def correct(
         [fx[finite].to_numpy(dtype=float), fy[finite].to_numpy(dtype=float)]
     )
     word_XY = None
-    if method in ("warp", "compare"):
+    if method in ("warp", "compare", "slice", "consensus"):
         word_XY = _word_centers_reading_order(words)
 
     line_idx = assign_lines(fixation_XY, line_Y, word_XY=word_XY, method=method)
@@ -512,4 +701,48 @@ def correct(
         # doesn't raise pandas' lossy-upcast error.
         corrected["y"] = corrected["y"].astype(float)
         corrected.loc[idx, "y"] = line_Y[line_idx]
+    corrected["y_original"] = pd.to_numeric(fixations["y"], errors="coerce")
+    corrected["y_correction"] = (
+        pd.to_numeric(corrected["y"], errors="coerce") - corrected["y_original"]
+    )
+    if method == "consensus":
+        votes = np.vstack(
+            [
+                assign_lines(fixation_XY, line_Y, word_XY=word_XY, method=name)
+                for name in _DISPATCH
+                if name != "slice"
+            ]
+        )
+        agreement = [
+            int(np.sum(votes[:, pos] == line_idx[pos])) for pos in range(len(line_idx))
+        ]
+        corrected["alignment_agreement"] = np.nan
+        corrected.loc[idx, "alignment_agreement"] = agreement
     return corrected, assigned
+
+
+def correction_sensitivity(
+    fixations: pd.DataFrame,
+    words: pd.DataFrame,
+    methods: tuple[str, ...] = ("attach", "slice", "consensus"),
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Carry several assignments together and report mean correction (PRE-18)."""
+    combined = fixations.copy()
+    report = []
+    for method in methods:
+        corrected, assigned = correct(fixations, words, method)
+        combined[f"y_{method}"] = corrected["y"]
+        combined[f"y_{method}_correction"] = corrected["y_correction"]
+        combined[f"line_{method}"] = assigned
+        if "alignment_agreement" in corrected:
+            combined[f"agreement_{method}"] = corrected["alignment_agreement"]
+        report.append(
+            {
+                "algorithm": method,
+                "average_y_correction": float(corrected["y_correction"].abs().mean()),
+                "max_y_correction": float(corrected["y_correction"].abs().max()),
+            }
+        )
+    line_cols = [f"line_{method}" for method in methods]
+    combined["assignment_disagreement"] = combined[line_cols].nunique(axis=1) > 1
+    return combined, pd.DataFrame(report)

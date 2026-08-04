@@ -55,6 +55,7 @@ GLOBAL_HOLLOW_FIXATIONS = "global_hollow_fixations"
 GLOBAL_SCALE_TEXT_TO_BOXES = "global_scale_text_to_boxes"
 GLOBAL_COLOR_BY = "global_color_by"
 GLOBAL_HEATMAP_STYLE = "global_heatmap_style"
+GLOBAL_DURATION_MASS_SIGMA_CHARS = "global_duration_mass_sigma_chars"
 GLOBAL_HEATMAP_NORM = "global_heatmap_norm"
 GLOBAL_HEATMAP_METRIC = "global_heatmap_metric"
 GLOBAL_CRITICAL_SPAN_STYLE = "global_critical_span_style"
@@ -66,6 +67,12 @@ GLOBAL_SACCADE_RENDER_MODE = "global_saccade_render_mode"
 # PRE-3 vertical drift correction (ENG-23 put it on the link + the config).
 GLOBAL_ALIGN_ALGORITHM = "global_align_algorithm"
 GLOBAL_ALIGN_CONNECTORS = "global_align_connectors"
+GLOBAL_ILLUSTRATION_LABEL = "global_illustration_label"
+GLOBAL_PREPROC_ENABLED = "global_preproc_enabled"
+GLOBAL_PREPROC_BLINK_ADJACENT = "global_preproc_blink_adjacent"
+GLOBAL_PREPROC_SHORT_POLICY = "global_preproc_short_policy"
+GLOBAL_PREPROC_SHORT_THRESHOLD_MS = "global_preproc_short_threshold_ms"
+GLOBAL_PREPROC_MERGE_DISTANCE_CHARS = "global_preproc_merge_distance_chars"
 GLOBAL_FIXATION_SYMBOL = "global_fixation_symbol"
 GLOBAL_FIXATION_COLOR = "global_fixation_color"
 GLOBAL_PALETTE = "global_palette"
@@ -204,6 +211,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_colorbars": GLOBAL_SHOW_COLORBARS,
         "hollow_fixations": GLOBAL_HOLLOW_FIXATIONS,
         "scale_text_to_boxes": GLOBAL_SCALE_TEXT_TO_BOXES,
+        "preproc_enabled": GLOBAL_PREPROC_ENABLED,
+        "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
     }
 )
 
@@ -242,6 +251,8 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "word_hover_measure": GLOBAL_WORD_HOVER_MEASURE,
         "word_hover_fields": GLOBAL_WORD_HOVER_FIELDS,
         "fixation_hover_fields": GLOBAL_FIXATION_HOVER_FIELDS,
+        "illustration_label": GLOBAL_ILLUSTRATION_LABEL,
+        "preproc_short_policy": GLOBAL_PREPROC_SHORT_POLICY,
     }
 )
 
@@ -258,6 +269,9 @@ SHARE_INT_PARAMS: Mapping[str, str] = MappingProxyType(
 SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
     {
         "line_spacing": GLOBAL_LINE_SPACING,
+        "duration_mass_sigma_chars": GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        "preproc_short_threshold_ms": GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
+        "preproc_merge_distance_chars": GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         "saccade_width": GLOBAL_SACCADE_WIDTH,
         "fixation_opacity": GLOBAL_FIXATION_OPACITY,
         "stimulus_image_opacity": GLOBAL_STIMULUS_IMAGE_OPACITY,
@@ -351,6 +365,9 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         GLOBAL_STIMULUS_IMAGE_SCALE,
+        GLOBAL_DURATION_MASS_SIGMA_CHARS,
+        GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
+        GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
     }
 )
 
@@ -414,6 +431,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_PALETTE,
         GLOBAL_COLOR_BY,
         GLOBAL_HEATMAP_STYLE,
+        GLOBAL_DURATION_MASS_SIGMA_CHARS,
         GLOBAL_HEATMAP_NORM,
         GLOBAL_HEATMAP_METRIC,
         GLOBAL_SHOW_COLORBARS,
@@ -435,6 +453,12 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_FIXATION_SNAP_TO_WORD,
         GLOBAL_ALIGN_ALGORITHM,
         GLOBAL_ALIGN_CONNECTORS,
+        GLOBAL_ILLUSTRATION_LABEL,
+        GLOBAL_PREPROC_ENABLED,
+        GLOBAL_PREPROC_BLINK_ADJACENT,
+        GLOBAL_PREPROC_SHORT_POLICY,
+        GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
+        GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
         GLOBAL_FIXATION_SYMBOL,
         GLOBAL_FIXATION_COLOR,
         GLOBAL_HOLLOW_FIXATIONS,

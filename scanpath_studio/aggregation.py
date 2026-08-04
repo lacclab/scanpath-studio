@@ -265,6 +265,46 @@ MEASURES: Dict[str, Measure] = {
             is_rate=True,
         ),
         Measure(
+            "landing_position",
+            "Initial landing position",
+            "words",
+            "initial_landing_position",
+            "letters",
+            True,
+        ),
+        Measure(
+            "landing_distance",
+            "Centred landing distance",
+            "words",
+            "initial_landing_distance",
+            "letters",
+            True,
+        ),
+        Measure(
+            "reg_in_count",
+            "Regressions into word",
+            "words",
+            "number_of_regressions_in",
+            "",
+            True,
+        ),
+        Measure(
+            "second_pass",
+            "Second-pass duration",
+            "words",
+            "second_pass_duration_ms",
+            "ms",
+            True,
+        ),
+        Measure(
+            "single_fix",
+            "Single-fixation duration",
+            "words",
+            "single_fixation_duration_ms",
+            "ms",
+            True,
+        ),
+        Measure(
             "fix_dur", "Fixation duration", "fixations", "duration_ms", "ms", False
         ),
         Measure(
@@ -703,6 +743,207 @@ def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index()
 
 
+def _first_present(frame: pd.DataFrame, columns: Sequence[str]):
+    """First non-null value from the first available column."""
+    if frame is None or frame.empty:
+        return None
+    for column in columns:
+        if column not in frame.columns:
+            continue
+        values = frame[column].dropna()
+        if not values.empty:
+            return values.iloc[0]
+    return None
+
+
+def _as_accuracy(value) -> Optional[float]:
+    """Coerce common correctness encodings to 0/1 without guessing blanks."""
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, (bool, np.bool_)):
+        return float(value)
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return float(bool(value))
+    text = str(value).strip().lower()
+    if text in {"true", "t", "yes", "y", "correct", "1"}:
+        return 1.0
+    if text in {"false", "f", "no", "n", "incorrect", "0"}:
+        return 0.0
+    return None
+
+
+def _run_summary(fixations: pd.DataFrame, n_words: int) -> Dict[str, float]:
+    """Run/refixation and first-pass/rereading stats for one ordered trial.
+
+    A run is a contiguous visit to one word. The first run on each word belongs
+    to first pass; later visits are rereading. This works on normalized streams
+    without requiring a corpus-specific ``pass_index`` convention.
+    """
+    if fixations.empty or "word_id" not in fixations.columns:
+        return {}
+    order = [
+        c for c in ("timestamp_ms", "order_in_trial", "fixation_id") if c in fixations
+    ]
+    fx = fixations.sort_values(order, kind="stable") if order else fixations.copy()
+    word = fx["word_id"]
+    valid = word.notna()
+    if not bool(valid.any()):
+        return {}
+    run_start = word.ne(word.shift()) | ~valid | ~valid.shift(fill_value=False)
+    run_id = run_start.cumsum()
+    visits = pd.DataFrame(
+        {
+            "word_id": word.to_numpy(),
+            "run_id": run_id.to_numpy(),
+            "duration_ms": pd.to_numeric(
+                fx.get("duration_ms"), errors="coerce"
+            ).to_numpy(),
+        },
+        index=fx.index,
+    ).loc[valid]
+    runs = (
+        visits.groupby(["word_id", "run_id"], sort=False)
+        .agg(duration_ms=("duration_ms", "sum"), n_fixations=("duration_ms", "size"))
+        .reset_index()
+    )
+    runs["visit_index"] = runs.groupby("word_id", sort=False).cumcount()
+    first = runs["visit_index"] == 0
+    denominator = n_words or int(runs["word_id"].nunique())
+    return {
+        "nrun": int(len(runs)),
+        "first_pass_ms": float(runs.loc[first, "duration_ms"].sum()),
+        "rereading_ms": float(runs.loc[~first, "duration_ms"].sum()),
+        "refixation_rate": float(
+            (runs.loc[first, "n_fixations"] > 1).sum() / denominator
+        )
+        if denominator
+        else np.nan,
+    }
+
+
+def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
+    """One export-ready summary row per ``(participant, trial)`` (AN-30).
+
+    Includes the standard reading totals plus run-derived refixation and
+    first-pass/rereading measures. Missing source concepts stay absent/NaN
+    rather than being silently invented (for example blink count).
+    """
+    key_columns = ["participant_id", "trial_id"]
+    keys: list[tuple[str, str]] = []
+    for frame in (fixations, words):
+        if frame is None or frame.empty or not set(key_columns) <= set(frame.columns):
+            continue
+        pairs = frame[key_columns].drop_duplicates()
+        keys.extend(
+            (str(row.participant_id), str(row.trial_id)) for row in pairs.itertuples()
+        )
+    keys = list(dict.fromkeys(keys))
+    rows: list[dict] = []
+    for participant_id, trial_id in keys:
+        fx = (
+            fixations[
+                (fixations["participant_id"].astype(str) == participant_id)
+                & (fixations["trial_id"].astype(str) == trial_id)
+            ]
+            if fixations is not None
+            and not fixations.empty
+            and set(key_columns) <= set(fixations.columns)
+            else pd.DataFrame()
+        )
+        wd = (
+            words[
+                (words["participant_id"].astype(str) == participant_id)
+                & (words["trial_id"].astype(str) == trial_id)
+            ]
+            if words is not None
+            and not words.empty
+            and set(key_columns) <= set(words.columns)
+            else pd.DataFrame()
+        )
+        row: dict = {"participant_id": participant_id, "trial_id": trial_id}
+        text_id = _first_present(
+            wd if not wd.empty else fx, ("text_id", "unique_text_id")
+        )
+        if text_id is not None:
+            row["text_id"] = text_id
+        n_words = (
+            int(wd["word_id"].nunique())
+            if not wd.empty and "word_id" in wd.columns
+            else 0
+        )
+        row["n_words"] = n_words
+        if not fx.empty and "excluded" in fx.columns:
+            fx = fx.loc[~fx["excluded"].fillna(False).astype(bool)]
+        if not fx.empty:
+            duration = pd.to_numeric(
+                fx.get("duration_ms", pd.Series(np.nan, index=fx.index)),
+                errors="coerce",
+            )
+            row["n_fixations"] = int(len(fx))
+            if duration.notna().any():
+                row["mean_fixation_ms"] = float(duration.mean())
+                row["total_fixation_ms"] = float(duration.sum())
+            amplitude = pd.to_numeric(
+                fx.get("saccade_amplitude", pd.Series(np.nan, index=fx.index)),
+                errors="coerce",
+            )
+            if amplitude.notna().any():
+                row["mean_saccade_px"] = float(amplitude.mean())
+                regression = (
+                    pd.to_numeric(
+                        fx.get("is_regression", pd.Series(False, index=fx.index)),
+                        errors="coerce",
+                    )
+                    .fillna(0)
+                    .astype(bool)
+                )
+                forward = amplitude[~regression]
+                if forward.notna().any():
+                    row["mean_forward_saccade_px"] = float(forward.mean())
+            if "is_regression" in fx.columns:
+                row["regression_rate"] = float(
+                    pd.to_numeric(fx["is_regression"], errors="coerce").mean()
+                )
+            reading = _trial_reading_time_ms(fx)
+            if not reading.empty:
+                row["reading_time_ms"] = float(reading.iloc[0]["reading_time_ms"])
+            row.update(_run_summary(fx, n_words))
+            if "blink_count" in fx.columns:
+                blink = pd.to_numeric(fx["blink_count"], errors="coerce").dropna()
+                if not blink.empty:
+                    row["blink_count"] = float(blink.max())
+            elif "is_blink" in fx.columns:
+                row["blink_count"] = int(
+                    pd.to_numeric(fx["is_blink"], errors="coerce")
+                    .fillna(0)
+                    .astype(bool)
+                    .sum()
+                )
+        if not wd.empty:
+            if "skip_flag" in wd.columns:
+                row["skip_rate"] = float(
+                    pd.to_numeric(wd["skip_flag"], errors="coerce").mean()
+                )
+            if "regression_in_flag" in wd.columns:
+                row["regression_in_rate"] = float(
+                    pd.to_numeric(wd["regression_in_flag"], errors="coerce").mean()
+                )
+        if "regression_in_rate" not in row and "regression_rate" in row:
+            row["regression_in_rate"] = row["regression_rate"]
+        reading_ms = row.get("reading_time_ms")
+        if n_words and reading_ms and reading_ms > 0:
+            row["wpm"] = float(n_words / (reading_ms / 60000.0))
+        correct = _as_accuracy(
+            _first_present(
+                wd if not wd.empty else fx, ("is_correct", "question_correct")
+            )
+        )
+        if correct is not None:
+            row["question_correct"] = correct
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def reader_summary(
     words: pd.DataFrame, fixations: pd.DataFrame, participant_id
 ) -> Dict[str, float]:
@@ -754,6 +995,36 @@ def _summary_row(words, fixations, pid) -> Dict[str, float]:
         )
         if total_ms > 0 and n_words:
             out["wpm"] = float(n_words / (total_ms / 60000.0))
+        trials = trial_summary_table(wd, fx)
+        if not trials.empty:
+            for column in (
+                "total_fixation_ms",
+                "blink_count",
+                "nrun",
+                "first_pass_ms",
+                "rereading_ms",
+                "n_question_correct",
+            ):
+                source = (
+                    "question_correct" if column == "n_question_correct" else column
+                )
+                if source in trials.columns:
+                    values = pd.to_numeric(trials[source], errors="coerce").dropna()
+                    if not values.empty:
+                        out[column] = float(values.sum())
+            for column in (
+                "mean_forward_saccade_px",
+                "refixation_rate",
+                "regression_in_rate",
+                "comprehension_accuracy",
+            ):
+                source = (
+                    "question_correct" if column == "comprehension_accuracy" else column
+                )
+                if source in trials.columns:
+                    values = pd.to_numeric(trials[source], errors="coerce").dropna()
+                    if not values.empty:
+                        out[column] = float(values.mean())
     if not wd.empty and "skip_flag" in wd.columns:
         out["skip_rate"] = float(pd.to_numeric(wd["skip_flag"], errors="coerce").mean())
     return out
@@ -778,6 +1049,20 @@ def cohort_summary_table(
         return pd.DataFrame()
     rows = [_summary_row(words, fixations, p) for p in pids]
     return pd.DataFrame(rows)
+
+
+def reader_summary_table(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    participants: Optional[Sequence] = None,
+) -> pd.DataFrame:
+    """First-class per-reader summary table (AN-30).
+
+    Kept as an explicit public name rather than forcing callers to know the
+    older ``cohort_summary_table`` terminology.
+    """
+    return cohort_summary_table(words, fixations, participants=participants)
 
 
 def metric_over_time(
@@ -924,6 +1209,9 @@ def landing_positions(
         left = pd.Series(_box_left(wd, layout=words), index=wd.index)
         width = pd.to_numeric(wd.get("width"), errors="coerce")
         dist = ffx - left
+        if "right_to_left" in wd.columns:
+            rtl = wd["right_to_left"].fillna(False).astype(bool)
+            dist = dist.where(~rtl, width - dist)
         mask = ffx.notna() & left.notna() & width.notna() & (width > 0)
         if "skip_flag" in wd.columns:
             mask &= ~pd.to_numeric(wd["skip_flag"], errors="coerce").fillna(0).astype(
@@ -954,12 +1242,16 @@ def landing_positions(
             .rename(columns={"x": "_fx"})
         )
         box_keys = [k for k in keys if k in words.columns]
-        box = words[box_keys + ["x", "width"]].assign(_left=_box_left(words))
+        extra = ["right_to_left"] if "right_to_left" in words else []
+        box = words[box_keys + ["x", "width", *extra]].assign(_left=_box_left(words))
         box = box.drop_duplicates(box_keys)
         merged = first.merge(box, on=box_keys, how="inner")
         left = pd.to_numeric(merged["_left"], errors="coerce")
         width = pd.to_numeric(merged["width"], errors="coerce")
         dist = pd.to_numeric(merged["_fx"], errors="coerce") - left
+        if "right_to_left" in merged:
+            rtl = merged["right_to_left"].fillna(False).astype(bool)
+            dist = dist.where(~rtl, width - dist)
         ok = dist.notna() & width.notna() & (width > 0)
         dist, width = dist[ok], width[ok]
     else:

@@ -38,11 +38,28 @@ The loader bends to fit real corpora:
 
 If your data carries only raw fixations, the app computes the canonical per-word
 measures itself — **FFD**, **FPRT** (gaze duration), **RPD** (go-past),
-**TFD** (dwell), plus skips and regressions, following Rayner (1998) and
+**TFD** (dwell), initial landing position/distance, second-pass and
+single-fixation duration, plus skips and regression counts, following Rayner (1998) and
 Inhoff & Radach (1998). Pre-aggregated EyeLink `IA_*` columns, when present, take
 precedence. Areas of interest come **directly from your word boxes** — they are
 not computed; only the fixation→word assignment is derived (bounding-box
 containment with a small nearest-word fallback).
+
+## Optional preprocessing and derived tables
+
+The **Preprocessing** panel is off by default. When disabled, it returns the
+normalized fixation table unchanged. When enabled, it can soft-mark
+blink-adjacent or short fixations as `excluded`, merge short-and-close
+fixations while retaining `original_duration_ms`, and materialize run/pass
+columns. Rows are never silently deleted; `excluded_reason` and the per-trial
+Cleaning QA table preserve the provenance.
+
+Sentence IDs are accepted from the dataset or inferred at sentence-final
+punctuation. The derived family includes sentence measures, first-class
+saccades (pixels and optional degrees of visual angle), trial/reader summaries,
+and a character grid with letter-based landing/launch positions. Trial text is
+also auto-tagged `right_to_left` for Hebrew/Arabic-majority content; an explicit
+column takes precedence.
 
 ## Setup wizard & saved setups
 

@@ -1115,6 +1115,59 @@ def _resolve_sample_image_paths(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def resolve_stimulus_image_paths(
+    frame: pd.DataFrame,
+    root: Union[str, os.PathLike],
+    pattern: str = "{text_id}.png",
+    *,
+    require_exists: bool = True,
+) -> pd.DataFrame:
+    """Attach per-row stimulus images from a local folder and filename pattern.
+
+    Placeholders are read from the row (for example ``{text_id}``,
+    ``{trial_id}``, or ``{participant_id}``). Relative subdirectories are
+    supported, but resolved files must remain under ``root``; absolute and
+    parent-traversal patterns are rejected. Rows whose placeholders are missing
+    or whose file does not exist keep their previous ``image_path`` value.
+
+    This pure helper is the headless/API surface for VIZ-14 and is also used by
+    the desktop-only folder controls and the CLI.
+    """
+    if frame is None or frame.empty:
+        return frame.copy() if isinstance(frame, pd.DataFrame) else pd.DataFrame()
+    base = Path(root).expanduser().resolve()
+    if not pattern or Path(pattern).is_absolute():
+        raise ValueError("Image filename pattern must be a non-empty relative path.")
+
+    class _Row(dict):
+        def __missing__(self, key):
+            raise KeyError(key)
+
+    def _resolved(row: pd.Series) -> object:
+        previous = row.get("image_path")
+        values = _Row(
+            {str(key): str(value) for key, value in row.items() if pd.notna(value)}
+        )
+        try:
+            relative = pattern.format_map(values)
+        except (KeyError, ValueError, AttributeError):
+            return previous
+        candidate = (base / relative).resolve()
+        try:
+            candidate.relative_to(base)
+        except ValueError as exc:
+            raise ValueError(
+                f"Image pattern resolves outside the selected folder: {relative!r}"
+            ) from exc
+        if require_exists and not candidate.is_file():
+            return previous
+        return str(candidate)
+
+    result = frame.copy()
+    result["image_path"] = result.apply(_resolved, axis=1)
+    return result
+
+
 @st.cache_data
 def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Load bundled demo IA and fixation tables (prefer Parquet).
@@ -1441,7 +1494,9 @@ def harmonize_frames(
     1-based fixation ``word_id`` (BUG-8), then fill missing fixation coordinates
     from word-box centers. Call whenever both frames are available (the API and
     the app both route through this)."""
-    words = broadcast_stimulus_words(words, fixations)
+    from .preprocessing import add_text_direction
+
+    words = add_text_direction(broadcast_stimulus_words(words, fixations))
     words = _reconcile_participant_asymmetry(words, fixations)
     fixations = correct_word_id_offset(words, fixations)
     fixations = fill_fixation_xy_from_words(fixations, words)
@@ -1559,6 +1614,14 @@ WORD_OPTIONAL_FIELDS = [
     ("IA_FIRST_RUN_DWELL_TIME", "first_pass_gaze_duration_ms", "numeric", "measure"),
     (
         "IA_SECOND_RUN_DWELL_TIME",
+        "second_pass_duration_ms",
+        "numeric",
+        "measure",
+    ),
+    # Compatibility aliases retained for existing datasets/API consumers; the
+    # PRE-4 canonical field above is the one measure computation consults.
+    (
+        "IA_SECOND_RUN_DWELL_TIME",
         "higher_pass_fixation_duration_ms",
         "numeric",
         "measure",
@@ -1566,6 +1629,12 @@ WORD_OPTIONAL_FIELDS = [
     ("IA_LAST_RUN_DWELL_TIME", "last_run_dwell_time_ms", "numeric", "measure"),
     ("IA_FIXATION_COUNT", "n_fixations", "numeric", "measure"),
     ("IA_SKIP", "skip_flag", "boolean", "measure"),
+    (
+        "IA_REGRESSION_IN_COUNT",
+        "number_of_regressions_in",
+        "numeric",
+        "measure",
+    ),
     ("IA_REGRESSION_IN_COUNT", "regression_in_count", "numeric", "measure"),
     ("IA_REGRESSION_OUT_COUNT", "regression_out_count", "numeric", "measure"),
     ("IA_REGRESSION_IN", "regression_in_flag", "boolean", "measure"),
@@ -1594,6 +1663,10 @@ WORD_OPTIONAL_FIELDS = [
     ("distance_to_head", "distance_to_head", "numeric", "linguistic"),
     ("left_dependents_count", "left_dependents_count", "numeric", "linguistic"),
     ("right_dependents_count", "right_dependents_count", "numeric", "linguistic"),
+    ("sentence_id", "sentence_id", "passthrough", "linguistic"),
+    ("SENTENCE_ID", "sentence_id", "passthrough", "linguistic"),
+    ("right_to_left", "right_to_left", "boolean", "meta"),
+    ("RIGHT_TO_LEFT", "right_to_left", "boolean", "meta"),
     (SOURCE_FILE_COLUMN, SOURCE_FILE_COLUMN, "passthrough", "meta"),
     ("TRIAL_INDEX", "TRIAL_INDEX", "passthrough", "meta"),
     ("trial_index", "trial_index", "passthrough", "meta"),
@@ -1655,6 +1728,10 @@ FIX_OPTIONAL_FIELDS = [
     ("eye", "eye", "string", "fixation"),
     ("EYE_USED", "eye", "string", "fixation"),
     ("EYE_TRACKED", "eye", "string", "fixation"),
+    ("is_blink", "is_blink", "boolean", "fixation"),
+    ("blink", "is_blink", "boolean", "fixation"),
+    ("blink_flag", "is_blink", "boolean", "fixation"),
+    ("BLINK", "is_blink", "boolean", "fixation"),
     # MultiplEYE trial-level facets + side-data → Trial Info chips / filter
     # facets / the comprehension panel / the stimulus-image layer. All are
     # MultiplEYE-specific source names (carried only when the loader emits them),
@@ -2360,6 +2437,31 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
     )
 
 
+def preprocess_fixation_stage(
+    words: pd.DataFrame, fixations: pd.DataFrame, settings: Dict
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached PRE-1 stage; disabled returns the original fixation object."""
+    if not settings.get("enabled"):
+        return fixations, pd.DataFrame()
+    key = (
+        frame_fingerprint(words),
+        frame_fingerprint(fixations),
+        tuple(sorted(settings.items())),
+    )
+    return _preprocess_fixation_stage_cached(words, fixations, settings, key)
+
+
+@st.cache_data(show_spinner="Preprocessing fixations…")
+def _preprocess_fixation_stage_cached(
+    _words: pd.DataFrame, _fixations: pd.DataFrame, settings: Dict, cache_key
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    from .measures import assign_fixations_to_words, enrich_fixations
+    from .preprocessing import preprocess_fixations
+
+    assigned = enrich_fixations(assign_fixations_to_words(_fixations, _words), _words)
+    return preprocess_fixations(assigned, _words, settings=settings)
+
+
 @st.cache_data(show_spinner="Computing reading measures…")
 def _compute_word_metrics_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
@@ -2369,13 +2471,15 @@ def _compute_word_metrics_cached(
     if _words.empty:
         return _words.copy()
 
-    # Pre-aggregated reading measures win over computed ones, so when the words
-    # frame already carries the EyeLink IA measures we skip the O(fixations)
-    # assignment + per-word temporal walk entirely (minutes on the full corpus).
-    if all(col in _words.columns for col in _PREAGGREGATED_METRIC_COLUMNS):
-        enriched = _words
-    else:
-        enriched = compute_per_word_measures(_fixations, _words)
+    # Existing IA measures still win column-by-column inside the measure
+    # function, but PRE-4 adds measures EyeLink exports do not usually carry.
+    # Compute whenever fixations exist so those missing fields are not silently
+    # absent merely because the four legacy headline columns were pre-aggregated.
+    enriched = (
+        compute_per_word_measures(_fixations, _words)
+        if not _fixations.empty
+        else _words
+    )
 
     metric_fields = [
         "first_fixation_ms",
@@ -2396,6 +2500,11 @@ def _compute_word_metrics_cached(
         "word_length",
         "word_length_no_punctuation",
         "gaze_duration_ms",
+        "initial_landing_position",
+        "initial_landing_distance",
+        "number_of_regressions_in",
+        "second_pass_duration_ms",
+        "single_fixation_duration_ms",
         "first_fix_x",
         "first_fix_y",
         "gpt2_surprisal",

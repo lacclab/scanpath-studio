@@ -52,6 +52,14 @@ from .constants import (
     WORD_LABEL_COLOR,
 )
 from .data import compute_word_metrics
+from .measures import assign_fixations_to_words, enrich_fixations
+from .aggregation import reader_summary_table, trial_summary_table
+from .preprocessing import (
+    character_grid,
+    cleaning_report,
+    saccade_table,
+    sentence_measures,
+)
 from .plots import make_scanpath_figure, split_scanpath_layers
 from .utils import extract_trial
 
@@ -87,6 +95,7 @@ class ExportOptions:
     include_fixations: bool = False
     include_measures: bool = False
     include_mega_table: bool = False
+    include_analysis_family: bool = False
     # VIZ-5: also drop a per-layer breakdown of the figure (word boxes / fixations
     # / saccades / heatmap / labels / stimulus image) into `layers/` so each can be
     # restyled independently in Illustrator / Inkscape. Uses the selected vector /
@@ -112,7 +121,10 @@ class ExportOptions:
 
     def any_table(self) -> bool:
         return (
-            self.include_fixations or self.include_measures or self.include_mega_table
+            self.include_fixations
+            or self.include_measures
+            or self.include_mega_table
+            or self.include_analysis_family
         )
 
     def table_formats(self) -> List[str]:
@@ -773,7 +785,7 @@ def render_export_options(
     are ignored.
     """
     st = st_module
-    # No expander — the options are always displayed (TODO 2.1).
+    # No expander — the options are always displayed.
     with st.container():
         st.caption(
             "Export many trials at once. Everything is packaged into a single "
@@ -782,7 +794,7 @@ def render_export_options(
         )
 
         st.markdown("### Scope")
-        # The whole-dataset choice now lives inside the scope radio (TODO 1).
+        # The whole-dataset choice lives inside the scope radio.
         (
             scope,
             scope_pid,
@@ -858,19 +870,26 @@ def render_export_options(
         tabular = (
             st.pills(
                 "Tabular data",
-                options=["Fixations", "Word measures", "Mega-table"],
+                options=[
+                    "Fixations",
+                    "Word measures",
+                    "Full measure family",
+                    "Mega-table",
+                ],
                 selection_mode="multi",
                 default=[],
                 key=f"{key_prefix}_tabular",
                 help="Fixations: per-trial fixation rows. Word measures: per-word "
                 "FFD / FPRT / RPD / TFD … Mega-table: one aggregated table across "
-                "every selected trial.",
+                "every selected trial. Full measure family adds saccades, sentences, "
+                "trial/reader summaries, character grids, cleaning QA, and run settings.",
             )
             or []
         )
         include_fixations = "Fixations" in tabular
         include_measures = "Word measures" in tabular
         include_mega_table = "Mega-table" in tabular
+        include_analysis_family = "Full measure family" in tabular
         any_table = bool(tabular)
         if any_table:
             table_format = (
@@ -898,6 +917,7 @@ def render_export_options(
         include_fixations=include_fixations,
         include_measures=include_measures,
         include_mega_table=include_mega_table,
+        include_analysis_family=include_analysis_family,
         separable_layers=separable_layers,
         table_format=table_format,
         png_scale=int(png_scale),
@@ -963,6 +983,7 @@ def bulk_export(
     y_field: str,
     settings: dict,
     options: ExportOptions,
+    raw_gaze: Optional[pd.DataFrame] = None,
     progress_callback=None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
@@ -977,6 +998,15 @@ def bulk_export(
 
     mega_fixations: list[pd.DataFrame] = []
     mega_measures: list[pd.DataFrame] = []
+    mega_family: dict[str, list[pd.DataFrame]] = {
+        "fixations": [],
+        "word_measures": [],
+        "saccades": [],
+        "sentence_measures": [],
+        "trial_summary": [],
+        "characters": [],
+        "cleaning_qa": [],
+    }
 
     readme_lines = [
         "# Bulk export",
@@ -1002,6 +1032,19 @@ def bulk_export(
         f"Demo corpus note: {CITATION['corpus_note']}",
     ]
     zf.writestr("README.md", "\n".join(readme_lines))
+    if options.include_analysis_family:
+        zf.writestr(
+            "run_config.json",
+            json.dumps(
+                {
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "settings": settings,
+                    "preprocessing": settings.get("preprocessing", {}),
+                },
+                indent=2,
+                default=str,
+            ),
+        )
 
     # One warm Kaleido browser for every trial's figure (see _figure_renderer)
     # instead of cold-starting Chrome on each render. HTML needs no browser, so
@@ -1239,13 +1282,50 @@ def bulk_export(
             # words to measure, so skip (an empty measures file adds nothing).
             per_trial_measures = (
                 compute_word_metrics(trial_words, trial_fix)
-                if (options.include_measures or options.include_mega_table)
+                if (
+                    options.include_measures
+                    or options.include_mega_table
+                    or options.include_analysis_family
+                )
                 and not trial_words.empty
                 else None
             )
+            family = {}
+            if options.include_analysis_family:
+                measured = (
+                    per_trial_measures
+                    if per_trial_measures is not None
+                    else trial_words
+                )
+                analysis_fix = (
+                    enrich_fixations(
+                        assign_fixations_to_words(trial_fix, trial_words), trial_words
+                    )
+                    if not trial_fix.empty and not trial_words.empty
+                    else trial_fix
+                )
+                family = {
+                    "fixations": analysis_fix,
+                    "word_measures": measured,
+                    "saccades": saccade_table(
+                        analysis_fix,
+                        pixels_per_degree=settings.get("pixels_per_degree"),
+                        raw_gaze=raw_gaze,
+                        words=trial_words,
+                    ),
+                    "sentence_measures": sentence_measures(measured, analysis_fix),
+                    "trial_summary": trial_summary_table(measured, analysis_fix),
+                    "characters": character_grid(trial_words),
+                    "cleaning_qa": cleaning_report(
+                        analysis_fix,
+                        short_policy=(settings.get("preprocessing") or {}).get(
+                            "short_policy", "Off"
+                        ),
+                    ),
+                }
 
             for fmt in options.table_formats():
-                if options.include_fixations:
+                if options.include_fixations and not options.include_analysis_family:
                     progress.bytes_written += _write_table(
                         zf, _path("fixations", fmt), trial_fix, fmt
                     )
@@ -1253,11 +1333,21 @@ def bulk_export(
                     progress.bytes_written += _write_table(
                         zf, _path("measures", fmt), per_trial_measures, fmt
                     )
+                if options.include_analysis_family:
+                    for artifact, table in family.items():
+                        if table is not None and not table.empty:
+                            progress.bytes_written += _write_table(
+                                zf, _path(artifact, fmt), table, fmt
+                            )
 
             if options.include_mega_table:
                 mega_fixations.append(trial_fix)
                 if per_trial_measures is not None:
                     mega_measures.append(per_trial_measures)
+            if options.include_analysis_family:
+                for artifact, table in family.items():
+                    if table is not None and not table.empty:
+                        mega_family[artifact].append(table)
 
             progress.finished_trials += 1
             if progress_callback:
@@ -1280,6 +1370,33 @@ def bulk_export(
                     fmt,
                 )
 
+    if options.include_analysis_family:
+        for fmt in options.table_formats():
+            for artifact, tables in mega_family.items():
+                if tables:
+                    progress.bytes_written += _write_table(
+                        zf,
+                        f"aggregate/all_{artifact}.{fmt}",
+                        pd.concat(tables, ignore_index=True),
+                        fmt,
+                    )
+            if mega_measures or words is not None:
+                all_measures = (
+                    pd.concat(mega_measures, ignore_index=True)
+                    if mega_measures
+                    else compute_word_metrics(words, fixations)
+                )
+                progress.bytes_written += _write_table(
+                    zf,
+                    f"aggregate/all_reader_summary.{fmt}",
+                    reader_summary_table(
+                        all_measures,
+                        pd.concat(mega_family["fixations"], ignore_index=True)
+                        if mega_family["fixations"]
+                        else fixations,
+                    ),
+                    fmt,
+                )
     zf.close()
     buf.seek(0)
     return buf.getvalue(), progress

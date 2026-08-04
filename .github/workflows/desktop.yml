@@ -42,6 +42,13 @@ jobs:
       - name: Build the bundle
         run: pyinstaller --clean --noconfirm desktop/scanpath_studio.spec
 
+      # ENG-19: deliberately ad-hoc (no Apple Developer identity/notarization).
+      # This supplies verifiable integrity; downloaded releases still use the
+      # documented first-launch Gatekeeper override.
+      - name: Ad-hoc sign macOS executable
+        if: runner.os == 'macOS'
+        run: codesign --force --deep --sign - --timestamp=none dist/ScanpathStudio/ScanpathStudio
+
       - name: Smoke test (selfcheck + server boot)
         run: python desktop/smoke_test.py
 

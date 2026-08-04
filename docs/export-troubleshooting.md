@@ -32,6 +32,15 @@ in-app export buttons pre-flight for Chrome and point you here when it's missing
 - The CLI's `--animate` writes **interactive HTML** only; use the Python API for
   GIF/MP4.
 
+## Complete tabular export
+
+In **Export → Multiple trials**, select **Full measure family** to add saccades,
+sentence measures, trial and reader summaries, character grids, cleaning QA,
+and `run_config.json` alongside the existing fixation and word-measure files.
+The zip contains both per-trial files and concatenated `aggregate/all_*` files.
+The run configuration records preprocessing and visualization settings so the
+numbers can be reproduced later.
+
 ## Common issues
 
 ??? question "“Ambiguous selection: N trials match” from `plot_scanpath`"

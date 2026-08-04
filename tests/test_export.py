@@ -122,6 +122,39 @@ class TestBulkExport:
             assert cfg["selection"]["participant_id"] == "p1"
             assert cfg["selection"]["trial_id"] == "t1"
 
+    def test_full_analysis_family_export(
+        self, minimal_combos, minimal_words, minimal_fixations, base_settings
+    ):
+        opts = ExportOptions(
+            include_png=False,
+            include_svg=False,
+            include_analysis_family=True,
+            table_format="csv",
+        )
+        zip_bytes, progress = bulk_export(
+            minimal_combos,
+            minimal_words,
+            minimal_fixations,
+            canvas_width=800,
+            canvas_height=400,
+            base_font_size=14,
+            font_family="monospace",
+            x_field="x",
+            y_field="y",
+            settings=base_settings,
+            options=opts,
+        )
+        assert progress.errors == []
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = set(zf.namelist())
+            assert "run_config.json" in names
+            assert "per_trial/p1__t1/saccades.csv" in names
+            assert "per_trial/p1__t1/word_measures.csv" in names
+            assert "per_trial/p1__t1/trial_summary.csv" in names
+            assert "aggregate/all_saccades.csv" in names
+            assert "aggregate/all_word_measures.csv" in names
+            assert "aggregate/all_reader_summary.csv" in names
+
     def test_html_figures_need_no_kaleido(
         self, minimal_combos, minimal_words, minimal_fixations, base_settings
     ):

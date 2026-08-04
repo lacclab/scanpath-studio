@@ -1114,17 +1114,28 @@ def _add_word_label_trace(
         ]
     else:
         label_color = text_color
-    # Anchor the label at the box's LEFT edge (textposition "middle right" draws
-    # the text rightward from the point), not the center. The word text is
-    # left-aligned within its AOI box — OneStop boxes tile the line including a
-    # trailing space, so a *centered* label drifts ~half a character right of the
-    # real glyph, visibly offset from the stimulus image and the fixations.
+    # Anchor LTR labels at the left edge and RTL labels at the right edge. Unicode
+    # direction isolates keep mixed Hebrew/Arabic + punctuation shaped by the
+    # browser without leaking bidi state into neighbouring labels.
+    from .preprocessing import detect_right_to_left
+
+    rtl = words.get("right_to_left")
+    if rtl is None:
+        rtl = words["text"].astype(str).map(detect_right_to_left)
+    else:
+        rtl = rtl.fillna(False).astype(bool)
+    label_x = words["x"].where(~rtl, words["x"] + words["width"])
+    label_position = ["middle left" if value else "middle right" for value in rtl]
+    label_text = [
+        f"\u2067{value}\u2069" if is_rtl else value
+        for value, is_rtl in zip(words["text"].astype(str), rtl)
+    ]
     trace = go.Scatter(
-        x=words["x"],
+        x=label_x,
         y=words["y"] + words["height"] / 2,
-        text=words["text"],
+        text=label_text,
         mode="text",
-        textposition="middle right",
+        textposition=label_position,
         showlegend=False,
         textfont=dict(color=label_color, size=base_font_size, family=font_family),
         hovertemplate=hover,
@@ -1421,8 +1432,13 @@ def _add_raw_gaze_layer(
 # are the fallbacks the app's own controls default to.
 _FIX_FLAG_SHORT_MS = 80.0
 _FIX_FLAG_LONG_MS = 800.0
-_FIX_FLAG_CATEGORIES = ("short", "long", "oob")
-_FIX_FLAG_LABELS = {"short": "Short", "long": "Long", "oob": "Out of bounds"}
+_FIX_FLAG_CATEGORIES = ("short", "long", "oob", "blink")
+_FIX_FLAG_LABELS = {
+    "short": "Short",
+    "long": "Long",
+    "oob": "Out of bounds",
+    "blink": "Blink-adjacent",
+}
 
 
 def _fixation_flag_masks(
@@ -1449,10 +1465,15 @@ def _fixation_flag_masks(
         oob = ~fixation_in_text_mask(fixations, words)
     short_ms = float(flags.get("short", {}).get("threshold_ms", _FIX_FLAG_SHORT_MS))
     long_ms = float(flags.get("long", {}).get("threshold_ms", _FIX_FLAG_LONG_MS))
+    blink = pd.Series(False, index=fixations.index)
+    for column in ("is_blink", "blink_before", "blink_after", "blink"):
+        if column in fixations:
+            blink |= fixations[column].fillna(False).astype(bool)
     return {
         "short": (dur < short_ms).fillna(False).astype(bool),
         "long": (dur > long_ms).fillna(False).astype(bool),
         "oob": oob.fillna(False).astype(bool),
+        "blink": blink,
     }
 
 
@@ -1500,6 +1521,7 @@ def make_scanpath_figure(
     show_saccade_arrows: bool = False,
     heatmap_style: str = "Word boxes",
     heatmap_norm: str = "Linear",
+    duration_mass_sigma_chars: float = 1.0,
     marker_size_range: Tuple[int, int],
     order_font_size: int,
     order_font_color: str,
@@ -1547,6 +1569,7 @@ def make_scanpath_figure(
     fixation_hover_fields: Optional[Sequence[str]] = None,
     show_connectors: bool = False,
     connector_y: Optional[Sequence[float]] = None,
+    illustration_reasons: Optional[Sequence[str]] = None,
 ) -> go.Figure:
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
@@ -1689,22 +1712,43 @@ def make_scanpath_figure(
         y_max = (
             y_max_data if y_max_data is not None else float(fixations[y_field].max())
         )
-        if heatmap_style == "Interpolated":
-            # Smooth, word-box-independent density over the fixations themselves.
+        if heatmap_style in {"Interpolated", "Duration mass"}:
+            # Interpolated is fixation-centred. Duration mass first distributes
+            # dwell time onto the discrete character grid, then renders those
+            # character centres as the support surface.
+            sigma_px = None
+            heatmap_points = fixations
+            heatmap_weights = weights
+            heatmap_x_field, heatmap_y_field = x_field, y_field
+            if heatmap_style == "Duration mass" and not words.empty:
+                from .preprocessing import duration_mass_table
+
+                mass = duration_mass_table(
+                    words, fixations, sigma_chars=duration_mass_sigma_chars
+                )
+                if not mass.empty:
+                    heatmap_points = mass
+                    heatmap_weights = mass["duration_mass_ms"]
+                    heatmap_x_field, heatmap_y_field = "center_x", "center_y"
+                    char_width = pd.to_numeric(mass["width"], errors="coerce").median()
+                    if pd.notna(char_width):
+                        sigma_px = max(float(char_width) * 0.35, 1.0)
             _add_interpolated_heatmap(
                 fig,
-                fixations,
-                x_field=x_field,
-                y_field=y_field,
+                heatmap_points,
+                x_field=heatmap_x_field,
+                y_field=heatmap_y_field,
                 x_min=x_min,
                 x_max=x_max,
                 y_min=y_min,
                 y_max=y_max,
-                weights=weights,
+                weights=heatmap_weights,
                 heatmap_colorscale=heatmap_colorscale,
                 show_colorbars=show_colorbars,
                 heatmap_norm=heatmap_norm,
                 colorbar_style=cb_style,
+                sigma_px=sigma_px,
+                title="Duration mass" if heatmap_style == "Duration mass" else None,
             )
         elif not words.empty:
             _add_word_level_heatmap(
@@ -2146,6 +2190,34 @@ def make_scanpath_figure(
         font=font_settings,
         shapes=shapes,
     )
+    add_illustration_label(fig, illustration_reasons)
+    return fig
+
+
+def add_illustration_label(
+    fig: go.Figure, reasons: Optional[Sequence[str]]
+) -> go.Figure:
+    """Stamp a figure and its metadata when it is schematic or transformed."""
+    reasons = [str(reason) for reason in (reasons or []) if reason]
+    if not reasons:
+        return fig
+    fig.add_annotation(
+        x=1,
+        y=0,
+        xref="paper",
+        yref="paper",
+        xanchor="right",
+        yanchor="bottom",
+        text="Illustration · " + "; ".join(reasons),
+        showarrow=False,
+        font=dict(size=10, color="#5f6368"),
+        bgcolor="rgba(255,255,255,0.82)",
+        borderpad=3,
+    )
+    metadata = dict(fig.layout.meta or {})
+    metadata["illustration"] = True
+    metadata["illustration_reasons"] = reasons
+    fig.update_layout(meta=metadata)
     return fig
 
 
@@ -2453,6 +2525,8 @@ def _add_interpolated_heatmap(
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_style: Optional[dict] = None,
+    sigma_px: Optional[float] = None,
+    title: Optional[str] = None,
 ) -> None:
     """Smooth, word-box-independent fixation heatmap (Gaussian-interpolated).
 
@@ -2489,7 +2563,9 @@ def _add_interpolated_heatmap(
     hist, _, _ = np.histogram2d(xs, ys, bins=[x_edges, y_edges], weights=w)
     grid = hist.T
 
-    sigma_px = max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
+    sigma_px = float(
+        sigma_px or max(_INTERP_MIN_SIGMA_PX, _INTERP_SIGMA_FRAC * max(x_span, y_span))
+    )
     blurred = _gaussian_blur_2d(
         grid, sigma_rows=sigma_px / (y_span / ny), sigma_cols=sigma_px / (x_span / nx)
     )
@@ -2502,7 +2578,9 @@ def _add_interpolated_heatmap(
     z = np.where(blurred < peak * _INTERP_FLOOR_FRAC, np.nan, blurred)
     z = _apply_heatmap_norm(z, heatmap_norm)
 
-    base_title = "Dwell-time density" if weights is not None else "Fixation density"
+    base_title = title or (
+        "Dwell-time density" if weights is not None else "Fixation density"
+    )
     fig.add_trace(
         go.Heatmap(
             x=(x_edges[:-1] + x_edges[1:]) / 2.0,
@@ -3883,6 +3961,128 @@ def _comparison_metric_colorbar(
     )
 
 
+def _comparison_word_heatmap_data(
+    trial_specs: Sequence[dict],
+    *,
+    metric: str,
+    heatmap_range: Optional[Tuple[float, float]],
+    heatmap_norm: str,
+) -> tuple[list[dict[str, float]], float, float, str]:
+    """Per-trial word values and one shared transformed colour range (CMP-7)."""
+    value_maps: list[dict[str, float]] = []
+    all_values: list[float] = []
+    duration_weighted = metric == "duration_ms"
+    for spec in trial_specs:
+        fixations = spec["trial_fix"]
+        if fixations.empty or "word_id" not in fixations.columns:
+            values: dict[str, float] = {}
+        else:
+            valid = fixations[fixations["word_id"].notna()].copy()
+            if duration_weighted and "duration_ms" in valid.columns:
+                grouped = (
+                    pd.to_numeric(valid["duration_ms"], errors="coerce")
+                    .groupby(valid["word_id"].astype(str))
+                    .sum()
+                )
+            else:
+                grouped = valid.groupby(valid["word_id"].astype(str)).size()
+            values = {str(key): float(value) for key, value in grouped.items()}
+        value_maps.append(values)
+        all_values.extend(value for value in values.values() if value > 0)
+    if heatmap_range is not None:
+        raw_min, raw_max = map(float, heatmap_range)
+    elif all_values:
+        raw_min, raw_max = min(all_values), max(all_values)
+    else:
+        raw_min, raw_max = 0.0, 1.0
+    z_min = float(_apply_heatmap_norm(raw_min, heatmap_norm))
+    z_max = float(_apply_heatmap_norm(raw_max, heatmap_norm))
+    if z_max <= z_min:
+        z_max = z_min + 1.0
+    title = "Duration (ms)" if duration_weighted else "Fixation count"
+    return value_maps, z_min, z_max, title
+
+
+def _comparison_heatmap_shapes(
+    words: pd.DataFrame,
+    values: dict[str, float],
+    *,
+    heatmap_colorscale: str,
+    heatmap_norm: str,
+    z_min: float,
+    z_max: float,
+    half: Optional[str] = None,
+    xref: Optional[str] = None,
+    yref: Optional[str] = None,
+) -> list[dict]:
+    """Tint full word boxes or their left/right half on a shared scale."""
+    if words.empty or not values:
+        return []
+    from plotly.colors import sample_colorscale
+
+    from .measures import word_box_bounds
+
+    shapes: list[dict] = []
+    z_span = max(z_max - z_min, 1e-9)
+    for row, (x0, y0, x1, y1) in zip(words.itertuples(), zip(*word_box_bounds(words))):
+        value = values.get(str(getattr(row, "word_id", "")), 0.0)
+        if value <= 0:
+            continue
+        midpoint = (x0 + x1) / 2.0
+        if half == "left":
+            x1 = midpoint
+        elif half == "right":
+            x0 = midpoint
+        transformed = float(_apply_heatmap_norm(value, heatmap_norm))
+        position = max(0.0, min(1.0, (transformed - z_min) / z_span))
+        shape = dict(
+            type="rect",
+            x0=x0,
+            y0=y0,
+            x1=x1,
+            y1=y1,
+            line=dict(width=0),
+            fillcolor=sample_colorscale(heatmap_colorscale, [position])[0],
+            opacity=0.55,
+            layer="below",
+            name=_shape_layer_tag("heatmap"),
+        )
+        if xref is not None:
+            shape["xref"] = xref
+        if yref is not None:
+            shape["yref"] = yref
+        shapes.append(shape)
+    return shapes
+
+
+def _comparison_heatmap_colorbar_trace(
+    *,
+    colorscale: str,
+    z_min: float,
+    z_max: float,
+    title: str,
+    heatmap_norm: str,
+    colorbar_style: dict,
+) -> go.Scatter:
+    return go.Scatter(
+        x=[None],
+        y=[None],
+        mode="markers",
+        marker=dict(
+            colorscale=colorscale,
+            showscale=True,
+            cmin=z_min,
+            cmax=z_max,
+            colorbar=_colorbar_dict(
+                _heatmap_title(title, heatmap_norm), **colorbar_style
+            ),
+        ),
+        showlegend=False,
+        hoverinfo="skip",
+        name="comparison heatmap colorbar",
+    )
+
+
 def _make_split_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -3909,6 +4109,11 @@ def _make_split_comparison_figure(
     fixation_color_range: Optional[Tuple[float, float]] = None,
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
     show_colorbars: bool = False,
+    show_heatmap: bool = False,
+    heatmap_metric: str = "duration_ms",
+    heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
+    heatmap_range: Optional[Tuple[float, float]] = None,
+    heatmap_norm: str = "Linear",
     colorbar_orientation: str = "Vertical",
     colorbar_tickangle: int = 0,
     colorbar_tickfont_size: int = 12,
@@ -3993,6 +4198,17 @@ def _make_split_comparison_figure(
             )
         )
 
+    heatmap_maps, heatmap_min, heatmap_max, heatmap_title = (
+        _comparison_word_heatmap_data(
+            trial_specs,
+            metric=heatmap_metric,
+            heatmap_range=heatmap_range,
+            heatmap_norm=heatmap_norm,
+        )
+        if show_heatmap
+        else ([], 0.0, 1.0, "")
+    )
+
     if is_stacked:
         fig = make_subplots(
             rows=2,
@@ -4046,6 +4262,20 @@ def _make_split_comparison_figure(
             row=row,
             col=col,
         )
+
+        if show_heatmap:
+            all_shapes.extend(
+                _comparison_heatmap_shapes(
+                    trial_words,
+                    heatmap_maps[idx],
+                    heatmap_colorscale=heatmap_colorscale,
+                    heatmap_norm=heatmap_norm,
+                    z_min=heatmap_min,
+                    z_max=heatmap_max,
+                    xref=xref,
+                    yref=yref,
+                )
+            )
 
         if show_words and not trial_words.empty:
             for box in build_word_boxes(trial_words, color=spec["color"]):
@@ -4137,6 +4367,18 @@ def _make_split_comparison_figure(
             }
         )
 
+    if show_heatmap and show_colorbars and any(heatmap_maps):
+        fig.add_trace(
+            _comparison_heatmap_colorbar_trace(
+                colorscale=heatmap_colorscale,
+                z_min=heatmap_min,
+                z_max=heatmap_max,
+                title=heatmap_title,
+                heatmap_norm=heatmap_norm,
+                colorbar_style=cb_style,
+            )
+        )
+
     # Fit the figure to the data aspect just like the single-trial plot.
     # `x_range` / `y_range` from the inner loop are per-trial; the two trials
     # being compared usually share the paragraph (same canvas), so re-using
@@ -4204,6 +4446,11 @@ def make_comparison_figure(
     fixation_color_range: Optional[Tuple[float, float]] = None,
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
     show_colorbars: bool = False,
+    show_heatmap: bool = False,
+    heatmap_metric: str = "duration_ms",
+    heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
+    heatmap_range: Optional[Tuple[float, float]] = None,
+    heatmap_norm: str = "Linear",
     colorbar_orientation: str = "Vertical",
     colorbar_tickangle: int = 0,
     colorbar_tickfont_size: int = 12,
@@ -4253,6 +4500,11 @@ def make_comparison_figure(
             fixation_color_range=fixation_color_range,
             fixation_symbol=fixation_symbol,
             show_colorbars=show_colorbars,
+            show_heatmap=show_heatmap,
+            heatmap_metric=heatmap_metric,
+            heatmap_colorscale=heatmap_colorscale,
+            heatmap_range=heatmap_range,
+            heatmap_norm=heatmap_norm,
             colorbar_orientation=colorbar_orientation,
             colorbar_tickangle=colorbar_tickangle,
             colorbar_tickfont_size=colorbar_tickfont_size,
@@ -4335,6 +4587,52 @@ def make_comparison_figure(
                 color=style["fix_color"],
             )
         )
+
+    heatmap_maps, heatmap_min, heatmap_max, heatmap_title = (
+        _comparison_word_heatmap_data(
+            trial_specs,
+            metric=heatmap_metric,
+            heatmap_range=heatmap_range,
+            heatmap_norm=heatmap_norm,
+        )
+        if show_heatmap
+        else ([], 0.0, 1.0, "")
+    )
+
+    if show_heatmap:
+        reference_words = next(
+            (
+                spec["trial_words"]
+                for spec in trial_specs
+                if not spec["trial_words"].empty
+            ),
+            pd.DataFrame(),
+        )
+        existing = list(fig.layout.shapes) if fig.layout.shapes else []
+        for index, half in enumerate(("left", "right")):
+            existing.extend(
+                _comparison_heatmap_shapes(
+                    reference_words,
+                    heatmap_maps[index],
+                    heatmap_colorscale=heatmap_colorscale,
+                    heatmap_norm=heatmap_norm,
+                    z_min=heatmap_min,
+                    z_max=heatmap_max,
+                    half=half,
+                )
+            )
+        fig.update_layout(shapes=existing)
+        if show_colorbars and any(heatmap_maps):
+            fig.add_trace(
+                _comparison_heatmap_colorbar_trace(
+                    colorscale=heatmap_colorscale,
+                    z_min=heatmap_min,
+                    z_max=heatmap_max,
+                    title=f"{heatmap_title} · left A / right B",
+                    heatmap_norm=heatmap_norm,
+                    colorbar_style=cb_style,
+                )
+            )
 
     x_range, y_range, *_ = _compute_axis_ranges(
         canvas_width,
@@ -5022,6 +5320,7 @@ def make_word_profile_figure(
     base_font_size: int,
     font_family: str,
     spread_label: str = "SD",
+    colors: Optional[Sequence[str]] = None,
     height: int = 380,
 ) -> go.Figure:
     """Cohort word profile(s): mean line + shaded spread band (AN-3 / AN-15).
@@ -5048,7 +5347,8 @@ def make_word_profile_figure(
         prof = prof.sort_values("word_id")
         xs = prof["word_id"].to_numpy()
         ys = prof["value"].to_numpy()
-        color = COMPARISON_PALETTE[i % len(COMPARISON_PALETTE)]
+        color_choices = tuple(colors or COMPARISON_PALETTE)
+        color = color_choices[i % len(color_choices)]
         rgba = _hex_to_rgba(color, 0.15)
         if {"lo", "hi"} <= set(prof.columns):
             lo = prof["lo"].to_numpy()
@@ -5263,6 +5563,7 @@ def make_distribution_figure(
     base_font_size: int,
     font_family: str,
     kind: str = "violin",
+    colors: Optional[Sequence[str]] = None,
     height: int = 380,
 ) -> go.Figure:
     """Overlaid metric distributions — one violin/box per group (AN-7/14/18)."""
@@ -5280,7 +5581,8 @@ def make_distribution_figure(
         )
     fig = go.Figure()
     for i, (name, arr) in enumerate(arrays):
-        color = _QUALITATIVE_PALETTE[i % len(_QUALITATIVE_PALETTE)]
+        color_choices = tuple(colors or _QUALITATIVE_PALETTE)
+        color = color_choices[i % len(color_choices)]
         if kind == "box":
             fig.add_trace(
                 go.Box(
@@ -5561,6 +5863,7 @@ def make_difference_profile_figure(
     canvas_width: int,
     base_font_size: int,
     font_family: str,
+    colors: Optional[Sequence[str]] = None,
     height: int = 380,
 ) -> go.Figure:
     """Per-word A−B difference profile, diverging color + zero line (AN-19)."""
@@ -5576,13 +5879,19 @@ def make_difference_profile_figure(
     diffs = pd.to_numeric(df["diff"], errors="coerce").to_numpy()
     vmax = np.nanmax(np.abs(diffs)) if np.isfinite(diffs).any() else 1.0
     vmax = vmax if vmax > 0 else 1.0
+    difference_colors = tuple(colors or (COMPARISON_PALETTE[1], COMPARISON_PALETTE[0]))
+    colorscale = [
+        [0.0, difference_colors[1 % len(difference_colors)]],
+        [0.5, "#f7f7f7"],
+        [1.0, difference_colors[0]],
+    ]
     fig = go.Figure(
         go.Bar(
             x=xs,
             y=diffs,
             marker=dict(
                 color=diffs,
-                colorscale=_DIVERGING_COLORSCALE,
+                colorscale=colorscale,
                 cmin=-vmax,
                 cmax=vmax,
                 colorbar=dict(title=f"{label_a} − {label_b}"),

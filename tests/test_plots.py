@@ -74,7 +74,7 @@ def _plot_region(fig):
 
 class TestDecorationDoesNotShrinkPlot:
     """A colorbar/legend must sit in reserved margin, not steal space from the
-    equal-aspect plot region (the colorbar-shrinks-the-plot bug, TODO 2)."""
+    equal-aspect plot region (the historical colorbar-shrinks-the-plot bug)."""
 
     def test_colorbar_keeps_plot_region(
         self, normalized_words_df, normalized_fixations_df
@@ -2006,6 +2006,61 @@ class TestMakeComparisonFigure:
         # (overriding Plotly's ~0.7 variable-size-marker default).
         assert marker_traces[1].marker.opacity == 1.0
 
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+    def test_comparison_word_heatmap_uses_shared_scale(
+        self, normalized_words_df, normalized_fixations_df, layout
+    ):
+        words_multi = pd.concat(
+            [
+                normalized_words_df.assign(participant_id="p1", trial_id="t1"),
+                normalized_words_df.assign(participant_id="p2", trial_id="t1"),
+            ]
+        )
+        fixations_multi = pd.concat(
+            [
+                normalized_fixations_df.assign(
+                    participant_id="p1", trial_id="t1", duration_ms=100
+                ),
+                normalized_fixations_df.assign(
+                    participant_id="p2", trial_id="t1", duration_ms=400
+                ),
+            ]
+        )
+
+        fig = make_comparison_figure(
+            words_multi,
+            fixations_multi,
+            trial_a=("p1", "t1"),
+            trial_b=("p2", "t1"),
+            canvas_width=800,
+            canvas_height=600,
+            font_family="Arial",
+            base_font_size=12,
+            layout=layout,
+            show_heatmap=True,
+            heatmap_metric="duration_ms",
+            show_colorbars=True,
+        )
+
+        heat_shapes = [
+            shape
+            for shape in fig.layout.shapes
+            if str(getattr(shape, "name", "")).endswith("layer:heatmap")
+        ]
+        assert heat_shapes
+        bars = [
+            trace for trace in fig.data if trace.name == "comparison heatmap colorbar"
+        ]
+        assert len(bars) == 1
+        assert bars[0].marker.cmin < bars[0].marker.cmax
+        if layout == "overlay":
+            # One left and one right half per fixated word.
+            midpoint = len(heat_shapes) // 2
+            assert midpoint > 0
+            assert float(heat_shapes[0].x1) == pytest.approx(
+                float(heat_shapes[midpoint].x0)
+            )
+
 
 class TestPlotEnhancements:
     """Background color, out-of-text highlight, and color-by-line options."""
@@ -2134,6 +2189,22 @@ class TestPlotEnhancements:
         words = next(t for t in fig.data if t.name == "words")
         # No highlight column active -> a single base colour for all words.
         assert words.textfont.color == "#0a0b0c"
+
+    def test_rtl_word_labels_anchor_at_right_edge(
+        self, synthetic_words_df, synthetic_fixations_df
+    ):
+        rtl_words = synthetic_words_df.iloc[[0]].copy()
+        rtl_words["text"] = "שלום"
+        rtl_words["right_to_left"] = True
+        fig = self._figure(
+            rtl_words,
+            synthetic_fixations_df.iloc[[0]],
+            show_word_labels=True,
+        )
+        trace = next(t for t in fig.data if t.name == "words")
+        assert trace.x[0] == rtl_words.iloc[0]["x"] + rtl_words.iloc[0]["width"]
+        assert trace.textposition[0] == "middle left"
+        assert trace.text[0].startswith("\u2067") and trace.text[0].endswith("\u2069")
 
 
 class TestTrueToScaleText:

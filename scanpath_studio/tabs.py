@@ -18,7 +18,6 @@ from scanpath_studio.aggregation import (
     apply_group,
     available_features,
     available_measures,
-    cohort_summary_table,
     cohort_word_profile,
     ensure_fixation_enrichment,
     group_effect_size,
@@ -32,9 +31,11 @@ from scanpath_studio.aggregation import (
     per_reader_word_measure,
     progressive_regressive_counts,
     reader_summary,
+    reader_summary_table,
     reader_vs_cohort_values,
     saccade_vs_duration,
     text_read_counts,
+    trial_summary_table,
     two_group_values,
     two_group_word_profiles,
     word_box_aggregate,
@@ -74,6 +75,7 @@ from scanpath_studio.controls import (
     _filter_fields_for,
     _numeric_slider,
     column_mapping_ui,
+    corpus_style_controls,
     render_narrow_by,
     render_trial_chip_picker,
     render_trial_filters,
@@ -96,9 +98,11 @@ from scanpath_studio.export import (
     render_export_options,
 )
 from scanpath_studio.html_embed import embed_html_iframe
+from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.plots import (
     _discard_flagged_fixations,
     _png_pixel_size,
+    add_illustration_label,
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
     animation_playback_ms,
@@ -580,6 +584,7 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         show_heatmap=viz_settings["show_heatmap"],
         heatmap_style=viz_settings.get("heatmap_style", "Word boxes"),
         heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
+        duration_mass_sigma_chars=viz_settings.get("duration_mass_sigma_chars", 1.0),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_raw_gaze=effective_show_raw_gaze,
         color_by=viz_settings["color_by"],
@@ -1489,6 +1494,23 @@ def _build_studio_config(
             # VIZ-10: autoplay the animated replay on load.
             "autoplay": bool(viz_settings.get("anim_autoplay", True)),
         },
+        "illustration": {
+            "label_mode": viz_settings.get("illustration_label", "Auto"),
+            "reasons": list(viz_settings.get("illustration_reasons") or []),
+        },
+        "preprocessing": {
+            "enabled": bool(st.session_state.get("global_preproc_enabled", False)),
+            "short_policy": st.session_state.get("global_preproc_short_policy", "Off"),
+            "short_threshold_ms": float(
+                st.session_state.get("global_preproc_short_threshold_ms", 80.0)
+            ),
+            "merge_distance_chars": float(
+                st.session_state.get("global_preproc_merge_distance_chars", 1.0)
+            ),
+            "discard_blink_adjacent": bool(
+                st.session_state.get("global_preproc_blink_adjacent", False)
+            ),
+        },
         # VIZ-11 follow-up: the animation frame grid, so a restored config
         # reproduces the same smoothness / export size.
         "animation": {
@@ -1499,6 +1521,9 @@ def _build_studio_config(
             "color_by": figure_settings["color_by"],
             "heatmap_metric": viz_settings["heatmap_metric"],
             "heatmap_style": figure_settings.get("heatmap_style", "Word boxes"),
+            "duration_mass_sigma_chars": float(
+                viz_settings.get("duration_mass_sigma_chars", 1.0)
+            ),
             "heatmap_norm": figure_settings.get("heatmap_norm", "Linear"),
             "show_colorbars": figure_settings["show_colorbars"],
             "fixation_range": (
@@ -1641,7 +1666,7 @@ def _render_save_restore_expander(
     font_family: str,
     slot=None,
 ):
-    """Render the "💾 Save & restore" sidebar panel (TODO 1.19).
+    """Render the "💾 Save & restore" sidebar panel (DATA-9).
 
     Merges the former Plot-configuration and Annotations panels into one: a
     single JSON sidecar that captures the full figure configuration (layers,
@@ -1658,7 +1683,7 @@ def _render_save_restore_expander(
 
     container = slot if slot is not None else st.sidebar
     annotation_records = annotations.current_records()
-    # Provenance (TODO 4.1): which data source + how its columns were mapped +
+    # Provenance: which data source + how its columns were mapped +
     # the app version + when it was exported, so a saved config records the full
     # context behind the figure, not just the plot settings.
     column_mapping = _collect_column_mapping()
@@ -1715,7 +1740,7 @@ def _render_save_restore_expander(
             "⬇ Download (JSON)",
             data=json.dumps(plot_config, indent=2),
             # General filename — the config spans the whole session, not one
-            # trial (TODO 4.2).
+            # trial.
             file_name="scanpath_studio_config.json",
             mime="application/json",
             key="plot_config_download",
@@ -1826,8 +1851,8 @@ def _render_anim_info_box(
     max_frames: Optional[int] = None,
 ) -> float:
     """Render the animation reading-time / playback info box (+ overlay caveats),
-    shown in the side panel under the Animate toggle (TODO 3.1). Returns the
-    playback duration in ms. No fixation count (TODO 1.17e)."""
+    shown in the side panel under the Animate toggle. Returns the playback
+    duration in ms; the box deliberately omits a redundant fixation count."""
     dual = fixations_b is not None and not fixations_b.empty
     summary = animation_timeline_summary(
         [trial_fixations] + ([fixations_b] if dual else []),
@@ -1879,6 +1904,42 @@ def _render_anim_info_box(
     return playback_ms
 
 
+def _apply_preprocessing_caption(fig, participant, trial) -> None:
+    """Put PRE-15 cleaning provenance on-screen, in exports, and in metadata."""
+    report = st.session_state.get("_preprocessing_report")
+    if not isinstance(report, pd.DataFrame) or report.empty:
+        return
+    row = report[
+        (report["participant_id"].astype(str) == str(participant))
+        & (report["trial_id"].astype(str) == str(trial))
+    ]
+    if row.empty:
+        return
+    item = row.iloc[0]
+    text = (
+        f"Preprocessing · {int(item.get('n_excluded', 0))}/"
+        f"{int(item.get('n_fixations_before', 0))} excluded "
+        f"({float(item.get('excluded_pct', 0)):.1%}) · "
+        f"{int(item.get('n_merged', 0))} merged"
+    )
+    fig.add_annotation(
+        x=0,
+        y=0,
+        xref="paper",
+        yref="paper",
+        xanchor="left",
+        yanchor="bottom",
+        text=text,
+        showarrow=False,
+        font=dict(size=10, color="#5f6368"),
+        bgcolor="rgba(255,255,255,0.82)",
+        borderpad=3,
+    )
+    metadata = dict(fig.layout.meta or {})
+    metadata["preprocessing"] = item.to_dict()
+    fig.update_layout(meta=metadata)
+
+
 def _build_and_render_animation(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -1920,7 +1981,7 @@ def _build_and_render_animation(
         max_frames=max_frames,
     )
     # The reading-time / playback info box renders in the side panel under the
-    # Animate toggle (see _render_anim_info_box / TODO 3.1), not here.
+    # Animate toggle (see _render_anim_info_box), not here.
     fig = make_scanpath_animation(
         trial_words,
         trial_fixations,
@@ -1989,6 +2050,8 @@ def _build_and_render_animation(
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
     )
+    add_illustration_label(fig, viz_settings.get("illustration_reasons"))
+    _apply_preprocessing_caption(fig, selected_participant, selected_trial)
     _render_true_scale_chart(fig, key="single_anim")
     if dual:
         save_slug = (
@@ -2023,6 +2086,7 @@ def _render_export_panel(
     combos_all: pd.DataFrame,
     words_all: pd.DataFrame,
     fixations_all: pd.DataFrame,
+    raw_gaze: pd.DataFrame,
     canvas_width: int,
     canvas_height: int,
     base_font_size: int,
@@ -2068,6 +2132,23 @@ def _render_export_panel(
     # (figures only — the exported tables stay uncorrected by design).
     bulk_settings["align_algorithm"] = viz_settings.get("align_algorithm", "Off")
     bulk_settings["align_connectors"] = bool(viz_settings.get("align_connectors"))
+    bulk_settings["preprocessing"] = dict(
+        st.session_state.get("_preprocessing_settings") or {}
+    )
+    report = st.session_state.get("_preprocessing_report")
+    bulk_settings["preprocessing_report"] = (
+        report.to_dict("records") if isinstance(report, pd.DataFrame) else []
+    )
+    from scanpath_studio.experimental_setup import pixels_per_degree
+
+    try:
+        bulk_settings["pixels_per_degree"] = pixels_per_degree(
+            float(st.session_state.get("global_viewing_distance_mm", 800.0)),
+            float(canvas_width),
+            float(st.session_state.get("global_monitor_width_mm", 597.0)),
+        )
+    except (TypeError, ValueError):
+        pass
     _render_bulk_export(
         combos,
         words_filtered,
@@ -2075,6 +2156,7 @@ def _render_export_panel(
         combos_all,
         words_all,
         fixations_all,
+        raw_gaze,
         canvas_width=int(canvas_width),
         canvas_height=int(canvas_height),
         base_font_size=int(base_font_size),
@@ -2673,6 +2755,27 @@ def render_single_trial_tab(
     fix_range = viz_settings.get("fix_index_range")
     fig_fixations = _slice_fix_range(trial_fixations, fix_range)
     fig_compare_fix = _slice_fix_range(compare_fix, fix_range)
+    full_fix_range = None
+    if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
+        order = pd.to_numeric(
+            trial_fixations["order_in_trial"], errors="coerce"
+        ).dropna()
+        if not order.empty:
+            full_fix_range = (int(order.min()), int(order.max()))
+    detected_reasons = illustration_reasons(
+        viz_settings,
+        data_source=st.session_state.get("_active_data_source"),
+        fix_index_range=fix_range,
+        full_fixation_range=full_fix_range,
+        raw_gaze_only=trial_fixations.empty
+        and raw_gaze is not None
+        and not raw_gaze.empty,
+    )
+    label_reasons = resolve_label_reasons(
+        viz_settings.get("illustration_label", "Auto"), detected_reasons
+    )
+    viz_settings["illustration_reasons"] = label_reasons
+    figure_settings["illustration_reasons"] = label_reasons
 
     # PRE-3 drift correction (VIZ-23) — hoisted ABOVE the render-mode split, so the
     # two Drift-correction controls apply on ALL THREE paths instead of the static
@@ -2929,6 +3032,9 @@ def render_single_trial_tab(
                 build_kwargs,
                 fig_key=_figure_input_key(trial_words, plot_fixations, build_kwargs),
             )
+            _apply_preprocessing_caption(
+                displayed_fig, selected_participant, selected_trial
+            )
             _render_true_scale_chart(displayed_fig, key="single")
 
     # Per-trial panels sit BELOW the plot as a single full-width subtab bar (they
@@ -3010,6 +3116,7 @@ def render_single_trial_tab(
             combos_all=combos_all,
             words_all=words_all,
             fixations_all=fixations_all,
+            raw_gaze=raw_gaze if raw_gaze is not None else pd.DataFrame(),
             canvas_width=canvas_width,
             canvas_height=canvas_height,
             base_font_size=base_font_size,
@@ -3046,6 +3153,7 @@ def _render_bulk_export(
     combos_all: pd.DataFrame,
     words_all: pd.DataFrame,
     fixations_all: pd.DataFrame,
+    raw_gaze: pd.DataFrame,
     *,
     canvas_width: int,
     canvas_height: int,
@@ -3107,6 +3215,7 @@ def _render_bulk_export(
             y_field=y_field,
             settings=figure_settings,
             options=options,
+            raw_gaze=raw_gaze,
             progress_callback=on_progress,
         )
         progress_bar.progress(1.0, text="Ready")
@@ -3214,6 +3323,13 @@ def _render_comparison_figure(
         # keep overriding the globals inside the builder.
         fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
         show_colorbars=viz_settings.get("show_colorbars", False),
+        show_heatmap=viz_settings.get("show_heatmap", False),
+        heatmap_metric=viz_settings.get("heatmap_metric", "duration_ms"),
+        heatmap_colorscale=viz_settings.get(
+            "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
+        ),
+        heatmap_range=viz_settings.get("heatmap_range"),
+        heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
         colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
         colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
         colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
@@ -3233,6 +3349,8 @@ def _render_comparison_figure(
         background_image_opacity=background_image_opacity,
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
     )
+    add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
+    _apply_preprocessing_caption(fig_compare, selected_participant, selected_trial)
     _render_true_scale_chart(fig_compare, key="compare")
     return fig_compare
 
@@ -3298,7 +3416,12 @@ def _c_word_rate(_words, text_col, text_id, min_readers, fkey):
 
 @st.cache_data(show_spinner=False)
 def _c_cohort_summary(_words, _fix, fwkey, ffkey):
-    return cohort_summary_table(_words, _fix)
+    return reader_summary_table(_words, _fix)
+
+
+@st.cache_data(show_spinner=False)
+def _c_trial_summary(_words, _fix, fwkey, ffkey):
+    return trial_summary_table(_words, _fix)
 
 
 @st.cache_data(show_spinner=False)
@@ -3596,6 +3719,12 @@ def render_corpus_analysis_tab(
     picker / aggregation / spread / normalization controls. (**Generations** moved
     to the Scanpath view's **Comparisons** subtab — ENG-8.)
     """
+    viz_settings = corpus_style_controls(
+        fixations_filtered,
+        base_font_size,
+        words=words_filtered,
+        host=st,
+    )
     common = dict(
         canvas_width=canvas_width,
         canvas_height=canvas_height,
@@ -3604,15 +3733,65 @@ def render_corpus_analysis_tab(
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
     )
-    text_tab, reader_tab, groups_tab = st.tabs(["Per text", "Per reader", "Groups"])
+    text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
+        ["Per text", "Per sentence", "Per reader", "Groups"]
+    )
     with text_tab:
         render_per_text_tab(
             words_filtered, fixations_filtered, viz_settings=viz_settings, **common
         )
     with reader_tab:
-        render_per_reader_tab(words_filtered, fixations_filtered, **common)
+        render_per_reader_tab(
+            words_filtered,
+            fixations_filtered,
+            viz_settings=viz_settings,
+            **common,
+        )
+    with sentence_tab:
+        from scanpath_studio.preprocessing import sentence_measures
+
+        sentence_table = sentence_measures(
+            compute_word_metrics(words_filtered, fixations_filtered),
+            fixations_filtered,
+        )
+        st.caption(
+            "Sentence is a first-class aggregation unit: combine one measure "
+            "across readers for each text/sentence pair."
+        )
+        numeric = [
+            column
+            for column in sentence_table.select_dtypes(include="number").columns
+            if column not in {"sentence_id"}
+        ]
+        if sentence_table.empty or not numeric:
+            st.info("No sentence-level measures are available for this selection.")
+        else:
+            controls = st.columns(2)
+            metric = controls[0].selectbox(
+                "Sentence measure", numeric, key="sentence_measure"
+            )
+            aggregate = controls[1].selectbox(
+                "Aggregate", ["Mean", "Median"], key="sentence_aggregate"
+            )
+            identity = [
+                column
+                for column in ("text_id", "sentence_id")
+                if column in sentence_table
+            ]
+            reducer = "mean" if aggregate == "Mean" else "median"
+            summary = (
+                sentence_table.groupby(identity, dropna=False)[metric]
+                .agg(reducer)
+                .reset_index(name=f"{reducer}_{metric}")
+            )
+            st.dataframe(summary, hide_index=True, width="stretch")
     with groups_tab:
-        render_groups_tab(words_filtered, fixations_filtered, **common)
+        render_groups_tab(
+            words_filtered,
+            fixations_filtered,
+            viz_settings=viz_settings,
+            **common,
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -3623,6 +3802,14 @@ def render_corpus_analysis_tab(
 def _chart(fig) -> None:
     """Render a non-spatial Plotly figure stretched to the column width."""
     st.plotly_chart(fig, width="stretch")
+
+
+def _corpus_series_colors(viz_settings: dict) -> tuple[str, str]:
+    """Palette-derived primary/secondary colours shared by corpus builders."""
+    return (
+        viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
+        viz_settings.get("saccade_color", SACCADE_COLOR),
+    )
 
 
 def _text_picker(words: pd.DataFrame, *, key: str, host=None, label: str = "Text"):
@@ -3812,6 +3999,7 @@ def render_per_text_tab(
                 {f"Cohort ({measure.label})": prof},
                 measure_label=measure.axis_label,
                 spread_label=spread,
+                colors=_corpus_series_colors(viz_settings),
                 **fw,
             )
         )
@@ -3917,6 +4105,7 @@ def render_per_reader_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     *,
+    viz_settings: dict,
     canvas_width: int,
     canvas_height: int,
     base_font_size: int,
@@ -3979,7 +4168,11 @@ def render_per_reader_tab(
         groups = reader_vs_cohort_values(frame, pid, measure, normalize=normalize)
         _chart(
             make_distribution_figure(
-                groups, metric_label=measure.axis_label, kind=kind, **fw
+                groups,
+                metric_label=measure.axis_label,
+                kind=kind,
+                colors=_corpus_series_colors(viz_settings),
+                **fw,
             )
         )
     elif view == "Reading summary":  # AN-8
@@ -4017,7 +4210,34 @@ def render_per_reader_tab(
             f"Reader **{pid}** vs the {max(len(cohort) - 1, 0)} other readers "
             "in scope (percentiles)."
         )
-        _download_tidy(st, cohort, name="reader_summaries.csv", key="dl_prdr8")
+        trials = _c_trial_summary(
+            words_filtered,
+            fix_e,
+            frame_fingerprint(words_filtered),
+            frame_fingerprint(fix_e),
+        )
+        trials = trials[trials["participant_id"].astype(str) == str(pid)]
+        with st.expander("Summary tables", expanded=False):
+            reader_table, trial_table = st.tabs(["Reader", "Trials"])
+            with reader_table:
+                selected_reader = cohort[
+                    cohort["participant_id"].astype(str) == str(pid)
+                ]
+                st.dataframe(selected_reader, width="stretch", hide_index=True)
+                _download_tidy(
+                    st,
+                    selected_reader,
+                    name=f"reader_summary_{pid}.csv",
+                    key="dl_prdr8_reader",
+                )
+            with trial_table:
+                st.dataframe(trials, width="stretch", hide_index=True)
+                _download_tidy(
+                    st,
+                    trials,
+                    name=f"trial_summaries_{pid}.csv",
+                    key="dl_prdr8_trials",
+                )
     elif view == "Fixation duration over time":  # AN-9
         c = st.columns([3, 2])
         measure = _measure_picker(words_filtered, fix_e, key="prdr_measure", host=c[0])
@@ -4104,6 +4324,7 @@ def render_groups_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     *,
+    viz_settings: dict,
     canvas_width: int,
     canvas_height: int,
     base_font_size: int,
@@ -4133,15 +4354,26 @@ def render_groups_tab(
         "A vs B — difference profile, paired bars, effect size, and more.",
     )
     if compare:
-        render_group_comparison_tab(words_filtered, fixations_filtered, **common)
+        render_group_comparison_tab(
+            words_filtered,
+            fixations_filtered,
+            viz_settings=viz_settings,
+            **common,
+        )
     else:
-        render_per_group_tab(words_filtered, fixations_filtered, **common)
+        render_per_group_tab(
+            words_filtered,
+            fixations_filtered,
+            viz_settings=viz_settings,
+            **common,
+        )
 
 
 def render_per_group_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     *,
+    viz_settings: dict,
     canvas_width: int,
     canvas_height: int,
     base_font_size: int,
@@ -4203,7 +4435,11 @@ def render_per_group_tab(
         vals = measure_values(frame, measure, normalize=normalize)
         _chart(
             make_distribution_figure(
-                {label: vals}, metric_label=measure.axis_label, kind=kind, **fw
+                {label: vals},
+                metric_label=measure.axis_label,
+                kind=kind,
+                colors=_corpus_series_colors(viz_settings),
+                **fw,
             )
         )
     elif view == "Word profile":  # AN-15
@@ -4242,6 +4478,7 @@ def render_per_group_tab(
                 {label: prof},
                 measure_label=measure.axis_label,
                 spread_label=spread,
+                colors=_corpus_series_colors(viz_settings),
                 **fw,
             )
         )
@@ -4255,8 +4492,20 @@ def render_per_group_tab(
         if table.empty:
             st.info("No per-reader summaries for this group.")
             return
-        st.dataframe(table, width="stretch", hide_index=True)
-        _download_tidy(st, table, name="group_reader_summaries.csv", key="dl_pgrp16")
+        trials = _c_trial_summary(
+            words_g, fix_g, frame_fingerprint(words_g), frame_fingerprint(fix_g)
+        )
+        reader_tab, trial_tab = st.tabs(["Readers", "Trials"])
+        with reader_tab:
+            st.dataframe(table, width="stretch", hide_index=True)
+            _download_tidy(
+                st, table, name="group_reader_summaries.csv", key="dl_pgrp16"
+            )
+        with trial_tab:
+            st.dataframe(trials, width="stretch", hide_index=True)
+            _download_tidy(
+                st, trials, name="group_trial_summaries.csv", key="dl_pgrp16_trials"
+            )
     elif view == "Group trend":  # AN-17
         c = st.columns([3, 1, 1])
         measure = _measure_picker(words_g, fix_g, key="pgrp_measure", host=c[0])
@@ -4303,6 +4552,7 @@ def render_group_comparison_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     *,
+    viz_settings: dict,
     canvas_width: int,
     canvas_height: int,
     base_font_size: int,
@@ -4371,7 +4621,11 @@ def render_group_comparison_tab(
         )
         _chart(
             make_distribution_figure(
-                groups, metric_label=measure.axis_label, kind=kind, **fw
+                groups,
+                metric_label=measure.axis_label,
+                kind=kind,
+                colors=_corpus_series_colors(viz_settings),
+                **fw,
             )
         )
     elif view == "Difference word profile":  # AN-19
@@ -4413,6 +4667,7 @@ def render_group_comparison_tab(
                 measure_label=measure.axis_label,
                 label_a=label_a,
                 label_b=label_b,
+                colors=_corpus_series_colors(viz_settings),
                 **fw,
             )
         )
@@ -4643,6 +4898,13 @@ def render_alignment_comparison_tab(
         "colours them by line. Pick one to apply on the main plot via "
         "**Fixations ⚙️ → Drift correction**."
     )
+    with st.expander("Algorithm citations", expanded=False):
+        st.markdown(
+            "Primary source: Carr et al. (2021), *Behavior Research Methods*, "
+            "[doi:10.3758/s13428-021-01554-0](https://doi.org/10.3758/s13428-021-01554-0)."
+        )
+        for method in alignment.ALGORITHMS:
+            st.markdown(f"- **{method}** — {alignment.METHOD_CITATIONS[method]}")
 
     if trial_fixations.empty or trial_words.empty:
         st.info("No fixations / word boxes for this trial to align.")
@@ -4680,8 +4942,8 @@ def render_alignment_comparison_tab(
         n_cols = st.slider(
             "Panels per row",
             min_value=2,
-            max_value=4,
-            value=3,
+            max_value=3,
+            value=2,
             key="align_grid_ncols",
         )
     with ctrl_cols[1]:
@@ -4728,6 +4990,22 @@ def render_alignment_comparison_tab(
     # Naive baseline (nearest-line) to count how many fixations each algorithm
     # moves relative to the current "color by line" behaviour.
     baseline = assign_fixation_lines(trial_fixations, trial_words)
+    _, sensitivity_report = alignment.correction_sensitivity(
+        trial_fixations, trial_words
+    )
+    st.dataframe(
+        sensitivity_report,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "average_y_correction": st.column_config.NumberColumn(format="%.1f px"),
+            "max_y_correction": st.column_config.NumberColumn(format="%.1f px"),
+        },
+    )
+    st.caption(
+        "Sensitivity QA: large mean corrections or disagreement between methods "
+        "identify trials whose measures deserve manual review."
+    )
 
     # Build the panel list: original first, then the 10 algorithms (skipped when
     # there is only a single line, where they would all be no-ops).
@@ -4763,12 +5041,35 @@ def render_alignment_comparison_tab(
                         else 0
                     )
                     st.caption(
-                        f"**{label}** · {n_lines_used} lines · {int(moved)} moved"
+                        f"**{label}** · {n_lines_used} lines · {int(moved)} moved · "
+                        f"mean |Δy| {corrected['y_correction'].abs().mean():.1f}px"
                     )
                     fig = _make_fig(
                         corrected,
                         connectors=trial_fixations["y"] if show_connectors else None,
                     )
+                    moved_mask = corrected["y_correction"].abs().gt(0.5)
+                    if moved_mask.any():
+                        import plotly.graph_objects as go
+
+                        fig.add_trace(
+                            go.Scatter(
+                                x=corrected.loc[moved_mask, "x"],
+                                y=corrected.loc[moved_mask, "y"],
+                                mode="markers",
+                                marker=dict(
+                                    symbol="circle-open",
+                                    size=16,
+                                    color="#d62728",
+                                    line=dict(width=2, color="#d62728"),
+                                ),
+                                name="Moved by correction",
+                                customdata=corrected.loc[
+                                    moved_mask, "y_correction"
+                                ].to_numpy(),
+                                hovertemplate="Moved Δy %{customdata:.1f}px<extra></extra>",
+                            )
+                        )
                 _render_true_scale_chart(
                     fig,
                     key=f"align_{label.replace(' ', '_').replace('(', '').replace(')', '')}",
@@ -5142,8 +5443,8 @@ def render_multiple_comparison_tab(
         fig_w = float(real_fig.layout.width or 900)
         fig_h = float(real_fig.layout.height or 600)
         aspect = fig_h / fig_w if fig_w else 0.5
-        assumed_col_px = max(200, int(780 / max(1, n_cols)))
-        cell_h = max(150, int(assumed_col_px * aspect) + 16)
+        assumed_col_px = max(360, int(1200 / max(1, n_cols)))
+        cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
         names = grid_names
         for start in range(0, len(names), n_cols):
@@ -5884,6 +6185,61 @@ def render_data_inspection_tab(
     # 2. Every raw-data table (Stimuli / Word-level / Fixation-level / Raw gaze).
     st.subheader("Raw data")
     render_raw_data_tab(words_filtered, fixations_filtered, raw_gaze_filtered)
+
+    st.divider()
+
+    # PRE-11/12/15/19 + AN-30: first-class derived tables, all exportable.
+    st.subheader("Derived analysis tables")
+    from scanpath_studio.preprocessing import (
+        character_grid,
+        cleaning_report,
+        saccade_table,
+        sentence_measures,
+    )
+    from scanpath_studio.experimental_setup import pixels_per_degree
+    from scanpath_studio.measures import assign_fixations_to_words, enrich_fixations
+
+    measured_words = compute_word_metrics(words_filtered, fixations_filtered)
+    analysis_fixations = (
+        enrich_fixations(
+            assign_fixations_to_words(fixations_filtered, words_filtered),
+            words_filtered,
+        )
+        if not fixations_filtered.empty and not words_filtered.empty
+        else fixations_filtered
+    )
+    try:
+        ppd = pixels_per_degree(
+            float(st.session_state.get("global_viewing_distance_mm", 800.0)),
+            float(st.session_state.get("global_canvas_width", 1200.0)),
+            float(st.session_state.get("global_monitor_width_mm", 597.0)),
+        )
+    except (TypeError, ValueError):
+        ppd = None
+    derived = {
+        "Sentences": sentence_measures(measured_words, fixations_filtered),
+        "Saccades": saccade_table(
+            analysis_fixations,
+            pixels_per_degree=ppd,
+            raw_gaze=raw_gaze_filtered,
+            words=words_filtered,
+        ),
+        "Trials": trial_summary_table(measured_words, fixations_filtered),
+        "Readers": reader_summary_table(measured_words, fixations_filtered),
+        "Characters": character_grid(words_filtered),
+        "Cleaning QA": cleaning_report(fixations_filtered),
+    }
+    for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
+        with tab:
+            if table.empty:
+                st.caption(f"No {label.lower()} table is available for this selection.")
+            else:
+                _render_paginated_dataframe(
+                    table,
+                    1000,
+                    f"derived_{label.lower().replace(' ', '_')}",
+                    show_info=False,
+                )
 
     st.divider()
 

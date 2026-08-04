@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Optional, auditable preprocessing pipeline** (PRE-1/4/6/11–19) — soft exclusion, blink handling, run/pass/sentence/saccade/character tables, RTL-aware landing positions, cleaning QA, and consensus line assignment, exposed across app, API, CLI, and export.
+- **Duration-mass heatmaps and line-assignment review tools** (PRE-8/10) — a Gaussian duration-mass heatmap style, plus larger comparison panels with moved-fixation overlays and correction-sensitivity tables.
+- **Full analysis-family export** (EXP-3 / AN-30) — saccade, sentence, and trial/reader summary tables now export alongside cleaning QA and run config; also readable in Corpus Analysis and Data Inspection.
+- **Authorable, auto-disclosed illustrations** (VIZ-20/22) — build a scanpath from text + fixation events; geometry-changing or synthetic figures are now auto-labelled as illustrations.
+- **Per-trial local stimulus-image patterns** (VIZ-14) — resolve per-row images (e.g. `{text_id}.png`) under a safe local root, from the UI, CLI, or API.
+- **Two-reader comparison heatmaps and corpus styling** (CMP-7 / AN-29) — split/stacked word heatmaps on a shared scale, plus corpus palette controls reaching the CLI and API.
+- **Wide-table performance warning** (PERF-2) — the setup wizard warns before a wide/large selection would slow normalization and hashing.
+- **Redesigned scanpath icon** (VIZ-29) — legible down to 16 px; all desktop and docs formats regenerated from code.
 - **Claude Code skills** (`.claude/skills/`) — `/release`, `/track`, `/new-feature`, `/preflight`, and `/paper-figs` package the release checklist, tracker conventions, every-surface scaffold, pre-commit gate, and manuscript-figure pipeline as repo-shipped skills.
 - **Claude Code hooks, guardrails and review subagents** (`.claude/`) — every edited `.py` file is auto-run through ruff (PostToolUse hook); edits to `uv.lock` / `site/` / `*.egg-info` are denied; `surface-parity-reviewer` + `perf-reviewer` subagents check a diff against the four-surface rule and the caching conventions; shared permission allowlist for ruff/pytest/uv.
 - **Agent-docs refresh** — AGENTS.md (9 missing modules added to the tree, 5 stale symbol references fixed, canonical columns updated to `text_id`), `scanpath_studio/CLAUDE.md` (bullets for `aggregation`/`similarity`/`model_scanpaths`/`debug_log`, pre-redesign leftovers fixed), `docs/agents.md` (CLI drift-correction + corpus flags, `raw_gaze=`, similarity/aggregation pointers), `tests/README.md` rewritten for the 53-file suite, CONTRIBUTING (docs-site build, tracker pointer, real demo-asset scripts, desktop workflow on release).
@@ -19,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The demo's raw gaze is labelled as synthetic** (DATA-15) — under the Raw-gaze toggle, atop the Data Inspection raw-gaze table, and in the getting-started docs: it is synthesized from the fixation report, not recorded eye-tracker output.
 
 ### Fixed
+- **Fixation filter and Stimulus image popovers now hide with their layer toggle** (`scanpath_studio/controls.py`) — previously visible even when the layer was off.
+- **Review hardening for the new preprocessing/authoring surfaces** — soft-excluded rows no longer leak into summaries/runs/saccades; saccade-gap timing, column survival through normalization, import precedence, sensitivity scoping, and authored-event persistence now match their intended contracts.
+- **macOS desktop downloads are ad-hoc signed and self-checked** (ENG-19) — release CI verifies bundle integrity, and the install guide documents the quarantine-removal fallback for unnotarized builds.
 - **Bulk-exported figures now honour drift correction** (EXP-4 / VIZ-24) — **Export → Multiple trials** silently exported uncorrected figures even when the on-screen plot was drift-corrected. Each trial is now corrected with the active algorithm (connectors included), `plot_config.json` records it, and the exported tables deliberately stay uncorrected.
 
 ## [0.26.0] - 2026-08-02

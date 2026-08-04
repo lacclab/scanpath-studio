@@ -33,10 +33,24 @@ the desktop build).
        [latest release](https://github.com/lacclab/scanpath-studio/releases/latest)
        (Safari usually unpacks it; otherwise double-click the archive).
     2. In the `ScanpathStudio` folder, **right-click `ScanpathStudio` → Open →
-       Open** the first time — a plain double-click is blocked by Gatekeeper
-       because the build isn't notarized. (Alternative: System Settings →
-       Privacy & Security → *Open Anyway*.)
-    3. A Terminal window shows the server log; your browser opens the app.
+       Open** the first time. If macOS offers **Open Anyway**, it is also under
+       System Settings → Privacy & Security.
+    3. If macOS says the app *cannot be opened* and offers no override, open
+       Terminal and clear quarantine from the **extracted folder**:
+
+       ```bash
+       xattr -dr com.apple.quarantine /path/to/ScanpathStudio
+       ```
+
+       Type `xattr -dr com.apple.quarantine ` (including the final space), drag
+       the extracted folder into Terminal, and press Return. Then run
+       `./ScanpathStudio/ScanpathStudio` once.
+    4. A Terminal window shows the server log; your browser opens the app.
+
+    Release builds carry an **ad-hoc integrity signature**, verified by the
+    desktop smoke test. They are still not Apple-notarized, so the first-launch
+    override remains necessary. The quarantine command changes only the folder
+    you name.
 
     The build is **Apple silicon (M-series) only** — on an Intel Mac, use the
     [pip install](getting-started.md#install) instead.

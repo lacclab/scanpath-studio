@@ -364,6 +364,7 @@ CITATION = {
 # Moved out of app.py so url_state.py / wizard.py can import them without a
 # cycle (app.py re-imports them for its own use and for tests).
 UPLOAD_CHOICE = "Upload tables"
+AUTHOR_CHOICE = "Author a scanpath"
 DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"

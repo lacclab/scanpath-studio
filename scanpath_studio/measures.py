@@ -297,13 +297,19 @@ def enrich_fixations(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.DataFra
         out["saccade_amplitude"] = out["saccade_amplitude"].where(
             out["saccade_amplitude"].notna(), np.sqrt(dx * dx + dy * dy)
         )
+    incoming = np.degrees(np.arctan2(-dy, dx))
+    out["angle_incoming"] = incoming
+    g = out.groupby(["participant_id", "trial_id"], sort=False)
+    out["angle_outgoing"] = g["angle_incoming"].shift(-1)
 
     next_word = g["word_id"].shift(-1)
     out["progression"] = np.sign(next_word - out["word_id"]).fillna(0).astype(int)
 
     running_max = g["word_id"].cummax()
     out["is_regression"] = (out["word_id"] < running_max).fillna(False).astype(bool)
-    return out
+    from .preprocessing import materialize_runs
+
+    return materialize_runs(out)
 
 
 def classify_saccades(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.Series:
@@ -585,15 +591,23 @@ def compute_per_word_measures(
             _regression_out_flag=False,
             _first_fix_x=np.nan,
             _first_fix_y=np.nan,
+            _initial_landing_position=np.nan,
+            _initial_landing_distance=np.nan,
+            _number_of_regressions_in=0,
+            _second_pass_duration=0.0,
+            _single_fixation_duration=np.nan,
         )
     )
 
-    if not fixations.empty and "word_id" in enriched.columns:
+    analysis_fixations = enriched
+    if "excluded" in enriched.columns:
+        analysis_fixations = enriched[~enriched["excluded"].fillna(False).astype(bool)]
+    if not analysis_fixations.empty and "word_id" in analysis_fixations.columns:
         per_word_rows = []
         # Group fixations by trial to walk them in temporal order.
-        for (pid, tid), fix_chunk in enriched.dropna(subset=["word_id"]).groupby(
-            ["participant_id", "trial_id"], sort=False
-        ):
+        for (pid, tid), fix_chunk in analysis_fixations.dropna(
+            subset=["word_id"]
+        ).groupby(["participant_id", "trial_id"], sort=False):
             fix_chunk = fix_chunk.sort_values("timestamp_ms")
             # Total / n / first-fixation are per-word aggregations
             grp = fix_chunk.groupby("word_id")
@@ -602,12 +616,27 @@ def compute_per_word_measures(
             ffd = grp["duration_ms"].first()
             ffx = grp["x"].first()
             ffy = grp["y"].first()
+            second_pass = (
+                fix_chunk[
+                    pd.to_numeric(fix_chunk.get("word_run"), errors="coerce").eq(2)
+                ]
+                .groupby("word_id")["duration_ms"]
+                .sum()
+            )
+            first_pass_counts = (
+                fix_chunk[
+                    pd.to_numeric(fix_chunk.get("word_run"), errors="coerce").eq(1)
+                ]
+                .groupby("word_id")
+                .size()
+            )
 
             # First-pass gaze: walk the trial in order, accumulate runs.
             first_pass_gaze: dict[float, float] = {}
             regression_path: dict[float, float] = {}
             regression_in: set = set()
             regression_out: set = set()
+            regression_in_count: dict[float, int] = {}
 
             running_max = -np.inf
             current_run_word: float | None = None
@@ -667,6 +696,7 @@ def compute_per_word_measures(
                 if prev_word is not None and w < prev_word:
                     regression_in.add(w)
                     regression_out.add(prev_word)
+                    regression_in_count[w] = regression_in_count.get(w, 0) + 1
 
                 running_max = max(running_max, w)
                 prev_word = w
@@ -679,6 +709,26 @@ def compute_per_word_measures(
                 regression_path.setdefault(k, v)
 
             for w in tot.index:
+                trial_word = words[
+                    (words["participant_id"] == pid)
+                    & (words["trial_id"] == tid)
+                    & (pd.to_numeric(words["word_id"], errors="coerce") == w)
+                ]
+                landing_position = landing_distance = np.nan
+                if not trial_word.empty:
+                    target = trial_word.iloc[0]
+                    text_len = max(len(str(target.get("text", ""))), 1)
+                    width = float(pd.to_numeric(target.get("width"), errors="coerce"))
+                    char_width = width / text_len if width > 0 else np.nan
+                    if np.isfinite(char_width) and char_width > 0:
+                        rtl = bool(target.get("right_to_left", False))
+                        offset = (
+                            float(target.get("x")) + width - float(ffx.loc[w])
+                            if rtl
+                            else float(ffx.loc[w]) - float(target.get("x"))
+                        )
+                        landing_position = offset / char_width + 1.0
+                        landing_distance = landing_position - (text_len + 1) / 2.0
                 per_word_rows.append(
                     dict(
                         participant_id=pid,
@@ -698,6 +748,15 @@ def compute_per_word_measures(
                         _regression_out_flag=w in regression_out,
                         _first_fix_x=float(ffx.loc[w]),
                         _first_fix_y=float(ffy.loc[w]),
+                        _initial_landing_position=landing_position,
+                        _initial_landing_distance=landing_distance,
+                        _number_of_regressions_in=int(regression_in_count.get(w, 0)),
+                        _second_pass_duration=float(second_pass.get(w, 0.0)),
+                        _single_fixation_duration=(
+                            float(ffd.loc[w])
+                            if int(first_pass_counts.get(w, 0)) == 1
+                            else np.nan
+                        ),
                     )
                 )
 
@@ -731,6 +790,11 @@ def compute_per_word_measures(
         "_regression_out_flag": "regression_out_flag",
         "_first_fix_x": "first_fix_x",
         "_first_fix_y": "first_fix_y",
+        "_initial_landing_position": "initial_landing_position",
+        "_initial_landing_distance": "initial_landing_distance",
+        "_number_of_regressions_in": "number_of_regressions_in",
+        "_second_pass_duration": "second_pass_duration_ms",
+        "_single_fixation_duration": "single_fixation_duration_ms",
     }
     for src, dst in rename_map.items():
         if src not in out.columns:

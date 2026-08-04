@@ -53,6 +53,23 @@ def _run_selfcheck(binary: Path) -> None:
     print("[smoke] selfcheck passed")
 
 
+def _verify_macos_signature(binary: Path) -> None:
+    """Require the CI's ENG-19 ad-hoc signature on macOS bundles."""
+    if sys.platform != "darwin":
+        return
+    print(f"[smoke] verifying macOS code signature: {binary}")
+    result = subprocess.run(
+        ["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(binary)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            "[smoke] macOS signature FAILED:\n" + result.stdout + result.stderr
+        )
+    print("[smoke] macOS signature passed")
+
+
 def _get(url: str, timeout: float = 5.0):
     return urllib.request.urlopen(url, timeout=timeout)
 
@@ -117,6 +134,7 @@ def main() -> None:
     binary = Path(sys.argv[1]) if len(sys.argv) > 1 else _default_binary()
     if not binary.exists():
         raise SystemExit(f"[smoke] binary not found: {binary}")
+    _verify_macos_signature(binary)
     _run_selfcheck(binary)
     _run_boot_test(binary)
     print("[smoke] all checks passed")

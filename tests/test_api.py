@@ -73,6 +73,32 @@ def test_load_scanpath_data_missing_file(tmp_path):
         sps.load_scanpath_data(tmp_path / "nope.csv", tmp_path / "nope2.csv")
 
 
+def test_load_scanpath_data_resolves_stimulus_images(tmp_path, sample_words_df):
+    expected = set()
+    for participant in sample_words_df["participant_id"].astype(str).unique():
+        image = tmp_path / f"{participant}.png"
+        image.write_bytes(b"png")
+        expected.add(str(image.resolve()))
+    words = sample_words_df.copy()
+
+    normalized, _ = sps.load_scanpath_data(
+        words=words,
+        image_root=tmp_path,
+        image_pattern="{participant_id}.png",
+    )
+
+    assert set(normalized["image_path"]) == expected
+
+
+def test_load_scanpath_data_rejects_image_pattern_escape(tmp_path, sample_words_df):
+    with pytest.raises(ValueError, match="outside the selected folder"):
+        sps.load_scanpath_data(
+            words=sample_words_df,
+            image_root=tmp_path,
+            image_pattern="../{text_id}.png",
+        )
+
+
 def test_load_scanpath_data_bad_schema():
     junk = pd.DataFrame({"a": [1], "b": [2]})
     with pytest.raises(ValueError, match="schema problems"):
@@ -721,7 +747,7 @@ def test_plot_scanpath_drift_correction_snaps_to_line_centers(sample):
     assert len(corrected) == len(raw)
 
 
-def test_plot_scanpath_drift_connectors_and_bad_algorithm(sample):
+def test_plot_scanpath_drift_connectors_and_slice_algorithm(sample):
     words, fixations = sample
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.plot_scanpath(
@@ -734,8 +760,8 @@ def test_plot_scanpath_drift_connectors_and_bad_algorithm(sample):
         drift_connectors=True,
     )
     assert [t for t in fig.data if t.name == "drift"]
-    with pytest.raises(ValueError, match="Unknown drift_correction 'slice'"):
-        sps.plot_scanpath(words, fixations, pid, tid, drift_correction="slice")
+    sliced = sps.plot_scanpath(words, fixations, pid, tid, drift_correction="slice")
+    assert sliced.data
 
 
 def test_animate_scanpath_returns_frames(sample):
@@ -810,6 +836,31 @@ def test_compute_word_metrics_keeps_precomputed_ia_measures(sample):
         merged["total_fixation_duration_ms_source"],
         check_names=False,
     )
+
+
+def test_preprocess_data_disabled_preserves_input_objects(sample):
+    words, fixations = sample
+    returned_words, returned_fixations, qa = sps.preprocess_data(words, fixations)
+    assert returned_words is words
+    assert returned_fixations is fixations
+    assert qa.empty
+
+
+def test_analysis_tables_exposes_complete_family(sample):
+    words, fixations = sample
+    tables = sps.analysis_tables(words, fixations)
+    assert {
+        "fixations",
+        "saccades",
+        "word_measures",
+        "sentence_measures",
+        "trial_summary",
+        "reader_summary",
+        "characters",
+        "cleaning_qa",
+    } == set(tables)
+    assert not tables["saccades"].empty
+    assert not tables["trial_summary"].empty
 
 
 def test_save_figure_html(sample, tmp_path):

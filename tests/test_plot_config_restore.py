@@ -394,7 +394,7 @@ class TestApplyUploadedPlotConfig:
 
 def test_build_studio_config_includes_provenance_and_round_trips():
     """The Save & restore config builder records provenance (app version, data
-    source, column mapping) + annotations and is JSON-serializable (TODO 4.1)."""
+    source, column mapping) + annotations and is JSON-serializable."""
     import json
 
     import pandas as pd

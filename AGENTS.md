@@ -31,6 +31,9 @@ scanpath_studio/
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ datasets.py       ready-made loaders for public corpora (PoTeC, MultiplEYE, OneStop) feeding the app's data sources + the headless API
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions) + geometry helpers (line clustering, in-text test)
+├─ preprocessing.py  optional soft-exclusion/merge pipeline + run/pass, sentence, saccade, character, RTL, QA, and sensitivity tables
+├─ authoring.py      deterministic text layout + hand-authored fixation events and JSON round-trip
+├─ illustration.py   detects geometry-changing/synthetic views that require an Illustration disclosure
 ├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3)
 ├─ similarity.py     scanpath similarity metrics (NLD etc.) scoring the Comparisons subtab
 ├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (Comparisons placeholder data)
@@ -82,7 +85,9 @@ After `normalize_words` / `normalize_fixations`:
 `regression_path_duration_ms` (RPD / go-past), `total_fixation_duration_ms`
 (TFD), `n_fixations`, `skip_flag`, `regression_in_flag`,
 `regression_out_flag`, `first_fix_x/y`. Fixations are enriched with
-`saccade_amplitude`, `progression`, `is_regression`. Pre-computed IA values on
+`saccade_amplitude`, `progression`, `is_regression`, incoming/outgoing angles,
+and run/pass columns. Initial landing position/distance, regression-in count,
+second-pass duration, and single-fixation duration are also computed. Pre-computed IA values on
 the words table take precedence over computed ones.
 
 ### Areas of interest (AOIs)

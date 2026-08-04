@@ -14,9 +14,13 @@ from __future__ import annotations
 
 import argparse
 import importlib.resources as resources
+import json
 import os.path
 import sys
+from pathlib import Path
 from typing import List, Optional
+
+import pandas as pd
 
 from . import __version__
 from .constants import (
@@ -105,6 +109,8 @@ def launch_app(extra_args: List[str]) -> None:
 
 
 def _render_parser() -> argparse.ArgumentParser:
+    from .alignment import ALGORITHMS
+
     parser = argparse.ArgumentParser(
         prog="scanpath-studio render",
         description=(
@@ -121,6 +127,11 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Use the bundled 3-participant OneStop demo data.",
     )
     src.add_argument(
+        "--authoring",
+        metavar="PATH",
+        help="Scanpath Studio authoring JSON created by the in-app editor.",
+    )
+    src.add_argument(
         "--words",
         metavar="PATH",
         nargs="+",
@@ -134,6 +145,19 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Fixations table(s) (csv/tsv/parquet/feather). Multiple paths or "
         "a quoted glob pattern concatenate multi-file datasets (e.g. one file "
         "per participant).",
+    )
+    src.add_argument(
+        "--image-root",
+        metavar="DIR",
+        help="Local stimulus-image folder. Files are matched per row using "
+        "--image-pattern.",
+    )
+    src.add_argument(
+        "--image-pattern",
+        default="{text_id}.png",
+        metavar="PATTERN",
+        help="Relative filename pattern with row placeholders, for example "
+        "'{text_id}.png' or '{participant_id}/{trial_id}.png'.",
     )
     src.add_argument(
         "--potec",
@@ -349,6 +373,19 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Snap each fixation above the word it lands on instead of its raw "
         "gaze point (VIZ-9).",
     )
+    viz.add_argument(
+        "--illustration",
+        action="store_true",
+        help="Apply the clean schematic preset: snapped fixations, arced "
+        "saccades, uniform colours, and no analytical overlays.",
+    )
+    viz.add_argument(
+        "--illustration-label",
+        choices=["auto", "show", "hide"],
+        default="auto",
+        help="Auto-label transformed/schematic figures, force the label, or "
+        "explicitly hide it (default: auto).",
+    )
     # PRE-3: vertical drift correction. The algorithm list below is spelled out
     # for `--help`; `alignment.ALGORITHMS` stays the source of truth (the flag
     # validates against it via _drift_algorithm, and a test pins the two lists
@@ -361,9 +398,8 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Correct vertical drift before plotting (PRE-3): snap each "
         "fixation to its assigned text line and colour the fixations by line, "
         "exactly like the app's Fixations ⚙️ → Drift correction. ALGORITHM is "
-        "one of the ten Carr et al. (2021) line-assignment algorithms: attach, "
-        "chain, cluster, compare, merge, regress, segment, split, stretch, "
-        "warp (default: no correction). Static figures only — not honored with "
+        f"one of: {', '.join(ALGORITHMS)} "
+        "(default: no correction). Static figures only — not honored with "
         "--animate.",
     )
     viz.add_argument(
@@ -404,6 +440,17 @@ def _render_parser() -> argparse.ArgumentParser:
         "--heatmap-metric",
         choices=["duration_ms", "counts"],
         help="Heatmap weighting (default: duration_ms).",
+    )
+    viz.add_argument(
+        "--heatmap-style",
+        choices=["word-boxes", "interpolated", "duration-mass"],
+        help="Heatmap geometry (default: word-boxes).",
+    )
+    viz.add_argument(
+        "--duration-mass-sigma",
+        type=float,
+        metavar="CHARS",
+        help="Gaussian sigma in character widths for --heatmap-style duration-mass.",
     )
     viz.add_argument(
         "--heatmap-colorscale",
@@ -676,6 +723,7 @@ def render(argv: List[str]) -> None:
         sum(
             [
                 args.sample,
+                bool(args.authoring),
                 bool(args.words or args.fixations),
                 bool(args.potec),
                 bool(args.onestop),
@@ -685,7 +733,7 @@ def render(argv: List[str]) -> None:
         != 1
     ):
         raise SystemExit(
-            "Provide exactly one input: --sample, --potec DIR, --onestop DIR, "
+            "Provide exactly one input: --sample, --authoring PATH, --potec DIR, --onestop DIR, "
             "--source NAME [--export DIR], or your own tables (--words and/or "
             "--fixations; one of them is enough for single-report datasets)."
         )
@@ -713,6 +761,12 @@ def render(argv: List[str]) -> None:
     if args.sample:
         words, fixations = api.load_sample_data()
         canvas = canvas or (2560, 1440)  # OneStop monitor
+    elif args.authoring:
+        try:
+            words, fixations = api.load_authored_scanpath(args.authoring)
+        except (ValueError, OSError) as exc:
+            raise SystemExit(str(exc)) from exc
+        canvas = canvas or (1200, 800)
     elif args.potec:
         from .datasets import load_potec
 
@@ -758,7 +812,25 @@ def render(argv: List[str]) -> None:
         # to — coords are offset onto the centered stimulus on the real screen.
         canvas = canvas or MULTIPLEYE_MONITOR
     else:
-        words, fixations = api.load_scanpath_data(args.words, args.fixations)
+        words, fixations = api.load_scanpath_data(
+            args.words,
+            args.fixations,
+            image_root=args.image_root,
+            image_pattern=args.image_pattern,
+        )
+
+    if args.image_root and not (args.words or args.fixations):
+        from .data import resolve_stimulus_image_paths
+
+        try:
+            words = resolve_stimulus_image_paths(
+                words, args.image_root, args.image_pattern
+            )
+            fixations = resolve_stimulus_image_paths(
+                fixations, args.image_root, args.image_pattern
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
 
     if args.list_trials:
         combos = api.list_trials(words, fixations)
@@ -812,6 +884,14 @@ def render(argv: List[str]) -> None:
         overrides["fixation_symbol"] = args.fixation_symbol
     if args.heatmap_metric:
         overrides["heatmap_metric"] = args.heatmap_metric
+    if args.heatmap_style:
+        overrides["heatmap_style"] = {
+            "word-boxes": "Word boxes",
+            "interpolated": "Interpolated",
+            "duration-mass": "Duration mass",
+        }[args.heatmap_style]
+    if args.duration_mass_sigma is not None:
+        overrides["duration_mass_sigma_chars"] = args.duration_mass_sigma
     if args.heatmap_colorscale:
         overrides["heatmap_colorscale"] = args.heatmap_colorscale
     if args.heatmap_norm:
@@ -854,6 +934,21 @@ def render(argv: List[str]) -> None:
         overrides["saccade_render_mode"] = "Arc"
     if args.snap_fixations:
         overrides["fixation_snap_to_word"] = True
+    if args.illustration:
+        overrides.update(
+            show_words=False,
+            show_word_labels=True,
+            show_fixations=True,
+            show_order=False,
+            show_saccades=True,
+            show_saccade_arrows=False,
+            show_heatmap=False,
+            color_by=UNIFORM_COLOR_FIELD,
+            saccade_color_mode="Uniform",
+            saccade_render_mode="Arc",
+            fixation_snap_to_word=True,
+            fixation_opacity=1.0,
+        )
     # VIZ-4: image stimulus background. make_scanpath_figure only draws the image
     # when a size is known, so default to the PNG's own pixel size, then the
     # canvas.
@@ -968,6 +1063,7 @@ def render(argv: List[str]) -> None:
                 # fixations exactly.
                 drift_correction=args.drift_correction,
                 drift_connectors=args.drift_connectors,
+                illustration_label=args.illustration_label,
                 **overrides,
                 **common,
             )
@@ -1005,6 +1101,95 @@ def render(argv: List[str]) -> None:
         )
 
 
+def analyze(argv: List[str]) -> None:
+    """Preprocess data and export the complete EXP-3 analysis family."""
+    parser = argparse.ArgumentParser(
+        prog="scanpath-studio analyze",
+        description="Write fixation, saccade, word, sentence, trial, reader, "
+        "character, and cleaning-QA tables without launching the app.",
+    )
+    parser.add_argument("--words", nargs="+", required=True)
+    parser.add_argument("--fixations", nargs="+", required=True)
+    parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--short-policy",
+        choices=["off", "merge", "merge-then-discard", "discard"],
+        default="off",
+    )
+    parser.add_argument("--short-threshold-ms", type=float, default=80.0)
+    parser.add_argument("--merge-distance-chars", type=float, default=1.0)
+    parser.add_argument("--discard-blink-adjacent", action="store_true")
+    parser.add_argument("--pixels-per-degree", type=float)
+    args = parser.parse_args(argv)
+
+    from . import api
+
+    words, fixations = api.load_scanpath_data(args.words, args.fixations)
+    policy = {
+        "off": "Off",
+        "merge": "Merge",
+        "merge-then-discard": "Merge then discard",
+        "discard": "Discard",
+    }[args.short_policy]
+    words, fixations, qa = api.preprocess_data(
+        words,
+        fixations,
+        enabled=policy != "Off" or args.discard_blink_adjacent,
+        short_policy=policy,
+        short_threshold_ms=args.short_threshold_ms,
+        merge_distance_chars=args.merge_distance_chars,
+        discard_blink_adjacent=args.discard_blink_adjacent,
+    )
+    tables = api.analysis_tables(
+        words, fixations, pixels_per_degree=args.pixels_per_degree
+    )
+    tables["cleaning_qa"] = qa
+    destination = Path(args.output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, table in tables.items():
+        table.to_csv(destination / f"{name}.csv", index=False)
+    config = {
+        "short_policy": policy,
+        "short_threshold_ms": args.short_threshold_ms,
+        "merge_distance_chars": args.merge_distance_chars,
+        "discard_blink_adjacent": args.discard_blink_adjacent,
+        "pixels_per_degree": args.pixels_per_degree,
+    }
+    (destination / "run_config.json").write_text(
+        json.dumps(config, indent=2), encoding="utf-8"
+    )
+    print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
+
+
+def corpus(argv: List[str]) -> None:
+    """Render a styled corpus figure from a tidy CSV (AN-29)."""
+    parser = argparse.ArgumentParser(prog="scanpath-studio corpus")
+    parser.add_argument("--input", required=True)
+    parser.add_argument(
+        "--kind", choices=["profile", "distribution", "difference"], required=True
+    )
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--measure-label", default="Value")
+    parser.add_argument("--series-col", default="series")
+    parser.add_argument("--value-col", default="value")
+    parser.add_argument("--primary-color", default="#1f77b4")
+    parser.add_argument("--secondary-color", default="#e45756")
+    args = parser.parse_args(argv)
+    from . import api
+
+    data = pd.read_csv(args.input)
+    fig = api.plot_corpus_figure(
+        data,
+        kind=args.kind,
+        measure_label=args.measure_label,
+        series_col=args.series_col,
+        value_col=args.value_col,
+        colors=(args.primary_color, args.secondary_color),
+    )
+    out = api.save_figure(fig, args.output)
+    print(f"Wrote {out}")
+
+
 _HELP = f"""scanpath-studio {__version__} — visualize eye-tracking-while-reading scanpaths
 
 usage:
@@ -1012,6 +1197,8 @@ usage:
   scanpath-studio run [args…]      same, forwarding args to `streamlit run`
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
+  scanpath-studio analyze …        export preprocessing + the full measure family
+  scanpath-studio corpus …         render a styled corpus-analysis figure
   scanpath-studio --version        print the version
 
 Unrecognized arguments are forwarded to `streamlit run` (e.g.
@@ -1026,6 +1213,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         launch_app(argv[1:])
     elif argv[0] == "render":
         render(argv[1:])
+    elif argv[0] == "analyze":
+        analyze(argv[1:])
+    elif argv[0] == "corpus":
+        corpus(argv[1:])
     elif argv[0] in ("-h", "--help"):
         print(_HELP)
     elif argv[0] in ("-V", "--version"):

@@ -25,7 +25,7 @@ output). Fix trivial failures (formatting) directly; report anything else.
    Fixed). If missing, draft the line and add it.
 5. **Tracker** — if the pending work corresponds to a tracker item in
    `tracker/data.js`, check its status/write-up is current (finished work →
-   `Pending approval`, never straight to `Done`).
+   `Review`, never straight to `Closed`).
 
 ## Reminders for the commit itself
 

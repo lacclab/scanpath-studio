@@ -1508,7 +1508,7 @@ def _build_studio_config(
                 st.session_state.get("global_preproc_merge_distance_chars", 1.0)
             ),
             "discard_blink_adjacent": bool(
-                st.session_state.get("global_preproc_blink_adjacent", False)
+                st.session_state.get("global_preproc_blink_adjacent", True)
             ),
         },
         # VIZ-11 follow-up: the animation frame grid, so a restored config
@@ -2483,9 +2483,14 @@ def render_single_trial_tab(
         st.markdown("## 🎬 View modes")
         # Animate styled like a layer: a toggle + a ⚙ popover for its config
         # (playback speed) — matching Compare and the visualization layers below.
+        # Seeded, not `value=`-defaulted: `single_animate` is restored pre-widget
+        # by a deep link / saved config (see session_keys), and passing both makes
+        # Streamlit warn (BUG-17). `setdefault` suffices — this toggle renders on
+        # every run, so it never first mounts late the way a popover-bound widget
+        # can (that case needs `controls._pin(rewrite=True)`; see BUG-15).
+        st.session_state.setdefault("single_animate", False)
         animate = st.toggle(
             "**Animate**",
-            value=False,
             key="single_animate",
             help="Replay the trial fixation by fixation; the play / pause / "
             "restart controls sit below the plot.",

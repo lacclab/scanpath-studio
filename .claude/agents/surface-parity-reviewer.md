@@ -1,6 +1,6 @@
 ---
 name: surface-parity-reviewer
-description: Reviews a diff for Scanpath Studio's house invariants — the four-surface rule (UI + deep link + CLI + headless API), stable widget keys, and the true-scale chart path. Use proactively after implementing or modifying a user-facing feature, before marking it Pending approval.
+description: Reviews a diff for Scanpath Studio's house invariants — the four-surface rule (UI + deep link + CLI + headless API), stable widget keys, and the true-scale chart path. Use proactively after implementing or modifying a user-facing feature, before marking it Review.
 tools: Read, Grep, Glob, Bash
 ---
 

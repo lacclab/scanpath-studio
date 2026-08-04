@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 87,
+  "revision": 88,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -112,6 +112,13 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-03"
+    },
+    "ENG-26": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
     },
     "ENG-27": {
       "status": "On hold",

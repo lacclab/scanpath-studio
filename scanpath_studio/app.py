@@ -81,6 +81,7 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    _pin,
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
@@ -1077,11 +1078,17 @@ def _load_onestop_public_source(
         help="Which OneStop reading regime to load. For the public variant each "
         "is a separate OSF download of the paragraph reports.",
     )
+    # Seeded rather than `default=`-ed: a deep link seeds `onestop_parts`
+    # pre-widget (`url_state._apply_url_preset`), and passing both makes
+    # Streamlit warn about the collision (BUG-17). `_pin(rewrite=True)` because
+    # this picker only renders while the OneStop public source is selected, so it
+    # can first mount on a later run — a plain setdefault would push nothing and
+    # the multiselect would come up empty (BUG-15).
+    _pin("onestop_parts", list(datasets.ONESTOP_DEFAULT_PARTS), rewrite=True)
     parts = opt.multiselect(
         "Parts",
         options=list(ONESTOP_PART_LABELS),
         format_func=lambda p: ONESTOP_PART_LABELS[p],
-        default=list(datasets.ONESTOP_DEFAULT_PARTS),
         key="onestop_parts",
         help="Which trial screens to load. Paragraph is the reading passage; the "
         "others are the surrounding screens (title / question / answers / "
@@ -2180,9 +2187,16 @@ def render_sidebar_canvas_controls(
         help="Background of the plotting area (and exported figures).",
     )
     if st.session_state.get("global_bg_choice") == "Custom…":
+        # Seed rather than pass `value=`: this key is restored pre-widget by a
+        # deep link / saved config, and a keyed widget given both logs Streamlit's
+        # "default value but also had its value set" warning (BUG-17).
+        # `_pin(rewrite=True)`, not `setdefault`: this picker only exists while
+        # the choice is "Custom…", so it typically FIRST mounts on a later run —
+        # the exact BUG-15 case where a plain setdefault pushes nothing and the
+        # picker shows black while the figure draws the restored colour.
+        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR, rewrite=True)
         display.color_picker(
             "Custom background color",
-            value=DEFAULT_BACKGROUND_COLOR,
             key="global_bg_custom",
         )
 
@@ -2274,13 +2288,31 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     return words, authored_fixations(words, events)
 
 
+#: PRE-1 control defaults. These keys are a wire format — a deep link or a saved
+#: config writes them into session state via `url_state` *before* the widgets
+#: render, so the widgets must NOT also pass `value=`: Streamlit warns when a
+#: keyed widget is given both (BUG-17). A plain `setdefault` is enough here (the
+#: expander's contents render every run, so these never mount late — unlike the
+#: `_pin(rewrite=True)` cases above); see `controls._pin` for that distinction.
+#: Keep in sync with the fallbacks in `url_state._restore_plot_config` and
+#: `tabs._build_studio_config`.
+_PREPROC_DEFAULTS: dict = {
+    "global_preproc_enabled": False,
+    "global_preproc_short_policy": "Off",
+    "global_preproc_short_threshold_ms": 80.0,
+    "global_preproc_merge_distance_chars": 1.0,
+    "global_preproc_blink_adjacent": True,
+}
+
+
 def _preprocessing_settings() -> dict:
     """Render the PRE-1 controls and return their cache-key-safe settings."""
+    for key, default in _PREPROC_DEFAULTS.items():
+        st.session_state.setdefault(key, default)
     with st.sidebar.expander("🧹 Preprocessing", expanded=False):
         enabled = st.toggle(
             "Enable preprocessing",
             key="global_preproc_enabled",
-            value=False,
             help="Optional and off by default. Original rows remain available; "
             "excluded rows are soft-marked with a reason.",
         )
@@ -2294,7 +2326,6 @@ def _preprocessing_settings() -> dict:
             "Short threshold (ms)",
             min_value=1.0,
             max_value=500.0,
-            value=80.0,
             key="global_preproc_short_threshold_ms",
             disabled=not enabled or policy == "Off",
         )
@@ -2302,7 +2333,6 @@ def _preprocessing_settings() -> dict:
             "Merge distance (characters)",
             min_value=0.25,
             max_value=10.0,
-            value=1.0,
             step=0.25,
             key="global_preproc_merge_distance_chars",
             disabled=not enabled or "Merge" not in policy,
@@ -2310,7 +2340,6 @@ def _preprocessing_settings() -> dict:
         blink = st.toggle(
             "Exclude blink-adjacent fixations",
             key="global_preproc_blink_adjacent",
-            value=True,
             disabled=not enabled,
         )
         if st.button("Recompute preprocessing", disabled=not enabled):

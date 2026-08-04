@@ -413,6 +413,11 @@ _VIZ_WIDGET_DEFAULTS = {
     # the selected trial's fixation count, so `sidebar_controls` resolves/clamps
     # the concrete (1, max_fix) range at render time (mirroring `multi_fix_range`).
     "single_fix_range": None,
+    # Whether that window survives a trial change. Off = the window belongs to
+    # the trial it was drawn on (switching trials shows the whole new trial); on
+    # = re-apply it to every trial, clamped to each one's length. Pinned here so
+    # it re-syncs when its popover first mounts on a later run (BUG-15).
+    "single_fix_range_all_trials": False,
     # Show the A/B legend on the two-trial comparison overlay (CMP-2). Off by
     # default — the per-scanpath colours already tell the readings apart.
     "global_show_compare_legend": False,
@@ -1451,6 +1456,26 @@ def _fix_range_max(fixations: Optional[pd.DataFrame]) -> int:
     return int(top) if pd.notna(top) else 0
 
 
+def _fix_range_trial_key(fixations: Optional[pd.DataFrame]) -> Optional[tuple]:
+    """Identity of the trial the window slider is sizing, or ``None`` if unclear.
+
+    Used only to notice a *trial change*; a frame that isn't a single trial (or
+    carries no identity columns) returns ``None``, which is treated as "don't
+    reset" so an ambiguous frame never silently drops the user's window.
+    """
+    if fixations is None or fixations.empty:
+        return None
+    parts = []
+    for col in ("participant_id", "trial_id"):
+        if col not in fixations.columns:
+            continue
+        values = fixations[col].dropna().unique()
+        if len(values) != 1:
+            return None
+        parts.append(str(values[0]))
+    return tuple(parts) or None
+
+
 def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
     """Render the VIZ-7 fixation-index window slider (``single_fix_range``).
 
@@ -1460,7 +1485,28 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
     This is the single fixation-index control for the app; the Comparisons subtab
     deliberately has none of its own (ENG-8). A trial with fewer than two
     fixations can't host a range slider (a one-value slider throws in the
-    browser), so the window is cleared to ``None`` (the full, unsliced trial)."""
+    browser), so the window is cleared to ``None`` (the full, unsliced trial).
+
+    **Scope.** A window is per-trial by default: picking another trial shows all
+    of that trial's fixations again, because a range like "fixations 5–20" rarely
+    means the same thing on a different reading. The *Apply to all trials*
+    checkbox opts into the sticky behaviour (the window is re-applied to every
+    trial, clamped to each one's length).
+
+    The checkbox is deliberately **UI-only** state (cf. ``share_identity_mode``),
+    because what it governs — what happens to the window when you select a
+    *different* trial — has no referent on the other three surfaces: a share link,
+    a ``render`` invocation and an ``api.plot_scanpath`` call each address one
+    explicit trial, and ``api``'s ``fix_index_range`` is a per-call argument
+    rather than sticky state. If it is ever persisted into a saved config it must
+    be added to ``session_keys.PLOT_CONFIG_STATE_KEYS``.
+
+    Note ``single_fix_range`` *itself* currently reaches only the UI and the
+    headless API — there is no ``fix_range`` URL param and
+    ``tabs._build_studio_config`` doesn't write one — so a window is not
+    shareable today. That is a pre-existing VIZ-7 gap, not something this
+    checkbox introduces; wiring it up would not change the reasoning above.
+    """
     if fixations is None:
         return
     max_fix = _fix_range_max(fixations)
@@ -1471,6 +1517,16 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
             st.session_state["single_fix_range"] = None
         st.session_state["single_fix_range_user_set"] = False
         return
+    # Notice a trial change *before* resolving the stored window: in per-trial
+    # mode, un-freezing the window is what makes the `user_set is False` branch
+    # below expand it to the new trial's full range.
+    all_trials = bool(st.session_state.get("single_fix_range_all_trials", False))
+    trial_key = _fix_range_trial_key(fixations)
+    if trial_key is not None:
+        previous = st.session_state.get("_fix_range_trial")
+        st.session_state["_fix_range_trial"] = trial_key
+        if previous is not None and previous != trial_key and not all_trials:
+            st.session_state["single_fix_range_user_set"] = False
     stored = st.session_state.get("single_fix_range")
     user_set = st.session_state.get("single_fix_range_user_set")
     if stored is None:
@@ -1504,6 +1560,17 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
         help="Draw only fixations whose index falls in this range (their "
         "saccades follow). The chips and panels still describe the full trial; "
         "the bulk (multiple-trial) export is unaffected.",
+    )
+    # Seeded via `_VIZ_WIDGET_DEFAULTS`, so no `value=` here (see `_pin`).
+    st.checkbox(
+        "Apply to all trials",
+        key="single_fix_range_all_trials",
+        help="**Off** (default) — the window belongs to this trial; picking "
+        "another trial shows all of its fixations again. **On** — keep the same "
+        "index window as you move through trials, clamped to each trial's "
+        "length (a shorter trial narrows it). Either way **Compare** windows "
+        "both scanpaths by the same range, since the two readings share one "
+        "index axis there.",
     )
 
 

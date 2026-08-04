@@ -62,8 +62,13 @@ you work under `scanpath_studio/`); contributor setup is in
   split out) · **Background (technical)** (anchors, design calls, gotchas,
   related IDs). A Backlog item has only *Request* + *Background*. The tracker's
   *How this works* panel carries the same convention.
-- **Approval gate.** Finished implementing → `Status: Pending approval`; **never**
-  jump straight to `Done`. On the user's sign-off, set `"status": "Done"` **and**
+- **Statuses.** The live workflow has six: `Backlog`, `Planned`, `In progress`,
+  `On hold`, `Review`, `Closed` (see `@AGENTS.md` → *Improvements tracker
+  handoff*). Older items in `tracker/data.js` still carry the retired wording
+  (`Pending approval`, `Done`, `Parked`, `Dropped`) — don't copy it into new or
+  edited items, and don't mass-rewrite the historical ones either.
+- **Approval gate.** Finished implementing → `Status: Review`; **never** jump
+  straight to `Closed`. On the user's sign-off, set `"status": "Closed"` **and**
   `"archived": true` (same for an item closed without being implemented — record
   the reason in `note`). Archived items are hidden until *Show archived*.
 - **IDs are stable** — never renumber. New items take the next free number in
@@ -88,6 +93,6 @@ See *Releasing* in `@AGENTS.md`: bump `__version__` in
 - **Subagents** — `surface-parity-reviewer` (four-surface rule, wire-format
   keys, true-scale chart path) and `perf-reviewer` (`@st.cache_data` +
   `frame_fingerprint` conventions) review a diff; run both before setting a
-  tracker item to *Pending approval*.
+  tracker item to *Review*.
 - **Guardrails** — edits to `uv.lock`, `site/`, and `*.egg-info` are denied
   in `.claude/settings.json`; they are generated artifacts.

@@ -1,6 +1,6 @@
 ---
 name: track
-description: Add or update an item in the improvements tracker (tracker/data.js) following the house conventions — stable IDs, four-paragraph write-up, approval gate. Use whenever work is started, finished (→ Pending approval), or signed off (→ Done + archived).
+description: Add or update an item in the improvements tracker (tracker/data.js) following the house conventions — stable IDs, four-paragraph write-up, approval gate. Use whenever work is started, finished (→ Review), or signed off (→ Closed + archived).
 ---
 
 # Tracker item workflow
@@ -19,15 +19,17 @@ Arguments: free-form — e.g. `CMP "chips reset on rerun"` (new item),
   (compare mode), `DATA`, `ENG`, `EXP` (export), `PERF`, `PRE`
   (preprocessing), `UX`, `VAL`, `VIZ`. Scan `data.js` for the highest used
   number in the prefix — including archived items — before assigning.
-- **Statuses:** `Backlog | Planned | In progress | Blocked | Parked |
-  Pending approval | Done | Dropped`. `archived: true` once signed off or
-  closed.
-- **Approval gate:** when implementation finishes, set
-  `Status: Pending approval` — **never** jump straight to `Done`. Only on the
-  user's explicit sign-off set `"status": "Done"` **and** `"archived": true`,
-  and add the leading status quote line to the body, e.g.
-  `> **Done — approved 2026-08-02.**` (use today's date). An item closed
-  without implementation also gets `archived: true` plus the reason in `note`.
+- **Statuses (six):** `Backlog | Planned | In progress | On hold | Review |
+  Closed`. `archived: true` once signed off or closed. The retired wording
+  (`Pending approval`, `Done`, `Parked`, `Dropped`) still appears on older
+  items — never write it into a new or edited item, and don't mass-rewrite the
+  historical ones.
+- **Approval gate:** when implementation finishes, set `Status: Review` —
+  **never** jump straight to `Closed`. Only on the user's explicit sign-off set
+  `"status": "Closed"` **and** `"archived": true`, and add the leading status
+  quote line to the body, e.g. `> **Closed — approved 2026-08-02.**` (use
+  today's date). An item closed without implementation also gets
+  `archived: true` plus the reason in `note`.
 - **`body` is an array of markdown lines** (one array entry per source line).
   Link code as `[controls.py](scanpath_studio/controls.py:622)` and other
   items as `#ID`.

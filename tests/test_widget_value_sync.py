@@ -143,3 +143,49 @@ def test_no_pinned_widget_passes_a_default():
         "a pinned viz widget now passes an explicit default — see "
         f"controls._pin: {offenders}"
     )
+
+
+def test_no_wire_format_widget_passes_a_default():
+    """The same invariant, for every module — not just ``controls.py``.
+
+    ``test_no_pinned_widget_passes_a_default`` only scans ``controls.py`` for
+    keys in ``_VIZ_WIDGET_DEFAULTS``, so the identical bug went unnoticed in
+    ``app.py``: the PRE-1 ``global_preproc_*`` widgets each passed ``value=``
+    beside a key that ``url_state`` writes pre-widget, and Streamlit logged
+    "was created with a default value but also had its value set via the Session
+    State API" on every run of a restored session.
+
+    Any key in the wire format (``session_keys``) is written into session state
+    *before* its widget exists, so the widget must take its value from state
+    alone and seed a missing default with ``setdefault``.
+    """
+    import ast
+    import inspect
+
+    from scanpath_studio import app, session_keys, tabs
+
+    wire = set(session_keys.PLOT_CONFIG_STATE_KEYS) | set(
+        session_keys.URL_SEEDED_STATE_KEYS
+    )
+    offenders = []
+    for module in (app, controls, tabs):
+        tree = ast.parse(inspect.getsource(module))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            kwargs = {kw.arg: kw for kw in node.keywords if kw.arg}
+            key = kwargs.get("key")
+            if key is None or not isinstance(key.value, ast.Constant):
+                continue
+            if key.value.value not in wire:
+                continue
+            clashes = sorted({"value", "index", "default"} & set(kwargs))
+            if clashes:
+                offenders.append(
+                    f"{module.__name__}:{node.lineno} {key.value.value}: {clashes}"
+                )
+    assert not offenders, (
+        "a widget whose key is part of the share-link / saved-config wire format "
+        "now passes an explicit default; seed it with st.session_state.setdefault "
+        f"instead so a restored value wins: {offenders}"
+    )

@@ -60,7 +60,7 @@ Optional passthrough columns go through the `WORD_OPTIONAL_FIELDS` /
 - [ ] `ruff check --exclude other_vis .` + `ruff format --exclude other_vis .`
 - [ ] One-line entry under `[Unreleased]` in `CHANGELOG.md`
 - [ ] Docs page updated if user-visible behavior changed (`docs/`)
-- [ ] Tracker item updated → `Pending approval` (use the `track` skill)
+- [ ] Tracker item updated → `Review` (use the `track` skill)
 
 ## Gotchas
 

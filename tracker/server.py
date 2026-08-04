@@ -192,11 +192,17 @@ class TrackerHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(APP_ROOT), **kwargs)
 
+    #: Files that are edited while the tracker is open, so a cached copy is
+    #: always wrong. `data.js` matters as much as `state.json`: it carries the
+    #: item catalogue, and without an explicit header browsers fall back to
+    #: *heuristic* freshness (a fraction of the time since `Last-Modified`) and
+    #: can serve a stale copy without revalidating — newly added items then just
+    #: don't appear, with nothing to indicate why.
+    _NO_STORE_PATHS = ("/tracker/state.json", "/tracker/data.js")
+
     def end_headers(self) -> None:
-        if (
-            self.path.endswith("/tracker/state.json")
-            or urlsplit(self.path).path == API_PATH
-        ):
+        path = urlsplit(self.path).path
+        if path.endswith(self._NO_STORE_PATHS) or path == API_PATH:
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 

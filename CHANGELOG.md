@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-08-04
+
 ### Added
 - **Scope the fixation-index window** (`controls._render_fix_range_slider`) — an **Apply to all trials** checkbox beside the range slider. Off by default: the window now belongs to the trial it was drawn on, so switching trials shows the whole new trial; check it to keep the window across trials (clamped to each one's length).
 

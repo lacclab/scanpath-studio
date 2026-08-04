@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-08-04
+
 ### Added
 - **Optional, auditable preprocessing pipeline** (PRE-1/4/6/11–19) — soft exclusion, blink handling, run/pass/sentence/saccade/character tables, RTL-aware landing positions, cleaning QA, and consensus line assignment, exposed across app, API, CLI, and export.
 - **Duration-mass heatmaps and line-assignment review tools** (PRE-8/10) — a Gaussian duration-mass heatmap style, plus larger comparison panels with moved-fixation overlays and correction-sensitivity tables.

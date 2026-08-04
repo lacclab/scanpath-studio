@@ -1135,6 +1135,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#complete-tabular-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete tabular export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#common-issues" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1617,6 +1628,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#complete-tabular-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete tabular export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#common-issues" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1694,6 +1716,13 @@ in-app export buttons pre-flight for Chrome and point you here when it's missing
 <li>The CLI's <code>--animate</code> writes <strong>interactive HTML</strong> only; use the Python API for
   GIF/MP4.</li>
 </ul>
+<h2 id="complete-tabular-export">Complete tabular export<a class="headerlink" href="#complete-tabular-export" title="Permanent link">&para;</a></h2>
+<p>In <strong>Export → Multiple trials</strong>, select <strong>Full measure family</strong> to add saccades,
+sentence measures, trial and reader summaries, character grids, cleaning QA,
+and <code>run_config.json</code> alongside the existing fixation and word-measure files.
+The zip contains both per-trial files and concatenated <code>aggregate/all_*</code> files.
+The run configuration records preprocessing and visualization settings so the
+numbers can be reproduced later.</p>
 <h2 id="common-issues">Common issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h2>
 <details class="question">
 <summary>“Ambiguous selection: N trials match” from <code>plot_scanpath</code></summary>

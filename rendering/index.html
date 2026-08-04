@@ -1535,6 +1535,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#duration-mass-and-illustration-disclosure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duration mass and illustration disclosure
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1685,6 +1696,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#duration-mass-and-illustration-disclosure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duration mass and illustration disclosure
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1796,6 +1818,17 @@ size and CSS-scales the whole block uniformly to the column width. Static image
 export bumps the raster <code>scale</code> to stay crisp; SVG/PDF are vector and need no bump.</p>
 <p>If you add a new spatial figure, keep it on <code>_render_true_scale_chart</code> — never
 <code>st.plotly_chart</code> — or the reading text will drift from the boxes.</p>
+<h2 id="duration-mass-and-illustration-disclosure">Duration mass and illustration disclosure<a class="headerlink" href="#duration-mass-and-illustration-disclosure" title="Permanent link">&para;</a></h2>
+<p>The <strong>Duration mass</strong> heatmap spreads each fixation's duration over nearby
+character centres with a Gaussian kernel. Its sigma is expressed in characters,
+so the setting remains meaningful across display resolutions and fonts. It uses
+the same linear/log normalization and colour controls as the other heatmaps.</p>
+<p>Geometry-changing views—snapped fixations, arced saccades, drift correction,
+discarded/subset paths, synthetic data, or a hand-authored scanpath—can be
+marked <strong>Illustration</strong> automatically. The annotation is part of the Plotly
+figure and export metadata, so it survives PNG/SVG and layered export. Use the
+manual Show/Hide override only when the publication context already supplies
+an equivalent disclosure.</p>
 
 
 

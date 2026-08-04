@@ -1079,6 +1079,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#optional-preprocessing-and-derived-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional preprocessing and derived tables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#setup-wizard-saved-setups" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1617,6 +1628,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#optional-preprocessing-and-derived-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional preprocessing and derived tables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#setup-wizard-saved-setups" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1701,11 +1723,25 @@ pre-aggregated reading measures.</p>
 <h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
 <p>If your data carries only raw fixations, the app computes the canonical per-word
 measures itself — <strong>FFD</strong>, <strong>FPRT</strong> (gaze duration), <strong>RPD</strong> (go-past),
-<strong>TFD</strong> (dwell), plus skips and regressions, following Rayner (1998) and
+<strong>TFD</strong> (dwell), initial landing position/distance, second-pass and
+single-fixation duration, plus skips and regression counts, following Rayner (1998) and
 Inhoff &amp; Radach (1998). Pre-aggregated EyeLink <code>IA_*</code> columns, when present, take
 precedence. Areas of interest come <strong>directly from your word boxes</strong> — they are
 not computed; only the fixation→word assignment is derived (bounding-box
 containment with a small nearest-word fallback).</p>
+<h2 id="optional-preprocessing-and-derived-tables">Optional preprocessing and derived tables<a class="headerlink" href="#optional-preprocessing-and-derived-tables" title="Permanent link">&para;</a></h2>
+<p>The <strong>Preprocessing</strong> panel is off by default. When disabled, it returns the
+normalized fixation table unchanged. When enabled, it can soft-mark
+blink-adjacent or short fixations as <code>excluded</code>, merge short-and-close
+fixations while retaining <code>original_duration_ms</code>, and materialize run/pass
+columns. Rows are never silently deleted; <code>excluded_reason</code> and the per-trial
+Cleaning QA table preserve the provenance.</p>
+<p>Sentence IDs are accepted from the dataset or inferred at sentence-final
+punctuation. The derived family includes sentence measures, first-class
+saccades (pixels and optional degrees of visual angle), trial/reader summaries,
+and a character grid with letter-based landing/launch positions. Trial text is
+also auto-tagged <code>right_to_left</code> for Hebrew/Arabic-majority content; an explicit
+column takes precedence.</p>
 <h2 id="setup-wizard-saved-setups">Setup wizard &amp; saved setups<a class="headerlink" href="#setup-wizard-saved-setups" title="Permanent link">&para;</a></h2>
 <p>Uploading through the app's <strong>➕ Add data</strong> wizard walks you through naming the
 dataset, the experimental setup (monitor resolution keeps everything

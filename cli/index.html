@@ -1644,6 +1644,9 @@ one trial without opening the UI.</p>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span>--participant<span class="w"> </span>p1<span class="w"> </span>--trial<span class="w"> </span>t3<span class="w"> </span>--output<span class="w"> </span>scanpath.svg
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Render a portable file saved by the in-app scanpath author</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
 </code></pre></div>
 <p>HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
@@ -1685,6 +1688,22 @@ Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
 <td><code>--stimulus-image PATH</code></td>
 </tr>
 <tr>
+<td>resolve per-trial images</td>
+<td><code>--image-root DIR --image-pattern '{text_id}.png'</code></td>
+</tr>
+<tr>
+<td>use Gaussian duration mass</td>
+<td><code>--heatmap-style 'Duration mass' --duration-mass-sigma 1.0</code></td>
+</tr>
+<tr>
+<td>mark a schematic</td>
+<td><code>--illustration</code> or <code>--illustration-label MODE</code></td>
+</tr>
+<tr>
+<td>render an authored trial</td>
+<td><code>--authoring PATH</code></td>
+</tr>
+<tr>
 <td>export editable layers</td>
 <td><code>--separable-layers</code></td>
 </tr>
@@ -1694,8 +1713,14 @@ Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scanpath-studio<span class="w"> </span>--help
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--help
 </code></pre></div>
-<p>The CLI renders one trial per invocation. Use the <a href="../automation/#batch-pattern">Python batch pattern</a>
-or the app's <strong>Export → Multiple trials</strong> for a corpus.</p>
+<p>The <code>analyze</code> command writes the full tabular family without opening the app:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
+</code></pre></div>
+<p>This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
+and run-configuration files. <code>scanpath-studio corpus</code> produces a tidy
+corpus-analysis table for scripting. The <code>render</code> command still renders one
+trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
+or <strong>Export → Multiple trials</strong> for many figures.</p>
 
 
 

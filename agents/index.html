@@ -2381,6 +2381,11 @@ plus replay-only knobs — <code>figure_options("animation")</code> is the full 
 <td><code>None</code></td>
 <td>no</td>
 </tr>
+<tr>
+<td><code>illustration_reasons</code></td>
+<td><code>None</code></td>
+<td>no</td>
+</tr>
 </tbody>
 </table>
 <h3 id="fixations">Fixations<a class="headerlink" href="#fixations" title="Permanent link">&para;</a></h3>
@@ -2568,6 +2573,11 @@ colours. <code>saccade_render_mode="Arc"</code> draws the linear-reading schemat
 <td>no</td>
 </tr>
 <tr>
+<td><code>duration_mass_sigma_chars</code></td>
+<td><code>1.0</code></td>
+<td>no</td>
+</tr>
+<tr>
 <td><code>heatmap_colorscale</code></td>
 <td><code>'Blues'</code></td>
 <td>no</td>
@@ -2589,9 +2599,10 @@ colours. <code>saccade_render_mode="Arc"</code> draws the linear-reading schemat
 </tr>
 </tbody>
 </table>
-<p><code>heatmap_style</code> is <code>"Word boxes"</code>, <code>"Interpolated"</code> or <code>"Density"</code>;
+<p><code>heatmap_style</code> is <code>"Word boxes"</code>, <code>"Interpolated"</code> or <code>"Duration mass"</code>;
 <code>heatmap_metric="counts"</code> weights by fixation count instead of dwell time;
-<code>heatmap_norm="Log"</code> compresses heavy-tailed dwell times.</p>
+<code>heatmap_norm="Log"</code> compresses heavy-tailed dwell times. Duration mass spreads
+dwell over nearby characters; <code>duration_mass_sigma_chars</code> controls its Gaussian.</p>
 <h3 id="text-words">Text &amp; words<a class="headerlink" href="#text-words" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

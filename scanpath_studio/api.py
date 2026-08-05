@@ -63,6 +63,7 @@ from .constants import (  # noqa: E402
     DEFAULT_SACCADE_WIDTH,
     FONT_FAMILY,
     PALETTES,
+    SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     UNIFORM_COLOR_FIELD,
     palette_settings,
@@ -161,6 +162,12 @@ CANONICAL_FIGURE_DEFAULTS: dict = dict(
     saccade_color_mode="Uniform",
     saccade_class_colors=None,
     saccade_type_legend=True,
+    # VIZ-31: the reading-class filter — which classes are drawn at all, as
+    # opposed to what colour they are drawn in. Spelled out as the full list
+    # rather than the equivalent `None` so this matches what the app's
+    # all-selected multiselect resolves to key-for-key; the builder treats a
+    # complete list as "no filter" and skips the classification pass.
+    saccade_classes=list(SACCADE_CLASS_ORDER),
     saccade_render_mode="Straight",
     fixation_snap_to_word=False,
     # VIZ-17 uniform fixation colour · VIZ-15 marker shape — the flat colour and

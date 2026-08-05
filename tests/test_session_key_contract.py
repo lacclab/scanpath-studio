@@ -262,7 +262,12 @@ def test_deep_link_seeds_frozen_state_keys():
     # Plausible values per encoding — a bad one would be dropped with a warning
     # (asserted empty below), which would hide a missing key. A param whose
     # reader validates against a closed domain needs its own real value here.
-    validated = {"align_algorithm": "Warp"}
+    validated = {
+        "align_algorithm": "Warp",
+        # VIZ-31: the reading-class filter parses against a closed set of class
+        # names, so a placeholder would be rejected with a warning.
+        "saccade_classes": "forward,regression",
+    }
     for param in sk.SHARE_TOGGLE_PARAMS:
         query[param] = "1"
     for param in sk.SHARE_VALUE_PARAMS:
@@ -410,6 +415,9 @@ def _restore_config_app():
             "saccade_color_mode": "Uniform",
             "saccade_type_legend": True,
             "saccade_class_colors": {c: "#445566" for c in SACCADE_CLASS_EDITABLE},
+            # VIZ-31 reading-class filter — a real subset, since the reader
+            # validates the names against the classes this build knows.
+            "saccade_classes": ["forward", "regression"],
             "fixation_snap_to_word": True,
             "drift_correction": "Warp",
             "drift_connectors": True,

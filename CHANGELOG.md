@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Draw only some saccade types** (VIZ-31) — a new **🧹 Saccade filter** picks which reading classes are drawn at all (forward, skip, refixation, return sweep, regression), so a regressions-only figure takes one click instead of colouring the other four to match the background. Hidden classes lose their direction arrows too, and it composes with any saccade colour mode. On every surface: the rail, the share link (`?saccade_classes=`), the saved config, `scanpath-studio render --saccade-classes`, and `sps.plot_scanpath(saccade_classes=…)`.
+
+### Fixed
+- **Rail labels no longer break mid-word** (`styles.py`) — below 1200 px the rail rendered "Anima/te" and "Com/pare": a bolded toggle label puts its text in a `<strong>` whose `overflow-wrap: anywhere` overrode the wrap rule set on the parent `<p>`.
+
+### Changed
+- **The visualization rail is grouped instead of flat** (VIZ-31) — the seven layer toggles now sit in named, collapsible sections, each shaped *toggle → ⚙️ style → 🧹 filter* — **👁️ Fixations** and **↗️ Saccades** (open by default), **📄 Stimulus** (text, bounding boxes, stimulus image) and **🔥 Overlays** (heatmap, raw gaze) — followed by **🖥️ Canvas & text** and **📐 Figure & axes**, so the rail opens as six rows instead of ~18. No setting was renamed, removed, or changed in behaviour.
+- **Canvas, font and background controls moved to the rail** (VIZ-31) — monitor geometry, typography, text colour and plot background left the sidebar's *Experimental Setup* expander (under 📂 Data) for the Scanpath rail, beside the layers they restyle, and are also reachable from Corpus Analysis under **🎨 Corpus figure style** (its figures are drawn from them); the setup wizard still shows the same panel inline. The Illustration-label override moved from a top-level rail row into **📐 Figure & axes**.
+
 ## [0.27.2] - 2026-08-05
 
 ### Added

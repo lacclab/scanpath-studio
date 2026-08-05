@@ -1272,31 +1272,53 @@ def _add_saccade_layer(
     style: str,
     show_arrows: bool,
     saccade_classes: Optional[pd.Series] = None,
+    color_by_class: bool = True,
     class_colors: Optional[dict] = None,
     class_legend: bool = True,
+    visible_classes: Optional[Iterable[str]] = None,
     render_mode: str = "Straight",
     two_way: bool = False,
 ) -> bool:
     """Add one scanpath's saccade lines (+ optional direction arrowheads) to ``fig``.
 
     Connects consecutive fixations in time order. When ``saccade_classes`` is
-    given (VIZ-8 "By type" mode) the lines are split into one sub-trace per
-    reading class, each in its own colour from ``class_colors`` and shown in a
-    small legend; ``two_way`` (VIZ-19) first folds those five classes down to
-    forward vs. regression. Otherwise a single uniform-``color`` trace is drawn.
-    ``render_mode="Arc"`` (VIZ-9) draws each saccade as an upward arch instead of
-    a straight connector. The arrowheads are a separate, independently-toggled
-    trace drawn before the fixation markers so the dots sit on top (uniform
-    ``color`` either way — they encode direction, the line colour encodes type).
-    The caller gates this on spatial axes, ``show_saccades`` and at least two
-    fixations.
+    given (the per-fixation reading class from ``measures.classify_saccades``)
+    the segments are grouped by class; with ``color_by_class`` (VIZ-8 "By type")
+    each group becomes its own sub-trace in its colour from ``class_colors``
+    plus a small legend, and ``two_way`` (VIZ-19) first folds the five classes
+    down to forward vs. regression. Otherwise a single uniform-``color`` trace is
+    drawn. ``visible_classes`` (VIZ-31) is the reading-class **filter**: segments
+    whose class isn't listed are not drawn at all — so it needs the
+    classification even in uniform-colour mode, which is why ``color_by_class``
+    exists separately. Filtering happens on the *unfolded* classes, before the
+    two-way fold, so "show only regressions" means the same thing in every
+    colour mode. It is read literally: an **empty** ``visible_classes`` draws no
+    saccades. (The rail never sends one — ``controls._collect_viz_settings``
+    reads a cleared multiselect as "no filter", since hiding the layer outright
+    is what its toggle is for.) ``render_mode="Arc"`` (VIZ-9) draws each saccade as an upward
+    arch instead of a straight connector. The arrowheads are a separate,
+    independently-toggled trace drawn before the fixation markers so the dots sit
+    on top (uniform ``color`` either way — they encode direction, the line colour
+    encodes type), and they honour the same filter. The caller gates this on
+    spatial axes, ``show_saccades`` and at least two fixations.
 
     Returns ``True`` when legend entries were added (by-type mode), so the caller
     reserves margin for the legend (mirrors ``_add_raw_gaze_layer``).
     """
     legend_added = False
     arch_frac = _ARCH_FRAC if render_mode == "Arc" else None
+    keep = None if visible_classes is None else set(visible_classes)
+    # Group once, on the raw (unfolded) classes, then filter — the two-way fold
+    # and the uniform-colour merge below both work off the same grouping.
+    segs = None
     if saccade_classes is not None:
+        segs = _saccade_segments_by_class(
+            fixations, x_field, y_field, saccade_classes, arch_frac
+        )
+        if keep is not None:
+            segs = {c: s for c, s in segs.items() if c in keep}
+
+    if segs is not None and color_by_class:
         # Merge over the full defaults so classes the caller omits (notably the
         # non-editable "other" catch-all — the UI palette only carries the five
         # reading classes) still get their intended colour instead of falling
@@ -1307,9 +1329,13 @@ def _add_saccade_layer(
         # colours, legend — is shared. "Forward" takes the forward class's
         # colour, which is what the picker shows for it.
         if two_way:
-            saccade_classes = saccade_classes.map(
-                lambda c: SACCADE_DIRECTION_FOLD.get(c, "other")
-            )
+            folded: dict = {}
+            for cls_name, (fx, fy) in segs.items():
+                bucket = SACCADE_DIRECTION_FOLD.get(cls_name, "other")
+                bx, by = folded.setdefault(bucket, ([], []))
+                bx.extend(fx)
+                by.extend(fy)
+            segs = folded
             draw_order = [*SACCADE_DIRECTION_CLASSES, "other"]
             labels = SACCADE_DIRECTION_LABELS
             legend_title = "Saccade direction"
@@ -1317,9 +1343,6 @@ def _add_saccade_layer(
             draw_order = SACCADE_CLASS_ORDER
             labels = SACCADE_CLASS_LABELS
             legend_title = "Saccade type"
-        segs = _saccade_segments_by_class(
-            fixations, x_field, y_field, saccade_classes, arch_frac
-        )
         for cls_name in draw_order:
             seg = segs.get(cls_name)
             if not seg or not seg[0]:
@@ -1345,7 +1368,22 @@ def _add_saccade_layer(
             # Reserve legend margin only when the key is actually shown.
             legend_added = class_legend
     else:
-        sx, sy = _saccade_segments(fixations, x_field, y_field, arch_frac)
+        if segs is None:
+            sx, sy = _saccade_segments(fixations, x_field, y_field, arch_frac)
+        else:
+            # Filtered, but drawn in one uniform colour: concatenate the classes
+            # that survived. Each class's arrays are already None-separated, so
+            # joining them is the same trace the unfiltered path builds minus the
+            # hidden segments (their order within the trace doesn't render).
+            sx, sy = [], []
+            for cls_name in [
+                *SACCADE_CLASS_ORDER,
+                *(c for c in segs if c not in SACCADE_CLASS_ORDER),
+            ]:
+                seg = segs.get(cls_name)
+                if seg:
+                    sx.extend(seg[0])
+                    sy.extend(seg[1])
         if sx:
             fig.add_trace(
                 go.Scatter(
@@ -1361,7 +1399,29 @@ def _add_saccade_layer(
     if show_arrows:
         # BUG-9: same arch_frac as the segments above, so the arrowheads sit on
         # the drawn line (arched or straight) instead of on the chord.
-        amx, amy, aang = _saccade_arrow_markers(fixations, x_field, y_field, arch_frac)
+        amx, amy, aang, aseg = _saccade_arrow_rows(
+            fixations, x_field, y_field, arch_frac
+        )
+        if amx and keep is not None and saccade_classes is not None:
+            # An arrowhead belongs to the saccade leaving fixation `aseg[j]` in
+            # time order, which is exactly how `_saccade_segments_by_class` keys
+            # a segment — so the filter drops arrows for hidden saccades instead
+            # of leaving them floating over nothing.
+            ordered_cls = saccade_classes.reindex(
+                fixations.sort_values("timestamp_ms").index
+            ).tolist()
+            mask = [
+                (
+                    "other"
+                    if i >= len(ordered_cls) or pd.isna(ordered_cls[i])
+                    else ordered_cls[i]
+                )
+                in keep
+                for i in aseg
+            ]
+            amx = [v for v, m in zip(amx, mask) if m]
+            amy = [v for v, m in zip(amy, mask) if m]
+            aang = [v for v, m in zip(aang, mask) if m]
         if amx:
             fig.add_trace(
                 go.Scatter(
@@ -1540,6 +1600,7 @@ def make_scanpath_figure(
     saccade_color_mode: str = "Uniform",
     saccade_class_colors: Optional[dict] = None,
     saccade_type_legend: bool = True,
+    saccade_classes: Optional[Iterable[str]] = None,
     saccade_render_mode: str = "Straight",
     fixation_snap_to_word: bool = False,
     hollow_fixations: bool = False,
@@ -1841,16 +1902,27 @@ def make_scanpath_figure(
         # RAW fixations (word_id is unchanged by the snap).
         # VIZ-19: "Forward / regression" is the same classification folded into
         # two buckets, so both non-uniform modes take this path.
-        saccade_classes = None
+        # VIZ-31: the same classification also backs the reading-class *filter*
+        # (`saccade_classes` = the classes to draw, ``None`` meaning all), so
+        # classify whenever either the colour mode or the filter needs it. A
+        # filter naming every class is a no-op and takes the cheaper raw path.
+        class_series = None
         two_way_saccades = saccade_color_mode == "Forward / regression"
-        if saccade_color_mode in ("By type", "Forward / regression"):
+        color_by_class = saccade_color_mode in ("By type", "Forward / regression")
+        visible_classes = (
+            None
+            if saccade_classes is None
+            or set(saccade_classes) >= set(SACCADE_CLASS_ORDER)
+            else set(saccade_classes)
+        )
+        if color_by_class or visible_classes is not None:
             existing = fixations.get("saccade_class")
             if existing is not None:
-                saccade_classes = existing
+                class_series = existing
             else:
                 from .measures import classify_saccades
 
-                saccade_classes = classify_saccades(fixations, words)
+                class_series = classify_saccades(fixations, words)
         if _add_saccade_layer(
             fig,
             render_fix,
@@ -1860,9 +1932,11 @@ def make_scanpath_figure(
             width=saccade_width,
             style=saccade_style,
             show_arrows=show_saccade_arrows,
-            saccade_classes=saccade_classes,
+            saccade_classes=class_series,
+            color_by_class=color_by_class,
             class_colors=saccade_class_colors,
             class_legend=saccade_type_legend,
+            visible_classes=visible_classes,
             render_mode=saccade_render_mode,
             two_way=two_way_saccades,
         ):

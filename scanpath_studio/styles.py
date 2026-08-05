@@ -353,6 +353,34 @@ def get_app_css() -> str:
         width: 100%;
         justify-content: flex-start;
     }
+    /* VIZ-31 layer groups (👁️ Scanpath / 📄 Stimulus / 🔥 Overlays / 🖥️ Canvas &
+       text / 📐 Figure & axes). Streamlit gives the expander label
+       `word-break: break-word`, which in a rail this narrow snaps the header
+       mid-word ("Scanpa\nth") — the same defect the nowrap rule above prevents
+       for toggle labels. Break at spaces only, and give the label the row's
+       spare width (the chevron is a fixed-size flex sibling, so the label needs
+       `min-width: 0` to be allowed to use it). Trimmed side padding buys back
+       ~16px, which is what keeps these headers on one line at real rail widths. */
+    .st-key-scanpath_rail [data-testid="stExpander"] summary {
+        padding-left: 0.35rem;
+        padding-right: 0.35rem;
+    }
+    .st-key-scanpath_rail [data-testid="stExpander"] summary p {
+        word-break: normal;
+        overflow-wrap: normal;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    /* A group's contents are inset 16px per side by default. Nesting the layer
+       toggles one level deeper means that inset now comes out of an already
+       narrow column — enough to clip the full-width popover triggers ("⚙️
+       Fixation styl…") against the card edge. Give it back most of the width;
+       the group's own border still reads as the grouping. */
+    .st-key-scanpath_rail [data-testid="stExpanderDetails"] {
+        padding-left: 0.4rem;
+        padding-right: 0.4rem;
+        padding-top: 0.1rem;
+    }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
        Streamlit renders captions as theme-text-color at opacity 0.6, which on
@@ -447,8 +475,13 @@ def get_app_css() -> str:
        card. Wrapping at spaces (never mid-word) is the lesser evil, and is what
        keeps the AC's "no overlap or clipping" true. */
     @media (max-width: 1200px) {
+        /* The `p *` arm matters: a bolded toggle label ("**Animate**") puts the
+           text in a <strong> that Streamlit gives `overflow-wrap: anywhere`,
+           which beats what this rule sets on the parent <p> — so without it the
+           rail still broke "Anima/te" and "Com/pare" mid-word here. */
         .st-key-scanpath_rail h5,
-        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p {
+        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p,
+        .st-key-scanpath_rail [data-testid="stWidgetLabel"] p * {
             white-space: normal;
             word-break: normal;
             overflow-wrap: normal;

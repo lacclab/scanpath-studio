@@ -30,6 +30,7 @@ from .constants import (
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_LABELS,
+    SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
@@ -315,6 +316,12 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_saccade_class_color_refixation": SACCADE_CLASS_COLORS["refixation"],
     "global_saccade_class_color_return_sweep": SACCADE_CLASS_COLORS["return_sweep"],
     "global_saccade_class_color_regression": SACCADE_CLASS_COLORS["regression"],
+    # VIZ-31: the saccade *filter* — which reading classes are drawn at all. The
+    # same `measures.classify_saccades` split the colour mode above uses, applied
+    # as visibility instead of hue ("show me only the regressions"). Default is
+    # every class, which the figure builder treats as "no filter" and short-
+    # circuits, so the common case pays nothing.
+    "global_saccade_classes": list(SACCADE_CLASS_ORDER),
     # VIZ-9 "linear reading" mode: draw saccades as upward arcs (`Arc`) instead of
     # straight connectors, and/or snap each fixation above the word it lands on.
     "global_saccade_render_mode": "Straight",
@@ -571,6 +578,27 @@ def _fixation_filter_badge() -> str:
     if n_discard:
         detail += f", {n_discard} hidden"
     return f" · {detail}"
+
+
+def _saccade_filter_badge() -> str:
+    """Compact badge summarising the VIZ-31 saccade reading-class filter.
+
+    Mirrors :func:`_fixation_filter_badge` — an active filter must be visible
+    without opening the popover, or a figure missing half its saccades reads as
+    a data problem. Empty (or a full selection) means no filter, so no badge.
+    """
+    selected = st.session_state.get("global_saccade_classes")
+    if not selected:
+        return ""
+    hidden = [cls for cls in SACCADE_CLASS_ORDER if cls not in set(selected)]
+    if not hidden:
+        return ""
+    if len(hidden) == len(SACCADE_CLASS_ORDER) - 1:
+        # One class left standing — name it; "5 hidden" says much less than
+        # "regression only" when that is the whole point of the figure.
+        kept = next(c for c in SACCADE_CLASS_ORDER if c not in set(hidden))
+        return f" · {SACCADE_CLASS_LABELS[kept].lower()} only"
+    return f" · {len(hidden)} hidden"
 
 
 # Quick-view presets: one click sets the *layer* toggles to a focused subset, so
@@ -1326,11 +1354,21 @@ def _pin(key: str, default, *, rewrite: bool) -> None:
     Safe only because no viz widget passes ``value=``/``index=`` (see
     ``_seed_viz_state``); adding one would also start logging Streamlit's
     "default value but also set via Session State API" warning.
+
+    A **list** default is copied on the way in: ``_VIZ_WIDGET_DEFAULTS`` is a
+    module-level table, so seeding a multiselect (``global_saccade_classes``)
+    with the list object itself would hand session state a live alias of the
+    default, and one in-place edit anywhere would change it for the rest of the
+    process. Re-asserting an already-stored value needs no copy.
     """
     if not rewrite and key in st.session_state:
         return
+    if key in st.session_state:
+        value = st.session_state[key]
+    else:
+        value = list(default) if isinstance(default, list) else default
     try:
-        st.session_state[key] = st.session_state.get(key, default)
+        st.session_state[key] = value
     except StreamlitAPIException:
         pass
 
@@ -1824,6 +1862,18 @@ def _collect_viz_settings(
             )
             for cls_name in SACCADE_CLASS_EDITABLE
         },
+        # VIZ-31: the reading-class filter. Ordered by SACCADE_CLASS_ORDER (not by
+        # click order) so the same selection always produces the same figure key,
+        # and unknown names are dropped — a stale link must not smuggle a class
+        # the build no longer classifies into the builder. An *empty* selection
+        # reads as "no filter", not "draw nothing": hiding the layer entirely is
+        # what the Saccades toggle above the filter is for, and a cleared
+        # multiselect that blanks the figure reads as a bug.
+        saccade_classes=[
+            cls_name
+            for cls_name in SACCADE_CLASS_ORDER
+            if cls_name in set(ss.get("global_saccade_classes") or SACCADE_CLASS_ORDER)
+        ],
         # VIZ-9: linear-reading mode (arced saccades + snap fixations above words).
         saccade_render_mode=ss.get("global_saccade_render_mode") or "Straight",
         fixation_snap_to_word=bool(ss.get("global_fixation_snap_to_word")),
@@ -1902,6 +1952,7 @@ def corpus_style_controls(
     *,
     words: Optional[pd.DataFrame] = None,
     host=None,
+    canvas_renderer=None,
 ) -> Dict:
     """Focused, shared-key styling controls for Corpus Analysis (AN-29).
 
@@ -1909,6 +1960,12 @@ def corpus_style_controls(
     the single-scanpath layer controls remain in the Scanpath rail. Because these
     widgets write the same ``global_*`` keys, Share/config restore, the CLI
     palette, and headless builder parameters stay one contract.
+
+    ``canvas_renderer`` renders the canvas / text panel here too (VIZ-31). The
+    corpus figures are drawn true-to-scale from exactly those values — monitor
+    size, fonts, line spacing, background — so the view that consumes them needs
+    a way to change them; before VIZ-31 the panel lived in the always-present
+    sidebar and was reachable from here for free.
     """
     _seed_viz_state(trial_fixations, base_font_size, words, rewrite=True)
     target = host or st
@@ -1938,6 +1995,8 @@ def corpus_style_controls(
             key="global_heatmap_colorscale",
             help="Used by word matrices and stimulus heatmaps.",
         )
+    if canvas_renderer is not None:
+        canvas_renderer(target)
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
@@ -1950,16 +2009,34 @@ def sidebar_controls(
     has_stimulus_image: bool = False,
     words: Optional[pd.DataFrame] = None,
     fix_range_fixations: Optional[pd.DataFrame] = None,
+    canvas_renderer=None,
 ) -> Dict:
     """Render the visualization controls and return the resolved settings dict.
 
-    Layout (cognitive-overload-conscious):
-      1. Quick-view presets up top — one click for a focused picture.
-      2. Layer on/off toggles. The layer's detailed styling lives in a per-layer
-         popover shown only while the layer is on, so the panel stays compact
-         (it now sits in a fixed rail beside the plot, not the scrollable
-         sidebar) — fixations keep their primary "Color by" control inline.
-      3. Global axes / colour bars in a collapsed expander.
+    Layout (VIZ-31 — grouped, so the rail opens short and reads by category):
+      1. Quick-view presets + Palette at the top: the two controls that get to a
+         good figure without opening anything.
+      2. Six collapsible sections, in this order — **👁️ Fixations** and
+         **↗️ Saccades** (the two expanded by default), **📄 Stimulus** (text,
+         bounding boxes, stimulus image), **🔥 Overlays** (heatmap, raw gaze),
+         the canvas/text panel, and **📐 Figure & axes**.
+      3. Inside a section: **layer toggle → ⚙️ style → 🧹 filter**, the detail
+         popovers shown only while the layer is on. Streamlit nests neither
+         expander-in-expander nor popover-in-popover, so an expander holding
+         popovers is the only two-level shape available — which is also why
+         Fixations and Saccades are peer sections rather than sub-sections of a
+         single "Scanpath" group.
+
+    The sections are created up front (Streamlit lays containers out in creation
+    order), so each block below renders into its section without moving in this
+    file — see the "Layer groups" comment.
+
+    ``canvas_renderer`` is an optional ``callable(slot)`` rendering the canvas /
+    text panel (``app.render_sidebar_canvas_controls``) into a slot reserved
+    between the Overlays and Figure groups. VIZ-31 moved that panel out of the
+    sidebar so the figure's fonts, text colour and background sit beside the
+    other visual controls; when it is ``None`` (the wizard, the non-rendering
+    readers) nothing is drawn there and the panel keeps its own home.
 
     ``host`` is the container to render into; it defaults to ``st.sidebar`` for
     backwards compatibility, but the app passes the scanpath rail
@@ -2028,13 +2105,9 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("illustration",),
     )
-    viz.selectbox(
-        "Illustration label",
-        options=["Auto", "Show", "Hide"],
-        key="global_illustration_label",
-        help="Auto labels figures when geometry or data is transformed. Show "
-        "forces the label; Hide is an explicit publication override.",
-    )
+    # VIZ-31: the Illustration *label* (the publication-disclosure override) now
+    # lives in the "📐 Figure & axes" group below, with the other figure-level
+    # presentation settings, rather than as a third top-level row up here.
 
     # VIZ-18: these figures end up in papers — printed, sometimes in black &
     # white — and are read by colourblind viewers, so the colour defaults are a
@@ -2097,12 +2170,52 @@ def sidebar_controls(
     _static_only = dict(in_animation=False, in_compare=False)
     _no_compare = dict(in_compare=False)
 
+    # --- Layer groups (VIZ-31) --------------------------------------------
+    # The seven layers used to sit as one flat top-to-bottom run of toggles, so
+    # the rail opened as ~13 peer rows with no hint that Text / Bounding boxes /
+    # Stimulus image describe the *stimulus* while Fixations / Saccades / Raw
+    # gaze describe the *recording*. They are now named groups, plus two for how
+    # the figure is framed.
+    #
+    # The groups are created HERE, up front, because Streamlit lays containers
+    # out in **creation** order — which lets each block below keep its current
+    # position in this file while rendering into whichever group it belongs to.
+    # So the visual order is exactly the order of these six lines; the code
+    # order further down is unchanged (and irrelevant to the layout).
+    #
+    # **Section shape.** Each group is `layer toggle → ⚙️ style → 🧹 filter`, the
+    # nesting the original wireframe asked for. Streamlit nests neither
+    # expander-in-expander nor popover-in-popover, but popover-in-**expander** is
+    # allowed — so a section is an expander and its sub-sections are popovers,
+    # which is the only two-level shape the framework actually renders. That is
+    # also why Fixations and Saccades are *peer* sections rather than one
+    # "Scanpath" group holding two sub-sections: the sub-section level is spent
+    # on style/filter, where it earns more than on the layer split.
+    #
+    # Both scanpath sections open by default; the rest stay collapsed. Together
+    # they show exactly what the single expanded "Scanpath" group used to (two
+    # toggles + their popovers), so nothing that was visible became hidden, and
+    # the Quick views above still cover the common combinations without opening
+    # anything at all.
+    fix_grp = viz.expander("👁️ Fixations", expanded=True)
+    sac_grp = viz.expander("↗️ Saccades", expanded=True)
+    stim_grp = viz.expander("📄 Stimulus", expanded=False)
+    ovl_grp = viz.expander("🔥 Overlays", expanded=False)
+    # Filled by `canvas_renderer` (app.render_sidebar_canvas_controls) at the end
+    # of this function — a plain container so it holds this slot in the order
+    # while the panel itself renders later. VIZ-31 moved that panel out of the
+    # sidebar's "Experimental Setup" expander: text colour, plot background, font
+    # and line spacing are figure styling and belong beside the other visual
+    # controls, not one panel away under a data-collection heading.
+    canvas_slot = viz.container()
+    axes_grp = viz.expander("📐 Figure & axes", expanded=False)
+
     # --- Fixations --------------------------------------------------------
     # The Fixations toggle is a `make_scanpath_figure`-only layer: the animated
     # replay IS the fixation trail and the comparison builder always draws both
     # scanpaths' markers, so neither takes a `show_fixations` argument.
     fix_off_disabled, _ = _mode_gate(animating, comparing, **_static_only)
-    show_fix = viz.toggle(
+    show_fix = fix_grp.toggle(
         "**Fixations**",
         key="global_show_fix",
         disabled=fix_off_disabled,
@@ -2118,7 +2231,7 @@ def sidebar_controls(
     # …but the styling below is still (partly) live in those modes, so keep the
     # popover reachable even when the (inert) layer toggle reads off.
     if show_fix or fix_off_disabled:
-        with viz.popover("⚙️ Fixation style", width="stretch"):
+        with fix_grp.popover("⚙️ Fixation style", width="stretch"):
             # The metric that maps to fixation HUE — applies to the static
             # figure, the single animated replay AND the comparison overlay (in
             # compare it colours both scanpaths by the metric; the per-scanpath
@@ -2341,7 +2454,7 @@ def sidebar_controls(
     # trial-fact strip was rejected because this is a view setting, not trial data.
     _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
     if show_fix or fix_off_disabled:
-        with viz.popover(
+        with fix_grp.popover(
             f"🧹 Fixation filter{_fixation_filter_badge()}",
             width="stretch",
             help=_gated_help(
@@ -2356,9 +2469,9 @@ def sidebar_controls(
             _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
-    show_saccades = viz.toggle("**Saccades**", key="global_show_saccades")
+    show_saccades = sac_grp.toggle("**Saccades**", key="global_show_saccades")
     if show_saccades:
-        with viz.popover("⚙️ Saccade style", width="stretch"):
+        with sac_grp.popover("⚙️ Saccade style", width="stretch"):
             # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
             # (each arrowhead un-masks with the saccade it belongs to), so
             # direction arrows now reach all three builders.
@@ -2473,10 +2586,48 @@ def sidebar_controls(
             if comparing:
                 _render_compare_saccade_styles()
 
+    # VIZ-31: the Saccades section's *filter* sub-section, the counterpart to the
+    # fixation one above — which reading classes are drawn at all, as opposed to
+    # what colour they are drawn in. "Show only the regressions" is the figure a
+    # reading paper asks for, and until now the only way to approximate it was to
+    # colour the other four classes to match the background. Static-only for the
+    # same reason the class *colouring* is: the classification never reaches the
+    # animation or comparison builders (see CLAUDE.md's render-path table), so the
+    # picker greys out there rather than silently dropping the filter.
+    if show_saccades:
+        _cls_dis, _cls_reason = _mode_gate(animating, comparing, **_static_only)
+        with sac_grp.popover(
+            f"🧹 Saccade filter{_saccade_filter_badge()}",
+            width="stretch",
+            help=_gated_help(
+                "Draw only some reading classes — forward, skip, refixation, "
+                "return sweep, regression.",
+                _cls_reason,
+            ),
+        ):
+            st.multiselect(
+                "Show saccade types",
+                options=SACCADE_CLASS_ORDER,
+                format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
+                key="global_saccade_classes",
+                disabled=_cls_dis,
+                help=_gated_help(
+                    "Hidden classes are dropped from the figure entirely — line "
+                    "**and** direction arrow. Clearing the list means *no "
+                    "filter*, not an empty plot; to hide the whole layer use the "
+                    "**Saccades** toggle above.",
+                    _cls_reason,
+                ),
+            )
+            st.caption(
+                "Classes come from the same reading-class split as ⚙️ Saccade "
+                "style → **By type**, so the two agree on what a regression is."
+            )
+
     # --- Text -------------------------------------------------------------
-    show_labels = viz.toggle("**Text**", key="global_show_labels")
+    show_labels = stim_grp.toggle("**Text**", key="global_show_labels")
     if show_labels:
-        with viz.popover("⚙️ Text & highlight", width="stretch"):
+        with stim_grp.popover("⚙️ Text & highlight", width="stretch"):
             # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
             # choice appears only when it's on (no "None" option). The canonical
             # value stays in `global_critical_span_style` ("Mark text" |
@@ -2588,14 +2739,14 @@ def sidebar_controls(
     # Animation remains disabled because a time-varying density layer would
     # need a distinct frame contract.
     heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
-    show_heatmap = viz.toggle(
+    show_heatmap = ovl_grp.toggle(
         "**Heatmap**",
         key="global_show_heatmap",
         disabled=heat_disabled,
         help=_gated_help("Tint the reading by fixation density.", heat_reason),
     )
     if show_heatmap:
-        with viz.popover("⚙️ Heatmap style", width="stretch"):
+        with ovl_grp.popover("⚙️ Heatmap style", width="stretch"):
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
@@ -2697,7 +2848,7 @@ def sidebar_controls(
                 )
 
     # --- Bounding boxes / Stimulus image / Raw gaze -----------------------
-    viz.toggle("**Bounding boxes**", key="global_show_words")
+    stim_grp.toggle("**Bounding boxes**", key="global_show_words")
     # VIZ-4: a stimulus image can come from the dataset (MultiplEYE stamps a
     # per-trial `image_path`) OR be uploaded here for any dataset (a full-monitor
     # screenshot of the reading screen). The upload's `data:` URI is stashed in
@@ -2710,7 +2861,7 @@ def sidebar_controls(
     # VIZ-23: `background_image*` are now parameters of all three builders — the
     # comparison figure places one `layout.image` per panel in the split layouts —
     # so the whole stimulus-image group is live in every mode.
-    show_stim_image = viz.toggle(
+    show_stim_image = stim_grp.toggle(
         "**Stimulus image**",
         help="Show a stimulus page behind the scanpath — the dataset's rendered "
         "page (exact coordinates; sidesteps CJK / RTL font issues) or an image "
@@ -2727,7 +2878,7 @@ def sidebar_controls(
     # image loaded yet) — its uploader is the only way to get an image in and
     # enable the toggle in the first place.
     if show_stim_image or not can_show_image:
-        with viz.popover("⚙️ Stimulus image", width="stretch"):
+        with stim_grp.popover("⚙️ Stimulus image", width="stretch"):
             st.file_uploader(
                 "Upload a stimulus image",
                 type=["png", "jpg", "jpeg", "gif", "webp"],
@@ -2780,7 +2931,7 @@ def sidebar_controls(
             )
     # Raw gaze is a `make_scanpath_figure`-only overlay.
     raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
-    viz.toggle(
+    ovl_grp.toggle(
         "**Raw gaze data**",
         help=_gated_help(
             "Display millisecond-level gaze positions as small dots. "
@@ -2798,13 +2949,33 @@ def sidebar_controls(
         and st.session_state.get("data_source_choice") == DEMO_CHOICE
         and st.session_state.get("global_show_raw_gaze")
     ):
-        viz.caption(
+        ovl_grp.caption(
             "⚠️ The demo's raw gaze is **synthesized** from its fixations for "
             "illustration — it is not recorded eye-tracker output."
         )
 
-    # --- Axes & color bars (global plot settings, rarely changed) ---------
-    axes = viz.expander("Axes & color bars", expanded=False)
+    # --- Canvas & text ----------------------------------------------------
+    # Rendered into the slot reserved above, so it lands between Overlays and
+    # Figure & axes no matter where this call sits. The panel owns its own
+    # expander (and its own title), so there is nothing to wrap here.
+    if canvas_renderer is not None:
+        canvas_renderer(canvas_slot)
+
+    # --- Figure & axes (figure-level presentation, rarely changed) --------
+    # VIZ-31 renamed this group from "Axes & color bars": it now also carries the
+    # Illustration-label override, which used to sit as a top-level row directly
+    # under the Quick views. It is a publication-disclosure setting about how the
+    # figure is *presented*, so it belongs with the framing controls rather than
+    # in the layer run — the ✏️ Illustration quick view is still the thing that
+    # turns the mode on.
+    axes = axes_grp
+    axes.selectbox(
+        "Illustration label",
+        options=["Auto", "Show", "Hide"],
+        key="global_illustration_label",
+        help="Auto labels figures when geometry or data is transformed. Show "
+        "forces the label; Hide is an explicit publication override.",
+    )
     axes.toggle(
         "**Show full monitor**",
         key="global_fit_to_monitor",

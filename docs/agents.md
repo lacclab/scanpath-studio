@@ -314,6 +314,7 @@ fixations yourself.
 | `saccade_color_mode` | `'Uniform'` | no |
 | `saccade_class_colors` | `None` | no |
 | `saccade_type_legend` | `True` | no |
+| `saccade_classes` | `['forward', 'skip', 'refixation', 'return_sweep', 'regression', 'other']` | no |
 | `saccade_render_mode` | `'Straight'` | no |
 | `show_saccade_arrows` | `False` | yes |
 
@@ -321,7 +322,11 @@ fixations yourself.
 or `"By type"` (forward / skip / refixation / return sweep / regression, each a
 legended sub-trace, classified at render time);
 `saccade_class_colors={"regression": "#000", …}` overrides individual class
-colours. `saccade_render_mode="Arc"` draws the linear-reading schematic.
+colours. `saccade_classes` is the same split used as a **filter** rather than as
+hue — `saccade_classes=["regression"]` draws a regressions-only figure (the
+hidden classes lose their direction arrows too), and it composes with any
+colour mode; naming every class is a no-op. `saccade_render_mode="Arc"` draws
+the linear-reading schematic.
 
 ### Heatmap
 

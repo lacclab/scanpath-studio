@@ -85,6 +85,10 @@ GLOBAL_SACCADE_CLASS_COLOR_SKIP = "global_saccade_class_color_skip"
 GLOBAL_SACCADE_CLASS_COLOR_REFIXATION = "global_saccade_class_color_refixation"
 GLOBAL_SACCADE_CLASS_COLOR_RETURN_SWEEP = "global_saccade_class_color_return_sweep"
 GLOBAL_SACCADE_CLASS_COLOR_REGRESSION = "global_saccade_class_color_regression"
+# VIZ-31: the saccade reading-class *filter* (which classes are drawn at all),
+# a list of class names. Wire format because a "regressions only" figure is
+# exactly the kind of view a link or a saved config exists to reproduce.
+GLOBAL_SACCADE_CLASSES = "global_saccade_classes"
 GLOBAL_ORDER_FONT_COLOR = "global_order_font_color"
 GLOBAL_TEXT_COLOR = "global_text_color"
 GLOBAL_HIGHLIGHT_TEXT_COLOR = "global_highlight_text_color"
@@ -242,6 +246,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "saccade_color_refixation": GLOBAL_SACCADE_CLASS_COLOR_REFIXATION,
         "saccade_color_return_sweep": GLOBAL_SACCADE_CLASS_COLOR_RETURN_SWEEP,
         "saccade_color_regression": GLOBAL_SACCADE_CLASS_COLOR_REGRESSION,
+        "saccade_classes": GLOBAL_SACCADE_CLASSES,
         "order_font_color": GLOBAL_ORDER_FONT_COLOR,
         "text_color": GLOBAL_TEXT_COLOR,
         "highlight_text_color": GLOBAL_HIGHLIGHT_TEXT_COLOR,
@@ -450,6 +455,7 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SACCADE_CLASS_COLOR_REFIXATION,
         GLOBAL_SACCADE_CLASS_COLOR_RETURN_SWEEP,
         GLOBAL_SACCADE_CLASS_COLOR_REGRESSION,
+        GLOBAL_SACCADE_CLASSES,
         GLOBAL_FIXATION_SNAP_TO_WORD,
         GLOBAL_ALIGN_ALGORITHM,
         GLOBAL_ALIGN_CONNECTORS,

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 92,
+  "revision": 94,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -95,9 +95,9 @@
     "ENG-19": {
       "status": "Closed",
       "priority": "Normal",
-      "implementationBrief": "It is a gatekeeper refusal, address best as can without signing the app etc.",
+      "implementationBrief": "",
       "archived": true,
-      "updated": "2026-08-04"
+      "updated": "2026-08-05"
     },
     "ENG-20": {
       "status": "On hold",
@@ -147,6 +147,13 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-04"
+    },
+    "ENG-30": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-05"
     },
     "EXP-3": {
       "status": "Closed",

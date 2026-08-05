@@ -47,6 +47,7 @@ from .constants import (
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     HIGHLIGHTED_TEXT_COLOR,
+    SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     UNIFORM_COLOR_FIELD,
     WORD_LABEL_COLOR,
@@ -567,6 +568,12 @@ def _plot_config_dict(
             "fixation_color": settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
             "fixation_symbol": settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
             "saccade_color_mode": settings.get("saccade_color_mode", "Uniform"),
+            # VIZ-31: which reading classes the exported figures actually drew —
+            # a regressions-only batch has to say so, or the files look like a
+            # dataset with almost no saccades in it.
+            "saccade_classes": list(
+                settings.get("saccade_classes") or SACCADE_CLASS_ORDER
+            ),
             # EXP-4 / VIZ-24: which PRE-3 drift correction produced the exported
             # figure ("Off" = none). The exported tables stay uncorrected — the
             # manifest is where that split is recorded. Same keys as the 💾 Save
@@ -1188,6 +1195,10 @@ def bulk_export(
                         ),
                         saccade_class_colors=settings.get("saccade_class_colors"),
                         saccade_type_legend=settings.get("saccade_type_legend", True),
+                        # VIZ-31: the reading-class filter. A batch launched from
+                        # a regressions-only view must export regressions-only
+                        # figures, not the full scanpath.
+                        saccade_classes=settings.get("saccade_classes"),
                         saccade_render_mode=settings.get(
                             "saccade_render_mode", "Straight"
                         ),

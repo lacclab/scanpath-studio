@@ -189,3 +189,56 @@ def test_no_wire_format_widget_passes_a_default():
         "now passes an explicit default; seed it with st.session_state.setdefault "
         f"instead so a restored value wins: {offenders}"
     )
+
+
+def test_canvas_settings_survive_a_corpus_analysis_round_trip():
+    """VIZ-31: the canvas panel renders only in the Scanpath rail — it must not
+    lose its settings on a view that doesn't render it.
+
+    Streamlit drops a widget's key from session state at the end of any run in
+    which the widget did not render. Once VIZ-31 moved the monitor / typography /
+    background panel out of the always-present sidebar and into the Scanpath
+    rail, a single trip through **Corpus Analysis** pruned all fourteen of its
+    keys — and because `app.seed_canvas_state` seeded them with ``setdefault``,
+    the *next* Corpus run wrote the factory default over the user's settings and
+    kept it (canvas 1234 → 700, font 33 → 16, text colour → #343a40), including
+    six keys that are share-link / saved-config wire format. The seeder now uses
+    ``controls._pin(rewrite=True)`` instead, which re-asserts the stored value on
+    every run and so keeps the keys alive across a view that never renders them.
+
+    Two Corpus runs matter: the first is the one that prunes, the second is the
+    one that would re-seed a default over the gap.
+    """
+    at = AppTest.from_file("streamlit_app.py", default_timeout=120)
+    at.session_state["data_source_choice"] = "Synthetic test trial"
+    at.run()
+
+    edits = {
+        "global_canvas_width": 1234,
+        "global_canvas_height": 999,
+        "global_base_font_size": 33,
+        "global_line_spacing": 2.5,
+        "global_text_color": "#ff0000",
+        "global_font_family": "Courier New",
+        "global_monitor_width_mm": 500.0,
+        "global_viewing_distance_mm": 650.0,
+    }
+    for key, value in edits.items():
+        at.session_state[key] = value
+    at.run()
+    assert not at.exception
+
+    at.session_state["main_nav"] = "Corpus Analysis"
+    at.run()
+    at.run()
+    at.session_state["main_nav"] = "Scanpath"
+    at.run()
+    assert not at.exception
+
+    survived = {key: at.session_state[key] for key in edits}
+    assert survived == edits, (
+        "a canvas / typography setting was reset by a trip through Corpus "
+        "Analysis — app.seed_canvas_state must _pin(rewrite=True) these keys, "
+        "not setdefault them, because only the Scanpath rail renders their "
+        f"widgets: {survived}"
+    )

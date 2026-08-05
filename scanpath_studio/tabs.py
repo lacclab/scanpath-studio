@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import json
 import os
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -61,6 +61,7 @@ from scanpath_studio.constants import (
     DEFAULT_SACCADE_WIDTH,
     DEMO_CHOICE,
     HIGHLIGHTED_TEXT_COLOR,
+    SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     WORD_LABEL_COLOR,
@@ -611,6 +612,8 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         saccade_color_mode=viz_settings.get("saccade_color_mode", "Uniform"),
         saccade_class_colors=viz_settings.get("saccade_class_colors"),
         saccade_type_legend=viz_settings.get("saccade_type_legend", True),
+        # VIZ-31: the reading-class filter (None / a full list = draw them all).
+        saccade_classes=viz_settings.get("saccade_classes"),
         saccade_render_mode=viz_settings.get("saccade_render_mode", "Straight"),
         fixation_snap_to_word=viz_settings.get("fixation_snap_to_word", False),
         hollow_fixations=viz_settings.get("hollow_fixations", False),
@@ -1549,6 +1552,10 @@ def _build_studio_config(
             "saccade_class_colors": dict(
                 viz_settings.get("saccade_class_colors") or {}
             ),
+            # VIZ-31: the reading-class filter (which classes are drawn at all).
+            "saccade_classes": list(
+                viz_settings.get("saccade_classes") or SACCADE_CLASS_ORDER
+            ),
             # VIZ-9: linear-reading mode (arced saccades + snap fixations).
             "saccade_render_mode": viz_settings.get("saccade_render_mode", "Straight"),
             "fixation_snap_to_word": bool(
@@ -2347,6 +2354,7 @@ def render_single_trial_tab(
     words_all: Optional[pd.DataFrame] = None,
     fixations_all: Optional[pd.DataFrame] = None,
     share_renderer: Optional[Callable[[], None]] = None,
+    canvas_renderer: Optional[Callable[[Any], None]] = None,
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
@@ -2655,6 +2663,11 @@ def render_single_trial_tab(
             # The selected trial's fixations size the VIZ-7 fixation-index window
             # slider (its max is this trial's fixation count).
             fix_range_fixations=trial_fixations,
+            # VIZ-31: the canvas / text panel (monitor geometry, fonts, text
+            # colour, background) renders inside the rail's group order rather
+            # than in the sidebar. `app.main` passes it in already bound to the
+            # frames + data source, since those are app-side concerns.
+            canvas_renderer=canvas_renderer,
         )
 
     # Second-trial selector + layout/legend options, rendered above the chips in
@@ -3714,6 +3727,7 @@ def render_corpus_analysis_tab(
     viz_settings: dict,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
+    canvas_renderer: Optional[Callable[[Any], None]] = None,
 ) -> None:
     """Corpus Analysis tab — question-oriented analysis sections.
 
@@ -3729,6 +3743,10 @@ def render_corpus_analysis_tab(
         base_font_size,
         words=words_filtered,
         host=st,
+        # VIZ-31: this view renders true-to-scale stimulus figures from the
+        # canvas / typography settings, so it hosts that panel too — the rail
+        # (its other home) doesn't exist here.
+        canvas_renderer=canvas_renderer,
     )
     common = dict(
         canvas_width=canvas_width,

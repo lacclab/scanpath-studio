@@ -32,6 +32,7 @@ from .constants import (
     PALETTES,
     SACCADE_CLASS_COLORS,
     SACCADE_CLASS_EDITABLE,
+    SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
@@ -367,6 +368,15 @@ def _render_parser() -> argparse.ArgumentParser:
         help="With --saccade-color-by-type: hide the saccade-type colour key on "
         "the figure (the coloured lines still draw). Legend shows by default "
         "(VIZ-8).",
+    )
+    viz.add_argument(
+        "--saccade-classes",
+        dest="saccade_classes",
+        metavar="CLASSES",
+        help="VIZ-31: draw only these reading classes, comma-separated, e.g. "
+        "--saccade-classes regression,return_sweep (classes: forward, skip, "
+        "refixation, return_sweep, regression, other). Hidden classes lose "
+        "their line and their direction arrow. Default: all.",
     )
     viz.add_argument(
         "--saccade-arcs",
@@ -938,6 +948,21 @@ def render(argv: List[str]) -> None:
                 )
             class_colors[cls_name] = color.strip()
         overrides["saccade_class_colors"] = class_colors
+    # VIZ-31: the reading-class filter. Independent of the colour mode above —
+    # "only the regressions, in one colour" is as valid as "all of them, coloured
+    # by type" — so it is its own flag rather than a mode.
+    if args.saccade_classes:
+        names = [p.strip() for p in args.saccade_classes.split(",") if p.strip()]
+        unknown = [n for n in names if n not in SACCADE_CLASS_ORDER]
+        if unknown or not names:
+            raise SystemExit(
+                f"--saccade-classes expects a comma-separated subset of "
+                f"{', '.join(SACCADE_CLASS_ORDER)}; got "
+                f"{args.saccade_classes!r}."
+            )
+        overrides["saccade_classes"] = [
+            cls for cls in SACCADE_CLASS_ORDER if cls in set(names)
+        ]
     # VIZ-9: linear-reading mode.
     if args.saccade_arcs:
         overrides["saccade_render_mode"] = "Arc"
@@ -1013,6 +1038,7 @@ def render(argv: List[str]) -> None:
                     "marker_size_range",
                     "saccade_color_mode",
                     "saccade_class_colors",
+                    "saccade_classes",
                     "saccade_render_mode",
                     "fixation_snap_to_word",
                 )

@@ -36,6 +36,7 @@ from .constants import (
     ONESTOP_VARIANT_LABELS,
     PALETTES,
     SACCADE_CLASS_EDITABLE,
+    SACCADE_CLASS_ORDER,
     SACCADE_COLOR_MODES,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
@@ -79,6 +80,22 @@ def _parse_float_range(v) -> tuple:
 def _parse_field_list(v) -> list[str]:
     """Comma-separated hover fields carried by a Share link (VIZ-26)."""
     return [part.strip() for part in str(v).split(",") if part.strip()]
+
+
+def _parse_saccade_classes(v) -> list[str]:
+    """VIZ-31 saccade reading-class filter carried by a Share link.
+
+    Comma-separated class names (``regression,return_sweep``). An unknown name
+    raises, so a link written against a build with different classes surfaces the
+    reader's "Ignored bad URL param" warning instead of quietly showing a figure
+    with the wrong saccades in it. The result is ordered by
+    ``SACCADE_CLASS_ORDER`` to match what the multiselect writes.
+    """
+    names = [part.strip() for part in str(v).split(",") if part.strip()]
+    unknown = [n for n in names if n not in SACCADE_CLASS_ORDER]
+    if unknown:
+        raise ValueError(f"unknown saccade class: {', '.join(unknown)}")
+    return [cls for cls in SACCADE_CLASS_ORDER if cls in set(names)]
 
 
 def _parse_align_algorithm(v) -> str:
@@ -211,6 +228,10 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "saccade_color_refixation": "global_saccade_class_color_refixation",
     "saccade_color_return_sweep": "global_saccade_class_color_return_sweep",
     "saccade_color_regression": "global_saccade_class_color_regression",
+    # VIZ-31: the reading-class *filter* (which classes are drawn at all), as a
+    # comma-separated list — the generic writer below already joins a list value,
+    # and `_URL_PRESETS` overrides the read side with a validating parser.
+    "saccade_classes": "global_saccade_classes",
     "order_font_color": "global_order_font_color",
     "text_color": "global_text_color",
     "highlight_text_color": "global_highlight_text_color",
@@ -267,6 +288,11 @@ _URL_PRESETS = {
     "align_algorithm": ("global_align_algorithm", _parse_align_algorithm),
     "word_hover_fields": ("global_word_hover_fields", _parse_field_list),
     "fixation_hover_fields": ("global_fixation_hover_fields", _parse_field_list),
+    # VIZ-31 saccade reading-class filter — validated like `align_algorithm`
+    # above, and for the same reason: the multiselect raises on a value outside
+    # its options, so an unknown class name has to be rejected here rather than
+    # wedging the rail.
+    "saccade_classes": ("global_saccade_classes", _parse_saccade_classes),
 }
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
@@ -953,6 +979,15 @@ def _restore_plot_config(
             col = class_colors.get(cls_name)
             if isinstance(col, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", col):
                 put(f"global_saccade_class_color_{cls_name}", col)
+    # VIZ-31: the reading-class filter. Unknown names are dropped rather than
+    # rejecting the whole config — a class this build no longer classifies would
+    # crash the multiselect, and silently widening the filter is the safe way to
+    # be wrong (it shows more saccades, never fewer than the file asked for).
+    saccade_classes = coloring.get("saccade_classes")
+    if isinstance(saccade_classes, list):
+        kept = [cls for cls in SACCADE_CLASS_ORDER if cls in set(saccade_classes)]
+        if kept:
+            put("global_saccade_classes", kept)
     # VIZ-15 marker shape · VIZ-17 uniform fixation colour.
     symbol = coloring.get("fixation_symbol")
     if symbol is not None:

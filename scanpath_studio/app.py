@@ -2036,26 +2036,25 @@ def render_sidebar_data_source() -> str:
     return choice
 
 
-def render_sidebar_canvas_controls(
+def seed_canvas_state(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
     data_choice: Optional[str] = None,
-    slot=None,
-    expanded: bool = False,
-    title: str = "Experimental Setup",
 ) -> Tuple[int, int, int, str, float, bool]:
-    """Render canvas dimension and font controls in sidebar.
+    """Resolve the canvas / typography settings without rendering any widget.
 
-    These controls allow users to match the visualization to their experimental
-    display setup, ensuring spatial accuracy and proper word box alignment.
+    Split out of `render_sidebar_canvas_controls` by **VIZ-31**, which moved that
+    panel from the sidebar into the Scanpath rail. The rail renders inside
+    `tabs.render_single_trial_tab`, i.e. *after* `main` has to know the canvas
+    size and font in order to build `viz_settings` and dispatch a view — and the
+    Corpus view has no rail at all. This function does every session-state write
+    the panel used to do on its way past (source-driven monitor/font snapping and
+    the default seeding), then reads the resolved values back out, so both
+    callers agree and neither has to render to learn them.
 
-    Args:
-        words_filtered: Filtered words dataframe (used to compute default dimensions)
-        fixations_filtered: Filtered fixations dataframe (used for coordinate ranges)
-        data_choice: Currently selected data source. When it's the OneStop server
-            bundle or the bundled demo (a OneStop subset), defaults to the
-            OneStop monitor resolution (2560x1440, Dell U2715H — OneStopL1 paper
-            §Monitor). Otherwise defaults are derived from data extents.
+    The seeding uses `controls._pin(rewrite=True)`, never `setdefault` — see the
+    comment on that block. It is what keeps these keys alive on a view that does
+    not render their widgets, which is now every view except Scanpath.
 
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
@@ -2114,8 +2113,7 @@ def render_sidebar_canvas_controls(
         st.session_state["global_canvas_width"] = canvas_width
         st.session_state["global_canvas_height"] = canvas_height
         st.session_state["_canvas_seeded_for"] = source_key
-    st.session_state.setdefault("global_canvas_width", canvas_width)
-    st.session_state.setdefault("global_canvas_height", canvas_height)
+    # The canvas pair itself is pinned with the rest of the defaults below.
 
     # Authoritative reading font: MultiplEYE stamps the stimulus FONT_SIZE + family
     # from its config onto the words. Snap the font controls to it when the source
@@ -2132,11 +2130,123 @@ def render_sidebar_canvas_controls(
         st.session_state["global_scale_text_to_boxes"] = False
         st.session_state["_font_seeded_for"] = source_key
 
-    # The display-setup panel (``title``, default "Experimental Setup") lives
-    # under the 📂 Data group (DATA-9), rendered into a slot reserved there by
-    # `main`; falls back to the sidebar when unset. The setup wizard renders the
-    # very same controls inline under its own numbered heading (Group A), passing
-    # a more specific title so it doesn't echo that heading.
+    # The remaining widget defaults. Each of these used to be `setdefault`ed
+    # inline, immediately above its own widget; seeding them here is what lets a
+    # caller resolve the settings without rendering the panel.
+    #
+    # `_pin(rewrite=True)`, NOT `setdefault` — and for a second reason on top of
+    # BUG-15's. Since VIZ-31 these widgets render only in the Scanpath rail, and
+    # Streamlit drops a widget's key from session state at the end of any run in
+    # which that widget did not render. So one trip through **Corpus Analysis**
+    # (no rail) would prune all fourteen; `setdefault` cannot notice, because the
+    # key is still there while the run is in progress and only vanishes at the
+    # end of it — the next Corpus run then "seeds" the *default* over the user's
+    # canvas, font, text colour and background, permanently. Re-asserting the
+    # stored value each run keeps them alive on a view that never renders them.
+    # This is what `controls._seed_viz_state(rewrite=True)` already does for the
+    # layer settings, which is why those survived the same trip and these didn't.
+    ss = st.session_state
+    bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
+    if ss.get("global_bg_choice") not in bg_options:
+        ss.pop("global_bg_choice", None)
+    # One table drives both the pin and the read-back. `_pin` swallows the
+    # StreamlitAPIException raised when a key's widget was already built earlier
+    # in the run, so a pinned key is *not* guaranteed to land — every read below
+    # therefore goes through `_resolved`, never `ss[...]`, or a swallowed write
+    # would surface as a KeyError that takes the whole app down.
+    defaults = {
+        "global_canvas_width": canvas_width,
+        "global_canvas_height": canvas_height,
+        "global_monitor_width_mm": 597.0,
+        "global_viewing_distance_mm": 800.0,
+        "global_scale_text_to_boxes": True,
+        "global_line_spacing": float(DEFAULT_LINE_SPACING),
+        "global_base_font_size": 16,
+        "global_stimulus_font_pt": 12.0,
+        "global_use_stimulus_font_pt": False,
+        "global_font_family": FONT_FAMILY,
+        "global_text_color": WORD_LABEL_COLOR,
+        "global_bg_choice": bg_options[0],
+        # Pinned here as well as in the render path: its picker exists only while
+        # the choice is "Custom…", so it is the one key with no other keeper —
+        # without this a custom background is lost the first time the user opens
+        # Corpus Analysis and the choice silently falls back to a preset.
+        "global_bg_custom": DEFAULT_BACKGROUND_COLOR,
+    }
+
+    def _resolved(key):
+        return ss.get(key, defaults[key])
+
+    for key, default in defaults.items():
+        _pin(key, default, rewrite=True)
+    # Derived from the two above it, so it is pinned after them.
+    _pin(
+        "global_display_dpi",
+        round(
+            float(_resolved("global_canvas_width"))
+            / (float(_resolved("global_monitor_width_mm")) / 25.4),
+            2,
+        ),
+        rewrite=True,
+    )
+    # Point-specified stimulus typography converts to px through the DPI above.
+    # The rendering path recomputes this from its own widget values (which is
+    # what makes an edit apply the same run); this keeps the non-rendering
+    # callers on the same number.
+    if not _resolved("global_scale_text_to_boxes") and _resolved(
+        "global_use_stimulus_font_pt"
+    ):
+        ss["global_base_font_size"] = int(
+            min(
+                max(
+                    round(
+                        font_pt_to_px(
+                            float(_resolved("global_stimulus_font_pt")),
+                            float(ss.get("global_display_dpi", 96.0)),
+                        )
+                    ),
+                    6,
+                ),
+                72,
+            )
+        )
+    return (
+        int(_resolved("global_canvas_width")),
+        int(_resolved("global_canvas_height")),
+        int(_resolved("global_base_font_size")),
+        str(_resolved("global_font_family")),
+        float(_resolved("global_line_spacing")),
+        bool(_resolved("global_scale_text_to_boxes")),
+    )
+
+
+def render_sidebar_canvas_controls(
+    words_filtered: pd.DataFrame,
+    fixations_filtered: pd.DataFrame,
+    data_choice: Optional[str] = None,
+    slot=None,
+    expanded: bool = False,
+    title: str = "Experimental Setup",
+) -> Tuple[int, int, int, str, float, bool]:
+    """Render the canvas-geometry, typography and background panel.
+
+    These controls let the user match the visualization to the experimental
+    display, which is what keeps coordinates and word boxes spatially accurate.
+
+    The panel renders into ``slot`` as its own collapsible expander. **VIZ-31**
+    moved its main home from the sidebar's 📂 Data group into the Scanpath rail
+    (`controls.sidebar_controls(canvas_renderer=…)`), so the figure's fonts, text
+    colour and background sit with the other visual controls; the setup wizard
+    still renders the same panel inline under its own heading with a more
+    specific ``title``. `seed_canvas_state` does the state work and is called
+    first here, so rendering and not-rendering resolve identically.
+
+    Returns:
+        Tuple of (canvas_width, canvas_height, base_font_size, font_family,
+        line_spacing, scale_text_to_boxes).
+    """
+    seed_canvas_state(words_filtered, fixations_filtered, data_choice)
+    _, font_css = _dataset_font(words_filtered)
     display = (slot if slot is not None else st.sidebar).expander(
         title, expanded=expanded
     )
@@ -2159,7 +2269,6 @@ def render_sidebar_canvas_controls(
     # DATA-2: physical setup values live beside the pixel canvas they explain.
     # They are persisted with the plot config and immediately yield a px/degree
     # scale for downstream saccade/reporting work.
-    st.session_state.setdefault("global_monitor_width_mm", 597.0)
     monitor_width_mm = display.number_input(
         "Monitor physical width (mm)",
         min_value=100.0,
@@ -2168,7 +2277,6 @@ def render_sidebar_canvas_controls(
         key="global_monitor_width_mm",
         help="Width of the visible display area, not the diagonal size.",
     )
-    st.session_state.setdefault("global_viewing_distance_mm", 800.0)
     viewing_distance_mm = display.number_input(
         "Viewing distance (mm)",
         min_value=100.0,
@@ -2178,7 +2286,6 @@ def render_sidebar_canvas_controls(
         help="Eye-to-screen distance during the experiment.",
     )
     derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
-    st.session_state.setdefault("global_display_dpi", round(derived_dpi, 2))
     display_dpi = display.number_input(
         "Display DPI",
         min_value=20.0,
@@ -2199,7 +2306,6 @@ def render_sidebar_canvas_controls(
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
     # Keyed (+ seeded) so the Save & restore panel can capture/reapply them.
-    st.session_state.setdefault("global_scale_text_to_boxes", True)
     scale_text_to_boxes = display.checkbox(
         "Scale text to boxes",
         key="global_scale_text_to_boxes",
@@ -2207,7 +2313,6 @@ def render_sidebar_canvas_controls(
         "line spacing) so it stays true to the real experiment at any zoom. "
         "Untick to use the fixed 'Figure font size' below instead.",
     )
-    st.session_state.setdefault("global_line_spacing", float(DEFAULT_LINE_SPACING))
     line_spacing = display.number_input(
         "Line spacing",
         min_value=1.0,
@@ -2218,9 +2323,6 @@ def render_sidebar_canvas_controls(
         help="Line slots per line of text. OneStop rendered one blank line above "
         "and one below each text line, so the box spans 3 line heights → 3.",
     )
-    st.session_state.setdefault("global_base_font_size", 16)
-    st.session_state.setdefault("global_stimulus_font_pt", 12.0)
-    st.session_state.setdefault("global_use_stimulus_font_pt", False)
     use_stimulus_font_pt = display.checkbox(
         "Use stimulus font size in points",
         key="global_use_stimulus_font_pt",
@@ -2260,7 +2362,6 @@ def render_sidebar_canvas_controls(
         "Prefer **Scale text to boxes** when the data ships word boxes — it sizes "
         "the text from the real geometry and sidesteps the conversion."
     )
-    st.session_state.setdefault("global_font_family", FONT_FAMILY)
     display.button(
         "Use multilingual font stack",
         on_click=lambda: st.session_state.update(
@@ -2303,7 +2404,6 @@ def render_sidebar_canvas_controls(
 
     # Base reading-text colour (highlighted-text colour lives in Visualization
     # controls). Read back into viz_settings by controls.sidebar_controls.
-    st.session_state.setdefault("global_text_color", WORD_LABEL_COLOR)
     display.color_picker(
         "Text color",
         key="global_text_color",
@@ -2313,9 +2413,6 @@ def render_sidebar_canvas_controls(
     # Plot background lives here (Experimental Setup) rather than under
     # Visualization; sidebar_controls reads the chosen value from session state.
     bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    if st.session_state.get("global_bg_choice") not in bg_options:
-        st.session_state.pop("global_bg_choice", None)
-    st.session_state.setdefault("global_bg_choice", bg_options[0])
     display.selectbox(
         "Plot background",
         options=bg_options,
@@ -2629,12 +2726,15 @@ def main() -> None:
     #     Description      (public-dataset caption / home link)
     #     Options          (source-specific: OneStop regime + parts + variant, …)
     #     Data location    (path input + Expected files + found/download status)
-    #     Experimental Setup
     #     Column mapping
     # A neutral "Configure" header replaces the old "<name> options" (the source
     # name is already shown in the picker above). The slot is a plain container so
-    # the Experimental Setup / Column mapping panels keep their own expanders
-    # (container → expander is fine; only expander-in-expander is not).
+    # the Column mapping panel keeps its own expander (container → expander is
+    # fine; only expander-in-expander is not).
+    #
+    # VIZ-31 removed the "Experimental Setup" slot from this group: monitor
+    # geometry, fonts, text colour and plot background are figure settings, and
+    # they now render in the Scanpath rail beside the layers they restyle.
     dataset_options_slot = st.sidebar.container()
     # The Upload wizard owns the page (and its own mapping) — no config group.
     if data_choice != UPLOAD_CHOICE:
@@ -2642,7 +2742,6 @@ def main() -> None:
     description_slot = dataset_options_slot.container()
     source_options_slot = dataset_options_slot.container()
     data_location_slot = dataset_options_slot.container()
-    experimental_setup_slot = dataset_options_slot.container()
     column_mapping_slot = dataset_options_slot.container()
 
     # Load + map core data. The **Upload** source renders each table as an
@@ -2949,8 +3048,13 @@ def main() -> None:
     raw_gaze_only = words_filtered.empty and fixations_filtered.empty
     if raw_gaze_only and "global_show_raw_gaze" not in st.session_state:
         st.session_state["global_show_raw_gaze"] = True
-    # "Experimental Setup" (monitor/font/text-scaling) renders into its reserved
-    # slot under the 📂 Data group (DATA-9), not under 🎨 Visualization.
+    # VIZ-31: the monitor/font/background panel moved out of the sidebar into the
+    # Scanpath rail, so it is *resolved* here (no widgets) and *rendered* later,
+    # inside the rail, via the `canvas_renderer` below. Resolving first is what
+    # keeps the Corpus view — which has no rail — on the same canvas + typography.
+    canvas_geometry_frame = (
+        fixations_filtered if not fixations_filtered.empty else raw_gaze_filtered
+    )
     (
         canvas_width,
         canvas_height,
@@ -2958,12 +3062,18 @@ def main() -> None:
         font_family,
         line_spacing,
         scale_text_to_boxes,
-    ) = render_sidebar_canvas_controls(
-        words_filtered,
-        fixations_filtered if not fixations_filtered.empty else raw_gaze_filtered,
-        data_choice,
-        slot=experimental_setup_slot,
-    )
+    ) = seed_canvas_state(words_filtered, canvas_geometry_frame, data_choice)
+
+    def canvas_renderer(slot) -> None:
+        """Render the canvas/text panel into the Scanpath rail's reserved slot."""
+        render_sidebar_canvas_controls(
+            words_filtered,
+            canvas_geometry_frame,
+            data_choice,
+            slot=slot,
+            title="🖥️ Canvas & text",
+        )
+
     # The visualization controls moved out of the sidebar into the Scanpath
     # screen's right-hand rail (tabs.render_single_trial_tab renders them via
     # controls.sidebar_controls with host=rail). The other views — and the Save &
@@ -3018,6 +3128,7 @@ def main() -> None:
             viz_settings=viz_settings,
             line_spacing=line_spacing,
             scale_text_to_boxes=scale_text_to_boxes,
+            canvas_renderer=canvas_renderer,
         )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
@@ -3040,6 +3151,7 @@ def main() -> None:
             words_all=words_all,
             fixations_all=fixations_all,
             share_renderer=lambda: _render_share_body(data_choice),
+            canvas_renderer=canvas_renderer,
         )
 
     # Re-resolve viz settings from session_state AFTER the dispatch so the Save &

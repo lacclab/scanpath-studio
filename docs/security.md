@@ -17,6 +17,19 @@ too. Nothing here is inferred from documentation alone.
   cache-key fingerprint and the log-handler installer against the bundled sample.
   Dependency claims were checked against the installed source, never the docs.
 
+!!! note "Amended after the audit — the on-device recovery cache (ENG-26)"
+    Version 0.27.0 added `persistence.py`: on a **localhost or desktop** run, the
+    app writes completed uploaded datasets to
+    `~/.cache/scanpath-studio/session-v1` as Parquet, plus a JSON manifest with
+    mappings, view settings and annotations, and restores them on the next
+    session. That post-dates the audit below, so every "no on-disk residue of
+    loaded data" claim on this page holds only for a hosted deployment (where
+    `persistence.persistence_enabled` returns False) or with
+    `SCANPATH_STUDIO_PERSIST=0`. The store is single-user, unencrypted and
+    account-readable; it is disclosed and deletable in-app (sidebar → **🗄️
+    Recovery cache**) and from `scanpath-studio cache --clear`, and it is
+    described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
+
 !!! warning "Scanpath Studio has no authentication, on any deployment"
     There is no login, no session token, and no per-user authorization anywhere
     in the codebase. Every access-control decision is made by whatever binds the
@@ -26,7 +39,7 @@ too. Nothing here is inferred from documentation alone.
 
 | Dimension | Verdict |
 | --- | --- |
-| On-disk residue from loaded data | Clean, with one narrow exception (S8) |
+| On-disk residue from loaded data | Clean, with one narrow exception (S8), **and the recovery cache added after this audit** — see the note below |
 | `@st.cache_data` persistence to disk | **Clean** — no `persist="disk"` anywhere |
 | Share links / saved configs carrying identifiers | Participant + trial ids ride in the URL, and the saved config also carries your notes (S3 — the link's ids are now opt-out-able; the saved config is not) |
 | Share links / saved configs carrying local file paths | **Clean** — no path in either |
@@ -680,15 +693,25 @@ was closed by arguing the impact away.
 Stated explicitly, because "we found nothing" is only useful if you know what was
 looked for.
 
-**No disk persistence of loaded data.** There is no `persist="disk"` on any
-`@st.cache_data` in the package, so Streamlit's `LocalDiskCacheStorage` is never
-engaged and `~/.streamlit/cache` is never created. Uploads go to Streamlit's
-`MemoryUploadedFileManager` (RAM, dropped by `remove_session_files` when the
-session ends). Wizard-finished datasets live in `st.session_state["_datasets"]`
-(`wizard._finalize_wizard_dataset`) — session memory, no on-disk store.
-Annotations live in session state. The only disk writes in the whole package are
-the corpus downloads in `datasets.py`, the CLI/headless `api.save_figure*`, and
-the MP4 temp file of S8.
+**No disk persistence of loaded data — on a hosted deployment.** There is no
+`persist="disk"` on any `@st.cache_data` in the package, so Streamlit's
+`LocalDiskCacheStorage` is never engaged and `~/.streamlit/cache` is never
+created. Uploads go to Streamlit's `MemoryUploadedFileManager` (RAM, dropped by
+`remove_session_files` when the session ends). Wizard-finished datasets live in
+`st.session_state["_datasets"]` (`wizard._finalize_wizard_dataset`), and
+annotations in session state.
+
+Since 0.27.0 that is the whole story only where `persistence.persistence_enabled`
+returns False — a hosted deployment, or any run with
+`SCANPATH_STUDIO_PERSIST=0`. On **localhost or the desktop app** the opposite is
+true by design: `persistence.save_state` writes those same session datasets to
+`~/.cache/scanpath-studio/session-v1` (Parquet frames + `manifest.json`) at the
+end of every run whose state changed, and `restore_state` reads them back on the
+next session. So the disk writes in the package are the corpus downloads in
+`datasets.py`, the CLI/headless `api.save_figure*`, the MP4 temp file of S8,
+and — locally — the recovery cache. It is written with `os.replace` over a
+sibling temp file (no partial reads), holds no credentials, and is removable
+from the app's **🗄️ Recovery cache** panel or `scanpath-studio cache --clear`.
 
 **No zip-slip on ingest.** An uploaded archive is never extracted.
 `data._read_zipped_table` reads each member into an `io.BytesIO` and hands it to

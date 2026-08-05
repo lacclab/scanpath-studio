@@ -489,3 +489,71 @@ class TestBulkExportFlow:
         }
         assert exported == {"l7_1090", "l37_1129"}
         assert len(names_all) == 1 + 2 * DEMO_TRIALS_IN_PICKER
+
+
+@pytest.mark.timeout(180)
+class TestRecoveryCachePanelFlow:
+    """ENG-30 — the sidebar 🗄️ Recovery cache panel is the on-device cache's
+    only user-visible surface, so it has to report the real store and its two
+    controls have to reach ``persistence`` (pause saving, forget what's saved).
+    """
+
+    @staticmethod
+    def _boot_local(tmp_path, monkeypatch) -> AppTest:
+        """Boot with persistence forced on and pointed at a throwaway folder.
+
+        ``st.context.url`` is empty under AppTest, so the loopback check would
+        otherwise report a hosted deployment; the env override is the supported
+        way in. ``SCANPATH_STUDIO_STATE_DIR`` keeps the test off the real
+        ``~/.cache`` folder.
+        """
+        monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+        monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+        return _boot(synthetic=True)
+
+    def test_panel_reports_the_store_and_its_controls_drive_persistence(
+        self, tmp_path, monkeypatch
+    ):
+        from scanpath_studio import persistence
+
+        at = self._boot_local(tmp_path, monkeypatch)
+        _clean(at, "cache panel:")
+
+        # Working in the app writes the cache — the panel's own claim.
+        manifest = tmp_path / "manifest.json"
+        assert manifest.is_file()
+        assert persistence.cache_status(tmp_path)["settings"] > 0
+
+        toggles = [t for t in at.toggle if t.key == "persist_local_saving"]
+        assert toggles, "the saving toggle is missing from the panel"
+        assert toggles[0].value is True
+
+        # Off → the pause flag is set and the next run writes nothing new.
+        written = manifest.stat().st_mtime_ns
+        at = toggles[0].set_value(False).run(timeout=60)
+        _clean(at, "after pausing:")
+        # AppTest's session-state proxy has no .get, so read the flag directly.
+        assert at.session_state["_local_persistence_paused"] is True
+        at.session_state["global_show_heatmap"] = not bool(
+            at.session_state["global_show_heatmap"]
+        )
+        at = at.run(timeout=60)
+        assert manifest.stat().st_mtime_ns == written
+
+        # Forget deletes the store; saving stays paused, so it does not come
+        # straight back on the same run's end-of-run save.
+        forget = [b for b in at.button if "Forget" in str(b.label)]
+        assert forget, "the Forget button is missing from the panel"
+        at = forget[0].click().run(timeout=60)
+        _clean(at, "after forgetting:")
+        assert not manifest.exists()
+        assert not persistence.cache_status(tmp_path)["exists"]
+
+    def test_panel_says_nothing_is_stored_on_a_hosted_deployment(self, monkeypatch):
+        # No override and no loopback URL under AppTest == the hosted case.
+        monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
+        at = _boot(synthetic=True)
+        _clean(at, "hosted cache panel:")
+        assert not [t for t in at.toggle if t.key == "persist_local_saving"]
+        captions = " ".join(str(c.value) for c in at.caption)
+        assert "Off here." in captions

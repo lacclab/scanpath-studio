@@ -4,6 +4,14 @@ The hosted app deliberately does not persist anything: there is no user identity
 there, so a process-wide cache could expose one visitor's data to another.  A
 localhost/desktop session stores uploaded datasets as Parquet plus a small JSON
 manifest and restores them on the next browser or process session.
+
+Storing a researcher's tables on their disk is invisible by nature, so the cache
+is also *inspectable*: :func:`cache_status` reports what is stored, where, how
+big it is and when it was written without importing Streamlit, and it backs the
+in-app "🗄️ Recovery cache" panel (``app._render_recovery_cache_panel``), the
+``scanpath-studio cache`` CLI subcommand and ``api.cache_status``.  Saving can be
+paused for the session (:func:`set_persistence_paused`) and the stored files
+deleted (:func:`clear_local_state`).
 """
 
 from __future__ import annotations
@@ -14,6 +22,7 @@ import logging
 import os
 import tempfile
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any, MutableMapping, Optional
 from urllib.parse import urlparse
@@ -24,7 +33,11 @@ from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_recor
 from .session_keys import COLUMN_MAPPING_PREFIX, PLOT_CONFIG_STATE_KEYS
 
 SCHEMA_VERSION = 1
+PERSIST_ENV_VAR = "SCANPATH_STUDIO_PERSIST"
+STATE_DIR_ENV_VAR = "SCANPATH_STUDIO_STATE_DIR"
 _RESTORED_KEY = "_local_persistence_restored"
+_RESTORED_PAYLOAD_KEY = "_local_persistence_restored_payload"
+_PAUSED_KEY = "_local_persistence_paused"
 _LAST_FINGERPRINT_KEY = "_local_persistence_fingerprint"
 _LAST_DATASET_IDENTITY_KEY = "_local_persistence_dataset_identity"
 _LAST_DATASET_ENTRIES_KEY = "_local_persistence_dataset_entries"
@@ -52,7 +65,7 @@ def persistence_enabled(url: str = "", environ: Optional[dict] = None) -> bool:
     desktop app and ``streamlit run`` while keeping public deployments isolated.
     """
     env = os.environ if environ is None else environ
-    override = str(env.get("SCANPATH_STUDIO_PERSIST", "")).strip().lower()
+    override = str(env.get(PERSIST_ENV_VAR, "")).strip().lower()
     if override in {"1", "true", "yes", "on"}:
         return True
     if override in {"0", "false", "no", "off"}:
@@ -63,7 +76,7 @@ def persistence_enabled(url: str = "", environ: Optional[dict] = None) -> bool:
 
 def state_directory(environ: Optional[dict] = None) -> Path:
     env = os.environ if environ is None else environ
-    configured = str(env.get("SCANPATH_STUDIO_STATE_DIR", "")).strip()
+    configured = str(env.get(STATE_DIR_ENV_VAR, "")).strip()
     if configured:
         return Path(configured).expanduser()
     return Path.home() / ".cache" / "scanpath-studio" / "session-v1"
@@ -175,6 +188,26 @@ def _manifest_for(
     )
     frames_dir = root / "datasets"
     frames_dir.mkdir(parents=True, exist_ok=True)
+    if reuse_datasets:
+        # A manifest written before ``rows`` existed is still restorable, and
+        # restoring seeds these entries verbatim — so without this backfill an
+        # upgraded install would reuse row-less entries forever and the panel
+        # would read "1 dataset · 0 rows · 812 MB". Reuse means the live frames
+        # ARE the ones on disk (_dataset_identity matched), so counting them is
+        # accurate and free (len is O(1)); no Parquet is rewritten.
+        live = dict(session.get("_datasets", {}))
+        for name, entry in list(datasets.items()):
+            if isinstance(entry, dict) and not entry.get("rows"):
+                payload = live.get(name)
+                if isinstance(payload, dict):
+                    datasets[name] = {
+                        **entry,
+                        "rows": {
+                            frame_key: int(len(payload[frame_key]))
+                            for frame_key in _FRAME_KEYS
+                            if isinstance(payload.get(frame_key), pd.DataFrame)
+                        },
+                    }
     if not reuse_datasets:
         for name, payload in dict(session.get("_datasets", {})).items():
             slug = _dataset_slug(str(name))
@@ -182,6 +215,7 @@ def _manifest_for(
                 k: _json_safe(v) for k, v in payload.items() if k not in _FRAME_KEYS
             }
             frame_files = {}
+            frame_rows = {}
             for frame_key in _FRAME_KEYS:
                 frame = payload.get(frame_key)
                 if not isinstance(frame, pd.DataFrame):
@@ -189,7 +223,15 @@ def _manifest_for(
                 filename = f"{slug}-{frame_key}.parquet"
                 _atomic_parquet(frame, frames_dir / filename)
                 frame_files[frame_key] = f"datasets/{filename}"
-            datasets[str(name)] = {"metadata": metadata, "frames": frame_files}
+                frame_rows[frame_key] = int(len(frame))
+            # ``rows`` is reporting-only (cache_status / the in-app panel say how
+            # much is stored without opening the Parquet files). The restore path
+            # reads ``frames`` alone, so an older manifest without it still loads.
+            datasets[str(name)] = {
+                "metadata": metadata,
+                "frames": frame_files,
+                "rows": frame_rows,
+            }
 
     values = {key: _json_safe(session[key]) for key in _SESSION_KEYS if key in session}
     values.update(
@@ -270,6 +312,10 @@ def restore_state(
             if not existing:
                 session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
                 session[_LAST_DATASET_ENTRIES_KEY] = dict(manifest.get("datasets", {}))
+            # Separate from _RESTORED_KEY, which only records that a restore was
+            # *attempted* this session. The app reads this one to tell the user
+            # their previous session came back (restored_from_cache).
+            session[_RESTORED_PAYLOAD_KEY] = True
             return True
         except (OSError, ValueError, TypeError, KeyError):
             # A partial/corrupt cache must never prevent the app from opening. The
@@ -303,8 +349,148 @@ def restore_local_state(
     return restore_state(session, state_directory(), skip_session_keys=protected)
 
 
+def restored_from_cache(session) -> bool:
+    """Whether this session actually got its state back from the cache."""
+    return bool(session.get(_RESTORED_PAYLOAD_KEY))
+
+
+def persistence_paused(session) -> bool:
+    """Whether the user switched saving off for this session (UI opt-out)."""
+    return bool(session.get(_PAUSED_KEY))
+
+
+def set_persistence_paused(session, paused: bool) -> None:
+    """Pause/resume saving for this session only.
+
+    Resuming clears the save fingerprint so the next run writes the current
+    session out in full, even though nothing about it changed while paused.
+    ``SCANPATH_STUDIO_PERSIST=0`` is the durable, process-wide opt-out.
+    """
+    session[_PAUSED_KEY] = bool(paused)
+    if not paused:
+        session.pop(_LAST_FINGERPRINT_KEY, None)
+
+
+def clear_local_state(session=None, root: Optional[Path] = None) -> None:
+    """Delete the stored cache and forget what this session had written.
+
+    The in-memory datasets are deliberately left alone — this removes the copy
+    on disk, it does not close the user's work. Callers that want the cache to
+    *stay* gone must also pause saving (the panel's Forget button does both);
+    otherwise the end-of-run save writes the same session straight back out.
+    """
+    forget_state(state_directory() if root is None else root)
+    if session is not None:
+        for key in (
+            _LAST_FINGERPRINT_KEY,
+            _LAST_DATASET_IDENTITY_KEY,
+            _LAST_DATASET_ENTRIES_KEY,
+            _RESTORED_PAYLOAD_KEY,
+        ):
+            session.pop(key, None)
+
+
+def _cache_files(root: Path) -> list:
+    """The files this module owns under ``root`` (mirrors forget_state)."""
+    files = [root / "manifest.json"]
+    frames_dir = root / "datasets"
+    if frames_dir.is_dir():
+        files.extend(sorted(frames_dir.glob("*.parquet")))
+    return [path for path in files if path.is_file()]
+
+
+def human_size(num_bytes: int) -> str:
+    """Format a byte count for the cache panel / CLI (1 decimal, binary units)."""
+    size = float(max(int(num_bytes), 0))
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"  # pragma: no cover - unreachable, loop returns first
+
+
+def cache_status(
+    root: Optional[Path] = None,
+    *,
+    url: str = "",
+    environ: Optional[dict] = None,
+) -> dict:
+    """Describe the on-device recovery cache — the whole read-only surface.
+
+    Streamlit-free on purpose: the same dict backs the in-app panel, the
+    ``scanpath-studio cache`` subcommand and ``api.cache_status``. Reading is
+    best-effort — a partial or corrupt manifest reports ``readable=False``
+    rather than raising, exactly as ``restore_state`` refuses to break the app
+    over one. ``rows`` is ``None`` (not ``0``) when a stored dataset predates
+    the manifest's ``rows`` field: "0 rows · 812 MB on disk" would be a lie,
+    "size only" is the truth. The next save backfills it.
+    """
+    env = os.environ if environ is None else environ
+    override = str(env.get(PERSIST_ENV_VAR, "")).strip().lower()
+    directory = state_directory(env) if root is None else Path(root)
+    manifest_path = directory / "manifest.json"
+    status = {
+        "enabled": persistence_enabled(url, env),
+        "override": (
+            "on"
+            if override in {"1", "true", "yes", "on"}
+            else "off"
+            if override in {"0", "false", "no", "off"}
+            else ""
+        ),
+        "directory": str(directory),
+        "exists": manifest_path.is_file(),
+        "readable": False,
+        "schema": None,
+        "datasets": [],
+        "rows": 0,
+        "annotations": 0,
+        "settings": 0,
+        "bytes": 0,
+        "saved_at": None,
+    }
+    if not directory.is_dir():
+        # The common hosted case: one stat, then out — no glob over a folder
+        # this deployment never creates.
+        return status
+    status["bytes"] = sum(path.stat().st_size for path in _cache_files(directory))
+    if not status["exists"]:
+        return status
+    try:
+        status["saved_at"] = datetime.fromtimestamp(
+            manifest_path.stat().st_mtime
+        ).isoformat(timespec="seconds")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        schema = int(manifest.get("schema", 0))
+        status["schema"] = schema
+        datasets = dict(manifest.get("datasets", {}))
+        status["datasets"] = [
+            {
+                "name": str(name),
+                "rows": {
+                    key: int(value)
+                    for key, value in dict(entry.get("rows", {})).items()
+                },
+            }
+            for name, entry in sorted(datasets.items())
+        ]
+        status["rows"] = (
+            sum(sum(entry["rows"].values()) for entry in status["datasets"])
+            if all(entry["rows"] for entry in status["datasets"])
+            else None
+        )
+        status["annotations"] = len(list(manifest.get("annotations", [])))
+        status["settings"] = len(dict(manifest.get("session", {})))
+        # A newer/unknown schema is present but will not restore — say so here
+        # rather than let the panel claim the work is safely stored.
+        status["readable"] = schema == SCHEMA_VERSION
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        status["readable"] = False
+    return status
+
+
 def save_local_state(session, url: str) -> bool:
-    if not persistence_enabled(url):
+    if not persistence_enabled(url) or persistence_paused(session):
         return False
     try:
         return save_state(session, state_directory())

@@ -12,12 +12,26 @@ your own machine. Do not upload identifiable recordings to the hosted demo.
 ## What happens to a file you upload
 
 Uploaded tables are parsed locally. Completed datasets, mappings, view settings,
-and annotations may be stored in an on-device recovery cache so a refresh does
-not erase the session.
+and annotations are stored in an on-device recovery cache so a refresh does not
+erase the session. This happens on local and desktop runs only; a hosted
+deployment stores nothing.
+
+The cache is visible and removable from inside the app: the sidebar's **🗄️
+Recovery cache** panel names the folder, reports what is stored and how large it
+is, pauses saving for the session, and deletes the stored copy (**Forget saved
+session**). The same from a terminal, with the app closed:
 
 ```bash
+scanpath-studio cache                       # what is stored, where, how big
+scanpath-studio cache --clear               # delete it
 SCANPATH_STUDIO_PERSIST=0 scanpath-studio   # disable recovery storage
+SCANPATH_STUDIO_STATE_DIR=/secure/path scanpath-studio   # store it elsewhere
 ```
+
+The cache holds the research tables themselves, not just settings — treat that
+folder like the data files it came from (disk encryption, shared-machine
+accounts). It is single-user and unencrypted: anyone with your account on that
+machine can read it.
 
 The desktop app binds to your machine only. A direct Streamlit launch may listen
 on the local network; on a shared or untrusted network, bind explicitly:

@@ -21,6 +21,8 @@ __all__ = [
     "animate_scanpath",
     "save_figure",
     "save_figure_layers",
+    "cache_status",
+    "clear_cache",
     "load_potec",
     "load_multipleye",
     "load_onestop",

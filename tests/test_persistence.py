@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
@@ -7,11 +8,17 @@ import pandas as pd
 import scanpath_studio.persistence as persistence
 
 from scanpath_studio.persistence import (
+    cache_status,
+    clear_local_state,
     forget_state,
+    human_size,
     persistence_enabled,
+    persistence_paused,
     restore_state,
+    restored_from_cache,
     save_local_state,
     save_state,
+    set_persistence_paused,
 )
 
 
@@ -120,3 +127,149 @@ def test_forget_removes_only_known_cache_files(tmp_path):
     forget_state(tmp_path)
     assert unrelated.read_text(encoding="utf-8") == "keep"
     assert not (tmp_path / "manifest.json").exists()
+
+
+# ENG-30 — the cache is inspectable and controllable from outside itself. These
+# pin the read-only status dict (app panel / CLI / api.cache_status all render
+# it) and the two controls: pause saving, and forget what was saved.
+
+
+def test_cache_status_describes_what_is_stored(tmp_path):
+    session = {
+        "_datasets": {"Corpus": _dataset()},
+        "global_show_heatmap": True,
+        "trial_annotations": {("p1", "t1"): {"star": True, "tags": [], "note": ""}},
+    }
+    save_state(session, tmp_path)
+
+    # Explicit environ: the ambient one may carry SCANPATH_STUDIO_PERSIST from
+    # another test or the developer's shell.
+    status = cache_status(tmp_path, url="http://localhost:8501", environ={})
+
+    assert status["enabled"] and status["exists"] and status["readable"]
+    assert status["directory"] == str(tmp_path)
+    assert [entry["name"] for entry in status["datasets"]] == ["Corpus"]
+    # 1 word row + 1 fixation row + an empty raw-gaze frame.
+    assert status["datasets"][0]["rows"] == {"words": 1, "fixations": 1, "raw_gaze": 0}
+    assert status["rows"] == 2
+    assert status["annotations"] == 1
+    assert status["settings"] >= 1
+    assert status["bytes"] > 0
+    assert status["saved_at"]
+
+
+def test_cache_status_on_an_empty_and_a_hosted_deployment(tmp_path):
+    empty = cache_status(tmp_path, url="http://localhost:8501", environ={})
+    assert not empty["exists"] and not empty["readable"]
+    assert empty["datasets"] == [] and empty["bytes"] == 0 and empty["rows"] == 0
+
+    hosted = cache_status(tmp_path, url="https://scanpath-studio.example", environ={})
+    assert not hosted["enabled"] and hosted["override"] == ""
+
+    forced_off = cache_status(
+        tmp_path,
+        url="http://localhost:8501",
+        environ={"SCANPATH_STUDIO_PERSIST": "0"},
+    )
+    assert not forced_off["enabled"] and forced_off["override"] == "off"
+
+
+def test_cache_status_flags_an_unreadable_manifest(tmp_path):
+    (tmp_path / "manifest.json").write_text("{ not json", encoding="utf-8")
+    status = cache_status(tmp_path, url="http://localhost:8501", environ={})
+    assert status["exists"] and not status["readable"]
+
+    (tmp_path / "manifest.json").write_text('{"schema": 99}', encoding="utf-8")
+    newer = cache_status(tmp_path, url="http://localhost:8501", environ={})
+    # A newer schema is present but restore_state refuses it, so the panel must
+    # not claim the session is safely stored.
+    assert newer["exists"] and not newer["readable"] and newer["schema"] == 99
+
+
+def test_pausing_stops_saving_and_resuming_writes_again(tmp_path, monkeypatch):
+    import scanpath_studio.persistence as module
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr(module, "state_directory", lambda *a, **k: tmp_path)
+    session = {"_datasets": {"Corpus": _dataset()}}
+
+    assert save_local_state(session, "http://localhost:8501")
+    set_persistence_paused(session, True)
+    assert persistence_paused(session)
+    session["global_show_heatmap"] = False  # a change that would otherwise save
+    assert not save_local_state(session, "http://localhost:8501")
+
+    set_persistence_paused(session, False)
+    assert save_local_state(session, "http://localhost:8501")
+
+
+def test_clear_local_state_deletes_files_and_session_bookkeeping(tmp_path, monkeypatch):
+    import scanpath_studio.persistence as module
+
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr(module, "state_directory", lambda *a, **k: tmp_path)
+    session = {"_datasets": {"Corpus": _dataset()}}
+    save_local_state(session, "http://localhost:8501")
+
+    clear_local_state(session)
+
+    assert not (tmp_path / "manifest.json").exists()
+    assert not cache_status(tmp_path, url="http://localhost:8501", environ={})["exists"]
+    # The loaded data is untouched, and the next save rewrites from scratch.
+    assert session["_datasets"]
+    assert save_local_state(session, "http://localhost:8501")
+
+
+def test_restored_flag_marks_only_a_session_that_got_data_back(tmp_path):
+    source = {"global_show_heatmap": True}
+    save_state(source, tmp_path)
+
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert restored_from_cache(restored)
+
+    empty_cache = {}
+    assert not restore_state(empty_cache, tmp_path / "elsewhere")
+    assert not restored_from_cache(empty_cache)
+
+
+def test_human_size_reads_as_a_file_size():
+    assert human_size(0) == "0 B"
+    assert human_size(900) == "900 B"
+    assert human_size(2048) == "2.0 KB"
+    assert human_size(5 * 1024 * 1024) == "5.0 MB"
+
+
+def test_upgrade_from_a_manifest_without_row_counts(tmp_path):
+    """A cache written before ``rows`` existed must not report 0 rows.
+
+    ``restore_state`` seeds ``_LAST_DATASET_ENTRIES_KEY`` from the manifest and
+    ``save_state`` re-emits those entries verbatim whenever the frames are
+    unchanged — so a row-less entry would otherwise survive every later save and
+    the panel would read "1 dataset · 0 rows · <size> on disk" forever.
+    """
+    session = {"_datasets": {"Corpus": _dataset()}, "global_show_heatmap": True}
+    save_state(session, tmp_path)
+
+    # Rewrite the manifest the way the pre-ENG-30 writer did.
+    path = tmp_path / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    for entry in manifest["datasets"].values():
+        entry.pop("rows", None)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    legacy = cache_status(tmp_path, url="http://localhost:8501", environ={})
+    assert legacy["readable"]
+    # Unknown, NOT zero — the size is real, so a 0 would contradict it.
+    assert legacy["rows"] is None
+
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    restored["global_show_heatmap"] = False  # a settings-only change → reuse path
+    assert save_state(restored, tmp_path)
+
+    healed = cache_status(tmp_path, url="http://localhost:8501", environ={})
+    assert healed["rows"] == 2
+    assert healed["datasets"][0]["rows"] == {"words": 1, "fixations": 1, "raw_gaze": 0}
+    # The backfill must not have rewritten the frames — it only counts them.
+    assert (tmp_path / "datasets").is_dir()

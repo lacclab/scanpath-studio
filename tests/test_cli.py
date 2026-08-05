@@ -562,3 +562,102 @@ def test_analyze_and_corpus_commands(tmp_path):
         ]
     )
     assert figure.is_file()
+
+
+# ENG-30 — `scanpath-studio cache` is the terminal view of the on-device
+# recovery cache the app writes on localhost/desktop.
+
+
+def _seed_cache(state_dir):
+    """Write a cache the way a local app session would."""
+    import pandas as pd
+
+    from scanpath_studio import persistence
+
+    session = {
+        "_datasets": {
+            "Corpus": {
+                "words": pd.DataFrame({"trial_id": ["t1"], "text": ["hello"]}),
+                "fixations": pd.DataFrame({"trial_id": ["t1"], "duration_ms": [120]}),
+                "raw_gaze": pd.DataFrame(),
+            }
+        },
+        "global_show_heatmap": True,
+    }
+    persistence.save_state(session, state_dir)
+
+
+def test_cache_reports_nothing_stored(tmp_path, monkeypatch, capsys):
+    # Both env vars pinned: the reported folder AND whether a local run would
+    # save must not depend on the developer's shell.
+    monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    cli.main(["cache"])
+    out = capsys.readouterr().out
+    assert str(tmp_path) in out
+    assert "Saving:  enabled" in out
+    assert "Stored:  nothing" in out
+
+
+def test_cache_reports_what_is_stored_and_clears_it(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("SCANPATH_STUDIO_PERSIST", raising=False)
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    _seed_cache(tmp_path)
+
+    cli.main(["cache"])
+    out = capsys.readouterr().out
+    assert "1 dataset(s): Corpus" in out
+    assert "2 rows" in out
+
+    cli.main(["cache", "--clear"])
+    assert "Cleared" in capsys.readouterr().out
+    assert not (tmp_path / "manifest.json").exists()
+
+    cli.main(["cache", "--clear"])
+    assert "Nothing stored" in capsys.readouterr().out
+
+
+def test_cache_path_and_json_output(tmp_path, monkeypatch, capsys):
+    import json as json_module
+
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    _seed_cache(tmp_path)
+
+    cli.main(["cache", "--path"])
+    assert capsys.readouterr().out.strip() == str(tmp_path)
+
+    cli.main(["cache", "--json"])
+    status = json_module.loads(capsys.readouterr().out)
+    assert status["readable"] and status["rows"] == 2
+    assert status["directory"] == str(tmp_path)
+
+
+def test_cache_reports_the_env_override(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("SCANPATH_STUDIO_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "0")
+    cli.main(["cache"])
+    out = capsys.readouterr().out
+    assert "Saving:  disabled (SCANPATH_STUDIO_PERSIST=off)" in out
+
+
+def test_no_persist_flag_is_consumed_before_streamlit(monkeypatch):
+    """`--no-persist` is ours: it sets the env var and never reaches streamlit.
+
+    Streamlit would reject the unknown flag, so the launcher has to strip it —
+    assert on the `sys.argv` handed to `streamlit run`, not just the env var.
+    """
+    import os
+
+    # setenv (not delenv) so monkeypatch records the variable and restores it at
+    # teardown — launch_app writes the real os.environ, and an unrecorded write
+    # would leak "persistence off" into every test that runs after this one.
+    monkeypatch.setenv("SCANPATH_STUDIO_PERSIST", "1")
+    monkeypatch.setattr("streamlit.web.cli.main", lambda: 0)
+    monkeypatch.setattr(cli.sys, "argv", [])
+
+    with pytest.raises(SystemExit):
+        cli.launch_app(["--no-persist", "--server.port", "8502"])
+
+    assert os.environ["SCANPATH_STUDIO_PERSIST"] == "0"
+    assert "--no-persist" not in cli.sys.argv
+    assert cli.sys.argv[-2:] == ["--server.port", "8502"]

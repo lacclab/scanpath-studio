@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **The on-device recovery cache is visible and controllable** (ENG-30) — the sidebar's new **🗄️ Recovery cache** panel names the folder, reports what is stored (datasets, rows, annotations, size, last written), pauses saving, and forgets the stored session; a one-shot toast says when a session was restored. Also `scanpath-studio cache [--json|--path|--clear]`, `scanpath-studio --no-persist`, and `sps.cache_status()` / `sps.clear_cache()`.
+
+### Changed
+- **Privacy, FAQ, CLI and security docs describe the recovery cache** (ENG-26/30) — the security audit's "no on-disk residue of loaded data" now says explicitly that it holds for hosted deployments only, and privacy.md documents the cache's contents, folder, and how to inspect or delete it.
+
 ## [0.27.1] - 2026-08-04
 
 ### Added

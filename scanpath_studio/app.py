@@ -51,7 +51,18 @@ from scanpath_studio.annotations import (
     filter_keys,
 )
 from scanpath_studio.experimental_setup import font_pt_to_px, pixels_per_degree
-from scanpath_studio.persistence import restore_local_state, save_local_state
+from scanpath_studio.persistence import (
+    PERSIST_ENV_VAR,
+    STATE_DIR_ENV_VAR,
+    cache_status,
+    clear_local_state,
+    human_size,
+    persistence_paused,
+    restore_local_state,
+    restored_from_cache,
+    save_local_state,
+    set_persistence_paused,
+)
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     BACKGROUND_PRESETS,
@@ -418,6 +429,131 @@ def _render_empty_after_filtering(
             type="primary",
             on_click=clear_trial_filters,
             help="Reset every Narrow-by, condition and annotation filter.",
+        )
+
+
+def _forget_recovery_cache() -> None:
+    """Delete the on-device cache and stop re-writing it this session.
+
+    An ``on_click`` callback, not inline button handling: it writes the
+    ``persist_local_saving`` toggle's key, which Streamlit forbids once that
+    widget has rendered in the current run. Pausing is what makes Forget stick —
+    ``main`` saves at the end of every run, so deleting alone would hand the
+    same session straight back to disk.
+    """
+    clear_local_state(st.session_state)
+    set_persistence_paused(st.session_state, True)
+    st.session_state["persist_local_saving"] = False
+    st.session_state["_recovery_cache_forgotten"] = True
+
+
+def _toggle_recovery_saving() -> None:
+    """Mirror the panel's saving toggle into the persistence pause flag."""
+    set_persistence_paused(
+        st.session_state, not bool(st.session_state.get("persist_local_saving", True))
+    )
+    st.session_state.pop("_recovery_cache_forgotten", None)
+
+
+def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
+    """Render the "🗄️ Recovery cache" sidebar panel (ENG-30).
+
+    ENG-26 made a local session survive a refresh or a restart, but silently:
+    nothing in the app said that a copy of the loaded tables was being written
+    to the user's disk, where it lived, or how to get rid of it. This panel is
+    that disclosure plus its controls — what is stored, how big it is, when it
+    was last written, pause saving, and forget it. On a hosted deployment (where
+    `persistence.persistence_enabled` is False) it explains that nothing is
+    stored instead of hiding, so the difference between deployments is visible
+    from the same place.
+
+    ``slot`` is the sidebar container ``main`` reserves in place, so the panel
+    can render *after* this run's ``save_local_state`` and still sit under 💾
+    Save & restore. ``cache_status`` re-reads the manifest each run (a few
+    ``stat`` calls plus a small JSON) rather than being cached — a status panel
+    that lags the thing it reports is worse than no panel.
+    """
+    container = slot if slot is not None else st.sidebar
+    status = cache_status(url=app_url)
+    with container.expander("🗄️ Recovery cache", expanded=False):
+        if not status["enabled"]:
+            st.caption(
+                "**Off here.** This deployment keeps your session in memory "
+                "only — a refresh or a restart loses uploaded datasets, "
+                "mappings, and annotations. Use **💾 Save & restore** above to "
+                "keep your work, or run Scanpath Studio locally (or as the "
+                "desktop app), where the session is restored automatically."
+            )
+            if status["override"] == "off":
+                st.caption(f"Disabled by `{PERSIST_ENV_VAR}=0`.")
+            return
+
+        st.caption(
+            "Uploaded datasets, column mappings, view settings, and annotations "
+            "are cached **on this computer** so a refresh or restart picks up "
+            "where you left off. Nothing is sent anywhere."
+        )
+        if restored_from_cache(st.session_state):
+            st.success("Restored from this cache when the app opened.", icon="↩️")
+        if status["exists"] and status["readable"]:
+            n_sets = len(status["datasets"])
+            bits = [f"**{n_sets}** dataset{'s' if n_sets != 1 else ''}"]
+            # None = stored before the manifest carried row counts; the next
+            # save backfills it. Saying "0 rows" would be worse than silence.
+            if status["rows"] is not None:
+                bits.append(f"**{status['rows']:,}** rows")
+            bits += [
+                f"**{status['annotations']}** annotated trial"
+                f"{'s' if status['annotations'] != 1 else ''}",
+                f"**{human_size(status['bytes'])}** on disk",
+            ]
+            st.markdown(" · ".join(bits))
+            if status["datasets"]:
+                st.caption(
+                    "Stored: " + ", ".join(d["name"] for d in status["datasets"]) + "."
+                )
+            saved_at = str(status["saved_at"] or "").replace("T", " ")
+            if saved_at:
+                st.caption(f"Last written {saved_at}.")
+        elif status["exists"]:
+            st.warning(
+                "The stored session can't be read (written by a different "
+                "version, or incomplete). It is ignored; saving over it is "
+                "safe.",
+                icon="⚠️",
+            )
+        elif st.session_state.get("_recovery_cache_forgotten"):
+            st.caption("Cleared. Nothing is stored on this computer.")
+        else:
+            st.caption("Nothing stored yet — the session is saved as you work.")
+
+        # Seed rather than pass `value=`: the Forget callback writes this key via
+        # the session-state API, and a widget carrying both logs Streamlit's
+        # "default value but also had its value set via the Session State API"
+        # warning on every run (same fix as the 0.27.1 restored-value pass).
+        st.session_state.setdefault(
+            "persist_local_saving", not persistence_paused(st.session_state)
+        )
+        st.toggle(
+            "Save this session on this computer",
+            key="persist_local_saving",
+            on_change=_toggle_recovery_saving,
+            help="Turn off to stop writing to the cache for the rest of this "
+            "session. Your work stays loaded either way.",
+        )
+        st.button(
+            "🗑 Forget saved session",
+            on_click=_forget_recovery_cache,
+            width="stretch",
+            disabled=not status["exists"],
+            help="Delete the stored copy from this computer and pause saving. "
+            "The data you have loaded stays open.",
+        )
+        st.caption(f"Folder: `{status['directory']}`")
+        st.caption(
+            f"Always off: `{PERSIST_ENV_VAR}=0` · move the folder: "
+            f"`{STATE_DIR_ENV_VAR}=…` · same info from the terminal: "
+            "`scanpath-studio cache`."
         )
 
 
@@ -2396,9 +2532,17 @@ def main() -> None:
     # win over restored settings; an explicit ?source= also wins over the stored
     # data-source choice.
     app_url = str(getattr(st.context, "url", "") or "")
-    restore_local_state(
+    if restore_local_state(
         st.session_state, app_url, protect_data_source=url_source is not None
-    )
+    ):
+        # ENG-30: say it once, where the user is looking. Silently repopulating a
+        # session reads as "the app kept my data somewhere" without saying where;
+        # the toast points at the sidebar panel that answers that.
+        st.toast(
+            "Restored your last session from this computer — see 🗄️ Recovery "
+            "cache in the sidebar.",
+            icon="↩️",
+        )
     if url_source == "onestop" and onestop_data_dir() is not None:
         st.session_state.setdefault("data_source_choice", ONESTOP_CHOICE)
     elif url_source == "multipleye" and multipleye_bundle_dir() is not None:
@@ -2935,6 +3079,12 @@ def main() -> None:
         font_family=font_family,
         slot=save_restore_slot,
     )
+    # ENG-30: the automatic counterpart to the portable JSON above — what the app
+    # is keeping on this machine, and the controls for it. Only the slot is
+    # reserved here (so the panel sits under Save & restore); it is FILLED after
+    # this run's save_local_state, or it would report the previous run's cache
+    # and read "nothing stored yet" on the run that first stores something.
+    recovery_cache_slot = st.sidebar.container()
 
     # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
     # share_renderer passed into render_single_trial_tab), so it builds its deep
@@ -2969,6 +3119,8 @@ def main() -> None:
     # Persist after all view/sidebar widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
+    # …then report on what that just wrote, into the slot reserved above.
+    _render_recovery_cache_panel(app_url, slot=recovery_cache_slot)
 
 
 if __name__ == "__main__":

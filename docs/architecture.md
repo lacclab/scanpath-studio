@@ -23,6 +23,7 @@ the repo root (kept current as the code changes); this is the short version.
 | `cli.py` | Console entry point (`run` / `render`). |
 | `tour.py` | First-visit welcome tour + the dataset-setup guide card. |
 | `annotations.py` | Per-trial favorites / tags / notes (session state + JSON). |
+| `persistence.py` | On-device recovery cache for a local/desktop session (datasets, mappings, settings, annotations), inspected and cleared from the sidebar panel, `scanpath-studio cache`, and `api.cache_status`. |
 | `alignment.py` | Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. |
 | `datasets.py` | Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE). |
 

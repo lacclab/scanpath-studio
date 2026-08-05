@@ -52,6 +52,10 @@ Local and desktop installs restore completed datasets and session state from an
 on-device cache. The hosted demo is memory-only. Download **💾 Save & restore**
 JSON when the work must be portable.
 
+The sidebar's **🗄️ Recovery cache** panel shows what that cache holds, where it
+is, and clears it; `scanpath-studio cache` does the same from a terminal. See
+[Privacy](privacy.md#what-happens-to-a-file-you-upload).
+
 ## Where does my data go?
 
 Local and desktop use stays on your machine. The hosted demo runs on a third-party

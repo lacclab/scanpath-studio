@@ -15,6 +15,11 @@ Everything the app draws is reachable from two places:
 Both go through the same `data → measures → plots` pipeline as the Streamlit
 app, so a figure rendered here is the figure the app shows.
 
+Headless use never writes an on-device cache. A *local app* run does — the
+session's datasets and settings, restored on the next launch — and
+`sps.cache_status()` / `sps.clear_cache()` (or `scanpath-studio cache`) inspect
+and remove it; see [Privacy](privacy.md#what-happens-to-a-file-you-upload).
+
 ## The 30-second version
 
 ```python

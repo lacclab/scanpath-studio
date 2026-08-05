@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import importlib.resources as resources
 import json
-import os.path
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -76,6 +76,15 @@ def _theme_cli_flags() -> List[str]:
 def launch_app(extra_args: List[str]) -> None:
     """Launch the Streamlit app via ``streamlit run``, forwarding extra args."""
     from streamlit.web import cli as stcli
+
+    # ENG-30: `--no-persist` is ours, not Streamlit's — consume it here (it would
+    # otherwise reach `streamlit run` as an unknown flag) and set the env var the
+    # app reads, so one launch runs without the on-device recovery cache.
+    if "--no-persist" in extra_args:
+        from .persistence import PERSIST_ENV_VAR
+
+        extra_args = [arg for arg in extra_args if arg != "--no-persist"]
+        os.environ[PERSIST_ENV_VAR] = "0"
 
     # Inject the branded theme unless the caller passes their own ``--theme.*``
     # (explicit flags win), so the app looks the same regardless of where it was
@@ -1190,15 +1199,90 @@ def corpus(argv: List[str]) -> None:
     print(f"Wrote {out}")
 
 
+def cache(argv: List[str]) -> None:
+    """Inspect or clear the on-device recovery cache (ENG-30).
+
+    The terminal counterpart of the app's 🗄️ Recovery cache panel, so the
+    storage a local run creates can be found, measured and deleted without
+    launching the app (or after closing it).
+    """
+    parser = argparse.ArgumentParser(
+        prog="scanpath-studio cache",
+        description="Show what a local run has stored on this computer "
+        "(uploaded datasets, mappings, view settings, annotations), where it "
+        "lives, and delete it. The hosted app stores nothing.",
+    )
+    parser.add_argument(
+        "--path", action="store_true", help="print the cache folder and exit"
+    )
+    parser.add_argument("--json", action="store_true", help="print the status as JSON")
+    parser.add_argument(
+        "--clear", action="store_true", help="delete the stored session"
+    )
+    args = parser.parse_args(argv)
+    from .persistence import PERSIST_ENV_VAR, cache_status, clear_local_state
+    from .persistence import human_size as _human_size
+
+    # A local run is what this cache belongs to, so report enablement for one
+    # (the env override still wins) rather than for the CLI process itself.
+    status = cache_status(url="http://localhost")
+    if args.path:
+        print(status["directory"])
+        return
+    if args.clear:
+        existed = status["exists"]
+        clear_local_state()
+        print(
+            f"Cleared {status['directory']}"
+            if existed
+            else f"Nothing stored in {status['directory']}"
+        )
+        return
+    if args.json:
+        print(json.dumps(status, indent=2))
+        return
+
+    print(f"Folder:  {status['directory']}")
+    print(
+        "Saving:  "
+        + ("enabled" if status["enabled"] else "disabled")
+        + (f" ({PERSIST_ENV_VAR}={status['override']})" if status["override"] else "")
+        + " for local runs"
+    )
+    if not status["exists"]:
+        print("Stored:  nothing")
+        return
+    if not status["readable"]:
+        print("Stored:  unreadable (wrong schema or incomplete) — ignored on startup")
+        print(f"Size:    {_human_size(status['bytes'])}")
+        return
+    names = ", ".join(entry["name"] for entry in status["datasets"]) or "none"
+    print(f"Stored:  {len(status['datasets'])} dataset(s): {names}")
+    # rows is None for a cache written before the manifest carried row counts
+    # (the app backfills it on its next save) — don't print a false 0.
+    rows = f"{status['rows']:,} rows" if status["rows"] is not None else "rows unknown"
+    print(
+        f"         {rows} · {status['annotations']} annotated "
+        f"trial(s) · {status['settings']} setting(s)"
+    )
+    print(f"Size:    {_human_size(status['bytes'])}")
+    print(f"Written: {status['saved_at']}")
+    print("Delete with `scanpath-studio cache --clear`.")
+
+
 _HELP = f"""scanpath-studio {__version__} — visualize eye-tracking-while-reading scanpaths
 
 usage:
   scanpath-studio                  launch the interactive app (Streamlit)
   scanpath-studio run [args…]      same, forwarding args to `streamlit run`
+  scanpath-studio [run] --no-persist
+                                   launch without the on-device recovery cache
+                                   (this run only; see `cache` below)
   scanpath-studio render …         render one trial to .html/.png/.svg/.pdf
                                    (see `scanpath-studio render --help`)
   scanpath-studio analyze …        export preprocessing + the full measure family
   scanpath-studio corpus …         render a styled corpus-analysis figure
+  scanpath-studio cache …          show / clear the on-device recovery cache
   scanpath-studio --version        print the version
 
 Unrecognized arguments are forwarded to `streamlit run` (e.g.
@@ -1217,6 +1301,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         analyze(argv[1:])
     elif argv[0] == "corpus":
         corpus(argv[1:])
+    elif argv[0] == "cache":
+        cache(argv[1:])
     elif argv[0] in ("-h", "--help"):
         print(_HELP)
     elif argv[0] in ("-V", "--version"):

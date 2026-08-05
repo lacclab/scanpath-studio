@@ -1346,3 +1346,34 @@ def save_figure_layers(
             layer_fig, path, scale=scale, width=width, height=height
         )
     return written
+
+
+def cache_status() -> dict:
+    """Describe the on-device recovery cache a local app run keeps (ENG-30).
+
+    The app stores completed uploaded datasets, column mappings, view settings
+    and annotations under the user's cache directory so a refresh or restart
+    resumes where it left off — on localhost/desktop only, never on a hosted
+    deployment. This reports that store without launching the app: ``enabled``,
+    ``directory``, ``datasets`` (name + per-frame row counts), ``rows``,
+    ``annotations``, ``settings``, ``bytes``, ``saved_at``, plus ``exists`` /
+    ``readable`` for a missing or unreadable manifest. Delete it with
+    :func:`clear_cache`; the same information is in the app's 🗄️ Recovery cache
+    panel and in ``scanpath-studio cache``."""
+    from .persistence import cache_status as _cache_status
+
+    return _cache_status(url="http://localhost")
+
+
+def clear_cache() -> dict:
+    """Delete the on-device recovery cache and return its status afterwards.
+
+    Removes only the files this app wrote (``manifest.json`` and the dataset
+    Parquet files); anything else in the folder is left alone. A *running* local
+    app writes its session back out at the end of its next run — use the app's
+    **Forget saved session** button, or ``SCANPATH_STUDIO_PERSIST=0``, to stop
+    that."""
+    from .persistence import clear_local_state
+
+    clear_local_state()
+    return cache_status()

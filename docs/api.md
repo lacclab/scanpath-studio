@@ -60,6 +60,16 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.save_figure_layers
 
+## Recovery cache
+
+The app caches a local session on the machine it runs on (see
+[Privacy](privacy.md#what-happens-to-a-file-you-upload)). These inspect and
+remove that store from a script; `scanpath-studio cache` is the CLI equivalent.
+
+::: scanpath_studio.api.cache_status
+
+::: scanpath_studio.api.clear_cache
+
 For a batch loop and surface choice, start at
 [Automation & reference](automation.md). GIF and MP4 export uses
 `scanpath_studio.animation_export.export_animation` and requires Kaleido plus

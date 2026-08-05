@@ -8,6 +8,7 @@ one trial without opening the UI.
 ```bash
 scanpath-studio
 scanpath-studio --server.port 8600
+scanpath-studio --no-persist          # don't cache the session on this computer
 ```
 
 Additional launch flags are forwarded to Streamlit.
@@ -68,3 +69,22 @@ and run-configuration files. `scanpath-studio corpus` produces a tidy
 corpus-analysis table for scripting. The `render` command still renders one
 trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
 or **Export → Multiple trials** for many figures.
+
+## Recovery cache
+
+A local or desktop run caches your session on your own machine — uploaded
+datasets, column mappings, view settings, and annotations — so a refresh or a
+restart resumes where you left off. `cache` shows what is stored and removes it:
+
+```bash
+scanpath-studio cache            # datasets, rows, size, folder, last written
+scanpath-studio cache --path     # just the folder
+scanpath-studio cache --json     # the same status as JSON
+scanpath-studio cache --clear    # delete the stored session
+```
+
+The same information (and a **Forget saved session** button) is in the app's
+sidebar under **🗄️ Recovery cache**. `SCANPATH_STUDIO_PERSIST=0` turns caching
+off permanently, `--no-persist` for one launch, and `SCANPATH_STUDIO_STATE_DIR`
+moves the folder. Hosted deployments never cache. See
+[Privacy](privacy.md#what-happens-to-a-file-you-upload).

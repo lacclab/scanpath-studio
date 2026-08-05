@@ -6,6 +6,25 @@ import pytest
 from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _plain_text_cli_output():
+    """Pin CLI/argparse output to uncoloured text for the whole run.
+
+    Python 3.14's argparse colourises ``--help``, and `_colorize.can_colorize`
+    honours ``FORCE_COLOR`` / ``PYTHON_COLORS`` *before* it looks at whether the
+    stream is a terminal. Agent harnesses, CI wrappers and some shells export
+    those, so a developer with one set would see the help-text assertions in
+    ``tests/test_cli_drift.py`` fail on ANSI escapes that CI never emits — a
+    failure about the environment, not the code. ``NO_COLOR`` wins over both,
+    and also covers a ``pytest -s`` run where stdout really is a tty.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.delenv("FORCE_COLOR", raising=False)
+        mp.delenv("PYTHON_COLORS", raising=False)
+        mp.setenv("NO_COLOR", "1")
+        yield
+
+
 @pytest.fixture
 def synthetic_words_df():
     """Normalized words for the fully-specified synthetic trial.

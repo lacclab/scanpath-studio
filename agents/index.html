@@ -2535,6 +2535,11 @@ fixations yourself.</p>
 <td>no</td>
 </tr>
 <tr>
+<td><code>saccade_classes</code></td>
+<td><code>['forward', 'skip', 'refixation', 'return_sweep', 'regression', 'other']</code></td>
+<td>no</td>
+</tr>
+<tr>
 <td><code>saccade_render_mode</code></td>
 <td><code>'Straight'</code></td>
 <td>no</td>
@@ -2550,7 +2555,11 @@ fixations yourself.</p>
 or <code>"By type"</code> (forward / skip / refixation / return sweep / regression, each a
 legended sub-trace, classified at render time);
 <code>saccade_class_colors={"regression": "#000", …}</code> overrides individual class
-colours. <code>saccade_render_mode="Arc"</code> draws the linear-reading schematic.</p>
+colours. <code>saccade_classes</code> is the same split used as a <strong>filter</strong> rather than as
+hue — <code>saccade_classes=["regression"]</code> draws a regressions-only figure (the
+hidden classes lose their direction arrows too), and it composes with any
+colour mode; naming every class is a no-op. <code>saccade_render_mode="Arc"</code> draws
+the linear-reading schematic.</p>
 <h3 id="heatmap">Heatmap<a class="headerlink" href="#heatmap" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

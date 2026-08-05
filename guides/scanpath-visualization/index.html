@@ -791,10 +791,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#filter-or-mark-fixations" class="md-nav__link">
+  <a href="#filter-fixations-and-saccades" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Filter or mark fixations
+        Filter fixations and saccades
       
     </span>
   </a>
@@ -1611,10 +1611,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#filter-or-mark-fixations" class="md-nav__link">
+  <a href="#filter-fixations-and-saccades" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Filter or mark fixations
+        Filter fixations and saccades
       
     </span>
   </a>
@@ -1671,44 +1671,70 @@ Start with the default view, then change only controls needed for the question.<
 readings are available; ordering helps surface long, short, early, or late
 trials. The detail popover shows the active trial's summary fields.</p>
 <h2 id="control-the-layers">Control the layers<a class="headerlink" href="#control-the-layers" title="Permanent link">&para;</a></h2>
+<p>The rail beside the plot groups the layers by what they describe. <strong>Quick
+views</strong> and <strong>Palette</strong> sit at the top — often all you need — followed by six
+collapsible sections:</p>
 <table>
 <thead>
 <tr>
-<th>Layer</th>
+<th>Section</th>
+<th>Layers</th>
 <th>Use it for</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Text and word boxes</td>
-<td>verify stimulus geometry and fixation-to-word alignment</td>
-</tr>
-<tr>
+<td>👁️ Fixations</td>
 <td>Fixations</td>
-<td>location, order, duration, and optional color field</td>
+<td>location, order, duration and colour field</td>
 </tr>
 <tr>
+<td>↗️ Saccades</td>
 <td>Saccades</td>
-<td>movement direction, reading type, regressions, and return sweeps</td>
+<td>movement direction, reading type, regressions and return sweeps</td>
 </tr>
 <tr>
-<td>Heatmap</td>
-<td>spatial concentration by count or duration</td>
+<td>📄 Stimulus</td>
+<td>Text, Bounding boxes, Stimulus image</td>
+<td>verify stimulus geometry and fixation-to-word alignment; compare against the original display</td>
 </tr>
 <tr>
-<td>Stimulus image</td>
-<td>compare the scanpath with the original display</td>
+<td>🔥 Overlays</td>
+<td>Heatmap, Raw gaze</td>
+<td>spatial concentration by count or duration; millisecond-level gaze samples</td>
+</tr>
+<tr>
+<td>🖥️ Canvas &amp; text</td>
+<td>—</td>
+<td>monitor geometry, viewing distance, fonts, text colour, plot background</td>
+</tr>
+<tr>
+<td>📐 Figure &amp; axes</td>
+<td>—</td>
+<td>full-monitor framing, colour bars, axis fields, illustration label</td>
 </tr>
 </tbody>
 </table>
-<p>Layer settings appear only when their layer is active. Marker size already
-encodes duration by default, so uniform fixation color is usually the clearest
-starting point.</p>
-<h2 id="filter-or-mark-fixations">Filter or mark fixations<a class="headerlink" href="#filter-or-mark-fixations" title="Permanent link">&para;</a></h2>
-<p><strong>Fixation filter</strong> contains duration thresholds, out-of-bounds handling, and
+<p>Each layer section opens the same way: the <strong>on/off toggle</strong> first, then
+<strong>⚙️ style</strong> and <strong>🧹 filter</strong> — appearance and visibility kept apart, so
+"colour the regressions red" and "show only the regressions" don't sit in the
+same list. The two scanpath sections are open by default; the rest start
+collapsed, and a layer's settings appear only while that layer is on. Marker
+size already encodes duration by default, so uniform fixation color is usually
+the clearest starting point.</p>
+<h2 id="filter-fixations-and-saccades">Filter fixations and saccades<a class="headerlink" href="#filter-fixations-and-saccades" title="Permanent link">&para;</a></h2>
+<p><strong>🧹 Fixation filter</strong> contains duration thresholds, out-of-bounds handling, and
 the fixation-index range. Marking preserves context; discarding removes points
-from the rendered scanpath. These are visualization choices, not edits to the
-source data or reading-measure computation.</p>
+from the rendered scanpath.</p>
+<p><strong>🧹 Saccade filter</strong> picks which reading classes are drawn at all — forward,
+skip, refixation, return sweep, regression. Hidden classes lose their line
+<em>and</em> their direction arrow, which is how you get a regressions-only figure.
+Classes come from the same split as ⚙️ Saccade style → <strong>By type</strong>, so the two
+always agree on what a regression is; clearing the list means <em>no filter</em>, not
+an empty plot. Both filters show a badge on the popover button while they are
+active, so a thinned figure never looks like missing data.</p>
+<p>These are visualization choices, not edits to the source data or reading-measure
+computation.</p>
 <h2 id="replay-and-compare">Replay and compare<a class="headerlink" href="#replay-and-compare" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Animate</strong> replays the selected trial. <strong>⚙ Playback</strong> controls speed,

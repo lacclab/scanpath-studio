@@ -2076,6 +2076,10 @@ root is the opposite document: how to <em>develop</em> this codebase.)</p>
 </table>
 <p>Both go through the same <code>data → measures → plots</code> pipeline as the Streamlit
 app, so a figure rendered here is the figure the app shows.</p>
+<p>Headless use never writes an on-device cache. A <em>local app</em> run does — the
+session's datasets and settings, restored on the next launch — and
+<code>sps.cache_status()</code> / <code>sps.clear_cache()</code> (or <code>scanpath-studio cache</code>) inspect
+and remove it; see <a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>.</p>
 <h2 id="the-30-second-version">The 30-second version<a class="headerlink" href="#the-30-second-version" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sps</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>

@@ -1050,6 +1050,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#recovery-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery cache
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1605,6 +1616,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#recovery-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery cache
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1631,6 +1653,7 @@ one trial without opening the UI.</p>
 <h2 id="launch">Launch<a class="headerlink" href="#launch" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>--server.port<span class="w"> </span><span class="m">8600</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>--no-persist<span class="w">          </span><span class="c1"># don&#39;t cache the session on this computer</span>
 </code></pre></div>
 <p>Additional launch flags are forwarded to Streamlit.</p>
 <h2 id="render">Render<a class="headerlink" href="#render" title="Permanent link">&para;</a></h2>
@@ -1721,6 +1744,20 @@ and run-configuration files. <code>scanpath-studio corpus</code> produces a tidy
 corpus-analysis table for scripting. The <code>render</code> command still renders one
 trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
 or <strong>Export → Multiple trials</strong> for many figures.</p>
+<h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
+<p>A local or desktop run caches your session on your own machine — uploaded
+datasets, column mappings, view settings, and annotations — so a refresh or a
+restart resumes where you left off. <code>cache</code> shows what is stored and removes it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
+</code></pre></div>
+<p>The same information (and a <strong>Forget saved session</strong> button) is in the app's
+sidebar under <strong>🗄️ Recovery cache</strong>. <code>SCANPATH_STUDIO_PERSIST=0</code> turns caching
+off permanently, <code>--no-persist</code> for one launch, and <code>SCANPATH_STUDIO_STATE_DIR</code>
+moves the folder. Hosted deployments never cache. See
+<a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>.</p>
 
 
 

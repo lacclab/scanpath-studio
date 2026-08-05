@@ -1244,6 +1244,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#recovery-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery cache
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recovery cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.cache_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cache_status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.clear_cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear_cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2049,6 +2088,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#recovery-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery cache
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recovery cache">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.cache_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cache_status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.clear_cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear_cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2523,6 +2601,64 @@ the files register perfectly when stacked in Illustrator / Inkscape. <code>fmt</
 is any :func:<code>save_figure</code> extension without the dot (<code>svg</code> / <code>pdf</code> are
 vector and best for editing; <code>png</code> / <code>html</code> also work). <code>scale</code> /
 <code>width</code> / <code>height</code> are forwarded to :func:<code>save_figure</code>.</p>
+
+
+    </div>
+
+</div><h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
+<p>The app caches a local session on the machine it runs on (see
+<a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>). These inspect and
+remove that store from a script; <code>scanpath-studio cache</code> is the CLI equivalent.</p>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.cache_status" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.cache_status</span>
+
+
+<a href="#scanpath_studio.api.cache_status" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cache_status</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Describe the on-device recovery cache a local app run keeps (ENG-30).</p>
+<p>The app stores completed uploaded datasets, column mappings, view settings
+and annotations under the user's cache directory so a refresh or restart
+resumes where it left off — on localhost/desktop only, never on a hosted
+deployment. This reports that store without launching the app: <code>enabled</code>,
+<code>directory</code>, <code>datasets</code> (name + per-frame row counts), <code>rows</code>,
+<code>annotations</code>, <code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> /
+<code>readable</code> for a missing or unreadable manifest. Delete it with
+:func:<code>clear_cache</code>; the same information is in the app's 🗄️ Recovery cache
+panel and in <code>scanpath-studio cache</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.clear_cache" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.clear_cache</span>
+
+
+<a href="#scanpath_studio.api.clear_cache" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">clear_cache</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Delete the on-device recovery cache and return its status afterwards.</p>
+<p>Removes only the files this app wrote (<code>manifest.json</code> and the dataset
+Parquet files); anything else in the folder is left alone. A <em>running</em> local
+app writes its session back out at the end of its next run — use the app's
+<strong>Forget saved session</strong> button, or <code>SCANPATH_STUDIO_PERSIST=0</code>, to stop
+that.</p>
 
 
     </div>

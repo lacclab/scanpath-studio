@@ -1674,10 +1674,22 @@ your own machine. Do not upload identifiable recordings to the hosted demo.</p>
 </table>
 <h2 id="what-happens-to-a-file-you-upload">What happens to a file you upload<a class="headerlink" href="#what-happens-to-a-file-you-upload" title="Permanent link">&para;</a></h2>
 <p>Uploaded tables are parsed locally. Completed datasets, mappings, view settings,
-and annotations may be stored in an on-device recovery cache so a refresh does
-not erase the session.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">SCANPATH_STUDIO_PERSIST</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>scanpath-studio<span class="w">   </span><span class="c1"># disable recovery storage</span>
+and annotations are stored in an on-device recovery cache so a refresh does not
+erase the session. This happens on local and desktop runs only; a hosted
+deployment stores nothing.</p>
+<p>The cache is visible and removable from inside the app: the sidebar's <strong>🗄️
+Recovery cache</strong> panel names the folder, reports what is stored and how large it
+is, pauses saving for the session, and deletes the stored copy (<strong>Forget saved
+session</strong>). The same from a terminal, with the app closed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">                       </span><span class="c1"># what is stored, where, how big</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">               </span><span class="c1"># delete it</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">SCANPATH_STUDIO_PERSIST</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>scanpath-studio<span class="w">   </span><span class="c1"># disable recovery storage</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nv">SCANPATH_STUDIO_STATE_DIR</span><span class="o">=</span>/secure/path<span class="w"> </span>scanpath-studio<span class="w">   </span><span class="c1"># store it elsewhere</span>
 </code></pre></div>
+<p>The cache holds the research tables themselves, not just settings — treat that
+folder like the data files it came from (disk encryption, shared-machine
+accounts). It is single-user and unencrypted: anyone with your account on that
+machine can read it.</p>
 <p>The desktop app binds to your machine only. A direct Streamlit launch may listen
 on the local network; on a shared or untrusted network, bind explicitly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scanpath-studio<span class="w"> </span>--server.address<span class="o">=</span><span class="m">127</span>.0.0.1

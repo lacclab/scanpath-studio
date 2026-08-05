@@ -1962,6 +1962,20 @@ too. Nothing here is inferred from documentation alone.</p>
   cache-key fingerprint and the log-handler installer against the bundled sample.
   Dependency claims were checked against the installed source, never the docs.</li>
 </ul>
+<div class="admonition note">
+<p class="admonition-title">Amended after the audit — the on-device recovery cache (ENG-26)</p>
+<p>Version 0.27.0 added <code>persistence.py</code>: on a <strong>localhost or desktop</strong> run, the
+app writes completed uploaded datasets to
+<code>~/.cache/scanpath-studio/session-v1</code> as Parquet, plus a JSON manifest with
+mappings, view settings and annotations, and restores them on the next
+session. That post-dates the audit below, so every "no on-disk residue of
+loaded data" claim on this page holds only for a hosted deployment (where
+<code>persistence.persistence_enabled</code> returns False) or with
+<code>SCANPATH_STUDIO_PERSIST=0</code>. The store is single-user, unencrypted and
+account-readable; it is disclosed and deletable in-app (sidebar → <strong>🗄️
+Recovery cache</strong>) and from <code>scanpath-studio cache --clear</code>, and it is
+described for researchers in <a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a>.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">Scanpath Studio has no authentication, on any deployment</p>
 <p>There is no login, no session token, and no per-user authorization anywhere
@@ -1979,7 +1993,7 @@ port. Several findings below follow from that single fact.</p>
 <tbody>
 <tr>
 <td>On-disk residue from loaded data</td>
-<td>Clean, with one narrow exception (S8)</td>
+<td>Clean, with one narrow exception (S8), <strong>and the recovery cache added after this audit</strong> — see the note below</td>
 </tr>
 <tr>
 <td><code>@st.cache_data</code> persistence to disk</td>
@@ -2576,15 +2590,24 @@ was closed by arguing the impact away.</p>
 <h2 id="what-is-clean">What is clean<a class="headerlink" href="#what-is-clean" title="Permanent link">&para;</a></h2>
 <p>Stated explicitly, because "we found nothing" is only useful if you know what was
 looked for.</p>
-<p><strong>No disk persistence of loaded data.</strong> There is no <code>persist="disk"</code> on any
-<code>@st.cache_data</code> in the package, so Streamlit's <code>LocalDiskCacheStorage</code> is never
-engaged and <code>~/.streamlit/cache</code> is never created. Uploads go to Streamlit's
-<code>MemoryUploadedFileManager</code> (RAM, dropped by <code>remove_session_files</code> when the
-session ends). Wizard-finished datasets live in <code>st.session_state["_datasets"]</code>
-(<code>wizard._finalize_wizard_dataset</code>) — session memory, no on-disk store.
-Annotations live in session state. The only disk writes in the whole package are
-the corpus downloads in <code>datasets.py</code>, the CLI/headless <code>api.save_figure*</code>, and
-the MP4 temp file of S8.</p>
+<p><strong>No disk persistence of loaded data — on a hosted deployment.</strong> There is no
+<code>persist="disk"</code> on any <code>@st.cache_data</code> in the package, so Streamlit's
+<code>LocalDiskCacheStorage</code> is never engaged and <code>~/.streamlit/cache</code> is never
+created. Uploads go to Streamlit's <code>MemoryUploadedFileManager</code> (RAM, dropped by
+<code>remove_session_files</code> when the session ends). Wizard-finished datasets live in
+<code>st.session_state["_datasets"]</code> (<code>wizard._finalize_wizard_dataset</code>), and
+annotations in session state.</p>
+<p>Since 0.27.0 that is the whole story only where <code>persistence.persistence_enabled</code>
+returns False — a hosted deployment, or any run with
+<code>SCANPATH_STUDIO_PERSIST=0</code>. On <strong>localhost or the desktop app</strong> the opposite is
+true by design: <code>persistence.save_state</code> writes those same session datasets to
+<code>~/.cache/scanpath-studio/session-v1</code> (Parquet frames + <code>manifest.json</code>) at the
+end of every run whose state changed, and <code>restore_state</code> reads them back on the
+next session. So the disk writes in the package are the corpus downloads in
+<code>datasets.py</code>, the CLI/headless <code>api.save_figure*</code>, the MP4 temp file of S8,
+and — locally — the recovery cache. It is written with <code>os.replace</code> over a
+sibling temp file (no partial reads), holds no credentials, and is removable
+from the app's <strong>🗄️ Recovery cache</strong> panel or <code>scanpath-studio cache --clear</code>.</p>
 <p><strong>No zip-slip on ingest.</strong> An uploaded archive is never extracted.
 <code>data._read_zipped_table</code> reads each member into an <code>io.BytesIO</code> and hands it to
 pandas; member names are used only as <code>source_file</code> labels via <code>Path(member).stem</code>.

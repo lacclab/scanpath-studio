@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 88,
+  "revision": 92,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -22,6 +22,20 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-03"
+    },
+    "BUG-16": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "BUG-17": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
     },
     "BUG-4": {
       "status": "On hold",
@@ -125,6 +139,13 @@
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
+      "updated": "2026-08-04"
+    },
+    "ENG-29": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
       "updated": "2026-08-04"
     },
     "EXP-3": {
@@ -356,6 +377,13 @@
       "updated": "2026-08-03"
     },
     "VIZ-29": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-04"
+    },
+    "VIZ-30": {
       "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",

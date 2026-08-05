@@ -26,6 +26,28 @@ def _load_catalog() -> dict:
     return json.loads(payload)
 
 
+def test_every_item_belongs_to_a_declared_group() -> None:
+    """An item whose ``group`` matches no declared group is invisible (ENG-29).
+
+    ``tracker/index.html`` renders by iterating ``DATA.groups`` and filtering
+    items into each one, so a typo'd or renamed group silently drops the item
+    from the page — the file is valid, the server serves it, and it just isn't
+    there. VIZ-30 shipped with ``"Visualization"`` instead of
+    ``"Visualization & display"`` and vanished exactly this way.
+    """
+    catalog = _load_catalog()
+    declared = {group["name"] for group in catalog["groups"]}
+    orphans = sorted(
+        f"{item['id']} -> {item['group']!r}"
+        for item in catalog["items"]
+        if item["group"] not in declared
+    )
+    assert not orphans, (
+        "these items name a group that isn't in TRACKER.groups, so the tracker "
+        f"page won't render them at all: {orphans}. Declared groups: {sorted(declared)}"
+    )
+
+
 def test_open_catalog_items_follow_write_up_shape() -> None:
     catalog = _load_catalog()
     state = json.loads((TRACKER_DIR / "state.json").read_text())

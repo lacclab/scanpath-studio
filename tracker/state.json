@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 103,
+  "revision": 109,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -60,9 +60,9 @@
     "CMP-7": {
       "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "Doesn't work. I see fixations and no heatmap although fixations are turned off and heatmap is on.",
+      "implementationBrief": "Doesn't work. I see fixations and no heatmap although fixations are turned off and heatmap is on. Re decition to settle - I think split-half.",
       "archived": false,
-      "updated": "2026-08-04"
+      "updated": "2026-08-07"
     },
     "DATA-10": {
       "status": "On hold",
@@ -148,6 +148,13 @@
       "archived": true,
       "updated": "2026-08-06"
     },
+    "ENG-28": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "I think this answers both questions - I am not going to personally review the code. I fully trust in you for code changes + I will betatest the final app, so what ever works for you (seems like one sweeping branch, delegated end to end)",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
     "ENG-29": {
       "status": "Closed",
       "priority": "Normal",
@@ -162,6 +169,13 @@
       "archived": true,
       "updated": "2026-08-05"
     },
+    "ENG-31": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "1. it can be two tasks. \n2. Can adopt it.\n3. Worth revisiting",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
     "ENG-33": {
       "status": "Closed",
       "priority": "Normal",
@@ -170,17 +184,17 @@
       "updated": "2026-08-06"
     },
     "ENG-34": {
-      "status": "Backlog",
+      "status": "Planned",
       "priority": "Normal",
       "implementationBrief": "only unreleased onwards; details per group.",
       "archived": false,
-      "updated": "2026-08-06"
+      "updated": "2026-08-07"
     },
     "ENG-35": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "Structured field. Migrate just backlog and in progress existing items to this format. Not sure about the other decisions to settle. \nRelated: Some tasks write \"What's left. Nothing.\" e.g., when in review. that's also not precise. it should be something like review the changes.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-07"
     },
     "EXP-3": {

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import pytest
 
+from scanpath_studio import controls
+
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
@@ -469,7 +471,7 @@ class TestUnmappedRawDataView:
         monkeypatch.delenv("SCANPATH_PUBLIC_DATASETS", raising=False)
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
-        source = [s for s in at.selectbox if s.key == "data_source_choice"]
+        source = [s for s in at.selectbox if s.key == "data_source_picker"]
         assert source, "data source picker not found"
         shorts = [
             app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
@@ -484,7 +486,7 @@ class TestUnmappedRawDataView:
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "0")
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
-        source = [s for s in at.selectbox if s.key == "data_source_choice"]
+        source = [s for s in at.selectbox if s.key == "data_source_picker"]
         assert source, "data source picker not found"
         shorts = [
             app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
@@ -542,7 +544,7 @@ class TestUnmappedRawDataView:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         # The flat picker carries the corpus token; selecting it resolves to the
         # public source with the corpus on public_dataset_choice.
-        source = [s for s in at.selectbox if s.key == "data_source_choice"][0]
+        source = [s for s in at.selectbox if s.key == "data_source_picker"][0]
         assert source.value == potec_key
         assert at.session_state["public_dataset_choice"] == potec_key
 
@@ -1117,7 +1119,7 @@ class TestSetupWizard:
         # The wizard owns the page: its sidebar Cancel button shows and the
         # normal data-source radio is gone.
         assert any(b.key == "cancel_add_data" for b in at.button)
-        assert not any(r.key == "data_source_choice" for r in at.radio)
+        assert not any(r.key == "data_source_picker" for r in at.radio)
 
     def test_wizard_active_then_finalize_renders_tabs(self, monkeypatch):
         app = self._inject(monkeypatch)
@@ -1293,7 +1295,7 @@ class TestSetupWizard:
         assert name in at.session_state["_datasets"]
         # DATA-9: flat source selectbox; an uploaded dataset is tagged private
         # ("🔒 <name> (yours)") but its option token (and the value) is the name.
-        pickers = [s for s in at.selectbox if s.key == "data_source_choice"]
+        pickers = [s for s in at.selectbox if s.key == "data_source_picker"]
         assert pickers, "data-source picker not rendered after finalize"
         assert pickers[0].value == name
         assert any(name in o for o in pickers[0].options), (
@@ -1973,3 +1975,49 @@ class TestGenericFilenamePowers:
         assert "_datasets" in at.session_state and at.session_state["_datasets"]
         stored = next(iter(at.session_state["_datasets"].values()))
         assert len(stored["words"]) == 2  # aggregated from 4 char rows
+
+
+@pytest.mark.timeout(120)
+class TestResetSettings:
+    """UX-26: the Reset settings action puts filters + visualization back."""
+
+    def test_reset_visualization_restores_defaults(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        # Tweak two viz settings away from their defaults (one layer toggle, one
+        # value control), then reset.
+        at.session_state["global_show_words"] = True
+        at.session_state["global_saccade_width"] = 7.5
+        at.run(timeout=30)
+        assert at.session_state["global_show_words"] is True
+
+        reset = [b for b in at.button if b.key == "reset_viz_settings_btn"]
+        assert reset, "Reset visualization button not rendered"
+        reset[0].click().run(timeout=30)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Re-seeded from controls._VIZ_WIDGET_DEFAULTS, not left deleted.
+        assert at.session_state["global_show_words"] is False
+        assert (
+            at.session_state["global_saccade_width"]
+            == controls._VIZ_WIDGET_DEFAULTS["global_saccade_width"]
+        )
+
+    def test_reset_both_clears_filters_too(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        at.session_state["filter_participants"] = ["nobody"]
+        at.session_state["global_show_words"] = True
+        at.run(timeout=30)
+
+        both = [b for b in at.button if b.key == "reset_all_settings_btn"]
+        assert both, "Reset both button not rendered"
+        both[0].click().run(timeout=30)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Either dropped outright or re-seeded empty — both mean "no constraint".
+        assert not (
+            "filter_participants" in at.session_state
+            and at.session_state["filter_participants"]
+        )
+        assert at.session_state["global_show_words"] is False

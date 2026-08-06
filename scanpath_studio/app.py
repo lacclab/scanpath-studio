@@ -1882,7 +1882,7 @@ def _sidebar_group(title: str) -> None:
 
 
 def render_sidebar_data_source() -> str:
-    """Render the data-source picker in the sidebar.
+    """Resolve the active data source (renders no picker widget — UX-25).
 
     Returns the selected source: ``DEMO_CHOICE`` ("Bundled Demo"), a stored
     uploaded dataset's name, ``ONESTOP_CHOICE`` / ``PUBLIC_DATASETS_CHOICE`` when
@@ -1890,22 +1890,23 @@ def render_sidebar_data_source() -> str:
     while the "➕ Add data" wizard is active. Switching to a stored dataset reloads
     it from session (no re-upload); the synthetic source is no longer offered
     fresh and "Public Datasets" shows grayed-out until the feature flag is on.
+
+    **UX-25** moved the *visible* picker out of the sidebar and onto the main
+    view's "Filter by" row (:func:`render_data_source_picker`). The picker has to
+    render inside the tab, i.e. long after the data is loaded, so this function
+    keeps its position at the top of ``main`` and stays the resolver: it applies
+    the pre-widget ``_pending_source_choice`` seam, heals a stale selection, and
+    publishes the entry list the picker renders from (``_data_source_entries``).
+    ``data_source_choice`` remains the canonical key (``?source=…`` deep links and
+    the wizard's finalize / cancel path both write it).
     """
-    # Imported lazily (not at module top) to avoid the app⇄wizard import cycle.
-    from scanpath_studio.wizard import _enter_add_data_wizard, _remove_dataset
-
-    # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
-    source = st.sidebar.container(key="tour_grp_data_source").expander(
-        "Data source", expanded=True
-    )
-
-    # Apply a programmatic source switch (the wizard's finalize / Cancel) BEFORE
-    # any widget reads data_source_choice. It rides a plain key, not the radio's
-    # widget value, so the browser never reconciles it away — assigning
-    # data_source_choice inline and rerunning is unreliable because the radio's
-    # frontend value can overwrite it on the rerun (works in AppTest, not in a
-    # real browser). Applying it here, before the radio instantiates, is the safe
-    # equivalent of an on_click callback.
+    # Apply a programmatic source switch (the wizard's finalize / Cancel, or the
+    # main-view picker's on_change) BEFORE anything reads data_source_choice. It
+    # rides a plain key, not a widget value, so the browser never reconciles it
+    # away — assigning data_source_choice inline and rerunning is unreliable
+    # because the widget's frontend value can overwrite it on the rerun (works in
+    # AppTest, not in a real browser). Callbacks run before the script body, so a
+    # pick made in the tab still takes effect on the very next run.
     pending = st.session_state.pop("_pending_source_choice", None)
     if pending is not None:
         st.session_state["data_source_choice"] = pending
@@ -1916,12 +1917,14 @@ def render_sidebar_data_source() -> str:
     # in the radio key (which Streamlit would garbage-collect mid-wizard — see
     # _enter_add_data_wizard). The legacy ``data_source_choice == UPLOAD_CHOICE``
     # is still honoured so AppTests / `?source=upload` deep links can open the
-    # wizard directly. While it's open, don't render the radio; offer a way out.
+    # wizard directly. While it's open the wizard owns the page (the "Filter by"
+    # row never renders), so the way out is rendered here, at the top of it.
     if (
         st.session_state.get("_show_upload_wizard")
         or st.session_state.get("data_source_choice") == UPLOAD_CHOICE
     ):
-        source.caption("➕ Adding a dataset — fill in the setup wizard →")
+        source = st.container(key="tour_grp_data_source")
+        source.caption("➕ Adding a dataset — fill in the setup wizard below.")
         if source.button("✕ Cancel", key="cancel_add_data"):
             st.session_state["_pending_source_choice"] = st.session_state.get(
                 "_prev_source", DEMO_CHOICE
@@ -1934,8 +1937,8 @@ def render_sidebar_data_source() -> str:
     # DATA-9: one **flat** source picker. Every source is a single entry tagged by
     # kind — 🧪 demo · 🔒 private (your uploads + local env bundles) · 🌐 public —
     # instead of a "Public datasets" category that then needed a second selectbox.
-    # `data_source_choice` stays the canonical widget key, but for a public corpus
-    # the entry's token IS the registry label; the return value resolves it back to
+    # `data_source_choice` stays the canonical key, but for a public corpus the
+    # entry's token IS the registry label; the return value resolves it back to
     # PUBLIC_DATASETS_CHOICE (+ public_dataset_choice) so the load path is unchanged.
     uploaded = list(st.session_state.get("_datasets", {}).keys())
     entries: list[str] = []
@@ -1977,6 +1980,65 @@ def render_sidebar_data_source() -> str:
             )
         st.session_state["data_source_choice"] = corpus or entries[0]
 
+    # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
+    # errors on an option that is no longer in the list.
+    if st.session_state.get("data_source_choice") not in entries:
+        st.session_state["data_source_choice"] = entries[0]
+    choice = st.session_state["data_source_choice"]
+
+    # Publish what the main-view picker renders from. It runs inside the tab,
+    # after this; recomputing the list there would duplicate the registry /
+    # stored-dataset logic above (and could disagree with the healed selection).
+    st.session_state["_data_source_entries"] = entries
+    st.session_state["_data_source_kinds"] = kinds
+    st.session_state["_data_source_uploaded"] = uploaded
+
+    # Resolve a public-corpus token back to the canonical PUBLIC_DATASETS_CHOICE so
+    # every downstream consumer (load dispatch, monitor, filter/col-map reset keys)
+    # is unchanged; the chosen corpus rides public_dataset_choice as before.
+    if public_datasets_enabled() and choice in PUBLIC_DATASET_REGISTRY:
+        st.session_state["public_dataset_choice"] = choice
+        return PUBLIC_DATASETS_CHOICE
+    return choice
+
+
+def _on_data_source_pick() -> None:
+    """Route the main-view picker's choice through the pre-widget seam (UX-25).
+
+    An ``on_change`` callback: it runs before the rerun's script body, so
+    ``render_sidebar_data_source`` — which pops ``_pending_source_choice`` at the
+    top of ``main`` — applies the new source on the *same* run that renders it.
+    The picker rides its own widget key (``data_source_picker``) rather than
+    writing ``data_source_choice`` directly, so a deep link / saved config can
+    keep assigning the canonical key without the widget reconciling it away.
+    """
+    picked = st.session_state.get("data_source_picker")
+    if picked:
+        st.session_state["_pending_source_choice"] = picked
+
+
+def render_data_source_picker(host=None) -> None:
+    """Render the data-source picker in the main view (UX-25).
+
+    Sits on the "Filter by" row, left of the label, so the top of the page reads
+    left-to-right as *which dataset → how to narrow it → which trial* — the app is
+    built to be used with the sidebar closed. Renders from the entry list
+    :func:`render_sidebar_data_source` published earlier this run; a pick is
+    applied on the next run via :func:`_on_data_source_pick`.
+
+    The compact row holds the selectbox only; managing sources (➕ Add data,
+    removing an uploaded dataset, contributing a corpus) lives behind the ⚙️
+    popover beside it.
+    """
+    # Imported lazily (not at module top) to avoid the app⇄wizard import cycle.
+    from scanpath_studio.wizard import _enter_add_data_wizard, _remove_dataset
+
+    entries = list(st.session_state.get("_data_source_entries") or [])
+    if not entries:
+        return
+    kinds: Dict[str, str] = dict(st.session_state.get("_data_source_kinds") or {})
+    uploaded = list(st.session_state.get("_data_source_uploaded") or [])
+
     def _entry_label(token: str) -> str:
         tag = kinds.get(token, "")
         if token in PUBLIC_DATASET_REGISTRY:
@@ -1987,25 +2049,40 @@ def render_sidebar_data_source() -> str:
             name = token
         return f"{tag} {name}".strip()
 
-    # Heal a stale/invalid selection (e.g. a removed dataset) so the widget never
-    # errors, then let the session value drive it — no `index=`, which would clash
-    # with the Session-State-backed key and can ignore a programmatic switch.
-    if st.session_state.get("data_source_choice") not in entries:
-        st.session_state["data_source_choice"] = entries[0]
-    choice = source.selectbox(
+    # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
+    box = (host if host is not None else st).container(key="tour_grp_data_source")
+    pick_col, gear_col = box.columns([5, 1], vertical_alignment="center")
+    # Mirror the canonical key onto the widget key before it instantiates, so a
+    # deep link / restore / wizard finalize shows up in the picker.
+    current = st.session_state.get("data_source_choice")
+    if current in entries:
+        st.session_state["data_source_picker"] = current
+    pick_col.selectbox(
         "Data source",
         entries,
         format_func=_entry_label,
         help=data_dictionary_help_text(),
-        key="data_source_choice",
+        key="data_source_picker",
+        on_change=_on_data_source_pick,
         label_visibility="collapsed",
+    )
+    manage = gear_col.popover("⚙️", width="content", help="Add or remove datasets.")
+    # The state change runs in an on_click callback (before widgets instantiate)
+    # so it can reassign the data_source_choice key — see _enter_add_data_wizard.
+    # The callback fires, then Streamlit reruns into the wizard branch.
+    manage.button(
+        "➕ Add data",
+        key="add_data_btn",
+        on_click=_enter_add_data_wizard,
+        help="Upload your own eye-tracking tables.",
+        width="stretch",
     )
     # Let the user remove datasets they added earlier (✕ next to each). Selecting
     # the removed one falls back to the demo (see _remove_dataset).
     if uploaded:
-        source.caption("Remove an added dataset")
+        manage.caption("Remove an added dataset")
         for name in uploaded:
-            name_col, x_col = source.columns([5, 1])
+            name_col, x_col = manage.columns([5, 1])
             name_col.write(name)
             x_col.button(
                 "✕",
@@ -2014,26 +2091,10 @@ def render_sidebar_data_source() -> str:
                 args=(name,),
                 help=f"Remove '{name}'",
             )
-    # The state change runs in an on_click callback (before widgets instantiate)
-    # so it can reassign the data_source_choice key — see _enter_add_data_wizard.
-    # The callback fires, then Streamlit reruns into the wizard branch above.
-    source.button(
-        "➕ Add data",
-        key="add_data_btn",
-        on_click=_enter_add_data_wizard,
-        help="Upload your own eye-tracking tables.",
-    )
-    source.caption(
+    manage.caption(
         "Have a public corpus? "
         f"[Get it built in ↗]({CITATION['docs_url']}contributing-a-dataset/)"
     )
-    # Resolve a public-corpus token back to the canonical PUBLIC_DATASETS_CHOICE so
-    # every downstream consumer (load dispatch, monitor, filter/col-map reset keys)
-    # is unchanged; the chosen corpus rides public_dataset_choice as before.
-    if public_datasets_enabled() and choice in PUBLIC_DATASET_REGISTRY:
-        st.session_state["public_dataset_choice"] = choice
-        return PUBLIC_DATASETS_CHOICE
-    return choice
 
 
 def seed_canvas_state(
@@ -2673,8 +2734,9 @@ def main() -> None:
     # so the dispatch below renders only the active page.
     active_view = _active_view()
 
-    # Data source selection (sidebar)
-    _sidebar_group("📂 Data")
+    # Data source selection. UX-25: only the *resolution* happens here (it must
+    # precede the load); the picker itself renders in the main view — on the
+    # Scanpath "Filter by" row, or at the top of the Corpus view.
     data_choice = render_sidebar_data_source()
     st.session_state["_active_data_source"] = data_choice
     preproc_settings = _preprocessing_settings()
@@ -3118,6 +3180,11 @@ def main() -> None:
     # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection
     # and fills the Save & restore slot when it's the active view.
     if active_view == _VIEW_CORPUS:
+        # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets its
+        # own compact row at the top of the page — it stays reachable on every
+        # view without reopening the sidebar.
+        _ds_col, _ = st.columns([2, 5])
+        render_data_source_picker(host=_ds_col)
         render_corpus_analysis_tab(
             words_filtered,
             fixations_filtered,
@@ -3151,6 +3218,7 @@ def main() -> None:
             words_all=words_all,
             fixations_all=fixations_all,
             share_renderer=lambda: _render_share_body(data_choice),
+            data_source_renderer=render_data_source_picker,
             canvas_renderer=canvas_renderer,
         )
 

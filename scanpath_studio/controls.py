@@ -2105,6 +2105,41 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("illustration",),
     )
+    # UX-26: a Quick view is already a "put these back to a known state"
+    # affordance, so the clean slate belongs in the same row — one step further
+    # than a preset, back to the app's own defaults. Behind a popover rather than
+    # a bare button: it is destructive-ish (a session of tweaking goes away) and
+    # the scope needs saying out loud. The buttons are `on_click` callbacks — see
+    # `reset_viz_settings` for why that is the only safe shape here.
+    _reset = viz.popover("♻️ Reset settings", width="stretch")
+    _reset.caption(
+        "Back to the app's defaults. Your **annotations**, column mapping, data "
+        "source and the selected trial are kept."
+    )
+    _reset.button(
+        "Visualization settings",
+        key="reset_viz_settings_btn",
+        on_click=reset_viz_settings,
+        width="stretch",
+        help="Every layer, colour, size and axis control back to its default — "
+        "including the settings a Share link put there.",
+    )
+    _reset.button(
+        "Trial filters",
+        key="reset_trial_filters_btn",
+        on_click=clear_trial_filters,
+        width="stretch",
+        help="Every Narrow-by, condition and annotation filter back to no constraint.",
+    )
+    _reset.button(
+        "↩️ Both",
+        key="reset_all_settings_btn",
+        type="primary",
+        on_click=reset_all_settings,
+        width="stretch",
+        help="Filters and visualization together — the full clean slate.",
+    )
+
     # VIZ-31: the Illustration *label* (the publication-disclosure override) now
     # lives in the "📐 Figure & axes" group below, with the other figure-level
     # presentation settings, rather than as a third top-level row up here.
@@ -3213,6 +3248,60 @@ def clear_trial_filters() -> None:
     st.session_state.pop("_trial_filters_raw", None)
 
 
+def reset_viz_settings() -> None:
+    """Put every visualization setting back to the app's defaults (UX-26).
+
+    The mechanism is ``clear_trial_filters``' — delete the widget keys and let
+    each control re-seed from ``_VIZ_WIDGET_DEFAULTS`` (plus the data-dependent
+    defaults `_seed_viz_state` computes) on the next render — so it must run as a
+    button ``on_click``: callbacks run before the rerun instantiates the widgets,
+    which is what keeps deleting their keys clear of Streamlit's "set after
+    instantiation" guard.
+
+    The key set is the honest inventory of what *visualization settings* means:
+    every ``global_*`` key, the per-scanpath compare styles
+    (``session_keys.compare_state_keys``), and the fixation-window pair the rail
+    owns. ``session_keys.PLOT_CONFIG_STATE_KEYS`` is folded in so a setting that
+    is restorable-but-not-currently-rendered is reset too. Deliberately NOT
+    touched: the trial selection, the annotations (user-authored content, not a
+    setting), the column mapping, and the data source.
+
+    Deep links re-apply: ``url_state._apply_url_preset`` seeds from
+    ``st.query_params`` at the top of every rerun, so on a page opened from a
+    Share link, deleting the keys alone would let the link reinstate itself on
+    the very next run. The viz params are stripped from the query string here;
+    the selection params (source / participant / trial) are left, so a reset
+    keeps you on the trial you were looking at.
+    """
+    from . import session_keys as _sk
+
+    keys = set(_sk.PLOT_CONFIG_STATE_KEYS)
+    keys |= set(_sk.compare_state_keys(0)) | set(_sk.compare_state_keys(1))
+    keys |= {k for k in st.session_state if str(k).startswith("global_")}
+    keys |= {"single_fix_range", "single_fix_range_all_trials"}
+    for key in keys:
+        st.session_state.pop(key, None)
+    # Re-seeding is source-driven for these two (see app.seed_canvas_state);
+    # dropping the guard makes the canvas / font snap back to the source's
+    # authoritative monitor on the next run rather than sticking at the old size.
+    st.session_state.pop("_canvas_seeded_for", None)
+    st.session_state.pop("_font_seeded_for", None)
+    st.session_state.pop("_palette_picked", None)
+    for param in _sk.URL_PRESET_PARAMS:
+        st.query_params.pop(param, None)
+
+
+def reset_all_settings() -> None:
+    """Reset the trial filters *and* the visualization settings (UX-26).
+
+    The one-click clean slate. Both halves are ``on_click``-safe for the reason
+    each documents; annotations, the column mapping, the loaded data source and
+    the selected trial all survive.
+    """
+    clear_trial_filters()
+    reset_viz_settings()
+
+
 def clear_trial_filter(*keys: str) -> None:
     """Reset *one* trial filter (UX-7) — the same mechanism as the reset-all.
 
@@ -3676,6 +3765,19 @@ def render_trial_filters(
             on_change=_apply,
             help="e.g. hide everything tagged 'To exclude'.",
         )
+
+    # UX-26: the filter reset used to appear only in the empty-result diagnostic
+    # panel — you had to filter yourself into nothing before the escape hatch
+    # showed up. It now has a permanent home at the foot of the panel that set
+    # the filters (and a second one in the rail's Reset settings popover).
+    host.divider()
+    host.button(
+        "✕ Clear all filters",
+        key="clear_all_filters_panel",
+        on_click=clear_trial_filters,
+        width="stretch",
+        help="Reset every Narrow-by, condition and annotation filter.",
+    )
 
     # Mirror the rendered widget values so _seed_filter_widget can restore them on
     # a run where this panel isn't shown (the keys get cleared); then publish the

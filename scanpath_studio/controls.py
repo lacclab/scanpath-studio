@@ -2105,41 +2105,6 @@ def sidebar_controls(
         on_click=_apply_view_preset,
         args=("illustration",),
     )
-    # UX-26: a Quick view is already a "put these back to a known state"
-    # affordance, so the clean slate belongs in the same row — one step further
-    # than a preset, back to the app's own defaults. Behind a popover rather than
-    # a bare button: it is destructive-ish (a session of tweaking goes away) and
-    # the scope needs saying out loud. The buttons are `on_click` callbacks — see
-    # `reset_viz_settings` for why that is the only safe shape here.
-    _reset = viz.popover("♻️ Reset settings", width="stretch")
-    _reset.caption(
-        "Back to the app's defaults. Your **annotations**, column mapping, data "
-        "source and the selected trial are kept."
-    )
-    _reset.button(
-        "Visualization settings",
-        key="reset_viz_settings_btn",
-        on_click=reset_viz_settings,
-        width="stretch",
-        help="Every layer, colour, size and axis control back to its default — "
-        "including the settings a Share link put there.",
-    )
-    _reset.button(
-        "Trial filters",
-        key="reset_trial_filters_btn",
-        on_click=clear_trial_filters,
-        width="stretch",
-        help="Every Narrow-by, condition and annotation filter back to no constraint.",
-    )
-    _reset.button(
-        "↩️ Both",
-        key="reset_all_settings_btn",
-        type="primary",
-        on_click=reset_all_settings,
-        width="stretch",
-        help="Filters and visualization together — the full clean slate.",
-    )
-
     # VIZ-31: the Illustration *label* (the publication-disclosure override) now
     # lives in the "📐 Figure & axes" group below, with the other figure-level
     # presentation settings, rather than as a third top-level row up here.
@@ -3079,6 +3044,30 @@ def sidebar_controls(
         ),
     )
 
+    # UX-26: the clean slate sits at the *foot* of the rail, below every section
+    # it undoes — a reset is where you land after scrolling the controls, not a
+    # peer of the Quick views. Scope is the visualization only: the trial filters
+    # have their own "✕ Clear all filters" in the More popover, next to the
+    # widgets it clears. Behind a popover rather than a bare button — a session of
+    # tweaking goes away, and the scope needs saying out loud. The button is an
+    # `on_click` callback; see `reset_viz_settings` for why that is the only safe
+    # shape here.
+    _reset = viz.popover("♻️ Reset settings", width="stretch")
+    _reset.caption(
+        "Put every visualization control back to the app's defaults. Your "
+        "**annotations**, trial filters, column mapping, data source and the "
+        "selected trial are kept."
+    )
+    _reset.button(
+        "♻️ Reset visualization",
+        key="reset_viz_settings_btn",
+        type="primary",
+        on_click=reset_viz_settings,
+        width="stretch",
+        help="Every layer, colour, size and axis control back to its default — "
+        "including the settings a Share link put there.",
+    )
+
     # Build the dict from session_state so it matches viz_settings_from_state
     # exactly; then fill in the per-scanpath comparison styling, shown only when
     # the Compare toggle (rail view-modes section) is on, so all styling sits here.
@@ -3289,17 +3278,6 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_palette_picked", None)
     for param in _sk.URL_PRESET_PARAMS:
         st.query_params.pop(param, None)
-
-
-def reset_all_settings() -> None:
-    """Reset the trial filters *and* the visualization settings (UX-26).
-
-    The one-click clean slate. Both halves are ``on_click``-safe for the reason
-    each documents; annotations, the column mapping, the loaded data source and
-    the selected trial all survive.
-    """
-    clear_trial_filters()
-    reset_viz_settings()
 
 
 def clear_trial_filter(*keys: str) -> None:

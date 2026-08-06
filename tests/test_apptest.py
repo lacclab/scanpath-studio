@@ -1979,7 +1979,7 @@ class TestGenericFilenamePowers:
 
 @pytest.mark.timeout(120)
 class TestResetSettings:
-    """UX-26: the Reset settings action puts filters + visualization back."""
+    """UX-26: the rail's Reset settings action puts the visualization back."""
 
     def test_reset_visualization_restores_defaults(self):
         at = _make_apptest(synthetic=True)
@@ -2003,16 +2003,29 @@ class TestResetSettings:
             == controls._VIZ_WIDGET_DEFAULTS["global_saccade_width"]
         )
 
-    def test_reset_both_clears_filters_too(self):
+    def test_reset_visualization_keeps_trial_filters(self):
+        """Scope check: filters are cleared from their own panel, not from here."""
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
         at.session_state["filter_participants"] = ["nobody"]
-        at.session_state["global_show_words"] = True
         at.run(timeout=30)
 
-        both = [b for b in at.button if b.key == "reset_all_settings_btn"]
-        assert both, "Reset both button not rendered"
-        both[0].click().run(timeout=30)
+        reset = [b for b in at.button if b.key == "reset_viz_settings_btn"]
+        assert reset, "Reset visualization button not rendered"
+        reset[0].click().run(timeout=30)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["filter_participants"] == ["nobody"]
+
+    def test_clear_all_filters_button_clears_them(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        at.session_state["filter_participants"] = ["nobody"]
+        at.run(timeout=30)
+
+        clear = [b for b in at.button if b.key == "clear_all_filters_panel"]
+        assert clear, "Clear all filters button not rendered"
+        clear[0].click().run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Either dropped outright or re-seeded empty — both mean "no constraint".
@@ -2020,4 +2033,3 @@ class TestResetSettings:
             "filter_participants" in at.session_state
             and at.session_state["filter_participants"]
         )
-        assert at.session_state["global_show_words"] is False

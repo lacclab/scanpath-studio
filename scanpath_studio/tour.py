@@ -289,7 +289,7 @@ _SPOTLIGHT_STEPS = [
         "in_sidebar": False,
         "title": "📂 Data source",
         "body": "Your **data source** (demo or your own upload) sits at the left "
-        "of the filter row — ⚙️ beside it adds or removes datasets. Columns "
+        "of the filter row — ➕ beside it adds or removes datasets. Columns "
         "auto-detect; remap any field in the wizard.",
     },
     {

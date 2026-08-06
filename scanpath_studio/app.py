@@ -2027,7 +2027,7 @@ def render_data_source_picker(host=None) -> None:
     applied on the next run via :func:`_on_data_source_pick`.
 
     The compact row holds the selectbox only; managing sources (➕ Add data,
-    removing an uploaded dataset, contributing a corpus) lives behind the ⚙️
+    removing an uploaded dataset, contributing a corpus) lives behind the ➕
     popover beside it.
     """
     # Imported lazily (not at module top) to avoid the app⇄wizard import cycle.
@@ -2051,7 +2051,7 @@ def render_data_source_picker(host=None) -> None:
 
     # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
     box = (host if host is not None else st).container(key="tour_grp_data_source")
-    pick_col, gear_col = box.columns([5, 1], vertical_alignment="center")
+    pick_col, add_col = box.columns([4, 1.2], vertical_alignment="center")
     # Mirror the canonical key onto the widget key before it instantiates, so a
     # deep link / restore / wizard finalize shows up in the picker.
     current = st.session_state.get("data_source_choice")
@@ -2066,7 +2066,7 @@ def render_data_source_picker(host=None) -> None:
         on_change=_on_data_source_pick,
         label_visibility="collapsed",
     )
-    manage = gear_col.popover("⚙️", width="content", help="Add or remove datasets.")
+    manage = add_col.popover("➕", width="stretch", help="Add or remove datasets.")
     # The state change runs in an on_click callback (before widgets instantiate)
     # so it can reassign the data_source_choice key — see _enter_add_data_wizard.
     # The callback fires, then Streamlit reruns into the wizard branch.

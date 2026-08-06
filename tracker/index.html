@@ -17,6 +17,8 @@
     --line-soft: #ededea;
     --accent: #2f6f4f;
     --accent-soft: #e4f0e9;
+    --decide: #a86a10;
+    --decide-soft: #fbf0dc;
     --code-bg: #f1f2ef;
     --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
     --radius: 10px;
@@ -33,6 +35,8 @@
       --line-soft: #282d31;
       --accent: #7fc79c;
       --accent-soft: #23372c;
+      --decide: #e2b264;
+      --decide-soft: #37301f;
       --code-bg: #24282c;
       --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
     }
@@ -41,14 +45,14 @@
     color-scheme: light;
     --bg:#fbfbfa; --panel:#fff; --panel-2:#f3f4f2; --ink:#1c1c1a; --ink-dim:#63645f;
     --ink-faint:#8d8e88; --line:#e2e2de; --line-soft:#ededea; --accent:#2f6f4f;
-    --accent-soft:#e4f0e9; --code-bg:#f1f2ef;
+    --accent-soft:#e4f0e9; --decide:#a86a10; --decide-soft:#fbf0dc; --code-bg:#f1f2ef;
     --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
   }
   html[data-theme="dark"] {
     color-scheme: dark;
     --bg:#16181a; --panel:#1e2124; --panel-2:#24282c; --ink:#e8e9e6; --ink-dim:#a3a7a3;
     --ink-faint:#7c817d; --line:#303539; --line-soft:#282d31; --accent:#7fc79c;
-    --accent-soft:#23372c; --code-bg:#24282c;
+    --accent-soft:#23372c; --decide:#e2b264; --decide-soft:#37301f; --code-bg:#24282c;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.25);
   }
 
@@ -193,6 +197,22 @@
     border-radius: 0 8px 8px 0; background: var(--accent-soft); white-space: pre-wrap;
   }
   .implementation-brief strong { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 3px; }
+  .decisions {
+    margin: .8em 0; padding: 10px 13px; border: 1px solid var(--decide);
+    border-left-width: 3px; border-radius: 0 8px 8px 0; background: var(--decide-soft);
+  }
+  .decisions > strong {
+    display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--decide); margin-bottom: 5px;
+  }
+  .decisions ul { margin: 0; padding-left: 1.25em; }
+  .decisions li { margin: .3em 0; }
+  .decisions .hint { margin: .55em 0 0 0; font-size: 12.5px; color: var(--ink-dim); }
+  .decide-badge {
+    flex: none; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px;
+    color: var(--decide); background: var(--decide-soft); border: 1px solid var(--decide);
+    white-space: nowrap;
+  }
   .editor {
     margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 9px;
     background: var(--panel-2);
@@ -285,6 +305,7 @@
     <details class="facet">
       <summary>View<span class="summary-meta" id="viewSummary">Open</span></summary>
       <div>
+      <button class="chip" id="toggleDecisions"><span class="dot" style="background:var(--decide)"></span>Waiting on my decision<span class="n" id="decideN"></span></button>
       <button class="chip" id="toggleArchive"><span class="dot" style="background:var(--ink-faint)"></span>Show archived<span class="n" id="archN"></span></button>
       <button class="chip" id="reset">Reset filters</button>
       </div>
@@ -361,11 +382,20 @@
   <ul>
     <li><b>Request</b> — what was asked for, in the asker's terms.</li>
     <li><b>What was done</b> — what actually shipped.</li>
-    <li><b>What's left</b> — what remains, or <i>Nothing</i>. Say it either way, and
-      link the follow-up item when the remainder was split out.</li>
+    <li><b>What's left</b> — what remains. Say it either way, and link the follow-up
+      item when the remainder was split out. An item in <code>Review</code> is never
+      "Nothing" — what is left is <i>your</i> review, so name what to look at.
+      "Nothing" is for an item that is genuinely finished and signed off.</li>
     <li><b>Background (technical)</b> — code anchors, design calls, gotchas, related
       IDs. The internal half, kept out of the first three.</li>
   </ul>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Open questions do <b>not</b> live in
+    <i>Background</i>. They go in a separate <code>decisions</code> field — a list of the
+    calls that need your input before the work can start. They render as their own
+    amber box at the top of the item, put a <b>⚖ to settle</b> badge on the card, and
+    are what the <i>Waiting on my decision</i> filter collects. Answer them in
+    <i>Instructions for implementation</i>; whoever implements clears the field and
+    records the call in <i>Background</i>.</p>
   <p style="font-size:13.4px;color:var(--ink-dim)">An item with no implementation
     behind it has only <i>Request</i> (plus <i>Background</i>), whether it is Backlog,
     Planned, or On hold. The other two appear once work exists. An implemented item
@@ -498,24 +528,30 @@
   const saved = JSON.parse(localStorage.getItem("tracker-ui") || "{}");
   const state = {
     q: "", status: new Set(saved.status || []), priority: new Set(saved.priority || []),
-    group: saved.group || null, archive: !!saved.archive, expandAll: false,
+    group: saved.group || null, archive: !!saved.archive, decisions: !!saved.decisions,
+    expandAll: false,
   };
   const persist = () => localStorage.setItem("tracker-ui",
     JSON.stringify({ status: [...state.status], priority: [...state.priority], group: state.group,
-      archive: state.archive }));
+      archive: state.archive, decisions: state.decisions }));
   const openIds = new Set();
+
+  // An item is "waiting on a decision" only while it is still open — a closed item's
+  // decisions were settled by the act of closing it, whatever the field still says.
+  const openDecisions = it => (it.archived ? [] : (it.decisions || []));
 
   const visiblePool = () => ITEMS.filter(i => state.archive ? true : !i.archived);
 
   function matches(it) {
     if (!state.archive && it.archived) return false;
+    if (state.decisions && !openDecisions(it).length) return false;
     if (state.status.size && !state.status.has(it.status)) return false;
     if (state.priority.size && !state.priority.has(it.priority || "Normal")) return false;
     if (state.group && it.group !== state.group) return false;
     if (state.q) {
       const hay = (it.id + " " + it.title + " " + it.status + " " + it.note + " "
         + (it.priority || "Normal") + " " + (it.implementationBrief || "") + " "
-        + it.added + " " + it.body.join(" ")).toLowerCase();
+        + it.added + " " + (it.decisions || []).join(" ") + " " + it.body.join(" ")).toLowerCase();
       if (!state.q.split(/\s+/).every(t => hay.includes(t))) return false;
     }
     return true;
@@ -559,7 +595,10 @@
     el("progressText").textContent = `${done} closed · ${ITEMS.length - done} open · ${ITEMS.length} total`;
     el("archN").textContent = done;
     el("toggleArchive").classList.toggle("on", state.archive);
-    el("viewSummary").textContent = state.archive ? "All tasks" : "Open";
+    el("decideN").textContent = ITEMS.filter(i => openDecisions(i).length).length;
+    el("toggleDecisions").classList.toggle("on", state.decisions);
+    el("viewSummary").textContent = [state.decisions ? "Waiting on me" : "",
+      state.archive ? "All tasks" : "Open"].filter(Boolean).join(" · ");
   }
 
   function itemHTML(it) {
@@ -571,6 +610,13 @@
     const priorityOptions = PRIORITIES.map(p => `<option${p === priority ? " selected" : ""}>${p}</option>`).join("");
     const note = it.implementationBrief
       ? `<div class="implementation-brief"><strong>Instructions for implementation</strong>${esc(it.implementationBrief)}</div>` : "";
+    const decisions = openDecisions(it);
+    const decideBox = decisions.length ? `<div class="decisions">
+      <strong>Decisions to settle before implementing</strong>
+      <ul>${decisions.map(d => `<li>${inline(d)}</li>`).join("")}</ul>
+      <p class="hint">Answer these in <em>Instructions for implementation</em> below — that is what a
+        coding agent reads before starting.</p>
+    </div>` : "";
     const editor = `<div class="editor" data-editor="${it.id}">
       <div class="editor-title">Edit task</div>
       <div class="editor-grid">
@@ -593,10 +639,11 @@
           <span class="ttl">${inline(it.title)}</span>
           ${sub ? `<div class="sub">${inline(sub)}</div>` : ""}
         </span>
+        ${decisions.length ? `<span class="decide-badge" title="Open decisions that need your call">⚖ ${decisions.length} to settle</span>` : ""}
         ${priority !== "Normal" ? `<span class="priority priority-${priority.toLowerCase()}">${priority}</span>` : ""}
         <span class="status"><span class="dot" style="background:${color(it.status)}"></span>${it.status}</span>
       </button>
-      ${open ? `<div class="body">${note}${markdown(it.body)}${editor}</div>` : ""}
+      ${open ? `<div class="body">${decideBox}${note}${markdown(it.body)}${editor}</div>` : ""}
     </article>`;
   }
 
@@ -842,10 +889,13 @@
       state.priority.has(priority) ? state.priority.delete(priority) : state.priority.add(priority);
     } else if (chip.dataset.group) {
       state.group = state.group === chip.dataset.group ? null : chip.dataset.group;
+    } else if (chip.id === "toggleDecisions") {
+      state.decisions = !state.decisions;
     } else if (chip.id === "toggleArchive") {
       state.archive = !state.archive;
     } else if (chip.id === "reset") {
-      state.status.clear(); state.priority.clear(); state.group = null; state.archive = false;
+      state.status.clear(); state.priority.clear(); state.group = null;
+      state.archive = false; state.decisions = false;
       el("q").value = ""; state.q = "";
     }
     persist(); render();

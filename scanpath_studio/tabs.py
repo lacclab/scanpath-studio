@@ -2354,6 +2354,9 @@ def render_single_trial_tab(
     words_all: Optional[pd.DataFrame] = None,
     fixations_all: Optional[pd.DataFrame] = None,
     share_renderer: Optional[Callable[[], None]] = None,
+    # UX-25: renders the data-source picker into the "Filter by" row's first
+    # column. Passed by ``app.main`` (which owns the source list + wizard hooks).
+    data_source_renderer: Optional[Callable[[object], None]] = None,
     canvas_renderer: Optional[Callable[[Any], None]] = None,
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
@@ -2397,15 +2400,21 @@ def render_single_trial_tab(
         rail = st.container(key="scanpath_rail")
 
     with plot_col:
-        # Narrow-by row: [Narrow by] [Text multiselect] [Participant multiselect]
-        # [More popover]. The Text/Participant multiselects narrow the trial pool;
+        # Narrow-by row: [Data source] [Filter by] [Text multiselect]
+        # [Participant multiselect] [More popover]. UX-25 put the data source
+        # first, so the row reads left-to-right as *which dataset → how to narrow
+        # it → which trial*. The Text/Participant multiselects narrow the pool;
         # "More" holds the condition + annotation filters. The specific trial is
         # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
         # Keyed wrapper so the welcome tour can spotlight the selection row.
         with st.container(key="tour_grp_trial_select"):
-            nb_label, nb_text, nb_part, more_col = st.columns(
-                [1, 2.3, 2.3, 1.2], vertical_alignment="center"
+            nb_source, nb_label, nb_text, nb_part, more_col = st.columns(
+                [2.2, 0.9, 2.2, 2.2, 1.1], vertical_alignment="center"
             )
+            # Rendered by app (it owns the entry list + the wizard hooks) — see
+            # app.render_data_source_picker; passed in so this row owns the layout.
+            if data_source_renderer is not None:
+                data_source_renderer(nb_source)
             nb_label.markdown("**Filter by**")
             render_narrow_by(
                 words_all, fixations_all, text_host=nb_text, part_host=nb_part

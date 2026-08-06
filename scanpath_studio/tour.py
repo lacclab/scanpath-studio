@@ -286,10 +286,11 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "title": "📂 Data & setup",
-        "body": "The sidebar holds your **data source** (demo or your own upload) "
-        "and **Experimental Setup** (monitor size, for true-to-scale rendering). "
-        "Columns auto-detect — remap any field in the wizard.",
+        "in_sidebar": False,
+        "title": "📂 Data source",
+        "body": "Your **data source** (demo or your own upload) sits at the left "
+        "of the filter row — ⚙️ beside it adds or removes datasets. Columns "
+        "auto-detect; remap any field in the wizard.",
     },
     {
         "selector": ".st-key-tour_grp_save_restore",

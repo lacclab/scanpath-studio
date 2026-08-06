@@ -57,11 +57,23 @@ you work under `scanpath_studio/`); contributor setup is in
   edited afterwards — even when `note`/`date` (which track a later status
   milestone, e.g. implemented/signed-off) stay empty.
 - **Write-up shape.** Four bold-led paragraphs in this order — **Request** (what
-  was asked, in the asker's terms) · **What was done** · **What's left** (or
-  "Nothing" — say it either way, and link the follow-up when the remainder was
-  split out) · **Background (technical)** (anchors, design calls, gotchas,
-  related IDs). A Backlog item has only *Request* + *Background*. The tracker's
-  *How this works* panel carries the same convention.
+  was asked, in the asker's terms) · **What was done** · **What's left** (say it
+  either way, and link the follow-up when the remainder was split out) ·
+  **Background (technical)** (anchors, design calls, gotchas, related IDs). A
+  Backlog item has only *Request* + *Background*. The tracker's *How this works*
+  panel carries the same convention.
+- **An item in `Review` never says "What's left. Nothing."** What's left is the
+  user's review — name what to look at (the judgement calls, the surfaces to
+  click). "Nothing" is only for an item that is finished *and* signed off.
+- **Open questions go in `decisions`, never buried in *Background*.** It's a
+  structured field on the item — an array of one-line calls that need the user's
+  input before the work can start. The tracker renders it as an amber *Decisions
+  to settle before implementing* callout at the top of the item, badges the card
+  (**⚖ N to settle**), and collects them under the *Waiting on my decision*
+  filter; free text inside *Background* gets none of that and generally doesn't
+  get read. The user answers in the item's *Instructions for implementation*;
+  whoever implements then clears `decisions` and records the call in
+  *Background*. Omit the field entirely when nothing is open (ENG-35).
 - **Statuses.** The live workflow has six: `Backlog`, `Planned`, `In progress`,
   `On hold`, `Review`, `Closed` (see `@AGENTS.md` → *Improvements tracker
   handoff*). Older items in `tracker/data.js` still carry the retired wording

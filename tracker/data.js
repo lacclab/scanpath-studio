@@ -536,6 +536,9 @@ window.TRACKER = {
   "group": "Compare mode",
   "subgroup": "",
   "archived": false,
+  "decisions": [
+   "Which of split-half / side-by-side / stacked is the **default** two-scanpath heatmap layout? All three are built; only the default is unsettled."
+  ],
   "body": [
     "**Request.** The word-level heatmap is single-scanpath only; in compare mode there's no",
     "heatmap view. Support two scanpaths in one heatmap by **splitting each word box**",
@@ -547,7 +550,7 @@ window.TRACKER = {
   "",
   "**What was done.** Compare mode now supports split-half, side-by-side, and stacked word heatmaps for readers A/B with one shared colour scale and colour bar.",
   "",
-  "**What's left.** User approval and final visual selection of the preferred default layout.",
+  "**What's left.** Your review of the three layouts in the app, and the default-layout call recorded above in *Decisions to settle*.",
   "",
   "**Background (technical).** Both halves use the existing word-box shape pipeline and the same metric range, avoiding misleading reader-specific normalization."
    ]
@@ -1188,6 +1191,10 @@ window.TRACKER = {
    "group": "Preprocessing — eyekit parity",
    "subgroup": "",
    "archived": false,
+   "decisions": [
+    "Does an excluded fixation stay excluded everywhere by default — reading measures, corpus aggregation, every export — or is that opt-in with the plot-only behaviour as the default? Today's shipped half silently means \"plot only\", which is the mismatch users would trip on.",
+    "Should `purge` reindex `fixation_id` / `order_in_trial` after the hard drop (matching eyekit), knowing that breaks ID stability against anything exported before the purge?"
+   ],
    "body": [
     "> **In progress.** The visualization-only half shipped 2026-06-23; the",
     "> eyekit-parity pipeline half (real exclude/purge reaching measures + export) is",
@@ -5784,6 +5791,11 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
+   "decisions": [
+    "Is this one task or two — land the version bump on its own (small, verifiable, unblocks the repo rule), then adopt native features as a separate item? The adoption list is long enough to swamp the bump.",
+    "`persist_state` (1.59) against the hand-rolled `_seed_viz_state` / `_pin(rewrite=True)`: adopt it if it subsumes BUG-15, or leave the known-good machinery alone before a release?",
+    "Scoped reruns via `@st.fragment` for the viz rail — the app deliberately avoids fragments so the settings→figure dataflow stays whole-app consistent. Worth revisiting now that 1.59/1.61 lifted the container limits, or is that invariant permanent?"
+   ],
    "body": [
     "**Request.** Switch to the latest Streamlit and see what we can stop",
     "hand-rolling. We are on **1.58**; **1.61** is current, and 1.59/1.60/1.61 added",
@@ -5889,7 +5901,7 @@ window.TRACKER = {
    "num": 35,
    "sub": "",
    "title": "Give tracker items a visible \"Decisions to settle\" section of their own",
-   "status": "Backlog",
+   "status": "Review",
    "note": "",
    "date": "",
    "added": "2026-08-06",
@@ -5902,29 +5914,49 @@ window.TRACKER = {
     "doesn't necessarily read, and certainly doesn't read looking for a decision to",
     "make. Pull them out into their own clearly-marked part of the write-up so the",
     "user can see at a glance what input is being asked of them and steer the work",
-    "before it starts.",
+    "before it starts. A second, related imprecision: items sitting in `Review` write",
+    "*What's left. Nothing.* when what is actually left is the user's review.",
     "",
-    "**Background (technical).** Three places have to change together. (1) The",
-    "write-up convention — today four bold-led paragraphs (*Request* · *What was",
-    "done* · *What's left* · *Background (technical)*), documented in the root",
-    "[`CLAUDE.md`](CLAUDE.md) (*Tracking work*), the `/track` skill",
+    "**What was done.** Open questions are now a **structured `decisions` field** on",
+    "the item — an array of one-line calls, separate from `body` — surfaced three ways",
+    "in [`tracker/index.html`](tracker/index.html): an amber **Decisions to settle",
+    "before implementing** callout pinned to the top of the item body (above the",
+    "implementation brief and the write-up), a **⚖ N to settle** badge on the collapsed",
+    "card, and a **Waiting on my decision** filter chip in the sidebar's *View* facet",
+    "(counted, persisted in `localStorage`, cleared by *Reset filters*) — so \"what is",
+    "waiting on me\" is one click, which was the point of the request. Decisions on an",
+    "archived item are treated as settled and stop counting. The callout points at",
+    "*Instructions for implementation* as the place to answer. The convention was",
+    "written into all three docs that carry it — the root [`CLAUDE.md`](CLAUDE.md)",
+    "(*Tracking work*), the `/track` skill",
     "([`.claude/skills/track/SKILL.md`](.claude/skills/track/SKILL.md)), and the",
-    "tracker's own *How this works* panel in",
-    "[`tracker/index.html`](tracker/index.html) — gains a fifth, e.g. **Decisions to",
-    "settle.** as a short bullet list, placed *above* Background (it's for the reader",
-    "who stops early) and omitted entirely when there's nothing open. (2) The",
-    "renderer should style it distinctly rather than as one more bold-led paragraph —",
-    "a callout box, and ideally a badge/filter on the item card so \"items waiting on",
-    "me\" is a list the user can pull up, which is the actual point of the request.",
-    "That likely wants a structured field (`decisions: [...]`) rather than free text",
-    "in `body`, since the card can't reliably grep markdown. (3) Existing items with",
-    "buried decisions get migrated opportunistically as they're touched, not in a",
-    "mass rewrite. Decisions to settle: structured field vs. body convention;",
-    "badge-and-filter vs. styling only; whether an unanswered decision should also",
-    "imply a status (it maps closely to `On hold`). **ENG-34** is a live example of",
-    "the problem — its decisions sit mid-paragraph in Background. Related:",
-    "**ENG-33** (the tracker's eventual move to GitHub Issues, which would have to",
-    "carry this too)."
+    "tracker's own *How this works* panel — including the `Review` wording fix: an item",
+    "in review says what to look at, never \"Nothing\". Per the user's brief the",
+    "migration covered the open work only: every `Backlog` / `In progress` item was",
+    "read and the five with genuine buried decisions were converted (**CMP-7**,",
+    "**PRE-2**, **ENG-28**, **ENG-31**, **ENG-34**).",
+    "",
+    "**What's left.** Your review of the rendering — in particular whether the amber",
+    "callout sits at the right altitude versus the implementation brief, and whether",
+    "the badge belongs on the collapsed card or only inside it. Two of the original",
+    "decisions were left open in your note and were called rather than blocked (see",
+    "*Background*); say the word if either should flip.",
+    "",
+    "**Background (technical).** Rendering hangs off `openDecisions(it)` in",
+    "[`index.html`](tracker/index.html), the single place that decides an item is",
+    "waiting on someone — `matches()`, the facet count, the badge and the callout all",
+    "read it, so \"archived means settled\" is defined once. The field is deliberately",
+    "*not* part of the server's write contract: `_validate_created_item` in",
+    "[`tracker/server.py`](tracker/server.py) checks an exact key set, tasks created",
+    "in the UI simply have no `decisions`, and the user answers through the existing",
+    "`implementationBrief` channel rather than a new one — so nothing in",
+    "`state.json` had to change. Two calls the user flagged as undecided: the badge",
+    "**and** filter were built rather than styling alone (a callout you have to open an",
+    "item to see doesn't answer \"what needs me?\"), and an open decision deliberately",
+    "does **not** imply a status — `On hold` means *we* are blocked, while a decision",
+    "can be open on an item nobody has started, and coupling them would have made the",
+    "status list lie. Related: **ENG-33** (the tracker's eventual move to GitHub",
+    "Issues, which would have to carry this too), **ENG-34**."
    ]
   },
   {
@@ -5940,6 +5972,10 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
+   "decisions": [
+    "Rewrite the already-released sections too, or start the new shape at `[Unreleased]` and leave history alone?",
+    "Is *Details* one flat list per release, or repeated per Added / Changed / Fixed group?"
+   ],
    "body": [
     "**Request.** Split each release section of `CHANGELOG.md` in two: a **very**",
     "concise headline list — essentially just today's bold lead of each entry, short",
@@ -5953,11 +5989,9 @@ window.TRACKER = {
     "per item. Proposed shape: keep the Added/Changed/Fixed grouping for the headline",
     "list (`- **Bold lead** (ID)` and nothing else), then a `### Details` subsection",
     "carrying the current long text, one short paragraph per item, anchored by the",
-    "same bold lead + ID so the two halves line up. Decisions to settle before",
-    "implementing: whether to rewrite the already-released sections or only",
-    "`[Unreleased]` onwards; whether *Details* is per-group or one flat list; whether",
-    "the headline list stays Keep-a-Changelog-valid (it does — the format doesn't",
-    "constrain bullet length). Then update the writing rule in the root `CLAUDE.md`",
+    "same bold lead + ID so the two halves line up. The headline list stays",
+    "Keep-a-Changelog-valid either way — the format doesn't constrain bullet length.",
+    "Then update the writing rule in the root `CLAUDE.md`",
     "(*Before every commit / push*) and `CONTRIBUTING.md`, which currently say \"one",
     "scannable line per item\", so future entries are written in the new shape from",
     "the start rather than condensed later. Related: **ENG-31**."
@@ -6530,6 +6564,10 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "Code quality",
    "archived": false,
+   "decisions": [
+    "Does the target architecture come back to you for sign-off before any bulk edits land, or is the whole pass delegated end to end? The Request asks for an explicit target first, which only means something if someone approves it.",
+    "One sweeping branch, or a series of small reviewable ones? A repo-wide pass is hard to review as a single diff, but staging it means living with a half-merged architecture for a while."
+   ],
    "body": [
     "**Request.** The app feels too complicated: too many files, too many lines of",
     "code, too much indirection, and too much historical residue. Run a repository-wide",

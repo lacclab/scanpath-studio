@@ -41,12 +41,43 @@ none):
 
 1. `**Request.**` — what was asked for, in the asker's terms.
 2. `**What was done.**` — what actually shipped.
-3. `**What's left.**` — what remains, or "Nothing" — say it either way; link
-   the follow-up item if the remainder was split out.
+3. `**What's left.**` — what remains; link the follow-up item if the remainder
+   was split out. An item you are moving to `Review` is **never** "Nothing" —
+   what's left is the user's review, so name what to look at (the judgement
+   calls you made, the surface to click). "Nothing" is only for an item that is
+   finished *and* signed off.
 4. `**Background (technical).**` — anchors, design calls, gotchas, related IDs.
 
 A Backlog item has only *Request* + *Background*; *What was done* / *What's
 left* appear once there is work behind it.
+
+## Decisions to settle
+
+Questions that need the **user's** call before the work can start do **not** go
+in *Background* — they go in a structured `decisions` field on the item, a
+sibling of `body`:
+
+```js
+"decisions": [
+ "Rewrite the already-released sections too, or start at `[Unreleased]`?",
+ "Is *Details* one flat list per release, or repeated per group?"
+],
+```
+
+One self-contained line per decision (markdown inline is rendered; `#ID` refs
+link). The tracker shows them as an amber callout pinned above the write-up,
+badges the collapsed card **⚖ N to settle**, and collects them under the
+*Waiting on my decision* filter — which is the point: the user should be able to
+see every call waiting on them in one click. Rules:
+
+- **Omit the field** when nothing is open. Never write an empty array.
+- **Ask, don't hedge.** A decision is a question with options, not "TBD".
+- **Clear it when settled**, in the same edit that acts on the answer, and
+  record the call you made in *Background* so the reasoning survives.
+- An open decision **does not** imply a status. `On hold` means the work is
+  blocked; a decision can be open on an item nobody has started.
+- Items created in the tracker UI have no `decisions` — the server's
+  `_validate_created_item` takes an exact key set. Add it by editing `data.js`.
 
 ## Placement
 

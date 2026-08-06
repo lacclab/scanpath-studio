@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 96,
+  "revision": 99,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -161,6 +161,20 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-05"
+    },
+    "ENG-33": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "Duplicate of ENG-32",
+      "archived": true,
+      "updated": "2026-08-06"
+    },
+    "ENG-34": {
+      "status": "Backlog",
+      "priority": "Normal",
+      "implementationBrief": "only unreleased onwards; details per group.",
+      "archived": false,
+      "updated": "2026-08-06"
     },
     "EXP-3": {
       "status": "Closed",

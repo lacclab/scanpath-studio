@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 109,
+  "revision": 112,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -151,7 +151,7 @@
     "ENG-28": {
       "status": "Planned",
       "priority": "Normal",
-      "implementationBrief": "I think this answers both questions - I am not going to personally review the code. I fully trust in you for code changes + I will betatest the final app, so what ever works for you (seems like one sweeping branch, delegated end to end)",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
@@ -172,7 +172,7 @@
     "ENG-31": {
       "status": "Planned",
       "priority": "Normal",
-      "implementationBrief": "1. it can be two tasks. \n2. Can adopt it.\n3. Worth revisiting",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
@@ -195,6 +195,13 @@
       "priority": "Normal",
       "implementationBrief": "Structured field. Migrate just backlog and in progress existing items to this format. Not sure about the other decisions to settle. \nRelated: Some tasks write \"What's left. Nothing.\" e.g., when in review. that's also not precise. it should be something like review the changes.",
       "archived": true,
+      "updated": "2026-08-07"
+    },
+    "ENG-36": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
       "updated": "2026-08-07"
     },
     "EXP-3": {

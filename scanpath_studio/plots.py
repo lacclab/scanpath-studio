@@ -3861,6 +3861,7 @@ def _add_comparison_fixation_trace(
     style: dict,
     font_settings: dict,
     *,
+    show_fixations: bool = True,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     show_order: bool = True,
@@ -3893,6 +3894,13 @@ def _add_comparison_fixation_trace(
     that survives a greyscale print, which is exactly what comparison figures get
     used for. The glyph shapes the static figure draws as text fall back to the
     default symbol here (:func:`_marker_symbol`).
+
+    ``show_fixations=False`` (CMP-7) drops the marker trace, and with it the
+    fixation-index labels that ride on it as marker text — the same thing the
+    toggle does on the static figure. The saccade and arrow layers are
+    independent and keep their own toggles, so a lines-only comparison is still
+    reachable. This is what makes a comparison *heatmap* readable: the whole
+    point of the split word boxes is lost under two full sets of markers.
     """
     if trial_fix.empty:
         return
@@ -3948,6 +3956,9 @@ def _add_comparison_fixation_trace(
                     hoverinfo="skip",
                 )
             )
+
+    if not show_fixations:
+        return
 
     sizes = _compute_marker_sizes(trial_fix["duration_ms"], style["marker_size_range"])
     # Metric colouring ("Color fixations by") when a numeric column is chosen:
@@ -4035,6 +4046,25 @@ def _comparison_metric_colorbar(
     )
 
 
+def _word_id_keys(values: pd.Series) -> pd.Series:
+    """Word ids as join keys that mean the same thing on both frames (CMP-7).
+
+    The words table and the fixations table routinely disagree on dtype: word
+    boxes carry an integer ``word_id`` while a fixation's is a float, because it
+    is NaN wherever the fixation landed outside every box. A plain ``str()`` then
+    yields ``"7"`` on one side and ``"7.0"`` on the other, so a keyed join
+    silently matches nothing — which is exactly how the comparison heatmap came
+    out empty. Whole numbers lose the decimal tail here; anything non-numeric
+    keeps its stripped string, so datasets with string word ids still join.
+    """
+    numeric = pd.to_numeric(values, errors="coerce")
+    integral = numeric.notna() & (numeric % 1 == 0)
+    text = values.astype(str).str.strip()
+    if not integral.any():
+        return text
+    return text.mask(integral, numeric.where(integral, 0).astype("int64").astype(str))
+
+
 def _comparison_word_heatmap_data(
     trial_specs: Sequence[dict],
     *,
@@ -4052,14 +4082,15 @@ def _comparison_word_heatmap_data(
             values: dict[str, float] = {}
         else:
             valid = fixations[fixations["word_id"].notna()].copy()
+            keys = _word_id_keys(valid["word_id"])
             if duration_weighted and "duration_ms" in valid.columns:
                 grouped = (
                     pd.to_numeric(valid["duration_ms"], errors="coerce")
-                    .groupby(valid["word_id"].astype(str))
+                    .groupby(keys)
                     .sum()
                 )
             else:
-                grouped = valid.groupby(valid["word_id"].astype(str)).size()
+                grouped = valid.groupby(keys).size()
             values = {str(key): float(value) for key, value in grouped.items()}
         value_maps.append(values)
         all_values.extend(value for value in values.values() if value > 0)
@@ -4098,8 +4129,11 @@ def _comparison_heatmap_shapes(
 
     shapes: list[dict] = []
     z_span = max(z_max - z_min, 1e-9)
-    for row, (x0, y0, x1, y1) in zip(words.itertuples(), zip(*word_box_bounds(words))):
-        value = values.get(str(getattr(row, "word_id", "")), 0.0)
+    if "word_id" not in words.columns:
+        return []
+    keys = _word_id_keys(words["word_id"])
+    for key, (x0, y0, x1, y1) in zip(keys, zip(*word_box_bounds(words))):
+        value = values.get(key, 0.0)
         if value <= 0:
             continue
         midpoint = (x0 + x1) / 2.0
@@ -4173,6 +4207,7 @@ def _make_split_comparison_figure(
     orientation: str,
     marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
     styles: Optional[Tuple[dict, dict]] = None,
+    show_fixations: bool = True,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     show_order: bool = False,
@@ -4378,6 +4413,7 @@ def _make_split_comparison_figure(
             spec["display_name"],
             spec["style"],
             font_settings,
+            show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
             show_order=show_order,
@@ -4510,6 +4546,7 @@ def make_comparison_figure(
     marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
     style_a: Optional[dict] = None,
     style_b: Optional[dict] = None,
+    show_fixations: bool = True,
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     show_order: bool = False,
@@ -4564,6 +4601,7 @@ def make_comparison_figure(
             orientation=layout,
             marker_size_range=marker_size_range,
             styles=(style_a, style_b),
+            show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
             show_order=show_order,
@@ -4732,6 +4770,7 @@ def make_comparison_figure(
             spec["display_name"],
             spec["style"],
             font_settings,
+            show_fixations=show_fixations,
             show_saccades=show_saccades,
             show_saccade_arrows=show_saccade_arrows,
             show_order=show_order,

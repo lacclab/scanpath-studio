@@ -2258,19 +2258,23 @@ def sidebar_controls(
     axes_grp = viz.expander("📐 Figure & axes", expanded=False)
 
     # --- Fixations --------------------------------------------------------
-    # The Fixations toggle is a `make_scanpath_figure`-only layer: the animated
-    # replay IS the fixation trail and the comparison builder always draws both
-    # scanpaths' markers, so neither takes a `show_fixations` argument.
-    fix_off_disabled, _ = _mode_gate(animating, comparing, **_static_only)
+    # The Fixations toggle reaches the static figure AND Compare (CMP-7 — the
+    # comparison heatmap is unreadable under two full sets of markers). Only the
+    # animated replay ignores it: the replay *is* the fixation trail, so there is
+    # nothing left to draw with it off, and `make_scanpath_animation` takes no
+    # `show_fixations` argument.
+    fix_off_disabled, _ = _mode_gate(
+        animating, comparing, in_animation=False, in_compare=True
+    )
     show_fix = fix_grp.toggle(
         "**Fixations**",
         key="global_show_fix",
         disabled=fix_off_disabled,
         help=_gated_help(
             "Draw the fixation markers.",
-            "⚠️ Fixations always draw in **Animate** / **Compare** mode — the "
-            "replay and the overlay are made of them. Your setting is kept for "
-            "the static figure; the styling below still applies."
+            "⚠️ Fixations always draw in **Animate** mode — the replay is made "
+            "of them. Your setting is kept for the static and comparison "
+            "figures; the styling below still applies."
             if fix_off_disabled
             else "",
         ),

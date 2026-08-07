@@ -108,7 +108,7 @@ isn't passed.
 | --- | :---: | :---: | :---: | --- |
 | `global_show_words` → `show_words` | ✅ | ✅ | ✅ | |
 | `global_show_labels` → `show_labels` | ✅ | ✅ | ✅ | |
-| `global_show_fix` → `show_fix` | ✅ | ❌ | ❌ | Neither builder takes `show_fixations` — the replay *is* the trail, the overlay always draws both scanpaths. Toggle disabled; its ⚙ popover stays reachable. |
+| `global_show_fix` → `show_fix` | ✅ | ❌ | ✅ | **CMP-7**: the comparison builders now take `show_fixations` (dropping the marker trace, and with it the index labels that ride on it as marker text) — a comparison *heatmap* is unreadable under two full sets of markers, so the toggle that hides them has to reach Compare. Still ❌ in Animate: `make_scanpath_animation` takes no such argument, because the replay *is* the fixation trail. Toggle disabled in Animate only; its ⚙ popover stays reachable either way. |
 | `global_show_saccades` → `show_saccades` | ✅ | ✅ | ✅ | |
 | `global_show_saccade_arrows` → `show_saccade_arrows` | ✅ | ✅ | ✅ | **VIZ-23**: the replay grew an arrow trace per scanpath (`_saccade_arrow_rows` → `_revealed_arrow_xy`) — each arrowhead un-masks with *its own* saccade instead of standing there from frame zero, and hidden arrows are masked to `None` so the arrays stay constant-length for `redraw=False`. |
 | `global_show_order` → `show_order` | ✅ | ✅ | ✅ | |
@@ -134,7 +134,7 @@ isn't passed.
 | `global_saccade_width` → `saccade_width` | ✅ | ✅ | ❌ | `cmp{idx}_saccade_width`. |
 | `global_saccade_color_mode` / `global_saccade_class_color_*` / `global_saccade_type_legend` | ✅ | ❌ | ❌ | VIZ-8/19 reading-class colouring — `make_scanpath_figure` only. |
 | `global_saccade_classes` → `saccade_classes` | ✅ | ❌ | ❌ | **VIZ-31** reading-class *filter* (which classes draw at all, line **and** arrowhead) — the same `measures.classify_saccades` split as the colouring above, so it is static-only for the same reason. Filtering happens on the *unfolded* classes, before VIZ-19's two-way fold, so "regressions only" means one thing in every colour mode. A selection naming every class short-circuits back onto the unclassified fast path, so the default costs nothing. |
-| `global_show_heatmap` + `global_heatmap_style` / `_norm` / `_metric` / `_colorscale` / `_color_range` | ✅ | ❌ | ❌ | Neither the animation nor the comparison builders take any heatmap argument. |
+| `global_show_heatmap` + `global_heatmap_metric` / `_norm` / `_colorscale` / `_color_range` | ✅ | ❌ | ✅ | **CMP-7** word-box heatmap on a scale shared by A and B: *overlay* splits each box into left-A / right-B halves, the two split layouts tint their own full boxes. `global_heatmap_style` is static-only (Compare is always word boxes — an interpolated or density layer has no half to split), so that one picker stays greyed while comparing. The animation takes no heatmap argument at all. **Join gotcha:** the value maps are keyed by `word_id` across two frames whose dtypes differ (int boxes vs. float fixations), so both sides must go through `plots._word_id_keys` — a bare `str()` matched nothing and drew an empty heatmap. |
 | `global_show_raw_gaze` → `show_raw_gaze` | ✅ | ❌ | ❌ | `raw_gaze` is a `make_scanpath_figure` parameter only. |
 | `global_show_stimulus_image` + `global_stimulus_image_opacity` / `_offset_x` / `_offset_y` / `_scale` / upload | ✅ | ✅ | ✅ | `background_image*` are now parameters of all three builders. **VIZ-23**: the shared `_background_image_spec` / `_add_background_image` place the `layout.image`; the split comparison layouts get one per panel via `add_layout_image(row=, col=)`, so there's no split-layout gap. `tabs._render_comparison_figure` takes the four values from the same `figure_settings` group the static branch computes (upload-wins + manual nudge). |
 | `global_critical_span_style` | ✅ | ➖ | ➖ | Two channels with different reach: **Mark text** recolours the word labels and applies everywhere (see `highlight_column` below); **Mark border** draws `build_critical_span_overlay`, a `make_scanpath_figure`-only shape layer. `tabs._marked_text_column` hands the other two builders `None` under any non-"Mark text" style, so a border style shows *unmarked* there rather than silently becoming text marking. |
@@ -183,11 +183,12 @@ gave the layer settings — which is why those survived the trip and these didn'
 After VIZ-23 the still-gated set is short, and each entry is a *missing layer*,
 not a missing keyword:
 
-- **static only** — heatmap, raw gaze, `x_field`/`y_field`, the VIZ-8/19
-  reading-class saccade colouring **and the VIZ-31 reading-class filter**, the
-  VIZ-9 Arc + snap schematic, the drift *connectors*, the "Mark border" span
-  overlay + its colour, and `show_fix` (the replay and the overlay are made of
-  fixations).
+- **static only** — raw gaze, `x_field`/`y_field`, the VIZ-8/19 reading-class
+  saccade colouring **and the VIZ-31 reading-class filter**, the VIZ-9 Arc +
+  snap schematic, the drift *connectors*, the "Mark border" span overlay + its
+  colour, and `heatmap_style` (Compare is always word boxes — CMP-7).
+- **not in animate** — the heatmap (a time-varying density layer would need its
+  own frame contract) and `show_fix` (the replay *is* the fixation trail).
 - **not in compare** — `fixation_flags`, `word_hover_measure`, and the marker /
   saccade appearance the per-scanpath `cmp{idx}_*` styles own (fixation colour,
   size range, opacity, hollow, saccade colour/style/width, index-label colour).

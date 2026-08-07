@@ -1,6 +1,6 @@
 {
  "version": 2,
- "revision": 147,
+ "revision": 148,
  "items": {
   "AN-29": {
    "status": "Closed",
@@ -72,9 +72,9 @@
    "updated": "2026-08-03"
   },
   "CMP-7": {
-   "status": "Planned",
+   "status": "Review",
    "priority": "Normal",
-   "implementationBrief": "Doesn't work. I see fixations and no heatmap although fixations are turned off and heatmap is on. Re decition to settle - I think split-half.",
+   "implementationBrief": "",
    "archived": false,
    "updated": "2026-08-07"
   },

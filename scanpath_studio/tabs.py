@@ -3542,6 +3542,9 @@ def _render_comparison_figure(
         style_a=viz_settings.get("compare_style_a"),
         style_b=viz_settings.get("compare_style_b"),
         marker_size_range=viz_settings.get("marker_size_range", (8, 24)),
+        # CMP-7: the Fixations toggle reaches Compare too — two full sets of
+        # markers bury the split-box heatmap the mode is there to show.
+        show_fixations=viz_settings.get("show_fix", True),
         show_saccades=viz_settings.get("show_saccades", True),
         show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
         show_order=viz_settings.get("show_order", False),

@@ -487,6 +487,91 @@ class TestComparisonWiring:
 
 
 # -----------------------------------------------------------------------------
+# CMP-7 — the comparison heatmap, and the Fixations toggle that makes it legible
+# -----------------------------------------------------------------------------
+
+
+def _float_word_id_fixations() -> pd.DataFrame:
+    """The fixation shape a real corpus has: ``word_id`` is a *float* column.
+
+    A fixation that lands outside every box gets ``NaN``, so pandas types the
+    whole column float64 while the words table keeps int64 ``word_id``. That
+    dtype gap is what CMP-7's heatmap fell into — ``str(7)`` on one side against
+    ``str(7.0)`` on the other matched nothing, and every word came out at value
+    zero, i.e. no heatmap at all.
+    """
+    frame = _fixations()
+    frame["word_id"] = frame["word_id"].astype(float)
+    frame.loc[frame.index[0], "word_id"] = float("nan")
+    return frame
+
+
+def _heatmap_count(fig) -> int:
+    return sum(
+        1
+        for s in fig.layout.shapes
+        if (s.name or "").startswith(plots._shape_layer_tag("heatmap"))
+    )
+
+
+def _marker_traces(fig) -> list:
+    return [t for t in fig.data if t.mode and "markers" in t.mode and t.x is not None]
+
+
+@pytest.mark.usefixtures("quiet_chart")
+class TestComparisonHeatmap:
+    @pytest.mark.parametrize("layout", ["overlay", "side_by_side", "stacked"])
+    def test_it_draws_against_float_word_ids(self, monkeypatch, layout):
+        fig, kwargs = _compare(
+            _viz(show_heatmap=True),
+            monkeypatch,
+            fixations=_float_word_id_fixations(),
+            layout=layout,
+        )
+        assert kwargs["show_heatmap"] is True
+        assert _heatmap_count(fig) > 0, "the comparison heatmap drew nothing"
+
+    def test_overlay_splits_each_box_in_half(self, monkeypatch):
+        """The split-half layout is the default and the point of the feature."""
+        fig, _ = _compare(
+            _viz(show_heatmap=True),
+            monkeypatch,
+            fixations=_float_word_id_fixations(),
+        )
+        tinted = [
+            s
+            for s in fig.layout.shapes
+            if (s.name or "").startswith(plots._shape_layer_tag("heatmap"))
+        ]
+        widths = {round(s.x1 - s.x0, 3) for s in tinted}
+        # Every word box is 50 px wide (see ``_words``); a half is 25.
+        assert widths == {25.0}
+
+    def test_fixations_off_leaves_the_heatmap_alone(self, monkeypatch):
+        """CMP-7: two full sets of markers bury the split boxes."""
+        on, _ = _compare(
+            _viz(show_heatmap=True),
+            monkeypatch,
+            fixations=_float_word_id_fixations(),
+        )
+        off, kwargs = _compare(
+            _viz(show_heatmap=True, show_fix=False),
+            monkeypatch,
+            fixations=_float_word_id_fixations(),
+        )
+        assert kwargs["show_fixations"] is False
+        assert _marker_traces(on), "the comparison drew no fixation markers at all"
+        assert not _marker_traces(off)
+        assert _heatmap_count(off) == _heatmap_count(on)
+
+    def test_saccades_survive_fixations_being_off(self, monkeypatch):
+        """The two layers have their own toggles — a lines-only compare works."""
+        fig, _ = _compare(_viz(show_fix=False), monkeypatch)
+        lines = [t for t in fig.data if t.mode == "lines"]
+        assert lines, "turning fixations off also removed the saccades"
+
+
+# -----------------------------------------------------------------------------
 # Drift correction on all three paths, driven through the real app
 # -----------------------------------------------------------------------------
 

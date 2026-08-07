@@ -39,6 +39,7 @@ from typing import List, Optional
 
 import pandas as pd
 
+from .aggregation import reader_summary_table, trial_summary_table
 from .constants import (
     CITATION,
     DEFAULT_FIXATION_COLOR,
@@ -54,14 +55,13 @@ from .constants import (
 )
 from .data import compute_word_metrics
 from .measures import assign_fixations_to_words, enrich_fixations
-from .aggregation import reader_summary_table, trial_summary_table
+from .plots import make_scanpath_figure, split_scanpath_layers
 from .preprocessing import (
     character_grid,
     cleaning_report,
     saccade_table,
     sentence_measures,
 )
-from .plots import make_scanpath_figure, split_scanpath_layers
 from .utils import extract_trial
 
 # --- EXP-1 · customizable export paths ---------------------------------------

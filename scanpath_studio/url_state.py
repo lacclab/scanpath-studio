@@ -16,19 +16,20 @@ from urllib.parse import parse_qsl, urlencode
 
 import pandas as pd
 import streamlit as st
+
 from scanpath_studio.html_embed import embed_html_iframe
 
 from .annotations import restore_records
 from .constants import (
     _VIEW_CORPUS,
     _VIEW_SCANPATH,
-    BACKGROUND_PRESETS,
     AUTHOR_CHOICE,
+    BACKGROUND_PRESETS,
     COLORSCALES,
+    CUSTOM_PALETTE,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
     MULTIPLEYE_BUNDLE_CHOICE,
-    CUSTOM_PALETTE,
     ONESTOP_CHOICE,
     ONESTOP_PART_LABELS,
     ONESTOP_PUBLIC_CHOICE,

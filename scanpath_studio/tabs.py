@@ -78,6 +78,8 @@ from scanpath_studio.controls import (
     column_mapping_ui,
     corpus_style_controls,
     render_narrow_by,
+    render_pattern_help,
+    render_pattern_input,
     render_trial_chip_picker,
     render_trial_filters,
     sidebar_controls,
@@ -2817,21 +2819,23 @@ def render_single_trial_tab(
                         # UX-31: override the auto "participant · trial" label,
                         # EXP-2-style (same pattern language + live preview as
                         # the rail's title/caption). Empty = the auto label.
-                        st.text_input(
-                            "Label A",
-                            key="cmp0_label_pattern",
-                            persist_state="session",
-                            help="Same fields as the title/caption pattern in "
-                            "📐 Figure & axes. Leave empty for the default "
-                            "`{participant_id} · {trial_id}`.",
+                        # The field vocabulary is spelled out here rather than
+                        # pointed at: "same fields as the title/caption pattern"
+                        # only helps a user who has already found that control.
+                        label_fields = pattern_fields(
+                            "p01", "t01", pd.DataFrame(), pd.DataFrame(), {}
                         )
-                        st.text_input(
-                            "Label B",
-                            key="cmp1_label_pattern",
-                            persist_state="session",
-                            help="Leave empty for the default "
-                            "`{participant_id} · {trial_id}`.",
-                        )
+                        box = st.container()
+                        for idx, side in ((0, "A"), (1, "B")):
+                            render_pattern_input(
+                                box,
+                                f"Label {side}",
+                                f"cmp{idx}_label_pattern",
+                                label_fields,
+                                help="Leave empty for the default "
+                                "`{participant_id} · {trial_id}`.",
+                            )
+                        render_pattern_help(box, label_fields)
         st.divider()
         st.markdown("## 🎨 Visualization")
         # The visualization controls moved out of the sidebar into this rail
@@ -3278,79 +3282,109 @@ def render_single_trial_tab(
                 "Export",
                 "🔎 Data Inspection",
                 "🔗 Share",
-            ]
+            ],
+            # PERF-3: `st.tabs` executes EVERY tab's body on every run — only the
+            # display is client-side — so the four expensive panels below were
+            # rebuilt on every rail tweak whether or not the user had ever opened
+            # them. On the bundled demo that was 42% of a rerun (480ms → 277ms
+            # with them stubbed out), and it scales with corpus size.
+            #
+            # Streamlit 1.61's keyed tabs are the native fix: with a `key` and
+            # `on_change="rerun"`, each tab object exposes `.open`, so a body can
+            # be rendered only when its tab is the selected one. The trade is that
+            # switching tabs now costs a rerun instead of being instant — worth it
+            # at ~0.3s, and the tab the user is actually looking at is the one
+            # that stays fast.
+            key="single_subtab",
+            on_change="rerun",
         )
     with tab_annot:
         render_trial_annotations(selected_participant, selected_trial, bare=True)
     with tab_stim:
         _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
     with tab_compare:
-        # ENG-8: Comparisons overlays the selected scanpath against other readings
-        # of the SAME text, grouped by a chosen column (repeated readings, model
-        # generations, …), scored by similarity. It uses the main scanpath
-        # selection and renders no picker of its own. Line assignment is now its
-        # own top-level subtab (tab_align), not nested here.
-        render_multiple_comparison_tab(
-            trial_words,
-            trial_fixations,
-            words_filtered,
-            fixations_filtered,
-            selected_participant=selected_participant,
-            selected_trial=selected_trial,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            viz_settings=viz_settings,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-        )
+        # PERF-3: only the selected tab's body runs (see the st.tabs call).
+        # Nothing to render when closed — a hidden panel is not on screen.
+        if tab_compare.open:
+            # ENG-8: Comparisons overlays the selected scanpath against other readings
+            # of the SAME text, grouped by a chosen column (repeated readings, model
+            # generations, …), scored by similarity. It uses the main scanpath
+            # selection and renders no picker of its own. Line assignment is now its
+            # own top-level subtab (tab_align), not nested here.
+            render_multiple_comparison_tab(
+                trial_words,
+                trial_fixations,
+                words_filtered,
+                fixations_filtered,
+                selected_participant=selected_participant,
+                selected_trial=selected_trial,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                viz_settings=viz_settings,
+                line_spacing=line_spacing,
+                scale_text_to_boxes=scale_text_to_boxes,
+            )
+
     with tab_align:
-        # PRE-3: the drift-correction algorithm comparison grid, on the same
-        # selected trial. Unnested from Comparisons to its own subtab (ENG-8).
-        render_alignment_comparison_tab(
-            trial_words,
-            trial_fixations,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            viz_settings=viz_settings,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-            selected_participant=selected_participant,
-            selected_trial=selected_trial,
-        )
+        # PERF-3: only the selected tab's body runs (see the st.tabs call).
+        # Nothing to render when closed — a hidden panel is not on screen.
+        if tab_align.open:
+            # PRE-3: the drift-correction algorithm comparison grid, on the same
+            # selected trial. Unnested from Comparisons to its own subtab (ENG-8).
+            render_alignment_comparison_tab(
+                trial_words,
+                trial_fixations,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                viz_settings=viz_settings,
+                line_spacing=line_spacing,
+                scale_text_to_boxes=scale_text_to_boxes,
+                selected_participant=selected_participant,
+                selected_trial=selected_trial,
+            )
+
     with tab_export:
-        _render_export_panel(
-            displayed_fig,
-            animate=animate,
-            save_slug=save_slug,
-            playback_ms=anim_playback_ms,
-            file_stem=anim_file_stem,
-            combos=combos,
-            words_filtered=words_filtered,
-            fixations_filtered=fixations_filtered,
-            combos_all=combos_all,
-            words_all=words_all,
-            fixations_all=fixations_all,
-            raw_gaze=raw_gaze if raw_gaze is not None else pd.DataFrame(),
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            viz_settings=viz_settings,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-        )
+        # PERF-3: only the selected tab's body runs (see the st.tabs call).
+        # Nothing to render when closed — a hidden panel is not on screen.
+        if tab_export.open:
+            _render_export_panel(
+                displayed_fig,
+                animate=animate,
+                save_slug=save_slug,
+                playback_ms=anim_playback_ms,
+                file_stem=anim_file_stem,
+                combos=combos,
+                words_filtered=words_filtered,
+                fixations_filtered=fixations_filtered,
+                combos_all=combos_all,
+                words_all=words_all,
+                fixations_all=fixations_all,
+                raw_gaze=raw_gaze if raw_gaze is not None else pd.DataFrame(),
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                viz_settings=viz_settings,
+                line_spacing=line_spacing,
+                scale_text_to_boxes=scale_text_to_boxes,
+            )
+
     with tab_inspect:
-        # The former Data Inspection view is now a subtab here (raw tables +
-        # summary stats + column mapping). Uses the filtered frames in view.
-        render_data_inspection_tab(
-            words_filtered,
-            fixations_filtered,
-            raw_gaze if raw_gaze is not None else pd.DataFrame(),
-        )
+        # PERF-3: only the selected tab's body runs (see the st.tabs call).
+        # Nothing to render when closed — a hidden panel is not on screen.
+        if tab_inspect.open:
+            # The former Data Inspection view is now a subtab here (raw tables +
+            # summary stats + column mapping). Uses the filtered frames in view.
+            render_data_inspection_tab(
+                words_filtered,
+                fixations_filtered,
+                raw_gaze if raw_gaze is not None else pd.DataFrame(),
+            )
+
     with tab_share:
         # The former header Share popover, now a subtab. app.main passes the
         # renderer (it owns the deep-link builder + data source).

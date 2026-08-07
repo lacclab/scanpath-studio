@@ -33,7 +33,12 @@ import pytest
 
 from scanpath_studio.constants import AUTHOR_CHOICE
 from scanpath_studio.data import load_sample_data
-from tests.conftest import APP_SCRIPT
+from tests.conftest import (
+    APP_SCRIPT,
+    SUBTAB_DATA_INSPECTION,
+    SUBTAB_EXPORT,
+    SUBTAB_KEY,
+)
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -67,14 +72,30 @@ _POS_TAGS = {
 }
 
 
-def _boot(*, synthetic: bool = False, timeout: int = 60) -> AppTest:
+def _boot(
+    *, synthetic: bool = False, timeout: int = 60, subtab: Optional[str] = None
+) -> AppTest:
     """Boot the app. ``synthetic=True`` picks the 6-word synthetic trial (one
-    trial, no raw gaze) instead of the bundled demo."""
+    trial, no raw gaze) instead of the bundled demo.
+
+    ``subtab`` opens one of the per-trial subtabs: since PERF-3 the expensive
+    ones render only when they are the selected tab, so a flow that reads Export
+    or Data Inspection content has to open it, exactly as a user does.
+    """
     at = AppTest.from_file(APP_SCRIPT)
     if synthetic:
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
+    if subtab:
+        at.session_state[SUBTAB_KEY] = subtab
     at.run(timeout=timeout)
     return at
+
+
+def _rerun(at: AppTest, subtab: Optional[str] = None, timeout: int = 60) -> AppTest:
+    """Rerun, re-asserting the open subtab — a widget interaction can drop it."""
+    if subtab:
+        at.session_state[SUBTAB_KEY] = subtab
+    return at.run(timeout=timeout)
 
 
 def _clean(at: AppTest, note: str = "") -> None:
@@ -134,7 +155,7 @@ class TestColumnMappingOverrideFlow:
     not just relabel the mapping table."""
 
     def test_remapping_word_text_re_derives_every_consumer(self):
-        at = _boot()
+        at = _boot(subtab=SUBTAB_DATA_INSPECTION)
         before = _word_labels(at)
         # Auto-detection maps the word label to EyeLink's IA_LABEL — real words,
         # not POS tags.
@@ -142,7 +163,7 @@ class TestColumnMappingOverrideFlow:
         assert not before <= _POS_TAGS, "demo should start with real word labels"
 
         at.selectbox(key="col_map_words_text").set_value("universal_pos")
-        at.run(timeout=60)
+        _rerun(at, SUBTAB_DATA_INSPECTION)
         _clean(at, "after remapping word text:")
 
         # The mapping the app normalized with — and the read-only table that
@@ -186,7 +207,7 @@ class TestColumnMappingOverrideFlow:
         after_expected = list(raw_fix["NEXT_SAC_AMPLITUDE"].head(5))
         assert before_expected != after_expected  # the remap must be observable
 
-        at = _boot()
+        at = _boot(subtab=SUBTAB_DATA_INSPECTION)
         assert (
             at.session_state["_active_column_mapping"]["fixations"]["duration"]
             == "CURRENT_FIX_DURATION"
@@ -196,7 +217,7 @@ class TestColumnMappingOverrideFlow:
         assert _fixation_durations(at)[:5] == before_expected
 
         at.selectbox(key="col_map_fix_duration").set_value("NEXT_SAC_AMPLITUDE")
-        at.run(timeout=60)
+        _rerun(at, SUBTAB_DATA_INSPECTION)
         _clean(at, "after remapping the fixation duration:")
 
         assert (
@@ -244,7 +265,7 @@ class TestTrialFilterFlow:
     UX-7 guidance state."""
 
     def test_condition_then_annotation_filter_narrow_the_pool(self):
-        at = _boot()
+        at = _boot(subtab=SUBTAB_DATA_INSPECTION)
         assert len(_trial_ids(at)) == DEMO_TRIALS_IN_PICKER
         assert _metric(at, "Trials") == str(DEMO_TRIALS_IN_WORDS)
 
@@ -389,7 +410,7 @@ class TestBulkExportFlow:
 
         monkeypatch.setattr(tabs, "bulk_export", capturing)
 
-        at = _boot()
+        at = _boot(subtab=SUBTAB_EXPORT)
         assert self._download_labels(at) == ["⬇ Download (JSON)"], (
             "the zip download button must only appear after a build"
         )

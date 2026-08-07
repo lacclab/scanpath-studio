@@ -50,23 +50,10 @@ if __package__ is None or __package__ == "":
 from scanpath_studio.annotations import (
     filter_keys,
 )
-from scanpath_studio.experimental_setup import font_pt_to_px, pixels_per_degree
-from scanpath_studio.persistence import (
-    PERSIST_ENV_VAR,
-    STATE_DIR_ENV_VAR,
-    cache_status,
-    clear_local_state,
-    human_size,
-    persistence_paused,
-    restore_local_state,
-    restored_from_cache,
-    save_local_state,
-    set_persistence_paused,
-)
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
-    BACKGROUND_PRESETS,
     AUTHOR_CHOICE,
+    BACKGROUND_PRESETS,
     CITATION,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
@@ -126,10 +113,10 @@ from scanpath_studio.data import (
     normalize_words,
     onestop_data_dir,
     onestop_full_bundle_exists,
+    preprocess_fixation_stage,
     propose_fix_schema,
     propose_raw_gaze_schema,
     propose_word_schema,
-    preprocess_fixation_stage,
     read_table,
     read_tables,
     resolve_stimulus_image_paths,
@@ -142,6 +129,19 @@ from scanpath_studio.data import (
     validate_word_schema,
 )
 from scanpath_studio.debug_log import install_log_capture, render_debug_panel
+from scanpath_studio.experimental_setup import font_pt_to_px, pixels_per_degree
+from scanpath_studio.persistence import (
+    PERSIST_ENV_VAR,
+    STATE_DIR_ENV_VAR,
+    cache_status,
+    clear_local_state,
+    human_size,
+    persistence_paused,
+    restore_local_state,
+    restored_from_cache,
+    save_local_state,
+    set_persistence_paused,
+)
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _build_figure_settings,

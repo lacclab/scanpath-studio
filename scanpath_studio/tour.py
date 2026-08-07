@@ -56,6 +56,7 @@ Mechanics worth knowing before editing:
 from __future__ import annotations
 
 import streamlit as st
+
 from scanpath_studio.html_embed import embed_html_iframe
 
 from .constants import CITATION

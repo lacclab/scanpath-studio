@@ -13,7 +13,12 @@ from __future__ import annotations
 import pytest
 
 from scanpath_studio import controls
-from tests.conftest import APP_SCRIPT
+from tests.conftest import (
+    APP_SCRIPT,
+    SUBTAB_DATA_INSPECTION,
+    SUBTAB_EXPORT,
+    SUBTAB_KEY,
+)
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -94,6 +99,7 @@ class TestAppLaunches:
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
         at.session_state["single_animate"] = True
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT  # PERF-3: open it to load it
         at.run(timeout=30)
         fmt_radios = [r for r in at.radio if list(r.options) == ["HTML", "GIF", "MP4"]]
         assert fmt_radios, "animation export-format radio not found"
@@ -241,6 +247,7 @@ class TestAppLaunches:
         # trial, ignoring the sidebar filter) first and "All filtered trials"
         # (the current sidebar selection) second.
         at = _make_apptest()  # bundled 3-pid demo
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT  # PERF-3: open it to load it
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         scope_radios = [r for r in at.radio if r.key == "bulk_export_scope"]
@@ -340,6 +347,53 @@ class TestSingleReportDatasets:
         )
 
 
+class TestLazySubtabs:
+    """PERF-3 — a per-trial subtab's body runs only when that tab is open.
+
+    ``st.tabs`` executes every tab's body on every run; only the display is
+    client-side. That made four expensive panels a fixed tax on every rail
+    tweak. Streamlit 1.61's keyed tabs expose ``tab.open``, so the bodies are
+    now gated on it — which is only correct if opening a tab really does load
+    it, and if the closed ones really are skipped.
+    """
+
+    def test_closed_subtabs_do_not_run_their_bodies(self, monkeypatch):
+        from scanpath_studio import tabs as tabs_module
+
+        ran: list[str] = []
+        for name in (
+            "render_multiple_comparison_tab",
+            "render_alignment_comparison_tab",
+            "render_data_inspection_tab",
+            "_render_export_panel",
+        ):
+            real = getattr(tabs_module, name)
+
+            def spy(*a, _n=name, _r=real, **k):
+                ran.append(_n)
+                return _r(*a, **k)
+
+            monkeypatch.setattr(tabs_module, name, spy)
+
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Annotations is the default tab, so none of the four should have run.
+        assert ran == [], f"a closed subtab still rendered: {ran}"
+
+    def test_opening_a_subtab_loads_it(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        assert not [r for r in at.radio if r.key == "bulk_export_scope"]
+
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert [r for r in at.radio if r.key == "bulk_export_scope"], (
+            "opening the Export subtab did not load its body"
+        )
+
+
 @pytest.mark.timeout(90)
 class TestDataInspectionTab:
     """The merged Data Inspection tab folds the former Raw Data + Data Statistics
@@ -349,7 +403,7 @@ class TestDataInspectionTab:
 
     def test_merged_sections_present_and_old_removed(self):
         at = _make_apptest(synthetic=True)
-        at.session_state["main_nav"] = "Data Inspection"
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -379,7 +433,7 @@ class TestDataInspectionTab:
 
     def test_column_mapping_table_renders(self):
         at = _make_apptest(synthetic=True)
-        at.session_state["main_nav"] = "Data Inspection"
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -450,7 +504,7 @@ class TestUnmappedRawDataView:
         # mapping still surfaces the raw data so the user can fix it. The raw
         # tables show in the Data Inspection view.
         at.session_state["setup_complete"] = True
-        at.session_state["main_nav"] = "Data Inspection"
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
         at.run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -1178,6 +1232,11 @@ class TestSetupWizard:
         entry = at.session_state["_datasets"][name]
         # The unmapped/unkept column is recorded as dropped (drives the note).
         assert "junk_col" in entry["dropped_columns"]["words"]
+        # The remap form lives in the Data Inspection subtab, which since PERF-3
+        # renders only when it is the open tab.
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The editable remap form renders for a stored dataset.
         assert any(b.key == f"remap_apply_{name}" for b in at.button)
 
@@ -1186,9 +1245,12 @@ class TestSetupWizard:
         text_box = [s for s in at.selectbox if s.key == text_key]
         assert text_box, "word-text remap selectbox not rendered"
         text_box[0].set_value("difficulty_level")
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        [b for b in at.button if b.key == f"remap_apply_{name}"][0].click()
+        apply_button = [b for b in at.button if b.key == f"remap_apply_{name}"]
+        assert apply_button, "remap Apply button not rendered"
+        apply_button[0].click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 

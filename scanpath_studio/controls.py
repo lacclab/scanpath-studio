@@ -13,16 +13,16 @@ from .annotations import known_tags
 from .constants import (
     BACKGROUND_PRESETS,
     COLORSCALES,
+    CUSTOM_PALETTE,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_MARKER_SIZE_RANGE,
-    CUSTOM_PALETTE,
     DEFAULT_PALETTE,
-    DEMO_CHOICE,
     DEFAULT_SACCADE_WIDTH,
+    DEMO_CHOICE,
     FIXATION_SYMBOLS,
     HIGHLIGHTED_TEXT_COLOR,
     OUT_OF_TEXT_COLOR,
@@ -1366,6 +1366,48 @@ def _clamped_pair(val, lo: float, hi: float) -> Optional[tuple]:
 
 
 _COMPARE_SCANPATHS = ((0, "Scanpath 1"), (1, "Scanpath 2"))
+
+
+def render_pattern_help(host, fields: dict) -> None:
+    """The one place the ``{field}`` vocabulary is spelled out (UX-31).
+
+    Three surfaces speak this little language — the figure title/caption, the
+    Compare A/B legend labels, and the bulk-export file-naming pattern — and two
+    of them used to describe it only as "same fields as the other one", so a user
+    who had seen neither had no way to learn that ``{participant_id}`` was even a
+    thing. Rendered as a collapsed expander: it is reference material, not a
+    control, and the rail is narrow.
+    """
+    if not fields:
+        return
+    with host.expander("Available fields", expanded=False):
+        st.markdown(
+            "Type any of these in a pattern and the trial's own value is "
+            "substituted:\n\n"
+            + "\n".join(f"- `{{{name}}}`" for name in sorted(fields))
+            + "\n\nAnything else is left as literal text."
+        )
+
+
+def render_pattern_input(
+    host, label: str, key: str, fields: dict, *, help: Optional[str] = None
+) -> str:
+    """A pattern text box with live validation and a rendered preview.
+
+    Returns the pattern, or ``""`` when it names a field that does not exist —
+    an invalid pattern must not reach a figure or a filename, and the error says
+    which placeholder is wrong (see ``export.pattern_error``).
+    """
+    host.text_input(label, key=key, persist_state="session", help=help)
+    value = st.session_state.get(key, "")
+    if not value:
+        return ""
+    error = pattern_error(value, fields)
+    if error:
+        host.error(error)
+        return ""
+    host.caption(f"{label} preview — **{render_pattern(value, fields)}**")
+    return value
 
 
 def _pin(key: str, default) -> None:
@@ -3186,42 +3228,26 @@ def sidebar_controls(
             trial_fixations if trial_fixations is not None else pd.DataFrame(),
             {},
         )
-        _pattern_available = ", ".join(
-            f"`{{{k}}}`" for k in sorted(_title_caption_fields)
-        )
-
-        def _title_caption_input(label: str, default: str, key: str) -> str:
-            axes.text_input(
-                label,
-                key=key,
-                help="Same fields as the file-naming pattern in Export. Leave "
-                "empty for no " + label.lower() + ".",
+        # EXP-5: two text boxes, two previews and a field list is far too tall
+        # for the rail — inline it ran "very long and narrow". Behind the ⚙️
+        # popover it follows the same `toggle → ⚙️ style` shape as every layer.
+        with axes.popover("⚙️ Title & caption", width="stretch"):
+            box = st.container()
+            render_pattern_input(
+                box,
+                "Title",
+                "global_title_pattern",
+                _title_caption_fields,
+                help="Leave empty for no title.",
             )
-            value = st.session_state.get(key, "")
-            error = pattern_error(value, _title_caption_fields)
-            if error:
-                axes.error(error)
-                return ""
-            return value
-
-        title_pattern = _title_caption_input(
-            "Title", DEFAULT_TITLE_PATTERN, "global_title_pattern"
-        )
-        caption_pattern = _title_caption_input(
-            "Caption", DEFAULT_CAPTION_PATTERN, "global_caption_pattern"
-        )
-        with axes.expander("Available fields", expanded=False):
-            axes.markdown(_pattern_available)
-        if title_pattern:
-            axes.caption(
-                "Title preview — "
-                f"**{render_pattern(title_pattern, _title_caption_fields)}**"
+            render_pattern_input(
+                box,
+                "Caption",
+                "global_caption_pattern",
+                _title_caption_fields,
+                help="Leave empty for no caption.",
             )
-        if caption_pattern:
-            axes.caption(
-                "Caption preview — "
-                + render_pattern(caption_pattern, _title_caption_fields)
-            )
+            render_pattern_help(box, _title_caption_fields)
 
     # UX-26: the clean slate sits at the *foot* of the rail, below every section
     # it undoes — a reset is where you land after scrolling the controls, not a

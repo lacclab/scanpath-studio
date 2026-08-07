@@ -68,17 +68,17 @@ from .constants import (  # noqa: E402
     UNIFORM_COLOR_FIELD,
     palette_settings,
 )
+from .export import annotate_figure  # noqa: E402
 from .plots import (  # noqa: E402
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
-    make_scanpath_animation,
-    make_scanpath_figure,
     make_difference_profile_figure,
     make_distribution_figure,
+    make_scanpath_animation,
+    make_scanpath_figure,
     make_word_profile_figure,
     split_scanpath_layers,
 )
-from .export import annotate_figure  # noqa: E402
 
 
 def build_authored_scanpath(

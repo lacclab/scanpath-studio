@@ -13,7 +13,6 @@ from typing import Mapping, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-
 DEFAULT_PREPROCESSING = {
     "enabled": False,
     "short_policy": "Off",

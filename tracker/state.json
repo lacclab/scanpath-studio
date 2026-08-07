@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 177,
+  "revision": 178,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -262,8 +262,8 @@
     },
     "PERF-3": {
       "status": "In progress",
-      "priority": "Normal",
-      "implementationBrief": "Great start. Show me a breakdown of what takes time so I can decide if we should keep it.",
+      "priority": "High",
+      "implementationBrief": "If they could be made lazy that would be AMAZING.",
       "archived": false,
       "updated": "2026-08-08"
     },

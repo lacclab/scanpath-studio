@@ -135,3 +135,21 @@ def normalized_fixations_df():
             "noise_flag": [False, False, False],
         }
     )
+
+
+#: Labels of the Scanpath view's per-trial subtabs, and the session key that
+#: selects one. PERF-3 made the four expensive panels render only when their tab
+#: is open (`st.tabs(key=…)` + `tab.open`), so a test that wants Export or Data
+#: Inspection must open it first, exactly as a user does.
+SUBTAB_KEY = "single_subtab"
+SUBTAB_ANNOTATIONS = "📝 Annotations"
+SUBTAB_COMPARISONS = "🔬 Comparisons"
+SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
+SUBTAB_EXPORT = "Export"
+SUBTAB_DATA_INSPECTION = "🔎 Data Inspection"
+
+
+def open_subtab(at, label: str):
+    """Select a per-trial subtab and rerun, so its body renders (PERF-3)."""
+    at.session_state[SUBTAB_KEY] = label
+    return at.run()

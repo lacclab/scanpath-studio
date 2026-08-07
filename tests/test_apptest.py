@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from scanpath_studio import controls
+from tests.conftest import APP_SCRIPT
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -32,7 +33,7 @@ def _make_apptest(*, synthetic: bool = False) -> "AppTest":
     specific richness; a few launch/multi-trial tests stay on the demo as the
     real-default-experience guardrails.
     """
-    at = AppTest.from_file("streamlit_app.py")
+    at = AppTest.from_file(APP_SCRIPT)
     if synthetic:
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
     return at

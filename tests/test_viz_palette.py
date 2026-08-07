@@ -21,6 +21,7 @@ from scanpath_studio.constants import (
     UNIFORM_COLOR_FIELD,
     palette_settings,
 )
+from tests.conftest import APP_SCRIPT
 
 
 def _fig(normalized_words_df, normalized_fixations_df, **kwargs):
@@ -338,7 +339,7 @@ class TestTheSelectorStopsClaimingAPalette:
         point of the item."""
         streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 
-        at = streamlit_testing.AppTest.from_file("streamlit_app.py")
+        at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
         at.query_params["source"] = "synthetic"
         at.run(timeout=60)
 

@@ -10,7 +10,9 @@ too. Nothing here is inferred from documentation alone.
 
 - **Audited version:** `scanpath_studio` 0.25.0
 - **Dependency versions the runtime claims were checked against:** Streamlit
-  1.58.0, pandas 2.3.3, CPython 3.12.12
+  1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
+  Streamlit **1.61.1** (ENG-31); see *After the audit — Streamlit 1.61* below
+  for the two config surfaces that version added.
 - **Method:** source read of every write-to-disk, URL-building, path-handling,
   archive-reading and `@st.cache_data` site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -29,6 +31,28 @@ too. Nothing here is inferred from documentation alone.
     account-readable; it is disclosed and deletable in-app (sidebar → **🗄️
     Recovery cache**) and from `scanpath-studio cache --clear`, and it is
     described for researchers in [privacy.md](privacy.md#what-happens-to-a-file-you-upload).
+
+!!! note "After the audit — Streamlit 1.61 (ENG-31)"
+    The runtime moved from 1.58.0 to 1.61.1. Two of the config options that
+    arrived in between touch the surfaces this page describes, and **both are
+    left at their defaults**:
+
+    - **`server.allowedHosts`** (1.61) — an allow-list of `Host` headers for
+      incoming WebSocket connections, against DNS rebinding. Empty by default,
+      which accepts any host, so it changes nothing about S1: a
+      `scanpath-studio run` on an untrusted network is still reachable by
+      anyone who can route to the port. A fixed-hostname deployment can now
+      narrow that (e.g. `['localhost']` for a desktop/loopback run).
+    - **`client.allowedOrigins`** (1.60) — origins allowed to drive the app by
+      `postMessage` when it is embedded in an iframe. It defaults to Streamlit's
+      own Community Cloud hosts. The OneStop review-app embed only loads
+      `?embed=true` with deep-link query params and sends no host messages, so
+      it is unaffected; nothing in this repo needs the list widened.
+
+    `server.maxWidgetStateSize` (25 MB) also arrived in 1.60. It caps a single
+    rerun's aggregate widget state, not session state — an uploaded corpus lives
+    in session state and is unaffected; the only widget-borne payload is the
+    💾 Save & restore config JSON, which is kilobytes.
 
 !!! warning "Scanpath Studio has no authentication, on any deployment"
     There is no login, no session token, and no per-user authorization anywhere
@@ -495,7 +519,8 @@ the remaining six either escape or interpolate tool-controlled constants
 `style="background:…"` attributes are not attacker-reachable either).
 
 Streamlit's markdown path does not compensate. Inspecting the shipped 1.58.0
-frontend bundle (`static/static/js/index.*.js`), the `allowHTML` branch lazily
+frontend bundle (`static/static/js/index.*.js`; re-checked on 1.61.1 after
+ENG-31 — `rehype-sanitize` is still absent), the `allowHTML` branch lazily
 loads `rehype-raw` and no sanitizer plugin — `rehype-sanitize` is not in the
 distribution at all; the only guard is a URL transform rejecting `javascript:`
 and `vbscript:` schemes, and `disallowedElements` is empty for non-label

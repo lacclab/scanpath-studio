@@ -2,7 +2,7 @@
 # (`~=`) keep the live app on a known-good minor while still picking up patch
 # releases. The library dependency bounds (looser, `>=`) live in pyproject.toml;
 # keep both in sync when adding or upgrading a dependency.
-streamlit~=1.58.0
+streamlit~=1.61.1
 pandas~=2.3.3
 plotly~=6.5.2
 numpy~=2.4.1

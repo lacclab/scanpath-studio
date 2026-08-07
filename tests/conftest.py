@@ -1,9 +1,17 @@
 """Pytest configuration and fixtures for scanpath visualization tests."""
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
 from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
+
+#: Absolute path to the app entry point driven by ``AppTest.from_file``.
+#: Streamlit 1.61 resolves a *relative* script path against the file that calls
+#: ``from_file`` (previously the process CWD), so ``"streamlit_app.py"`` would
+#: look for ``tests/streamlit_app.py``. Always pass this constant.
+APP_SCRIPT = str(Path(__file__).resolve().parents[1] / "streamlit_app.py")
 
 
 @pytest.fixture(autouse=True, scope="session")

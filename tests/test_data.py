@@ -13,11 +13,11 @@ from scanpath_studio.controls import (
 )
 from scanpath_studio.data import (
     compute_canvas_size,
-    frame_fingerprint,
     compute_word_metrics,
     default_filters,
     filter_data,
     filter_raw_gaze,
+    frame_fingerprint,
     infer_fix_schema,
     infer_raw_gaze_schema,
     infer_word_schema,

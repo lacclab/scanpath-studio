@@ -1,11 +1,10 @@
 from pathlib import Path
 
-from PIL import Image
 import pytest
+from PIL import Image
 
-from desktop.make_icons import draw_icon
 from desktop import smoke_test
-
+from desktop.make_icons import draw_icon
 
 ROOT = Path(__file__).resolve().parents[1]
 

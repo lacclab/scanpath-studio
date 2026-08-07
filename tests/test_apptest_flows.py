@@ -32,6 +32,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio.data import load_sample_data
+from tests.conftest import APP_SCRIPT
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -68,7 +69,7 @@ _POS_TAGS = {
 def _boot(*, synthetic: bool = False, timeout: int = 60) -> AppTest:
     """Boot the app. ``synthetic=True`` picks the 6-word synthetic trial (one
     trial, no raw gaze) instead of the bundled demo."""
-    at = AppTest.from_file("streamlit_app.py")
+    at = AppTest.from_file(APP_SCRIPT)
     if synthetic:
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
     at.run(timeout=timeout)

@@ -25,6 +25,7 @@ import pytest
 
 from scanpath_studio import alignment, plots, tabs
 from scanpath_studio.constants import DEFAULT_FIXATION_SYMBOL, WORD_LABEL_COLOR
+from tests.conftest import APP_SCRIPT
 
 # The two text lines of the toy stimulus below sit at these y centers
 # (``y + height / 2``), so a corrected fixation must land on one of them.
@@ -542,7 +543,7 @@ class TestDriftCorrectionReachesEveryPath:
 
     def test_static_animation_and_comparison_all_move(self, monkeypatch):
         seen = self._spy(monkeypatch)
-        at = AppTest.from_file("streamlit_app.py")
+        at = AppTest.from_file(APP_SCRIPT)
         at.run(timeout=90)
         assert not at.exception, at.exception
 
@@ -611,7 +612,7 @@ class TestDriftCorrectionReachesEveryPath:
         """The default. Each builder must see the very frame it saw before —
         same values, in the same order."""
         seen = self._spy(monkeypatch)
-        at = AppTest.from_file("streamlit_app.py")
+        at = AppTest.from_file(APP_SCRIPT)
         at.run(timeout=90)
         assert not at.exception, at.exception
         _, static_fix = seen["static"][-1]

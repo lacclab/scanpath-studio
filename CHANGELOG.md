@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quick-view labels fall back to emoji-only when the rail is narrow** (UX-29)
 - **Welcome tour: copy, step order and highlighting polish** (UX-34)
 - **CHANGELOG entries: a Slack-pasteable headline, details below** (ENG-34)
+- **Runtime moved to Streamlit 1.61.1** (ENG-31)
 
 ### Details
 
@@ -56,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quick-view labels fall back to emoji-only when the rail is narrow** (UX-29) — below a ~320px rail width the Scanpath/Heatmap/Illustration buttons drop their text and show only the emoji, via a CSS container query, instead of wrapping to 2–3 lines; the three-button row never stacks.
 - **Welcome tour: copy, step order and highlighting polish** (UX-34) — simplified step 2's copy; split trial-picking from pool-narrowing into two steps; Animate/Compare now spotlights just that block, not the whole rail; the per-trial-panels step lists Comparisons and both export scopes; Data source moved earlier; Corpus Analysis got its own step; the final step is now a general "the left sidebar" step.
 - **CHANGELOG entries: a Slack-pasteable headline, details below** (ENG-34) — `[Unreleased]` entries are now a short headline list per group, with the longer per-item text moved to a `### Details` subsection underneath (this section is the first to use the new shape). Already-released sections are unchanged.
+- **Runtime moved to Streamlit 1.61.1** (ENG-31) — from 1.58.0, in one step: `requirements.txt` (`~=1.61.1`), `pyproject.toml` (`>=1.61.1`) and the regenerated lock. The only breaking change that reached this repo is in the tests — Streamlit 1.61 resolves a relative `AppTest.from_file` path against the *calling file* instead of the process CWD, so all seven call sites now pass `tests/conftest.py`'s absolute `APP_SCRIPT`. Everything the release notes flagged was checked and needed no change: the `?embed=true` iframe path (`st.iframe` still treats any string containing `<` as srcdoc, never a file path), the VIZ-21/23 disabled-widget gating under 1.61's server-side enforcement, and the 1.60 query-string / widget-state caps. `docs/security.md` records the two new config surfaces (`server.allowedHosts`, `client.allowedOrigins`), both left at their defaults.
 
 ## [0.27.2] - 2026-08-05
 

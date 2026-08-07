@@ -14,6 +14,8 @@ import pathlib
 import pandas as pd
 import pytest
 
+from tests.conftest import APP_SCRIPT
+
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
 
@@ -62,7 +64,7 @@ class TestTheClaimsHold:
         """The note tells the reader to add `?source=synthetic`. The synthetic
         source is deliberately NOT offered in the data-source picker, so this
         deep link is the only route — if it breaks, the note is a dead end."""
-        at = AppTest.from_file("streamlit_app.py")
+        at = AppTest.from_file(APP_SCRIPT)
         at.query_params["source"] = "synthetic"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"

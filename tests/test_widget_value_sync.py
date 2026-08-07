@@ -20,6 +20,7 @@ from __future__ import annotations
 import pytest
 
 from scanpath_studio import controls
+from tests.conftest import APP_SCRIPT
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -209,7 +210,7 @@ def test_canvas_settings_survive_a_corpus_analysis_round_trip():
     Two Corpus runs matter: the first is the one that prunes, the second is the
     one that would re-seed a default over the gap.
     """
-    at = AppTest.from_file("streamlit_app.py", default_timeout=120)
+    at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
     at.session_state["data_source_choice"] = "Synthetic test trial"
     at.run()
 

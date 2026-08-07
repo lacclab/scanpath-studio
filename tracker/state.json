@@ -1,6 +1,6 @@
 {
  "version": 2,
- "revision": 149,
+ "revision": 150,
  "items": {
   "AN-29": {
    "status": "Closed",
@@ -261,9 +261,9 @@
    "updated": "2026-08-04"
   },
   "PERF-3": {
-   "status": "Planned",
+   "status": "Review",
    "priority": "Normal",
-   "implementationBrief": "Check after ENG-36",
+   "implementationBrief": "",
    "archived": false,
    "updated": "2026-08-07"
   },

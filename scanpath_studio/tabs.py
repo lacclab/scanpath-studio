@@ -6386,6 +6386,55 @@ def _render_column_mapping_section() -> None:
     st.caption("How each source column maps to the app's canonical fields.")
 
 
+@st.cache_data(show_spinner="Building the derived analysis tables…")
+def _c_derived_tables(
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _raw_gaze: pd.DataFrame,
+    words_fingerprint,
+    fixations_fingerprint,
+    raw_gaze_fingerprint,
+    pixels_per_degree_value: Optional[float],
+) -> dict:
+    """The six PRE-11/12/15/19 + AN-30 derived tables, built once per dataset.
+
+    PERF-3: **Data Inspection is a subtab**, and Streamlit renders every subtab's
+    body on every run — only the *display* is client-side. So this ran in full on
+    every rerun of the Scanpath view, whether or not the user had ever opened the
+    tab; a cosmetic colour change on the rail paid for the whole preprocessing
+    suite. Nothing here depends on any viz setting, so it is keyed on the three
+    frame fingerprints plus the one scalar that does matter (pixels-per-degree,
+    from the experimental setup).
+    """
+    from scanpath_studio.measures import assign_fixations_to_words, enrich_fixations
+    from scanpath_studio.preprocessing import (
+        character_grid,
+        cleaning_report,
+        saccade_table,
+        sentence_measures,
+    )
+
+    measured_words = compute_word_metrics(_words, _fixations)
+    analysis_fixations = (
+        enrich_fixations(assign_fixations_to_words(_fixations, _words), _words)
+        if not _fixations.empty and not _words.empty
+        else _fixations
+    )
+    return {
+        "Sentences": sentence_measures(measured_words, _fixations),
+        "Saccades": saccade_table(
+            analysis_fixations,
+            pixels_per_degree=pixels_per_degree_value,
+            raw_gaze=_raw_gaze,
+            words=_words,
+        ),
+        "Trials": trial_summary_table(measured_words, _fixations),
+        "Readers": reader_summary_table(measured_words, _fixations),
+        "Characters": character_grid(_words),
+        "Cleaning QA": cleaning_report(_fixations),
+    }
+
+
 def render_data_inspection_tab(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -6432,24 +6481,8 @@ def render_data_inspection_tab(
 
     # PRE-11/12/15/19 + AN-30: first-class derived tables, all exportable.
     st.subheader("Derived analysis tables")
-    from scanpath_studio.preprocessing import (
-        character_grid,
-        cleaning_report,
-        saccade_table,
-        sentence_measures,
-    )
     from scanpath_studio.experimental_setup import pixels_per_degree
-    from scanpath_studio.measures import assign_fixations_to_words, enrich_fixations
 
-    measured_words = compute_word_metrics(words_filtered, fixations_filtered)
-    analysis_fixations = (
-        enrich_fixations(
-            assign_fixations_to_words(fixations_filtered, words_filtered),
-            words_filtered,
-        )
-        if not fixations_filtered.empty and not words_filtered.empty
-        else fixations_filtered
-    )
     try:
         ppd = pixels_per_degree(
             float(st.session_state.get("global_viewing_distance_mm", 800.0)),
@@ -6458,19 +6491,15 @@ def render_data_inspection_tab(
         )
     except (TypeError, ValueError):
         ppd = None
-    derived = {
-        "Sentences": sentence_measures(measured_words, fixations_filtered),
-        "Saccades": saccade_table(
-            analysis_fixations,
-            pixels_per_degree=ppd,
-            raw_gaze=raw_gaze_filtered,
-            words=words_filtered,
-        ),
-        "Trials": trial_summary_table(measured_words, fixations_filtered),
-        "Readers": reader_summary_table(measured_words, fixations_filtered),
-        "Characters": character_grid(words_filtered),
-        "Cleaning QA": cleaning_report(fixations_filtered),
-    }
+    derived = _c_derived_tables(
+        words_filtered,
+        fixations_filtered,
+        raw_gaze_filtered,
+        frame_fingerprint(words_filtered),
+        frame_fingerprint(fixations_filtered),
+        frame_fingerprint(raw_gaze_filtered),
+        ppd,
+    )
     for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
         with tab:
             if table.empty:

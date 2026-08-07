@@ -314,3 +314,102 @@ def test_slice_consensus_and_sensitivity_are_available(
     combined, report = alignment.correction_sensitivity(normalized_fixations_df, words)
     assert "assignment_disagreement" in combined
     assert set(report["algorithm"]) == {"attach", "slice", "consensus"}
+
+
+def test_letter_position_is_exact_and_scoped_to_the_right_reader():
+    """PERF-3 rewrote this lookup from a per-fixation scan of the whole words
+    frame into one pre-built index, so the arithmetic and the scoping are pinned.
+
+    Two readers share the word ids but not the geometry, which is what a
+    per-reader words table looks like (MultiplEYE ships one). A lookup that
+    dropped the identity columns would score both saccades off reader ``a``'s
+    boxes and still look plausible.
+    """
+    words = pd.DataFrame(
+        {
+            "participant_id": ["a", "b"],
+            "trial_id": ["t", "t"],
+            "word_id": [1.0, 1.0],
+            "text": ["abcde", "abcde"],  # 5 characters
+            "x": [100.0, 500.0],
+            "y": [10.0, 10.0],
+            "width": [50.0, 50.0],  # → 10 px per character
+            "height": [20.0, 20.0],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["a", "a", "b", "b"],
+            "trial_id": ["t", "t", "t", "t"],
+            "timestamp_ms": [0.0, 100.0, 0.0, 100.0],
+            "duration_ms": [50.0, 50.0, 50.0, 50.0],
+            # 25 px into a 50 px word == halfway == character 3.5 (1-based).
+            "x": [125.0, 105.0, 525.0, 505.0],
+            "y": [10.0, 10.0, 10.0, 10.0],
+            "word_id": [1.0, 1.0, 1.0, 1.0],
+        }
+    )
+    saccades = saccade_table(fixations, words=words).set_index("participant_id")
+
+    assert saccades.loc["a", "launch_letter"] == 3.5
+    assert saccades.loc["a", "landing_letter"] == 1.5
+    # Reader b's word sits 400 px right; scored against a's box it would be 41.5.
+    assert saccades.loc["b", "launch_letter"] == 3.5
+    assert saccades.loc["b", "landing_letter"] == 1.5
+
+
+def test_letter_position_survives_a_words_table_with_no_identity_columns():
+    """A stimulus-level words table (PoTeC) has no participant/trial columns."""
+    words = pd.DataFrame(
+        {
+            "word_id": [1.0],
+            "text": ["abcde"],
+            "x": [100.0],
+            "y": [10.0],
+            "width": [50.0],
+            "height": [20.0],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["a", "a"],
+            "trial_id": ["t", "t"],
+            "timestamp_ms": [0.0, 100.0],
+            "duration_ms": [50.0, 50.0],
+            "x": [125.0, 105.0],
+            "y": [10.0, 10.0],
+            "word_id": [1.0, 1.0],
+        }
+    )
+    row = saccade_table(fixations, words=words).iloc[0]
+    assert row["launch_letter"] == 3.5
+    assert row["landing_letter"] == 1.5
+
+
+def test_a_right_to_left_word_counts_letters_from_its_right_edge():
+    words = pd.DataFrame(
+        {
+            "word_id": [1.0],
+            "text": ["abcde"],
+            "x": [100.0],
+            "y": [10.0],
+            "width": [50.0],
+            "height": [20.0],
+            "right_to_left": [True],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["a", "a"],
+            "trial_id": ["t", "t"],
+            "timestamp_ms": [0.0, 100.0],
+            "duration_ms": [50.0, 50.0],
+            "x": [105.0, 125.0],
+            "y": [10.0, 10.0],
+            "word_id": [1.0, 1.0],
+        }
+    )
+    row = saccade_table(fixations, words=words).iloc[0]
+    # 5 px from the LEFT edge is 45 px from the right → character 5.5.
+    assert row["launch_letter"] == 5.5
+    assert row["landing_letter"] == 3.5

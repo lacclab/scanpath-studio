@@ -8,7 +8,7 @@ functions to the UI, CLI, public API, and bulk export.
 from __future__ import annotations
 
 import math
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -622,6 +622,61 @@ def duration_mass_table(
     return out
 
 
+def _word_letter_geometry(
+    words: Optional[pd.DataFrame], keys: Sequence[str]
+) -> dict[tuple, tuple[float, float, int, bool]]:
+    """``(identity…, word_id) -> (x, width, character count, right_to_left)``.
+
+    Built once per :func:`saccade_table` call so the per-saccade letter-position
+    lookup is a dict hit rather than a scan of the whole words frame (PERF-3).
+    The first row wins for a duplicated key, which is what the old
+    ``target.iloc[0]`` did.
+    """
+    if words is None or words.empty or "word_id" not in words:
+        return {}
+    ids = pd.to_numeric(words["word_id"], errors="coerce")
+    present = [key for key in keys if key in words]
+    lengths = words["text"].astype(str).str.len() if "text" in words else None
+    rtl = words["right_to_left"] if "right_to_left" in words else None
+    geometry: dict[tuple, tuple[float, float, int, bool]] = {}
+    for position, word_id in enumerate(ids.to_numpy()):
+        if pd.isna(word_id):
+            continue
+        key = tuple(words[column].iat[position] for column in present) + (
+            float(word_id),
+        )
+        if key in geometry:
+            continue
+        geometry[key] = (
+            float(words["x"].iat[position]),
+            float(words["width"].iat[position]),
+            max(int(lengths.iat[position]) if lengths is not None else 1, 1),
+            bool(rtl.iat[position]) if rtl is not None else False,
+        )
+    return geometry
+
+
+def _letter_position_in_word(
+    event: dict,
+    geometry: dict[tuple, tuple[float, float, int, bool]],
+    identity: tuple,
+) -> float:
+    """Which character of its word a fixation landed on, 1-based."""
+    word_id = event.get("word_id")
+    if not geometry or pd.isna(word_id):
+        return np.nan
+    found = geometry.get(identity + (float(word_id),))
+    if found is None:  # a words frame without the identity columns
+        found = geometry.get((float(word_id),))
+    if found is None:
+        return np.nan
+    word_x, width, length, right_to_left = found
+    offset = float(event["x"]) - word_x
+    if right_to_left:
+        offset = width - offset
+    return offset / (width / length) + 1
+
+
 def saccade_table(
     fixations: pd.DataFrame,
     *,
@@ -637,6 +692,13 @@ def saccade_table(
     if "excluded" in analysis:
         analysis = analysis.loc[~analysis["excluded"].fillna(False).astype(bool)]
     keys = [c for c in ("participant_id", "trial_id") if c in analysis]
+    # PERF-3: the letter-position of a saccade's launch and landing used to be
+    # resolved by scanning the WHOLE words frame per fixation — a `to_numeric`
+    # over every word id plus a boolean mask, twice per saccade. On the bundled
+    # demo that was ~19 s of a rerun on its own, and it grew with corpus × trial
+    # count. Index the geometry once instead: (identity…, word_id) → the four
+    # numbers the formula needs.
+    word_geometry = _word_letter_geometry(words, keys)
     for identity, chunk in analysis.groupby(keys, sort=False, dropna=False):
         identity = identity if isinstance(identity, tuple) else (identity,)
         chunk = chunk.sort_values("timestamp_ms")
@@ -670,25 +732,8 @@ def saccade_table(
                         speed = gd / dt.replace(0, np.nan) / pixels_per_degree * 1000
                         peak_velocity = float(speed.max())
 
-            def _letter_position(event):
-                if words is None or words.empty or pd.isna(event.get("word_id")):
-                    return np.nan
-                target = words[
-                    pd.to_numeric(words["word_id"], errors="coerce")
-                    == float(event["word_id"])
-                ]
-                for key, value in zip(keys, identity):
-                    if key in target:
-                        target = target[target[key] == value]
-                if target.empty:
-                    return np.nan
-                word = target.iloc[0]
-                length = max(len(str(word.get("text", ""))), 1)
-                char_width = float(word["width"]) / length
-                offset = float(event["x"]) - float(word["x"])
-                if bool(word.get("right_to_left", False)):
-                    offset = float(word["width"]) - offset
-                return offset / char_width + 1
+            def _letter_position(event, _identity=identity):
+                return _letter_position_in_word(event, word_geometry, _identity)
 
             row = dict(zip(keys, identity))
             row.update(

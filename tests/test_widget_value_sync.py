@@ -1,18 +1,26 @@
 """BUG-15: a viz widget that first renders on a later run must show its value.
 
-Streamlit only sends a session-state value down to the browser on the run where
-that key was written *programmatically* (``set_value`` on the widget's proto).
-``controls._seed_viz_state`` used to write the defaults with ``setdefault``, so
-the push happened once — on the first run. A widget whose popover only renders
-later (its layer toggle was off at load, from a deep link or a restored config)
-then mounted with **no** value: the two ``st.segmented_control`` pickers showed
-nothing pressed at all (their proto default is empty) and a colour picker showed
-black while the figure drew the linked colour.
+Two things go wrong when a control renders only sometimes — its layer toggle was
+off at load, or its whole panel lives on a view the user isn't on:
 
-The fix is ``controls._pin``: re-assert the stored value every run. These tests
-pin the mechanism — the flag Streamlit itself reads to decide whether to push a
-value — plus the invariant that makes it safe (no viz widget passes a default),
-because both are invisible from the rendered output.
+1. Streamlit drops a widget's key from session state at the end of any run in
+   which the widget did not render, so the stored value is simply gone.
+2. Even when the value is still there, Streamlit only pushes it to the browser
+   on the run it was written *programmatically*, so a late-mounting widget
+   arrives at its **proto** default — nothing pressed at all on a
+   ``st.segmented_control``, black on a colour picker — while the figure keeps
+   drawing the value the state actually holds.
+
+Both used to be worked around from Python, by re-asserting every stored value on
+every run (``controls._pin(rewrite=True)``). Streamlit 1.61 handles both itself:
+``persist_state="session"`` preserves the value while the widget is unmounted
+*and* marks it changed on remount so the frontend adopts it (ENG-36). ``_pin`` is
+back to a plain default-if-absent.
+
+So these tests pin the outcome (a value survives a run without its widget) and
+the contract that produces it (every wire-format widget declares
+``persist_state``), plus the invariant that keeps it safe (no such widget passes
+its own default) — none of which is visible in the rendered output.
 """
 
 from __future__ import annotations
@@ -35,61 +43,101 @@ _FIX = {
     "order_in_trial": [1, 2],
 }
 
-# The keys behind the two controls the bug was reported on, plus one of each
-# other affected kind (a colour picker and a range).
-_WATCHED = (
-    "global_saccade_style",
-    "global_saccade_render_mode",
-    "global_saccade_color",
-    "global_marker_size_range",
-    "cmp0_saccade_style",
-)
+#: Persisted keys whose widget genuinely cannot take ``persist_state``.
+_NO_PERSIST_STATE = {
+    # st.file_uploader takes no persist_state; the decoded image is stashed
+    # separately by controls._uploaded_image_data_uri anyway.
+    "global_stimulus_image_upload",
+}
 
 
-def _seed_twice_app():
-    """Seed the viz state on two consecutive runs; record the sync flag."""
+def _late_mount_app():
+    """Render the saccade-style picker on every run *except* the second.
+
+    That gap is the whole bug: run 2 is a rerun where the widget's popover is
+    closed (its layer toggle is off), which is when Streamlit prunes the key.
+    """
     import pandas as pd
     import streamlit as st
-    from streamlit.runtime.state.session_state_proxy import get_session_state
 
     from scanpath_studio.controls import _seed_viz_state
 
-    # A stored non-default value, as a deep link or restored config would leave.
-    st.session_state.setdefault("global_saccade_style", "Dotted")
-    _seed_viz_state(pd.DataFrame(st.session_state["_fix"]), 14, None, rewrite=True)
+    run = st.session_state.get("_run", 0) + 1
+    st.session_state["_run"] = run
+    if run == 1:
+        # A stored non-default value, as a deep link or restored config leaves it.
+        st.session_state.setdefault("global_saccade_style", "Dotted")
 
-    state = get_session_state()
-    st.session_state["_run"] = st.session_state.get("_run", 0) + 1
-    st.session_state["_pushes"] = {
-        key: state.is_new_state_value(key) for key in st.session_state["_watched"]
-    }
-    st.session_state["_style"] = st.session_state["global_saccade_style"]
+    _seed_viz_state(pd.DataFrame(st.session_state["_fix"]), 14, None)
+
+    if run != 2:
+        st.segmented_control(
+            "Line style",
+            options=["Solid", "Dashed", "Dotted"],
+            key="global_saccade_style",
+            persist_state="session",
+        )
+    st.session_state["_style"] = st.session_state.get("global_saccade_style", "<GONE>")
 
 
-def test_stored_values_are_re_pushed_on_every_run():
-    """Every run marks the keys "newly set", so a late-mounting widget syncs.
+def test_a_value_survives_a_run_whose_widget_did_not_render():
+    """The outcome BUG-15 is about, whatever mechanism delivers it.
 
-    ``is_new_state_value`` is exactly what ``register_widget`` reads to set
-    ``set_value`` on the proto — if it goes False on the second run, a widget
-    that first renders then shows its proto default instead of this value.
+    Without it the key is pruned on run 2 and ``_seed_viz_state`` writes the
+    factory default over the user's setting on run 3 — permanently, since it now
+    looks like their choice.
     """
-    at = AppTest.from_function(_seed_twice_app)
+    at = AppTest.from_function(_late_mount_app)
     at.session_state["_fix"] = _FIX
-    at.session_state["_watched"] = list(_WATCHED)
-    at.run(timeout=30)
-    assert not at.exception, at.exception
-    assert all(at.session_state["_pushes"].values()), at.session_state["_pushes"]
+    for expected_run in (1, 2, 3):
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert at.session_state["_run"] == expected_run
+        assert at.session_state["_style"] == "Dotted", (
+            f"run {expected_run}: the stored value did not survive a run without "
+            "its widget — check persist_state='session' on the widget"
+        )
 
-    at.run(timeout=30)  # second run: nothing was written programmatically
-    assert not at.exception, at.exception
-    assert at.session_state["_run"] == 2
-    missing = [k for k, pushed in at.session_state["_pushes"].items() if not pushed]
-    assert not missing, (
-        "these keys are no longer re-asserted, so a widget that first renders on "
-        f"a later run will show its default instead of the stored value: {missing}"
+
+def test_every_wire_format_widget_declares_persist_state():
+    """The contract that replaced the re-assert-every-run workaround (ENG-36).
+
+    A widget on a share-link / saved-config key can render conditionally, and one
+    without ``persist_state="session"`` silently loses the user's value the first
+    time its panel doesn't render. That is invisible until someone reports a
+    setting resetting itself, so it is pinned here instead.
+    """
+    import ast
+    import inspect
+
+    from scanpath_studio import app, session_keys, tabs
+
+    keys = (
+        set(controls._VIZ_WIDGET_DEFAULTS)
+        | {"global_marker_size_range"}
+        | set(session_keys.PLOT_CONFIG_STATE_KEYS)
+        | set(session_keys.URL_SEEDED_STATE_KEYS)
+    ) - _NO_PERSIST_STATE
+    offenders = []
+    for module in (app, controls, tabs):
+        tree = ast.parse(inspect.getsource(module))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            kwargs = {kw.arg: kw for kw in node.keywords if kw.arg}
+            key = kwargs.get("key")
+            if key is None or not isinstance(key.value, ast.Constant):
+                continue
+            if key.value.value not in keys:
+                continue
+            persist = kwargs.get("persist_state")
+            if persist is None or getattr(persist.value, "value", None) != "session":
+                offenders.append(f"{module.__name__}:{node.lineno} {key.value.value}")
+    assert not offenders, (
+        "these widgets sit on a persisted key but do not declare "
+        f'persist_state="session", so their value is lost the first time their '
+        f"panel does not render: {offenders}"
     )
-    # Re-asserting must not overwrite what was already there.
-    assert at.session_state["_style"] == "Dotted"
 
 
 def _pin_app():
@@ -99,8 +147,8 @@ def _pin_app():
     from scanpath_studio.controls import _pin
 
     st.session_state["k"] = "kept"
-    _pin("k", "fallback", rewrite=True)
-    _pin("fresh", "fallback", rewrite=True)
+    _pin("k", "fallback")
+    _pin("fresh", "fallback")
 
 
 def test_pin_keeps_an_existing_value():
@@ -204,8 +252,9 @@ def test_canvas_settings_survive_a_corpus_analysis_round_trip():
     the *next* Corpus run wrote the factory default over the user's settings and
     kept it (canvas 1234 → 700, font 33 → 16, text colour → #343a40), including
     six keys that are share-link / saved-config wire format. The seeder now uses
-    ``controls._pin(rewrite=True)`` instead, which re-asserts the stored value on
-    every run and so keeps the keys alive across a view that never renders them.
+    ``persist_state="session"`` on each of those widgets, which is what keeps the
+    keys alive across a view that never renders them (ENG-36; before 1.61 this
+    was a hand-rolled re-assert-every-run in ``controls._pin``).
 
     Two Corpus runs matter: the first is the one that prunes, the second is the
     one that would re-seed a default over the gap.

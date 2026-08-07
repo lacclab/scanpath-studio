@@ -98,6 +98,7 @@ def _numeric_slider(
     help: Optional[str] = None,
     disabled: bool = False,
     on_change=None,
+    persist_state: Optional[str] = None,
 ) -> None:
     """A single-value slider plus a number box bound to the same setting.
 
@@ -134,6 +135,7 @@ def _numeric_slider(
         help=help,
         disabled=disabled,
         on_change=on_change,
+        persist_state=persist_state,
     )
     num_col.number_input(
         label,
@@ -161,6 +163,7 @@ def _range_slider(
     help: Optional[str] = None,
     disabled: bool = False,
     on_change=None,
+    persist_state: Optional[str] = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
 
@@ -195,6 +198,7 @@ def _range_slider(
         help=help,
         disabled=disabled,
         on_change=on_change,
+        persist_state=persist_state,
     )
     fmt = number_format if number_format is not None else slider_format
     for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
@@ -511,6 +515,7 @@ def _render_fixclass_category(
         options=_FIXCLASS_MODES,
         horizontal=True,
         key=f"global_fixclass_{key_prefix}_mode",
+        persist_state="session",
         help=_gated_help(
             "Highlight marks these fixations with an overlay marker; Discard hides "
             "them from the plot only (reading measures and exported tables are "
@@ -525,6 +530,7 @@ def _render_fixclass_category(
             min_value=1,
             step=10,
             key=f"global_fixclass_{key_prefix}_threshold_ms",
+            persist_state="session",
             disabled=disabled,
         )
     if mode == "Highlight":
@@ -533,6 +539,7 @@ def _render_fixclass_category(
             options=list(_OUT_OF_TEXT_MARKERS),
             format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
             key=f"global_fixclass_{key_prefix}_symbol",
+            persist_state="session",
             disabled=disabled,
         )
         st.color_picker(
@@ -1361,72 +1368,62 @@ def _clamped_pair(val, lo: float, hi: float) -> Optional[tuple]:
 _COMPARE_SCANPATHS = ((0, "Scanpath 1"), (1, "Scanpath 2"))
 
 
-def _pin(key: str, default, *, rewrite: bool) -> None:
-    """Seed ``key``; with ``rewrite`` also RE-ASSERT the stored value (BUG-15).
+def _pin(key: str, default) -> None:
+    """Seed ``key``'s default if it has none yet. Never overwrites.
 
-    The rewrite is load-bearing and must not be "simplified" back to
-    ``setdefault``. Streamlit only pushes a session-state value down to the
-    browser on the run where the key was written *programmatically* — that is
-    what sets ``set_value`` on the widget's proto. A widget that first renders
-    on a **later** run (its layer toggle was off at load, from a deep link or a
-    restored config, and the popover holding it never rendered) arrives with no
-    ``set_value`` and shows its *proto* default instead of the live setting: the
-    segmented controls show nothing pressed at all — their proto default is
-    empty — and a colour picker shows black while the figure draws the linked
-    colour. Re-asserting the same value each run keeps the widget honest
-    whenever it mounts, and is a no-op for everything else, including a click
-    made earlier in the same run (session state already holds the new value).
-
-    ``rewrite=False`` for callers that run **after** the widgets: ``app.main``
-    re-reads the settings once the rail has rendered, and writing a widget key
-    then raises. ``sidebar_controls`` seeds before it renders, so it rewrites —
-    but a few keys in the shared defaults table belong to widgets ``tabs.py``
-    renders *earlier* in the same run (⚙ Compare options / ⚙ Playback). Those
-    refuse the write and don't need it: their widget has already been created
-    this run, so it is already carrying the value. Hence the narrow catch rather
-    than a hand-kept exclusion list that would rot the next time the rail moves.
+    This is the *first value* half of the widget-state contract. The other half
+    — keeping that value alive through runs where the widget doesn't render, and
+    pushing it to the browser when the widget finally mounts — used to be a
+    matching ``rewrite=True`` re-assertion here (BUG-15: Streamlit only sent a
+    value down on the run it was written programmatically, so a control whose
+    popover first opened on a *later* run mounted at its proto default — nothing
+    pressed on a segmented control, black on a colour picker). Streamlit 1.61
+    owns that natively: every widget on these keys passes
+    ``persist_state="session"``, which preserves the value while unmounted and
+    marks it as changed on remount so the frontend adopts it (ENG-36). Keep the
+    kwarg when adding a widget on a ``global_*`` / ``single_*`` / ``cmp{idx}_*``
+    key — it is what makes this a plain ``setdefault`` again.
 
     Safe only because no viz widget passes ``value=``/``index=`` (see
-    ``_seed_viz_state``); adding one would also start logging Streamlit's
-    "default value but also set via Session State API" warning.
+    ``_seed_viz_state``); adding one would fight the stored value *and* log
+    Streamlit's "default value but also set via Session State API" warning.
 
     A **list** default is copied on the way in: ``_VIZ_WIDGET_DEFAULTS`` is a
     module-level table, so seeding a multiselect (``global_saccade_classes``)
     with the list object itself would hand session state a live alias of the
     default, and one in-place edit anywhere would change it for the rest of the
-    process. Re-asserting an already-stored value needs no copy.
+    process.
     """
-    if not rewrite and key in st.session_state:
-        return
     if key in st.session_state:
-        value = st.session_state[key]
-    else:
-        value = list(default) if isinstance(default, list) else default
+        return
     try:
-        st.session_state[key] = value
+        st.session_state[key] = list(default) if isinstance(default, list) else default
     except StreamlitAPIException:
+        # The key belongs to a widget already created this run (⚙ Compare
+        # options / ⚙ Playback render in tabs.py before the rail). It is already
+        # carrying its value, so there is nothing to seed.
         pass
 
 
-def _seed_compare_styles(*, rewrite: bool) -> None:
+def _seed_compare_styles() -> None:
     """Seed the per-scanpath comparison styling keys (so the collected dicts have
     values even when the relevant layer popover isn't open this run).
 
-    BUG-15's ``_pin`` mechanism now owns the colour keys too, replacing the two
-    older explicit-value workarounds. Every conditionally-rendered comparison
-    widget therefore follows the same late-mount synchronization rule."""
+    Seeding is all that is needed: the widgets themselves carry
+    ``persist_state="session"``, which keeps the value alive through the runs
+    where the popover isn't open (ENG-36)."""
     for idx, _ in _COMPARE_SCANPATHS:
-        _pin(f"cmp{idx}_fix_color", compare_palette_color(idx), rewrite=rewrite)
-        _pin(f"cmp{idx}_saccade_color", compare_palette_color(idx), rewrite=rewrite)
-        _pin(f"cmp{idx}_saccade_style", "Solid", rewrite=rewrite)
-        _pin(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH, rewrite=rewrite)
-        _pin(f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE, rewrite=rewrite)
+        _pin(f"cmp{idx}_fix_color", compare_palette_color(idx))
+        _pin(f"cmp{idx}_saccade_color", compare_palette_color(idx))
+        _pin(f"cmp{idx}_saccade_style", "Solid")
+        _pin(f"cmp{idx}_saccade_width", DEFAULT_SACCADE_WIDTH)
+        _pin(f"cmp{idx}_marker_size_range", DEFAULT_MARKER_SIZE_RANGE)
         # VIZ-6: per-scanpath marker alpha (replaces the per-scanpath hollow
         # checkbox). Default 0.7 matches the single-trial default so overlapping
         # fixations show through. `cmp{idx}_hollow` kept seeded for saved-config /
         # deep-link backward compatibility (no widget renders it anymore).
-        _pin(f"cmp{idx}_opacity", 0.7, rewrite=rewrite)
-        _pin(f"cmp{idx}_hollow", False, rewrite=rewrite)
+        _pin(f"cmp{idx}_opacity", 0.7)
+        _pin(f"cmp{idx}_hollow", False)
 
 
 def _render_compare_fix_styles() -> None:
@@ -1438,11 +1435,13 @@ def _render_compare_fix_styles() -> None:
         st.color_picker(
             f"{name} — fixation color",
             key=f"cmp{idx}_fix_color",
+            persist_state="session",
         )
         _range_slider(
             st,
             f"{name} — marker size range",
             key=f"cmp{idx}_marker_size_range",
+            persist_state="session",
             min_value=4,
             max_value=40,
         )
@@ -1450,6 +1449,7 @@ def _render_compare_fix_styles() -> None:
             st,
             f"{name} — opacity",
             key=f"cmp{idx}_opacity",
+            persist_state="session",
             min_value=0.1,
             max_value=1.0,
             step=0.05,
@@ -1467,14 +1467,19 @@ def _render_compare_saccade_styles() -> None:
         st.color_picker(
             f"{name} — saccade color",
             key=f"cmp{idx}_saccade_color",
+            persist_state="session",
         )
         st.selectbox(
-            f"{name} — line style", options=style_labels, key=f"cmp{idx}_saccade_style"
+            f"{name} — line style",
+            options=style_labels,
+            key=f"cmp{idx}_saccade_style",
+            persist_state="session",
         )
         _numeric_slider(
             st,
             f"{name} — line width",
             key=f"cmp{idx}_saccade_width",
+            persist_state="session",
             min_value=SACCADE_WIDTH_BOUNDS[0],
             max_value=SACCADE_WIDTH_BOUNDS[1],
             step=0.5,
@@ -1627,6 +1632,7 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
         st,
         "Fixation index range",
         key="single_fix_range",
+        persist_state="session",
         min_value=1,
         max_value=max_fix,
         on_change=_mark_fix_range_user_set,
@@ -1638,6 +1644,7 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
     st.checkbox(
         "Apply to all trials",
         key="single_fix_range_all_trials",
+        persist_state="session",
         help="**Off** (default) — the window belongs to this trial; picking "
         "another trial shows all of its fixations again. **On** — keep the same "
         "index window as you move through trials, clamped to each trial's "
@@ -1651,8 +1658,6 @@ def _seed_viz_state(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
     words: Optional[pd.DataFrame],
-    *,
-    rewrite: bool = False,
 ) -> tuple[List[str], List[str], List[str]]:
     """Seed every viz widget's session_state default (pure — renders nothing).
 
@@ -1664,22 +1669,22 @@ def _seed_viz_state(
     settable (deep links / plot-config restore) without Streamlit's "default
     value but also set via Session State API" warning.
 
-    ``rewrite=True`` (only from ``sidebar_controls``, which seeds *before* it
-    renders) additionally re-asserts each stored value so a widget appearing for
-    the first time on this run still receives it — see ``_pin`` / BUG-15. The
-    reader must leave it False: ``app.main`` calls it again *after* the rail has
-    rendered, where writing a widget key raises. Returns ``(color_fields,
-    numeric_fields, highlight_options)`` for the caller to reuse.
+    Seeding only — keeping a stored value alive through a run where its widget
+    doesn't render is the widgets' own ``persist_state="session"`` (ENG-36), so
+    this is safe to call both before rendering (``sidebar_controls``) and after
+    (``app.main`` re-reads the settings once the rail has rendered, where writing
+    a widget key would raise). Returns ``(color_fields, numeric_fields,
+    highlight_options)`` for the caller to reuse.
     """
     for _key, _default in _VIZ_WIDGET_DEFAULTS.items():
-        _pin(_key, _default, rewrite=rewrite)
-    _pin("global_marker_size_range", (8, 24), rewrite=rewrite)
-    _seed_compare_styles(rewrite=rewrite)
+        _pin(_key, _default)
+    _pin("global_marker_size_range", (8, 24))
+    _seed_compare_styles()
 
     color_fields = color_field_options(trial_fixations)
     _drop_stale("global_color_by", color_fields)
     # VIZ-17: one flat colour by default — see `color_field_options`.
-    _pin("global_color_by", UNIFORM_COLOR_FIELD, rewrite=rewrite)
+    _pin("global_color_by", UNIFORM_COLOR_FIELD)
 
     numeric_fields = numeric_field_options(trial_fixations)
     if numeric_fields:
@@ -1690,9 +1695,9 @@ def _seed_viz_state(
             else numeric_fields[min(1, len(numeric_fields) - 1)]
         )
         _drop_stale("global_x_field", numeric_fields)
-        _pin("global_x_field", x_default, rewrite=rewrite)
+        _pin("global_x_field", x_default)
         _drop_stale("global_y_field", numeric_fields)
-        _pin("global_y_field", y_default, rewrite=rewrite)
+        _pin("global_y_field", y_default)
 
     # Highlight-column default + stale-clear run every time (even when the Text
     # styling popover isn't rendered this run) so a restored config on data with
@@ -1705,7 +1710,6 @@ def _seed_viz_state(
             "is_in_aspan"
             if "is_in_aspan" in highlight_options
             else highlight_options[0],
-            rewrite=rewrite,
         )
 
     # VIZ-26: arbitrary multi-field word/fixation hover. The legacy one-measure
@@ -1725,13 +1729,6 @@ def _seed_viz_state(
         _pin(
             "global_word_hover_fields",
             [field for field in default_word_hover if field in word_hover_options],
-            rewrite=rewrite,
-        )
-    elif rewrite:
-        _pin(
-            "global_word_hover_fields",
-            st.session_state["global_word_hover_fields"],
-            rewrite=True,
         )
     if "global_fixation_hover_fields" not in st.session_state:
         _pin(
@@ -1741,13 +1738,6 @@ def _seed_viz_state(
                 for field in ("order_in_trial", "duration_ms", "word_id")
                 if field in fix_hover_options
             ],
-            rewrite=rewrite,
-        )
-    elif rewrite:
-        _pin(
-            "global_fixation_hover_fields",
-            st.session_state["global_fixation_hover_fields"],
-            rewrite=True,
         )
     return color_fields, numeric_fields, highlight_options
 
@@ -2014,7 +2004,7 @@ def corpus_style_controls(
     a way to change them; before VIZ-31 the panel lived in the always-present
     sidebar and was reachable from here for free.
     """
-    _seed_viz_state(trial_fixations, base_font_size, words, rewrite=True)
+    _seed_viz_state(trial_fixations, base_font_size, words)
     target = host or st
     with target.expander("🎨 Corpus figure style", expanded=False):
         active = _active_palette()
@@ -2024,6 +2014,7 @@ def corpus_style_controls(
             "Palette",
             options=options,
             key="global_palette",
+            persist_state="session",
             on_change=_on_palette_change,
             help="Shared with the Scanpath view and every saved/shareable figure setting.",
         )
@@ -2031,15 +2022,20 @@ def corpus_style_controls(
         columns[0].color_picker(
             "Primary series",
             key="global_fixation_color",
+            persist_state="session",
             help="First group or profile.",
         )
         columns[1].color_picker(
-            "Secondary series", key="global_saccade_color", help="Second group."
+            "Secondary series",
+            key="global_saccade_color",
+            persist_state="session",
+            help="Second group.",
         )
         st.selectbox(
             "Heatmap colorscale",
             options=COLORSCALES,
             key="global_heatmap_colorscale",
+            persist_state="session",
             help="Used by word matrices and stimulus heatmaps.",
         )
     if canvas_renderer is not None:
@@ -2096,10 +2092,9 @@ def sidebar_controls(
     count). When omitted, the slider isn't rendered (e.g. the non-rendering
     Corpus reader, which never windows).
     """
-    # rewrite=True: this is the one caller that seeds *before* rendering, so it
     # can re-push the stored values to the browser (BUG-15 — see `_pin`).
     color_fields, numeric_fields, highlight_options = _seed_viz_state(
-        trial_fixations, base_font_size, words, rewrite=True
+        trial_fixations, base_font_size, words
     )
     if not numeric_fields:
         st.error("No numeric fields found in fixations to map axes.")
@@ -2171,6 +2166,7 @@ def sidebar_controls(
         "Palette",
         options=_palette_options,
         key="global_palette",
+        persist_state="session",
         on_change=_on_palette_change,
         help="Colour defaults for the marks. **Default (colourblind-safe)** uses "
         "the Okabe–Ito hues; **Print / greyscale** drops hue entirely so the "
@@ -2269,6 +2265,7 @@ def sidebar_controls(
     show_fix = fix_grp.toggle(
         "**Fixations**",
         key="global_show_fix",
+        persist_state="session",
         disabled=fix_off_disabled,
         help=_gated_help(
             "Draw the fixation markers.",
@@ -2296,6 +2293,7 @@ def sidebar_controls(
                 "Color fixations by",
                 options=color_fields,
                 key="global_color_by",
+                persist_state="session",
                 disabled=metric_disabled,
                 help=_gated_help(
                     f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
@@ -2315,6 +2313,7 @@ def sidebar_controls(
                 st.color_picker(
                     "Fixation color",
                     key="global_fixation_color",
+                    persist_state="session",
                     disabled=_dis,
                     help=_gated_help(
                         "The single colour every fixation marker wears.", _reason
@@ -2331,6 +2330,7 @@ def sidebar_controls(
                 options=list(FIXATION_SYMBOLS),
                 format_func=lambda s: FIXATION_SYMBOLS[s],
                 key="global_fixation_symbol",
+                persist_state="session",
                 help="Shape of the fixation markers. Unlike colour, shape "
                 "still reads in black & white. Applies on all three render "
                 "paths, including both compared scanpaths.",
@@ -2349,6 +2349,7 @@ def sidebar_controls(
                 "Drift correction",
                 options=_ALIGN_OPTIONS,
                 key="global_align_algorithm",
+                persist_state="session",
                 help="Snap fixations to their assigned text line using a "
                 "vertical drift-correction algorithm (Carr et al., 2021). "
                 "'Off' shows the raw fixations. See also the 📐 Line "
@@ -2358,6 +2359,7 @@ def sidebar_controls(
                 st.checkbox(
                     "Show drift connectors",
                     key="global_align_connectors",
+                    persist_state="session",
                     disabled=static_disabled,
                     help=_gated_help(
                         "Draw a faint line from each fixation's original "
@@ -2379,6 +2381,7 @@ def sidebar_controls(
             st.checkbox(
                 "Snap fixations above words",
                 key="global_fixation_snap_to_word",
+                persist_state="session",
                 disabled=static_disabled,
                 help=_gated_help(
                     "Schematic layout, **not** drift correction: every "
@@ -2397,6 +2400,7 @@ def sidebar_controls(
                 st,
                 "Size",
                 key="global_marker_size_range",
+                persist_state="session",
                 min_value=4,
                 max_value=40,
                 disabled=_dis,
@@ -2406,6 +2410,7 @@ def sidebar_controls(
                 st,
                 "Opacity",
                 key="global_fixation_opacity",
+                persist_state="session",
                 min_value=0.1,
                 max_value=1.0,
                 step=0.05,
@@ -2454,6 +2459,7 @@ def sidebar_controls(
                     st,
                     "Fixation color range",
                     key="global_fixation_color_range",
+                    persist_state="session",
                     min_value=cmin,
                     max_value=cmax_eff,
                     step=1.0,
@@ -2461,7 +2467,9 @@ def sidebar_controls(
                     disabled=metric_disabled,
                     help=_gated_help(None, metric_reason),
                 )
-            show_order = st.checkbox("Fixation index", key="global_show_order")
+            show_order = st.checkbox(
+                "Fixation index", key="global_show_order", persist_state="session"
+            )
             if show_order:
                 # In Compare (and in a dual animation) the index labels are tinted
                 # to each scanpath's own colour, so the global colour is inert.
@@ -2469,6 +2477,7 @@ def sidebar_controls(
                 st.color_picker(
                     "Index label color",
                     key="global_order_font_color",
+                    persist_state="session",
                     disabled=_dis,
                     help=_gated_help("Fixation-index label colour.", _reason),
                 )
@@ -2476,6 +2485,7 @@ def sidebar_controls(
                     st,
                     "Index label size",
                     key="global_order_font_size",
+                    persist_state="session",
                     min_value=6,
                     max_value=72,
                     help="Fixation-index label size (figure pixels; the plot is "
@@ -2487,6 +2497,7 @@ def sidebar_controls(
                 "Hover fields",
                 options=hover_field_options(trial_fixations),
                 key="global_fixation_hover_fields",
+                persist_state="session",
                 disabled=_hover_dis,
                 help=_gated_help(
                     "Fields shown when hovering a fixation. Choose any retained "
@@ -2520,7 +2531,9 @@ def sidebar_controls(
             _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
-    show_saccades = sac_grp.toggle("**Saccades**", key="global_show_saccades")
+    show_saccades = sac_grp.toggle(
+        "**Saccades**", key="global_show_saccades", persist_state="session"
+    )
     if show_saccades:
         with sac_grp.popover("⚙️ Saccade style", width="stretch"):
             # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
@@ -2529,6 +2542,7 @@ def sidebar_controls(
             st.checkbox(
                 "Direction arrows",
                 key="global_show_saccade_arrows",
+                persist_state="session",
                 help="Draw an arrowhead on each saccade pointing in the gaze "
                 "direction. In **Animate** each arrow appears with its own "
                 "saccade rather than all at once.",
@@ -2545,6 +2559,7 @@ def sidebar_controls(
                 "Saccade color",
                 options=SACCADE_COLOR_MODES,
                 key="global_saccade_color_mode",
+                persist_state="session",
                 disabled=class_disabled,
                 help=_gated_help(
                     "**Uniform** — one colour for every saccade. **Forward / "
@@ -2581,6 +2596,7 @@ def sidebar_controls(
                 st.checkbox(
                     "Show legend",
                     key="global_saccade_type_legend",
+                    persist_state="session",
                     help="Show the saccade-type colour key on the plot. Turn "
                     "it off for a cleaner figure once the colours are learned.",
                 )
@@ -2592,6 +2608,7 @@ def sidebar_controls(
                 st.color_picker(
                     "Line color",
                     key="global_saccade_color",
+                    persist_state="session",
                     disabled=_dis,
                     help=_gated_help(
                         "Colour of the saccade lines and direction arrows.", _reason
@@ -2602,6 +2619,7 @@ def sidebar_controls(
                 "Saccade line style",
                 options=list(SACCADE_DASH_OPTIONS.keys()),
                 key="global_saccade_style",
+                persist_state="session",
                 disabled=_dis,
                 help=_gated_help("Line style for the saccade traces.", _reason),
             )
@@ -2609,6 +2627,7 @@ def sidebar_controls(
                 st,
                 "Saccade line width",
                 key="global_saccade_width",
+                persist_state="session",
                 min_value=SACCADE_WIDTH_BOUNDS[0],
                 max_value=SACCADE_WIDTH_BOUNDS[1],
                 step=0.5,
@@ -2625,6 +2644,7 @@ def sidebar_controls(
                 "Line shape",
                 options=["Straight", "Arc"],
                 key="global_saccade_render_mode",
+                persist_state="session",
                 disabled=class_disabled,
                 help=_gated_help(
                     "Straight connectors, or upward **arcs** over the text "
@@ -2661,6 +2681,7 @@ def sidebar_controls(
                 options=SACCADE_CLASS_ORDER,
                 format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
                 key="global_saccade_classes",
+                persist_state="session",
                 disabled=_cls_dis,
                 help=_gated_help(
                     "Hidden classes are dropped from the figure entirely — line "
@@ -2676,7 +2697,9 @@ def sidebar_controls(
             )
 
     # --- Text -------------------------------------------------------------
-    show_labels = stim_grp.toggle("**Text**", key="global_show_labels")
+    show_labels = stim_grp.toggle(
+        "**Text**", key="global_show_labels", persist_state="session"
+    )
     if show_labels:
         with stim_grp.popover("⚙️ Text & highlight", width="stretch"):
             # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
@@ -2719,6 +2742,7 @@ def sidebar_controls(
             span_on = st.toggle(
                 "Highlight a span",
                 key="global_highlight_span_on",
+                persist_state="session",
                 on_change=_on_span_toggle,
                 help="Highlight a per-word span (e.g. the answer span) on the text.",
             )
@@ -2729,6 +2753,7 @@ def sidebar_controls(
                         "Highlight words by",
                         options=highlight_options,
                         key="global_highlight_column",
+                        persist_state="session",
                         help="Which per-word column to highlight on the text (words "
                         "where it is true). Defaults to the OneStop answer span.",
                     )
@@ -2737,6 +2762,7 @@ def sidebar_controls(
                     options=["Mark text", "Mark border"],
                     horizontal=True,
                     key="global_highlight_span_mode",
+                    persist_state="session",
                     on_change=_on_span_mode,
                     help="Mark text: colour the span's words. Mark border: draw a "
                     "thin outline around the span."
@@ -2756,6 +2782,7 @@ def sidebar_controls(
                 st.color_picker(
                     "Highlighted text color",
                     key="global_highlight_text_color",
+                    persist_state="session",
                     help="Colour of the highlighted reading text (used with "
                     "'Mark text').",
                 )
@@ -2763,6 +2790,7 @@ def sidebar_controls(
                 st.color_picker(
                     "Border color",
                     key="global_span_border_color",
+                    persist_state="session",
                     disabled=border_disabled,
                     help=_gated_help(
                         "Colour of the span outline (used with 'Mark border').",
@@ -2776,6 +2804,7 @@ def sidebar_controls(
                 "Hover fields",
                 options=hover_field_options(words, words=True),
                 key="global_word_hover_fields",
+                persist_state="session",
                 disabled=_hover_dis,
                 help=_gated_help(
                     "Fields shown when hovering a word: identity, any reading "
@@ -2793,6 +2822,7 @@ def sidebar_controls(
     show_heatmap = ovl_grp.toggle(
         "**Heatmap**",
         key="global_show_heatmap",
+        persist_state="session",
         disabled=heat_disabled,
         help=_gated_help("Tint the reading by fixation density.", heat_reason),
     )
@@ -2806,6 +2836,7 @@ def sidebar_controls(
                 options=["Word boxes", "Interpolated", "Duration mass"],
                 horizontal=True,
                 key="global_heatmap_style",
+                persist_state="session",
                 disabled=heat_disabled or comparing,
                 help=_gated_help(
                     "Comparison always uses word boxes with one shared scale. "
@@ -2826,6 +2857,7 @@ def sidebar_controls(
                     max_value=10.0,
                     step=0.25,
                     key="global_duration_mass_sigma_chars",
+                    persist_state="session",
                     disabled=heat_disabled,
                     help="Gaussian standard deviation measured in character widths.",
                 )
@@ -2843,6 +2875,7 @@ def sidebar_controls(
                 options=["Linear", "Log"],
                 horizontal=True,
                 key="global_heatmap_norm",
+                persist_state="session",
                 disabled=heat_disabled,
                 help=_gated_help(
                     "Linear maps colour straight to the value. Log maps to "
@@ -2860,6 +2893,7 @@ def sidebar_controls(
                     heat_reason,
                 ),
                 key="global_heatmap_metric",
+                persist_state="session",
             )
             heat_data = (
                 trial_fixations["duration_ms"]
@@ -2884,6 +2918,7 @@ def sidebar_controls(
                     st,
                     "Heatmap color range",
                     key="global_heatmap_color_range",
+                    persist_state="session",
                     min_value=hmin,
                     max_value=hmax_eff,
                     step=1.0,
@@ -2899,7 +2934,9 @@ def sidebar_controls(
                 )
 
     # --- Bounding boxes / Stimulus image / Raw gaze -----------------------
-    stim_grp.toggle("**Bounding boxes**", key="global_show_words")
+    stim_grp.toggle(
+        "**Bounding boxes**", key="global_show_words", persist_state="session"
+    )
     # VIZ-4: a stimulus image can come from the dataset (MultiplEYE stamps a
     # per-trial `image_path`) OR be uploaded here for any dataset (a full-monitor
     # screenshot of the reading screen). The upload's `data:` URI is stashed in
@@ -2924,6 +2961,7 @@ def sidebar_controls(
         ),
         disabled=not can_show_image,
         key="global_show_stimulus_image",
+        persist_state="session",
     )
     # Keep the popover reachable even while the toggle is off-and-disabled (no
     # image loaded yet) — its uploader is the only way to get an image in and
@@ -2933,6 +2971,8 @@ def sidebar_controls(
             st.file_uploader(
                 "Upload a stimulus image",
                 type=["png", "jpg", "jpeg", "gif", "webp"],
+                # No persist_state: st.file_uploader does not take it, and an
+                # UploadedFile is already stashed by _uploaded_image_data_uri.
                 key="global_stimulus_image_upload",
                 help="Use a screenshot of the reading screen as the background for "
                 "any dataset. An upload **overrides** a dataset's built-in image and "
@@ -2944,6 +2984,7 @@ def sidebar_controls(
                 st,
                 "Image opacity",
                 key="global_stimulus_image_opacity",
+                persist_state="session",
                 min_value=0.1,
                 max_value=1.0,
                 step=0.05,
@@ -2961,18 +3002,21 @@ def sidebar_controls(
                 "Image X offset (px)",
                 step=5.0,
                 key="global_stimulus_image_offset_x",
+                persist_state="session",
                 help="Shift the image horizontally to line it up with the text.",
             )
             off_cols[1].number_input(
                 "Image Y offset (px)",
                 step=5.0,
                 key="global_stimulus_image_offset_y",
+                persist_state="session",
                 help="Shift the image vertically to line it up with the text.",
             )
             _numeric_slider(
                 st,
                 "Image scale",
                 key="global_stimulus_image_scale",
+                persist_state="session",
                 min_value=0.25,
                 max_value=3.0,
                 step=0.05,
@@ -2991,6 +3035,7 @@ def sidebar_controls(
         ),
         disabled=not has_raw_gaze or raw_disabled,
         key="global_show_raw_gaze",
+        persist_state="session",
     )
     # DATA-15: the bundled demo's raw gaze is SYNTHESIZED from the fixation
     # report (OneStop ships no sample-level gaze) — it looks like eye-tracker
@@ -3024,16 +3069,20 @@ def sidebar_controls(
         "Illustration label",
         options=["Auto", "Show", "Hide"],
         key="global_illustration_label",
+        persist_state="session",
         help="Auto labels figures when geometry or data is transformed. Show "
         "forces the label; Hide is an explicit publication override.",
     )
     axes.toggle(
         "**Show full monitor**",
         key="global_fit_to_monitor",
+        persist_state="session",
         help="Frame the whole presentation monitor so the scanpath sits where it "
         "appeared on screen. Turn off to crop the view tightly to the data.",
     )
-    show_colorbars = axes.checkbox("Show color bars", key="global_show_colorbars")
+    show_colorbars = axes.checkbox(
+        "Show color bars", key="global_show_colorbars", persist_state="session"
+    )
     if show_colorbars:
         # VIZ-23: all three builders now route their colour bar through
         # `_colorbar_dict`, so the styling below applies wherever a colour bar is
@@ -3048,6 +3097,7 @@ def sidebar_controls(
             options=["Vertical", "Horizontal"],
             horizontal=True,
             key="global_colorbar_orientation",
+            persist_state="session",
             disabled=cb_disabled,
             help=_gated_help(
                 "Vertical bar on the right, or a horizontal bar below the plot.",
@@ -3058,6 +3108,7 @@ def sidebar_controls(
             axes,
             "Tick label angle",
             key="global_colorbar_tickangle",
+            persist_state="session",
             min_value=-90,
             max_value=90,
             step=15,
@@ -3068,6 +3119,7 @@ def sidebar_controls(
             axes,
             "Tick label size",
             key="global_colorbar_tickfont_size",
+            persist_state="session",
             min_value=6,
             max_value=20,
             disabled=cb_disabled,
@@ -3080,6 +3132,7 @@ def sidebar_controls(
         "X axis field",
         options=numeric_fields,
         key="global_x_field",
+        persist_state="session",
         disabled=axis_disabled,
         help=_gated_help(
             "Fixation column plotted on the X axis (default `x`).", axis_reason
@@ -3089,6 +3142,7 @@ def sidebar_controls(
         "Y axis field",
         options=numeric_fields,
         key="global_y_field",
+        persist_state="session",
         disabled=axis_disabled,
         help=_gated_help(
             "Fixation column plotted on the Y axis (default `y`).", axis_reason
@@ -3117,6 +3171,7 @@ def sidebar_controls(
     show_title_caption = axes.toggle(
         "Title & caption on the figure",
         key="global_show_title_caption",
+        persist_state="session",
         on_change=_on_toggle_title_caption,
         help="Render a title and/or caption into the figure — on screen, in "
         "**This trial** export, and in a bulk export — so a figure dropped "

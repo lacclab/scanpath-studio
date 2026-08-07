@@ -40,7 +40,7 @@ COLORSCALES = [
 # VIZ-32: colourblind-safe (Viridis) is the default a fresh session opens with.
 # A keyed selectbox first-rendered inside a popover would otherwise display its
 # first option rather than a non-index-0 seeded value on first open — handled by
-# `controls._popover_selectbox` (explicit `index=`) / `_pin(rewrite=True)`, so a
+# `controls._popover_selectbox` (explicit `index=`) / `_pin` + `persist_state`, so a
 # non-index-0 default here still keeps the picker and the figure in sync.
 DEFAULT_FIXATION_COLORSCALE = "Viridis"
 DEFAULT_HEATMAP_COLORSCALE = "Viridis"

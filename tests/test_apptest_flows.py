@@ -31,8 +31,8 @@ from typing import Optional
 import pandas as pd
 import pytest
 
-from scanpath_studio.data import load_sample_data
 from scanpath_studio.constants import AUTHOR_CHOICE
+from scanpath_studio.data import load_sample_data
 from tests.conftest import APP_SCRIPT
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")

@@ -2634,11 +2634,12 @@ def render_single_trial_tab(
             # by a deep link / saved config (see session_keys), and passing both makes
             # Streamlit warn (BUG-17). `setdefault` suffices — this toggle renders on
             # every run, so it never first mounts late the way a popover-bound widget
-            # can (that case needs `controls._pin(rewrite=True)`; see BUG-15).
+            # can (that case needs `persist_state="session"`; see BUG-15/ENG-36).
             st.session_state.setdefault("single_animate", False)
             animate = st.toggle(
                 "🎬 **Animate**",
                 key="single_animate",
+                persist_state="session",
                 help="Replay the trial fixation by fixation; the play / pause / "
                 "restart controls sit below the plot.",
             )
@@ -2661,6 +2662,7 @@ def render_single_trial_tab(
                         ],
                         help="Playback speed relative to the recorded fixation timings.",
                         key="single_playback_speed",
+                        persist_state="session",
                     )
                     # UX-30: the reading-time / playback-duration box reads as a
                     # consequence of the speed picked above, so it sits right below it
@@ -2674,6 +2676,7 @@ def render_single_trial_tab(
                     st.checkbox(
                         "Autoplay on load",
                         key="global_anim_autoplay",
+                        persist_state="session",
                         help="Start the replay automatically when the plot loads, at "
                         "the playback speed set above. Turn off to start paused (press "
                         "▶ Play to run it).",
@@ -2724,6 +2727,7 @@ def render_single_trial_tab(
                         "Animation quality",
                         options=["Coarse", "Fine", "Custom"],
                         key="global_anim_quality",
+                        persist_state="session",
                         on_change=_apply_anim_quality,
                         help="**Coarse** — 300 ms / 120 frames for fast drafts. "
                         "**Fine** — 40 ms / 900 frames for high-fidelity review. "
@@ -2739,6 +2743,7 @@ def render_single_trial_tab(
                             st,
                             "Frame every (ms)",
                             key="global_anim_grid_step_ms",
+                            persist_state="session",
                             min_value=20,
                             max_value=500,
                             step=10,
@@ -2751,6 +2756,7 @@ def render_single_trial_tab(
                             st,
                             "Max frames",
                             key="global_anim_max_frames",
+                            persist_state="session",
                             min_value=30,
                             max_value=2000,
                             step=10,
@@ -2767,6 +2773,7 @@ def render_single_trial_tab(
                 "⚖️ **Compare**",
                 value=False,
                 key="single_compare_toggle",
+                persist_state="session",
                 help=(
                     "Co-animate a second reading on one clock."
                     if animate
@@ -2802,11 +2809,13 @@ def render_single_trial_tab(
                             "View",
                             options=["Overlay", "Side by side", "Stacked"],
                             key="single_compare_layout",
+                            persist_state="session",
                             help="Stacked = trials shown one above the other.",
                         )
                     show_legend_now = st.checkbox(
                         "Show A/B legend",
                         key="global_show_compare_legend",
+                        persist_state="session",
                         help="Show a legend naming the two scanpaths on the overlay "
                         "(off by default — the colours already tell A and B apart).",
                     )
@@ -2817,6 +2826,7 @@ def render_single_trial_tab(
                         st.text_input(
                             "Label A",
                             key="cmp0_label_pattern",
+                            persist_state="session",
                             help="Same fields as the title/caption pattern in "
                             "📐 Figure & axes. Leave empty for the default "
                             "`{participant_id} · {trial_id}`.",
@@ -2824,6 +2834,7 @@ def render_single_trial_tab(
                         st.text_input(
                             "Label B",
                             key="cmp1_label_pattern",
+                            persist_state="session",
                             help="Leave empty for the default "
                             "`{participant_id} · {trial_id}`.",
                         )
@@ -3444,7 +3455,7 @@ def _render_bulk_export(
         st.download_button(
             "Download zip",
             data=zip_bytes,
-            file_name=f"scanpath_export_{pd.Timestamp.utcnow():%Y%m%d_%H%M%S}.zip",
+            file_name=f"scanpath_export_{pd.Timestamp.now('UTC'):%Y%m%d_%H%M%S}.zip",
             mime="application/zip",
             type="primary",
         )

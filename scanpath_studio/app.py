@@ -1200,6 +1200,7 @@ def _load_onestop_public_source(
         options=list(ONESTOP_VARIANT_LABELS),
         format_func=lambda v: ONESTOP_VARIANT_LABELS[v],
         key="onestop_variant",
+        persist_state="session",
         help="Public downloads the reports from OSF on demand; LaCC lab reads a "
         "local lab-processed export (extra derived columns, no download).",
     )
@@ -1208,21 +1209,23 @@ def _load_onestop_public_source(
         options=list(ONESTOP_REGIME_LABELS),
         format_func=lambda r: ONESTOP_REGIME_LABELS[r],
         key="onestop_regime",
+        persist_state="session",
         help="Which OneStop reading regime to load. For the public variant each "
         "is a separate OSF download of the paragraph reports.",
     )
     # Seeded rather than `default=`-ed: a deep link seeds `onestop_parts`
     # pre-widget (`url_state._apply_url_preset`), and passing both makes
-    # Streamlit warn about the collision (BUG-17). `_pin(rewrite=True)` because
-    # this picker only renders while the OneStop public source is selected, so it
-    # can first mount on a later run — a plain setdefault would push nothing and
-    # the multiselect would come up empty (BUG-15).
-    _pin("onestop_parts", list(datasets.ONESTOP_DEFAULT_PARTS), rewrite=True)
+    # Streamlit warn about the collision (BUG-17). This picker renders only while
+    # the OneStop public source is selected, so it can first mount on a later run —
+    # `persist_state="session"` on the widget is what makes it come up carrying the
+    # seeded/deep-linked value rather than empty (BUG-15 / ENG-36).
+    _pin("onestop_parts", list(datasets.ONESTOP_DEFAULT_PARTS))
     parts = opt.multiselect(
         "Parts",
         options=list(ONESTOP_PART_LABELS),
         format_func=lambda p: ONESTOP_PART_LABELS[p],
         key="onestop_parts",
+        persist_state="session",
         help="Which trial screens to load. Paragraph is the reading passage; the "
         "others are the surrounding screens (title / question / answers / "
         "feedback). Loading several makes each part its own trial.",
@@ -2110,9 +2113,9 @@ def seed_canvas_state(
     the default seeding), then reads the resolved values back out, so both
     callers agree and neither has to render to learn them.
 
-    The seeding uses `controls._pin(rewrite=True)`, never `setdefault` — see the
-    comment on that block. It is what keeps these keys alive on a view that does
-    not render their widgets, which is now every view except Scanpath.
+    Seeding is `controls._pin` (a plain default-if-absent); what keeps these
+    keys alive on a view that never renders their widgets is the widgets' own
+    `persist_state="session"` — see the comment on that block.
 
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
@@ -2192,17 +2195,16 @@ def seed_canvas_state(
     # inline, immediately above its own widget; seeding them here is what lets a
     # caller resolve the settings without rendering the panel.
     #
-    # `_pin(rewrite=True)`, NOT `setdefault` — and for a second reason on top of
-    # BUG-15's. Since VIZ-31 these widgets render only in the Scanpath rail, and
-    # Streamlit drops a widget's key from session state at the end of any run in
-    # which that widget did not render. So one trip through **Corpus Analysis**
-    # (no rail) would prune all fourteen; `setdefault` cannot notice, because the
-    # key is still there while the run is in progress and only vanishes at the
-    # end of it — the next Corpus run then "seeds" the *default* over the user's
-    # canvas, font, text colour and background, permanently. Re-asserting the
-    # stored value each run keeps them alive on a view that never renders them.
-    # This is what `controls._seed_viz_state(rewrite=True)` already does for the
-    # layer settings, which is why those survived the same trip and these didn't.
+    # Seeding alone is NOT what keeps these alive. Since VIZ-31 these widgets
+    # render only in the Scanpath rail, and Streamlit drops a widget's key from
+    # session state at the end of any run in which the widget did not render — so
+    # one trip through **Corpus Analysis** (no rail) would prune all fourteen and
+    # the next run would seed the factory default over the user's canvas, font,
+    # text colour and background, permanently. What prevents that is
+    # `persist_state="session"` on each of those widgets (ENG-36; it replaced a
+    # hand-rolled re-assert-every-run workaround). Six of the fourteen are
+    # share-link / saved-config wire format, so this is not cosmetic. Pinned by
+    # `test_canvas_settings_survive_a_corpus_analysis_round_trip`.
     ss = st.session_state
     bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
     if ss.get("global_bg_choice") not in bg_options:
@@ -2236,7 +2238,7 @@ def seed_canvas_state(
         return ss.get(key, defaults[key])
 
     for key, default in defaults.items():
-        _pin(key, default, rewrite=True)
+        _pin(key, default)
     # Derived from the two above it, so it is pinned after them.
     _pin(
         "global_display_dpi",
@@ -2245,7 +2247,6 @@ def seed_canvas_state(
             / (float(_resolved("global_monitor_width_mm")) / 25.4),
             2,
         ),
-        rewrite=True,
     )
     # Point-specified stimulus typography converts to px through the DPI above.
     # The rendering path recomputes this from its own widget values (which is
@@ -2315,6 +2316,7 @@ def render_sidebar_canvas_controls(
         step=10,
         help="Use the real monitor width in pixels to keep coordinates true to scale.",
         key="global_canvas_width",
+        persist_state="session",
     )
     canvas_height = display.number_input(
         "Monitor height (px)",
@@ -2323,6 +2325,7 @@ def render_sidebar_canvas_controls(
         step=10,
         help="Use the real monitor height in pixels to keep coordinates true to scale.",
         key="global_canvas_height",
+        persist_state="session",
     )
     # DATA-2: physical setup values live beside the pixel canvas they explain.
     # They are persisted with the plot config and immediately yield a px/degree
@@ -2333,6 +2336,7 @@ def render_sidebar_canvas_controls(
         max_value=3000.0,
         step=1.0,
         key="global_monitor_width_mm",
+        persist_state="session",
         help="Width of the visible display area, not the diagonal size.",
     )
     viewing_distance_mm = display.number_input(
@@ -2341,6 +2345,7 @@ def render_sidebar_canvas_controls(
         max_value=3000.0,
         step=10.0,
         key="global_viewing_distance_mm",
+        persist_state="session",
         help="Eye-to-screen distance during the experiment.",
     )
     derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
@@ -2350,6 +2355,7 @@ def render_sidebar_canvas_controls(
         max_value=1000.0,
         step=1.0,
         key="global_display_dpi",
+        persist_state="session",
         help="Used for point-to-pixel stimulus font conversion. The physical "
         f"width above implies {derived_dpi:.1f} DPI.",
     )
@@ -2367,6 +2373,7 @@ def render_sidebar_canvas_controls(
     scale_text_to_boxes = display.checkbox(
         "Scale text to boxes",
         key="global_scale_text_to_boxes",
+        persist_state="session",
         help="Size the reading text from the word boxes (height = box height ÷ "
         "line spacing) so it stays true to the real experiment at any zoom. "
         "Untick to use the fixed 'Figure font size' below instead.",
@@ -2378,12 +2385,14 @@ def render_sidebar_canvas_controls(
         step=0.5,
         disabled=not scale_text_to_boxes,
         key="global_line_spacing",
+        persist_state="session",
         help="Line slots per line of text. OneStop rendered one blank line above "
         "and one below each text line, so the box spans 3 line heights → 3.",
     )
     use_stimulus_font_pt = display.checkbox(
         "Use stimulus font size in points",
         key="global_use_stimulus_font_pt",
+        persist_state="session",
         disabled=scale_text_to_boxes,
         help="Convert the original stimulus point size with the DPI above. "
         "Scale-to-boxes still takes precedence when enabled.",
@@ -2394,6 +2403,7 @@ def render_sidebar_canvas_controls(
         max_value=144.0,
         step=0.5,
         key="global_stimulus_font_pt",
+        persist_state="session",
         disabled=scale_text_to_boxes or not use_stimulus_font_pt,
     )
     if not scale_text_to_boxes and use_stimulus_font_pt:
@@ -2409,6 +2419,7 @@ def render_sidebar_canvas_controls(
         "figure. Used for the reading text when 'Scale text to boxes' is off or "
         "the data has no word boxes, and always for axis/legend chrome.",
         key="global_base_font_size",
+        persist_state="session",
         disabled=not scale_text_to_boxes and use_stimulus_font_pt,
     )
     # VIZ-1: every font-size control here is in pixels, but stimulus typography
@@ -2433,6 +2444,7 @@ def render_sidebar_canvas_controls(
     font_family = display.text_input(
         "Text font",
         key="global_font_family",
+        persist_state="session",
         help="Font for the word labels. Use the exact font from your experiment "
         "(e.g. 'Courier New') or a CSS fallback stack.",
     )
@@ -2465,6 +2477,7 @@ def render_sidebar_canvas_controls(
     display.color_picker(
         "Text color",
         key="global_text_color",
+        persist_state="session",
         help="Colour of the reading text drawn over the stimulus.",
     )
 
@@ -2475,20 +2488,22 @@ def render_sidebar_canvas_controls(
         "Plot background",
         options=bg_options,
         key="global_bg_choice",
+        persist_state="session",
         help="Background of the plotting area (and exported figures).",
     )
     if st.session_state.get("global_bg_choice") == "Custom…":
         # Seed rather than pass `value=`: this key is restored pre-widget by a
         # deep link / saved config, and a keyed widget given both logs Streamlit's
         # "default value but also had its value set" warning (BUG-17).
-        # `_pin(rewrite=True)`, not `setdefault`: this picker only exists while
-        # the choice is "Custom…", so it typically FIRST mounts on a later run —
-        # the exact BUG-15 case where a plain setdefault pushes nothing and the
-        # picker shows black while the figure draws the restored colour.
-        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR, rewrite=True)
+        # This picker exists only while the choice is "Custom…", so it typically
+        # FIRST mounts on a later run — the BUG-15 case, now handled by the
+        # widget's own `persist_state="session"` (ENG-36) rather than by
+        # re-asserting the value from Python on every run.
+        _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
         display.color_picker(
             "Custom background color",
             key="global_bg_custom",
+            persist_state="session",
         )
 
     return (
@@ -2628,7 +2643,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
 #: render, so the widgets must NOT also pass `value=`: Streamlit warns when a
 #: keyed widget is given both (BUG-17). A plain `setdefault` is enough here (the
 #: expander's contents render every run, so these never mount late — unlike the
-#: `_pin(rewrite=True)` cases above); see `controls._pin` for that distinction.
+#: `persist_state` cases above); see `controls._pin` for that distinction.
 #: Keep in sync with the fallbacks in `url_state._restore_plot_config` and
 #: `tabs._build_studio_config`.
 _PREPROC_DEFAULTS: dict = {
@@ -2648,6 +2663,7 @@ def _preprocessing_settings() -> dict:
         enabled = st.toggle(
             "Enable preprocessing",
             key="global_preproc_enabled",
+            persist_state="session",
             help="Optional and off by default. Original rows remain available; "
             "excluded rows are soft-marked with a reason.",
         )
@@ -2655,6 +2671,7 @@ def _preprocessing_settings() -> dict:
             "Short fixations",
             ["Off", "Merge", "Merge then discard", "Discard"],
             key="global_preproc_short_policy",
+            persist_state="session",
             disabled=not enabled,
         )
         threshold = st.number_input(
@@ -2662,6 +2679,7 @@ def _preprocessing_settings() -> dict:
             min_value=1.0,
             max_value=500.0,
             key="global_preproc_short_threshold_ms",
+            persist_state="session",
             disabled=not enabled or policy == "Off",
         )
         distance = st.number_input(
@@ -2670,11 +2688,13 @@ def _preprocessing_settings() -> dict:
             max_value=10.0,
             step=0.25,
             key="global_preproc_merge_distance_chars",
+            persist_state="session",
             disabled=not enabled or "Merge" not in policy,
         )
         blink = st.toggle(
             "Exclude blink-adjacent fixations",
             key="global_preproc_blink_adjacent",
+            persist_state="session",
             disabled=not enabled,
         )
         if st.button("Recompute preprocessing", disabled=not enabled):

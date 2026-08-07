@@ -585,6 +585,42 @@ window.TRACKER = {
    ]
   },
   {
+  "id": "CMP-9",
+  "prefix": "CMP",
+  "num": 9,
+  "sub": "",
+  "title": "Compare mode has no CLI or headless-API surface",
+  "status": "Backlog",
+  "note": "",
+  "date": "",
+  "added": "2026-08-08",
+  "group": "Compare mode",
+  "subgroup": "",
+  "archived": false,
+  "body": [
+   "**Request.** Split out of **UX-31** on the user's call (2026-08-08): Compare",
+   "mode is UI-only. `plots.make_comparison_figure` exists and is fully featured,",
+   "but neither `scanpath-studio render` nor `sps.plot_scanpath` can produce a",
+   "comparison figure, so a two-scanpath figure cannot be scripted, batch-rendered",
+   "or dropped into a paper pipeline — only clicked.",
+   "",
+   "**Background (technical).** This is a **four-surface-rule** gap (`AGENTS.md` →",
+   "*Exposing a feature on every surface*): Compare has the UI and the share link",
+   "but neither the CLI nor the headless API. Concretely: a new",
+   "`api.compare_scanpaths` (or a `compare_with=(participant, trial)` argument on",
+   "`plot_scanpath`) wrapping `make_comparison_figure`, with the",
+   "`CANONICAL_FIGURE_DEFAULTS` treatment so headless output matches the app; then",
+   "`render --compare-with PID:TRIAL` plus `--compare-layout",
+   "{overlay,side-by-side,stacked}` in `cli.py`. The per-scanpath styling",
+   "(`cmp{idx}_*` → `style_a`/`style_b`) needs a headless spelling too — probably",
+   "two small dicts rather than a dozen flags. Note the builder's signature is",
+   "already 45 parameters wide, one of the hotspots **ENG-28** wants to collapse",
+   "behind a settings object; doing that first would make this item much smaller.",
+   "Related: **UX-31** (the A/B legend labels this must accept), **CMP-7** (the",
+   "compare heatmap), **ENG-28**."
+  ]
+ },
+  {
   "id": "CMP-8",
   "prefix": "CMP",
   "num": 8,
@@ -4541,7 +4577,16 @@ window.TRACKER = {
     "Reach is all three render paths (static, animation, compare) from the start,",
     "not static-only. The Export panel's own toggle should go away rather than",
     "stay as a second, possibly-diverging entry point — the rail control becomes",
-    "the single source of truth that the export path reads back."
+    "the single source of truth that the export path reads back.",
+    "",
+    "**What was done (2026-08-08, follow-up).** The user's note — *\"maybe make them",
+    "a popup (like fixation style settings) as right now it comes out very long and",
+    "narrow\"* — is addressed: the editor moved out of 📐 Figure & axes into a **⚙️",
+    "Title & caption** popover, matching the `toggle → ⚙️ style` shape every layer",
+    "section already uses. Inline it was two text inputs, two preview captions and an",
+    "\"Available fields\" expander stacked in a ~320px column. The inputs also moved to",
+    "a shared `controls.render_pattern_input`, so title, caption and the Compare A/B",
+    "labels now share one implementation — see **UX-31**."
    ]
   },
   {
@@ -7544,7 +7589,19 @@ window.TRACKER = {
     "**Decision settled (2026-08-07, per user instructions).** Add an actual",
     "override, not just an explanation — the user wants to choose the label",
     "text, patterned after how the title/caption naming options work (**EXP-2**),",
-    "which picks up the full four-surface obligation noted above."
+    "which picks up the full four-surface obligation noted above.",
+    "",
+    "**What was done (2026-08-08, follow-up).** Both halves of the user's note.",
+    "(1) *\"Explain somewhere what the options are (like {participant_id})\"* — the",
+    "A/B label boxes said only \"same fields as the title/caption pattern\", which is",
+    "no help to anyone who has not found that control. New",
+    "`controls.render_pattern_help` renders an **Available fields** list naming every",
+    "placeholder, and `render_pattern_input` gives each box a live preview and the",
+    "same validation error; both now back the A/B labels *and* the figure",
+    "title/caption, so the vocabulary is documented once and cannot drift.",
+    "(2) *\"Also add a task for adding compare mode to cli/api\"* — filed as **CMP-9**:",
+    "Compare is a four-surface-rule gap (UI + share link, but no CLI and no headless",
+    "API), and it notes that ENG-28's settings-object refactor would shrink it."
    ]
   },
   {

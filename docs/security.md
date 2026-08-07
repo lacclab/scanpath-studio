@@ -335,7 +335,7 @@ checking that `fig.to_json()` holds a `data:image/png;base64,…` payload and no
 `tabs._render_download_buttons` fed the raw frames straight to
 `_frame_to_csv_bytes` / `_frame_to_parquet_bytes` and would have leaked the
 column the same way — but it was **unreachable**. Its only caller was
-`tabs._render_paginated_dataframe`, which called it under
+`tabs._render_raw_table` (then `_render_paginated_dataframe`), which called it under
 `if download_name and not df.empty`, and none of that function's four call sites
 (`render_metrics_tab`, `render_fixations_tab`, `render_raw_gaze_tab`,
 `render_stimuli_tab`) passed `download_name`. So the tab rendered tables with no
@@ -665,7 +665,7 @@ and the 500-record ring buffer keeps its full history. Covered by
 
 `tabs._render_download_buttons` (CSV + Parquet of the raw frame, via
 `_frame_to_csv_bytes` / `_frame_to_parquet_bytes`) is called from exactly one
-place: `tabs._render_paginated_dataframe`, under `if download_name and not
+place: `tabs._render_raw_table` (then `_render_paginated_dataframe`), under `if download_name and not
 df.empty`. None of that function's four call sites — `render_metrics_tab`,
 `render_fixations_tab`, `render_raw_gaze_tab`, and the stimuli table in
 `render_stimuli_tab` — passes `download_name`, and no other module calls either
@@ -682,12 +682,12 @@ wires them up would ship the leak with them.
 **Status:** **fixed** 2026-07-29 — deleted. `_render_download_buttons`,
 `_frame_to_csv_bytes`, `_frame_to_parquet_bytes` and the
 `_EAGER_DOWNLOAD_MAX_ROWS` threshold are gone, along with
-`_render_paginated_dataframe`'s `download_name` parameter; a repo-wide grep
+the raw-table renderer's `download_name` parameter; a repo-wide grep
 (including `tests/`) confirmed nothing referenced them. Bulk export
 (`export.bulk_export`) remains the supported way to get the tables out, and it
 strips `image_path` at `export._write_table` (S4), so wiring the buttons back
 up is now the deliberate act it should have been. A comment on
-`_render_paginated_dataframe` records why the tab has no download button.
+`tabs._render_raw_table` records why the tab has no download button.
 Covered by
 `tests/test_security_fixes.py::TestDataInspectionDownloadHelperIsGone`.
 
@@ -842,6 +842,13 @@ no `<` can reach it.
   before sending it to a collaborator.
 - **Check exported tables before publishing them.** Drop the `image_path` column
   if it is present (S4).
+- **A hosted demo can hide the built-in table download.** Streamlit 1.60 added
+  `client.disableDataExport`, which removes the CSV-download affordance from
+  every `st.dataframe` / `st.data_editor`. Data Inspection deliberately offers
+  no download button of its own (S4/S9 — those are the raw frames, `image_path`
+  and all), but Streamlit's own toolbar still offers one. The option is
+  app-wide, so it belongs in a deployment's config, not in this repo: set it
+  where you set `SCANPATH_LOCAL_FS=0`.
 - **Re-upload with a changed row count, or clear the cache, after correcting a
   corpus.** A same-shape edit in the middle of a table does not bust the cache
   (S5).

@@ -5822,48 +5822,25 @@ def render_multiple_comparison_tab(
 # -----------------------------------------------------------------------------
 
 
-def _render_paginated_dataframe(
-    df: pd.DataFrame,
-    page_size: int,
-    key: str,
-    caption: Optional[str] = None,
-    show_info: bool = True,
-) -> None:
-    """Render a dataframe with pagination and an optional caption.
+def _render_raw_table(df: pd.DataFrame, caption: Optional[str] = None) -> None:
+    """Render one of the raw Data Inspection tables, whole.
 
-    ``caption`` is skipped when falsy, and ``show_info`` suppresses the blue
-    "Showing N rows with pagination" banner — the Data Inspection tab uses this
-    to keep the raw tables uncluttered.
+    ``lazy=True`` (ENG-36 — Streamlit 1.61) replaced a hand-rolled pager: a
+    **Page** number box, a `.iloc` slice and a "rows 1,001 – 2,000 of 4,300,000"
+    caption. Streamlit now keeps the frame on the app server and streams only the
+    rows in view, which is both less code and a better table — the user scrolls
+    and sorts across the *whole* corpus instead of one thousand rows at a time,
+    and a rerun no longer ships the visible page to the browser again. Passing it
+    explicitly rather than leaving the default: the default only kicks in above
+    150 000 rows, and these are exactly the frames worth streaming well below
+    that.
 
-    There is deliberately no download button here: the Data Inspection tables
-    are the *raw* frames, which carry passthrough columns like ``image_path``
-    that hold an absolute local path. Bulk export is the supported way out, and
-    it strips those at its single chokepoint (``export.strip_local_paths``).
+    There is deliberately no download button here: these are the *raw* frames,
+    which carry passthrough columns like ``image_path`` that hold an absolute
+    local path. Bulk export is the supported way out, and it strips those at its
+    single chokepoint (``export.strip_local_paths``).
     """
-    total_rows = len(df)
-    total_pages = max(1, (total_rows + page_size - 1) // page_size)
-
-    if total_rows > page_size:
-        if show_info:
-            st.info(
-                f"Showing {total_rows:,} rows with pagination ({page_size:,} per page)."
-            )
-        page = st.number_input(
-            "Page",
-            min_value=1,
-            max_value=total_pages,
-            value=1,
-            key=key,
-            help=f"Total pages: {total_pages:,}",
-        )
-        start_idx = (page - 1) * page_size
-        end_idx = min(start_idx + page_size, total_rows)
-        display_df = df.iloc[start_idx:end_idx]
-        st.caption(f"Showing rows {start_idx + 1:,} – {end_idx:,} of {total_rows:,}")
-    else:
-        display_df = df
-
-    st.dataframe(display_df, hide_index=True, width="stretch")
+    st.dataframe(df, hide_index=True, width="stretch", lazy=True)
     if caption:
         st.caption(caption)
 
@@ -5874,15 +5851,13 @@ def render_metrics_tab(
     """Render word-level metrics tab."""
     st.subheader("Word-level data")
     metrics = compute_word_metrics(words_filtered, fixations_filtered)
-    _render_paginated_dataframe(metrics, 1000, "metrics_page", show_info=False)
+    _render_raw_table(metrics)
 
 
 def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
     """Render fixation-level data tab."""
     st.subheader("Fixation-level data")
-    _render_paginated_dataframe(
-        fixations_filtered, 1000, "fixations_page", show_info=False
-    )
+    _render_raw_table(fixations_filtered)
 
 
 def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
@@ -5898,9 +5873,7 @@ def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
             "⚠️ The demo's raw gaze is **synthesized** from its fixations for "
             "illustration — it is not recorded eye-tracker output."
         )
-    _render_paginated_dataframe(
-        raw_gaze_filtered, 1000, "raw_gaze_page", show_info=False
-    )
+    _render_raw_table(raw_gaze_filtered)
 
 
 @st.cache_data(show_spinner="Building stimuli list…")
@@ -5980,7 +5953,7 @@ def render_stimuli_tab(words_filtered: pd.DataFrame) -> None:
             "Text ID column mappings."
         )
         return
-    _render_paginated_dataframe(stimuli, 100, "stimuli_page", show_info=False)
+    _render_raw_table(stimuli)
 
 
 def _render_data_provenance() -> None:
@@ -6503,12 +6476,7 @@ def render_data_inspection_tab(
             if table.empty:
                 st.caption(f"No {label.lower()} table is available for this selection.")
             else:
-                _render_paginated_dataframe(
-                    table,
-                    1000,
-                    f"derived_{label.lower().replace(' ', '_')}",
-                    show_info=False,
-                )
+                _render_raw_table(table)
 
     st.divider()
 

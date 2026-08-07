@@ -189,10 +189,10 @@ class TestDataInspectionDownloadHelperIsGone:
         ):
             assert not hasattr(tabs_module, name), f"{name} is dead code — remove it"
 
-    def test_paginated_dataframe_has_no_download_name_param(self):
+    def test_the_raw_table_renderer_has_no_download_name_param(self):
         import inspect
 
-        params = inspect.signature(tabs_module._render_paginated_dataframe).parameters
+        params = inspect.signature(tabs_module._render_raw_table).parameters
         assert "download_name" not in params
 
 

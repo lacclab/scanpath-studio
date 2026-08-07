@@ -2837,10 +2837,18 @@ def main() -> None:
     # Just-finalized upload: paint a "loading" bridge into the main area now so it
     # repaints over the wizard (instead of the wizard lingering until the slow
     # first figure finishes). Cleared just before the tabs render below.
+    #
+    # ENG-36: the message keeps its own line — a bare skeleton says "loading" but
+    # not *what*, and the wizard has just closed under the user — while
+    # `st.skeleton` (1.59) reserves the height the plot is about to take, so the
+    # page doesn't reflow when the figure lands. Standalone mode, not the `with`
+    # form: the wait spans everything between here and the tab render below, not
+    # one block.
     _finalizing_bridge = None
     if st.session_state.pop("_wizard_finalizing", False):
-        _finalizing_bridge = st.empty()
+        _finalizing_bridge = st.container()
         _finalizing_bridge.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
+        _finalizing_bridge.skeleton(height=420)
     # DATA-9: render ALL of a source's config in ONE clean group, in a fixed
     # order, right below the source picker (instead of scattered sibling
     # expanders + a duplicative "<name> options" label). The order — set here by

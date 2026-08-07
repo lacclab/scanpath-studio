@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FAQ: "I edited the code and nothing changed?"** (UX-35)
 
 ### Fixed
+- **Changing a rail setting mid-rerun no longer crashes the app** (BUG-18)
 - **Rail labels no longer break mid-word** (`styles.py`)
 - **Stimulus & questions no longer shows bogus Q&A fields on generic uploads** (UX-32)
 
@@ -43,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FAQ: "I edited the code and nothing changed?"** (UX-35) — the module-reload / `st.cache_data` gotcha (already documented for contributors) now has an in-app FAQ entry and a `docs/faq.md` entry too, distinguished from the on-device Recovery cache.
 
 #### Fixed
+- **Changing a rail setting mid-rerun no longer crashes the app** (BUG-18) — typing in one of the slider number boxes (reported on the heatmap colour range) while the previous rerun was still running could take the whole app down with `KeyError: st.session_state has no key "global_heatmap_color_range__num_lo"`. Streamlit runs a widget's `on_change` *before* the script that recreates the widget, and drops the key of any widget that didn't render — so a conditional box (the heatmap range only renders when the trial/metric has data) could be handed a callback pointing at a key that no longer existed. The callback is now a no-op in that case: there is no pending edit to apply, and the canonical setting still holds its last committed value.
 - **Rail labels no longer break mid-word** (`styles.py`) — below 1200 px the rail rendered "Anima/te" and "Com/pare": a bolded toggle label puts its text in a `<strong>` whose `overflow-wrap: anywhere` overrode the wrap rule set on the parent `<p>`.
 - **Stimulus & questions no longer shows bogus Q&A fields on generic uploads** (UX-32) — the panel's question/answer field detection matched any column whose name loosely resembled a QA hint ("response", "prompt", …) regardless of type, so an unrelated numeric column like `response_time_ms` could render as a fabricated "Response time ms: 120" line; it's now excluded unless boolish.
 

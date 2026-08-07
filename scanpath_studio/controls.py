@@ -67,6 +67,24 @@ NONE_OPTION = "(none)"
 # move the box too — one-way sync each direction, no feedback loop.
 
 
+def _shadow_key_missing(*keys: str) -> bool:
+    """True when a number box's shadow key is not in session state (BUG-18).
+
+    An ``on_change`` callback runs *before* the script that would (re)create the
+    widget, and Streamlit drops a widget's key at the end of any run in which it
+    did not render. Several of these boxes are conditional — the heatmap
+    colour-range pair only renders when the current trial/metric has data — so a
+    change queued while a slow rerun was still in flight can reach a callback
+    whose own key no longer exists, and reading it raised ``KeyError`` and took
+    the app down mid-rerun.
+
+    A missing shadow key means there is no user edit left to apply: the canonical
+    key still holds the last committed value, and the box re-seeds from it the
+    next time it renders. So the callback becomes a no-op rather than a crash.
+    """
+    return any(k not in st.session_state for k in keys)
+
+
 def _numeric_slider(
     host,
     label: str,
@@ -96,6 +114,8 @@ def _numeric_slider(
         st.session_state[num_key] = st.session_state[key]
 
     def _apply() -> None:
+        if _shadow_key_missing(num_key):  # BUG-18
+            return
         st.session_state[key] = st.session_state[num_key]
         if on_change is not None:
             on_change()
@@ -155,6 +175,8 @@ def _range_slider(
         st.session_state[lo_key], st.session_state[hi_key] = current
 
     def _apply() -> None:
+        if _shadow_key_missing(lo_key, hi_key):  # BUG-18
+            return
         lo, hi = st.session_state[lo_key], st.session_state[hi_key]
         st.session_state[key] = (min(lo, hi), max(lo, hi))
         if on_change is not None:

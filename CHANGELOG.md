@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-chip colour highlight, for any dataset** (UX-28)
 - **Editable Compare A/B legend labels** (UX-31)
 - **FAQ: "I edited the code and nothing changed?"** (UX-35)
+- **A coverage badge, a published coverage report, and a CI floor** (ENG-37)
 
 ### Fixed
 - **Reruns are ~28× faster: a rail tweak no longer rebuilds the whole preprocessing suite** (PERF-3)
@@ -47,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Title & caption on the figure, live on the rail** (EXP-5) — the EXP-2 pattern-language title/caption is no longer Export-only: a **📐 Figure & axes → Title & caption on the figure** control shows it live on screen (all three render paths — static, animation, compare), and both **This trial** and bulk export now read it back instead of the old Export-only toggle. On every surface: the rail, the share link, saved configs, `scanpath-studio render --title/--caption`, and `sps.plot_scanpath(title=, caption=)` / `sps.animate_scanpath(title=, caption=)`.
 - **Per-chip colour highlight, for any dataset** (UX-28) — the ✏️ Edit chips popover gained a colour picker per shown field, generalizing what used to be a handful of hardcoded OneStop-only chip colours (difficulty/preview/repeat/correctness), which still apply as defaults until overridden.
 - **Editable Compare A/B legend labels** (UX-31) — the ⚙️ Compare options popover's **Show A/B legend** now has Label A / Label B pattern overrides (same language as the title/caption control above), applied on both the static comparison figure and the dual-animation co-animation, and saved with the rest of the per-scanpath compare styling.
+- **A coverage badge, a published coverage report, and a CI floor** (ENG-37) — `pytest-cov` was a dependency that nothing invoked. Coverage is now configured in `pyproject.toml` (with a `fail_under` floor and the two one-shot data-prep scripts omitted — they walk corpora that cannot exist in CI), a `Coverage` job runs it on every PR and prints the table into the run summary, and the browsable HTML report ships with the docs site so the README badge links to it. No third-party coverage service and no new secret. The audit that came with it closed the thinnest gaps: `experimental_setup.py` (the DPI / pixels-per-degree conversions behind every visual-angle number) went 69% → 100% with hand-computed expectations, `debug_log.py` 47% → 91% including the HTML-escaping of log messages, and `python -m scanpath_studio` is now exercised as a real subprocess. Overall: **90%**.
 - **FAQ: "I edited the code and nothing changed?"** (UX-35) — the module-reload / `st.cache_data` gotcha (already documented for contributors) now has an in-app FAQ entry and a `docs/faq.md` entry too, distinguished from the on-device Recovery cache.
 
 #### Fixed

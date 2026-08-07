@@ -43,6 +43,42 @@ jobs:
         # runtime, so this is a ~3x wall-clock win.
         run: pytest -q -n auto
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install package + test deps
+        run: uv pip install --system -e ".[test]"
+
+      # One leg only: the number does not vary by interpreter, and --cov costs
+      # tracing overhead on top of the matrix above. The floor lives in
+      # pyproject.toml ([tool.coverage.report] fail_under), so this step and a
+      # local `pytest --cov` gate on the same value.
+      - name: Run pytest with coverage
+        run: pytest -q -n auto --cov
+
+      # The number in the PR, without needing a third-party service: the Docs
+      # workflow publishes the browsable report + the README badge on push to
+      # main (ENG-37).
+      - name: Summarize
+        if: always()
+        run: |
+          echo '## Coverage' >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

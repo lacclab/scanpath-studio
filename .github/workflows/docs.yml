@@ -10,6 +10,7 @@ on:
       - docs/**
       - mkdocs.yml
       - scanpath_studio/**
+      - tests/**
       - pyproject.toml
       - .github/workflows/docs.yml
   workflow_dispatch:
@@ -34,9 +35,45 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install (package + docs extras)
-        run: pip install -e ".[docs]"
+      - name: Install (package + docs + test extras)
+        # The test extras are here for the coverage report published alongside
+        # the site (ENG-37) — see "Coverage report" below.
+        run: pip install -e ".[docs,test]"
       - name: Build (strict — fail on warnings / bad refs)
         run: mkdocs build --strict
+
+      # ENG-37 — the coverage badge, with no third-party account and no
+      # commit-back. The site is already published from this workflow, so the
+      # HTML report is written into the built `site/` and shipped with it, plus a
+      # tiny shields.io *endpoint* JSON the README badge reads. That makes the
+      # badge a link to the browsable report rather than a bare number.
+      # `gh-deploy --dirty` below is what preserves these extra files: gh-deploy
+      # always rebuilds, and without `--dirty` it clears `site/` first (there is
+      # no `--no-build`).
+      - name: Coverage report
+        run: |
+          pytest -q -n auto --cov --cov-report=html:site/coverage --cov-report=json
+          python - <<'PY'
+          import json, pathlib
+          total = json.load(open("coverage.json"))["totals"]["percent_covered"]
+          colour = (
+              "brightgreen" if total >= 90
+              else "green" if total >= 80
+              else "yellow" if total >= 70
+              else "orange" if total >= 60
+              else "red"
+          )
+          pathlib.Path("site/coverage/badge.json").write_text(
+              json.dumps(
+                  {
+                      "schemaVersion": 1,
+                      "label": "coverage",
+                      "message": f"{total:.0f}%",
+                      "color": colour,
+                  }
+              )
+          )
+          PY
+
       - name: Deploy to GitHub Pages
-        run: mkdocs gh-deploy --force
+        run: mkdocs gh-deploy --dirty --force

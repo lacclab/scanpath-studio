@@ -661,3 +661,27 @@ def test_no_persist_flag_is_consumed_before_streamlit(monkeypatch):
     assert os.environ["SCANPATH_STUDIO_PERSIST"] == "0"
     assert "--no-persist" not in cli.sys.argv
     assert cli.sys.argv[-2:] == ["--server.port", "8502"]
+
+
+def test_python_dash_m_reaches_the_cli(tmp_path):
+    """``python -m scanpath_studio`` is a documented entry point (README, docs).
+
+    Run it as a real subprocess rather than importing ``__main__``: the thing
+    that can break is the ``if __name__ == "__main__"`` wiring itself, and an
+    import never executes that branch. ``--version`` is the cheapest command
+    that proves the dispatch reached ``cli.main``.
+    """
+    import subprocess
+    import sys
+
+    from scanpath_studio import __version__
+
+    result = subprocess.run(
+        [sys.executable, "-m", "scanpath_studio", "--version"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=tmp_path,  # outside the repo, so it runs the installed package
+    )
+    assert result.returncode == 0, result.stderr
+    assert __version__ in (result.stdout + result.stderr)

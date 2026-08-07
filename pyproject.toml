@@ -92,3 +92,29 @@ include = ["scanpath_studio"]
     "sample_data/images/*.png",
     "sample_data/images/*.csv",
 ]
+
+[tool.coverage.run]
+source = ["scanpath_studio"]
+# Two one-shot data-prep scripts, deliberately untested and deliberately not
+# counted. Both are run by hand, once per data refresh, against corpora that are
+# not in the repo and cannot be in CI: `onestop_shard` needs the ~15 GB OneStop
+# lacclab CSVs, `update_sample_data` needs the full OneStop release to
+# regenerate the bundled demo. Testing them would mean mocking the file layout
+# they exist to walk, which pins the mock rather than the script (ENG-37).
+omit = [
+    "scanpath_studio/onestop_shard.py",
+    "scanpath_studio/update_sample_data.py",
+]
+
+[tool.coverage.report]
+# A floor, not a target: it fails the build when a change drops coverage
+# meaningfully, without turning every PR into a coverage negotiation. Raise it
+# when the real number has been comfortably above for a while.
+fail_under = 88
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@(abc\\.)?abstractmethod",
+]

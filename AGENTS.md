@@ -141,7 +141,7 @@ uv run streamlit run streamlit_app.py
 # Tests
 pytest                              # run the full suite
 pytest tests/test_measures.py       # one file
-pytest --cov=scanpath_studio --cov-report=term
+pytest --cov                        # coverage; config + floor in pyproject.toml
 
 # Lint
 ruff check --exclude other_vis .
@@ -166,7 +166,13 @@ User-facing docs live in `docs/` and publish to
 generated from the `api.py` docstrings, so keep those current.
 
 CI on GitHub Actions runs pytest on Python 3.11/3.12/3.13/3.14 plus ruff
-lint+format checks on every pull request.
+lint+format checks on every pull request, and one `pytest --cov` leg that fails
+below `[tool.coverage.report] fail_under` in `pyproject.toml` (ENG-37). The
+browsable HTML report and the README's coverage badge are published with the
+docs site on push to main — see `.github/workflows/docs.yml` → *Coverage report*
+— so there is no third-party coverage service and no secret to manage. The two
+one-shot data-prep scripts (`onestop_shard.py`, `update_sample_data.py`) are
+omitted from the measurement: they walk corpora that cannot exist in CI.
 
 ## Code style
 

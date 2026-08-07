@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 114,
+  "revision": 144,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -37,6 +37,20 @@
       "archived": true,
       "updated": "2026-08-04"
     },
+    "BUG-18": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "BUG-19": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
     "BUG-4": {
       "status": "On hold",
       "priority": "Normal",
@@ -58,9 +72,16 @@
       "updated": "2026-08-03"
     },
     "CMP-7": {
-      "status": "In progress",
+      "status": "Planned",
       "priority": "Normal",
       "implementationBrief": "Doesn't work. I see fixations and no heatmap although fixations are turned off and heatmap is on. Re decition to settle - I think split-half.",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "DATA-1": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
@@ -70,6 +91,13 @@
       "implementationBrief": "Use code from eyegenbench",
       "archived": false,
       "updated": "2026-08-04"
+    },
+    "DATA-15": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
     },
     "DATA-17": {
       "status": "Closed",
@@ -204,6 +232,13 @@
       "archived": false,
       "updated": "2026-08-07"
     },
+    "ENG-37": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
     "EXP-3": {
       "status": "Closed",
       "priority": "Normal",
@@ -211,12 +246,26 @@
       "archived": true,
       "updated": "2026-08-04"
     },
+    "EXP-5": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
     "PERF-2": {
       "status": "Closed",
       "priority": "Low",
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-04"
+    },
+    "PERF-3": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "Check after ENG-36",
+      "archived": false,
+      "updated": "2026-08-07"
     },
     "PRE-1": {
       "status": "Closed",
@@ -295,6 +344,13 @@
       "archived": true,
       "updated": "2026-08-04"
     },
+    "PRE-2": {
+      "status": "On hold",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
     "PRE-4": {
       "status": "Closed",
       "priority": "Normal",
@@ -343,11 +399,11 @@
       "updated": "2026-08-03"
     },
     "UX-23": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-03"
+      "updated": "2026-08-07"
     },
     "UX-24": {
       "status": "Closed",
@@ -369,10 +425,80 @@
       "archived": true,
       "updated": "2026-08-07"
     },
+    "UX-27": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-28": {
+      "status": "Planned",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-29": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-30": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
     "UX-31": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-32": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-33": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-34": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-35": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "I meant that the documentation and faq say nothing is saved but it is. faq - My uploaded data vanished after a refresh. and Where does my data go?",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-36": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-07"
+    },
+    "UX-38": {
       "status": "Backlog",
       "priority": "Normal",
-      "implementationBrief": "I want to be able to choose the label, maybe something like how it is done in the title and caption naming options.",
+      "implementationBrief": "I feel like the settings there should not necesssarily be there, or better grouped.",
       "archived": false,
       "updated": "2026-08-07"
     },
@@ -391,11 +517,11 @@
       "updated": "2026-08-04"
     },
     "VAL-3": {
-      "status": "In progress",
+      "status": "On hold",
       "priority": "Normal",
       "implementationBrief": "Can be closed by MECO",
       "archived": false,
-      "updated": "2026-08-03"
+      "updated": "2026-08-07"
     },
     "VAL-4": {
       "status": "On hold",
@@ -468,9 +594,9 @@
       "updated": "2026-08-04"
     },
     "VIZ-32": {
-      "status": "Backlog",
+      "status": "Planned",
       "priority": "Normal",
-      "implementationBrief": "I don't think the old default is needed, make the colorbilnd the default.",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     }

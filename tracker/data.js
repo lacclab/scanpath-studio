@@ -4471,11 +4471,6 @@ window.TRACKER = {
    "group": "Export",
    "subgroup": "",
    "archived": false,
-   "decisions": [
-    "Rail control: reuse EXP-2's pattern language (auto-fields like `{participant_id}`, live preview) or a simpler plain free-text title/caption meant for on-screen use?",
-    "Reach: apply the live title/caption to all three render paths (static, animation, compare — see the *Which viz settings apply in which render path* table in `scanpath_studio/CLAUDE.md`), or start static-only like the span-border overlay?",
-    "Should the Export panel's toggle become a read-back of the same rail state (one control, two entry points), or stay a separate export-time setting that can differ from what's on screen?"
-   ],
    "body": [
     "**Request.** EXP-2's figure title/caption only lives inside **Export → Naming &",
     "labels** ([`export._render_naming_options`](scanpath_studio/export.py:709),",
@@ -4493,7 +4488,14 @@ window.TRACKER = {
     "`global_*` session key read by `_collect_viz_settings`, a deep-link/Share entry",
     "in `url_state.py`, a `cli.py render` flag, and an `api.py`/",
     "`CANONICAL_FIGURE_DEFAULTS` parameter — not just the Export-panel + widget pair",
-    "that exists today. Related: **EXP-1**, **EXP-2**."
+    "that exists today. Related: **EXP-1**, **EXP-2**.",
+    "",
+    "**Decisions settled (2026-08-07, per user instructions).** Reuse EXP-2's",
+    "pattern language (auto-fields + live preview), not a plain free-text field.",
+    "Reach is all three render paths (static, animation, compare) from the start,",
+    "not static-only. The Export panel's own toggle should go away rather than",
+    "stay as a second, possibly-diverging entry point — the rail control becomes",
+    "the single source of truth that the export path reads back."
    ]
   },
   {
@@ -6994,10 +6996,12 @@ window.TRACKER = {
     "API), since it's cosmetic but user-configurable state — see *Exposing a",
     "feature on every surface* in `AGENTS.md`. If removed instead, delete",
     "`_chip_color`/`_DIFFICULTY_COLORS`/`_REPEAT_COLOR`/`_PREVIEW_COLOR` and the",
-    "`is_correct` branch outright rather than leaving dead constants behind."
-   ],
-   "decisions": [
-    "Remove the OneStop-specific chip coloring outright, or generalize it into a user-configurable \"highlight this chip\" feature that works for any dataset's columns/values (via the existing ✏️ Edit chips popover)?"
+    "`is_correct` branch outright rather than leaving dead constants behind.",
+    "",
+    "**Decision settled (2026-08-07, per user instructions).** Generalize rather",
+    "than remove: extend the ✏️ Edit chips popover with a per-chip colour choice",
+    "so any dataset's condition chips can be highlighted, going through the",
+    "four-surface rule as noted above."
    ]
   },
   {
@@ -7041,10 +7045,13 @@ window.TRACKER = {
     "changes); a new fourth preset would need the same audit `_VIEW_PRESETS`",
     "entries already get (which layers it turns on/off) but touches no",
     "wire-format surface since presets are a UI convenience over existing",
-    "`global_*` keys, not a stored value of their own."
-   ],
-   "decisions": [
-    "Widen the rail (shrinking the plot column) to fit the three existing quick-view labels in fewer lines, or keep the rail width and add a fourth quick view so the row becomes a 2×2 grid instead?"
+    "`global_*` keys, not a stored value of their own.",
+    "",
+    "**Decision settled (2026-08-07, per user instructions).** Neither widening",
+    "the rail nor adding a fourth quick view — instead, fall back to an",
+    "emoji-only label (drop the text) once the rail is too narrow to fit the",
+    "full \"👁️ Scanpath\" / \"🔥 Heatmap\" / \"✏️ Illustration\" labels on one line,",
+    "keeping today's three-button row and column split."
    ]
   },
   {
@@ -7126,10 +7133,10 @@ window.TRACKER = {
     "  bottom.",
     "- Purely cosmetic/layout — no `viz_settings` keys, deep-link params, CLI",
     "  flags, or API parameters change, so this doesn't touch the four-surface",
-    "  rule."
-   ],
-   "decisions": [
-    "What icon for Compare (and does Animate keep 🎬, or do both change) — options include a side-by-side glyph (⇄, ⚖️, 🆚) versus keeping text-only toggles and moving the distinguishing icon to the section header only?"
+    "  rule.",
+    "",
+    "**Decision settled (2026-08-07, per user instructions).** Animate keeps 🎬;",
+    "Compare gets ⚖️."
    ]
   },
   {
@@ -7179,10 +7186,12 @@ window.TRACKER = {
     "  (they're derived, not stored) — if this becomes user-editable text it picks",
     "  up the full four-surface obligation from `AGENTS.md` (session key + Share",
     "  param + CLI flag + API kwarg), which is the main reason to settle scope",
-    "  before implementing rather than mid-way through."
-   ],
-   "decisions": [
-    "Is the ask just to explain the current auto-derived label (no behavior change beyond maybe unifying the static vs. animated formula), or to add an actual override — e.g. two text inputs in the ⚙️ Compare options popover — that lets the user type their own A/B legend text?"
+    "  before implementing rather than mid-way through.",
+    "",
+    "**Decision settled (2026-08-07, per user instructions).** Add an actual",
+    "override, not just an explanation — the user wants to choose the label",
+    "text, patterned after how the title/caption naming options work (**EXP-2**),",
+    "which picks up the full four-surface obligation noted above."
    ]
   },
   {
@@ -7315,10 +7324,13 @@ window.TRACKER = {
     "*presets* those keys and an explicit value always wins. What changes is the",
     "unstyled first-run look, screenshots/docs that show the current \"Default\"",
     "colours (check `docs/` for any that assume the old tuning), and any test",
-    "asserting the literal string `\"Default\"` as the initial `global_palette` value."
-   ],
-   "decisions": [
-    "Rename the existing `\"Colourblind-safe\"` entry to `\"Default (colourblind-safe)\"` and give the old colour-screen tuning a new name so it stays selectable (option a), or just repoint `DEFAULT_PALETTE` at the existing `\"Colourblind-safe\"` name without any renaming (option b, cheaper but doesn't produce the exact label asked for)?"
+    "asserting the literal string `\"Default\"` as the initial `global_palette` value.",
+    "",
+    "**Decision settled (2026-08-07, per user instructions).** Neither option a",
+    "nor b as scoped — the old colour-screen tuning isn't worth keeping as a",
+    "separate selectable entry at all. Drop the old `\"Default\"` palette, rename",
+    "`\"Colourblind-safe\"` to `\"Default (colourblind-safe)\"`, and repoint",
+    "`DEFAULT_PALETTE` at it, leaving three palettes (down from four)."
    ]
   },
   {
@@ -7636,10 +7648,17 @@ window.TRACKER = {
     "**💾 Save & restore** (`tabs._render_save_restore_expander`) — the",
     "data-source picker itself moved out of the sidebar into the main view",
     "under **UX-25**. See **UX-34** for the separate welcome-tour pass, which",
-    "touches several of these same containers' spotlight copy."
+    "touches several of these same containers' spotlight copy.",
+    "",
+    "**Partial decision (2026-08-07, per user instructions).** The pain point is",
+    "placement/grouping — the user feels some of the current settings don't",
+    "necessarily belong in the sidebar, or should be grouped better. Still open:",
+    "*which* settings (trial filters? Recovery cache? Save & restore?) and where",
+    "they'd move to instead — needs a follow-up pass to pin down before this is",
+    "scoped enough to implement."
    ],
    "decisions": [
-    "What specifically feels off about the left sidebar menu — layout/grouping, discoverability of a particular control, something else? Need concrete pain points from the user before this is scoped enough to implement."
+    "Which specific settings feel misplaced in the sidebar, and where should they move to / how should they be grouped instead — trial filters, the Recovery cache panel, Save & restore, something else?"
    ]
   },
   {

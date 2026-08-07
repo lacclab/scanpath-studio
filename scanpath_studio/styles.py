@@ -291,25 +291,38 @@ def get_app_css() -> str:
         color: #212529;
         border: 1px solid rgba(0, 0, 0, 0.06);
     }
-    /* The two chip-strip controls — "Details" (summary stats) and ✏️ (edit
-       chips). Both are shrunk to chip size and nudged down onto the first chip
-       row's baseline: the strip now wraps, so the columns are TOP-aligned (a
-       centred control would drift to the middle of a tall strip), and this
-       offset is the strip's own top margin. UX-11 also fixed the ✏️ sitting
-       visibly high — it was pulled sideways with a negative margin and centred
-       against a one-line strip. */
-    .st-key-chip_edit_box,
-    .st-key-chip_details_box { margin-top: 0.1rem; }
-    .st-key-chip_edit_box { margin-left: -0.6rem; }
-    .st-key-chip_edit_box button,
-    .st-key-chip_details_box button {
+    /* UX-27 — ONE button shape for the three control rows stacked above the
+       plot. They are built in three different functions across two modules
+       (the Narrow-by/More row and the chip strip's Details/✏️ in tabs.py, the
+       trial picker's ◀ ▶ ⇅ in utils.py), each with its own `st.columns` and its
+       own width unit, so they used to render at three different heights and two
+       different shapes — square icon buttons beside pill-shaped labelled ones.
+       Rather than hand-tuning each call site, every trigger in the block goes in
+       a container keyed `railbtn_*` and takes its geometry from here.
+
+       The shape is the chip pill (it was already tuned to sit against the chip
+       strip, and it is the smallest of the three, so adopting it shrinks the
+       cluster rather than growing it). `min-width` is what squares up the
+       icon-only buttons: without it ◀, ▶ and ⇅ each collapse to their own glyph
+       width. */
+    [class*="st-key-railbtn_"] button {
         min-height: 0 !important;
+        min-width: 2.3rem;
         padding: 0.1rem 0.65rem !important;
         border-radius: 999px !important;
         font-size: 0.9rem !important;
         line-height: 1.55 !important;
         white-space: nowrap;
     }
+    /* The two chip-strip controls — "Details" (summary stats) and ✏️ (edit
+       chips) — are additionally nudged down onto the first chip row's baseline:
+       the strip wraps, so the columns are TOP-aligned (a centred control would
+       drift to the middle of a tall strip), and this offset is the strip's own
+       top margin. UX-11 also fixed the ✏️ sitting visibly high — it was pulled
+       sideways with a negative margin and centred against a one-line strip. */
+    .st-key-railbtn_chip_edit,
+    .st-key-railbtn_chip_details { margin-top: 0.1rem; }
+    .st-key-railbtn_chip_edit { margin-left: -0.6rem; }
     /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
        `__num_hi`) exists for typing an *exact* value — the slider beside it
        already handles stepping. It holds a number, not a sentence, so drop the

@@ -484,8 +484,13 @@ def _select_trial_none_mode(
         # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
         # canonical selection is a trial *id*, so re-sorting never changes which
         # trial is selected — only where it sits in the list.
+        # UX-27: each of the three step/sort triggers goes in a `railbtn_*`
+        # container so styles.py can give the whole cluster above the plot one
+        # button shape — these were square (each `width="stretch"` inside its own
+        # narrow column) beside pill-shaped labelled buttons on the rows above
+        # and below.
         sort_key, sort_desc, sort_choice = _render_trial_sort_popover(
-            sort_col,
+            sort_col.container(key=f"railbtn_{key_prefix}_sort"),
             combos,
             trial_field,
             key_prefix,
@@ -533,23 +538,21 @@ def _select_trial_none_mode(
                 label_visibility="collapsed",
                 format_func=_slider_label,
             )
-        prev_col.button(
+        prev_col.container(key=f"railbtn_{key_prefix}_prev").button(
             "◀",
             key=f"{key_prefix}_prev_trial" if key_prefix else "prev_trial",
             on_click=_step_trial,
             args=(-1,),
             disabled=current_idx == 0,
             help="Previous trial",
-            width="stretch",
         )
-        next_col.button(
+        next_col.container(key=f"railbtn_{key_prefix}_next").button(
             "▶",
             key=f"{key_prefix}_next_trial" if key_prefix else "next_trial",
             on_click=_step_trial,
             args=(1,),
             disabled=current_idx == n_trials - 1,
             help="Next trial",
-            width="stretch",
         )
 
     if not selected_trial_label:

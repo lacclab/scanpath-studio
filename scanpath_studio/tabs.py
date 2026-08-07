@@ -2549,7 +2549,11 @@ def render_single_trial_tab(
                 words_all, fixations_all, text_host=nb_text, part_host=nb_part
             )
             with more_col:
-                more_pop = st.popover("More", width="content")
+                # UX-27: keyed so styles.py can give it the shared rail-button
+                # shape, matching the picker's ◀ ▶ ⇅ and the chip row below.
+                more_pop = st.container(key="railbtn_more").popover(
+                    "More", width="content"
+                )
                 more_pop.caption("More ways to narrow — conditions & annotations.")
                 render_trial_filters(words_all, fixations_all, host=more_pop)
             # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
@@ -3041,9 +3045,9 @@ def render_single_trial_tab(
             [11, 1.6, 0.9], vertical_alignment="top"
         )
         with edit_col:
-            # Keyed container so styles.py can shrink the popover trigger to chip
-            # size and drop it onto the chip baseline.
-            edit_box = st.container(key="chip_edit_box")
+            # Keyed container so styles.py can give the trigger the shared
+            # rail-button shape and drop it onto the chip baseline (UX-11/27).
+            edit_box = st.container(key="railbtn_chip_edit")
             with edit_box.popover(
                 "✏️",
                 help="Edit which fields show as chips above the plot, and drag to "
@@ -3052,7 +3056,7 @@ def render_single_trial_tab(
             ):
                 render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
-        details_box = details_col.container(key="chip_details_box")
+        details_box = details_col.container(key="railbtn_chip_details")
         with strip_col:
             # When comparing, label each chip strip with its trial id coloured to
             # match the scanpath in the overlay (A = primary colour, B = compared

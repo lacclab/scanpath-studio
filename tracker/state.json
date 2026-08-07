@@ -1,6 +1,6 @@
 {
  "version": 2,
- "revision": 150,
+ "revision": 151,
  "items": {
   "AN-29": {
    "status": "Closed",
@@ -426,7 +426,7 @@
    "updated": "2026-08-07"
   },
   "UX-27": {
-   "status": "Planned",
+   "status": "Review",
    "priority": "Normal",
    "implementationBrief": "",
    "archived": false,

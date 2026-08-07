@@ -68,7 +68,7 @@ class TestTheClaimsHold:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         assert at.session_state["data_source_choice"] == "Synthetic test trial"
-        picker = next(s for s in at.selectbox if s.label.startswith("Trial ID"))
+        picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
         assert list(picker.options) == ["synthetic_2line_demo"]
 
     def test_the_expectations_cover_every_canonical_measure(self):

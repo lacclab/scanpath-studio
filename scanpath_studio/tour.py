@@ -241,17 +241,30 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_plot",
         "in_sidebar": False,
         "title": "🗺️ The scanpath",
-        "body": "Each dot is a **fixation**, sized by duration; the lines are "
-        "**saccades** between them. The reading text sits true-to-scale "
-        "underneath.",
+        "body": "This is the main plot. Each dot is a **fixation**, sized by "
+        "duration; the lines are **saccades** between them.",
+    },
+    {
+        "selector": ".st-key-tour_grp_data_source",
+        "in_sidebar": False,
+        "title": "📂 Data source",
+        "body": "Your **data source** (demo or your own upload) sits at the left "
+        "of the filter row — ➕ beside it adds or removes datasets. Columns "
+        "auto-detect; remap any field in the wizard.",
     },
     {
         "selector": ".st-key-tour_grp_trial_select",
         "in_sidebar": False,
         "title": "🎯 Pick a trial",
-        "body": "Step through trials with the selector and ◀ ▶. **Filter by** Text "
-        "or Participant to narrow the pool; **More** adds condition & annotation "
-        "filters.",
+        "body": "Step through trials with the selector and ◀ ▶, or scrub the "
+        "slider — it shows the trial's position and id.",
+    },
+    {
+        "selector": ".st-key-tour_grp_trial_select",
+        "in_sidebar": False,
+        "title": "🔍 Narrow the pool",
+        "body": "**Filter by** Text or Participant to shrink the trial list; "
+        "**More** adds condition & annotation filters (favorites, tags).",
     },
     {
         "selector": ".st-key-tour_grp_chips",
@@ -262,12 +275,12 @@ _SPOTLIGHT_STEPS = [
         "**✏️ Edit chips** at the right of the strip.",
     },
     {
-        "selector": ".st-key-scanpath_rail",
+        "selector": ".st-key-tour_grp_view_modes",
         "in_sidebar": False,
         "title": "🎬 Animate & compare",
-        "body": "Top of the rail beside the plot: **Animate** replays the trial "
-        "fixation by fixation, and **Compare** overlays a second scanpath. Each "
-        "has a ⚙ popover for its settings.",
+        "body": "**Animate** replays the trial fixation by fixation, and "
+        "**Compare** overlays a second scanpath. Each has a ⚙ popover for its "
+        "settings.",
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
@@ -281,23 +294,23 @@ _SPOTLIGHT_STEPS = [
         "in_sidebar": False,
         "title": "📑 Per-trial panels",
         "body": "Below the plot: **📝 Annotations**, **Stimulus & questions**, "
-        "**Export** (this trial or bulk), **🔎 Data Inspection**, and **🔗 Share** "
-        "a deep link.",
+        "**🔬 Comparisons**, **Export** (this trial or bulk), "
+        "**🔎 Data Inspection**, and **🔗 Share** a deep link.",
     },
     {
-        "selector": ".st-key-tour_grp_data_source",
+        "selector": ".st-key-header_buttons",
         "in_sidebar": False,
-        "title": "📂 Data source",
-        "body": "Your **data source** (demo or your own upload) sits at the left "
-        "of the filter row — ➕ beside it adds or removes datasets. Columns "
-        "auto-detect; remap any field in the wizard.",
+        "title": "📊 Corpus Analysis",
+        "body": "Switch here to aggregate across readers, texts and groups "
+        "instead of one trial at a time — question-oriented views per text, per "
+        "reader, or per cohort.",
     },
     {
         "selector": ".st-key-tour_grp_save_restore",
-        "title": "💾 Save, share & more",
-        "body": "**💾 Save & restore** saves the whole setup + annotations to JSON. "
-        "Switch to **📊 Corpus Analysis** from the top-right button. Replay this "
-        "tour from **🎓 Show tutorial**. 👀",
+        "title": "📚 The left sidebar",
+        "body": "**💾 Save & restore** saves the whole setup + annotations to "
+        "JSON; the rest of the sidebar holds the recovery cache, debug tools and "
+        "this tutorial. Replay it any time from **🎓 Show tutorial**. 👀",
     },
 ]
 
@@ -825,6 +838,15 @@ _FAQ_ITEMS = [
         "Static image export goes through Kaleido, which drives a headless "
         "Chrome that `pip install` doesn't provide. Run `plotly_get_chrome -y` "
         "once. **HTML** export is browser-free and always available.",
+    ),
+    (
+        "I edited the code (or a setting looks stale) and nothing changed.",
+        "Streamlit doesn't reload already-imported modules on a rerun, and "
+        "`st.cache_data` doesn't hash the helpers a cached loader calls — a "
+        "rerun or **Clear cache** isn't enough after editing code. Restart the "
+        "server process. This is a different cache from the sidebar's "
+        "**🗄️ Recovery cache** panel, which stores your data and settings, "
+        "not code.",
     ),
     (
         "How do I cite Scanpath Studio?",

@@ -432,7 +432,7 @@ def _render_parser() -> argparse.ArgumentParser:
     viz.add_argument(
         "--palette",
         choices=list(PALETTES),
-        help="Colour palette for the marks (VIZ-18): Colourblind-safe "
+        help="Colour palette for the marks (VIZ-18): Default (colourblind-safe) "
         "(Okabe–Ito), Print / greyscale (hue-free, survives a B&W print), or "
         "High contrast. Individual --*-color flags override it.",
     )
@@ -566,6 +566,19 @@ def _render_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="NAME",
         help=f"Word label font (default: {FONT_FAMILY}).",
+    )
+    viz.add_argument(
+        "--title",
+        default=None,
+        metavar="TEXT",
+        help="Title band stamped on the figure (EXP-5); off by default. The "
+        "figure grows to make room rather than shrinking the plot.",
+    )
+    viz.add_argument(
+        "--caption",
+        default=None,
+        metavar="TEXT",
+        help="Caption band stamped on the figure (EXP-5); off by default.",
     )
     viz.add_argument(
         "--separable-layers",
@@ -1005,6 +1018,8 @@ def render(argv: List[str]) -> None:
         canvas_size=canvas,
         base_font_size=args.font_size,
         font_family=args.font_family or FONT_FAMILY,
+        title=args.title or "",
+        caption=args.caption or "",
     )
     try:
         if args.animate:

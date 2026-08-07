@@ -56,6 +56,15 @@ The sidebar's **🗄️ Recovery cache** panel shows what that cache holds, wher
 is, and clears it; `scanpath-studio cache` does the same from a terminal. See
 [Privacy](privacy.md#what-happens-to-a-file-you-upload).
 
+## I edited the code and nothing changed?
+
+Streamlit re-runs only the top-level script — it does not reload already-imported
+modules, and `st.cache_data` does not hash the helper functions a cached loader
+calls. Restart the server process after editing code; a rerun or "Clear cache"
+isn't enough. This is unrelated to the **🗄️ Recovery cache**, which stores your
+data and settings, not code. See
+[Contributing](https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md#if-a-code-change-doesnt-show-up).
+
 ## Where does my data go?
 
 Local and desktop use stays on your machine. The hosted demo runs on a third-party

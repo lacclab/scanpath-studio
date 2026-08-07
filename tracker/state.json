@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 144,
+  "revision": 145,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -212,7 +212,7 @@
       "updated": "2026-08-06"
     },
     "ENG-34": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "only unreleased onwards; details per group.",
       "archived": false,
@@ -247,7 +247,7 @@
       "updated": "2026-08-04"
     },
     "EXP-5": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
@@ -433,63 +433,63 @@
       "updated": "2026-08-07"
     },
     "UX-28": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Low",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-29": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-30": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-31": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-32": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-33": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-34": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-35": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "I meant that the documentation and faq say nothing is saved but it is. faq - My uploaded data vanished after a refresh. and Where does my data go?",
       "archived": false,
       "updated": "2026-08-07"
     },
     "UX-36": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
@@ -594,7 +594,7 @@
       "updated": "2026-08-04"
     },
     "VIZ-32": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,

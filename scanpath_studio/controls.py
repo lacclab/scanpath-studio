@@ -41,6 +41,13 @@ from .constants import (
     palette_settings,
 )
 from .data import frame_fingerprint
+from .export import (
+    DEFAULT_CAPTION_PATTERN,
+    DEFAULT_TITLE_PATTERN,
+    pattern_error,
+    pattern_fields,
+    render_pattern,
+)
 
 NONE_OPTION = "(none)"
 
@@ -435,6 +442,12 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_colorbar_orientation": "Vertical",
     "global_colorbar_tickangle": 0,
     "global_colorbar_tickfont_size": 12,
+    # EXP-5: title/caption on the figure (Figure & axes group). Off by default;
+    # the two patterns are only meaningful while the toggle is on — see
+    # `_collect_viz_settings`, which reports them empty otherwise.
+    "global_show_title_caption": False,
+    "global_title_pattern": "",
+    "global_caption_pattern": "",
 }
 
 
@@ -1920,6 +1933,18 @@ def _collect_viz_settings(
         align_algorithm=ss.get("global_align_algorithm") or "Off",
         align_connectors=bool(ss.get("global_align_connectors"))
         and (ss.get("global_align_algorithm") or "Off") != "Off",
+        # EXP-5: empty when the toggle is off, regardless of stored pattern text,
+        # so turning it off can never leave a stale pattern silently applied.
+        title_pattern=(
+            ss.get("global_title_pattern") or ""
+            if ss.get("global_show_title_caption")
+            else ""
+        ),
+        caption_pattern=(
+            ss.get("global_caption_pattern") or ""
+            if ss.get("global_show_title_caption")
+            else ""
+        ),
     )
 
 
@@ -2115,7 +2140,7 @@ def sidebar_controls(
     # keys, so every per-element picker below still overrides it — and once one
     # is overridden the selector says **Custom** rather than keeping a name the
     # figure no longer earns (the same rule the Quick-view buttons follow above).
-    # `Custom` is offered only while it's true, so the list stays the four real
+    # `Custom` is offered only while it's true, so the list stays the three real
     # palettes the moment the colours match one again.
     _active = _active_palette()
     _palette_options = list(PALETTES) if _active else [CUSTOM_PALETTE, *PALETTES]
@@ -2125,11 +2150,11 @@ def sidebar_controls(
         options=_palette_options,
         key="global_palette",
         on_change=_on_palette_change,
-        help="Colour defaults for the marks. **Colourblind-safe** uses the "
-        "Okabe–Ito hues; **Print / greyscale** drops hue entirely so the figure "
-        "survives a black & white print (pair it with a marker shape); **High "
-        "contrast** is for projectors. Each one just presets the colour pickers — "
-        "change any of them afterwards and this reads **Custom**.",
+        help="Colour defaults for the marks. **Default (colourblind-safe)** uses "
+        "the Okabe–Ito hues; **Print / greyscale** drops hue entirely so the "
+        "figure survives a black & white print (pair it with a marker shape); "
+        "**High contrast** is for projectors. Each one just presets the colour "
+        "pickers — change any of them afterwards and this reads **Custom**.",
     )
     if _palette in PALETTES:
         viz.caption(PALETTES[_palette]["description"])
@@ -3044,6 +3069,79 @@ def sidebar_controls(
         ),
     )
 
+    # EXP-5: title/caption on the figure — moved here from being Export-only
+    # (EXP-2), so it's visible live rather than a setting a user has to remember
+    # to go find under Export. This is now the single source of truth: the
+    # Export panel's bulk section reads these two patterns back instead of
+    # keeping its own copy, and the live figure on screen (all three render
+    # paths) carries the same title/caption a bulk export would produce.
+    def _on_toggle_title_caption() -> None:
+        # Pre-fill a friendly starting pattern the first time this is switched
+        # on, rather than an empty box the user has to know the field syntax
+        # to fill in. `_seed_viz_state`'s `_pin` already seeded both keys to
+        # "" earlier this run, so a plain `setdefault` below would be a no-op —
+        # this has to run as the toggle's own callback (before that seeding
+        # happens on the next rerun) to actually take.
+        if st.session_state.get("global_show_title_caption"):
+            if not st.session_state.get("global_title_pattern"):
+                st.session_state["global_title_pattern"] = DEFAULT_TITLE_PATTERN
+            if not st.session_state.get("global_caption_pattern"):
+                st.session_state["global_caption_pattern"] = DEFAULT_CAPTION_PATTERN
+
+    show_title_caption = axes.toggle(
+        "Title & caption on the figure",
+        key="global_show_title_caption",
+        on_change=_on_toggle_title_caption,
+        help="Render a title and/or caption into the figure — on screen, in "
+        "**This trial** export, and in a bulk export — so a figure dropped "
+        "into a paper or a slide carries its own provenance. The plot itself "
+        "is not scaled down; the figure grows to make room.",
+    )
+    if show_title_caption:
+        _title_caption_fields = pattern_fields(
+            "p01",
+            "t01",
+            words if words is not None else pd.DataFrame(),
+            trial_fixations if trial_fixations is not None else pd.DataFrame(),
+            {},
+        )
+        _pattern_available = ", ".join(
+            f"`{{{k}}}`" for k in sorted(_title_caption_fields)
+        )
+
+        def _title_caption_input(label: str, default: str, key: str) -> str:
+            axes.text_input(
+                label,
+                key=key,
+                help="Same fields as the file-naming pattern in Export. Leave "
+                "empty for no " + label.lower() + ".",
+            )
+            value = st.session_state.get(key, "")
+            error = pattern_error(value, _title_caption_fields)
+            if error:
+                axes.error(error)
+                return ""
+            return value
+
+        title_pattern = _title_caption_input(
+            "Title", DEFAULT_TITLE_PATTERN, "global_title_pattern"
+        )
+        caption_pattern = _title_caption_input(
+            "Caption", DEFAULT_CAPTION_PATTERN, "global_caption_pattern"
+        )
+        with axes.expander("Available fields", expanded=False):
+            axes.markdown(_pattern_available)
+        if title_pattern:
+            axes.caption(
+                "Title preview — "
+                f"**{render_pattern(title_pattern, _title_caption_fields)}**"
+            )
+        if caption_pattern:
+            axes.caption(
+                "Caption preview — "
+                + render_pattern(caption_pattern, _title_caption_fields)
+            )
+
     # UX-26: the clean slate sits at the *foot* of the rail, below every section
     # it undoes — a reset is where you land after scrolling the controls, not a
     # peer of the Quick views. Scope is the visualization only: the trial filters
@@ -3499,6 +3597,32 @@ def render_trial_chip_picker(
         "for the current data).",
         on_click=lambda: st.session_state.pop("_trial_level_cache", None),
     )
+
+    # UX-28: per-chip colour, generalized from what used to be a handful of
+    # hardcoded OneStop column/value special-cases (tabs._chip_color) — any
+    # dataset's condition chips can now be highlighted, not just OneStop's.
+    # `#EEF2F7` must match `tabs._CHIP_NEUTRAL_BG`: picking it back is how a
+    # chip returns to "no override" rather than staying pinned to a colour.
+    _neutral = "#EEF2F7"
+    shown_now = st.session_state["trial_chip_fields"]
+    if shown_now:
+        host.caption("Chip colours — optional highlight per shown field.")
+        colors = dict(st.session_state.get("trial_chip_colors") or {})
+        for key in shown_now:
+            label_col, swatch_col = host.columns([3, 1], vertical_alignment="center")
+            label_col.caption(key_to_label[key])
+            picked = swatch_col.color_picker(
+                key_to_label[key],
+                value=colors.get(key) or _neutral,
+                key=f"trial_chip_color_{key}",
+                label_visibility="collapsed",
+                help="Pick back to the default grey to remove the highlight.",
+            )
+            if picked.lower() == _neutral.lower():
+                colors.pop(key, None)
+            else:
+                colors[key] = picked
+        st.session_state["trial_chip_colors"] = colors
 
 
 def _seed_filter_widget(key: str, options: list, default: list) -> None:

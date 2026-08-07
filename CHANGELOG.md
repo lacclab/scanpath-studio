@@ -8,16 +8,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Reset settings** (UX-26) — a **♻️ Reset settings** popover at the foot of the rail puts every visualization control back to the app's defaults in one click (annotations, trial filters, column mapping, data source and the selected trial are kept); it also strips the viz parameters from the URL, so the reset sticks on a page opened from a Share link. Trial filters get their own permanent **✕ Clear all filters** button at the foot of the **More** filter popover, instead of only appearing once a filter left nothing.
-- **Draw only some saccade types** (VIZ-31) — a new **🧹 Saccade filter** picks which reading classes are drawn at all (forward, skip, refixation, return sweep, regression), so a regressions-only figure takes one click instead of colouring the other four to match the background. Hidden classes lose their direction arrows too, and it composes with any saccade colour mode. On every surface: the rail, the share link (`?saccade_classes=`), the saved config, `scanpath-studio render --saccade-classes`, and `sps.plot_scanpath(saccade_classes=…)`.
+- **Reset settings** (UX-26)
+- **Draw only some saccade types** (VIZ-31)
+- **Title & caption on the figure, live on the rail** (EXP-5)
+- **Per-chip colour highlight, for any dataset** (UX-28)
+- **Editable Compare A/B legend labels** (UX-31)
+- **FAQ: "I edited the code and nothing changed?"** (UX-35)
 
 ### Fixed
-- **Rail labels no longer break mid-word** (`styles.py`) — below 1200 px the rail rendered "Anima/te" and "Com/pare": a bolded toggle label puts its text in a `<strong>` whose `overflow-wrap: anywhere` overrode the wrap rule set on the parent `<p>`.
+- **Rail labels no longer break mid-word** (`styles.py`)
+- **Stimulus & questions no longer shows bogus Q&A fields on generic uploads** (UX-32)
 
 ### Changed
+- **The data-source picker moved into the main view** (UX-25)
+- **The visualization rail is grouped instead of flat** (VIZ-31)
+- **Canvas, font and background controls moved to the rail** (VIZ-31)
+- **Colourblind-safe is now the default palette** (VIZ-32)
+- **Trial picker reads "Select Trial"** (UX-33)
+- **About panel's AI-assistance note trimmed to match the docs** (UX-36)
+- **View modes: Compare gets its own icon, Playback popover tightened** (UX-30)
+- **Quick-view labels fall back to emoji-only when the rail is narrow** (UX-29)
+- **Welcome tour: copy, step order and highlighting polish** (UX-34)
+- **CHANGELOG entries: a Slack-pasteable headline, details below** (ENG-34)
+
+### Details
+
+#### Added
+- **Reset settings** (UX-26) — a **♻️ Reset settings** popover at the foot of the rail puts every visualization control back to the app's defaults in one click (annotations, trial filters, column mapping, data source and the selected trial are kept); it also strips the viz parameters from the URL, so the reset sticks on a page opened from a Share link. Trial filters get their own permanent **✕ Clear all filters** button at the foot of the **More** filter popover, instead of only appearing once a filter left nothing.
+- **Draw only some saccade types** (VIZ-31) — a new **🧹 Saccade filter** picks which reading classes are drawn at all (forward, skip, refixation, return sweep, regression), so a regressions-only figure takes one click instead of colouring the other four to match the background. Hidden classes lose their direction arrows too, and it composes with any saccade colour mode. On every surface: the rail, the share link (`?saccade_classes=`), the saved config, `scanpath-studio render --saccade-classes`, and `sps.plot_scanpath(saccade_classes=…)`.
+- **Title & caption on the figure, live on the rail** (EXP-5) — the EXP-2 pattern-language title/caption is no longer Export-only: a **📐 Figure & axes → Title & caption on the figure** control shows it live on screen (all three render paths — static, animation, compare), and both **This trial** and bulk export now read it back instead of the old Export-only toggle. On every surface: the rail, the share link, saved configs, `scanpath-studio render --title/--caption`, and `sps.plot_scanpath(title=, caption=)` / `sps.animate_scanpath(title=, caption=)`.
+- **Per-chip colour highlight, for any dataset** (UX-28) — the ✏️ Edit chips popover gained a colour picker per shown field, generalizing what used to be a handful of hardcoded OneStop-only chip colours (difficulty/preview/repeat/correctness), which still apply as defaults until overridden.
+- **Editable Compare A/B legend labels** (UX-31) — the ⚙️ Compare options popover's **Show A/B legend** now has Label A / Label B pattern overrides (same language as the title/caption control above), applied on both the static comparison figure and the dual-animation co-animation, and saved with the rest of the per-scanpath compare styling.
+- **FAQ: "I edited the code and nothing changed?"** (UX-35) — the module-reload / `st.cache_data` gotcha (already documented for contributors) now has an in-app FAQ entry and a `docs/faq.md` entry too, distinguished from the on-device Recovery cache.
+
+#### Fixed
+- **Rail labels no longer break mid-word** (`styles.py`) — below 1200 px the rail rendered "Anima/te" and "Com/pare": a bolded toggle label puts its text in a `<strong>` whose `overflow-wrap: anywhere` overrode the wrap rule set on the parent `<p>`.
+- **Stimulus & questions no longer shows bogus Q&A fields on generic uploads** (UX-32) — the panel's question/answer field detection matched any column whose name loosely resembled a QA hint ("response", "prompt", …) regardless of type, so an unrelated numeric column like `response_time_ms` could render as a fabricated "Response time ms: 120" line; it's now excluded unless boolish.
+
+#### Changed
 - **The data-source picker moved into the main view** (UX-25) — it now sits at the left of the **Filter by** row (and at the top of Corpus Analysis), so the page reads *which dataset → how to narrow it → which trial* and the sidebar no longer has to be opened to switch sources. Adding and removing datasets moved behind the ➕ beside it.
 - **The visualization rail is grouped instead of flat** (VIZ-31) — the seven layer toggles now sit in named, collapsible sections, each shaped *toggle → ⚙️ style → 🧹 filter* — **👁️ Fixations** and **↗️ Saccades** (open by default), **📄 Stimulus** (text, bounding boxes, stimulus image) and **🔥 Overlays** (heatmap, raw gaze) — followed by **🖥️ Canvas & text** and **📐 Figure & axes**, so the rail opens as six rows instead of ~18. No setting was renamed, removed, or changed in behaviour.
 - **Canvas, font and background controls moved to the rail** (VIZ-31) — monitor geometry, typography, text colour and plot background left the sidebar's *Experimental Setup* expander (under 📂 Data) for the Scanpath rail, beside the layers they restyle, and are also reachable from Corpus Analysis under **🎨 Corpus figure style** (its figures are drawn from them); the setup wizard still shows the same panel inline. The Illustration-label override moved from a top-level rail row into **📐 Figure & axes**.
+- **Colourblind-safe is now the default palette** (VIZ-32) — the old colour-screen "Default" palette is gone; "Colourblind-safe" is renamed **"Default (colourblind-safe)"** and is what a fresh session (or a link/config with no explicit colour keys) now opens with — three palettes instead of four. Existing links/configs that name explicit colours are unaffected.
+- **Trial picker reads "Select Trial"** (UX-33) — was plainly "Trial ID"; now bolded **Select Trial**, an invitation to act rather than a data-field label.
+- **About panel's AI-assistance note trimmed to match the docs** (UX-36) — the sidebar's note was a heading plus two full paragraphs; now four short sentences, matching `docs/index.md`'s length and tone.
+- **View modes: Compare gets its own icon, Playback popover tightened** (UX-30) — Compare now reads **⚖️ Compare** (Animate keeps 🎬) on its own toggle label, not just the shared section header. In the ⚙️ Playback popover: the reading-time/playback-duration info box moved up under Playback speed, a divider now separates Autoplay from Frame grid, and Frame every (ms) / Max frames render only while quality is **Custom**.
+- **Quick-view labels fall back to emoji-only when the rail is narrow** (UX-29) — below a ~320px rail width the Scanpath/Heatmap/Illustration buttons drop their text and show only the emoji, via a CSS container query, instead of wrapping to 2–3 lines; the three-button row never stacks.
+- **Welcome tour: copy, step order and highlighting polish** (UX-34) — simplified step 2's copy; split trial-picking from pool-narrowing into two steps; Animate/Compare now spotlights just that block, not the whole rail; the per-trial-panels step lists Comparisons and both export scopes; Data source moved earlier; Corpus Analysis got its own step; the final step is now a general "the left sidebar" step.
+- **CHANGELOG entries: a Slack-pasteable headline, details below** (ENG-34) — `[Unreleased]` entries are now a short headline list per group, with the longer per-item text moved to a `### Details` subsection underneath (this section is the first to use the new shape). Already-released sections are unchanged.
 
 ## [0.27.2] - 2026-08-05
 

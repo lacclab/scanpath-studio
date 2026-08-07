@@ -392,13 +392,14 @@ def _restore_config_app():
         "marker_size_range": [4, 10],
         "hollow": True,
         "opacity": 0.5,
+        "label_pattern": "{participant_id} · {trial_id}",
     }
     config = {
         "schema": st.session_state["_schema"],
         "column_mapping": {"col_map_fix_participant": "participant_id"},
         "layers": {key: True for key in _PLOT_CONFIG_LAYER_KEYS},
         "coloring": {
-            "palette": "Default",
+            "palette": "Default (colourblind-safe)",
             "color_by": color_by,
             "heatmap_style": "Word boxes",
             "heatmap_norm": "Linear",
@@ -457,6 +458,11 @@ def _restore_config_app():
             # branch runs and both background keys are exercised.
             "background_color": "#abcdef",
             "span_border_color": "#000000",
+        },
+        "labels": {
+            "show_title_caption": True,
+            "title_pattern": "{participant_id} · {trial_id}",
+            "caption_pattern": "{text_id} · {n_fixations} fixations",
         },
         "compare": [compare_entry, dict(compare_entry)],
         "selection": {"participant_id": "p1", "trial_id": "t1"},

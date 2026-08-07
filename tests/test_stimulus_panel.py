@@ -149,6 +149,23 @@ class TestDetection:
         assert not _is_boolish(pd.Series(["0", "1", "0"]))
         assert _is_boolish(pd.Series([True, False, True]))
 
+    def test_numeric_column_matching_a_qa_hint_is_not_treated_as_qa(self):
+        # UX-32: a generic upload's unrelated numeric column (a timing/count/id
+        # field) can still match a QA name hint by coincidence — e.g. a
+        # `response_time_ms` column matches "response". It must not render as
+        # bogus question/answer text ("Response time ms: 120").
+        w = pd.DataFrame(
+            {
+                "word_id": [0, 1, 2],
+                "text": ["a", "b", "c"],
+                "response_time_ms": [120, 340, 210],
+                "is_correct": [True, True, True],
+            }
+        )
+        qa = _detect_question_columns(w)
+        assert "response_time_ms" not in qa
+        assert "is_correct" in qa
+
 
 def _onestop_panel_app():
     import pandas as pd

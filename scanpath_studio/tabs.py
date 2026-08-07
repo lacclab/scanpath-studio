@@ -95,8 +95,11 @@ from scanpath_studio.data import (
 )
 from scanpath_studio.export import (
     ExportProgress,
+    annotate_figure,
     bulk_export,
+    pattern_fields,
     render_export_options,
+    render_pattern,
 )
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
@@ -1044,7 +1047,11 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     differs across the trial's words (e.g. a per-word ``response`` mask) is
     span-like data, not a trial-level field, and rendering its first value as
     ``"Response: True"`` would be misleading. A *constant* boolean (e.g.
-    ``is_correct``) is a legitimate trial-level field and is kept.
+    ``is_correct``) is a legitimate trial-level field and is kept. Also excludes
+    plain numeric columns (UX-32): a Q&A field is inherently text or boolean, so
+    an unrelated numeric column that merely matches a name hint — e.g. a
+    ``response_time_ms`` timing column on a generic upload — would otherwise
+    render as a bogus "Response time ms: 120" line.
     """
     out = []
     for c in trial_words.columns:
@@ -1054,8 +1061,11 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
         if not any(h in lc for h in _QA_NAME_HINTS) or _is_boolish_span(c):
             continue
         col = trial_words[c]
-        if _is_boolish(col) and col.dropna().nunique() > 1:
+        boolish = _is_boolish(col)
+        if boolish and col.dropna().nunique() > 1:
             continue  # per-word-varying boolean → not a trial-level Q&A field
+        if not boolish and pd.api.types.is_numeric_dtype(col):
+            continue  # a timing/count/id column, not question/answer text
         out.append(c)
     return out
 
@@ -1618,6 +1628,14 @@ def _build_studio_config(
                 viz_settings.get("fixation_hover_fields") or []
             ),
         },
+        # EXP-5: title/caption pattern, moved here from being Export-only.
+        "labels": {
+            "show_title_caption": bool(
+                st.session_state.get("global_show_title_caption", False)
+            ),
+            "title_pattern": viz_settings.get("title_pattern", ""),
+            "caption_pattern": viz_settings.get("caption_pattern", ""),
+        },
         "highlighting": {
             "critical_span_style": figure_settings.get(
                 "critical_span_style", "Mark text"
@@ -1713,6 +1731,8 @@ def _render_save_restore_expander(
             ],
             "hollow": bool(st.session_state.get(f"cmp{idx}_hollow", False)),
             "opacity": float(st.session_state.get(f"cmp{idx}_opacity", 1.0)),
+            # UX-31: the A/B legend label override ("" = the auto label).
+            "label_pattern": st.session_state.get(f"cmp{idx}_label_pattern") or "",
         }
         for idx in range(2)
     ]
@@ -1947,6 +1967,82 @@ def _apply_preprocessing_caption(fig, participant, trial) -> None:
     fig.update_layout(meta=metadata)
 
 
+def _apply_title_caption(
+    fig,
+    viz_settings: dict,
+    trial_words: pd.DataFrame,
+    trial_fixations: pd.DataFrame,
+    participant: str,
+    trial: str,
+    combo_row: Optional[dict] = None,
+) -> None:
+    """EXP-5: stamp the rail's title/caption pattern onto ``fig``.
+
+    Reuses EXP-2's pattern language (`export.pattern_fields`/`render_pattern`/
+    `annotate_figure`) but against the trial on screen, so all three render
+    paths — static, animation, compare — carry the same title/caption a bulk
+    export would produce for this trial. The rail control is the single source
+    of truth: `viz_settings["title_pattern"]`/`["caption_pattern"]` come from
+    `controls._collect_viz_settings`, and the Export panel's bulk section reads
+    the same two keys rather than keeping its own copy.
+
+    Reads straight from `viz_settings` (`.get()`, tolerant of a minimal dict)
+    rather than `_build_figure_settings`'s translated, all-keys-required shape
+    — the `{settings}` placeholder only needs a handful of them, and the
+    animation/comparison call sites don't otherwise need a full figure-builder
+    settings dict at all."""
+    title_pattern = viz_settings.get("title_pattern") or ""
+    caption_pattern = viz_settings.get("caption_pattern") or ""
+    if not title_pattern and not caption_pattern:
+        return
+    settings_summary_input = {
+        "show_words": viz_settings.get("show_words", False),
+        "show_word_labels": viz_settings.get("show_labels", True),
+        "show_fixations": viz_settings.get("show_fix", True),
+        "show_saccades": viz_settings.get("show_saccades", True),
+        "show_heatmap": viz_settings.get("show_heatmap", False),
+        "color_by": viz_settings.get("color_by"),
+        "palette": viz_settings.get("palette"),
+    }
+    fields = pattern_fields(
+        participant,
+        trial,
+        trial_words,
+        trial_fixations,
+        settings_summary_input,
+        combo_row=combo_row,
+    )
+    title = render_pattern(title_pattern, fields) if title_pattern else ""
+    caption = render_pattern(caption_pattern, fields) if caption_pattern else ""
+    annotate_figure(fig, title=title, caption=caption)
+
+
+def _resolve_compare_label(
+    idx: int,
+    participant: Optional[str],
+    trial: Optional[str],
+    trial_words: Optional[pd.DataFrame],
+    trial_fixations: Optional[pd.DataFrame],
+) -> str:
+    """UX-31: the A/B legend label for compare scanpath ``idx`` (0 or 1).
+
+    An explicit ``cmp{idx}_label_pattern`` (⚙️ Compare options popover,
+    EXP-2-style pattern + preview) overrides the plain ``participant · trial``
+    default; empty (the common case) falls through to it unchanged."""
+    default = f"{participant} · {trial}"
+    pattern = st.session_state.get(f"cmp{idx}_label_pattern") or ""
+    if not pattern or not participant or not trial:
+        return default
+    fields = pattern_fields(
+        participant,
+        trial,
+        trial_words if trial_words is not None else pd.DataFrame(),
+        trial_fixations if trial_fixations is not None else pd.DataFrame(),
+        {},
+    )
+    return render_pattern(pattern, fields) or default
+
+
 def _build_and_render_animation(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -2043,10 +2139,22 @@ def _build_and_render_animation(
         show_legend=viz_settings.get("show_compare_legend", False),
         fixations_b=fixations_b if dual else None,
         words_b=words_b if dual else None,
+        # UX-31: an explicit `cmp{idx}_label_pattern` (set in the ⚙️ Compare
+        # options popover, EXP-2-style) overrides the auto label.
         label_a=(
-            f"{selected_participant} · {selected_trial}" if dual else "Scanpath A"
+            _resolve_compare_label(
+                0, selected_participant, selected_trial, trial_words, trial_fixations
+            )
+            if dual
+            else "Scanpath A"
         ),
-        label_b=(f"{compare_participant} · {compare_trial}" if dual else "Scanpath B"),
+        label_b=(
+            _resolve_compare_label(
+                1, compare_participant, compare_trial, words_b, fixations_b
+            )
+            if dual
+            else "Scanpath B"
+        ),
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
         background_image=background_image,
@@ -2059,6 +2167,14 @@ def _build_and_render_animation(
     )
     add_illustration_label(fig, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig, selected_participant, selected_trial)
+    _apply_title_caption(
+        fig,
+        viz_settings,
+        trial_words,
+        trial_fixations,
+        selected_participant,
+        selected_trial,
+    )
     _render_true_scale_chart(fig, key="single_anim")
     if dual:
         save_slug = (
@@ -2139,6 +2255,10 @@ def _render_export_panel(
     # (figures only — the exported tables stay uncorrected by design).
     bulk_settings["align_algorithm"] = viz_settings.get("align_algorithm", "Off")
     bulk_settings["align_connectors"] = bool(viz_settings.get("align_connectors"))
+    # EXP-5: the rail's title/caption pattern is the single source of truth —
+    # bulk export reads it back rather than keeping its own copy.
+    bulk_settings["title_pattern"] = viz_settings.get("title_pattern", "")
+    bulk_settings["caption_pattern"] = viz_settings.get("caption_pattern", "")
     bulk_settings["preprocessing"] = dict(
         st.session_state.get("_preprocessing_settings") or {}
     )
@@ -2224,8 +2344,17 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
 
 
 def _chip_color(col: str, value_str: str) -> str:
-    """Background for a chip — known conditions keep their metadata-table colour
-    (so a condition reads the same everywhere), everything else is neutral."""
+    """Background for a chip.
+
+    UX-28: a user-picked colour (any field, any dataset — set via the ✏️ Edit
+    chips popover's **Chip colours** section, `trial_chip_colors`) wins over
+    everything below. Absent that, known OneStop conditions keep their
+    metadata-table colour so the demo reads the same as before this was
+    generalized; everything else is neutral.
+    """
+    override = (st.session_state.get("trial_chip_colors") or {}).get(col)
+    if override:
+        return override
     v = value_str.lower()
     if col == "difficulty_level":
         for prefix, color in _DIFFICULTY_COLORS.items():
@@ -2497,167 +2626,207 @@ def render_single_trial_tab(
     # resolved Animate / Compare / viz settings; its right-side position is fixed
     # by the column split regardless of render order.
     with rail:
-        st.markdown("## 🎬 View modes")
-        # Animate styled like a layer: a toggle + a ⚙ popover for its config
-        # (playback speed) — matching Compare and the visualization layers below.
-        # Seeded, not `value=`-defaulted: `single_animate` is restored pre-widget
-        # by a deep link / saved config (see session_keys), and passing both makes
-        # Streamlit warn (BUG-17). `setdefault` suffices — this toggle renders on
-        # every run, so it never first mounts late the way a popover-bound widget
-        # can (that case needs `controls._pin(rewrite=True)`; see BUG-15).
-        st.session_state.setdefault("single_animate", False)
-        animate = st.toggle(
-            "**Animate**",
-            key="single_animate",
-            help="Replay the trial fixation by fixation; the play / pause / "
-            "restart controls sit below the plot.",
-        )
-        # Reading-time / playback info box, filled below once playback speed + any
-        # compare trial are known (lives inside the Playback popover).
-        anim_info_slot = None
-        # Playback speed shows only when animating a trial that has fixations.
-        # Default ×4 — a brisk review pace (real-time ÷ 4).
-        playback_speed = _ANIM_DEFAULT_SPEED
-        if animate and not trial_fixations.empty:
-            with st.popover("⚙️ Playback", width="stretch"):
-                st.session_state.setdefault(
-                    "single_playback_speed", _ANIM_DEFAULT_SPEED
-                )
-                playback_speed = st.select_slider(
-                    "Playback speed",
-                    options=_ANIM_SPEED_OPTIONS,
-                    format_func=lambda x: _ANIM_SPEED_LABELS[
-                        _ANIM_SPEED_OPTIONS.index(x)
-                    ],
-                    help="Playback speed relative to the recorded fixation timings.",
-                    key="single_playback_speed",
-                )
-                # VIZ-10: start the replay automatically on load (at the speed
-                # above). Off → the figure waits on the ▶ Play button.
-                st.checkbox(
-                    "Autoplay on load",
-                    key="global_anim_autoplay",
-                    help="Start the replay automatically when the plot loads, at "
-                    "the playback speed set above. Turn off to start paused (press "
-                    "▶ Play to run it).",
-                )
-                # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
-                # against frame count, which is what export size and render time
-                # are made of. It used to be decided for the user in two module
-                # constants, and the cap coarsened the grid silently.
-                st.caption("**Frame grid**")
-
-                def _apply_anim_quality() -> None:
-                    preset = _ANIM_QUALITY_PRESETS.get(
-                        st.session_state.get("global_anim_quality")
-                    )
-                    if preset is not None:
-                        (
-                            st.session_state["global_anim_grid_step_ms"],
-                            st.session_state["global_anim_max_frames"],
-                        ) = preset
-
-                current_grid = (
-                    int(st.session_state.get("global_anim_grid_step_ms", 100)),
-                    int(st.session_state.get("global_anim_max_frames", 360)),
-                )
-                inferred_quality = next(
-                    (
-                        name
-                        for name, values in _ANIM_QUALITY_PRESETS.items()
-                        if values == current_grid
-                    ),
-                    "Custom",
-                )
-                st.session_state["global_anim_quality"] = inferred_quality
-                st.segmented_control(
-                    "Animation quality",
-                    options=["Coarse", "Fine", "Custom"],
-                    key="global_anim_quality",
-                    on_change=_apply_anim_quality,
-                    help="**Coarse** — 300 ms / 120 frames for fast drafts. "
-                    "**Fine** — 40 ms / 900 frames for high-fidelity review. The "
-                    "sliders remain editable; changing either makes the mode Custom.",
-                )
-
-                def _mark_anim_quality_custom() -> None:
-                    st.session_state["global_anim_quality"] = "Custom"
-
-                _numeric_slider(
-                    st,
-                    "Frame every (ms)",
-                    key="global_anim_grid_step_ms",
-                    min_value=20,
-                    max_value=500,
-                    step=10,
-                    on_change=_mark_anim_quality_custom,
-                    help="How often a frame is emitted along the reading clock. "
-                    "Smaller is smoother and larger to export; the slider scrubs "
-                    "linearly through seconds either way.",
-                )
-                _numeric_slider(
-                    st,
-                    "Max frames",
-                    key="global_anim_max_frames",
-                    min_value=30,
-                    max_value=2000,
-                    step=10,
-                    on_change=_mark_anim_quality_custom,
-                    help="Hard ceiling on the frame count. A long reading coarsens "
-                    "the grid to stay under it rather than emitting thousands of "
-                    "frames (which balloons the GIF/MP4 export).",
-                )
-                anim_info_slot = st.container()
-        # Compare is a view mode (toggle here); the second-trial selector renders
-        # above the chips in the plot column (compare_slot below), mirroring the
-        # main trial picker (CMP-1).
-        compare_enabled = st.toggle(
-            "**Compare**",
-            value=False,
-            key="single_compare_toggle",
-            help=(
-                "Co-animate a second reading on one clock."
-                if animate
-                else "Overlay another trial's scanpath or view them side by side."
-            ),
-        )
-        # ENG-24: controls must gate against the mode the renderer can actually
-        # enter, not merely the raw toggle. Compare needs at least one candidate;
-        # Animate is resolved independently because it remains a distinct empty-
-        # state when the selected trial has no fixations.
-        st.session_state["_resolved_comparing"] = bool(
-            compare_enabled
-            and build_comparison_options(
-                combos,
-                selection_mode,
-                selected_participant,
-                selected_trial,
-                selected_text,
+        with rail.container(key="tour_grp_view_modes"):
+            st.markdown("## 🎬 View modes")
+            # Animate styled like a layer: a toggle + a ⚙ popover for its config
+            # (playback speed) — matching Compare and the visualization layers below.
+            # Seeded, not `value=`-defaulted: `single_animate` is restored pre-widget
+            # by a deep link / saved config (see session_keys), and passing both makes
+            # Streamlit warn (BUG-17). `setdefault` suffices — this toggle renders on
+            # every run, so it never first mounts late the way a popover-bound widget
+            # can (that case needs `controls._pin(rewrite=True)`; see BUG-15).
+            st.session_state.setdefault("single_animate", False)
+            animate = st.toggle(
+                "🎬 **Animate**",
+                key="single_animate",
+                help="Replay the trial fixation by fixation; the play / pause / "
+                "restart controls sit below the plot.",
             )
-        )
-        st.session_state["_resolved_animating"] = bool(animate)
-        # Compare config in the rail (moved out of the inline selector): the
-        # overlay/side-by-side/stacked layout + the show-A/B-legend toggle. The
-        # layout reaches the figure via session_state (`single_compare_layout`),
-        # read into `compare_layout` below.
-        if compare_enabled:
-            with st.popover("⚙️ Compare options", width="stretch"):
-                if not animate:
-                    # Seed so the control shows "Overlay" selected by default
-                    # (the body reads this key to resolve compare_layout).
-                    st.session_state.setdefault("single_compare_layout", "Overlay")
-                    st.segmented_control(
-                        "View",
-                        options=["Overlay", "Side by side", "Stacked"],
-                        key="single_compare_layout",
-                        help="Stacked = trials shown one above the other.",
+            # Reading-time / playback info box, filled below once playback speed + any
+            # compare trial are known (lives inside the Playback popover).
+            anim_info_slot = None
+            # Playback speed shows only when animating a trial that has fixations.
+            # Default ×4 — a brisk review pace (real-time ÷ 4).
+            playback_speed = _ANIM_DEFAULT_SPEED
+            if animate and not trial_fixations.empty:
+                with st.popover("⚙️ Playback", width="stretch"):
+                    st.session_state.setdefault(
+                        "single_playback_speed", _ANIM_DEFAULT_SPEED
                     )
-                st.checkbox(
-                    "Show A/B legend",
-                    key="global_show_compare_legend",
-                    help="Show a legend naming the two scanpaths on the overlay "
-                    "(off by default — the colours already tell A and B apart).",
+                    playback_speed = st.select_slider(
+                        "Playback speed",
+                        options=_ANIM_SPEED_OPTIONS,
+                        format_func=lambda x: _ANIM_SPEED_LABELS[
+                            _ANIM_SPEED_OPTIONS.index(x)
+                        ],
+                        help="Playback speed relative to the recorded fixation timings.",
+                        key="single_playback_speed",
+                    )
+                    # UX-30: the reading-time / playback-duration box reads as a
+                    # consequence of the speed picked above, so it sits right below it
+                    # instead of at the foot of the popover. `anim_info_slot` is only a
+                    # placeholder here — Streamlit lays containers out in creation
+                    # order, so the actual fill (below, once fixations/compare are
+                    # known) still lands in this spot.
+                    anim_info_slot = st.container()
+                    # VIZ-10: start the replay automatically on load (at the speed
+                    # above). Off → the figure waits on the ▶ Play button.
+                    st.checkbox(
+                        "Autoplay on load",
+                        key="global_anim_autoplay",
+                        help="Start the replay automatically when the plot loads, at "
+                        "the playback speed set above. Turn off to start paused (press "
+                        "▶ Play to run it).",
+                    )
+                    st.divider()
+                    # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
+                    # against frame count, which is what export size and render time
+                    # are made of. It used to be decided for the user in two module
+                    # constants, and the cap coarsened the grid silently.
+                    st.caption("**Frame grid**")
+
+                    def _apply_anim_quality() -> None:
+                        preset = _ANIM_QUALITY_PRESETS.get(
+                            st.session_state.get("global_anim_quality")
+                        )
+                        if preset is not None:
+                            (
+                                st.session_state["global_anim_grid_step_ms"],
+                                st.session_state["global_anim_max_frames"],
+                            ) = preset
+
+                    current_grid = (
+                        int(st.session_state.get("global_anim_grid_step_ms", 100)),
+                        int(st.session_state.get("global_anim_max_frames", 360)),
+                    )
+                    matched_quality = next(
+                        (
+                            name
+                            for name, values in _ANIM_QUALITY_PRESETS.items()
+                            if values == current_grid
+                        ),
+                        None,
+                    )
+                    # UX-30: gating the sliders behind Custom means picking Custom on
+                    # the segmented control has to be "sticky" even while the grid
+                    # still equals a Coarse/Fine preset exactly (the state right after
+                    # switching, before either slider is touched) — otherwise this
+                    # same re-inference would immediately snap it back to that preset's
+                    # name and hide the sliders that were just revealed. Only fall back
+                    # to inferring Coarse/Fine here when the mode isn't already Custom;
+                    # a grid matching no preset at all is unambiguous either way.
+                    previous_quality = st.session_state.get("global_anim_quality")
+                    if matched_quality is None:
+                        st.session_state["global_anim_quality"] = "Custom"
+                    elif previous_quality != "Custom":
+                        st.session_state["global_anim_quality"] = matched_quality
+                    st.segmented_control(
+                        "Animation quality",
+                        options=["Coarse", "Fine", "Custom"],
+                        key="global_anim_quality",
+                        on_change=_apply_anim_quality,
+                        help="**Coarse** — 300 ms / 120 frames for fast drafts. "
+                        "**Fine** — 40 ms / 900 frames for high-fidelity review. "
+                        "**Custom** reveals the sliders below, pre-seeded with "
+                        "whichever preset was active last.",
+                    )
+
+                    def _mark_anim_quality_custom() -> None:
+                        st.session_state["global_anim_quality"] = "Custom"
+
+                    if st.session_state["global_anim_quality"] == "Custom":
+                        _numeric_slider(
+                            st,
+                            "Frame every (ms)",
+                            key="global_anim_grid_step_ms",
+                            min_value=20,
+                            max_value=500,
+                            step=10,
+                            on_change=_mark_anim_quality_custom,
+                            help="How often a frame is emitted along the reading "
+                            "clock. Smaller is smoother and larger to export; the "
+                            "slider scrubs linearly through seconds either way.",
+                        )
+                        _numeric_slider(
+                            st,
+                            "Max frames",
+                            key="global_anim_max_frames",
+                            min_value=30,
+                            max_value=2000,
+                            step=10,
+                            on_change=_mark_anim_quality_custom,
+                            help="Hard ceiling on the frame count. A long reading "
+                            "coarsens the grid to stay under it rather than "
+                            "emitting thousands of frames (which balloons the "
+                            "GIF/MP4 export).",
+                        )
+            # Compare is a view mode (toggle here); the second-trial selector renders
+            # above the chips in the plot column (compare_slot below), mirroring the
+            # main trial picker (CMP-1).
+            compare_enabled = st.toggle(
+                "⚖️ **Compare**",
+                value=False,
+                key="single_compare_toggle",
+                help=(
+                    "Co-animate a second reading on one clock."
+                    if animate
+                    else "Overlay another trial's scanpath or view them side by side."
+                ),
+            )
+            # ENG-24: controls must gate against the mode the renderer can actually
+            # enter, not merely the raw toggle. Compare needs at least one candidate;
+            # Animate is resolved independently because it remains a distinct empty-
+            # state when the selected trial has no fixations.
+            st.session_state["_resolved_comparing"] = bool(
+                compare_enabled
+                and build_comparison_options(
+                    combos,
+                    selection_mode,
+                    selected_participant,
+                    selected_trial,
+                    selected_text,
                 )
+            )
+            st.session_state["_resolved_animating"] = bool(animate)
+            # Compare config in the rail (moved out of the inline selector): the
+            # overlay/side-by-side/stacked layout + the show-A/B-legend toggle. The
+            # layout reaches the figure via session_state (`single_compare_layout`),
+            # read into `compare_layout` below.
+            if compare_enabled:
+                with st.popover("⚙️ Compare options", width="stretch"):
+                    if not animate:
+                        # Seed so the control shows "Overlay" selected by default
+                        # (the body reads this key to resolve compare_layout).
+                        st.session_state.setdefault("single_compare_layout", "Overlay")
+                        st.segmented_control(
+                            "View",
+                            options=["Overlay", "Side by side", "Stacked"],
+                            key="single_compare_layout",
+                            help="Stacked = trials shown one above the other.",
+                        )
+                    show_legend_now = st.checkbox(
+                        "Show A/B legend",
+                        key="global_show_compare_legend",
+                        help="Show a legend naming the two scanpaths on the overlay "
+                        "(off by default — the colours already tell A and B apart).",
+                    )
+                    if show_legend_now:
+                        # UX-31: override the auto "participant · trial" label,
+                        # EXP-2-style (same pattern language + live preview as
+                        # the rail's title/caption). Empty = the auto label.
+                        st.text_input(
+                            "Label A",
+                            key="cmp0_label_pattern",
+                            help="Same fields as the title/caption pattern in "
+                            "📐 Figure & axes. Leave empty for the default "
+                            "`{participant_id} · {trial_id}`.",
+                        )
+                        st.text_input(
+                            "Label B",
+                            key="cmp1_label_pattern",
+                            help="Leave empty for the default "
+                            "`{participant_id} · {trial_id}`.",
+                        )
         st.divider()
         st.markdown("## 🎨 Visualization")
         # The visualization controls moved out of the sidebar into this rail
@@ -3062,6 +3231,23 @@ def render_single_trial_tab(
             _apply_preprocessing_caption(
                 displayed_fig, selected_participant, selected_trial
             )
+            _primary_combo = combos[
+                (combos["participant_id"] == selected_participant)
+                & (combos["trial_id"] == selected_trial)
+            ]
+            _apply_title_caption(
+                displayed_fig,
+                viz_settings,
+                trial_words,
+                plot_fixations,
+                selected_participant,
+                selected_trial,
+                combo_row=(
+                    _primary_combo.iloc[0].to_dict()
+                    if not _primary_combo.empty
+                    else None
+                ),
+            )
             _render_true_scale_chart(displayed_fig, key="single")
 
     # Per-trial panels sit BELOW the plot as a single full-width subtab bar (they
@@ -3192,7 +3378,12 @@ def _render_bulk_export(
 ) -> None:
     """Render configurable bulk-export UI (artifact picker + run + download)."""
     options = render_export_options(
-        st, combos, key_prefix="bulk_export", combos_all=combos_all
+        st,
+        combos,
+        key_prefix="bulk_export",
+        combos_all=combos_all,
+        title_pattern=figure_settings.get("title_pattern", ""),
+        caption_pattern=figure_settings.get("caption_pattern", ""),
     )
     # Tick "Export the whole dataset" → export the unfiltered frames.
     if options.export_unfiltered:
@@ -3317,6 +3508,23 @@ def _render_comparison_figure(
     compare_label = friendly_trial_label(
         compare_participant, compare_trial, compare_text_id, label_pool
     )
+    # UX-31: an explicit cmp{idx}_label_pattern overrides the auto label above.
+    if st.session_state.get("cmp0_label_pattern"):
+        primary_label = _resolve_compare_label(
+            0,
+            selected_participant,
+            selected_trial,
+            extract_trial(words_filtered, selected_participant, selected_trial),
+            extract_trial(fixations_filtered, selected_participant, selected_trial),
+        )
+    if st.session_state.get("cmp1_label_pattern"):
+        compare_label = _resolve_compare_label(
+            1,
+            compare_participant,
+            compare_trial,
+            extract_trial(words_filtered, compare_participant, compare_trial),
+            extract_trial(fixations_filtered, compare_participant, compare_trial),
+        )
 
     fig_compare = make_comparison_figure(
         words_filtered,
@@ -3378,6 +3586,21 @@ def _render_comparison_figure(
     )
     add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig_compare, selected_participant, selected_trial)
+    _primary_combo = combos[
+        (combos["participant_id"] == selected_participant)
+        & (combos["trial_id"] == selected_trial)
+    ]
+    _apply_title_caption(
+        fig_compare,
+        viz_settings,
+        extract_trial(words_filtered, selected_participant, selected_trial),
+        extract_trial(fixations_filtered, selected_participant, selected_trial),
+        selected_participant,
+        selected_trial,
+        combo_row=(
+            _primary_combo.iloc[0].to_dict() if not _primary_combo.empty else None
+        ),
+    )
     _render_true_scale_chart(fig_compare, key="compare")
     return fig_compare
 

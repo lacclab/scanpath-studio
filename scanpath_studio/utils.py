@@ -433,7 +433,7 @@ def _select_trial_none_mode(
         return f"{label}  ·  {shown}" if shown else label
 
     n_trials = len(trial_options)
-    picker_label = "Trial ID"
+    picker_label = "**Select Trial**"
     trial_id_key = f"{key_prefix}_trial_id" if key_prefix else None
     slider_key = f"{key_prefix}_trial_pos" if key_prefix else "trial_pos"
 
@@ -501,7 +501,9 @@ def _select_trial_none_mode(
             sort_values.update(
                 {opt: format_sort_value(lookup.get(opt)) for opt in trial_options}
             )
-            picker_label = f"Trial ID  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+            picker_label = (
+                f"**Select Trial**  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+            )
         current_idx = trial_options.index(current_label)
     else:
         sel_col = host

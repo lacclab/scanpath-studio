@@ -193,6 +193,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_colorbars": "global_show_colorbars",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
+    # EXP-5: title/caption on the figure — off by default.
+    "show_title_caption": "global_show_title_caption",
 }
 _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when set)
     "preproc_short_policy": "global_preproc_short_policy",
@@ -241,6 +243,11 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "word_hover_measure": "global_word_hover_measure",
     "word_hover_fields": "global_word_hover_fields",
     "fixation_hover_fields": "global_fixation_hover_fields",
+    # EXP-5: the pattern strings themselves — meaningless while
+    # `show_title_caption` is off, but carried unconditionally like every other
+    # value param (the reader only applies them once the toggle is on).
+    "title_pattern": "global_title_pattern",
+    "caption_pattern": "global_caption_pattern",
 }
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -1227,6 +1234,21 @@ def _restore_plot_config(
     ):
         put("global_fixation_hover_fields", fixation_hover_fields)
 
+    # EXP-5: title/caption on the figure, moved here from being Export-only.
+    labels = section("labels")
+    if "show_title_caption" in labels:
+        put("global_show_title_caption", bool(labels["show_title_caption"]))
+    if isinstance(labels.get("title_pattern"), str):
+        put("global_title_pattern", labels["title_pattern"])
+    if isinstance(labels.get("caption_pattern"), str):
+        put("global_caption_pattern", labels["caption_pattern"])
+    elif "labels" not in config and has_valid_plot_section:
+        # Pre-EXP-5 configs have no labels block; pin the off defaults so the
+        # frozen state-key set is still fully written.
+        put("global_show_title_caption", False)
+        put("global_title_pattern", "")
+        put("global_caption_pattern", "")
+
     highlighting = section("highlighting")
     if "critical_span_style" in highlighting:
         css = highlighting["critical_span_style"]
@@ -1333,6 +1355,9 @@ def _restore_plot_config(
                     1.0,
                     f"scanpath {idx + 1} opacity",
                 )
+            # UX-31: the A/B legend label override.
+            if isinstance(entry.get("label_pattern"), str):
+                put(f"cmp{idx}_label_pattern", entry["label_pattern"])
 
     selection = section("selection")
     if selection:

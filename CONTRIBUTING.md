@@ -42,8 +42,10 @@ across Python 3.11/3.12/3.13/3.14. See [AGENTS.md](AGENTS.md) and the package
 [CLAUDE.md](scanpath_studio/CLAUDE.md) for an architectural overview.
 
 Add a concise entry to the `[Unreleased]` section of
-[`CHANGELOG.md`](CHANGELOG.md) — a line or two grouped under Added / Changed /
-Fixed, not a per-tweak log.
+[`CHANGELOG.md`](CHANGELOG.md), in its two-tier shape (ENG-34): a headline
+`- **Bold lead** (ID)` line under Added / Changed / Fixed, plus a one-paragraph
+`### Details` entry under the matching `#### <Group>` heading — not a per-tweak
+log.
 
 If you add a user-facing feature, expose it on **every** surface — not just
 visually, but also the deep link / Share, the CLI, and the headless API. See

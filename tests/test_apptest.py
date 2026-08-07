@@ -736,7 +736,9 @@ class TestUnmappedRawDataView:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The picker's label carries the active sort key (UX-10), so match the
         # stem rather than the whole string.
-        picker = next((s for s in at.selectbox if s.label.startswith("Trial ID")), None)
+        picker = next(
+            (s for s in at.selectbox if s.label.startswith("**Select Trial**")), None
+        )
         opts = list(picker.options) if picker is not None else []
         # Two per-page trials, not collapsed into one stimulus-level trial.
         assert len(opts) == 2, f"expected 2 per-page trials, got {opts}"

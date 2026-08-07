@@ -707,13 +707,17 @@ def _preview_fields(combos: pd.DataFrame) -> dict:
 
 
 def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
-    """The **Naming & labels** block: EXP-1 path pattern + EXP-2 title/caption.
+    """The **Naming & labels** block: EXP-1's path pattern.
 
     Every pattern is validated and previewed against the first trial in scope as
     it's typed — finding a typo after a 200-trial render is the worst possible
-    place to find it. Returns ``(path_pattern, title_pattern, caption_pattern)``;
-    an invalid pattern falls back to its default so a bad keystroke can't produce
-    a broken zip.
+    place to find it. Returns ``path_pattern``; an invalid pattern falls back to
+    its default so a bad keystroke can't produce a broken zip.
+
+    The title/caption pair used to live here too (EXP-2) but moved to the
+    Scanpath rail's **📐 Figure & axes** group (EXP-5), so it's visible on the
+    live figure and not just at export time; `render_export_options` reads it
+    back from there instead of keeping a second, possibly-diverging copy.
     """
     st.markdown("### Naming & labels")
     fields = _preview_fields(combos)
@@ -746,36 +750,7 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
     )
     with st.expander("Available fields", expanded=False):
         st.markdown(available)
-
-    label_figures = st.toggle(
-        "Title & caption on the figure",
-        value=False,
-        key=f"{key_prefix}_labels",
-        help="Render a title and/or caption into the exported image (and record "
-        "them in the plot config), so a figure dropped into a paper or a slide "
-        "carries its own provenance. The plot itself is not scaled down — the "
-        "figure grows to make room.",
-    )
-    if not label_figures:
-        return path_pattern, "", ""
-    title_pattern = _pattern_input(
-        "Title",
-        DEFAULT_TITLE_PATTERN,
-        f"{key_prefix}_title_pattern",
-        "Same fields as the path. Leave empty for no title.",
-    )
-    caption_pattern = _pattern_input(
-        "Caption",
-        DEFAULT_CAPTION_PATTERN,
-        f"{key_prefix}_caption_pattern",
-        "`{settings}` expands to a summary of the settings that produced the "
-        "figure. Leave empty for no caption.",
-    )
-    if title_pattern:
-        st.caption(f"Title preview — **{render_pattern(title_pattern, fields)}**")
-    if caption_pattern:
-        st.caption(f"Caption preview — {render_pattern(caption_pattern, fields)}")
-    return path_pattern, title_pattern, caption_pattern
+    return path_pattern
 
 
 def render_export_options(
@@ -783,13 +758,17 @@ def render_export_options(
     combos: pd.DataFrame,
     key_prefix: str = "export",
     combos_all: Optional[pd.DataFrame] = None,
+    title_pattern: str = "",
+    caption_pattern: str = "",
 ) -> ExportOptions:
     """Render the bulk-export options UI and return a populated ExportOptions.
 
     ``combos`` is the currently filtered trial pool; ``combos_all`` (when given)
     is the whole loaded dataset. Picking the "All" scope switches the scope
     picker — and the export itself — to ``combos_all`` so the sidebar filters
-    are ignored.
+    are ignored. ``title_pattern``/``caption_pattern`` come from the Scanpath
+    rail's **📐 Figure & axes** → *Title & caption on the figure* (EXP-5) —
+    this panel no longer has its own copy of that setting.
     """
     st = st_module
     # No expander — the options are always displayed.
@@ -911,9 +890,13 @@ def render_export_options(
         else:
             table_format = str(st.session_state.get(f"{key_prefix}_fmt", "csv"))
 
-        path_pattern, title_pattern, caption_pattern = _render_naming_options(
-            st, combos, key_prefix
-        )
+        path_pattern = _render_naming_options(st, combos, key_prefix)
+        if title_pattern or caption_pattern:
+            st.caption(
+                "Title & caption on the figure — set on the Scanpath rail's "
+                "**📐 Figure & axes** → *Title & caption on the figure*, and "
+                "applied here too."
+            )
 
     return ExportOptions(
         include_png=include_png,

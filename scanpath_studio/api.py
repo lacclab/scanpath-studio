@@ -78,6 +78,7 @@ from .plots import (  # noqa: E402
     make_word_profile_figure,
     split_scanpath_layers,
 )
+from .export import annotate_figure  # noqa: E402
 
 
 def build_authored_scanpath(
@@ -930,7 +931,7 @@ def _expand_palette(overrides: dict) -> dict:
     any colour the caller also passes explicitly wins over it::
 
         sps.plot_scanpath(w, f, palette="Print / greyscale")
-        sps.plot_scanpath(w, f, palette="Colourblind-safe", saccade_color="#000")
+        sps.plot_scanpath(w, f, palette="Default (colourblind-safe)", saccade_color="#000")
 
     The palette itself isn't a figure kwarg, so it's consumed here rather than
     forwarded. Raises on an unknown name — a silent fallback to the default
@@ -1089,6 +1090,8 @@ def plot_scanpath(
     fix_index_range: Optional[Tuple[int, int]] = None,
     illustration: bool = False,
     illustration_label: str = "auto",
+    title: str = "",
+    caption: str = "",
     **figure_overrides,
 ) -> go.Figure:
     """Build the canonical scanpath figure for one trial.
@@ -1112,6 +1115,11 @@ def plot_scanpath(
     through ``end`` (1-based, both inclusive) of the trial — the headless form of
     the app's fixation-index window. It is applied before the drift correction,
     like the app.
+
+    ``title`` / ``caption`` (EXP-5) stamp a title/caption band onto the figure
+    without shrinking the plot area, exactly like the rail's *Title & caption on
+    the figure* control — literal text here, not the rail's ``{trial_id}``-style
+    pattern, since the caller already knows which trial this is.
 
     Remaining keywords override the app's defaults and are forwarded to
     :func:`plots.make_scanpath_figure` (e.g. ``show_heatmap=False``,
@@ -1184,7 +1192,7 @@ def plot_scanpath(
         _require_normalized(raw_gaze, "raw_gaze")
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
         settings.setdefault("show_raw_gaze", True)
-    return make_scanpath_figure(
+    fig = make_scanpath_figure(
         trial_words,
         trial_fixations,
         canvas_width=int(canvas_size[0]),
@@ -1196,6 +1204,8 @@ def plot_scanpath(
         raw_gaze=raw_gaze,
         **settings,
     )
+    annotate_figure(fig, title=title, caption=caption)
+    return fig
 
 
 def animate_scanpath(
@@ -1210,6 +1220,8 @@ def animate_scanpath(
     playback_speed: float = 1.0,
     autoplay: bool = True,
     fix_index_range: Optional[Tuple[int, int]] = None,
+    title: str = "",
+    caption: str = "",
     **animation_overrides,
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
@@ -1237,6 +1249,8 @@ def animate_scanpath(
     matches the static figure. ``palette=`` (VIZ-18) works here too; the colours
     it implies that the animation doesn't support are dropped rather than
     raising, since the caller named a look, not those individual keys.
+
+    ``title`` / ``caption`` (EXP-5) — same as :func:`plot_scanpath`.
     """
     valid = set(_ANIMATION_FIGURE_PARAMS)
     explicit = set(animation_overrides) - {"palette"}
@@ -1263,7 +1277,7 @@ def animate_scanpath(
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
     if canvas_size is None:
         canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
-    return make_scanpath_animation(
+    fig = make_scanpath_animation(
         trial_words,
         trial_fixations,
         canvas_width=int(canvas_size[0]),
@@ -1274,6 +1288,8 @@ def animate_scanpath(
         autoplay=autoplay,
         **animation_overrides,
     )
+    annotate_figure(fig, title=title, caption=caption)
+    return fig
 
 
 def save_figure(

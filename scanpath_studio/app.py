@@ -628,14 +628,11 @@ If you use the bundled demo data, also cite
         st.markdown("**🤖 Built with AI assistance**")
         st.markdown(
             f"""
-Much of this code was written with AI assistance. Two things you can check: the
-reading measures are pinned to a ground-truth trial with expected values per
-measure (add `?source=synthetic` to this app's URL), and EyeLink `IA_*` measures
-already in your export are passed through, not recomputed.
-
-That is not the same as bug-free. **Cross-check anything you publish against your
-own pipeline.** If something looks wrong, [open an issue]({CITATION["url"]}/issues) ↗
-with the JSON from **💾 Save & restore** — it reproduces the exact view.
+Scanpath Studio was built with AI assistance. Cross-check results before
+publishing; verify the ground-truth trial with `?source=synthetic`, and note
+that EyeLink `IA_*` measures already in your export are passed through, not
+recomputed. If something looks wrong, [open an issue]({CITATION["url"]}/issues) ↗
+with your **💾 Save & restore** JSON.
 """
         )
 

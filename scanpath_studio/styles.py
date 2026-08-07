@@ -337,6 +337,12 @@ def get_app_css() -> str:
         border-radius: 12px;
         padding: 0.55rem 0.85rem 0.35rem;
         background: var(--sps-accent-soft);
+        /* UX-29: lets the Quick-view rule below query the rail's own rendered
+           width, not the viewport's — the wrap it reacts to comes from the
+           sidebar being open/closed, which changes this column's width without
+           necessarily crossing a viewport breakpoint. */
+        container-type: inline-size;
+        container-name: sps-rail;
     }
     .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
@@ -380,6 +386,28 @@ def get_app_css() -> str:
         padding-left: 0.4rem;
         padding-right: 0.4rem;
         padding-top: 0.1rem;
+    }
+    /* UX-29: the three Quick-view buttons ("👁️ Scanpath" / "🔥 Heatmap" / "✏️
+       Illustration") wrap to 2-3 lines once the rail column narrows — closing
+       the sidebar buys back some width, but not always enough. Rather than
+       widen the rail (shrinks the plot column) or drop to a 2×2 grid, fall back
+       to the emoji alone: the label text is collapsed to zero size (so it takes
+       no layout space) and a `::before` re-adds just the emoji at normal size —
+       the row stays the same three-button layout at every width. */
+    @container sps-rail (max-width: 320px) {
+        .st-key-viz_view_scanpath button p,
+        .st-key-viz_view_heatmap button p,
+        .st-key-viz_view_illustration button p {
+            font-size: 0;
+        }
+        .st-key-viz_view_scanpath button p::before,
+        .st-key-viz_view_heatmap button p::before,
+        .st-key-viz_view_illustration button p::before {
+            font-size: 1rem;
+        }
+        .st-key-viz_view_scanpath button p::before { content: "👁️"; }
+        .st-key-viz_view_heatmap button p::before { content: "🔥"; }
+        .st-key-viz_view_illustration button p::before { content: "✏️"; }
     }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────

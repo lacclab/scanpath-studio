@@ -266,8 +266,8 @@ plus replay-only knobs — `figure_options("animation")` is the full list).
 |--------|---------|------|
 | `color_by` | `'(uniform)'` | yes |
 | `color_by_line` | `False` | yes |
-| `fixation_color` | `'#1f77b4'` | yes |
-| `fixation_colorscale` | `'Blues'` | yes |
+| `fixation_color` | `'#0072B2'` | yes |
+| `fixation_colorscale` | `'Viridis'` | yes |
 | `fixation_color_range` | `None` | yes |
 | `fixation_symbol` | `'circle'` | yes |
 | `fixation_opacity` | `0.7` | yes |
@@ -308,7 +308,7 @@ fixations yourself.
 
 | Option | Default | Anim |
 |--------|---------|------|
-| `saccade_color` | `'#6f42c1'` | yes |
+| `saccade_color` | `'#CC79A7'` | yes |
 | `saccade_style` | `'solid'` | yes |
 | `saccade_width` | `2.0` | yes |
 | `saccade_color_mode` | `'Uniform'` | no |
@@ -336,7 +336,7 @@ the linear-reading schematic.
 | `heatmap_metric` | `'duration_ms'` | no |
 | `heatmap_norm` | `'Linear'` | no |
 | `duration_mass_sigma_chars` | `1.0` | no |
-| `heatmap_colorscale` | `'Blues'` | no |
+| `heatmap_colorscale` | `'Viridis'` | no |
 | `heatmap_range` | `None` | no |
 | `word_heatmap_col` | `None` | no |
 | `word_heatmap_title` | `None` | no |
@@ -350,9 +350,9 @@ dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
 | Option | Default | Anim |
 |--------|---------|------|
-| `text_color` | `'#343a40'` | yes |
+| `text_color` | `'#000000'` | yes |
 | `highlight_column` | `'is_in_aspan'` | yes |
-| `highlight_text_color` | `'#C8097C'` | yes |
+| `highlight_text_color` | `'#D55E00'` | yes |
 | `critical_span_style` | `'Mark text'` | no |
 | `span_border_color` | `'#000000'` | no |
 | `line_spacing` | `3.0` | yes |
@@ -390,7 +390,7 @@ coordinates — see [Rendering](rendering.md).
 | `colorbar_tickfont_size` | `12` | yes |
 
 `palette=` is a shorthand that sets a whole group of the colours above at once —
-`"Default"`, `"Colourblind-safe"`, `"Print / greyscale"` or `"High contrast"`
+`"Default (colourblind-safe)"`, `"Print / greyscale"` or `"High contrast"`
 (`constants.PALETTES`). Anything you pass explicitly still wins over it, and an
 unknown name raises rather than silently falling back.
 

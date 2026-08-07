@@ -37,24 +37,27 @@ COLORSCALES = [
     "Spectral",
 ]
 
-DEFAULT_FIXATION_COLORSCALE = "Blues"
-# Index 0 of COLORSCALES on purpose: a keyed selectbox first-rendered inside a
-# popover (the Heatmap-style popover) displays its first option, not the seeded
-# session value, on first open — so a non-index-0 default would show the wrong
-# colorscale (and get committed on the next interaction). Keeping the default at
-# index 0 keeps the picker and the figure in sync. See controls.sidebar_controls.
-DEFAULT_HEATMAP_COLORSCALE = "Blues"
+# VIZ-32: colourblind-safe (Viridis) is the default a fresh session opens with.
+# A keyed selectbox first-rendered inside a popover would otherwise display its
+# first option rather than a non-index-0 seeded value on first open — handled by
+# `controls._popover_selectbox` (explicit `index=`) / `_pin(rewrite=True)`, so a
+# non-index-0 default here still keeps the picker and the figure in sync.
+DEFAULT_FIXATION_COLORSCALE = "Viridis"
+DEFAULT_HEATMAP_COLORSCALE = "Viridis"
 
 DEFAULT_MARKER_SIZE_RANGE = (8, 24)
 DEFAULT_PAGE_SIZE = 1000
 DEFAULT_ORDER_FONT_COLOR = "#111111"
 
 WORD_BOX_COLOR = "#6c757d"
-WORD_LABEL_COLOR = "#343a40"
-# Default colour for highlighted ("Mark text") reading text — dark pink. The
-# visualization controls expose a picker that overrides it per figure.
-HIGHLIGHTED_TEXT_COLOR = "#C8097C"
-SACCADE_COLOR = "#6f42c1"
+# VIZ-32: black, matching the colourblind-safe default palette.
+WORD_LABEL_COLOR = "#000000"
+# Default colour for highlighted ("Mark text") reading text — vermillion,
+# matching the colourblind-safe default palette. The visualization controls
+# expose a picker that overrides it per figure.
+HIGHLIGHTED_TEXT_COLOR = "#D55E00"
+# VIZ-32: reddish purple, matching the colourblind-safe default palette.
+SACCADE_COLOR = "#CC79A7"
 TRENDLINE_COLOR = "#dc3545"
 CURRENT_FIX_COLOR = "rgba(255, 127, 14, 0.6)"
 CURRENT_FIX_OUTLINE = "#ff7f0e"
@@ -106,13 +109,14 @@ SACCADE_CLASS_LABELS = {
     "regression": "Regression",
     "other": "Other",
 }
+# VIZ-32: Okabe-Ito, matching the colourblind-safe default palette.
 SACCADE_CLASS_COLORS = {
-    "forward": "#2ca02c",  # green — normal left-to-right progression
-    "skip": "#1f77b4",  # blue — jumps over one or more words
-    "refixation": "#9467bd",  # purple — lands back on the same word
-    "return_sweep": "#ff7f0e",  # orange — long sweep to the next line
-    "regression": "#d62728",  # red — moves backward
-    "other": "#7f7f7f",  # grey — unclassifiable (off-text endpoint)
+    "forward": "#009E73",  # bluish green — normal left-to-right progression
+    "skip": "#56B4E9",  # sky blue — jumps over one or more words
+    "refixation": "#CC79A7",  # reddish purple — lands back on the same word
+    "return_sweep": "#E69F00",  # orange — long sweep to the next line
+    "regression": "#D55E00",  # vermillion — moves backward
+    "other": "#999999",  # grey — unclassifiable (off-text endpoint)
 }
 # The five reading classes the palette UI lets the user recolour (``other`` is
 # fixed grey).
@@ -175,7 +179,8 @@ FIXATION_GLYPH_SIZE_SCALE = 1.8
 # default is therefore one flat colour, and colour-by is an explicit opt-in for a
 # *different* variable (surprisal, frequency, line, pass index).
 UNIFORM_COLOR_FIELD = "(uniform)"
-DEFAULT_FIXATION_COLOR = "#1f77b4"
+# VIZ-32: blue, matching the colourblind-safe default palette.
+DEFAULT_FIXATION_COLOR = "#0072B2"
 
 # Outline width (px) for hollow (outline-only) fixation markers.
 HOLLOW_OUTLINE_WIDTH = 2.0
@@ -216,8 +221,13 @@ CANVAS_PAD_FRACTION = 0.05
 #     greyscale conversion. Marker shape (VIZ-15) and the two-way saccade mode
 #     (VIZ-19) are the redundant channels when colour alone can't carry it.
 PALETTES: dict[str, dict] = {
-    "Default": {
-        "description": "The original palette — tuned for a colour screen.",
+    # Okabe & Ito's eight-colour set — the de-facto standard for qualitative
+    # colourblind-safe encoding — plus Viridis, which is both perceptually
+    # uniform and safe across the common deficiencies. VIZ-32: this is the
+    # default a fresh session opens with, not just an opt-in choice.
+    "Default (colourblind-safe)": {
+        "description": "Okabe–Ito hues + Viridis scales; safe for deuteran-, "
+        "protan- and tritanopia.",
         "fixation_color": DEFAULT_FIXATION_COLOR,
         "fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
         "heatmap_colorscale": DEFAULT_HEATMAP_COLORSCALE,
@@ -226,28 +236,6 @@ PALETTES: dict[str, dict] = {
         "word_label_color": WORD_LABEL_COLOR,
         "highlight_text_color": HIGHLIGHTED_TEXT_COLOR,
         "background_color": DEFAULT_BACKGROUND_COLOR,
-    },
-    # Okabe & Ito's eight-colour set — the de-facto standard for qualitative
-    # colourblind-safe encoding — plus Viridis, which is both perceptually
-    # uniform and safe across the common deficiencies.
-    "Colourblind-safe": {
-        "description": "Okabe–Ito hues + Viridis scales; safe for deuteran-, "
-        "protan- and tritanopia.",
-        "fixation_color": "#0072B2",  # blue
-        "fixation_colorscale": "Viridis",
-        "heatmap_colorscale": "Viridis",
-        "saccade_color": "#CC79A7",  # reddish purple
-        "saccade_class_colors": {
-            "forward": "#009E73",  # bluish green
-            "skip": "#56B4E9",  # sky blue
-            "refixation": "#CC79A7",  # reddish purple
-            "return_sweep": "#E69F00",  # orange
-            "regression": "#D55E00",  # vermillion
-            "other": "#999999",
-        },
-        "word_label_color": "#000000",
-        "highlight_text_color": "#D55E00",
-        "background_color": "#ffffff",
     },
     # Lightness-only encoding: everything survives a black & white print or
     # photocopy, because nothing depends on hue at all.
@@ -293,7 +281,7 @@ PALETTES: dict[str, dict] = {
         "background_color": "#ffffff",
     },
 }
-DEFAULT_PALETTE = "Default"
+DEFAULT_PALETTE = "Default (colourblind-safe)"
 # Not a palette — the honest answer when the live colours match none of them.
 # A palette only *presets* the individual colour keys, so the moment one of those
 # pickers is changed the selector would otherwise keep naming a palette the figure

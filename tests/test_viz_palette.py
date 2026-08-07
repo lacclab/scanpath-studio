@@ -161,9 +161,9 @@ class TestPalettes:
             assert key in settings, f"{name} is missing {key}"
 
     def test_settings_are_copies_not_registry_references(self):
-        settings = palette_settings("Default")
+        settings = palette_settings(DEFAULT_PALETTE)
         settings["saccade_class_colors"]["forward"] = "#000000"
-        assert PALETTES["Default"]["saccade_class_colors"]["forward"] != "#000000"
+        assert PALETTES[DEFAULT_PALETTE]["saccade_class_colors"]["forward"] != "#000000"
 
     def test_api_expands_a_palette_into_colours(
         self, normalized_words_df, normalized_fixations_df
@@ -215,7 +215,7 @@ class TestPalettes:
     def test_palette_maps_onto_session_keys(self):
         from scanpath_studio.controls import palette_state
 
-        state = palette_state("Colourblind-safe")
+        state = palette_state("Default (colourblind-safe)")
         assert state["global_fixation_color"] == "#0072B2"
         assert state["global_saccade_class_color_regression"] == "#D55E00"
         # `other` is not user-editable, so it gets no session key.
@@ -225,7 +225,7 @@ class TestPalettes:
 class TestTheSelectorStopsClaimingAPalette:
     """VIZ-18 follow-up. A palette is one-way — it writes the ordinary colour
     keys and never reads them back — so without a derived "which palette is
-    actually active?" the dropdown keeps reading *Colourblind-safe* after you've
+    actually active?" the dropdown keeps reading *Default (colourblind-safe)* after you've
     hand-edited one of its colours. Same rule VIZ-12 applies to the Quick views."""
 
     @pytest.fixture
@@ -247,7 +247,7 @@ class TestTheSelectorStopsClaimingAPalette:
     def test_editing_one_colour_drops_it_to_custom(self, state):
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Colourblind-safe")
+        apply_palette("Default (colourblind-safe)")
         state["global_saccade_color"] = "#123456"
         assert _active_palette() is None
 
@@ -272,12 +272,12 @@ class TestTheSelectorStopsClaimingAPalette:
         returns, so the option disappears from the list again."""
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Colourblind-safe")
+        apply_palette("Default (colourblind-safe)")
         original = state["global_saccade_color"]
         state["global_saccade_color"] = "#123456"
         assert _active_palette() is None
         state["global_saccade_color"] = original
-        assert _active_palette() == "Colourblind-safe"
+        assert _active_palette() == "Default (colourblind-safe)"
 
     def test_a_lowercased_hex_still_matches(self, state):
         """`st.color_picker` hands colours back lowercase; the registry spells
@@ -285,9 +285,9 @@ class TestTheSelectorStopsClaimingAPalette:
         read Custom the first time its own picker was touched."""
         from scanpath_studio.controls import _active_palette, apply_palette
 
-        apply_palette("Colourblind-safe")
+        apply_palette("Default (colourblind-safe)")
         state["global_fixation_color"] = state["global_fixation_color"].lower()
-        assert _active_palette() == "Colourblind-safe"
+        assert _active_palette() == "Default (colourblind-safe)"
 
     def test_empty_state_is_not_silently_a_palette(self, state):
         from scanpath_studio.controls import _active_palette
@@ -299,7 +299,7 @@ class TestTheSelectorStopsClaimingAPalette:
         or picking it would wipe the very colours it stands for."""
         from scanpath_studio.controls import apply_palette
 
-        apply_palette("Colourblind-safe")
+        apply_palette("Default (colourblind-safe)")
         state["global_saccade_color"] = "#123456"
         apply_palette(CUSTOM_PALETTE)
         assert state["global_saccade_color"] == "#123456"
@@ -345,8 +345,8 @@ class TestTheSelectorStopsClaimingAPalette:
         def picker():
             return next(s for s in at.selectbox if s.label == "Palette")
 
-        picker().set_value("Colourblind-safe").run(timeout=60)
-        assert picker().value == "Colourblind-safe"
+        picker().set_value("Default (colourblind-safe)").run(timeout=60)
+        assert picker().value == "Default (colourblind-safe)"
         assert CUSTOM_PALETTE not in picker().options
 
         # Hand-edit one of the palette's colours, exactly as the colour picker
@@ -358,7 +358,11 @@ class TestTheSelectorStopsClaimingAPalette:
 
     @pytest.mark.parametrize(
         ("saved", "expect_skipped"),
-        [(CUSTOM_PALETTE, False), ("Colourblind-safe", False), ("Nope", True)],
+        [
+            (CUSTOM_PALETTE, False),
+            ("Default (colourblind-safe)", False),
+            ("Nope", True),
+        ],
     )
     def test_restoring_a_custom_config_is_not_reported_as_skipped(
         self, monkeypatch, saved, expect_skipped

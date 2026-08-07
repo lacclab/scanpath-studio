@@ -113,6 +113,10 @@ GLOBAL_FIXATION_COLOR_RANGE = "global_fixation_color_range"
 GLOBAL_HEATMAP_COLOR_RANGE = "global_heatmap_color_range"
 GLOBAL_SHOW_STIMULUS_IMAGE = "global_show_stimulus_image"
 GLOBAL_FIT_TO_MONITOR = "global_fit_to_monitor"
+# EXP-5: title/caption on the figure (moved here from being Export-only).
+GLOBAL_SHOW_TITLE_CAPTION = "global_show_title_caption"
+GLOBAL_TITLE_PATTERN = "global_title_pattern"
+GLOBAL_CAPTION_PATTERN = "global_caption_pattern"
 
 # --- Saved-config-only settings (no share-link param) ----------------------
 GLOBAL_BASE_FONT_SIZE = "global_base_font_size"
@@ -174,6 +178,8 @@ CMP_SACCADE_WIDTH = "cmp{idx}_saccade_width"
 CMP_MARKER_SIZE_RANGE = "cmp{idx}_marker_size_range"
 CMP_HOLLOW = "cmp{idx}_hollow"
 CMP_OPACITY = "cmp{idx}_opacity"
+# UX-31: the A/B legend label override ("" = the auto "participant · trial").
+CMP_LABEL_PATTERN = "cmp{idx}_label_pattern"
 
 # ---------------------------------------------------------------------------
 # URL query-parameter names that are NOT viz settings — the selection half of a
@@ -215,6 +221,7 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "show_colorbars": GLOBAL_SHOW_COLORBARS,
         "hollow_fixations": GLOBAL_HOLLOW_FIXATIONS,
         "scale_text_to_boxes": GLOBAL_SCALE_TEXT_TO_BOXES,
+        "show_title_caption": GLOBAL_SHOW_TITLE_CAPTION,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
     }
@@ -258,6 +265,8 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "fixation_hover_fields": GLOBAL_FIXATION_HOVER_FIELDS,
         "illustration_label": GLOBAL_ILLUSTRATION_LABEL,
         "preproc_short_policy": GLOBAL_PREPROC_SHORT_POLICY,
+        "title_pattern": GLOBAL_TITLE_PATTERN,
+        "caption_pattern": GLOBAL_CAPTION_PATTERN,
     }
 )
 
@@ -412,6 +421,7 @@ COMPARE_STATE_KEY_TEMPLATES = frozenset(
         CMP_MARKER_SIZE_RANGE,
         CMP_HOLLOW,
         CMP_OPACITY,
+        CMP_LABEL_PATTERN,
     }
 )
 
@@ -519,6 +529,10 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_FIXCLASS_OOB_MODE,
         GLOBAL_FIXCLASS_OOB_SYMBOL,
         GLOBAL_FIXCLASS_OOB_COLOR,
+        # labels
+        GLOBAL_SHOW_TITLE_CAPTION,
+        GLOBAL_TITLE_PATTERN,
+        GLOBAL_CAPTION_PATTERN,
     }
 )
 

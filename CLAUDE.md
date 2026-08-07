@@ -15,11 +15,15 @@ you work under `scanpath_studio/`); contributor setup is in
 - **Run ruff first — always.** `ruff check --exclude other_vis .` and
   `ruff format --exclude other_vis .`. CI's Lint job gates on **both**, so a
   missed format fails the build. Don't skip it, even for "docs-only" changes.
-- **Update `CHANGELOG.md` as you go** — **one scannable line per item** under the
-  `[Unreleased]` section (grouped Added / Changed / Fixed), not a per-tweak log
-  and not a design doc. If it needs a paragraph, the paragraph belongs in the
-  item's write-up in `tracker/data.js`; the changelog gets the one-line
-  version. A bug fix may take two lines when the *wrong* behaviour needs naming.
+- **Update `CHANGELOG.md` as you go, in the two-tier shape** (ENG-34, `[Unreleased]`
+  onwards only — already-released sections keep their old one-paragraph-per-item
+  shape). Under each `[Unreleased]` group (Added / Changed / Fixed): a **headline
+  list** first — `- **Bold lead** (ID)` and nothing else, short enough to paste
+  into Slack — then a `### Details` subsection with the same Added / Changed /
+  Fixed grouping, one short paragraph per item under a matching `#### <Group>`
+  heading, anchored by the same bold lead + ID so the two halves line up. Not a
+  per-tweak log and not a design doc — if a detail needs more than a short
+  paragraph, the rest belongs in the item's write-up in `tracker/data.js`.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
 

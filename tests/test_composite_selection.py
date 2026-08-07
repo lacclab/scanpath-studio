@@ -219,7 +219,7 @@ class TestCompositeTrialPicker:
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        assert any(label.startswith("Trial ID") for label in labels), labels
+        assert any(label.startswith("**Select Trial**") for label in labels), labels
 
 
 @pytest.mark.timeout(60)

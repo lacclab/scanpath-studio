@@ -1902,14 +1902,11 @@ def _render_anim_info_box(
                     "word boxes don't line up — the spatial overlay isn't "
                     "meaningful. Best for two readings of the same paragraph."
                 )
-    else:
-        st.info(
-            f"Reading time: {reading_span_ms / 1000:.1f}s · "
-            f"Playback at ×{playback_speed:g}: {playback_ms / 1000:.1f}s"
-        )
     # VIZ-11 follow-up: state what the chosen grid actually produced. The cap
     # coarsening the step used to be invisible, which is the whole reason the
-    # setting felt arbitrary.
+    # setting felt arbitrary. UX-30 folded it INTO the box below rather than
+    # leaving it as a second, detached caption at the foot of the popover: the
+    # frame count is part of the same "what will this replay be like?" answer.
     grid = (
         f"**{summary['n_frames']}** frames · one every "
         f"{summary['step_ms']:.0f} ms of reading"
@@ -1919,7 +1916,14 @@ def _render_anim_info_box(
             f" — coarsened from {summary['requested_step_ms']:.0f} ms to stay "
             f"under the {max_frames or 360}-frame cap"
         )
-    st.caption(grid)
+    if not dual:
+        st.info(
+            f"Reading time: {reading_span_ms / 1000:.1f}s · "
+            f"Playback at ×{playback_speed:g}: {playback_ms / 1000:.1f}s\n\n"
+            f"{grid}"
+        )
+    else:
+        st.caption(grid)
     return playback_ms
 
 
@@ -2623,7 +2627,11 @@ def render_single_trial_tab(
     # by the column split regardless of render order.
     with rail:
         with rail.container(key="tour_grp_view_modes"):
-            st.markdown("## 🎬 View modes")
+            # UX-30: a neutral section icon. 🎬 belongs to **Animate** (it is on
+            # that toggle), so using it for the header made the whole section read
+            # as being about animation — with ⚖️ Compare sitting under it. 🎛️ says
+            # "mode switch", and matches the house set (👁️ 📄 🔥 🎨 📐 🖥️).
+            st.markdown("## 🎛️ View modes")
             # Animate styled like a layer: a toggle + a ⚙ popover for its config
             # (playback speed) — matching Compare and the visualization layers below.
             # Seeded, not `value=`-defaulted: `single_animate` is restored pre-widget
@@ -2666,9 +2674,10 @@ def render_single_trial_tab(
                     # placeholder here — Streamlit lays containers out in creation
                     # order, so the actual fill (below, once fixations/compare are
                     # known) still lands in this spot.
-                    anim_info_slot = st.container()
                     # VIZ-10: start the replay automatically on load (at the speed
-                    # above). Off → the figure waits on the ▶ Play button.
+                    # above). Off → the figure waits on the ▶ Play button. UX-30
+                    # moved it up here: Autoplay and speed are both "how does it
+                    # play", where the frame grid below is "how is it sampled".
                     st.checkbox(
                         "Autoplay on load",
                         key="global_anim_autoplay",
@@ -2677,6 +2686,7 @@ def render_single_trial_tab(
                         "the playback speed set above. Turn off to start paused (press "
                         "▶ Play to run it).",
                     )
+                    anim_info_slot = st.container()
                     st.divider()
                     # VIZ-11 follow-up: the frame grid is a real tradeoff — smoothness
                     # against frame count, which is what export size and render time
@@ -2735,8 +2745,12 @@ def render_single_trial_tab(
                         st.session_state["global_anim_quality"] = "Custom"
 
                     if st.session_state["global_anim_quality"] == "Custom":
+                        # UX-30: two short numeric pickers, side by side rather
+                        # than stacked — the popover is narrow and they are read
+                        # together (step against cap).
+                        grid_left, grid_right = st.columns(2)
                         _numeric_slider(
-                            st,
+                            grid_left,
                             "Frame every (ms)",
                             key="global_anim_grid_step_ms",
                             persist_state="session",
@@ -2749,7 +2763,7 @@ def render_single_trial_tab(
                             "slider scrubs linearly through seconds either way.",
                         )
                         _numeric_slider(
-                            st,
+                            grid_right,
                             "Max frames",
                             key="global_anim_max_frames",
                             persist_state="session",

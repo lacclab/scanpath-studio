@@ -1,6 +1,6 @@
 {
  "version": 2,
- "revision": 179,
+ "revision": 180,
  "items": {
   "AN-29": {
    "status": "Closed",
@@ -447,9 +447,9 @@
    "updated": "2026-08-08"
   },
   "UX-30": {
-   "status": "In progress",
+   "status": "Review",
    "priority": "Normal",
-   "implementationBrief": "🎬 for the section header is awkward. Fix it.\n Left the \"other polish worth a look\" ideas from the Background below - Why? Implement them.",
+   "implementationBrief": "",
    "archived": false,
    "updated": "2026-08-08"
   },

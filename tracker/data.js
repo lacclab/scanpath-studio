@@ -7641,6 +7641,35 @@ window.TRACKER = {
    "decisions": [
     "What specifically feels off about the left sidebar menu — layout/grouping, discoverability of a particular control, something else? Need concrete pain points from the user before this is scoped enough to implement."
    ]
+  },
+  {
+   "id": "UX-39",
+   "prefix": "UX",
+   "num": 39,
+   "sub": "",
+   "title": "Add an easter egg somewhere in the app",
+   "status": "Backlog",
+   "note": "",
+   "date": "",
+   "added": "2026-08-07",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "body": [
+    "**Request.** Tuck a small easter egg somewhere in the app — no specific",
+    "trigger or surface requested yet, just \"add one somewhere.\"",
+    "",
+    "**Background (technical).** Unscoped. Candidate hooks once a trigger is",
+    "picked: a Konami-code-style key sequence caught at the `app.py` top level,",
+    "a hidden click target in the sidebar (near the Help group — see **UX-38**",
+    "— or the About panel), or a rare/whimsical state in an existing view (e.g.",
+    "a one-in-N chance on `tour.py`'s welcome dialog). Should stay inert by",
+    "default and not interfere with the four-surface rule (`@AGENTS.md` →",
+    "*Exposing a feature on every surface*) since it's not a real feature."
+   ],
+   "decisions": [
+    "What should the easter egg actually be, and what triggers it — a hidden key sequence, a rare random occurrence, a hidden click target? Need a concrete idea before this is scoped enough to implement."
+   ]
   }
  ]
 };

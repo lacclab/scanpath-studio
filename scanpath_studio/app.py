@@ -2514,6 +2514,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         default_events,
         layout_text,
         parse_authoring_json,
+        unusable_event_rows,
     )
 
     st.subheader("✏️ Author a scanpath")
@@ -2556,20 +2557,63 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         st.session_state.pop("author_events_editor", None)
         st.session_state["_author_text_for_events"] = text
     seed = st.session_state.get("_authored_events_frame", default_events(words))
+    last_word = int(words["word_id"].max()) if not words.empty else 1
+    st.caption(
+        f"One row per fixation, in reading order. **Target word** is the word it "
+        f"lands on — **1** is the first word of the stimulus above and "
+        f"**{last_word}** the last — and it is what the per-word reading measures "
+        "(first-fixation duration, regressions, …) are computed against. **X** and "
+        "**Y** place the marker on the canvas; leave them and the fixation sits at "
+        "its target word's centre."
+    )
+    # BUG-19: the editor's own key holds the edits as a delta against `seed`, so
+    # `seed` must stay the STABLE base — it is reseeded only when the stimulus
+    # text changes or a file is restored. Writing the returned frame back into it
+    # applies that delta twice, and after a row deletion leaves a gapped index,
+    # which `num_rows="dynamic"` cannot add rows to: from there edits land on the
+    # wrong rows and rows disappear. Read the edits from the return value only.
     events = st.data_editor(
         seed,
         key="author_events_editor",
         num_rows="dynamic",
         hide_index=True,
         column_config={
-            "word_id": st.column_config.NumberColumn("Target word", min_value=1),
-            "x": st.column_config.NumberColumn("X (px)"),
-            "y": st.column_config.NumberColumn("Y (px)"),
-            "duration_ms": st.column_config.NumberColumn("Duration (ms)", min_value=1),
+            "word_id": st.column_config.NumberColumn(
+                "Target word",
+                min_value=1,
+                max_value=last_word,
+                step=1,
+                help=(
+                    "Which word of the stimulus this fixation lands on, counting "
+                    f"from 1. The current text has {last_word} "
+                    f"{'word' if last_word == 1 else 'words'}."
+                ),
+            ),
+            "x": st.column_config.NumberColumn(
+                "X (px)", help="Horizontal position. Blank = the target word's centre."
+            ),
+            "y": st.column_config.NumberColumn(
+                "Y (px)", help="Vertical position. Blank = the target word's centre."
+            ),
+            "duration_ms": st.column_config.NumberColumn(
+                "Duration (ms)",
+                min_value=1,
+                help="How long the fixation lasts. It also sets the marker size.",
+            ),
         },
         width="stretch",
     )
-    st.session_state["_authored_events_frame"] = events
+    # A row that names no usable word produces no fixation. Say so — silently
+    # dropping it is what read as "my edit didn't take" (BUG-19).
+    dropped = unusable_event_rows(words, events)
+    if dropped:
+        listed = ", ".join(str(number) for number in dropped[:10])
+        more = f" (+{len(dropped) - 10} more)" if len(dropped) > 10 else ""
+        st.warning(
+            f"Row {listed}{more} {'has' if len(dropped) == 1 else 'have'} no valid "
+            f"**Target word**, so {'it is' if len(dropped) == 1 else 'they are'} "
+            f"not drawn. Enter a whole number from 1 to {last_word}."
+        )
     st.download_button(
         "💾 Save authoring file",
         data=authoring_json(text, events),

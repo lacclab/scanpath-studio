@@ -32,6 +32,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio.data import load_sample_data
+from scanpath_studio.constants import AUTHOR_CHOICE
 from tests.conftest import APP_SCRIPT
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -558,3 +559,73 @@ class TestRecoveryCachePanelFlow:
         assert not [t for t in at.toggle if t.key == "persist_local_saving"]
         captions = " ".join(str(c.value) for c in at.caption)
         assert "Off here." in captions
+
+
+class TestAuthoringEditorFlow:
+    """BUG-19 — the ✏️ Author a scanpath grid, driven the way a browser drives it.
+
+    ``st.data_editor`` keeps its edits as a *delta* against the frame it was
+    handed, and the browser re-sends that delta on every rerun. The editor used
+    to feed its own return value back in as the next run's input, so the delta
+    was applied twice; after a row deletion the frame also picked up a gapped
+    index, which ``num_rows="dynamic"`` cannot add rows to. From there edits
+    landed on the wrong rows and rows disappeared — the reported "some rows can't
+    be edited". The base frame must stay stable and range-indexed no matter how
+    many reruns a live edit survives.
+    """
+
+    #: One edit, one added row and one deletion — what the browser holds after a
+    #: user has been working in the grid for a moment.
+    _DELTA = {
+        "edited_rows": {0: {"duration_ms": 999}},
+        "added_rows": [{"word_id": 2, "x": 100.0, "y": 100.0, "duration_ms": 300}],
+        "deleted_rows": [1],
+    }
+
+    def _author(self) -> AppTest:
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = AUTHOR_CHOICE
+        at.run(timeout=60)
+        return at
+
+    def test_the_editor_base_survives_repeated_reruns_with_a_live_edit(self):
+        at = self._author()
+        _clean(at, "authoring source:")
+        base = at.session_state["_authored_events_frame"]
+        original = base.copy()
+
+        for _ in range(4):
+            at.session_state["author_events_editor"] = dict(self._DELTA)
+            at = at.run(timeout=60)
+            _clean(at, "after an authoring edit:")
+            base = at.session_state["_authored_events_frame"]
+            # A gapped index is the failure mode: it disables row-adding and
+            # misaligns every subsequent edit.
+            assert list(base.index) == list(range(len(base)))
+            pd.testing.assert_frame_equal(base, original)
+
+    def test_a_new_stimulus_reseeds_the_grid(self):
+        """The base is stable, but not frozen — new text means new rows."""
+        at = self._author()
+        before = len(at.session_state["_authored_events_frame"])
+        at.session_state["author_text"] = "one two three"
+        at = at.run(timeout=60)
+        _clean(at, "after changing the stimulus:")
+        after = at.session_state["_authored_events_frame"]
+        assert len(after) == 3 != before
+        assert list(after.index) == [0, 1, 2]
+
+    def test_a_row_with_no_valid_target_word_is_called_out(self):
+        at = self._author()
+        at.session_state["author_events_editor"] = {
+            "edited_rows": {1: {"word_id": 999}},
+            "added_rows": [],
+            "deleted_rows": [],
+        }
+        at = at.run(timeout=60)
+        _clean(at, "with an unusable authoring row:")
+        warnings = " ".join(str(w.value) for w in at.warning)
+        assert "Target word" in warnings, (
+            "an undrawable row was dropped without saying so"
+        )
+        assert "Row 2" in warnings

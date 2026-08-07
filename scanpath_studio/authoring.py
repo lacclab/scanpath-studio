@@ -57,6 +57,33 @@ def default_events(words: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def event_target_word(event: dict) -> int | None:
+    """The word a row targets, or ``None`` when it names no usable word."""
+    try:
+        return int(float(event.get("word_id")))
+    except (TypeError, ValueError):
+        return None
+
+
+def unusable_event_rows(words: pd.DataFrame, events: pd.DataFrame) -> list[int]:
+    """1-based row numbers that :func:`authored_fixations` will drop (BUG-19).
+
+    A row whose **Target word** is blank or names a word the stimulus does not
+    have produces no fixation at all. Dropping it is right — there is nowhere to
+    put it — but doing so silently reads as "my edit didn't take", so the editor
+    surfaces these rows instead. Same predicate as the builder below, so the two
+    can never disagree about which rows survive.
+    """
+    if words.empty or events is None or events.empty:
+        return []
+    valid = set(words["word_id"].astype(int))
+    return [
+        number
+        for number, event in enumerate(events.to_dict("records"), start=1)
+        if event_target_word(event) not in valid
+    ]
+
+
 def authored_fixations(words: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     """Normalize editable author events into the standard fixation schema."""
     columns = [
@@ -81,11 +108,8 @@ def authored_fixations(words: pd.DataFrame, events: pd.DataFrame) -> pd.DataFram
     rows = []
     timestamp = 0.0
     for order, event in enumerate(events.to_dict("records"), start=1):
-        try:
-            word_id = int(float(event.get("word_id")))
-        except (TypeError, ValueError):
-            continue
-        if word_id not in centers.index:
+        word_id = event_target_word(event)
+        if word_id is None or word_id not in centers.index:
             continue
         duration = pd.to_numeric(event.get("duration_ms"), errors="coerce")
         duration = float(duration) if pd.notna(duration) and duration > 0 else 220.0
@@ -125,4 +149,7 @@ def parse_authoring_json(payload: str) -> tuple[str, pd.DataFrame]:
     events = value.get("fixations", [])
     if not isinstance(events, list):
         raise ValueError("The authoring file's fixations must be a list.")
-    return value["text"], pd.DataFrame(events)
+    # A range index is required, not cosmetic: `st.data_editor(num_rows="dynamic")`
+    # cannot add rows to a gap-indexed frame, and its edits then land on the wrong
+    # rows (BUG-19).
+    return value["text"], pd.DataFrame(events).reset_index(drop=True)

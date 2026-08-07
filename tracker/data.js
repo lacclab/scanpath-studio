@@ -8147,7 +8147,23 @@ window.TRACKER = {
     "tighter CSS selector) rather than reusing the rail's. Any selector change",
     "must keep `_SPOTLIGHT_STEPS` selectors in sync with the keyed containers in",
     "`app.py` / `controls.py` / `annotations.py`, per the module's own comment",
-    "([`tour.py:31`](scanpath_studio/tour.py:31))."
+    "([`tour.py:31`](scanpath_studio/tour.py:31)).",
+    "",
+    "**Follow-up (2026-08-08).** The user reported that *\"steps 4 and 5 highlight",
+    "both areas instead of just the relevant parts\"* — correct, and the cause was",
+    "concrete: **both steps used the same selector**",
+    "(`.st-key-tour_grp_trial_select`), a container that wrapped the Filter-by row",
+    "*and* the trial picker, so each step spotlit the pair. `tabs.py` now has two",
+    "wrappers — `tour_grp_narrow_by` and `tour_grp_trial_picker` — and each step",
+    "targets its own. With them separated the old ordering read badly (the",
+    "spotlight jumped down to the picker, then back up to the filters), so the two",
+    "steps were also **swapped into reading order**: narrow the pool, then pick a",
+    "trial. That reorder is a judgement call on top of the reported bug — say if",
+    "you would rather keep picking first. `tests/test_tour.py` now pins the",
+    "convention `scanpath_studio/CLAUDE.md` only described: every spotlight",
+    "selector must resolve to a real `tour_grp_*` container, and no two steps may",
+    "share one — a renamed container previously left a step silently pointing at",
+    "nothing."
    ]
   },
   {

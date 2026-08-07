@@ -217,3 +217,51 @@ class TestFaq:
         for question, answer in _FAQ_ITEMS:
             assert question.endswith(("?", ".")), f"not a question: {question!r}"
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
+
+
+class TestSpotlightSelectorsResolve:
+    """Every spotlight step must point at a container that actually exists.
+
+    ``scanpath_studio/CLAUDE.md`` says to keep ``_SPOTLIGHT_STEPS`` in sync with
+    the ``tour_grp_*`` wrappers, but nothing enforced it: a renamed or removed
+    container leaves the step silently un-highlighted — the card still advances,
+    it just points at nothing, which no other test would notice.
+    """
+
+    def _keyed_containers(self) -> set[str]:
+        import re
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[1] / "scanpath_studio"
+        source = "".join(
+            (root / f"{module}.py").read_text()
+            for module in ("tabs", "app", "controls", "annotations")
+        )
+        return set(re.findall(r'key="([\w]+)"', source))
+
+    def test_every_selector_has_a_container(self):
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+        keys = self._keyed_containers()
+        missing = [
+            step["selector"]
+            for step in _SPOTLIGHT_STEPS
+            if step.get("selector")
+            and step["selector"].removeprefix(".st-key-") not in keys
+        ]
+        assert not missing, (
+            "these tour steps point at containers that no longer exist — the step "
+            f"will highlight nothing: {missing}"
+        )
+
+    def test_no_two_steps_spotlight_the_same_area(self):
+        """UX-34: two steps sharing a selector lit up both areas at once.
+
+        The "narrow the pool" and "pick a trial" steps both targeted the wrapper
+        around *both* rows, so each highlighted the other's subject too.
+        """
+        from scanpath_studio.tour import _SPOTLIGHT_STEPS
+
+        selectors = [s["selector"] for s in _SPOTLIGHT_STEPS if s.get("selector")]
+        duplicates = {s for s in selectors if selectors.count(s) > 1}
+        assert not duplicates, f"steps share a spotlight target: {duplicates}"

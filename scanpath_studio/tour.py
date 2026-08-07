@@ -253,19 +253,24 @@ _SPOTLIGHT_STEPS = [
         "of the filter row — ➕ beside it adds or removes datasets. Columns "
         "auto-detect; remap any field in the wizard.",
     },
+    # UX-34: narrowing comes before picking, both on screen (the Filter-by row
+    # sits above the picker) and in the workflow, so the spotlight now walks them
+    # top-to-bottom instead of jumping down to the picker and back up. Each step
+    # targets its own container — they used to share one wrapper, so both lit up
+    # the whole block.
     {
-        "selector": ".st-key-tour_grp_trial_select",
-        "in_sidebar": False,
-        "title": "🎯 Pick a trial",
-        "body": "Step through trials with the selector and ◀ ▶, or scrub the "
-        "slider — it shows the trial's position and id.",
-    },
-    {
-        "selector": ".st-key-tour_grp_trial_select",
+        "selector": ".st-key-tour_grp_narrow_by",
         "in_sidebar": False,
         "title": "🔍 Narrow the pool",
         "body": "**Filter by** Text or Participant to shrink the trial list; "
         "**More** adds condition & annotation filters (favorites, tags).",
+    },
+    {
+        "selector": ".st-key-tour_grp_trial_picker",
+        "in_sidebar": False,
+        "title": "🎯 Pick a trial",
+        "body": "Step through trials with the selector and ◀ ▶, or scrub the "
+        "slider — it shows the trial's position and id.",
     },
     {
         "selector": ".st-key-tour_grp_chips",

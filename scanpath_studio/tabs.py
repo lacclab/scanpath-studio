@@ -2532,7 +2532,11 @@ def render_single_trial_tab(
         # "More" holds the condition + annotation filters. The specific trial is
         # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
         # Keyed wrapper so the welcome tour can spotlight the selection row.
-        with st.container(key="tour_grp_trial_select"):
+        # UX-34: two keyed containers, not one. The welcome tour has a step for
+        # *narrowing the pool* and a step for *picking a trial*, and while both
+        # rows sat inside one `tour_grp_trial_select` wrapper each step spotlit
+        # the whole block — highlighting both areas when it meant one.
+        with st.container(key="tour_grp_narrow_by"):
             nb_source, nb_label, nb_text, nb_part, more_col = st.columns(
                 [2.2, 0.9, 2.2, 2.2, 1.1], vertical_alignment="center"
             )
@@ -2552,10 +2556,11 @@ def render_single_trial_tab(
                 )
                 more_pop.caption("More ways to narrow — conditions & annotations.")
                 render_trial_filters(words_all, fixations_all, host=more_pop)
-            # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
-            # Pass the More-popover filter columns so composite components that are
-            # also conditions (e.g. repeated_reading_trial) narrow there, not as a
-            # dedicated trial selector — keeping the picker stable across datasets.
+        # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
+        # Pass the More-popover filter columns so composite components that are
+        # also conditions (e.g. repeated_reading_trial) narrow there, not as a
+        # dedicated trial selector — keeping the picker stable across datasets.
+        with st.container(key="tour_grp_trial_picker"):
             selected_participant, selected_trial, selection_mode, selected_text = (
                 select_trial(
                     combos,

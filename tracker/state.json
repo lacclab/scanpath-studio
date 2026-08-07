@@ -1,6 +1,6 @@
 {
  "version": 2,
- "revision": 180,
+ "revision": 181,
  "items": {
   "AN-29": {
    "status": "Closed",
@@ -475,9 +475,9 @@
    "updated": "2026-08-08"
   },
   "UX-34": {
-   "status": "In progress",
+   "status": "Review",
    "priority": "Normal",
-   "implementationBrief": "Great start. Steps 4 and 5 highlight both areas instead of just the relevant parts.",
+   "implementationBrief": "",
    "archived": false,
    "updated": "2026-08-08"
   },

@@ -1218,6 +1218,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#i-edited-the-code-and-nothing-changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I edited the code and nothing changed?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#where-does-my-data-go" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1738,6 +1749,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#i-edited-the-code-and-nothing-changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I edited the code and nothing changed?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#where-does-my-data-go" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1816,6 +1838,13 @@ JSON when the work must be portable.</p>
 <p>The sidebar's <strong>🗄️ Recovery cache</strong> panel shows what that cache holds, where it
 is, and clears it; <code>scanpath-studio cache</code> does the same from a terminal. See
 <a href="../privacy/#what-happens-to-a-file-you-upload">Privacy</a>.</p>
+<h2 id="i-edited-the-code-and-nothing-changed">I edited the code and nothing changed?<a class="headerlink" href="#i-edited-the-code-and-nothing-changed" title="Permanent link">&para;</a></h2>
+<p>Streamlit re-runs only the top-level script — it does not reload already-imported
+modules, and <code>st.cache_data</code> does not hash the helper functions a cached loader
+calls. Restart the server process after editing code; a rerun or "Clear cache"
+isn't enough. This is unrelated to the <strong>🗄️ Recovery cache</strong>, which stores your
+data and settings, not code. See
+<a href="https://github.com/lacclab/scanpath-studio/blob/main/CONTRIBUTING.md#if-a-code-change-doesnt-show-up">Contributing</a>.</p>
 <h2 id="where-does-my-data-go">Where does my data go?<a class="headerlink" href="#where-does-my-data-go" title="Permanent link">&para;</a></h2>
 <p>Local and desktop use stays on your machine. The hosted demo runs on a third-party
 Streamlit server, so do not upload identifiable participant data there. See

@@ -1955,7 +1955,9 @@ too. Nothing here is inferred from documentation alone.</p>
 <ul>
 <li><strong>Audited version:</strong> <code>scanpath_studio</code> 0.25.0</li>
 <li><strong>Dependency versions the runtime claims were checked against:</strong> Streamlit
-  1.58.0, pandas 2.3.3, CPython 3.12.12</li>
+  1.58.0, pandas 2.3.3, CPython 3.12.12. The runtime has since moved to
+  Streamlit <strong>1.61.1</strong> (ENG-31); see <em>After the audit — Streamlit 1.61</em> below
+  for the two config surfaces that version added.</li>
 <li><strong>Method:</strong> source read of every write-to-disk, URL-building, path-handling,
   archive-reading and <code>@st.cache_data</code> site, plus targeted scripts that exercised
   the share-link builder, the bulk exporter, the export path sanitizer, the
@@ -1975,6 +1977,29 @@ loaded data" claim on this page holds only for a hosted deployment (where
 account-readable; it is disclosed and deletable in-app (sidebar → <strong>🗄️
 Recovery cache</strong>) and from <code>scanpath-studio cache --clear</code>, and it is
 described for researchers in <a href="../privacy/#what-happens-to-a-file-you-upload">privacy.md</a>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">After the audit — Streamlit 1.61 (ENG-31)</p>
+<p>The runtime moved from 1.58.0 to 1.61.1. Two of the config options that
+arrived in between touch the surfaces this page describes, and <strong>both are
+left at their defaults</strong>:</p>
+<ul>
+<li><strong><code>server.allowedHosts</code></strong> (1.61) — an allow-list of <code>Host</code> headers for
+  incoming WebSocket connections, against DNS rebinding. Empty by default,
+  which accepts any host, so it changes nothing about S1: a
+  <code>scanpath-studio run</code> on an untrusted network is still reachable by
+  anyone who can route to the port. A fixed-hostname deployment can now
+  narrow that (e.g. <code>['localhost']</code> for a desktop/loopback run).</li>
+<li><strong><code>client.allowedOrigins</code></strong> (1.60) — origins allowed to drive the app by
+  <code>postMessage</code> when it is embedded in an iframe. It defaults to Streamlit's
+  own Community Cloud hosts. The OneStop review-app embed only loads
+  <code>?embed=true</code> with deep-link query params and sends no host messages, so
+  it is unaffected; nothing in this repo needs the list widened.</li>
+</ul>
+<p><code>server.maxWidgetStateSize</code> (25 MB) also arrived in 1.60. It caps a single
+rerun's aggregate widget state, not session state — an uploaded corpus lives
+in session state and is unaffected; the only widget-borne payload is the
+💾 Save &amp; restore config JSON, which is kilobytes.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Scanpath Studio has no authentication, on any deployment</p>
@@ -2270,7 +2295,7 @@ checking that <code>fig.to_json()</code> holds a <code>data:image/png;base64,…
 <code>tabs._render_download_buttons</code> fed the raw frames straight to
 <code>_frame_to_csv_bytes</code> / <code>_frame_to_parquet_bytes</code> and would have leaked the
 column the same way — but it was <strong>unreachable</strong>. Its only caller was
-<code>tabs._render_paginated_dataframe</code>, which called it under
+<code>tabs._render_raw_table</code> (then <code>_render_paginated_dataframe</code>), which called it under
 <code>if download_name and not df.empty</code>, and none of that function's four call sites
 (<code>render_metrics_tab</code>, <code>render_fixations_tab</code>, <code>render_raw_gaze_tab</code>,
 <code>render_stimuli_tab</code>) passed <code>download_name</code>. So the tab rendered tables with no
@@ -2424,7 +2449,8 @@ the remaining six either escape or interpolate tool-controlled constants
 (<code>_chip_color</code> and <code>_span_bg_for</code> both return values from fixed palettes, so the
 <code>style="background:…"</code> attributes are not attacker-reachable either).</p>
 <p>Streamlit's markdown path does not compensate. Inspecting the shipped 1.58.0
-frontend bundle (<code>static/static/js/index.*.js</code>), the <code>allowHTML</code> branch lazily
+frontend bundle (<code>static/static/js/index.*.js</code>; re-checked on 1.61.1 after
+ENG-31 — <code>rehype-sanitize</code> is still absent), the <code>allowHTML</code> branch lazily
 loads <code>rehype-raw</code> and no sanitizer plugin — <code>rehype-sanitize</code> is not in the
 distribution at all; the only guard is a URL transform rejecting <code>javascript:</code>
 and <code>vbscript:</code> schemes, and <code>disallowedElements</code> is empty for non-label
@@ -2535,7 +2561,7 @@ and the 500-record ring buffer keeps its full history. Covered by
 <h3 id="s11-low-the-data-inspection-download-helper-is-unreachable-so-a-latent-leak-sits-in-dead-code">S11 · Low — the Data Inspection download helper is unreachable, so a latent leak sits in dead code<a class="headerlink" href="#s11-low-the-data-inspection-download-helper-is-unreachable-so-a-latent-leak-sits-in-dead-code" title="Permanent link">&para;</a></h3>
 <p><code>tabs._render_download_buttons</code> (CSV + Parquet of the raw frame, via
 <code>_frame_to_csv_bytes</code> / <code>_frame_to_parquet_bytes</code>) is called from exactly one
-place: <code>tabs._render_paginated_dataframe</code>, under <code>if download_name and not
+place: <code>tabs._render_raw_table</code> (then <code>_render_paginated_dataframe</code>), under <code>if download_name and not
 df.empty</code>. None of that function's four call sites — <code>render_metrics_tab</code>,
 <code>render_fixations_tab</code>, <code>render_raw_gaze_tab</code>, and the stimuli table in
 <code>render_stimuli_tab</code> — passes <code>download_name</code>, and no other module calls either
@@ -2549,12 +2575,12 @@ wires them up would ship the leak with them.</p>
 <p><strong>Status:</strong> <strong>fixed</strong> 2026-07-29 — deleted. <code>_render_download_buttons</code>,
 <code>_frame_to_csv_bytes</code>, <code>_frame_to_parquet_bytes</code> and the
 <code>_EAGER_DOWNLOAD_MAX_ROWS</code> threshold are gone, along with
-<code>_render_paginated_dataframe</code>'s <code>download_name</code> parameter; a repo-wide grep
+the raw-table renderer's <code>download_name</code> parameter; a repo-wide grep
 (including <code>tests/</code>) confirmed nothing referenced them. Bulk export
 (<code>export.bulk_export</code>) remains the supported way to get the tables out, and it
 strips <code>image_path</code> at <code>export._write_table</code> (S4), so wiring the buttons back
 up is now the deliberate act it should have been. A comment on
-<code>_render_paginated_dataframe</code> records why the tab has no download button.
+<code>tabs._render_raw_table</code> records why the tab has no download button.
 Covered by
 <code>tests/test_security_fixes.py::TestDataInspectionDownloadHelperIsGone</code>.</p>
 <h2 id="what-is-fixed-and-what-is-accepted">What is fixed, and what is accepted<a class="headerlink" href="#what-is-fixed-and-what-is-accepted" title="Permanent link">&para;</a></h2>
@@ -2701,6 +2727,13 @@ no <code>&lt;</code> can reach it.</p>
   before sending it to a collaborator.</li>
 <li><strong>Check exported tables before publishing them.</strong> Drop the <code>image_path</code> column
   if it is present (S4).</li>
+<li><strong>A hosted demo can hide the built-in table download.</strong> Streamlit 1.60 added
+  <code>client.disableDataExport</code>, which removes the CSV-download affordance from
+  every <code>st.dataframe</code> / <code>st.data_editor</code>. Data Inspection deliberately offers
+  no download button of its own (S4/S9 — those are the raw frames, <code>image_path</code>
+  and all), but Streamlit's own toolbar still offers one. The option is
+  app-wide, so it belongs in a deployment's config, not in this repo: set it
+  where you set <code>SCANPATH_LOCAL_FS=0</code>.</li>
 <li><strong>Re-upload with a changed row count, or clear the cache, after correcting a
   corpus.</strong> A same-shape edit in the middle of a table does not bust the cache
   (S5).</li>

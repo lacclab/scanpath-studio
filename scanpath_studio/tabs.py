@@ -1796,16 +1796,6 @@ def _render_save_restore_expander(
             )
 
 
-def _ordered_trial_ids(combos: pd.DataFrame) -> list[str]:
-    """Stable trial_id ordering used by the under-image Prev/Next buttons.
-
-    Mirrors `_select_trial_none_mode`'s sort so the under-image nav lands on
-    the same trial as the side-panel Prev/Next when both are present.
-    """
-    trial_col = "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
-    return sorted(combos[trial_col].dropna().astype(str).unique().tolist())
-
-
 def _build_compare_meta(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,

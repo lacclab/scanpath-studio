@@ -825,16 +825,3 @@ def compute_per_word_measures(
             )
 
     return out
-
-
-def compute_trial_measures(
-    fixations: pd.DataFrame, words: pd.DataFrame
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Convenience wrapper: returns (enriched_fixations, words_with_measures)."""
-    enriched_fix = (
-        enrich_fixations(assign_fixations_to_words(fixations, words), words)
-        if not fixations.empty
-        else fixations
-    )
-    enriched_words = compute_per_word_measures(fixations, words)
-    return enriched_fix, enriched_words

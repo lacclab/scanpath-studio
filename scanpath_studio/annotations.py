@@ -141,18 +141,6 @@ def known_tags() -> List[str]:
     return sorted(tags)
 
 
-def starred_keys() -> Set[Key]:
-    return {k for k, v in _store().items() if v.get("star")}
-
-
-def keys_with_tag(tag: str) -> Set[Key]:
-    return {k for k, v in _store().items() if tag in v.get("tags", [])}
-
-
-def annotated_count() -> int:
-    return len(_store())
-
-
 def current_records() -> List[dict]:
     """All annotations as a flat record list — for embedding in a saved config."""
     return store_to_records(_store())

@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Widget values now persist natively instead of by hand** (ENG-36)
 - **Raw data tables scroll instead of paginating** (ENG-36)
 
+### Removed
+- **Five helpers nothing referenced** (ENG-28)
+
 ### Details
 
 #### Added
@@ -74,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raw data tables scroll instead of paginating** (ENG-36) — the four Data Inspection tables (Stimuli / Word-level / Fixation-level / Raw gaze) and the derived preprocessing tables lost their **Page** number box, the `.iloc` slice behind it and the "rows 1,001 – 2,000 of 4,300,000" caption, in favour of Streamlit 1.61's `st.dataframe(lazy=True)`: the frame stays on the app server and only the rows in view are sent. You can now scroll and sort across the whole corpus instead of a thousand rows at a time, and a rerun no longer re-ships the visible page.
 - **Widget values now persist natively instead of by hand** (ENG-36) — every rail / canvas / compare control on a `global_*`, `single_*` or `cmp*` key now declares Streamlit 1.61's `persist_state="session"`. That is the native answer to BUG-15: Streamlit itself keeps the value alive through runs where the widget doesn't render and re-pushes it to the browser when the widget mounts again. The hand-rolled equivalent — re-asserting every stored value from Python on every run (`controls._pin(rewrite=True)`) — is gone, and `_pin` is back to a plain default-if-absent. No setting changed name or behaviour; a new test fails if a widget is added on a persisted key without the kwarg.
 - **Runtime moved to Streamlit 1.61.1** (ENG-31) — from 1.58.0, in one step: `requirements.txt` (`~=1.61.1`), `pyproject.toml` (`>=1.61.1`) and the regenerated lock. The only breaking change that reached this repo is in the tests — Streamlit 1.61 resolves a relative `AppTest.from_file` path against the *calling file* instead of the process CWD, so all seven call sites now pass `tests/conftest.py`'s absolute `APP_SCRIPT`. Everything the release notes flagged was checked and needed no change: the `?embed=true` iframe path (`st.iframe` still treats any string containing `<` as srcdoc, never a file path), the VIZ-21/23 disabled-widget gating under 1.61's server-side enforcement, and the 1.60 query-string / widget-state caps. `docs/security.md` records the two new config surfaces (`server.allowedHosts`, `client.allowedOrigins`), both left at their defaults.
+
+#### Removed
+- **Five helpers nothing referenced** (ENG-28) — `annotations.starred_keys` / `keys_with_tag` / `annotated_count`, `measures.compute_trial_measures` (an unused convenience wrapper), and `tabs._ordered_trial_ids`, whose docstring described "the under-image Prev/Next buttons" — a UI element that no longer exists. Found by the ENG-28 inventory pass, which also established that this is *all* the dead code in the package: at 100% confidence a dead-code scan reports only `@st.cache_data` fingerprint parameters (unused by design — they are the cache key), and no dependency is genuinely unused.
 
 ## [0.27.2] - 2026-08-05
 

@@ -190,3 +190,5 @@ uv.lock
 
 # Stray OneStop CSV exports dropped at the repo root (raw source data)
 /*.csv.zip
+.claude/skills/developing-with-streamlit
+.gitignore

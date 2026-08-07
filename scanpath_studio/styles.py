@@ -314,15 +314,37 @@ def get_app_css() -> str:
         line-height: 1.55 !important;
         white-space: nowrap;
     }
+    /* Flush the cluster's right edge. Each row's trailing control sits in a
+       column that already ends at the container's right edge, but the button
+       inside is content-width and left-aligned, so the three ends were ragged by
+       up to 43px — the most visible way a "one cluster" block reads as three
+       rows. These blocks are flex COLUMNS, so the cross-axis property is
+       `align-items`, not `justify-content`. */
+    .st-key-railbtn_more,
+    .st-key-railbtn_single_sort,
+    .st-key-railbtn_chip_edit { align-items: flex-end; }
+    /* ◀ ▶ are one pair, so they share one column and lay out as a flex ROW (a
+       Streamlit vertical block stacks its children otherwise). A column each
+       left them a full gutter apart once they stopped stretching to fill it. */
+    [class*="st-key-railbtn_"][class*="_step"] {
+        flex-direction: row;
+        /* `!important` because Streamlit sets its own gap on a vertical block,
+           and 0 would butt the two pill outlines into one double-thick line. 3px
+           separates them while they still read as a pair. */
+        gap: 3px !important;
+        align-items: center;
+    }
+    [class*="st-key-railbtn_"][class*="_step"] > div { flex: 0 0 auto; }
     /* The two chip-strip controls — "Details" (summary stats) and ✏️ (edit
        chips) — are additionally nudged down onto the first chip row's baseline:
        the strip wraps, so the columns are TOP-aligned (a centred control would
        drift to the middle of a tall strip), and this offset is the strip's own
-       top margin. UX-11 also fixed the ✏️ sitting visibly high — it was pulled
-       sideways with a negative margin and centred against a one-line strip. */
+       top margin. (UX-11 also fixed the ✏️ sitting visibly high, when it was
+       centred against a one-line strip. Its sideways `margin-left: -0.6rem` is
+       gone as of UX-27 — it was the reason the pencil landed 9.6px short of the
+       other two rows' right edges.) */
     .st-key-railbtn_chip_edit,
     .st-key-railbtn_chip_details { margin-top: 0.1rem; }
-    .st-key-railbtn_chip_edit { margin-left: -0.6rem; }
     /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
        `__num_hi`) exists for typing an *exact* value — the slider beside it
        already handles stepping. It holds a number, not a sentence, so drop the

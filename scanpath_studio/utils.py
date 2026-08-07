@@ -475,10 +475,12 @@ def _select_trial_none_mode(
             # so a separate "Trial X / N" caption is redundant.
             return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_option_label(value)}"
 
-        # One row: [selectbox] [slider] [◀][▶][⇅] — arrows adjacent at the end,
-        # then the UX-10 sort popover.
-        sel_col, slider_col, prev_col, next_col, sort_col = host.columns(
-            [3, 5, 0.55, 0.55, 0.55], vertical_alignment="bottom"
+        # One row: [selectbox] [slider] [◀▶][⇅] — arrows adjacent at the end,
+        # then the UX-10 sort popover. ◀ and ▶ share ONE column (UX-27): a
+        # prev/next pair has to read as a pair, and one column each left them a
+        # gutter apart once they stopped stretching to fill it.
+        sel_col, slider_col, step_col, sort_col = host.columns(
+            [3, 5, 1.1, 0.55], vertical_alignment="bottom"
         )
         # UX-10: order the pool *before* the widgets read `trial_options`, so the
         # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
@@ -538,7 +540,10 @@ def _select_trial_none_mode(
                 label_visibility="collapsed",
                 format_func=_slider_label,
             )
-        prev_col.container(key=f"railbtn_{key_prefix}_prev").button(
+        # Both step buttons in ONE keyed container, which styles.py lays out as a
+        # flex ROW (a Streamlit vertical block stacks its children by default).
+        steps = step_col.container(key=f"railbtn_{key_prefix}_step")
+        steps.button(
             "◀",
             key=f"{key_prefix}_prev_trial" if key_prefix else "prev_trial",
             on_click=_step_trial,
@@ -546,7 +551,7 @@ def _select_trial_none_mode(
             disabled=current_idx == 0,
             help="Previous trial",
         )
-        next_col.container(key=f"railbtn_{key_prefix}_next").button(
+        steps.button(
             "▶",
             key=f"{key_prefix}_next_trial" if key_prefix else "next_trial",
             on_click=_step_trial,

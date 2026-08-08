@@ -1,6 +1,6 @@
 {
  "version": 2,
- "revision": 181,
+ "revision": 187,
  "items": {
   "AN-29": {
    "status": "Closed",
@@ -247,10 +247,10 @@
    "updated": "2026-08-04"
   },
   "EXP-5": {
-   "status": "Review",
+   "status": "Closed",
    "priority": "Normal",
    "implementationBrief": "",
-   "archived": false,
+   "archived": true,
    "updated": "2026-08-08"
   },
   "PERF-2": {
@@ -261,9 +261,9 @@
    "updated": "2026-08-04"
   },
   "PERF-3": {
-   "status": "Review",
+   "status": "In progress",
    "priority": "Normal",
-   "implementationBrief": "",
+   "implementationBrief": "We still ned to make this faster.",
    "archived": false,
    "updated": "2026-08-08"
   },
@@ -447,10 +447,10 @@
    "updated": "2026-08-08"
   },
   "UX-30": {
-   "status": "Review",
+   "status": "Closed",
    "priority": "Normal",
    "implementationBrief": "",
-   "archived": false,
+   "archived": true,
    "updated": "2026-08-08"
   },
   "UX-31": {
@@ -475,10 +475,10 @@
    "updated": "2026-08-08"
   },
   "UX-34": {
-   "status": "Review",
+   "status": "Closed",
    "priority": "Normal",
    "implementationBrief": "",
-   "archived": false,
+   "archived": true,
    "updated": "2026-08-08"
   },
   "UX-35": {

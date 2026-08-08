@@ -475,13 +475,20 @@ def _select_trial_none_mode(
             # so a separate "Trial X / N" caption is redundant.
             return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_option_label(value)}"
 
-        # One row: [selectbox] [slider] [◀▶][⇅] — arrows adjacent at the end,
-        # then the UX-10 sort popover. ◀ and ▶ share ONE column (UX-27): a
-        # prev/next pair has to read as a pair, and one column each left them a
-        # gutter apart once they stopped stretching to fill it.
-        sel_col, slider_col, step_col, sort_col = host.columns(
-            [3, 5, 1.1, 0.55], vertical_alignment="bottom"
+        # One row: [selectbox] [slider] [◀ ▶ ⇅] — the three triggers share ONE
+        # trailing column as a `railbtn_*` cluster (UX-27), which styles.py packs
+        # right at a uniform 3px spacing. A column each put a full gutter between
+        # them, so a prev/next *pair* didn't read as a pair and the group didn't
+        # line up with the **More** row above or the chip row below.
+        sel_col, slider_col, trail_col = host.columns(
+            [3, 5, 1.9], vertical_alignment="bottom"
         )
+        trail = trail_col.container(key=f"railbtn_{key_prefix}_trail")
+        # Created in display order (◀ ▶ then ⇅) but filled out of order: the sort
+        # popover has to render first, because the order it returns is what the
+        # selectbox, the slider and the ◀ ▶ steps all walk.
+        step_col = trail.container(key=f"railbtn_{key_prefix}_step")
+        sort_col = trail.container(key=f"railbtn_{key_prefix}_sort")
         # UX-10: order the pool *before* the widgets read `trial_options`, so the
         # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
         # canonical selection is a trial *id*, so re-sorting never changes which
@@ -492,7 +499,7 @@ def _select_trial_none_mode(
         # narrow column) beside pill-shaped labelled buttons on the rows above
         # and below.
         sort_key, sort_desc, sort_choice = _render_trial_sort_popover(
-            sort_col.container(key=f"railbtn_{key_prefix}_sort"),
+            sort_col,
             combos,
             trial_field,
             key_prefix,
@@ -540,9 +547,10 @@ def _select_trial_none_mode(
                 label_visibility="collapsed",
                 format_func=_slider_label,
             )
-        # Both step buttons in ONE keyed container, which styles.py lays out as a
-        # flex ROW (a Streamlit vertical block stacks its children by default).
-        steps = step_col.container(key=f"railbtn_{key_prefix}_step")
+        # Both step buttons in the keyed container reserved above, which styles.py
+        # lays out as a flex ROW (a Streamlit vertical block stacks its children
+        # by default).
+        steps = step_col
         steps.button(
             "◀",
             key=f"{key_prefix}_prev_trial" if key_prefix else "prev_trial",

@@ -314,27 +314,38 @@ def get_app_css() -> str:
         line-height: 1.55 !important;
         white-space: nowrap;
     }
-    /* Flush the cluster's right edge. Each row's trailing control sits in a
-       column that already ends at the container's right edge, but the button
-       inside is content-width and left-aligned, so the three ends were ragged by
-       up to 43px — the most visible way a "one cluster" block reads as three
-       rows. These blocks are flex COLUMNS, so the cross-axis property is
-       `align-items`, not `justify-content`. */
-    .st-key-railbtn_more,
-    .st-key-railbtn_single_sort,
-    .st-key-railbtn_chip_edit { align-items: flex-end; }
-    /* ◀ ▶ are one pair, so they share one column and lay out as a flex ROW (a
-       Streamlit vertical block stacks its children otherwise). A column each
-       left them a full gutter apart once they stopped stretching to fill it. */
-    [class*="st-key-railbtn_"][class*="_step"] {
+    /* Right-pack every cluster, at one spacing. Each row ends in a trailing
+       column that already stops at the container's right edge, but a Streamlit
+       vertical block is a flex COLUMN of full-width children, so a content-width
+       button sat at the LEFT of its slot: the three rows' ends were ragged by up
+       to 43px, and once the right-most three were flushed the *second* control
+       in each row (◀ ▶, "Details") was still adrift — one full column gutter in
+       from its neighbour, at a different offset per row.
+
+       So a row's trailing controls now share ONE `railbtn_*` container and this
+       rule makes every such container a right-packed flex row. "More" alone,
+       ◀ ▶ ⇅, and Details + ✏️ therefore all end on the same edge with the same
+       3px between neighbours, whatever each row's own column split is. Nesting
+       is intentional (`_trail` > `_step`): the outer cluster fixes the display
+       order, and the inner containers let a trigger be *filled* out of order —
+       the sort popover has to run before the ◀ ▶ it precedes in the DOM. */
+    [class*="st-key-railbtn_"] {
         flex-direction: row;
-        /* `!important` because Streamlit sets its own gap on a vertical block,
-           and 0 would butt the two pill outlines into one double-thick line. 3px
-           separates them while they still read as a pair. */
-        gap: 3px !important;
+        justify-content: flex-end;
         align-items: center;
     }
-    [class*="st-key-railbtn_"][class*="_step"] > div { flex: 0 0 auto; }
+    /* Streamlit gives each child of a vertical block `width: 100%`, so in a flex
+       ROW every child claims the container's full width and the group overflows
+       to the LEFT instead of packing to the right — `width: auto` is what makes
+       each one content-sized. The 3px between neighbours is a margin, not the
+       container's `gap`: Streamlit's own two-class `.stVerticalBlock.st-emotion-*`
+       gap rule outranks a single attribute selector, so `gap` here computes to
+       0 and the pill outlines butt into one double-thick line. */
+    [class*="st-key-railbtn_"] > div {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+    [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
     /* The two chip-strip controls — "Details" (summary stats) and ✏️ (edit
        chips) — are additionally nudged down onto the first chip row's baseline:
        the strip wraps, so the columns are TOP-aligned (a centred control would
@@ -343,8 +354,7 @@ def get_app_css() -> str:
        centred against a one-line strip. Its sideways `margin-left: -0.6rem` is
        gone as of UX-27 — it was the reason the pencil landed 9.6px short of the
        other two rows' right edges.) */
-    .st-key-railbtn_chip_edit,
-    .st-key-railbtn_chip_details { margin-top: 0.1rem; }
+    .st-key-railbtn_chip_trail { margin-top: 0.1rem; }
     /* UX-9: the number box paired with each slider (`<key>__num`, `__num_lo`,
        `__num_hi`) exists for typing an *exact* value — the slider beside it
        already handles stepping. It holds a number, not a sentence, so drop the

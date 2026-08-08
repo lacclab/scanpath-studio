@@ -2013,6 +2013,13 @@ def _apply_title_caption(
     annotate_figure(fig, title=title, caption=caption)
 
 
+#: The auto A/B legend label, written in the pattern language (UX-31). Kept as
+#: the pattern rather than the rendered text so the *same* string can be shown
+#: as the Label A/B placeholder — an empty box and this pattern produce the same
+#: label, which is exactly what the placeholder promises.
+DEFAULT_COMPARE_LABEL_PATTERN = "{participant_id} · {trial_id}"
+
+
 def _resolve_compare_label(
     idx: int,
     participant: Optional[str],
@@ -2851,8 +2858,11 @@ def render_single_trial_tab(
                                 f"Label {side}",
                                 f"cmp{idx}_label_pattern",
                                 label_fields,
-                                help="Leave empty for the default "
-                                "`{participant_id} · {trial_id}`.",
+                                # The auto label shows *in* the box, greyed, so
+                                # what an empty box gives you is readable without
+                                # hovering the tooltip (UX-31).
+                                placeholder=DEFAULT_COMPARE_LABEL_PATTERN,
+                                help="Leave empty for the auto label.",
                             )
                         render_pattern_help(box, label_fields)
         st.divider()
@@ -3054,22 +3064,24 @@ def render_single_trial_tab(
         # middle of a tall strip instead of sitting on the first chip's line.
         # Kept at the top level rather than nesting the controls in one column,
         # so no `st.columns` nesting is involved.
-        strip_col, details_col, edit_col = st.columns(
-            [11, 1.6, 0.9], vertical_alignment="top"
-        )
-        with edit_col:
-            # Keyed container so styles.py can give the trigger the shared
-            # rail-button shape and drop it onto the chip baseline (UX-11/27).
-            edit_box = st.container(key="railbtn_chip_edit")
-            with edit_box.popover(
-                "✏️",
-                help="Edit which fields show as chips above the plot, and drag to "
-                "reorder them.",
-                width="content",
-            ):
-                render_trial_chip_picker(words_all, fixations_all, host=st.container())
+        # UX-27: **Details** and ✏️ share ONE trailing column, as a `railbtn_*`
+        # cluster — styles.py lays every such container out as a right-packed
+        # flex row, so this row's pair ends flush with **More** above it and
+        # ◀ ▶ ⇅ between them, at the same 3px internal spacing.
+        strip_col, trail_col = st.columns([11, 2.5], vertical_alignment="top")
+        trail = trail_col.container(key="railbtn_chip_trail")
+        # Created in display order (Details, then ✏️) but filled out of order:
+        # the popover body needs `summary`, which the strip below computes.
+        details_box = trail.container(key="railbtn_chip_details")
+        edit_box = trail.container(key="railbtn_chip_edit")
+        with edit_box.popover(
+            "✏️",
+            help="Edit which fields show as chips above the plot, and drag to "
+            "reorder them.",
+            width="content",
+        ):
+            render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
-        details_box = details_col.container(key="railbtn_chip_details")
         with strip_col:
             # When comparing, label each chip strip with its trial id coloured to
             # match the scanpath in the overlay (A = primary colour, B = compared

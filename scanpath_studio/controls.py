@@ -1390,15 +1390,28 @@ def render_pattern_help(host, fields: dict) -> None:
 
 
 def render_pattern_input(
-    host, label: str, key: str, fields: dict, *, help: Optional[str] = None
+    host,
+    label: str,
+    key: str,
+    fields: dict,
+    *,
+    help: Optional[str] = None,
+    placeholder: Optional[str] = None,
 ) -> str:
     """A pattern text box with live validation and a rendered preview.
 
     Returns the pattern, or ``""`` when it names a field that does not exist —
     an invalid pattern must not reach a figure or a filename, and the error says
     which placeholder is wrong (see ``export.pattern_error``).
+
+    ``placeholder`` is what an *empty* box falls back to, printed greyed inside
+    the box itself (UX-31). These boxes default to empty — the fallback used to
+    be stated only in the `help` tooltip, so the one thing you need to know
+    before typing (what you get if you don't) needed a hover to find.
     """
-    host.text_input(label, key=key, persist_state="session", help=help)
+    host.text_input(
+        label, key=key, persist_state="session", help=help, placeholder=placeholder
+    )
     value = st.session_state.get(key, "")
     if not value:
         return ""
@@ -3238,6 +3251,11 @@ def sidebar_controls(
                 "Title",
                 "global_title_pattern",
                 _title_caption_fields,
+                # Both boxes are pre-filled with these on the run the toggle is
+                # switched on, so the placeholder only shows once the user has
+                # deliberately cleared one — where it says what typing it back
+                # would give (UX-31).
+                placeholder=DEFAULT_TITLE_PATTERN,
                 help="Leave empty for no title.",
             )
             render_pattern_input(
@@ -3245,6 +3263,7 @@ def sidebar_controls(
                 "Caption",
                 "global_caption_pattern",
                 _title_caption_fields,
+                placeholder=DEFAULT_CAPTION_PATTERN,
                 help="Leave empty for no caption.",
             )
             render_pattern_help(box, _title_caption_fields)

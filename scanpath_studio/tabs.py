@@ -3962,6 +3962,61 @@ def _download_tidy(host, df, *, name, key, label="⬇ Download this table (CSV)"
     )
 
 
+#: Cell text of the "open this trial" button. `st.column_config.ButtonColumn`
+#: takes the button's label from the cell *value*, so this is data, not config.
+_OPEN_TRIAL_LABEL = ":material/open_in_new: Open"
+
+
+def _render_trials_with_open_button(
+    trials: pd.DataFrame, participant: Optional[str], *, key: str
+) -> None:
+    """A per-trial summary table whose rows open the trial (ENG-36).
+
+    Corpus Analysis lists a reader's trials with their numbers; acting on one
+    meant reading its id off the table, switching to the Scanpath view and
+    hunting it down in the picker. Streamlit 1.61's `ButtonColumn` puts the jump
+    in the row it belongs to.
+
+    The click arrives as a *callback*, before the script rebuilds ``combos``, so
+    it can't seed the picker itself — it parks the request via
+    ``url_state.request_trial`` and ``app.main`` applies it once the trial pool
+    exists, the same hop a ``?trial_id=`` deep link takes.
+    """
+    if trials is None or trials.empty or "trial_id" not in trials.columns:
+        st.dataframe(trials, width="stretch", hide_index=True)
+        return
+    click_key = f"{key}_open_trial_click"
+    ids = trials["trial_id"].astype(str).tolist()
+
+    def _open() -> None:
+        # Imported at call time, like the PLOT_CONFIG_SCHEMA read above:
+        # `url_state` imports nothing from here, and this keeps it that way.
+        from scanpath_studio.url_state import request_trial
+
+        click = st.session_state.get(click_key)
+        row = click["row"] if click else None
+        if row is not None and 0 <= row < len(ids):
+            request_trial(participant, ids[row])
+
+    shown = trials.copy()
+    shown.insert(0, "Open", _OPEN_TRIAL_LABEL)
+    st.dataframe(
+        shown,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Open": st.column_config.ButtonColumn(
+                "",
+                type="tertiary",
+                width="small",
+                help="Show this trial's scanpath in the Scanpath view.",
+                on_click=_open,
+                key=click_key,
+            )
+        },
+    )
+
+
 def _apply_min_readers(host, df, min_readers, *, key):
     """Drop under-supported word rows and caption the count (AN-26)."""
     if df is None or df.empty or "enough" not in df.columns or min_readers <= 1:
@@ -4633,17 +4688,26 @@ def render_per_reader_tab(
             frame_fingerprint(words_filtered),
             frame_fingerprint(fix_e),
         )
+        # ENG-36: `st.metric(icon=…)` (1.61). Six numbers in one row read as an
+        # undifferentiated wall; the glyph is what lets you find "the speed one"
+        # without reading every label. Chosen to say what the number *is*, not to
+        # decorate — speed, duration, count, direction of travel.
         specs = [
-            ("wpm", "Reading speed", "{:.0f} wpm"),
-            ("mean_fixation_ms", "Mean fixation", "{:.0f} ms"),
-            ("n_fixations", "Fixations", "{:.0f}"),
-            ("regression_rate", "Regression rate", "{:.0%}"),
-            ("skip_rate", "Skip rate", "{:.0%}"),
-            ("mean_saccade_px", "Mean saccade", "{:.1f} px"),
+            ("wpm", "Reading speed", "{:.0f} wpm", ":material/speed:"),
+            ("mean_fixation_ms", "Mean fixation", "{:.0f} ms", ":material/timer:"),
+            ("n_fixations", "Fixations", "{:.0f}", ":material/blur_on:"),
+            (
+                "regression_rate",
+                "Regression rate",
+                "{:.0%}",
+                ":material/keyboard_backspace:",
+            ),
+            ("skip_rate", "Skip rate", "{:.0%}", ":material/fast_forward:"),
+            ("mean_saccade_px", "Mean saccade", "{:.1f} px", ":material/arrow_range:"),
         ]
         present = [s for s in specs if s[0] in summary]
         cols = st.columns(len(present)) if present else []
-        for col, (skey, label, fmt) in zip(cols, present):
+        for col, (skey, label, fmt, icon) in zip(cols, present):
             value = summary.get(skey)
             pct = (
                 _percentile(cohort[skey], value)
@@ -4655,6 +4719,7 @@ def render_per_reader_tab(
                 fmt.format(value) if value is not None else "—",
                 delta=(f"{pct:.0f}th pct" if pct is not None else None),
                 delta_color="off",
+                icon=icon,
             )
         st.caption(
             f"Reader **{pid}** vs the {max(len(cohort) - 1, 0)} other readers "
@@ -4681,7 +4746,7 @@ def render_per_reader_tab(
                     key="dl_prdr8_reader",
                 )
             with trial_table:
-                st.dataframe(trials, width="stretch", hide_index=True)
+                _render_trials_with_open_button(trials, pid, key="prdr8")
                 _download_tidy(
                     st,
                     trials,
@@ -6640,16 +6705,23 @@ def render_data_inspection_tab(
 
     # 1. Headline dataset counts.
     st.subheader("Dataset statistics")
+    # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
+    # equally-weighted numbers — one glyph per *kind* of thing being counted.
     top_cols = st.columns(6)
-    top_cols[0].metric("Participants", f"{stats['n_participants']:,}")
-    top_cols[1].metric("Texts", f"{stats['n_texts']:,}")
-    top_cols[2].metric("Trials", f"{stats['n_trials']:,}")
-    top_cols[3].metric("Fixations", f"{stats['n_fixations']:,}")
-    top_cols[4].metric("Words", f"{stats['n_words']:,}")
+    top_cols[0].metric(
+        "Participants", f"{stats['n_participants']:,}", icon=":material/group:"
+    )
+    top_cols[1].metric("Texts", f"{stats['n_texts']:,}", icon=":material/article:")
+    top_cols[2].metric("Trials", f"{stats['n_trials']:,}", icon=":material/list_alt:")
+    top_cols[3].metric(
+        "Fixations", f"{stats['n_fixations']:,}", icon=":material/blur_on:"
+    )
+    top_cols[4].metric("Words", f"{stats['n_words']:,}", icon=":material/abc:")
     top_cols[5].metric(
         "Gaze points",
         f"{stats['n_gaze']:,}" if stats["n_gaze"] else "0",
         help="Counts raw gaze samples if provided.",
+        icon=":material/scatter_plot:",
     )
 
     st.divider()

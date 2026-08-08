@@ -355,6 +355,14 @@ through. The basename is kept so the column still matches a row to its stimulus.
 Covered by `tests/test_export.py::TestLocalPathsAreNotExported`, which greps
 every zip member the way this audit did.
 
+**Deployment note (ENG-36).** The fix covers the app's *own* exports. Streamlit's
+built-in toolbar on every `st.dataframe` / `st.data_editor` also offers a CSV
+download, and that one does not pass through `export._write_table` — it serves
+the frame as rendered. On a hosted deployment where that is unwanted, set
+`client.disableDataExport = true` in the deployment's `config.toml`. It is
+deliberately **not** set in the repo: it is app-wide, and on a local install the
+built-in download is a feature, not a leak.
+
 ---
 
 ### S5 · Medium — `frame_fingerprint` does not look at the middle of a frame, so edited data can serve a stale cached result
@@ -436,6 +444,30 @@ per-row hashes were combined with `.sum()`, which is order-invariant, so a frame
 and a `sort_values` of itself — same rows, same index labels — shared a key; they
 are now digested in order. Covered by
 `tests/test_data.py::TestFrameFingerprint`.
+
+**Amended 2026-08-08 (PERF-3): the fingerprint is now memoized per run.**
+`frame_fingerprint` keeps a `threading.local` map of `id(frame) →
+(frame, fingerprint)`, cleared by `data.reset_fingerprint_memo()` at the top of
+`app.main`, so the same frame *object* is hashed once per script run instead of
+~26 times. Recorded here because it is adjacent to this finding, and it is worth
+being precise about what it does and does not change:
+
+- **It does not weaken the content hash.** Two *distinct* frames are still hashed
+  independently and still collide only if their content agrees — a re-uploaded
+  table is a different object, so it takes the full path above.
+- **`id()` reuse cannot happen.** Each entry holds a **strong reference** to its
+  frame, so a memoized frame cannot be collected and its id cannot be reissued to
+  another object while the entry lives.
+- **What it does assume** is that no fingerprinted frame is mutated *in place*
+  part-way through a run — the within-run form of this finding. That holds by
+  construction today (the app's frames are built by `normalize_*` / `filter_*` /
+  `.copy()` and then only read; helpers that add columns do so on a local copy),
+  it is documented beside the memo in `data.py`, and the per-run reset bounds the
+  window to a single script run. Adding an in-place `frame[col] = …` to a
+  long-lived frame would re-open it.
+- Covered by `tests/test_data.py::TestFingerprintMemo` and
+  `tests/test_apptest.py::TestFingerprintMemoIsPerRun` (which pins the reset call
+  itself, since losing it would be silent).
 
 ---
 

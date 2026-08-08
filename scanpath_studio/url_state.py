@@ -695,6 +695,47 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
         st.session_state["_url_trial_applied"] = True
 
 
+#: Where an in-app "open this trial" request waits for `combos` to exist.
+PENDING_TRIAL_KEY = "_pending_trial_selection"
+
+
+def request_trial(participant: Optional[str], trial_id: Optional[str]) -> None:
+    """Ask the app to open ``trial_id`` in the Scanpath view (ENG-36).
+
+    Called from a *callback* — the reader/trial tables in Corpus Analysis have a
+    "go to this trial" button — which runs before the script, so the trial pool
+    it needs (``combos``) does not exist yet. The request is therefore parked and
+    applied by :func:`_apply_pending_trial_selection` once ``main`` has built the
+    pool, which is the same shape as the ``?trial_id=`` deep link and reuses the
+    same seeding.
+    """
+    if not trial_id:
+        return
+    st.session_state[PENDING_TRIAL_KEY] = {
+        "participant_id": str(participant) if participant else None,
+        "trial_id": str(trial_id),
+    }
+    _go_scanpath()
+
+
+def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
+    """Consume a :func:`request_trial` hop, if one is waiting.
+
+    Dropped only once it lands: a pool that is still empty or mid-load would
+    otherwise swallow the request. Unlike the deep-link twin there is no
+    once-flag — each click is its own request, and the key *is* the flag.
+    """
+    selection = st.session_state.get(PENDING_TRIAL_KEY)
+    if not selection:
+        return
+    results = [
+        _restore_selection(selection, combos, key_prefix=prefix)
+        for prefix in _SELECTION_PREFIXES
+    ]
+    if any(results):
+        st.session_state.pop(PENDING_TRIAL_KEY, None)
+
+
 def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
     """Seed the ``col_map_*`` session keys from a saved config's ``column_mapping``
     so a restored config pre-fills the wizard mapping + kept-field choices (and

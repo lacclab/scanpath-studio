@@ -2128,3 +2128,67 @@ class TestFingerprintMemoIsPerRun:
         at.run(timeout=30)
         assert len(calls) == 2
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+
+class TestOpenTrialFromCorpusTable:
+    """ENG-36: a per-trial row in Corpus Analysis can open that trial.
+
+    The click arrives as a *callback*, before `main` rebuilds the trial pool, so
+    it cannot seed the picker itself — `url_state.request_trial` parks it and
+    `_apply_pending_trial_selection` applies it once `combos` exists (the same
+    hop a `?trial_id=` deep link takes). This pins the whole hop, since the two
+    halves live in different modules and neither is meaningful alone.
+    """
+
+    def test_a_parked_request_lands_on_the_trial_and_the_scanpath_view(self):
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        at = _make_apptest()
+        at.run(timeout=60)
+        booted_on = at.session_state["single_trial_id"]
+        assert booted_on, "no trial selected on boot"
+
+        # Park a request for some *other* trial, exactly as the button's callback
+        # does, while sitting on the view the button lives on.
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.run(timeout=60)
+
+        target = "l7_1090_2_1_1_Ele_r0"
+        assert target != booted_on
+        at.session_state[PENDING_TRIAL_KEY] = {
+            "participant_id": None,
+            "trial_id": target,
+        }
+        at.session_state["main_nav"] = "Scanpath Visualization"
+        at.run(timeout=60)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["single_trial_id"] == target
+        # Consumed once it lands, so it can't re-apply over later navigation.
+        assert PENDING_TRIAL_KEY not in at.session_state
+
+    def test_a_request_for_an_absent_trial_is_kept_rather_than_dropped(self):
+        """A pool that is empty or still loading must not swallow the request."""
+
+        def _app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.url_state import (
+                PENDING_TRIAL_KEY,
+                _apply_pending_trial_selection,
+            )
+
+            st.session_state[PENDING_TRIAL_KEY] = {
+                "participant_id": None,
+                "trial_id": "nope",
+            }
+            _apply_pending_trial_selection(pd.DataFrame())
+            st.write(bool(st.session_state.get(PENDING_TRIAL_KEY)))
+
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        at = AppTest.from_function(_app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert at.session_state[PENDING_TRIAL_KEY]["trial_id"] == "nope"

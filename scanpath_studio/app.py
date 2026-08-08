@@ -160,6 +160,7 @@ from scanpath_studio.tour import (
 )
 from scanpath_studio.url_state import (
     _active_view,
+    _apply_pending_trial_selection,
     _apply_uploaded_plot_config,
     _apply_url_preset,
     _apply_url_trial_selection,
@@ -3171,6 +3172,10 @@ def main() -> None:
     # exist — see _apply_url_trial_selection. Runs before the sidebar/tab widgets
     # render so the seeded selection is picked up as their initial value.
     _apply_url_trial_selection(combos)
+    # Same hop, from inside the app: a "go to this trial" button in a Corpus
+    # Analysis table parks its request in a callback (before combos exist) and
+    # it is applied here — see url_state.request_trial (ENG-36).
+    _apply_pending_trial_selection(combos)
 
     # Restore settings + annotations from an uploaded config JSON BEFORE the
     # sidebar widgets render, so they pick up the saved values (see

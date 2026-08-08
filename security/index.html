@@ -2312,6 +2312,13 @@ every exported table (per-trial, aggregate, mega-table; CSV and Parquet) passes
 through. The basename is kept so the column still matches a row to its stimulus.
 Covered by <code>tests/test_export.py::TestLocalPathsAreNotExported</code>, which greps
 every zip member the way this audit did.</p>
+<p><strong>Deployment note (ENG-36).</strong> The fix covers the app's <em>own</em> exports. Streamlit's
+built-in toolbar on every <code>st.dataframe</code> / <code>st.data_editor</code> also offers a CSV
+download, and that one does not pass through <code>export._write_table</code> — it serves
+the frame as rendered. On a hosted deployment where that is unwanted, set
+<code>client.disableDataExport = true</code> in the deployment's <code>config.toml</code>. It is
+deliberately <strong>not</strong> set in the repo: it is app-wide, and on a local install the
+built-in download is a feature, not a leak.</p>
 <hr />
 <h3 id="s5-medium-frame_fingerprint-does-not-look-at-the-middle-of-a-frame-so-edited-data-can-serve-a-stale-cached-result">S5 · Medium — <code>frame_fingerprint</code> does not look at the middle of a frame, so edited data can serve a stale cached result<a class="headerlink" href="#s5-medium-frame_fingerprint-does-not-look-at-the-middle-of-a-frame-so-edited-data-can-serve-a-stale-cached-result" title="Permanent link">&para;</a></h3>
 <p><code>data.py:frame_fingerprint</code> is the explicit cache key for every <code>@st.cache_data</code>
@@ -2384,6 +2391,30 @@ per-row hashes were combined with <code>.sum()</code>, which is order-invariant,
 and a <code>sort_values</code> of itself — same rows, same index labels — shared a key; they
 are now digested in order. Covered by
 <code>tests/test_data.py::TestFrameFingerprint</code>.</p>
+<p><strong>Amended 2026-08-08 (PERF-3): the fingerprint is now memoized per run.</strong>
+<code>frame_fingerprint</code> keeps a <code>threading.local</code> map of <code>id(frame) →
+(frame, fingerprint)</code>, cleared by <code>data.reset_fingerprint_memo()</code> at the top of
+<code>app.main</code>, so the same frame <em>object</em> is hashed once per script run instead of
+~26 times. Recorded here because it is adjacent to this finding, and it is worth
+being precise about what it does and does not change:</p>
+<ul>
+<li><strong>It does not weaken the content hash.</strong> Two <em>distinct</em> frames are still hashed
+  independently and still collide only if their content agrees — a re-uploaded
+  table is a different object, so it takes the full path above.</li>
+<li><strong><code>id()</code> reuse cannot happen.</strong> Each entry holds a <strong>strong reference</strong> to its
+  frame, so a memoized frame cannot be collected and its id cannot be reissued to
+  another object while the entry lives.</li>
+<li><strong>What it does assume</strong> is that no fingerprinted frame is mutated <em>in place</em>
+  part-way through a run — the within-run form of this finding. That holds by
+  construction today (the app's frames are built by <code>normalize_*</code> / <code>filter_*</code> /
+  <code>.copy()</code> and then only read; helpers that add columns do so on a local copy),
+  it is documented beside the memo in <code>data.py</code>, and the per-run reset bounds the
+  window to a single script run. Adding an in-place <code>frame[col] = …</code> to a
+  long-lived frame would re-open it.</li>
+<li>Covered by <code>tests/test_data.py::TestFingerprintMemo</code> and
+  <code>tests/test_apptest.py::TestFingerprintMemoIsPerRun</code> (which pins the reset call
+  itself, since losing it would be silent).</li>
+</ul>
 <hr />
 <h3 id="s6-lowmedium-a-zip-upload-is-decompressed-without-a-size-cap">S6 · Low–Medium — a zip upload is decompressed without a size cap<a class="headerlink" href="#s6-lowmedium-a-zip-upload-is-decompressed-without-a-size-cap" title="Permanent link">&para;</a></h3>
 <p><code>data.py:_read_zipped_table</code> reads every member of an uploaded <code>.zip</code> into memory

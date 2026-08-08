@@ -110,7 +110,7 @@ omit = [
 # A floor, not a target: it fails the build when a change drops coverage
 # meaningfully, without turning every PR into a coverage negotiation. Raise it
 # when the real number has been comfortably above for a while.
-fail_under = 88
+fail_under = 89
 show_missing = true
 exclude_also = [
     "if TYPE_CHECKING:",

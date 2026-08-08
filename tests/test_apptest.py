@@ -15,9 +15,11 @@ import pytest
 from scanpath_studio import controls
 from tests.conftest import (
     APP_SCRIPT,
+    SUBTAB_COMPARISONS,
     SUBTAB_DATA_INSPECTION,
     SUBTAB_EXPORT,
     SUBTAB_KEY,
+    SUBTAB_LINE_ASSIGNMENT,
 )
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -104,9 +106,17 @@ class TestAppLaunches:
         fmt_radios = [r for r in at.radio if list(r.options) == ["HTML", "GIF", "MP4"]]
         assert fmt_radios, "animation export-format radio not found"
         at.session_state["anim_export_format"] = "MP4"
+        # Re-pin the subtab: the tab bar is itself a widget, so any *other*
+        # programmatic change lets it fall back to its default and the panel
+        # under test silently doesn't render — the assertions below would then
+        # pass without ever reaching the rasterized branch (ENG-37).
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        # The rasterized branch really rendered: its options and Render button.
+        assert [s for s in at.select_slider if s.key == "anim_export_scale"]
+        assert [b for b in at.button if b.key == "anim_export_generate"]
 
     def test_single_trial_picker_degrades_without_slider(self):
         # The mode pills are gone — there is just one trial picker now. With a
@@ -2192,3 +2202,139 @@ class TestOpenTrialFromCorpusTable:
         at.run(timeout=30)
         assert not at.exception, at.exception
         assert at.session_state[PENDING_TRIAL_KEY]["trial_id"] == "nope"
+
+
+class TestLazySubtabBodiesStillRender:
+    """ENG-37 — the four on-demand panels are exercised, not just gated.
+
+    PERF-3 made Comparisons / Line assignment / Export / Data Inspection render
+    only when open, which is right for latency but took ~460 lines of `tabs.py`
+    out of every `AppTest` boot. `TestLazySubtabs` above pins the *gating*; these
+    open each panel on the bundled demo and drive it far enough that its body
+    actually runs — the two heaviest (the ten-algorithm drift grid and the
+    same-text generations comparison) are otherwise never executed by any test.
+
+    On the bundled demo rather than the synthetic trial: Comparisons needs a
+    column that can distinguish several readings of one text, and the drift
+    algorithms need more than two text lines to have anything to assign.
+    """
+
+    def test_line_assignment_grid_renders_every_algorithm(self):
+        from scanpath_studio.alignment import ALGORITHMS
+
+        at = _make_apptest()
+        at.run(timeout=120)
+        at.session_state[SUBTAB_KEY] = SUBTAB_LINE_ASSIGNMENT
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # The 11 true-scale figures sit behind a toggle — the panel is expensive
+        # even when open, so it doesn't draw until asked. Set it through session
+        # state rather than `.set_value().run()`: driving a widget makes the tab
+        # bar (itself a widget) fall back to its default, closing the very panel
+        # under test, so the subtab has to be re-pinned on the same run anyway.
+        grid = [t for t in at.toggle if "grid" in (t.label or "").lower()]
+        assert grid, "the comparison-grid toggle should render"
+        at.session_state["align_grid_show"] = True
+        at.session_state[SUBTAB_KEY] = SUBTAB_LINE_ASSIGNMENT
+        at.run(timeout=300)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The panels are Plotly figures embedded as HTML, which AppTest cannot
+        # see into — so assert on the two things around them that only exist once
+        # the grid body has run: the per-panel layout control, and the
+        # sensitivity report, which is computed from real corrections.
+        assert [s for s in at.slider if s.key == "align_grid_ncols"]
+        reported = [
+            df
+            for df in (d.value for d in at.dataframe)
+            if getattr(df, "columns", None) is not None
+            and "average_y_correction" in df.columns
+        ]
+        assert reported, "the drift sensitivity report should render"
+        assert not reported[0].empty
+        # Every algorithm is named in the citations list the panel opens with.
+        cited = " ".join(m.value for m in at.markdown).lower()
+        assert not [a for a in ALGORITHMS if a not in cited]
+
+    def test_comparisons_scores_other_readings_of_the_same_text(self):
+        at = _make_apptest()
+        at.run(timeout=120)
+        at.session_state[SUBTAB_KEY] = SUBTAB_COMPARISONS
+        at.run(timeout=300)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        picker = [s for s in at.selectbox if s.key == "multi_gen_col"]
+        assert picker, "the grouping-column picker should render"
+        text = " ".join(m.value for m in at.markdown)
+        # The similarity table is the point of the panel.
+        assert "Similarity to the selected scanpath" in text
+        assert "Metric convergence" in text
+
+    def test_export_and_data_inspection_bodies_run(self):
+        at = _make_apptest()
+        at.run(timeout=120)
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert [r for r in at.radio if r.key == "bulk_export_scope"]
+
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        at.run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        headings = " ".join(m.value for m in at.markdown)
+        assert "Dataset statistics" in headings or at.dataframe
+
+
+class TestAnimationExportRasterBranch:
+    """ENG-37 — the GIF/MP4 export panel, which no test reached before.
+
+    `_render_animation_export` returns early for HTML, so ~100 lines — the
+    Chrome pre-flight, the resolution and frame-cap controls, the render-time
+    estimate, and the cache that keeps the download button alive across reruns —
+    only run once a rasterized format is picked *and* the Export subtab is still
+    open on that same run.
+    """
+
+    def _panel(self, at, fmt="GIF"):
+        at.session_state["single_animate"] = True
+        at.session_state["anim_export_format"] = fmt
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT
+        return at.run(timeout=60)
+
+    def test_it_warns_before_a_render_that_can_only_fail(self, monkeypatch):
+        """ENG-10's pre-flight: no Chrome, no raster export — say so up front."""
+        from scanpath_studio import tabs as tabs_module
+
+        monkeypatch.setattr(tabs_module, "chrome_available", lambda: False)
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        self._panel(at)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        warnings = " ".join(w.value for w in at.warning)
+        assert "GIF export can't run here" in warnings
+        # …and it still offers the controls, so the warning is advice, not a wall.
+        assert [s for s in at.select_slider if s.key == "anim_export_scale"]
+
+    def test_a_render_failure_is_reported_rather_than_raised(self, monkeypatch):
+        """A Kaleido failure must surface as an app message, not a traceback."""
+        from scanpath_studio import tabs as tabs_module
+        from scanpath_studio.animation_export import AnimationExportError
+
+        monkeypatch.setattr(tabs_module, "chrome_available", lambda: True)
+
+        def _boom(*a, **k):
+            raise AnimationExportError("no browser here")
+
+        monkeypatch.setattr(tabs_module, "export_animation", _boom)
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        self._panel(at, fmt="MP4")
+        render = [b for b in at.button if b.key == "anim_export_generate"]
+        assert render, "the Render button should be offered"
+        at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT
+        render[0].click().run(timeout=120)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        said = " ".join(w.value for w in at.warning) + " ".join(
+            e.value for e in at.error
+        )
+        assert "no browser here" in said or "MP4" in said

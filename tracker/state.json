@@ -1,6 +1,6 @@
 {
  "version": 2,
- "revision": 187,
+ "revision": 190,
  "items": {
   "AN-29": {
    "status": "Closed",
@@ -261,10 +261,10 @@
    "updated": "2026-08-04"
   },
   "PERF-3": {
-   "status": "Review",
+   "status": "Closed",
    "priority": "Normal",
    "implementationBrief": "",
-   "archived": false,
+   "archived": true,
    "updated": "2026-08-08"
   },
   "PRE-1": {
@@ -426,10 +426,10 @@
    "updated": "2026-08-07"
   },
   "UX-27": {
-   "status": "Review",
+   "status": "Closed",
    "priority": "Normal",
    "implementationBrief": "",
-   "archived": false,
+   "archived": true,
    "updated": "2026-08-08"
   },
   "UX-28": {
@@ -454,16 +454,16 @@
    "updated": "2026-08-08"
   },
   "UX-31": {
-   "status": "Review",
+   "status": "Closed",
    "priority": "Normal",
    "implementationBrief": "",
-   "archived": false,
+   "archived": true,
    "updated": "2026-08-08"
   },
   "UX-32": {
-   "status": "In progress",
+   "status": "Review",
    "priority": "Normal",
-   "implementationBrief": "Maybe expose the fields ?",
+   "implementationBrief": "",
    "archived": false,
    "updated": "2026-08-08"
   },

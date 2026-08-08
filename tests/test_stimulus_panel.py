@@ -224,3 +224,112 @@ class TestRender:
         assert "Pick the target" in md
         assert "Response" in md
         assert "Is target span" in md
+
+
+def _unhinted_panel_app():
+    """A corpus whose columns match no name hint at all — the UX-32 case."""
+    import pandas as pd
+
+    from scanpath_studio.tabs import _render_paragraph_panel
+
+    w = pd.DataFrame(
+        {
+            "word_id": [0, 1, 2, 3],
+            "text": ["alpha", "beta", "gamma", "delta"],
+            "focus_region": [False, True, True, False],
+            "probe_text": ["Which one stands out?"] * 4,
+        }
+    )
+    _render_paragraph_panel(w, bare=True)
+
+
+class TestFieldPicker:
+    """UX-32: name-hint detection supplies the defaults, the picker overrides it.
+
+    The panel was "generic when the column *names* cooperate" — a corpus whose
+    critical span is called `focus_region` and whose question is `probe_text` got
+    nothing at all out of it. Exposing the fields is what makes it actually
+    corpus-generic.
+    """
+
+    def _words(self):
+        return pd.DataFrame(
+            {
+                "word_id": [0, 1, 2, 3],
+                "text": ["alpha", "beta", "gamma", "delta"],
+                "focus_region": [False, True, True, False],
+                "is_in_aspan": [True, False, False, False],
+                "probe_text": ["Which one stands out?"] * 4,
+                "question": ["Which colour?"] * 4,
+                "reading_time_ms": [1200] * 4,
+                # Constant boolean: a trial-level fact, not a span.
+                "is_correct": [True] * 4,
+                # Per-word, non-boolean: neither a span nor a trial-level field.
+                "surprisal": [1.0, 2.0, 3.0, 4.0],
+            }
+        )
+
+    def test_candidates_are_wider_than_the_name_hints(self):
+        from scanpath_studio.tabs import _stimulus_field_candidates
+
+        spans, qa = _stimulus_field_candidates(self._words())
+        # Every *varying* boolean column is offerable as a span, hint or no hint.
+        assert set(spans) == {"focus_region", "is_in_aspan"}
+        # Every trial-level column is offerable as a field — including a numeric
+        # one (auto-detection deliberately refuses to guess at those) and a
+        # constant boolean, which is a fact about the trial, not a span.
+        assert set(qa) == {"probe_text", "question", "reading_time_ms", "is_correct"}
+        # Per-word non-boolean data is neither.
+        assert "surprisal" not in spans and "surprisal" not in qa
+        assert "text" not in qa and "word_id" not in qa
+
+    def test_a_dataset_the_hints_miss_can_still_be_shown(self):
+        at = AppTest.from_function(_unhinted_panel_app)
+        at.run()
+        assert not at.exception, at.exception
+        md = " ".join(m.value for m in at.markdown)
+        # Nothing is detected by name here, so nothing shows by default…
+        assert "Which one stands out?" not in md
+        picker = [ms for ms in at.multiselect if ms.key == "stimulus_qa_fields"]
+        assert picker, "the ⚙️ Fields picker should offer the Q&A columns"
+        assert "probe_text" in picker[0].options
+        # …until the user picks them, and then it does.
+        at.session_state["stimulus_qa_fields"] = ["probe_text"]
+        at.session_state["stimulus_span_fields"] = ["focus_region"]
+        at.run()
+        md = " ".join(m.value for m in at.markdown)
+        assert "Which one stands out?" in md
+        assert "Focus region" in md
+
+    def test_switching_corpus_shape_re_seeds_from_detection(self):
+        """A stored pick must not leave the panel blank on another dataset."""
+
+        def _app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.tabs import _stimulus_fields
+
+            first = pd.DataFrame(
+                {
+                    "text": ["a", "b"],
+                    "focus_region": [True, False],
+                    "probe_text": ["q?"] * 2,
+                }
+            )
+            second = pd.DataFrame(
+                {
+                    "text": ["a", "b"],
+                    "is_in_aspan": [True, False],
+                    "question": ["q?"] * 2,
+                }
+            )
+            _stimulus_fields(first)
+            st.session_state["stimulus_qa_fields"] = []  # user clears it
+            st.write(_stimulus_fields(second))  # different corpus shape
+
+        at = AppTest.from_function(_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["stimulus_qa_fields"] == ["question"]
+        assert at.session_state["stimulus_span_fields"] == ["is_in_aspan"]

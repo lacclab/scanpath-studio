@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Title & caption on the figure, live on the rail** (EXP-5)
 - **Per-chip colour highlight, for any dataset** (UX-28)
 - **Editable Compare A/B legend labels** (UX-31)
+- **Pick which columns "Stimulus & questions" shows** (UX-32)
 - **FAQ: "I edited the code and nothing changed?"** (UX-35)
 - **A coverage badge, a published coverage report, and a CI floor** (ENG-37)
 
@@ -53,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-chip colour highlight, for any dataset** (UX-28) — the ✏️ Edit chips popover gained a colour picker per shown field, generalizing what used to be a handful of hardcoded OneStop-only chip colours (difficulty/preview/repeat/correctness), which still apply as defaults until overridden.
 - **Editable Compare A/B legend labels** (UX-31) — the ⚙️ Compare options popover's **Show A/B legend** now has Label A / Label B pattern overrides (same language as the title/caption control above), applied on both the static comparison figure and the dual-animation co-animation, and saved with the rest of the per-scanpath compare styling.
 - **A coverage badge, a published coverage report, and a CI floor** (ENG-37) — `pytest-cov` was a dependency that nothing invoked. Coverage is now configured in `pyproject.toml` (with a `fail_under` floor and the two one-shot data-prep scripts omitted — they walk corpora that cannot exist in CI), a `Coverage` job runs it on every PR and prints the table into the run summary, and the browsable HTML report ships with the docs site so the README badge links to it. No third-party coverage service and no new secret. The audit that came with it closed the thinnest gaps: `experimental_setup.py` (the DPI / pixels-per-degree conversions behind every visual-angle number) went 69% → 100% with hand-computed expectations, `debug_log.py` 47% → 91% including the HTML-escaping of log messages, and `python -m scanpath_studio` is now exercised as a real subprocess. Overall: **90%**.
+- **Pick which columns "Stimulus & questions" shows** (UX-32) — the panel highlights spans and lists question/answer fields by matching column *names*, so a corpus whose critical span is called `focus_region`, or whose question column is `q_text`, got nothing out of it. A **⚙️ Fields** popover now lets you choose both lists yourself: the name matching picks the defaults, and everything else about the trial is offered — every per-word true/false column as a possible span, every trial-level column as a possible field, numeric ones included. Your choice sticks while you step through trials and goes back to auto-detection when you switch to a differently-shaped dataset.
 - **FAQ: "I edited the code and nothing changed?"** (UX-35) — the module-reload / `st.cache_data` gotcha (already documented for contributors) now has an in-app FAQ entry and a `docs/faq.md` entry too, distinguished from the on-device Recovery cache.
 
 #### Fixed

@@ -1072,6 +1072,124 @@ def _detect_question_columns(trial_words: pd.DataFrame) -> list[str]:
     return out
 
 
+#: Columns the Stimulus & questions field picker never offers (UX-32): the
+#: stimulus text itself, word geometry, and the identity columns the trial chips
+#: above the plot already carry.
+_STIMULUS_FIELD_EXCLUDE = frozenset(
+    {
+        "text",
+        "word_id",
+        "line_idx",
+        "x",
+        "y",
+        "width",
+        "height",
+        "participant_id",
+        "trial_id",
+        "text_id",
+        "comprehension_questions",
+    }
+)
+#: Session keys behind the picker. UI-only, like the trial-chip picker they
+#: mirror (`trial_chip_fields`): they choose what a *panel* lists, not anything a
+#: figure renders, so there is nothing for the deep link / CLI / headless API to
+#: carry — see the four-surface note on UX-32.
+_STIMULUS_SPAN_KEY = "stimulus_span_fields"
+_STIMULUS_QA_KEY = "stimulus_qa_fields"
+_STIMULUS_SIG_KEY = "_stimulus_fields_signature"
+
+
+def _stimulus_field_candidates(
+    trial_words: pd.DataFrame,
+) -> tuple[list[str], list[str]]:
+    """(span candidates, Q&A candidates) the picker may offer for this trial.
+
+    Wider than what :func:`_detect_span_columns` / :func:`_detect_question_columns`
+    pick automatically, and deliberately so — auto-detection has to be
+    conservative (it is what produced the `response_time_ms` false positive), but
+    once the user is choosing explicitly the right pool is *everything shaped
+    like* a span or a trial-level field, name hints aside.
+
+    The split is by shape, not by name, and it turns on whether a column *varies
+    across the trial's words*: a boolean that changes word to word marks a span,
+    a boolean that is constant is a trial-level fact (``is_correct``) and belongs
+    with the Q&A fields, exactly as :func:`_detect_question_columns` already
+    treats it. Constant non-boolean columns are Q&A candidates too, numeric ones
+    included — auto-detection refuses to guess at a numeric, but a deliberately
+    picked timing column is a legitimate thing to want on screen.
+    """
+    spans, qa = [], []
+    for col in trial_words.columns:
+        if col in _STIMULUS_FIELD_EXCLUDE:
+            continue
+        series = trial_words[col]
+        varies = series.dropna().nunique() > 1
+        if _is_boolish(series) and bool(series.fillna(False).astype(bool).any()):
+            (spans if varies else qa).append(col)
+        elif not varies:
+            qa.append(col)
+    return spans, qa
+
+
+def _stimulus_fields(trial_words: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """The span + Q&A columns to render, honouring the user's picks (UX-32).
+
+    Auto-detection stays the *default*; the picker only overrides it. The stored
+    choice is re-seeded whenever the candidate pool changes shape — switching to
+    another corpus should go back to what that corpus auto-detects, rather than
+    leaving the panel empty because none of the previous dataset's columns exist
+    — but is left alone while the pool is stable, so stepping through trials
+    doesn't undo a choice.
+    """
+    span_options, qa_options = _stimulus_field_candidates(trial_words)
+    signature = (tuple(span_options), tuple(qa_options))
+    if st.session_state.get(_STIMULUS_SIG_KEY) != signature:
+        st.session_state[_STIMULUS_SIG_KEY] = signature
+        st.session_state[_STIMULUS_SPAN_KEY] = _detect_span_columns(trial_words)
+        st.session_state[_STIMULUS_QA_KEY] = _detect_question_columns(trial_words)
+    spans = [
+        c for c in st.session_state.get(_STIMULUS_SPAN_KEY, []) if c in span_options
+    ]
+    qa = [c for c in st.session_state.get(_STIMULUS_QA_KEY, []) if c in qa_options]
+    return spans, qa
+
+
+def _render_stimulus_field_picker(host, trial_words: pd.DataFrame) -> None:
+    """The ⚙️ Fields popover: which columns this panel highlights and lists.
+
+    UX-32 asked whether this panel is still effectively OneStop-specific. The
+    honest answer was "generic when the column *names* cooperate" — a corpus
+    whose critical span is called `focus_region`, or whose question column is
+    `q_text`, got nothing. This is the escape hatch: name hints pick the
+    defaults, and anything they miss (or wrongly include) is one click away.
+    """
+    span_options, qa_options = _stimulus_field_candidates(trial_words)
+    if not span_options and not qa_options:
+        return
+    with host.popover("⚙️ Fields", width="content"):
+        st.caption(
+            "Which of this dataset's columns the panel highlights and lists. "
+            "Detected by name to begin with — change them here when the naming "
+            "doesn't match, or to add a field the detection skipped."
+        )
+        if span_options:
+            st.multiselect(
+                "Highlighted spans",
+                options=span_options,
+                key=_STIMULUS_SPAN_KEY,
+                help="Per-word true/false columns. Each selected one tints its "
+                "words in the stimulus text and gets a summary line below it.",
+            )
+        if qa_options:
+            st.multiselect(
+                "Question & answer fields",
+                options=qa_options,
+                key=_STIMULUS_QA_KEY,
+                help="Trial-level columns (one value for the whole trial), "
+                "listed under the stimulus text.",
+            )
+
+
 def _render_comprehension_questions(trial_words: pd.DataFrame) -> None:
     """Render structured comprehension questions for the trial's stimulus.
 
@@ -1297,9 +1415,10 @@ def _render_paragraph_panel(
     the panel can sit directly inside a subtab."""
     if "text" not in trial_words.columns or trial_words.empty:
         return
-    span_cols = _detect_span_columns(trial_words)
+    # UX-32: the name-hint detection supplies the defaults; the ⚙️ Fields popover
+    # is what lets a corpus whose columns are named differently use the panel.
+    span_cols, qa_cols = _stimulus_fields(trial_words)
     span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
-    qa_cols = _detect_question_columns(trial_words)
 
     container = (
         st.container()
@@ -1307,7 +1426,10 @@ def _render_paragraph_panel(
         else st.expander("Stimulus & questions", expanded=expanded)
     )
     with container:
-        _render_paragraph_with_spans(trial_words, span_bg)
+        text_col, picker_col = st.columns([9, 1.4], vertical_alignment="top")
+        _render_stimulus_field_picker(picker_col, trial_words)
+        with text_col:
+            _render_paragraph_with_spans(trial_words, span_bg)
 
         # Breathing room between the stimulus text and the question block (generic
         # Q&A fields and/or MultiplEYE's structured comprehension questions).

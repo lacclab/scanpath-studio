@@ -721,19 +721,21 @@ def request_trial(participant: Optional[str], trial_id: Optional[str]) -> None:
 def _apply_pending_trial_selection(combos: pd.DataFrame) -> None:
     """Consume a :func:`request_trial` hop, if one is waiting.
 
-    Dropped only once it lands: a pool that is still empty or mid-load would
-    otherwise swallow the request. Unlike the deep-link twin there is no
-    once-flag — each click is its own request, and the key *is* the flag.
+    Held over only while the pool cannot answer — an *empty* ``combos`` means
+    still loading (the OneStop shard, a big upload), and dropping the request
+    there would lose the click. Once the pool exists the request is resolved one
+    way or the other and cleared either way: a request the pool has genuinely
+    answered "not here" must not sit in session state and then fire later,
+    silently re-pointing the picker the moment a filter change happens to bring
+    that trial back into scope. Unlike the deep-link twin there is no once-flag —
+    each click is its own request, and the key *is* the flag.
     """
     selection = st.session_state.get(PENDING_TRIAL_KEY)
-    if not selection:
+    if not selection or combos is None or combos.empty:
         return
-    results = [
+    for prefix in _SELECTION_PREFIXES:
         _restore_selection(selection, combos, key_prefix=prefix)
-        for prefix in _SELECTION_PREFIXES
-    ]
-    if any(results):
-        st.session_state.pop(PENDING_TRIAL_KEY, None)
+    st.session_state.pop(PENDING_TRIAL_KEY, None)
 
 
 def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:

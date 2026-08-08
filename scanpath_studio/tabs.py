@@ -1090,13 +1090,37 @@ _STIMULUS_FIELD_EXCLUDE = frozenset(
         "comprehension_questions",
     }
 )
-#: Session keys behind the picker. UI-only, like the trial-chip picker they
-#: mirror (`trial_chip_fields`): they choose what a *panel* lists, not anything a
-#: figure renders, so there is nothing for the deep link / CLI / headless API to
-#: carry — see the four-surface note on UX-32.
+#: Session keys behind the picker. UI-only in the four-surface sense — they
+#: choose what a *panel* lists, not anything a figure renders, so there is nothing
+#: for the deep link / CLI / headless API to carry (see the note on UX-32).
+#:
+#: They are still **widget** keys, though, which the trial-chip picker they
+#: otherwise resemble is not (`controls.py` writes `trial_chip_fields` directly).
+#: That difference is load-bearing: Streamlit drops a widget's key at the end of
+#: any run in which the widget did not render, and this panel lives only in the
+#: Scanpath view — so one trip through Corpus Analysis would prune both keys, and
+#: the signature guard below (a plain key, which survives) would then never
+#: re-seed them. Hence `persist_state="session"` on both multiselects, the same
+#: rule as every `global_*` / `single_*` widget.
 _STIMULUS_SPAN_KEY = "stimulus_span_fields"
 _STIMULUS_QA_KEY = "stimulus_qa_fields"
 _STIMULUS_SIG_KEY = "_stimulus_fields_signature"
+
+
+@st.cache_data(show_spinner=False)
+def _c_stimulus_field_candidates(
+    _trial_words: pd.DataFrame, cache_key: tuple
+) -> tuple[list[str], list[str]]:
+    """Cached :func:`_stimulus_field_candidates` (house `_c_*` convention).
+
+    The scan is per-column `dropna().nunique()`, which on a wide schema (OneStop
+    ships ~60 columns) costs ~5 ms — small in isolation, but this panel renders
+    on *every* rerun of the Scanpath view regardless of which subtab is showing,
+    so uncached it was ~15× what the two name-hint detectors it replaced cost.
+    Keyed on the frame fingerprint like every other `_c_*` wrapper, so an edited
+    or re-uploaded corpus re-derives.
+    """
+    return _stimulus_field_candidates(_trial_words)
 
 
 def _stimulus_field_candidates(
@@ -1135,15 +1159,33 @@ def _stimulus_fields(trial_words: pd.DataFrame) -> tuple[list[str], list[str]]:
     """The span + Q&A columns to render, honouring the user's picks (UX-32).
 
     Auto-detection stays the *default*; the picker only overrides it. The stored
-    choice is re-seeded whenever the candidate pool changes shape — switching to
-    another corpus should go back to what that corpus auto-detects, rather than
-    leaving the panel empty because none of the previous dataset's columns exist
-    — but is left alone while the pool is stable, so stepping through trials
-    doesn't undo a choice.
+    choice is re-seeded whenever the dataset changes shape — switching to another
+    corpus should go back to what that corpus auto-detects, rather than leaving
+    the panel empty because none of the previous dataset's columns exist — but is
+    left alone otherwise, so stepping through trials doesn't undo a choice.
+
+    Returns ``(spans, qa)`` and also the option pools, so the picker beside it
+    doesn't scan the frame a second time.
     """
-    span_options, qa_options = _stimulus_field_candidates(trial_words)
-    signature = (tuple(span_options), tuple(qa_options))
-    if st.session_state.get(_STIMULUS_SIG_KEY) != signature:
+    span_options, qa_options = _c_stimulus_field_candidates(
+        trial_words, frame_fingerprint(trial_words)
+    )
+    # The signature is the *column set*, not the derived option pools. Those are
+    # computed from this trial's slice, so a trial whose critical span happens to
+    # be empty classifies that column differently — and keying the re-seed on
+    # them would silently reset the user's picks on that trial, which is the
+    # opposite of what the paragraph above promises.
+    signature = tuple(map(str, trial_words.columns))
+    # Re-seed on a changed candidate pool *or* on a missing key. The second case
+    # should not happen — `persist_state="session"` is what keeps these alive
+    # while the panel is unmounted — but the signature is a plain key and would
+    # survive a pruning that took the widget keys with it, leaving the panel
+    # permanently blank with nothing to trigger a recovery.
+    if (
+        st.session_state.get(_STIMULUS_SIG_KEY) != signature
+        or _STIMULUS_SPAN_KEY not in st.session_state
+        or _STIMULUS_QA_KEY not in st.session_state
+    ):
         st.session_state[_STIMULUS_SIG_KEY] = signature
         st.session_state[_STIMULUS_SPAN_KEY] = _detect_span_columns(trial_words)
         st.session_state[_STIMULUS_QA_KEY] = _detect_question_columns(trial_words)
@@ -1151,10 +1193,10 @@ def _stimulus_fields(trial_words: pd.DataFrame) -> tuple[list[str], list[str]]:
         c for c in st.session_state.get(_STIMULUS_SPAN_KEY, []) if c in span_options
     ]
     qa = [c for c in st.session_state.get(_STIMULUS_QA_KEY, []) if c in qa_options]
-    return spans, qa
+    return spans, qa, span_options, qa_options
 
 
-def _render_stimulus_field_picker(host, trial_words: pd.DataFrame) -> None:
+def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
     """The ⚙️ Fields popover: which columns this panel highlights and lists.
 
     UX-32 asked whether this panel is still effectively OneStop-specific. The
@@ -1162,8 +1204,11 @@ def _render_stimulus_field_picker(host, trial_words: pd.DataFrame) -> None:
     whose critical span is called `focus_region`, or whose question column is
     `q_text`, got nothing. This is the escape hatch: name hints pick the
     defaults, and anything they miss (or wrongly include) is one click away.
+
+    Takes the option pools rather than the frame: `_stimulus_fields` has already
+    derived them for this run, and re-deriving here scanned the words frame a
+    second time on every rerun.
     """
-    span_options, qa_options = _stimulus_field_candidates(trial_words)
     if not span_options and not qa_options:
         return
     with host.popover("⚙️ Fields", width="content"):
@@ -1177,6 +1222,7 @@ def _render_stimulus_field_picker(host, trial_words: pd.DataFrame) -> None:
                 "Highlighted spans",
                 options=span_options,
                 key=_STIMULUS_SPAN_KEY,
+                persist_state="session",
                 help="Per-word true/false columns. Each selected one tints its "
                 "words in the stimulus text and gets a summary line below it.",
             )
@@ -1185,6 +1231,7 @@ def _render_stimulus_field_picker(host, trial_words: pd.DataFrame) -> None:
                 "Question & answer fields",
                 options=qa_options,
                 key=_STIMULUS_QA_KEY,
+                persist_state="session",
                 help="Trial-level columns (one value for the whole trial), "
                 "listed under the stimulus text.",
             )
@@ -1417,7 +1464,7 @@ def _render_paragraph_panel(
         return
     # UX-32: the name-hint detection supplies the defaults; the ⚙️ Fields popover
     # is what lets a corpus whose columns are named differently use the panel.
-    span_cols, qa_cols = _stimulus_fields(trial_words)
+    span_cols, qa_cols, span_options, qa_options = _stimulus_fields(trial_words)
     span_bg = {c: _span_bg_for(c, i) for i, c in enumerate(span_cols)}
 
     container = (
@@ -1427,7 +1474,7 @@ def _render_paragraph_panel(
     )
     with container:
         text_col, picker_col = st.columns([9, 1.4], vertical_alignment="top")
-        _render_stimulus_field_picker(picker_col, trial_words)
+        _render_stimulus_field_picker(picker_col, span_options, qa_options)
         with text_col:
             _render_paragraph_with_spans(trial_words, span_bg)
 
@@ -3986,6 +4033,11 @@ def _render_trials_with_open_button(
         st.dataframe(trials, width="stretch", hide_index=True)
         return
     click_key = f"{key}_open_trial_click"
+    # `click["row"]` is a position in the frame we hand to `st.dataframe`, not in
+    # whatever order the user has clicked the table's headers into — the same
+    # source-position semantics as dataframe *selections* (Streamlit's own
+    # ButtonColumn example indexes `df.iloc[click["row"]]`). So a parallel list
+    # built from that frame stays correct under client-side sorting.
     ids = trials["trial_id"].astype(str).tolist()
 
     def _open() -> None:
@@ -4913,10 +4965,15 @@ def render_per_group_tab(
         )
     _warn_word_only_group_fields(st, fixations_filtered, spec)
     words_g = apply_group(words_filtered, spec or {})
+    # One `apply_group` call, not two: it returns `frame[mask]`, a new full-size
+    # copy, so calling it again just to compute the cache key built a second
+    # corpus-sized frame that nothing else ever saw — and (since PERF-3) parked
+    # it in the fingerprint memo for the rest of the run.
+    fix_in = apply_group(fixations_filtered, spec or {})
     fix_g = _c_enrich_fix(
-        apply_group(fixations_filtered, spec or {}),
+        fix_in,
         words_g,
-        frame_fingerprint(apply_group(fixations_filtered, spec or {})),
+        frame_fingerprint(fix_in),
         frame_fingerprint(words_g),
     )
     n_readers = (

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 192,
+  "revision": 194,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -45,10 +45,10 @@
       "updated": "2026-08-08"
     },
     "BUG-19": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-08"
     },
     "BUG-4": {
@@ -226,10 +226,10 @@
       "updated": "2026-08-07"
     },
     "ENG-36": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-08"
     },
     "ENG-37": {

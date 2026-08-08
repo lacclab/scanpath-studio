@@ -1408,6 +1408,11 @@ def render_pattern_input(
     the box itself (UX-31). These boxes default to empty — the fallback used to
     be stated only in the `help` tooltip, so the one thing you need to know
     before typing (what you get if you don't) needed a hover to find.
+
+    Pass it **only** where an empty box really does produce that string. The
+    Compare A/B labels qualify (empty → the auto ``participant · trial``); the
+    figure title/caption do not (empty → no title at all), and a placeholder
+    there would promise the opposite of what happens.
     """
     host.text_input(
         label, key=key, persist_state="session", help=help, placeholder=placeholder
@@ -3251,11 +3256,11 @@ def sidebar_controls(
                 "Title",
                 "global_title_pattern",
                 _title_caption_fields,
-                # Both boxes are pre-filled with these on the run the toggle is
-                # switched on, so the placeholder only shows once the user has
-                # deliberately cleared one — where it says what typing it back
-                # would give (UX-31).
-                placeholder=DEFAULT_TITLE_PATTERN,
+                # No placeholder here, unlike the Compare A/B labels: a
+                # placeholder promises "this is what an empty box gives you",
+                # and an empty box here gives *no title at all*. Both boxes are
+                # pre-filled with the defaults on the run the toggle is switched
+                # on, so there is nothing an empty one needs to explain (UX-31).
                 help="Leave empty for no title.",
             )
             render_pattern_input(
@@ -3263,7 +3268,6 @@ def sidebar_controls(
                 "Caption",
                 "global_caption_pattern",
                 _title_caption_fields,
-                placeholder=DEFAULT_CAPTION_PATTERN,
                 help="Leave empty for no caption.",
             )
             render_pattern_help(box, _title_caption_fields)

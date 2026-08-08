@@ -333,3 +333,64 @@ class TestFieldPicker:
         assert not at.exception, at.exception
         assert at.session_state["stimulus_qa_fields"] == ["question"]
         assert at.session_state["stimulus_span_fields"] == ["is_in_aspan"]
+
+
+class TestFieldPickerSurvivesAViewSwitch:
+    """The picker's keys must outlive a run that doesn't render the picker.
+
+    Streamlit drops a widget's key at the end of any run in which the widget did
+    not render, and this panel exists only in the Scanpath view — so without
+    `persist_state="session"` one trip through Corpus Analysis silently and
+    *permanently* stripped every span highlight and the whole Q&A block,
+    including the defaults the user never touched. The signature guard couldn't
+    recover it either: that key is a plain one and survives the pruning, so it
+    saw "nothing changed" and never re-seeded. Same shape as
+    `test_canvas_settings_survive_a_corpus_analysis_round_trip`.
+    """
+
+    def test_a_corpus_analysis_round_trip_keeps_the_selection(self):
+        from tests.conftest import APP_SCRIPT
+
+        at = AppTest.from_file(APP_SCRIPT, default_timeout=120)
+        at.run()
+        assert not at.exception, at.exception
+        before_spans = list(at.session_state["stimulus_span_fields"])
+        before_qa = list(at.session_state["stimulus_qa_fields"])
+        assert before_spans and before_qa, "the demo should auto-detect both"
+
+        at.session_state["main_nav"] = "Corpus Analysis"
+        at.run()
+        at.session_state["main_nav"] = "Scanpath Visualization"
+        at.run()
+        assert not at.exception, at.exception
+        assert list(at.session_state["stimulus_span_fields"]) == before_spans
+        assert list(at.session_state["stimulus_qa_fields"]) == before_qa
+
+
+class TestFieldPickerKeepsChoicesAcrossTrials:
+    """Stepping through trials must not silently undo a choice.
+
+    The re-seed guard keys on the dataset's *column set*, not on the derived
+    option pools: those are computed from one trial's slice, so a trial whose
+    critical span happens to be empty classifies that column into the other
+    bucket — and keying on them reset the user's picks on exactly that trial.
+    """
+
+    def _app():
+        import pandas as pd
+        import streamlit as st
+
+        from scanpath_studio.tabs import _stimulus_fields
+
+        common = {"text": ["a", "b"], "question": ["q?"] * 2}
+        # Trial 1: the span column has a True, so it is a span candidate.
+        _stimulus_fields(pd.DataFrame({**common, "is_in_aspan": [True, False]}))
+        st.session_state["stimulus_qa_fields"] = []  # the user clears the Q&A list
+        # Trial 2: same columns, but this trial's span is empty.
+        _stimulus_fields(pd.DataFrame({**common, "is_in_aspan": [False, False]}))
+
+    def test_a_trial_with_an_empty_span_does_not_reset_the_picks(self):
+        at = AppTest.from_function(TestFieldPickerKeepsChoicesAcrossTrials._app)
+        at.run()
+        assert not at.exception, at.exception
+        assert at.session_state["stimulus_qa_fields"] == []

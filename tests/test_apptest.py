@@ -2177,32 +2177,6 @@ class TestOpenTrialFromCorpusTable:
         # Consumed once it lands, so it can't re-apply over later navigation.
         assert PENDING_TRIAL_KEY not in at.session_state
 
-    def test_a_request_for_an_absent_trial_is_kept_rather_than_dropped(self):
-        """A pool that is empty or still loading must not swallow the request."""
-
-        def _app():
-            import pandas as pd
-            import streamlit as st
-
-            from scanpath_studio.url_state import (
-                PENDING_TRIAL_KEY,
-                _apply_pending_trial_selection,
-            )
-
-            st.session_state[PENDING_TRIAL_KEY] = {
-                "participant_id": None,
-                "trial_id": "nope",
-            }
-            _apply_pending_trial_selection(pd.DataFrame())
-            st.write(bool(st.session_state.get(PENDING_TRIAL_KEY)))
-
-        from scanpath_studio.url_state import PENDING_TRIAL_KEY
-
-        at = AppTest.from_function(_app)
-        at.run(timeout=30)
-        assert not at.exception, at.exception
-        assert at.session_state[PENDING_TRIAL_KEY]["trial_id"] == "nope"
-
 
 class TestLazySubtabBodiesStillRender:
     """ENG-37 — the four on-demand panels are exercised, not just gated.
@@ -2338,3 +2312,65 @@ class TestAnimationExportRasterBranch:
             e.value for e in at.error
         )
         assert "no browser here" in said or "MP4" in said
+
+
+class TestPendingTrialRequestDoesNotLinger:
+    """ENG-36 — a request the pool has answered "no" must not fire later.
+
+    `_apply_pending_trial_selection` holds a request over while `combos` is
+    *empty* (still loading), because dropping it there would lose the click. Once
+    the pool exists the answer is final either way: leaving an unmatched request
+    parked would silently re-point the trial picker the moment an unrelated
+    filter change happened to bring that trial into scope.
+    """
+
+    def test_an_unanswerable_request_survives_an_empty_pool(self):
+        def _app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.url_state import (
+                PENDING_TRIAL_KEY,
+                _apply_pending_trial_selection,
+            )
+
+            st.session_state[PENDING_TRIAL_KEY] = {
+                "participant_id": None,
+                "trial_id": "nope",
+            }
+            _apply_pending_trial_selection(pd.DataFrame())
+            st.write("kept")
+
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        at = AppTest.from_function(_app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert at.session_state[PENDING_TRIAL_KEY]["trial_id"] == "nope"
+
+    def test_a_populated_pool_clears_the_request_even_when_it_misses(self):
+        def _app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.url_state import (
+                PENDING_TRIAL_KEY,
+                _apply_pending_trial_selection,
+            )
+
+            st.session_state[PENDING_TRIAL_KEY] = {
+                "participant_id": None,
+                "trial_id": "nope",
+            }
+            combos = pd.DataFrame(
+                {"participant_id": ["p1"], "trial_id": ["t1"], "text_id": ["x"]}
+            )
+            _apply_pending_trial_selection(combos)
+            st.write(PENDING_TRIAL_KEY in st.session_state)
+
+        from scanpath_studio.url_state import PENDING_TRIAL_KEY
+
+        at = AppTest.from_function(_app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert PENDING_TRIAL_KEY not in at.session_state

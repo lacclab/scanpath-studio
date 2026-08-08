@@ -9,7 +9,9 @@ import os
 import re
 import threading
 import uuid
+import weakref
 import zipfile
+from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
@@ -41,16 +43,23 @@ _FINGERPRINT_STRIDE_ROWS = 256
 # and fixations frames `app.main` loaded once. Hashing the same object twice in
 # one run cannot produce two answers, so the second hash onwards is pure waste.
 #
-# The dict holds a **strong reference** to each frame, which is what makes an
-# `id()` key safe: a memoized frame cannot be collected, so its id cannot be
-# handed to a different object while the entry lives. (The `is` re-check below
-# costs nothing and documents the invariant.)
+# Entries hold a **weak** reference to the frame, and the `is` re-check below is
+# what makes an `id()` key safe: a collected frame's id may be reissued to
+# another object, but the entry's ref is dead by then, so the lookup misses. A
+# strong reference would work too — and did, at first — but it pins every frame
+# it has seen. That is worse than it sounds here: `st.cache_data` hands out a
+# fresh object per call, so each run's corpus frames are new objects, and a
+# strong memo kept up to `_FINGERPRINT_MEMO_MAX` of them alive from the end of
+# one run until the top of the next — i.e. for a session's whole idle time, on
+# frames that used to be freed the moment `main()` returned.
 #
 # `threading.local` scopes it to the ScriptRunner thread — one per Streamlit
 # session — so two sessions never share entries and one session's reset can't
 # drop another's. `reset_fingerprint_memo()` at the top of `app.main` bounds the
-# lifetime to a single script run, which bounds both memory and the blast radius
-# of the assumption below.
+# staleness window to a single script run. (Widget callbacks run *before* the
+# script body, so the first fingerprints of a rerun — `controls._compute_trial_filters`
+# — still see the previous run's entries. Harmless: an id hit implies object
+# identity either way, and those frames are the ones about to be reused.)
 #
 # THE ASSUMPTION: a fingerprinted frame is not mutated **in place** part-way
 # through a run. That holds today — the frames the app fingerprints are built by
@@ -63,6 +72,10 @@ _FINGERPRINT_STRIDE_ROWS = 256
 _FINGERPRINT_MEMO = threading.local()
 #: Backstop for a non-Streamlit caller (headless `api.py`, the CLI) that never
 #: reaches `reset_fingerprint_memo`: keep the memo from growing without bound.
+#: A rerun makes ~26 calls, so the app never reaches this; a bulk export does
+#: (`compute_word_metrics` adds two entries per trial), which is why eviction is
+#: least-recently-used rather than clear-everything — the latter threw away the
+#: hot corpus frames to make room for per-trial temporaries.
 _FINGERPRINT_MEMO_MAX = 64
 
 
@@ -115,14 +128,21 @@ def frame_fingerprint(df: Optional[pd.DataFrame]) -> tuple:
         return (0, ())
     memo = getattr(_FINGERPRINT_MEMO, "cache", None)
     if memo is None:
-        memo = _FINGERPRINT_MEMO.cache = {}
-    hit = memo.get(id(df))
-    if hit is not None and hit[0] is df:
+        memo = _FINGERPRINT_MEMO.cache = OrderedDict()
+    key = id(df)
+    hit = memo.get(key)
+    if hit is not None and hit[0]() is df:
+        memo.move_to_end(key)
         return hit[1]
     value = _compute_frame_fingerprint(df)
+    # Drop entries whose frame has already been collected before evicting a live
+    # one — those are pure bookkeeping and cost nothing to lose.
     if len(memo) >= _FINGERPRINT_MEMO_MAX:
-        memo.clear()
-    memo[id(df)] = (df, value)
+        for dead in [k for k, (ref, _) in memo.items() if ref() is None]:
+            del memo[dead]
+    while len(memo) >= _FINGERPRINT_MEMO_MAX:
+        memo.popitem(last=False)
+    memo[key] = (weakref.ref(df), value)
     return value
 
 

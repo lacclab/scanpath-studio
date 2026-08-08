@@ -986,9 +986,8 @@ class TestFingerprintMemo:
         assert len(calls) == 2
 
     def test_the_memo_is_bounded_for_a_caller_that_never_resets(self, monkeypatch):
-        """Headless `api.py` / the CLI never reach `app.main`'s reset, and every
-        entry holds a strong reference to its frame — so the memo has to have a
-        ceiling of its own or a long script would retain every frame it hashed."""
+        """Headless `api.py` / the CLI never reach `app.main`'s reset, so the memo
+        needs a ceiling of its own or a long script accumulates entries."""
         self._counted(monkeypatch)
         frames = [
             pd.DataFrame({"x": [i]})
@@ -1000,3 +999,40 @@ class TestFingerprintMemo:
             len(data_module._FINGERPRINT_MEMO.cache)
             <= data_module._FINGERPRINT_MEMO_MAX
         )
+
+    def test_it_does_not_keep_a_frame_alive(self, monkeypatch):
+        """The entry is a *weak* ref, so memoizing must not pin the frame.
+
+        `st.cache_data` hands out a fresh object per call, so every run's corpus
+        frames are new objects. A strong memo held up to `_FINGERPRINT_MEMO_MAX`
+        of them from the end of one run until the top of the next — a session's
+        whole idle time — on frames that used to be freed when `main()` returned.
+        """
+        import gc
+        import weakref
+
+        self._counted(monkeypatch)
+        df = pd.DataFrame({"x": range(500)})
+        frame_fingerprint(df)
+        ref = weakref.ref(df)
+        del df
+        gc.collect()
+        assert ref() is None, "the memo is pinning the frame"
+
+    def test_eviction_drops_the_coldest_entry_not_everything(self, monkeypatch):
+        """A bulk export overflows the ceiling with per-trial temporaries. Clearing
+        the whole memo there threw away the hot corpus frames to make room for
+        them, so the next `_c_*` call re-hashed from scratch."""
+        calls = self._counted(monkeypatch)
+        hot = pd.DataFrame({"x": range(500)})
+        frame_fingerprint(hot)
+        # Overflow the memo with short-lived frames, touching `hot` throughout —
+        # exactly the per-trial-loop shape.
+        cold = []
+        for i in range(data_module._FINGERPRINT_MEMO_MAX + 10):
+            frame = pd.DataFrame({"x": [i]})
+            cold.append(frame)  # keep alive, so eviction can't cheat via weakrefs
+            frame_fingerprint(frame)
+            frame_fingerprint(hot)
+        # `hot` was hashed once and has stayed memoized throughout.
+        assert calls.count((500, 1)) == 1

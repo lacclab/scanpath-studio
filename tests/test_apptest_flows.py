@@ -377,13 +377,14 @@ class TestBulkExportFlow:
     """The Export subtab, driven end to end: pick formats, press Build export,
     get a zip whose contents match the trial pool and the live plot settings.
 
-    AppTest can't click a ``st.download_button`` (and the bytes it serves live
-    in Streamlit's media-file manager, not in the element tree), so the zip is
-    intercepted at the ``tabs.bulk_export`` seam by a wrapper that still calls
-    the real function. Everything up to and including the button press — the
-    options collected from the widgets, the scope, the trial pool, the figure
-    settings — is the real UI path; only the *delivery* of the bytes is
-    substituted, and the rendered download button is asserted separately.
+    Streamlit 1.59 made ``st.download_button`` drivable from ``AppTest``, and the
+    test clicks the real one — but the bytes it serves still live in Streamlit's
+    media-file manager, not in the element tree, so there is no way to *read* the
+    zip back from the click. The payload is therefore still captured at the
+    ``tabs.bulk_export`` seam by a wrapper that calls the real function.
+    Everything up to and including the button press — the options collected from
+    the widgets, the scope, the trial pool, the figure settings — is the real UI
+    path; only the *inspection* of the bytes is substituted (ENG-36).
     """
 
     @staticmethod
@@ -486,8 +487,15 @@ class TestBulkExportFlow:
             ]
         )
 
-        # The rendered download button is the real delivery path.
-        assert "Download zip" in self._download_labels(at)
+        # The rendered download button is the real delivery path — and since
+        # Streamlit 1.59 it is drivable, so click it rather than only asserting
+        # it exists: that is what proves the button is wired to a live payload
+        # and that the app survives serving it (ENG-36).
+        zip_button = [b for b in at.get("download_button") if b.label == "Download zip"]
+        assert zip_button, "the zip download button should render after a build"
+        zip_button[0].click()
+        at.run(timeout=60)
+        _clean(at, "after clicking the zip download button:")
 
         # Scope "All" ignores the participant filter: the other reader's trials
         # come back, while the picker stays narrowed.

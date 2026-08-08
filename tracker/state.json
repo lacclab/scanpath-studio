@@ -45,9 +45,9 @@
       "updated": "2026-08-08"
     },
     "BUG-19": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
-      "implementationBrief": "Just do your best, you have full authority.",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-08"
     },

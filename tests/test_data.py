@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from scanpath_studio import data as data_module
 from scanpath_studio.controls import (
     BOX_FORMAT_EDGES,
     BOX_FORMAT_ORIGIN,
@@ -26,6 +27,7 @@ from scanpath_studio.data import (
     normalize_words,
     pick_column,
     propose_word_schema,
+    reset_fingerprint_memo,
     trial_id_series,
     trial_mapping_columns,
 )
@@ -920,8 +922,81 @@ class TestFrameFingerprint:
         rows = [{"span": {"a": 1}} for _ in range(3)]
         df = pd.DataFrame({"span": [frozenset({1}) | frozenset() for _ in rows]})
         df["span"] = [object() for _ in range(3)]  # unhashable-to-stringify path
-        first, second = frame_fingerprint(df), frame_fingerprint(df)
+        # Reset between the two calls: the PERF-3 memo would otherwise hand back
+        # the first answer for the same object and this would pass vacuously.
+        first = frame_fingerprint(df)
+        reset_fingerprint_memo()
+        second = frame_fingerprint(df)
         # Either it hashed fine (equal keys) or it failed closed (unique keys) —
         # what must NOT happen is a constant that other frames also produce.
         if first != second:
             assert frame_fingerprint(pd.DataFrame({"span": [1, 2, 3]})) != first
+
+
+class TestFingerprintMemo:
+    """PERF-3: the same frame OBJECT is hashed at most once per run.
+
+    Once the expensive subtabs went lazy, the cache keys themselves were the
+    biggest cost left in a rerun — ~26 calls over the same handful of frames,
+    43% of the run. Hashing one object twice in a run cannot give two answers,
+    so everything after the first is waste.
+    """
+
+    def setup_method(self):
+        reset_fingerprint_memo()
+
+    teardown_method = setup_method
+
+    def _counted(self, monkeypatch):
+        calls = []
+        real = data_module._compute_frame_fingerprint
+
+        def spy(df):
+            calls.append(df.shape)
+            return real(df)
+
+        monkeypatch.setattr(data_module, "_compute_frame_fingerprint", spy)
+        return calls
+
+    def test_the_same_object_is_hashed_once(self, monkeypatch):
+        calls = self._counted(monkeypatch)
+        df = pd.DataFrame({"x": range(500)})
+        keys = [frame_fingerprint(df) for _ in range(5)]
+        assert len(calls) == 1
+        assert len(set(keys)) == 1
+
+    def test_an_equal_but_distinct_frame_still_gets_the_same_key(self, monkeypatch):
+        """The memo is an identity shortcut, never a substitute for the hash —
+        two separate frames with equal content must still share a cache entry."""
+        calls = self._counted(monkeypatch)
+        a = pd.DataFrame({"x": range(500)})
+        b = a.copy()
+        assert frame_fingerprint(a) == frame_fingerprint(b)
+        assert len(calls) == 2
+
+    def test_a_reset_makes_the_next_call_hash_again(self, monkeypatch):
+        """What bounds staleness to a single run: `app.main` resets at the top,
+        so a frame mutated between runs is re-hashed rather than remembered."""
+        calls = self._counted(monkeypatch)
+        df = pd.DataFrame({"x": range(500)})
+        first = frame_fingerprint(df)
+        reset_fingerprint_memo()
+        df.loc[250, "x"] = 999999
+        assert frame_fingerprint(df) != first
+        assert len(calls) == 2
+
+    def test_the_memo_is_bounded_for_a_caller_that_never_resets(self, monkeypatch):
+        """Headless `api.py` / the CLI never reach `app.main`'s reset, and every
+        entry holds a strong reference to its frame — so the memo has to have a
+        ceiling of its own or a long script would retain every frame it hashed."""
+        self._counted(monkeypatch)
+        frames = [
+            pd.DataFrame({"x": [i]})
+            for i in range(data_module._FINGERPRINT_MEMO_MAX + 5)
+        ]
+        for frame in frames:
+            frame_fingerprint(frame)
+        assert (
+            len(data_module._FINGERPRINT_MEMO.cache)
+            <= data_module._FINGERPRINT_MEMO_MAX
+        )

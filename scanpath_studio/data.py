@@ -7,6 +7,7 @@ import io
 import logging
 import os
 import re
+import threading
 import uuid
 import zipfile
 from pathlib import Path
@@ -31,6 +32,43 @@ _FINGERPRINT_FULL_MAX_ROWS = 200_000
 # Above the threshold: rows sampled from each end, plus an evenly-spaced stride.
 _FINGERPRINT_EDGE_ROWS = 64
 _FINGERPRINT_STRIDE_ROWS = 256
+
+# PERF-3. Per-run memo, `id(frame) -> (frame, fingerprint)`.
+#
+# Once the expensive subtabs went lazy the biggest remaining cost in a rerun was
+# the cache keys themselves: ~26 calls, 43% of the run, and the same handful of
+# frame OBJECTS over and over — every `_c_*` wrapper re-fingerprints the words
+# and fixations frames `app.main` loaded once. Hashing the same object twice in
+# one run cannot produce two answers, so the second hash onwards is pure waste.
+#
+# The dict holds a **strong reference** to each frame, which is what makes an
+# `id()` key safe: a memoized frame cannot be collected, so its id cannot be
+# handed to a different object while the entry lives. (The `is` re-check below
+# costs nothing and documents the invariant.)
+#
+# `threading.local` scopes it to the ScriptRunner thread — one per Streamlit
+# session — so two sessions never share entries and one session's reset can't
+# drop another's. `reset_fingerprint_memo()` at the top of `app.main` bounds the
+# lifetime to a single script run, which bounds both memory and the blast radius
+# of the assumption below.
+#
+# THE ASSUMPTION: a fingerprinted frame is not mutated **in place** part-way
+# through a run. That holds today — the frames the app fingerprints are built by
+# `normalize_*` / `filter_*` / `.copy()` and then only read; helpers that add
+# columns (`aggregation.py`) do it to a local copy — and it is the within-run
+# form of the DATA-16 / audit S5 hazard the sampling threshold above is about.
+# If you ever add an in-place `frame[col] = …` to a long-lived frame, either
+# copy instead or the caches downstream of it will serve pre-mutation results
+# for the rest of that run.
+_FINGERPRINT_MEMO = threading.local()
+#: Backstop for a non-Streamlit caller (headless `api.py`, the CLI) that never
+#: reaches `reset_fingerprint_memo`: keep the memo from growing without bound.
+_FINGERPRINT_MEMO_MAX = 64
+
+
+def reset_fingerprint_memo() -> None:
+    """Drop the per-run fingerprint memo. Called once per script run (PERF-3)."""
+    getattr(_FINGERPRINT_MEMO, "cache", {}).clear()
 
 
 def frame_fingerprint(df: Optional[pd.DataFrame]) -> tuple:
@@ -69,9 +107,27 @@ def frame_fingerprint(df: Optional[pd.DataFrame]) -> tuple:
     when switching between two such frames. If even that fails the key becomes
     *unique* rather than zero — an unhashable frame must miss the cache, not
     match every other frame of its shape.
+
+    **The same frame object is only hashed once per run** — see the
+    ``_FINGERPRINT_MEMO`` note above for why that is safe and what it assumes.
     """
     if df is None or getattr(df, "empty", True):
         return (0, ())
+    memo = getattr(_FINGERPRINT_MEMO, "cache", None)
+    if memo is None:
+        memo = _FINGERPRINT_MEMO.cache = {}
+    hit = memo.get(id(df))
+    if hit is not None and hit[0] is df:
+        return hit[1]
+    value = _compute_frame_fingerprint(df)
+    if len(memo) >= _FINGERPRINT_MEMO_MAX:
+        memo.clear()
+    memo[id(df)] = (df, value)
+    return value
+
+
+def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
+    """The actual hash behind :func:`frame_fingerprint`, memo aside."""
     cols = tuple(map(str, df.columns))
     n = int(len(df))
 

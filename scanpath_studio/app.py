@@ -119,6 +119,7 @@ from scanpath_studio.data import (
     propose_word_schema,
     read_table,
     read_tables,
+    reset_fingerprint_memo,
     resolve_stimulus_image_paths,
     trial_keys,
     trial_mapping_columns,
@@ -2733,6 +2734,10 @@ def main() -> None:
         - Handles missing raw gaze data gracefully
     """
     configure_page()
+    # PERF-3: the cache-key memo is scoped to ONE script run — drop last run's
+    # entries before anything fingerprints a frame, so a frame rebuilt this run
+    # is hashed afresh and last run's frames stop being kept alive.
+    reset_fingerprint_memo()
     # Start capturing log records into the in-app debug buffer before any data
     # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
     install_log_capture()

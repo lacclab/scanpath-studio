@@ -2098,3 +2098,33 @@ class TestResetSettings:
             "filter_participants" in at.session_state
             and at.session_state["filter_participants"]
         )
+
+
+class TestFingerprintMemoIsPerRun:
+    """PERF-3: the cache-key memo must be reset at the top of every script run.
+
+    The memo makes the same frame *object* hash once instead of ~26 times, which
+    is safe only because its lifetime is one run: `app.main` clears it before
+    anything fingerprints a frame, so a frame rebuilt (or, in principle, mutated)
+    between runs is hashed afresh rather than remembered. Losing that call is
+    silent — the app keeps working and starts serving pre-change results — so it
+    is pinned here rather than left to the one-line call site.
+    """
+
+    def test_every_run_resets_the_memo(self, monkeypatch):
+        import scanpath_studio.app as app_module
+        from scanpath_studio.data import reset_fingerprint_memo
+
+        calls = []
+
+        def counted() -> None:
+            calls.append(1)
+            reset_fingerprint_memo()
+
+        monkeypatch.setattr(app_module, "reset_fingerprint_memo", counted)
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        assert len(calls) == 1
+        at.run(timeout=30)
+        assert len(calls) == 2
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"

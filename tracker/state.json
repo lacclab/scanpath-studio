@@ -261,9 +261,9 @@
    "updated": "2026-08-04"
   },
   "PERF-3": {
-   "status": "In progress",
+   "status": "Review",
    "priority": "Normal",
-   "implementationBrief": "We still ned to make this faster.",
+   "implementationBrief": "",
    "archived": false,
    "updated": "2026-08-08"
   },

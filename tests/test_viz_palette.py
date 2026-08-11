@@ -346,6 +346,9 @@ class TestTheSelectorStopsClaimingAPalette:
         def picker():
             return next(s for s in at.selectbox if s.label == "Palette")
 
+        palette_descriptions = {entry["description"] for entry in PALETTES.values()}
+        assert palette_descriptions.isdisjoint(c.value for c in at.caption)
+
         picker().set_value("Default (colourblind-safe)").run(timeout=60)
         assert picker().value == "Default (colourblind-safe)"
         assert CUSTOM_PALETTE not in picker().options
@@ -356,6 +359,7 @@ class TestTheSelectorStopsClaimingAPalette:
         at.run(timeout=60)
         assert picker().value == CUSTOM_PALETTE
         assert CUSTOM_PALETTE in picker().options
+        assert not any("Your own colours" in c.value for c in at.caption)
 
     @pytest.mark.parametrize(
         ("saved", "expect_skipped"),

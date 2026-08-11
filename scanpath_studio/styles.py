@@ -291,6 +291,14 @@ def get_app_css() -> str:
         color: #212529;
         border: 1px solid rgba(0, 0, 0, 0.06);
     }
+    /* UX-42: Data source and Filter by share a row but are separate tasks (and
+       separate tour targets). A quiet rule makes that boundary legible; the
+       inset keeps the Filter-by label from sitting directly against it. */
+    .st-key-tour_grp_narrow_by {
+        box-sizing: border-box;
+        border-left: 1px solid var(--sps-border);
+        padding-left: 0.7rem;
+    }
     /* UX-27 — ONE button shape for the three control rows stacked above the
        plot. They are built in three different functions across two modules
        (the Narrow-by/More row and the chip strip's Details/✏️ in tabs.py, the
@@ -394,6 +402,11 @@ def get_app_css() -> str:
     /* Section dividers default to 32px top+bottom margin — far too airy for the
        narrow rail. Tighten them so the sections sit close together. */
     .st-key-scanpath_rail hr { margin: 0.5rem 0 !important; }
+    /* The palette divider meets the first bordered layer card; leave a small
+       extra pause so the rule and the Fixations border do not crowd together. */
+    .st-key-scanpath_rail .st-key-palette_layers_divider {
+        margin-bottom: 0.4rem !important;
+    }
     /* The rail is deliberately narrow — keep its short headers + toggle labels on
        one line so they don't break mid-word (e.g. "Anima\nte") when it's tight. */
     .st-key-scanpath_rail h5,

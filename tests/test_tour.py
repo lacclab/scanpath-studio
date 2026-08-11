@@ -411,3 +411,25 @@ class TestSpotlightSelectorsResolve:
         selectors = [s["selector"] for s in _SPOTLIGHT_STEPS if s.get("selector")]
         duplicates = {s for s in selectors if selectors.count(s) > 1}
         assert not duplicates, f"steps share a spotlight target: {duplicates}"
+
+    def test_data_source_sits_outside_the_filter_spotlight(self):
+        """UX-42: adjacent targets must not be nested inside one highlight."""
+        import inspect
+
+        from scanpath_studio.tabs import render_single_trial_tab
+
+        source = inspect.getsource(render_single_trial_tab)
+        assert "nb_source, nb_filters = st.columns(" in source
+        assert "data_source_renderer(nb_source)" in source
+        assert (
+            'filter_box = nb_filters.container(key="tour_grp_narrow_by")' in source
+        )
+
+    def test_filter_group_has_a_dataset_divider(self):
+        """UX-42: the sibling groups retain a visible boundary between them."""
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        assert ".st-key-tour_grp_narrow_by {" in css
+        assert "border-left: 1px solid var(--sps-border);" in css
+        assert "padding-left: 0.7rem;" in css

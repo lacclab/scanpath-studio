@@ -2344,7 +2344,7 @@ def sidebar_controls(
     _active = _active_palette()
     _palette_options = list(PALETTES) if _active else [CUSTOM_PALETTE, *PALETTES]
     st.session_state["global_palette"] = _active or CUSTOM_PALETTE
-    _palette = viz.selectbox(
+    viz.selectbox(
         "Palette",
         options=_palette_options,
         key="global_palette",
@@ -2356,16 +2356,10 @@ def sidebar_controls(
         "**High contrast** is for projectors. Each one just presets the colour "
         "pickers — change any of them afterwards and this reads **Custom**.",
     )
-    if _palette in PALETTES:
-        viz.caption(PALETTES[_palette]["description"])
-    else:
-        _from = st.session_state.get("_palette_picked", DEFAULT_PALETTE)
-        viz.caption(
-            f"Your own colours, edited from **{_from}**. "
-            "Pick a palette to overwrite them."
-        )
 
-    viz.divider()
+    # Keep the palette controls visually separate from the bordered layer cards.
+    # A keyed wrapper gives the spacing a stable, narrowly scoped CSS hook.
+    viz.container(key="palette_layers_divider").divider()
 
     # Each main layer is an `st.toggle`; the layer's detailed styling lives in a
     # per-layer popover shown only while the layer is on — so the rail shows just

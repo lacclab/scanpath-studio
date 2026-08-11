@@ -2892,31 +2892,35 @@ def render_single_trial_tab(
         # it → which trial*. The Text/Participant multiselects narrow the pool;
         # "More" holds the condition + annotation filters. The specific trial is
         # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
-        # Keyed wrapper so the welcome tour can spotlight the selection row.
-        # UX-34: two keyed containers, not one. The welcome tour has a step for
-        # *narrowing the pool* and a step for *picking a trial*, and while both
-        # rows sat inside one `tour_grp_trial_select` wrapper each step spotlit
-        # the whole block — highlighting both areas when it meant one.
-        with st.container(key="tour_grp_narrow_by"):
-            nb_source, nb_label, nb_text, nb_part, more_col = st.columns(
-                [2.2, 0.9, 2.2, 2.2, 1.1], vertical_alignment="center"
+        # UX-42: Data source and Filter by have separate tour steps, so they need
+        # sibling spotlight targets even though they share one visual row. The
+        # nested columns preserve the existing proportions: 2.2 for the source,
+        # then 0.9 + 2.2 + 2.2 + 1.1 for the narrowing controls.
+        nb_source, nb_filters = st.columns(
+            [2.2, 6.4], vertical_alignment="center"
+        )
+        # Rendered by app (it owns the entry list + the wizard hooks) — see
+        # app.render_data_source_picker; its own `tour_grp_data_source` wrapper
+        # now sits beside, rather than inside, the Filter-by spotlight.
+        if data_source_renderer is not None:
+            data_source_renderer(nb_source)
+
+        filter_box = nb_filters.container(key="tour_grp_narrow_by")
+        nb_label, nb_text, nb_part, more_col = filter_box.columns(
+            [0.9, 2.2, 2.2, 1.1], vertical_alignment="center"
+        )
+        nb_label.markdown("**Filter by**")
+        render_narrow_by(
+            words_all, fixations_all, text_host=nb_text, part_host=nb_part
+        )
+        with more_col:
+            # UX-27: keyed so styles.py can give it the shared rail-button
+            # shape, matching the picker's ◀ ▶ ⇅ and the chip row below.
+            more_pop = st.container(key="railbtn_more").popover(
+                "More", width="content"
             )
-            # Rendered by app (it owns the entry list + the wizard hooks) — see
-            # app.render_data_source_picker; passed in so this row owns the layout.
-            if data_source_renderer is not None:
-                data_source_renderer(nb_source)
-            nb_label.markdown("**Filter by**")
-            render_narrow_by(
-                words_all, fixations_all, text_host=nb_text, part_host=nb_part
-            )
-            with more_col:
-                # UX-27: keyed so styles.py can give it the shared rail-button
-                # shape, matching the picker's ◀ ▶ ⇅ and the chip row below.
-                more_pop = st.container(key="railbtn_more").popover(
-                    "More", width="content"
-                )
-                more_pop.caption("More ways to narrow — conditions & annotations.")
-                render_trial_filters(words_all, fixations_all, host=more_pop)
+            more_pop.caption("More ways to narrow — conditions & annotations.")
+            render_trial_filters(words_all, fixations_all, host=more_pop)
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         # Pass the More-popover filter columns so composite components that are
         # also conditions (e.g. repeated_reading_trial) narrow there, not as a

@@ -2594,23 +2594,23 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     layout = {**DEFAULT_LAYOUT, **st.session_state.get("_author_layout", {})}
     words = layout_text(text, **layout)
-    st.markdown("**Parsed word geometry**")
-    if words.empty:
-        st.info(
-            "Enter stimulus text to create word boxes. The empty canvas is still valid."
-        )
-    else:
-        line_count = int(words["line_idx"].max()) + 1
-        st.caption(
-            f"{len(words)} {'word' if len(words) == 1 else 'words'} across "
-            f"{line_count} {'line' if line_count == 1 else 'lines'} · word ids are "
-            "1-based; line indices are 0-based. Explicit blank lines are retained."
-        )
-        st.dataframe(
-            words[["text", "word_id", "line_idx", "x", "y", "width", "height"]],
-            hide_index=True,
-            width="stretch",
-        )
+    with st.expander("Parsed word geometry", expanded=False):
+        if words.empty:
+            st.info(
+                "Enter stimulus text to create word boxes. The empty canvas is still valid."
+            )
+        else:
+            line_count = int(words["line_idx"].max()) + 1
+            st.caption(
+                f"{len(words)} {'word' if len(words) == 1 else 'words'} across "
+                f"{line_count} {'line' if line_count == 1 else 'lines'} · word ids are "
+                "1-based; line indices are 0-based. Explicit blank lines are retained."
+            )
+            st.dataframe(
+                words[["text", "word_id", "line_idx", "x", "y", "width", "height"]],
+                hide_index=True,
+                width="stretch",
+            )
     for problem in layout_problems(
         words, canvas_width=layout["canvas_width"], margin=layout["margin"]
     ):
@@ -2625,7 +2625,9 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         st.session_state["_author_selected_fixation"] = None
     seed = st.session_state.get("_authored_events_frame", default_events(words))
     last_word = int(words["word_id"].max()) if not words.empty else 1
-    st.caption(
+    canvas_panel = st.container()
+    fixation_table = st.expander("Fixation table", expanded=False)
+    fixation_table.caption(
         "One row per fixation. **Fixation id** is stable; **Order** controls the "
         "reading sequence. X/Y place the marker in screen pixels. **Target word** "
         f"is optional (1–{last_word}) and may be edited independently; blank X/Y "
@@ -2638,7 +2640,7 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     # which `num_rows="dynamic"` cannot add rows to: from there edits land on the
     # wrong rows and rows disappear. Read the edits from the return value only.
     editor_revision = int(st.session_state.get("_author_events_editor_revision", 0))
-    events = st.data_editor(
+    events = fixation_table.data_editor(
         seed,
         key=f"author_events_editor_{editor_revision}",
         num_rows="dynamic",
@@ -2706,13 +2708,14 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         if not words.empty
         else 480,
     )
-    canvas_event = render_authoring_canvas(
-        words,
-        effective_events,
-        canvas_width=layout["canvas_width"],
-        canvas_height=canvas_height,
-        selected_fixation_id=selected,
-    )
+    with canvas_panel:
+        canvas_event = render_authoring_canvas(
+            words,
+            effective_events,
+            canvas_width=layout["canvas_width"],
+            canvas_height=canvas_height,
+            selected_fixation_id=selected,
+        )
     if canvas_event:
         try:
             updated, selected = apply_authoring_event(

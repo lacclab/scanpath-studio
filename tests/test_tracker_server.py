@@ -48,6 +48,14 @@ def test_every_item_belongs_to_a_declared_group() -> None:
     )
 
 
+def test_decision_callout_renders_numbered_list() -> None:
+    source = (TRACKER_DIR / "index.html").read_text()
+
+    assert '<ol>${decisions.map(d => `<li>${inline(d)}</li>`).join("")}</ol>' in source
+    assert ".decisions ol" in source
+    assert ".decisions ul" not in source
+
+
 def test_open_catalog_items_follow_write_up_shape() -> None:
     catalog = _load_catalog()
     state = json.loads((TRACKER_DIR / "state.json").read_text())

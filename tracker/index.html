@@ -205,7 +205,7 @@
     display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
     color: var(--decide); margin-bottom: 5px;
   }
-  .decisions ul { margin: 0; padding-left: 1.25em; }
+  .decisions ol { margin: 0; padding-left: 1.5em; }
   .decisions li { margin: .3em 0; }
   .decisions .hint { margin: .55em 0 0 0; font-size: 12.5px; color: var(--ink-dim); }
   .decide-badge {
@@ -613,7 +613,7 @@
     const decisions = openDecisions(it);
     const decideBox = decisions.length ? `<div class="decisions">
       <strong>Decisions to settle before implementing</strong>
-      <ul>${decisions.map(d => `<li>${inline(d)}</li>`).join("")}</ul>
+      <ol>${decisions.map(d => `<li>${inline(d)}</li>`).join("")}</ol>
       <p class="hint">Answer these in <em>Instructions for implementation</em> below — that is what a
         coding agent reads before starting.</p>
     </div>` : "";

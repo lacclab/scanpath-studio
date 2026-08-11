@@ -2305,19 +2305,18 @@ def render_sidebar_canvas_controls(
     slot=None,
     expanded: bool = False,
     title: str = "Experimental Setup",
+    bare: bool = False,
 ) -> Tuple[int, int, int, str, float, bool]:
     """Render the canvas-geometry, typography and background panel.
 
     These controls let the user match the visualization to the experimental
     display, which is what keeps coordinates and word boxes spatially accurate.
 
-    The panel renders into ``slot`` as its own collapsible expander. **VIZ-31**
-    moved its main home from the sidebar's 📂 Data group into the Scanpath rail
-    (`controls.sidebar_controls(canvas_renderer=…)`), so the figure's fonts, text
-    colour and background sit with the other visual controls; the setup wizard
-    still renders the same panel inline under its own heading with a more
-    specific ``title``. `seed_canvas_state` does the state work and is called
-    first here, so rendering and not-rendering resolve identically.
+    The panel normally renders into ``slot`` as its own collapsible expander.
+    Pass ``bare=True`` when ``slot`` is already the disclosure container, as the
+    compact Scanpath rail does. The setup wizard keeps the standalone expander.
+    `seed_canvas_state` does the state work and is called first here, so rendering
+    and not-rendering resolve identically.
 
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
@@ -2325,9 +2324,8 @@ def render_sidebar_canvas_controls(
     """
     seed_canvas_state(words_filtered, fixations_filtered, data_choice)
     _, font_css = _dataset_font(words_filtered)
-    display = (slot if slot is not None else st.sidebar).expander(
-        title, expanded=expanded
-    )
+    host = slot if slot is not None else st.sidebar
+    display = host if bare else host.expander(title, expanded=expanded)
     canvas_width = display.number_input(
         "Monitor width (px)",
         min_value=100,
@@ -3310,13 +3308,13 @@ def main() -> None:
     ) = seed_canvas_state(words_filtered, canvas_geometry_frame, data_choice)
 
     def canvas_renderer(slot) -> None:
-        """Render the canvas/text panel into the Scanpath rail's reserved slot."""
+        """Render canvas/text controls into the rail's figure disclosure."""
         render_sidebar_canvas_controls(
             words_filtered,
             canvas_geometry_frame,
             data_choice,
             slot=slot,
-            title="🖥️ Canvas & text",
+            bare=True,
         )
 
     # The visualization controls moved out of the sidebar into the Scanpath

@@ -799,7 +799,7 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
     its default so a bad keystroke can't produce a broken zip.
 
     The title/caption pair used to live here too (EXP-2) but moved to the
-    Scanpath rail's **📐 Figure & axes** group (EXP-5), so it's visible on the
+    Scanpath rail's **📐 Figure & canvas** group (EXP-5), so it's visible on the
     live figure and not just at export time; `render_export_options` reads it
     back from there instead of keeping a second, possibly-diverging copy.
     """
@@ -851,7 +851,7 @@ def render_export_options(
     is the whole loaded dataset. Picking the "All" scope switches the scope
     picker — and the export itself — to ``combos_all`` so the sidebar filters
     are ignored. ``title_pattern``/``caption_pattern`` come from the Scanpath
-    rail's **📐 Figure & axes** → *Title & caption on the figure* (EXP-5) —
+    rail's **📐 Figure & canvas** → *Title & caption on the figure* (EXP-5) —
     this panel no longer has its own copy of that setting.
     """
     st = st_module
@@ -978,7 +978,7 @@ def render_export_options(
         if title_pattern or caption_pattern:
             st.caption(
                 "Title & caption on the figure — set on the Scanpath rail's "
-                "**📐 Figure & axes** → *Title & caption on the figure*, and "
+                "**📐 Figure & canvas** → *Title & caption on the figure*, and "
                 "applied here too."
             )
 

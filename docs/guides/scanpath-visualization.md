@@ -17,9 +17,8 @@ choose parent-trial or current-screen scope.
 
 ## Control the layers
 
-The rail beside the plot groups the layers by what they describe. **Quick
-views** and **Palette** sit at the top — often all you need — followed by six
-collapsible sections:
+The **Plot controls** rail beside the plot starts with three **Quick views** and
+a **Palette** — often all you need — followed by five collapsible sections:
 
 | Section | Layers | Use it for |
 | --- | --- | --- |
@@ -27,20 +26,19 @@ collapsible sections:
 | ↗️ Saccades | Saccades | movement direction, reading type, regressions and return sweeps |
 | 📄 Stimulus | Text, Bounding boxes, Stimulus image | verify stimulus geometry and fixation-to-word alignment; compare against the original display |
 | 🔥 Overlays | Heatmap, Raw gaze | spatial concentration by count or duration; millisecond-level gaze samples |
-| 🖥️ Canvas & text | — | monitor geometry, viewing distance, fonts, text colour, plot background |
-| 📐 Figure & axes | — | full-monitor framing, colour bars, axis fields, illustration label |
+| 📐 Figure & canvas | — | monitor geometry, fonts, plot background, full-monitor framing, colour bars, axes and labels |
 
 Each layer section opens the same way: the **on/off toggle** first, then
 **⚙️ style** and **🧹 filter** — appearance and visibility kept apart, so
 "colour the regressions red" and "show only the regressions" don't sit in the
-same list. The two scanpath sections are open by default; the rest start
-collapsed, and a layer's settings appear only while that layer is on. Marker
+same list. Fixations is open by default; the rest start collapsed, and a layer's
+settings appear only while that layer is on. Marker
 size already encodes duration by default, so uniform fixation color is usually
 the clearest starting point.
 
 ### Show screen coordinates
 
-Open **📐 Figure & axes** and turn on **Coordinate grid** to read the stimulus in
+Open **📐 Figure & canvas** and turn on **Coordinate grid** to read the stimulus in
 monitor pixels. Automatic spacing chooses a readable 1/2/5×10ⁿ interval for the
 current range; turn it off to enter an exact major interval. Ticks stay anchored
 to screen-coordinate zero even when the visible range is cropped or negative.
@@ -48,14 +46,14 @@ The grid is off by default and does not shrink or rescale the spatial data area.
 
 ## Filter fixations and saccades
 
-**🧹 Fixation filter** contains duration thresholds, out-of-bounds handling, and
+**Fixations → 🧹 Filter** contains duration thresholds, out-of-bounds handling, and
 the fixation-index range. Marking preserves context; discarding removes points
 from the rendered scanpath.
 
-**🧹 Saccade filter** picks which reading classes are drawn at all — forward,
+**Saccades → 🧹 Filter** picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line
 *and* their direction arrow, which is how you get a regressions-only figure.
-Classes come from the same split as ⚙️ Saccade style → **By type**, so the two
+Classes come from the same split as Saccades → ⚙️ Style → **By type**, so the two
 always agree on what a regression is; clearing the list means *no filter*, not
 an empty plot. Both filters show a badge on the popover button while they are
 active, so a thinned figure never looks like missing data.

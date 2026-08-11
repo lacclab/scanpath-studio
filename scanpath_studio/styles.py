@@ -323,6 +323,13 @@ def get_app_css() -> str:
         line-height: 1.55 !important;
         white-space: nowrap;
     }
+    /* A popover trigger also carries Streamlit's disclosure chevron on its
+       right edge. The shared pill padding above is deliberately tight for
+       ordinary buttons, but would leave that chevron sitting on the outline. */
+    .st-key-railbtn_plot_reset button {
+        padding-left: 0.35rem !important;
+        padding-right: 1.25rem !important;
+    }
     /* Right-pack every cluster, at one spacing. Each row ends in a trailing
        column that already stops at the container's right edge, but a Streamlit
        vertical block is a flex COLUMN of full-width children, so a content-width
@@ -386,18 +393,40 @@ def get_app_css() -> str:
     }
 
     /* Control rail: a subtle card so it reads as a panel, with a hair more
-       breathing room between the stacked toggles than the app-wide gap:0 rule. */
+       breathing room between the stacked toggles than the app-wide gap:0 rule.
+       UX-43 gives it its own scroll area exactly as tall as the plot row: the
+       subtabs live in the next row and can grow without stretching the rail. */
     .st-key-scanpath_rail {
         border: 1px solid var(--sps-border);
         border-radius: 12px;
         padding: 0.55rem 0.85rem 0.35rem;
         background: var(--sps-accent-soft);
+        box-sizing: border-box;
+        height: 100%;
+        max-height: 100%;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        scrollbar-gutter: stable;
         /* UX-29: lets the Quick-view rule below query the rail's own rendered
            width, not the viewport's — the wrap it reacts to comes from the
            sidebar being open/closed, which changes this column's width without
            necessarily crossing a viewport breakpoint. */
         container-type: inline-size;
         container-name: sps-rail;
+    }
+    /* Remove the rail from the row's intrinsic height calculation, then stretch
+       it through the right column. The left (plot) column alone determines the
+       row height; Streamlit's flex row gives the right column that same height. */
+    [data-testid="stColumn"]:has(.st-key-scanpath_rail) {
+        position: relative;
+    }
+    [data-testid="stColumn"]:has(.st-key-scanpath_rail)
+        > [data-testid="stVerticalBlock"] {
+        position: absolute;
+        inset: 0;
+    }
+    [data-testid="stLayoutWrapper"]:has(> .st-key-scanpath_rail) {
+        height: 100%;
     }
     .st-key-scanpath_rail div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .st-key-scanpath_rail h5 { margin: 0.15rem 0 0.1rem; }
@@ -420,7 +449,7 @@ def get_app_css() -> str:
         justify-content: flex-start;
     }
     /* VIZ-31 layer groups (👁️ Scanpath / 📄 Stimulus / 🔥 Overlays / 🖥️ Canvas &
-       text / 📐 Figure & axes). Streamlit gives the expander label
+       text / 📐 Figure & canvas). Streamlit gives the expander label
        `word-break: break-word`, which in a rail this narrow snaps the header
        mid-word ("Scanpa\nth") — the same defect the nowrap rule above prevents
        for toggle labels. Break at spaces only, and give the label the row's
@@ -469,6 +498,17 @@ def get_app_css() -> str:
         .st-key-viz_view_heatmap button p::before { content: "🔥"; }
         .st-key-viz_view_illustration button p::before { content: "✏️"; }
     }
+    /* At an exceptionally narrow rail, two header columns cannot hold a real
+       heading and even a compact popover trigger. Stack just this header and
+       keep the Reset action right-aligned; ordinary rail widths remain a row. */
+    @container sps-rail (max-width: 240px) {
+        .st-key-plot_controls_header [data-testid="stHorizontalBlock"] {
+            flex-direction: column;
+        }
+        .st-key-plot_controls_header [data-testid="stColumn"] {
+            width: 100% !important;
+        }
+    }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
        Streamlit renders captions as theme-text-color at opacity 0.6, which on
@@ -494,14 +534,17 @@ def get_app_css() -> str:
        a valid outline (no h1→h5 jump): the rail/export sections are <h2>, their
        sub-sections <h3>. Pin the visual size back to the original compact look
        (by Streamlit's stable text-derived ids) so the layout is unchanged. */
-    #view-modes, #visualization, #scope, #figures, #also-include {
+    #plot-controls, #scope, #figures, #also-include {
         font-size: 20px !important; line-height: 24px !important;
         font-weight: 600 !important; padding: 6px 0 16px !important;
         /* In the narrow plot-side rail these can wrap; only ever break at a
            space, never mid-word ("Visualizatio↵n"). */
         word-break: normal !important; overflow-wrap: normal !important;
     }
-    #view-modes, #visualization { margin: 2.4px 0 1.6px !important; }
+    #plot-controls {
+        margin: 2.4px 0 1.6px !important;
+        white-space: nowrap;
+    }
     #this-trial, #multiple-trials {
         font-size: 24px !important; line-height: 28.8px !important;
         font-weight: 600 !important; padding: 8px 0 16px !important;
@@ -552,7 +595,7 @@ def get_app_css() -> str:
         }
         /* The pinned section-header sizes (see the heading-level rules above)
            are what push the narrow rail's headers to two lines first. */
-        #view-modes, #visualization, #scope, #figures, #also-include {
+        #plot-controls, #scope, #figures, #also-include {
             font-size: 18px !important; line-height: 22px !important;
         }
     }
@@ -621,6 +664,27 @@ def get_app_css() -> str:
         [data-testid="stElementContainer"]:has(iframe[title*="components.html"]),
         [data-testid="stElementContainer"]:has(iframe[title*="st.iframe"]) {
             overflow-x: auto;
+        }
+    }
+    /* Once the layout is narrow enough to stack/reflow, a nested vertical
+       scroller is more awkward than useful. Return the rail to document flow. */
+    @media (max-width: 900px) {
+        [data-testid="stColumn"]:has(.st-key-scanpath_rail) {
+            position: static;
+        }
+        [data-testid="stColumn"]:has(.st-key-scanpath_rail)
+            > [data-testid="stVerticalBlock"] {
+            position: static;
+        }
+        [data-testid="stLayoutWrapper"]:has(> .st-key-scanpath_rail) {
+            height: auto;
+        }
+        .st-key-scanpath_rail {
+            height: auto;
+            max-height: none;
+            overflow-y: visible;
+            overscroll-behavior-y: auto;
+            scrollbar-gutter: auto;
         }
     }
     </style>

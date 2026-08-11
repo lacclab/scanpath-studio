@@ -13,7 +13,7 @@ fixations using your word boxes and computes its own measures. AOI padding,
 fixation exclusions, and definitions can differ between pipelines. Cross-check
 values used in a publication.
 
-## Does Fixation filter change the measures?
+## Does Fixations → Filter change the measures?
 
 No. Its duration, boundary, and index controls affect the rendered scanpath.
 They do not edit the source tables or recompute the corpus measures.

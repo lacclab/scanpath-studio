@@ -16,7 +16,7 @@ which filter removed it.
 ## 2. Review candidate trials
 
 For each candidate, inspect the default scanpath and turn on **Animate** only
-when timing helps. Open **Fixation filter** and mark:
+when timing helps. Open **Fixations → Filter** and mark:
 
 - out-of-bounds points;
 - fixations below or above your duration thresholds;

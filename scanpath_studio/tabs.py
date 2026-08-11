@@ -81,6 +81,7 @@ from scanpath_studio.controls import (
     render_pattern_input,
     render_trial_chip_picker,
     render_trial_filters,
+    render_viz_reset,
     sidebar_controls,
 )
 from scanpath_studio.data import (
@@ -2760,7 +2761,7 @@ def render_single_trial_tab(
        rail on the right carrying the **view modes** (Animate / Compare) and the
        **visualization controls** (formerly in the sidebar — see
        ``controls.sidebar_controls``, rendered here with ``host=``).
-    3. A full-width **subtab bar** below: 📝 Annotations · Stimulus & questions ·
+    3. A plot-width **subtab bar** directly below it: 📝 Annotations · Stimulus & questions ·
        Export · 🔎 Data Inspection · 🔗 Share. Export folds in the former Bulk
        Export tab (``_render_export_panel``); Data Inspection (the former
        standalone view) renders inline here; Share (the former header popover)
@@ -2782,8 +2783,8 @@ def render_single_trial_tab(
     # --- Plot (left) + control rail (right) -----------------------------------
     # Columns FIRST so the rail starts at the very top, beside the selection —
     # built for the sidebar-closed workflow. The selection menus + chips + plot all
-    # live in the left column; the per-trial subtabs render full-width below. The
-    # rail is kept narrow (the plot is the hero).
+    # live in the left column, including the per-trial subtabs directly below the
+    # plot. The rail is kept narrow (the plot is the hero) and scrolls separately.
     plot_col, rail_col = st.columns([4, 1], gap="large")
     with rail_col:
         rail = st.container(key="scanpath_rail")
@@ -2799,9 +2800,7 @@ def render_single_trial_tab(
         # sibling spotlight targets even though they share one visual row. The
         # nested columns preserve the existing proportions: 2.2 for the source,
         # then 0.9 + 2.2 + 2.2 + 1.1 for the narrowing controls.
-        nb_source, nb_filters = st.columns(
-            [2.2, 6.4], vertical_alignment="center"
-        )
+        nb_source, nb_filters = st.columns([2.2, 6.4], vertical_alignment="center")
         # Rendered by app (it owns the entry list + the wizard hooks) — see
         # app.render_data_source_picker; its own `tour_grp_data_source` wrapper
         # now sits beside, rather than inside, the Filter-by spotlight.
@@ -2813,15 +2812,11 @@ def render_single_trial_tab(
             [0.9, 2.2, 2.2, 1.1], vertical_alignment="center"
         )
         nb_label.markdown("**Filter by**")
-        render_narrow_by(
-            words_all, fixations_all, text_host=nb_text, part_host=nb_part
-        )
+        render_narrow_by(words_all, fixations_all, text_host=nb_text, part_host=nb_part)
         with more_col:
             # UX-27: keyed so styles.py can give it the shared rail-button
             # shape, matching the picker's ◀ ▶ ⇅ and the chip row below.
-            more_pop = st.container(key="railbtn_more").popover(
-                "More", width="content"
-            )
+            more_pop = st.container(key="railbtn_more").popover("More", width="content")
             more_pop.caption("More ways to narrow — conditions & annotations.")
             render_trial_filters(words_all, fixations_all, host=more_pop)
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
@@ -2848,6 +2843,13 @@ def render_single_trial_tab(
         compare_slot = st.container()
         chips_slot = st.container(key="tour_grp_chips")
         plot_slot = st.container(key="tour_grp_plot")
+
+    # UX-43: a second row repeats the 4:1 split and reserves only its left side
+    # for the per-trial panels. Keeping the slot OUT of the plot/rail row means
+    # an open Annotations (or any other) panel cannot make the rail taller than
+    # the plot above it; the blank right cell preserves exact plot-column width.
+    subtabs_col, _ = st.columns([4, 1], gap="large")
+    subtabs_slot = subtabs_col.container(key="tour_grp_subtabs")
 
     if not (selected_participant and selected_trial):
         return
@@ -2930,16 +2932,21 @@ def render_single_trial_tab(
     # comparison selection is known — so a second chip strip can show the compared
     # trial too.
 
-    # Render the rail (view modes + viz controls) before the figure so it sees the
+    # Render the rail (plot controls) before the figure so it sees the
     # resolved Animate / Compare / viz settings; its right-side position is fixed
     # by the column split regardless of render order.
     with rail:
+        # UX-44: modes, presets, palette and layers are one control system. Keep
+        # one heading for the rail and put the scoped reset beside it instead of
+        # spending a full-width row at the foot of the scroll area.
+        with st.container(key="plot_controls_header"):
+            rail_heading, rail_reset = st.columns(
+                [1.6, 1], gap="small", vertical_alignment="center"
+            )
+            rail_heading.markdown("## 🎛️ Plot controls")
+            with rail_reset.container(key="railbtn_plot_reset"):
+                render_viz_reset(st, compact=True)
         with rail.container(key="tour_grp_view_modes"):
-            # UX-30: a neutral section icon. 🎬 belongs to **Animate** (it is on
-            # that toggle), so using it for the header made the whole section read
-            # as being about animation — with ⚖️ Compare sitting under it. 🎛️ says
-            # "mode switch", and matches the house set (👁️ 📄 🔥 🎨 📐 🖥️).
-            st.markdown("## 🎛️ View modes")
             # Animate styled like a layer: a toggle + a ⚙ popover for its config
             # (playback speed) — matching Compare and the visualization layers below.
             # Seeded, not `value=`-defaulted: `single_animate` is restored pre-widget
@@ -3161,8 +3168,6 @@ def render_single_trial_tab(
                                 help="Leave empty for the auto label.",
                             )
                         render_pattern_help(box, label_fields)
-        st.divider()
-        st.markdown("## 🎨 Visualization")
         # The visualization controls moved out of the sidebar into this rail
         # (host=rail) so they sit beside the plot with the sidebar closed.
         viz_settings = sidebar_controls(
@@ -3560,12 +3565,11 @@ def render_single_trial_tab(
             )
             _render_true_scale_chart(displayed_fig, key="single")
 
-    # Per-trial panels sit BELOW the plot as a single full-width subtab bar (they
-    # must be created outside the columns to span the page width). Trial Info is
-    # gone — the chip strip above the plot now carries the trial's identity,
-    # conditions and summary stats (configurable via the sidebar 🏷️ Trial chips).
-    # Keyed wrapper so the welcome tour can spotlight the per-trial subtab bar.
-    with st.container(key="tour_grp_subtabs"):
+    # Per-trial panels sit directly BELOW the plot, in the next row's left column. Trial
+    # Info is gone — the chip strip above the plot now carries the trial's identity,
+    # conditions and summary stats (configurable via the ✏️ chip editor).
+    # The reserved keyed slot remains the welcome-tour spotlight target.
+    with subtabs_slot:
         (
             tab_annot,
             tab_stim,

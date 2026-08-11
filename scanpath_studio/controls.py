@@ -454,7 +454,7 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_colorbar_orientation": "Vertical",
     "global_colorbar_tickangle": 0,
     "global_colorbar_tickfont_size": 12,
-    # EXP-5: title/caption on the figure (Figure & axes group). Off by default;
+    # EXP-5: title/caption on the figure (Figure & canvas group). Off by default;
     # the two patterns are only meaningful while the toggle is on — see
     # `_collect_viz_settings`, which reports them empty otherwise.
     "global_show_title_caption": False,
@@ -2225,6 +2225,30 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
+def render_viz_reset(host, *, compact: bool = False) -> None:
+    """Render the scoped visualization reset popover into ``host``."""
+    label = "↺ Reset" if compact else "♻️ Reset settings"
+    reset = host.popover(
+        label,
+        width="content" if compact else "stretch",
+        help="Reset visualization settings to their defaults.",
+    )
+    reset.caption(
+        "Put every visualization control back to the app's defaults. Your "
+        "**annotations**, trial filters, column mapping, data source and the "
+        "selected trial are kept."
+    )
+    reset.button(
+        "♻️ Reset visualization",
+        key="reset_viz_settings_btn",
+        type="primary",
+        on_click=reset_viz_settings,
+        width="stretch",
+        help="Every layer, colour, size and axis control back to its default — "
+        "including the settings a Share link put there.",
+    )
+
+
 def sidebar_controls(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
@@ -2238,13 +2262,12 @@ def sidebar_controls(
 ) -> Dict:
     """Render the visualization controls and return the resolved settings dict.
 
-    Layout (VIZ-31 — grouped, so the rail opens short and reads by category):
+    Layout (VIZ-31 / UX-44 — grouped so the rail reads by category):
       1. Quick-view presets + Palette at the top: the two controls that get to a
          good figure without opening anything.
-      2. Six collapsible sections, in this order — **👁️ Fixations** and
-         **↗️ Saccades** (the two expanded by default), **📄 Stimulus** (text,
-         bounding boxes, stimulus image), **🔥 Overlays** (heatmap, raw gaze),
-         the canvas/text panel, and **📐 Figure & axes**.
+      2. Five collapsible sections — **👁️ Fixations** (expanded), then collapsed
+         **↗️ Saccades**, **📄 Stimulus**, **🔥 Overlays**, and
+         **📐 Figure & canvas** (canvas/text plus axes/labels).
       3. Inside a section: **layer toggle → ⚙️ style → 🧹 filter**, the detail
          popovers shown only while the layer is on. Streamlit nests neither
          expander-in-expander nor popover-in-popover, so an expander holding
@@ -2330,7 +2353,7 @@ def sidebar_controls(
         args=("illustration",),
     )
     # VIZ-31: the Illustration *label* (the publication-disclosure override) now
-    # lives in the "📐 Figure & axes" group below, with the other figure-level
+    # lives in the "📐 Figure & canvas" group below, with the other figure-level
     # presentation settings, rather than as a third top-level row up here.
 
     # VIZ-18: these figures end up in papers — printed, sometimes in black &
@@ -2368,7 +2391,7 @@ def sidebar_controls(
     # Values for off layers are read back from session_state by
     # `_collect_viz_settings`, so the returned dict always carries every key.
 
-    # VIZ-21: the two view modes (rail → 🎬 View modes, rendered *before* this
+    # VIZ-21: the two view modes (rail → 🎛️ Plot controls, rendered *before* this
     # function) route the figure through different builders, and each ignores a
     # different slice of these controls. Read both flags and gate every affected
     # widget through `_mode_gate` — greyed with a reason, never silently ignored,
@@ -2411,23 +2434,17 @@ def sidebar_controls(
     # "Scanpath" group holding two sub-sections: the sub-section level is spent
     # on style/filter, where it earns more than on the layer split.
     #
-    # Both scanpath sections open by default; the rest stay collapsed. Together
-    # they show exactly what the single expanded "Scanpath" group used to (two
-    # toggles + their popovers), so nothing that was visible became hidden, and
-    # the Quick views above still cover the common combinations without opening
-    # anything at all.
+    # Fixations opens because it is the primary layer; Saccades and the less-used
+    # groups stay collapsed so the independent rail starts compact. The preset row
+    # above still covers the common combinations without opening anything at all.
     fix_grp = viz.expander("👁️ Fixations", expanded=True)
-    sac_grp = viz.expander("↗️ Saccades", expanded=True)
+    sac_grp = viz.expander("↗️ Saccades", expanded=False)
     stim_grp = viz.expander("📄 Stimulus", expanded=False)
     ovl_grp = viz.expander("🔥 Overlays", expanded=False)
-    # Filled by `canvas_renderer` (app.render_sidebar_canvas_controls) at the end
-    # of this function — a plain container so it holds this slot in the order
-    # while the panel itself renders later. VIZ-31 moved that panel out of the
-    # sidebar's "Experimental Setup" expander: text colour, plot background, font
-    # and line spacing are figure styling and belong beside the other visual
-    # controls, not one panel away under a data-collection heading.
-    canvas_slot = viz.container()
-    axes_grp = viz.expander("📐 Figure & axes", expanded=False)
+    # Canvas/text and the former Figure/axes controls share one disclosure: both
+    # describe the figure's framing rather than a data layer. The injected canvas
+    # renderer writes directly into this expander (not a nested expander).
+    figure_grp = viz.expander("📐 Figure & canvas", expanded=False)
 
     # --- Fixations --------------------------------------------------------
     # The Fixations toggle reaches the static figure AND Compare (CMP-7 — the
@@ -2455,7 +2472,7 @@ def sidebar_controls(
     # …but the styling below is still (partly) live in those modes, so keep the
     # popover reachable even when the (inert) layer toggle reads off.
     if show_fix or fix_off_disabled:
-        with fix_grp.popover("⚙️ Fixation style", width="stretch"):
+        with fix_grp.popover("⚙️ Style", width="stretch"):
             # The metric that maps to fixation HUE — applies to the static
             # figure, the single animated replay AND the comparison overlay (in
             # compare it colours both scanpaths by the metric; the per-scanpath
@@ -2547,7 +2564,7 @@ def sidebar_controls(
             # Drift-correction selectbox, which made it read as a
             # drift-correction option. It is not — it's the fixation half of
             # the VIZ-9 *linear-reading schematic* (its partner, arcing
-            # saccades, is Saccade style → Line shape → Arc). Keep it under
+            # saccades, is Saccades → Style → Line shape → Arc). Keep it under
             # Fixations (it moves fixations), but in its own captioned block
             # so the two are never confused.
             st.divider()
@@ -2565,7 +2582,7 @@ def sidebar_controls(
                     "on, so the scanpath reads as a diagram rather than as "
                     "recorded gaze. Drift correction (above) instead nudges the "
                     "raw coordinates onto their true text line. Pairs with "
-                    "Saccades → ⚙️ Saccade style → Line shape → **Arc**.",
+                    "Saccades → ⚙️ Style → Line shape → **Arc**.",
                     static_reason,
                 ),
             )
@@ -2693,7 +2710,7 @@ def sidebar_controls(
     _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
     if show_fix or fix_off_disabled:
         with fix_grp.popover(
-            f"🧹 Fixation filter{_fixation_filter_badge()}",
+            f"🧹 Filter{_fixation_filter_badge()}",
             width="stretch",
             help=_gated_help(
                 "Highlight or hide short, long, and out-of-bounds fixations.",
@@ -2711,7 +2728,7 @@ def sidebar_controls(
         "**Saccades**", key="global_show_saccades", persist_state="session"
     )
     if show_saccades:
-        with sac_grp.popover("⚙️ Saccade style", width="stretch"):
+        with sac_grp.popover("⚙️ Style", width="stretch"):
             # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
             # (each arrowhead un-masks with the saccade it belongs to), so
             # direction arrows now reach all three builders.
@@ -2825,7 +2842,7 @@ def sidebar_controls(
                 help=_gated_help(
                     "Straight connectors, or upward **arcs** over the text "
                     "(the classic linear-reading diagram). Pairs with Fixations → "
-                    "⚙️ Fixation style → **Snap fixations above words**.",
+                    "Fixations → ⚙️ Style → **Snap fixations above words**.",
                     class_reason,
                 ),
             )
@@ -2844,7 +2861,7 @@ def sidebar_controls(
     if show_saccades:
         _cls_dis, _cls_reason = _mode_gate(animating, comparing, **_static_only)
         with sac_grp.popover(
-            f"🧹 Saccade filter{_saccade_filter_badge()}",
+            f"🧹 Filter{_saccade_filter_badge()}",
             width="stretch",
             help=_gated_help(
                 "Draw only some reading classes — forward, skip, refixation, "
@@ -3226,21 +3243,23 @@ def sidebar_controls(
             "illustration — it is not recorded eye-tracker output."
         )
 
-    # --- Canvas & text ----------------------------------------------------
-    # Rendered into the slot reserved above, so it lands between Overlays and
-    # Figure & axes no matter where this call sits. The panel owns its own
-    # expander (and its own title), so there is nothing to wrap here.
+    # --- Figure & canvas --------------------------------------------------
+    # The renderer is bound by app.main and writes its canvas/text controls
+    # directly into the shared disclosure, followed by the figure/axis controls.
     if canvas_renderer is not None:
-        canvas_renderer(canvas_slot)
+        figure_grp.caption("**Canvas & text**")
+        canvas_renderer(figure_grp)
 
+    figure_grp.divider()
+    figure_grp.caption("**Axes & labels**")
     # --- Figure & axes (figure-level presentation, rarely changed) --------
     # VIZ-31 renamed this group from "Axes & color bars": it now also carries the
     # Illustration-label override, which used to sit as a top-level row directly
-    # under the Quick views. It is a publication-disclosure setting about how the
+    # under the view presets. It is a publication-disclosure setting about how the
     # figure is *presented*, so it belongs with the framing controls rather than
     # in the layer run — the ✏️ Illustration quick view is still the thing that
     # turns the mode on.
-    axes = axes_grp
+    axes = figure_grp
     axes.selectbox(
         "Illustration label",
         options=["Auto", "Show", "Hide"],
@@ -3414,33 +3433,9 @@ def sidebar_controls(
             )
             render_pattern_help(box, _title_caption_fields)
 
-    # UX-26: the clean slate sits at the *foot* of the rail, below every section
-    # it undoes — a reset is where you land after scrolling the controls, not a
-    # peer of the Quick views. Scope is the visualization only: the trial filters
-    # have their own "✕ Clear all filters" in the More popover, next to the
-    # widgets it clears. Behind a popover rather than a bare button — a session of
-    # tweaking goes away, and the scope needs saying out loud. The button is an
-    # `on_click` callback; see `reset_viz_settings` for why that is the only safe
-    # shape here.
-    _reset = viz.popover("♻️ Reset settings", width="stretch")
-    _reset.caption(
-        "Put every visualization control back to the app's defaults. Your "
-        "**annotations**, trial filters, column mapping, data source and the "
-        "selected trial are kept."
-    )
-    _reset.button(
-        "♻️ Reset visualization",
-        key="reset_viz_settings_btn",
-        type="primary",
-        on_click=reset_viz_settings,
-        width="stretch",
-        help="Every layer, colour, size and axis control back to its default — "
-        "including the settings a Share link put there.",
-    )
-
     # Build the dict from session_state so it matches viz_settings_from_state
     # exactly; then fill in the per-scanpath comparison styling, shown only when
-    # the Compare toggle (rail view-modes section) is on, so all styling sits here.
+    # the Compare toggle (rail plot-controls section) is on, so all styling sits here.
     settings = _collect_viz_settings(
         trial_fixations,
         words,

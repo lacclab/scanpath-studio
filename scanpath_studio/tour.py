@@ -271,7 +271,7 @@ _STEPS = [
         "Narrow trials by participant or condition. Each tab has its own trial picker.",
     ),
     (
-        "🎨 Visualization controls",
+        "🎛️ Plot controls",
         "Toggle and style every layer — fixations, saccades, heatmap, word boxes, "
         "text. **Experimental Setup** sets your monitor so it stays true-to-scale.",
     ),
@@ -472,7 +472,7 @@ _SPOTLIGHT_STEPS = [
     {
         "selector": ".st-key-tour_grp_viz_controls",
         "in_sidebar": False,
-        "title": "🎨 Visualization",
+        "title": "🎛️ Plot controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
         "boxes, text. **Quick views** jump between Scanpath and Heatmap presets.",
     },

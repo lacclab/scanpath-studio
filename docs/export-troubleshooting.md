@@ -56,7 +56,7 @@ numbers can be reproduced later.
 
 ??? question "The reading text looks too big / too small"
     Text is drawn true-to-scale from the word boxes and the **monitor
-    resolution**. Set the real monitor size (**🖥️ Canvas & text** in the
+    resolution**. Set the real monitor size (**📐 Figure & canvas** in the
     visualization rail, or `canvas_size=(W, H)` in the API) — e.g.
     `(2560, 1440)` for OneStop.
 

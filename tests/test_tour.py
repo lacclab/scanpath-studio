@@ -421,9 +421,7 @@ class TestSpotlightSelectorsResolve:
         source = inspect.getsource(render_single_trial_tab)
         assert "nb_source, nb_filters = st.columns(" in source
         assert "data_source_renderer(nb_source)" in source
-        assert (
-            'filter_box = nb_filters.container(key="tour_grp_narrow_by")' in source
-        )
+        assert 'filter_box = nb_filters.container(key="tour_grp_narrow_by")' in source
 
     def test_filter_group_has_a_dataset_divider(self):
         """UX-42: the sibling groups retain a visible boundary between them."""
@@ -433,3 +431,82 @@ class TestSpotlightSelectorsResolve:
         assert ".st-key-tour_grp_narrow_by {" in css
         assert "border-left: 1px solid var(--sps-border);" in css
         assert "padding-left: 0.7rem;" in css
+
+    def test_subtabs_use_a_second_plot_width_row(self):
+        """UX-43: open subtab content cannot contribute to the rail-row height."""
+        import inspect
+
+        from scanpath_studio.tabs import render_single_trial_tab
+
+        source = inspect.getsource(render_single_trial_tab)
+        assert 'plot_col, rail_col = st.columns([4, 1], gap="large")' in source
+        assert 'subtabs_col, _ = st.columns([4, 1], gap="large")' in source
+        assert 'subtabs_slot = subtabs_col.container(key="tour_grp_subtabs")' in source
+        assert "with subtabs_slot:" in source
+
+    def test_visualization_rail_has_responsive_independent_scroll(self):
+        """UX-43: desktop scrolls the rail; narrow layouts return to page flow."""
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        assert ".st-key-scanpath_rail {" in css
+        assert '[data-testid="stColumn"]:has(.st-key-scanpath_rail) {' in css
+        assert "position: absolute;" in css
+        assert "height: 100%;" in css
+        assert "max-height: 100%;" in css
+        assert "overflow-y: auto;" in css
+        assert "@media (max-width: 900px)" in css
+        assert "overflow-y: visible;" in css
+
+    def test_plot_rail_uses_one_compact_control_header(self):
+        """UX-44: modes and visualization settings share one rail heading."""
+        import inspect
+
+        from scanpath_studio import controls
+        from scanpath_studio.tabs import render_single_trial_tab
+
+        tab_source = inspect.getsource(render_single_trial_tab)
+        control_source = inspect.getsource(controls.sidebar_controls)
+
+        assert 'rail_heading.markdown("## 🎛️ Plot controls")' in tab_source
+        assert 'st.markdown("## 🎛️ View modes")' not in tab_source
+        assert 'st.markdown("## 🎨 Visualization")' not in tab_source
+        assert 'viz.caption("Quick views")' in control_source
+        assert 'sac_grp = viz.expander("↗️ Saccades", expanded=False)' in control_source
+
+    def test_plot_rail_merges_figure_and_canvas_without_nested_expander(self):
+        """UX-44: four lower groups become three without nesting expanders."""
+        import inspect
+
+        from scanpath_studio import app, controls
+
+        control_source = inspect.getsource(controls.sidebar_controls)
+        canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
+
+        assert 'figure_grp = viz.expander("📐 Figure & canvas"' in control_source
+        assert "canvas_renderer(figure_grp)" in control_source
+        assert "display = host if bare else host.expander" in canvas_source
+        assert 'viz.expander("🖥️ Canvas & text"' not in control_source
+        assert 'viz.expander("📐 Figure & axes"' not in control_source
+
+    def test_plot_rail_uses_contextual_style_filter_and_header_reset(self):
+        """UX-44: repeated labels stay terse and Reset no longer costs a row."""
+        import inspect
+
+        from scanpath_studio import controls
+        from scanpath_studio.tabs import render_single_trial_tab
+
+        tab_source = inspect.getsource(render_single_trial_tab)
+        control_source = inspect.getsource(controls.sidebar_controls)
+
+        assert "render_viz_reset(st, compact=True)" in tab_source
+        assert 'popover("⚙️ Style"' in control_source
+        assert 'f"🧹 Filter{' in control_source
+        assert "Reset settings" not in control_source
+
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        assert ".st-key-railbtn_plot_reset button {" in css
+        assert "padding-right: 1.25rem !important;" in css
+        assert "@container sps-rail (max-width: 240px)" in css

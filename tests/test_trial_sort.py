@@ -90,6 +90,147 @@ class TestTrialSortKeys:
         assert "Fixations (n)" in keys
         assert "Participant id" not in keys
 
+    def test_discovers_metadata_before_the_combo_projection_drops_it(self):
+        combos = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t2"],
+                "text_id": ["a", "b"],
+            }
+        )
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p1", "p1"],
+                "trial_id": ["t1", "t1", "t2", "t2"],
+                "word_index": [1, 2, 1, 2],
+                "difficulty_band": ["easy", "easy", "hard", "hard"],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p1"],
+                "trial_id": ["t1", "t2", "t2"],
+                "duration_ms": [100, 150, 200],
+                "device_batch": [3, 7, 7],
+            }
+        )
+
+        keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
+
+        assert keys["Difficulty band"].to_dict() == {"t1": "easy", "t2": "hard"}
+        assert keys["Device batch"].to_dict() == {"t1": 3, "t2": 7}
+        assert "Word index" not in keys
+        assert "Duration ms" not in keys
+
+    def test_participant_scope_prevents_repeated_trial_ids_from_colliding(self):
+        # This mirrors the report: the picker has already been narrowed to p1,
+        # while its source tables still contain another participant using the
+        # same plain trial labels with different metadata.
+        combos = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t2"],
+            }
+        )
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2", "p2"],
+                "trial_id": ["t1", "t2", "t1", "t2"],
+                "condition": ["A", "B", "B", "A"],
+            }
+        )
+
+        keys = trial_sort_keys(combos, "trial_id", words=words)
+
+        assert keys["Condition"].to_dict() == {"t1": "A", "t2": "B"}
+        assert sort_trial_options(["t1", "t2"], keys["Condition"]) == ["t1", "t2"]
+
+    def test_matching_cross_table_metadata_is_merged_once(self):
+        combos = pd.DataFrame(
+            {"participant_id": ["p1", "p1"], "trial_id": ["t1", "t2"]}
+        )
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t2"],
+                "session": ["s1", None],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t2"],
+                "session": ["s1", "s2"],
+            }
+        )
+
+        keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
+
+        assert list(keys).count("Session") == 1
+        assert keys["Session"].to_dict() == {"t1": "s1", "t2": "s2"}
+
+    def test_cross_table_conflict_is_not_silently_resolved(self):
+        combos = pd.DataFrame(
+            {"participant_id": ["p1", "p1"], "trial_id": ["t1", "t2"]}
+        )
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t2"],
+                "genre": ["news", "fiction"],
+            }
+        )
+        fixations = words.assign(genre=["news", "essay"])
+
+        keys = trial_sort_keys(combos, "trial_id", words=words, fixations=fixations)
+
+        assert "Genre" not in keys
+
+    def test_unique_trial_identity_drives_metadata_and_computed_stats(self):
+        combos = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["u1", "u2"],
+                "unique_trial_id": ["u1", "u2"],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p1"],
+                "trial_id": ["reused", "reused", "reused"],
+                "unique_trial_id": ["u1", "u2", "u2"],
+                "duration_ms": [100, 200, 300],
+                "is_correct": [True, False, False],
+            }
+        )
+
+        keys = trial_sort_keys(combos, "unique_trial_id", fixations=fixations)
+
+        assert keys["Fixations (n)"].to_dict() == {"u1": 1.0, "u2": 2.0}
+        assert keys["Is correct"].to_dict() == {"u1": True, "u2": False}
+
+    def test_within_trial_variation_and_non_metadata_payloads_are_excluded(self):
+        combos = pd.DataFrame(
+            {"participant_id": ["p1", "p1"], "trial_id": ["t1", "t2"]}
+        )
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 4,
+                "trial_id": ["t1", "t1", "t2", "t2"],
+                "condition": ["A", "B", "C", "C"],
+                "source_file": ["/private/a.csv"] * 2 + ["/private/b.csv"] * 2,
+                "image_x": [100, 100, 200, 200],
+                "notes": ["word " * 30] * 4,
+            }
+        )
+
+        keys = trial_sort_keys(combos, "trial_id", words=words)
+
+        assert "Condition" not in keys
+        assert "Source file" not in keys
+        assert "Image x" not in keys
+        assert "Notes" not in keys
+
 
 class TestSortTrialOptions:
     def test_default_is_id_order(self, combos, fixations):
@@ -155,6 +296,38 @@ def _sortable_picker_app():
     st.session_state["_picker_rendered"] = True
 
 
+def _participant_scoped_metadata_picker_app():
+    """Narrow to p1 while the source frames retain p2's repeated trial ids."""
+    import pandas as pd
+    import streamlit as st
+
+    from scanpath_studio.utils import build_combo_options, select_trial
+
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p2", "p2"],
+            "trial_id": ["t1", "t2", "t1", "t2"],
+            "duration_ms": [100.0, 100.0, 100.0, 100.0],
+        }
+    )
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p2", "p2"],
+            "trial_id": ["t1", "t2", "t1", "t2"],
+            "condition": ["B", "A", "A", "B"],
+        }
+    )
+    combos, _, _ = build_combo_options(fixations)
+    narrowed = combos[combos["participant_id"] == "p1"]
+    select_trial(
+        narrowed,
+        key_prefix="single",
+        words=words,
+        fixations=fixations,
+    )
+    st.session_state["_picker_rendered"] = True
+
+
 class TestSortValueIsVisibleInThePicker:
     """UX-10 follow-up: sorting with the key hidden just looks shuffled."""
 
@@ -197,6 +370,22 @@ class TestSortValueIsVisibleInThePicker:
             "t_b  ·  12",
             "t_a  ·  5",
             "t_c  ·  2",
+        ]
+
+    def test_participant_narrowing_keeps_metadata_sort_fields(self):
+        at = AppTest.from_function(_participant_scoped_metadata_picker_app)
+        at.run(timeout=20)
+        assert not at.exception, at.exception
+        sorter = at.selectbox(key="single_trial_sort")
+        assert "Condition" in sorter.options
+
+        sorter.set_value("Condition")
+        at.run(timeout=20)
+
+        picker = self._picker(at)
+        assert [picker.format_func(o) for o in picker.options] == [
+            "t2  ·  A",
+            "t1  ·  B",
         ]
 
 

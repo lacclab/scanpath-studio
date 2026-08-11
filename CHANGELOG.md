@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Quick-view and full-monitor transitions keep the current visualization state** (BUG-20, BUG-21) — leaving Illustration restores the styling it temporarily overrode, including after a restored/deep-linked Illustration state; Scanpath/Heatmap highlighting and the rendered figure now agree.
+- **Participant narrowing keeps eligible trial-sort fields** (BUG-22) — trial-level metadata is discovered from the scoped word/fixation tables instead of only the compact picker projection, with cross-table conflicts and event-level fields excluded.
+
 ### Changed
 - **One figure-settings contract now powers every renderer** (ENG-28) — the UI, headless API, bulk export, static scanpath, animation, and comparison paths share `FigureSettings` instead of forwarding dozens of parallel arguments. Public `plot_scanpath` and `animate_scanpath` keywords remain unchanged.
 - **Core module ownership is one-way** (ENG-28) — MultiplEYE server loading belongs to `datasets.py`, while run materialization belongs to `measures.py`, removing the `data`/`datasets` and `measures`/`preprocessing` import cycles.

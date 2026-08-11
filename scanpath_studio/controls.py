@@ -624,10 +624,20 @@ def _saccade_filter_badge() -> str:
 
 
 # Quick-view presets: one click sets the *layer* toggles to a focused subset, so
-# a user lands on a legible picture instead of toggling layers one by one. Only
-# the ``global_show_*`` on/off keys are set — per-layer styling (colours, sizes,
-# colorscales) is deliberately left untouched. Keys not listed in a preset keep
-# their current value, so e.g. "Heatmap" leaves the bounding-box grid off.
+# a user lands on a legible picture instead of toggling layers one by one. The
+# Illustration preset also applies four presentation overrides. Those overrides
+# are temporary: ``_apply_view_preset`` snapshots them on the way in and restores
+# them on the way out, so Illustration → Scanpath cannot leave arc/snap/opacity
+# settings behind while the button says Scanpath. Other per-layer styling
+# (colours, sizes, colorscales) remains untouched.
+_ILLUSTRATION_OVERRIDE_KEYS = (
+    "global_saccade_render_mode",
+    "global_fixation_snap_to_word",
+    "global_saccade_color_mode",
+    "global_fixation_opacity",
+)
+_PRE_ILLUSTRATION_STATE = "_quick_view_pre_illustration"
+
 _VIEW_PRESETS: Dict[str, Dict[str, object]] = {
     "scanpath": {
         "global_show_fix": True,
@@ -686,20 +696,63 @@ _VIEW_PRESETS: Dict[str, Dict[str, object]] = {
 
 
 def _apply_view_preset(name: str) -> None:
-    """Apply a Quick-view preset's layer toggles.
+    """Apply a Quick-view preset and keep Illustration overrides reversible.
 
     Runs as a button ``on_click`` callback, i.e. *before* the next rerun
     instantiates the layer checkboxes — so writing their ``global_show_*`` keys
-    here is picked up cleanly (no "set after widget instantiated" warning)."""
+    here is picked up cleanly (no "set after widget instantiated" warning).
+
+    Illustration owns four style/geometry values that ordinary quick views do
+    not. Preserve their incoming values once, then restore each value that is
+    still carrying Illustration's override when another preset is selected. A
+    value edited explicitly while Illustration is active is therefore retained.
+    """
+    if name not in _VIEW_PRESETS:
+        raise ValueError(f"Unknown quick-view preset: {name}")
+
+    ss = st.session_state
+    illustration = _VIEW_PRESETS["illustration"]
+    was_illustration = all(ss.get(key) == value for key, value in illustration.items())
+    if name == "illustration":
+        if _PRE_ILLUSTRATION_STATE not in ss:
+            ss[_PRE_ILLUSTRATION_STATE] = {
+                key: (
+                    _VIZ_WIDGET_DEFAULTS[key]
+                    if was_illustration
+                    else ss.get(key, _VIZ_WIDGET_DEFAULTS[key])
+                )
+                for key in _ILLUSTRATION_OVERRIDE_KEYS
+            }
+    else:
+        previous = ss.pop(_PRE_ILLUSTRATION_STATE, None)
+        # A saved config, deep link, or hot-reloaded session can enter on the
+        # Illustration values without ever running the callback that captures a
+        # snapshot. Falling back to the ordinary defaults still makes the exit
+        # deterministic instead of leaving Illustration geometry behind.
+        if previous is None and was_illustration:
+            previous = {
+                key: _VIZ_WIDGET_DEFAULTS[key] for key in _ILLUSTRATION_OVERRIDE_KEYS
+            }
+        if previous is not None:
+            for key in _ILLUSTRATION_OVERRIDE_KEYS:
+                # Do not overwrite an explicit edit made after Illustration was
+                # applied; only undo the value the preset itself still owns.
+                if ss.get(key) == illustration[key]:
+                    ss[key] = previous.get(key, _VIZ_WIDGET_DEFAULTS[key])
+
     for key, value in _VIEW_PRESETS[name].items():
-        st.session_state[key] = value
+        ss[key] = value
 
 
 def _active_quick_view() -> Optional[str]:
-    """Return which quick-view preset (scanpath/heatmap) the current layer toggles
-    match, or None if the user has customized away from both presets."""
+    """Return the quick-view preset whose owned values match current state.
+
+    Illustration is deliberately checked before Scanpath: its layer set is a
+    superset of the Scanpath contract, so the old order mislabeled an active
+    Illustration as Scanpath even while arc-and-snap geometry remained live.
+    """
     ss = st.session_state
-    for name in ("scanpath", "heatmap", "illustration"):
+    for name in ("illustration", "scanpath", "heatmap"):
         if all(ss.get(k) == v for k, v in _VIEW_PRESETS[name].items()):
             return name
     return None
@@ -3484,6 +3537,7 @@ def reset_viz_settings() -> None:
     st.session_state.pop("_canvas_seeded_for", None)
     st.session_state.pop("_font_seeded_for", None)
     st.session_state.pop("_palette_picked", None)
+    st.session_state.pop(_PRE_ILLUSTRATION_STATE, None)
     for param in _sk.URL_PRESET_PARAMS:
         st.query_params.pop(param, None)
 

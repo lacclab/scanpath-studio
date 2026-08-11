@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 197,
+  "revision": 205,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -50,6 +50,27 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-08"
+    },
+    "BUG-20": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-11"
+    },
+    "BUG-21": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-11"
+    },
+    "BUG-22": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-11"
     },
     "BUG-4": {
       "status": "On hold",
@@ -252,6 +273,13 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-08"
+    },
+    "EXP-6": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-11"
     },
     "PERF-2": {
       "status": "Closed",

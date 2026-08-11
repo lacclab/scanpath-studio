@@ -207,6 +207,262 @@ _TRIAL_SORT_PREFERRED_COLS = (
     "trial_index",
 )
 
+# Event/geometry fields can occasionally be constant by accident (for example a
+# one-fixation trial), but that does not make them trial metadata. Keep them out
+# of the generic metadata tail; computed timing/count keys above are the useful
+# sortable representation of those event columns.
+_TRIAL_SORT_EXCLUDED_COLS = {
+    "trial_id",
+    "unique_trial_id",
+    "word",
+    "token",
+    "text",
+    "sentence",
+    "question",
+    "answer",
+    "response",
+    "x",
+    "y",
+    "x_start",
+    "x_end",
+    "y_start",
+    "y_end",
+    "xmin",
+    "xmax",
+    "ymin",
+    "ymax",
+    "width",
+    "height",
+    "timestamp",
+    "timestamp_ms",
+    "duration",
+    "duration_ms",
+    "order_in_trial",
+    "fixation_index",
+    "word_index",
+    "word_id",
+    "ia_id",
+    "char_index",
+    "line_index",
+    "source_file",
+}
+_TRIAL_SORT_PRIVATE_NAME_PARTS = (
+    "path",
+    "filepath",
+    "filename",
+    "directory",
+    "folder",
+    "url",
+    "uri",
+)
+_TRIAL_SORT_GEOMETRY_SUFFIXES = (
+    "_x",
+    "_y",
+    "_xmin",
+    "_xmax",
+    "_ymin",
+    "_ymax",
+    "_x_start",
+    "_x_end",
+    "_y_start",
+    "_y_end",
+    "_width",
+    "_height",
+)
+
+
+def _trial_sort_column_allowed(column: object) -> bool:
+    """Whether ``column`` can be discovered as generic trial metadata."""
+    name = str(column)
+    lower = name.lower()
+    if name.startswith("_") or lower in _TRIAL_SORT_EXCLUDED_COLS:
+        return False
+    if lower.endswith(_TRIAL_SORT_GEOMETRY_SUFFIXES):
+        return False
+    return not any(part in lower for part in _TRIAL_SORT_PRIVATE_NAME_PARTS)
+
+
+def _effective_trial_field(
+    frame: Optional[pd.DataFrame], trial_field: str, picker_ids: set[str]
+) -> Optional[str]:
+    """Find the frame column that names the picker's effective trial ids."""
+    if frame is None or frame.empty:
+        return None
+    for field in (trial_field, "unique_trial_id", "trial_id"):
+        if field not in frame.columns:
+            continue
+        values = set(frame[field].dropna().astype(str).unique())
+        if values & picker_ids:
+            return field
+    return None
+
+
+def _is_missing_scalar(value) -> bool:
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(missing) if isinstance(missing, (bool, np.bool_)) else False
+
+
+def _same_sort_value(left, right) -> bool:
+    """Scalar equality for reconciling the words and fixations tables."""
+    if _is_missing_scalar(left) or _is_missing_scalar(right):
+        # Partial missingness is not a conflict; the table carrying a value wins.
+        return True
+    try:
+        equal = left == right
+    except (TypeError, ValueError):
+        return False
+    return bool(equal) if isinstance(equal, (bool, np.bool_)) else False
+
+
+def _looks_like_free_text(series: pd.Series) -> bool:
+    """Reject prose-like cells while retaining ordinary categorical metadata."""
+    values = [str(v).strip() for v in series if not _is_missing_scalar(v)]
+    return bool(values) and any(len(v) > 200 or len(v.split()) > 24 for v in values)
+
+
+def _trial_level_columns_from_frame(
+    frame: Optional[pd.DataFrame],
+    trial_field: str,
+    picker_ids: set[str],
+    participants: set[str],
+) -> Dict[str, pd.Series]:
+    """Discover one scalar value per active trial directly from one source table.
+
+    Grouping includes participant identity, preventing repeated plain trial ids
+    from being merged before the active picker scope is applied. The returned
+    Series uses the picker's effective id because that is what
+    ``sort_trial_options`` consumes.
+    """
+    identity = _effective_trial_field(frame, trial_field, picker_ids)
+    if frame is None or frame.empty or identity is None:
+        return {}
+
+    scoped = frame
+    if participants and "participant_id" in scoped.columns:
+        scoped = scoped[scoped["participant_id"].astype(str).isin(participants)]
+    scoped = scoped[scoped[identity].astype(str).isin(picker_ids)]
+    if scoped.empty:
+        return {}
+
+    group_cols = [identity]
+    if "participant_id" in scoped.columns and identity != "participant_id":
+        group_cols.insert(0, "participant_id")
+    grouped = scoped.groupby(group_cols, sort=False, dropna=False)
+    discovered: Dict[str, pd.Series] = {}
+    for col in scoped.columns:
+        if col == identity or not _trial_sort_column_allowed(col):
+            continue
+        try:
+            if (grouped[col].nunique(dropna=False) > 1).any():
+                continue
+            if col in group_cols:
+                values = scoped[group_cols].drop_duplicates().copy()
+            else:
+                values = grouped[col].agg(lambda cells: cells.iloc[0]).reset_index()
+            # If the same effective id survives for multiple participants, it is
+            # usable only when those rows agree. A participant-narrowed picker
+            # naturally has one row here; a global ambiguous picker is not
+            # allowed to choose one participant silently.
+            by_id = values.groupby(values[identity].astype(str), sort=False)[col]
+            if (by_id.nunique(dropna=False) > 1).any():
+                continue
+            deduped = values.drop_duplicates(subset=[identity])
+        except (TypeError, ValueError):
+            # Nested/list-like event payloads are not sortable scalar metadata.
+            continue
+        series = pd.Series(
+            deduped[col].to_numpy(),
+            index=deduped[identity].astype(str).to_numpy(),
+        )
+        if series.dropna().empty or _looks_like_free_text(series):
+            continue
+        discovered[str(col)] = series
+    return discovered
+
+
+def _merge_trial_level_sources(
+    sources: Iterable[Dict[str, pd.Series]],
+) -> Dict[str, pd.Series]:
+    """Merge compatible metadata sources; omit cross-table disagreements."""
+    by_column: Dict[str, list[pd.Series]] = {}
+    for source in sources:
+        for col, series in source.items():
+            by_column.setdefault(col, []).append(series)
+
+    merged: Dict[str, pd.Series] = {}
+    for col, series_list in by_column.items():
+        combined = pd.Series(dtype=object)
+        conflict = False
+        for series in series_list:
+            current = series.copy()
+            current.index = current.index.astype(str)
+            for trial_id in combined.index.intersection(current.index):
+                if not _same_sort_value(combined[trial_id], current[trial_id]):
+                    conflict = True
+                    break
+            if conflict:
+                break
+            combined = combined.combine_first(current)
+        if not conflict and not combined.empty:
+            merged[col] = combined
+    return merged
+
+
+@st.cache_data(show_spinner=False)
+def _trial_level_sort_columns_cached(
+    _combos: pd.DataFrame,
+    _words: Optional[pd.DataFrame],
+    _fixations: Optional[pd.DataFrame],
+    trial_field: str,
+    cache_key,
+) -> Dict[str, pd.Series]:
+    """Cached metadata discovery over the participant-scoped picker frames."""
+    del cache_key  # explicit hash input for the underscore-prefixed frames
+    if _combos is None or _combos.empty or trial_field not in _combos.columns:
+        return {}
+    picker_ids = set(_combos[trial_field].dropna().astype(str).unique())
+    participants = (
+        set(_combos["participant_id"].dropna().astype(str).unique())
+        if "participant_id" in _combos.columns
+        else set()
+    )
+    return _merge_trial_level_sources(
+        (
+            _trial_level_columns_from_frame(
+                _combos, trial_field, picker_ids, participants
+            ),
+            _trial_level_columns_from_frame(
+                _words, trial_field, picker_ids, participants
+            ),
+            _trial_level_columns_from_frame(
+                _fixations, trial_field, picker_ids, participants
+            ),
+        )
+    )
+
+
+def _trial_level_sort_columns(
+    combos: pd.DataFrame,
+    trial_field: str,
+    words: Optional[pd.DataFrame],
+    fixations: Optional[pd.DataFrame],
+) -> Dict[str, pd.Series]:
+    return _trial_level_sort_columns_cached(
+        combos,
+        words,
+        fixations,
+        trial_field,
+        cache_key=(
+            frame_fingerprint(combos),
+            frame_fingerprint(words),
+            frame_fingerprint(fixations),
+            trial_field,
+        ),
+    )
+
 
 def _per_trial_stat(frame: pd.DataFrame, trial_field: str, how: str) -> pd.Series:
     """One computed stat per trial id, as a Series indexed by that id."""
@@ -237,8 +493,9 @@ def trial_sort_keys(
     """Available sort keys (UX-10): label → Series indexed by trial id.
 
     Offers a computed stat only when the frame it needs is present, and a column
-    only when it's actually *trial-level* in ``combos`` (one value per trial) —
-    a column that varies within a trial can't order the pool meaningfully.
+    only when it is actually trial-level in the active participant-scoped words,
+    fixations, or combo frame. This deliberately discovers metadata before the
+    lossy combo projection can discard it.
     """
     keys: Dict[str, pd.Series] = {}
     # This rank was captured before build_combo_options' canonical sort.
@@ -255,32 +512,24 @@ def trial_sort_keys(
         )
     for label, (which, how) in _TRIAL_SORT_STATS.items():
         frame = fixations if which == "fixations" else words
-        # The stat is keyed by the *plain* trial id on the data frames; combos may
-        # be keyed by unique_trial_id, so fall back when the field is absent.
-        field = (
-            trial_field
-            if (frame is not None and trial_field in frame.columns)
-            else "trial_id"
+        picker_ids = (
+            set(combos[trial_field].dropna().astype(str).unique())
+            if combos is not None and not combos.empty and trial_field in combos.columns
+            else set()
         )
-        series = _per_trial_stat(frame, field, how)
+        field = _effective_trial_field(frame, trial_field, picker_ids)
+        series = _per_trial_stat(frame, field or trial_field, how)
         if not series.empty:
             keys[label] = series
     if combos is None or combos.empty or trial_field not in combos.columns:
         return keys
-    ids = combos[trial_field].astype(str)
-    for col in _TRIAL_SORT_PREFERRED_COLS:
-        if col not in combos.columns or col == trial_field:
+    discovered = _trial_level_sort_columns(combos, trial_field, words, fixations)
+    ordered_cols = [c for c in _TRIAL_SORT_PREFERRED_COLS if c in discovered]
+    ordered_cols.extend(sorted(set(discovered) - set(ordered_cols), key=str.casefold))
+    for col in ordered_cols:
+        if col == trial_field:
             continue
-        if (combos.groupby(ids, sort=False)[col].nunique(dropna=False) > 1).any():
-            continue  # varies within a trial — can't order the pool by it
-        # Build the id→value Series from the deduplicated rows explicitly: an
-        # Arrow-backed `ids.unique()` isn't accepted as a `set_index` key, and
-        # pairing the two `.to_numpy()`s keeps id and value on the same row.
-        deduped = combos.drop_duplicates(subset=[trial_field])
-        keys[col.replace("_", " ").capitalize()] = pd.Series(
-            deduped[col].to_numpy(),
-            index=deduped[trial_field].astype(str).to_numpy(),
-        )
+        keys[col.replace("_", " ").capitalize()] = discovered[col]
     return keys
 
 

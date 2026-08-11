@@ -501,6 +501,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#author-a-scanpath-without-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Author a scanpath without files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#static-export-setup" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1617,6 +1628,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#author-a-scanpath-without-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Author a scanpath without files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#static-export-setup" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1708,6 +1730,21 @@ if your OS blocks the unsigned build.</p>
 </ol>
 <p>See <a href="../guides/loading-data/">Loading public and own data</a> for accepted formats,
 manual mapping, and common checks.</p>
+<h2 id="author-a-scanpath-without-files">Author a scanpath without files<a class="headerlink" href="#author-a-scanpath-without-files" title="Permanent link">&para;</a></h2>
+<p>Choose <strong>Author a scanpath</strong> as the data source when you want to sketch a trial
+from text instead of uploading tables. Enter the stimulus, inspect the generated
+word boxes, then edit the scanpath in either place:</p>
+<ul>
+<li>click empty canvas space to add a fixation;</li>
+<li>drag a fixation to change its X/Y coordinate;</li>
+<li>select and delete a fixation on the canvas; or</li>
+<li>edit the event table directly.</li>
+</ul>
+<p>The editor starts with one centred fixation per word. X/Y is the authoritative
+location; <strong>Target word</strong> is optional metadata for reading measures, so a
+fixation may sit between or outside words. Download the authoring JSON to reopen
+the same layout later, render it with <code>scanpath-studio render --authoring</code>, or
+load it with <code>scanpath_studio.load_authored_scanpath</code>.</p>
 <h2 id="static-export-setup">Static export setup<a class="headerlink" href="#static-export-setup" title="Permanent link">&para;</a></h2>
 <p>If HTML exports but static images do not, install the browser used by Plotly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>plotly_get_chrome<span class="w"> </span>-y

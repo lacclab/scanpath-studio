@@ -2699,6 +2699,16 @@ default); it is ignored when the column isn't there.</p>
 <td>yes</td>
 </tr>
 <tr>
+<td><code>show_coordinate_grid</code></td>
+<td><code>False</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>coordinate_grid_spacing</code></td>
+<td><code>None</code></td>
+<td>yes</td>
+</tr>
+<tr>
 <td><code>x_field</code></td>
 <td><code>'x'</code></td>
 <td>no</td>
@@ -2731,6 +2741,9 @@ default); it is ignored when the column isn't there.</p>
 </tbody>
 </table>
 <p><code>fit_to_monitor=True</code> frames the whole <code>canvas_size</code>; <code>False</code> crops to the data.
+<code>show_coordinate_grid=True</code> overlays zero-anchored monitor-pixel coordinates;
+<code>coordinate_grid_spacing=None</code> selects a readable 1/2/5×10ⁿ interval, while a
+positive number pins the major interval in pixels.
 <code>background_image</code> places a stimulus screenshot under the scanpath at data
 coordinates — see <a href="../rendering/">Rendering</a>.</p>
 <h3 id="colorbars">Colorbars<a class="headerlink" href="#colorbars" title="Permanent link">&para;</a></h3>

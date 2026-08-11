@@ -1658,6 +1658,10 @@ fonts; it defines the figure's coordinate system.</p>
 <p>Use the visualization controls to set colors, opacity, labels, and saccade
 style. Prefer the defaults unless a change carries information. Check the whole
 canvas for clipped marks, unreadable text, and an unnecessary legend.</p>
+<p>For geometry review, <strong>📐 Figure &amp; axes → Coordinate grid</strong> adds labelled
+screen-pixel axes. Keep automatic spacing for exploration or set a manual major
+interval when several exported figures must use identical grid marks. The grid
+is included in static images, animations, comparisons, and batch figures.</p>
 <p>Open <strong>Export → This trial</strong> and choose:</p>
 <table>
 <thead>
@@ -1685,7 +1689,12 @@ canvas for clipped marks, unreadable text, and an unnecessary legend.</p>
 </tr>
 </tbody>
 </table>
-<p>Static image and video formats require Chrome/Chromium; HTML does not.</p>
+<p>Static image and video formats require Chrome/Chromium; HTML does not.
+Rendering begins with a visible stage message. Animation and bulk jobs show
+real frame/trial counts; single static rasterization stays indeterminate because
+the renderer exposes no truthful intermediate percentage. A successful result
+remains available after a rerun, and an unchanged static request reuses the
+already-rendered bytes.</p>
 <h2 id="3-export-a-batch-when-needed">3. Export a batch when needed<a class="headerlink" href="#3-export-a-batch-when-needed" title="Permanent link">&para;</a></h2>
 <p>In <strong>Export → Multiple trials</strong>:</p>
 <ol>

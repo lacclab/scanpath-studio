@@ -299,12 +299,13 @@ def get_app_css() -> str:
         border-left: 1px solid var(--sps-border);
         padding-left: 0.7rem;
     }
-    /* UX-27 — ONE button shape for the three control rows stacked above the
+    /* UX-27 / CMP-10 — ONE button shape for the control rows stacked above the
        plot. They are built in three different functions across two modules
        (the Narrow-by/More row and the chip strip's Details/✏️ in tabs.py, the
-       trial picker's ◀ ▶ ⇅ in utils.py), each with its own `st.columns` and its
-       own width unit, so they used to render at three different heights and two
-       different shapes — square icon buttons beside pill-shaped labelled ones.
+       comparison picker's ◀ ▶ ⇅ in tabs.py, and the main trial picker's ◀ ▶ ⇅
+       in utils.py), each with its own `st.columns` and its own width unit, so
+       they used to render at different heights and two different shapes —
+       square icon buttons beside pill-shaped labelled ones.
        Rather than hand-tuning each call site, every trigger in the block goes in
        a container keyed `railbtn_*` and takes its geometry from here.
 
@@ -332,11 +333,12 @@ def get_app_css() -> str:
 
        So a row's trailing controls now share ONE `railbtn_*` container and this
        rule makes every such container a right-packed flex row. "More" alone,
-       ◀ ▶ ⇅, and Details + ✏️ therefore all end on the same edge with the same
-       3px between neighbours, whatever each row's own column split is. Nesting
-       is intentional (`_trail` > `_step`): the outer cluster fixes the display
-       order, and the inner containers let a trigger be *filled* out of order —
-       the sort popover has to run before the ◀ ▶ it precedes in the DOM. */
+       both ◀ ▶ ⇅ picker clusters, and Details + ✏️ therefore all end on the same
+       edge with the same 3px between neighbours, whatever each row's own column
+       split is. Nesting is intentional (`_trail` > `_step`): the outer cluster
+       fixes the display order, and the inner containers let a trigger be *filled*
+       out of order — the sort popover has to run before the ◀ ▶ it precedes in
+       the DOM. */
     [class*="st-key-railbtn_"] {
         flex-direction: row;
         justify-content: flex-end;

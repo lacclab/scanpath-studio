@@ -150,13 +150,15 @@ from scanpath_studio.similarity import (
     nld_by_time,
 )
 from scanpath_studio.utils import (
-    SAME_TEXT_MARKER,
+    TRIAL_SORT_DEFAULT,
     build_comparison_options,
     compute_trial_stats,
     extract_trial,
     friendly_trial_label,
     safe_summary,
     select_trial,
+    sort_trial_options,
+    trial_sort_keys,
 )
 
 # -----------------------------------------------------------------------------
@@ -845,144 +847,34 @@ def _cached_scanpath_figure(
     )
 
 
-# CMP-6: how many same-text candidates the "Most similar / different" orderings
-# score at most (NLD is O(len_A·len_B) per candidate; the cap bounds a
-# high-cardinality corpus). Unscored candidates keep their default order after
-# the scored ones, and a caption says so.
-_CMP_MAX_SCORE = 100
-# The candidate orderings for the compare-trial (B) selector. "Same text first"
-# is the historical default (📄 group, then 👤, then the rest, in data order).
-_CMP_ORDER_OPTIONS = (
-    "Same text first",
-    "Most similar",
-    "Most different",
-    "Most fixations",
-    "Longest reading",
-)
-
-
-@st.cache_data(show_spinner=False)
-def _c_compare_trial_stats(_fixations: pd.DataFrame, fingerprint) -> dict:
-    """Per-(participant, trial) fixation count + total reading time (ms).
-
-    Backs the CMP-6 "Most fixations" / "Longest reading" candidate orderings.
-    Keyed by ``fingerprint`` (the filtered fixations' frame fingerprint), so it
-    recomputes only when the trial pool changes."""
-    if _fixations.empty or not {
-        "participant_id",
-        "trial_id",
-        "duration_ms",
-    } <= set(_fixations.columns):
-        return {}
-    agg = _fixations.groupby(["participant_id", "trial_id"], sort=False)[
-        "duration_ms"
-    ].agg(["size", "sum"])
-    return {
-        (str(p), str(t)): (int(row["size"]), float(row["sum"]))
-        for (p, t), row in agg.iterrows()
-    }
-
-
-@st.cache_data(show_spinner="Scoring candidate similarity…")
-def _c_compare_nld(
-    _fixations: pd.DataFrame,
-    _trial_words: pd.DataFrame,
-    fingerprint,
-    words_fingerprint,
-    participant: str,
-    trial: str,
-    candidates: tuple,
-) -> dict:
-    """NLD of each same-text candidate scanpath against the selected one (CMP-6).
-
-    ``candidates`` is a tuple of ``(participant_id, trial_id)`` pairs, all
-    reading the SAME text as the selected trial, so the selected trial's word
-    boxes serve as the shared AOI frame — exactly how the Comparisons subtab
-    scores its grid (``compute_similarity_table``). Returns
-    ``{(pid, tid): nld}`` with NaN where a sequence is empty. Cache key: the
-    pool + word-box fingerprints + the selection + the candidate set."""
-    from .similarity import normalized_levenshtein, ordered_word_ids
-
-    ref_fix = extract_trial(_fixations, participant, trial)
-    ref_seq = [int(w) for w in ordered_word_ids(ref_fix, _trial_words) if pd.notna(w)]
-    scores: dict = {}
-    for pid, tid in candidates:
-        cand_fix = extract_trial(_fixations, pid, tid)
-        cand_seq = [
-            int(w) for w in ordered_word_ids(cand_fix, _trial_words) if pd.notna(w)
-        ]
-        if not ref_seq and not cand_seq:
-            scores[(pid, tid)] = float("nan")
-        else:
-            scores[(pid, tid)] = normalized_levenshtein(ref_seq, cand_seq)
-    return scores
+_CMP_SORT_DEFAULT = "Same text, then same participant"
 
 
 def _order_compare_options(
     options: list,
-    order: str,
-    fixations_filtered: pd.DataFrame,
-    trial_words: pd.DataFrame,
-    selected_participant: str,
-    selected_trial: str,
-) -> tuple[list, Optional[str]]:
-    """Reorder the compare-B candidate list per the CMP-6 ordering choice.
+    choice: str,
+    sort_keys: dict[str, pd.Series],
+    *,
+    descending: bool = False,
+) -> list:
+    """Sort comparison candidates with the main trial picker's vocabulary.
 
-    Returns ``(options, note)`` where ``note`` is an optional caption explaining
-    what the ordering did (e.g. that only same-text candidates carry a
-    similarity score, or that scoring was capped). "Same text first" (the
-    default) returns the list untouched."""
-    if order == "Same text first" or len(options) < 2:
-        return options, None
-    fingerprint = frame_fingerprint(fixations_filtered)
-    if order in ("Most similar", "Most different"):
-        # NLD is only meaningful between readings of the same text, so score the
-        # 📄 group and leave everyone else after it in default order.
-        same_text = [o for o in options if SAME_TEXT_MARKER in o[3]]
-        rest = [o for o in options if SAME_TEXT_MARKER not in o[3]]
-        if not same_text:
-            return options, "No same-text candidates to score — default order."
-        scored = same_text[:_CMP_MAX_SCORE]
-        overflow = same_text[_CMP_MAX_SCORE:]
-        scores = _c_compare_nld(
-            fixations_filtered,
-            trial_words,
-            fingerprint,
-            frame_fingerprint(trial_words),
-            str(selected_participant),
-            str(selected_trial),
-            tuple((str(o[0]), str(o[1])) for o in scored),
-        )
-
-        def _score(opt) -> float:
-            v = scores.get((str(opt[0]), str(opt[1])))
-            return float("nan") if v is None else v
-
-        reverse = order == "Most different"
-        # NaN-scored candidates go last within the scored group either way.
-        scored = sorted(
-            scored,
-            key=lambda o: (
-                pd.isna(_score(o)),
-                -_score(o) if (reverse and pd.notna(_score(o))) else _score(o),
-            ),
-        )
-        note = f"Same-text trials ordered by NLD ({order.lower()} to A first)"
-        if overflow:
-            note += f"; scored the first {_CMP_MAX_SCORE} of {len(same_text)}"
-        if rest:
-            note += "; other-text trials follow unscored"
-        return scored + overflow + rest, note + "."
-    if order in ("Most fixations", "Longest reading"):
-        stats = _c_compare_trial_stats(fixations_filtered, fingerprint)
-        idx = 0 if order == "Most fixations" else 1
-
-        def _stat(opt) -> float:
-            v = stats.get((str(opt[0]), str(opt[1])))
-            return float(v[idx]) if v else -1.0
-
-        return sorted(options, key=_stat, reverse=True), None
-    return options, None
+    The comparison-specific default preserves ``build_comparison_options``'s
+    relation priority: same text, then same participant, then everything else.
+    Every other choice comes from ``utils.trial_sort_keys``, alongside its
+    normal ``Trial ID`` default.
+    """
+    if choice == _CMP_SORT_DEFAULT or len(options) < 2:
+        return options
+    key_series = None if choice == TRIAL_SORT_DEFAULT else sort_keys.get(choice)
+    trial_ids = [str(option[1]) for option in options]
+    ordered_ids = sort_trial_options(
+        trial_ids,
+        key_series,
+        descending=descending if key_series is not None else False,
+    )
+    rank = {trial_id: idx for idx, trial_id in enumerate(ordered_ids)}
+    return sorted(options, key=lambda option: rank.get(str(option[1]), len(rank)))
 
 
 def _render_compare_selector(
@@ -1000,11 +892,11 @@ def _render_compare_selector(
 
     Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ 📄/👤
     markers) and a scrubbing ``select_slider`` showing ``"index/TOTAL · <trial
-    id>"``, plus ◀ ▶ step buttons, plus a CMP-6 **Order by** picker that can
-    rank the candidates by similarity to the selected trial (NLD), fixation
-    count, or total reading time instead of data order. The overlay layout +
-    A/B-legend config now live in the rail's **⚙️ Compare** popover (under the
-    Compare toggle). Returns ``(participant, trial)``."""
+    id>"``, plus ◀ ▶ step buttons and a CMP-6 sort picker. The sort picker uses
+    the main trial picker's generated choices; only its default differs, keeping
+    same-text trials first, then same-participant trials, then the rest. The
+    overlay layout + A/B-legend config live in the rail's **⚙️ Compare** popover
+    (under the Compare toggle). Returns ``(participant, trial)``."""
     options = build_comparison_options(
         combos, selection_mode, selected_participant, selected_trial, selected_text
     )
@@ -1061,45 +953,57 @@ def _render_compare_selector(
         )
         return None, None
 
-    # CMP-6: the candidate ordering is visually LAST in the picker row, after the
+    # CMP-6: candidate sorting is visually LAST in the picker row, after the
     # step buttons. It still executes before the selectbox/slider below, so a
-    # change applies to their list on the same run. UI-only — it never travels in a
-    # deep link or saved config (same call as `share_identity_mode`, DATA-16/S3).
+    # change applies to their list on the same run. CMP-10 mirrors the main trial
+    # picker: ◀ / ▶ / ⇅ share one right-packed `railbtn_*` pill cluster instead of
+    # occupying three independent columns. UI-only — it never travels in a deep
+    # link or saved config (same call as `share_identity_mode`, DATA-16/S3).
     n = len(options)
-    orderable = n > 2 and fixations_filtered is not None and trial_words is not None
-    order_note = None
-    order_col = None
+    sort_keys = trial_sort_keys(
+        combos,
+        "trial_id",
+        words=words_filtered,
+        fixations=fixations_filtered,
+    )
+    sort_options = [_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT, *sort_keys]
+    sort_col = None
     if n > 1:
-        if orderable:
-            sel_col, slider_col, prev_col, next_col, order_col = st.columns(
-                [2.8, 3.9, 0.55, 0.55, 1.9], vertical_alignment="bottom"
-            )
-        else:
-            sel_col, slider_col, prev_col, next_col = st.columns(
-                [3, 5, 0.55, 0.55], vertical_alignment="bottom"
-            )
+        sel_col, slider_col, trail_col = st.columns(
+            [3, 5, 1.9], vertical_alignment="bottom"
+        )
+        trail = trail_col.container(key="railbtn_single_compare_trail")
+        # Create the children in display order, then fill the ordering popover
+        # first because its result determines the option order used below.
+        step_col = trail.container(key="railbtn_single_compare_step")
+        sort_col = trail.container(key="railbtn_single_compare_sort")
     else:
         sel_col = st
 
-    if orderable and order_col is not None:
-        order = order_col.selectbox(
-            "Order candidates by",
-            options=list(_CMP_ORDER_OPTIONS),
-            key="single_compare_order",
-            label_visibility="collapsed",
-            help="Order the candidate trials (B): **Same text first** — the "
-            "default data order; **Most similar / Most different** — by NLD on "
-            "the fixated-word sequence against the selected trial A (same-text "
-            "trials only, others follow unscored); **Most fixations** / "
-            "**Longest reading** — by size of the reading.",
-        )
-        options, order_note = _order_compare_options(
+    sort_choice = _CMP_SORT_DEFAULT
+    sort_desc = False
+    if sort_col is not None:
+        if st.session_state.get("single_compare_order") not in sort_options:
+            st.session_state["single_compare_order"] = _CMP_SORT_DEFAULT
+        with sort_col.popover("⇅", width="content", help="Sort the comparison trials"):
+            sort_choice = st.selectbox(
+                "Sort trials by",
+                options=sort_options,
+                key="single_compare_order",
+                help="The default keeps related readings together: same text, then "
+                "the same participant, then all remaining trials. Other choices "
+                "match the main trial picker's sort menu.",
+            )
+            sort_desc = st.checkbox(
+                "Descending",
+                key="single_compare_sort_desc",
+                disabled=sort_choice in {_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT},
+            )
+        options = _order_compare_options(
             options,
-            order,
-            fixations_filtered,
-            trial_words,
-            selected_participant,
-            selected_trial,
+            sort_choice,
+            sort_keys,
+            descending=sort_desc,
         )
 
     labels = [opt[2] for opt in options]
@@ -1130,13 +1034,16 @@ def _render_compare_selector(
 
         current_idx = labels.index(current)
 
+    picker_label = "**Compare To**"
+    if sort_choice not in {_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT}:
+        picker_label += f"  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
     selected_compare_label = sel_col.selectbox(
-        "Compare with trial (B)",
+        picker_label,
         options=labels,
         key=sel_key,
-        help="📄 = same text as the primary trial · 👤 = same participant."
+        help="Choose the second trial to compare against the selected trial. "
+        "📄 = same text · 👤 = same participant."
         + (" Animated comparison overlays both on one clock." if animate else ""),
-        label_visibility="collapsed",
     )
     if n > 1:
         with slider_col:
@@ -1151,27 +1058,23 @@ def _render_compare_selector(
                 ),
                 help=f"Scrub through the {n} candidate trials.",
             )
-        prev_col.button(
+        step_col.button(
             "◀",
             key="single_compare_prev",
             on_click=_step_compare,
             args=(-1,),
             disabled=current_idx == 0,
             help="Previous candidate",
-            width="stretch",
         )
-        next_col.button(
+        step_col.button(
             "▶",
             key="single_compare_next",
             on_click=_step_compare,
             args=(1,),
             disabled=current_idx == n - 1,
             help="Next candidate",
-            width="stretch",
         )
 
-    if order_note:
-        st.caption(order_note)
     if selected_compare_label:
         return label_to_trial[selected_compare_label]
     return None, None

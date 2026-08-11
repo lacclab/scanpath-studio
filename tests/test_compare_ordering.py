@@ -1,69 +1,18 @@
-"""CMP-6: ordering of the compare-trial (B) selector candidates."""
+"""CMP-6/CMP-10: comparison picker sorting mirrors the main trial picker."""
 
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from scanpath_studio.tabs import _order_compare_options
-from scanpath_studio.utils import SAME_TEXT_MARKER
-
-
-@pytest.fixture
-def trial_words():
-    # One line, four words — enough for word-id sequences (the fixations carry
-    # their own word_id, so no geometric assignment is needed).
-    return pd.DataFrame(
-        {
-            "participant_id": ["p1"] * 4,
-            "trial_id": ["t1"] * 4,
-            "word_id": [1, 2, 3, 4],
-            "text": ["the", "cat", "sat", "down"],
-            "line_idx": [1, 1, 1, 1],
-            "x": [100, 200, 300, 400],
-            "y": [50, 50, 50, 50],
-            "width": [80, 80, 80, 80],
-            "height": [40, 40, 40, 40],
-        }
-    )
-
-
-def _trial_fix(pid, tid, word_ids, dur=100.0):
-    n = len(word_ids)
-    return pd.DataFrame(
-        {
-            "participant_id": [pid] * n,
-            "trial_id": [tid] * n,
-            "word_id": list(word_ids),
-            "x": [140 + 100 * (w - 1) for w in word_ids],
-            "y": [70.0] * n,
-            "duration_ms": [dur] * n,
-            "timestamp_ms": [i * 200 for i in range(n)],
-        }
-    )
-
-
-@pytest.fixture
-def fixations_pool():
-    # Selected trial p1/t1 reads 1-2-3-4. Candidate c-same is identical;
-    # c-diff reads backwards; c-long has the most fixations / reading time;
-    # c-other is a different text (no 📄 marker in the options below).
-    return pd.concat(
-        [
-            _trial_fix("p1", "t1", [1, 2, 3, 4]),
-            _trial_fix("p2", "c-same", [1, 2, 3, 4]),
-            _trial_fix("p3", "c-diff", [4, 3, 2, 1, 1, 4]),
-            _trial_fix("p4", "c-long", [1, 1, 2, 2, 3, 3, 4, 4], dur=300.0),
-            _trial_fix("p5", "c-other", [1, 2]),
-        ],
-        ignore_index=True,
-    )
+from scanpath_studio.tabs import _CMP_SORT_DEFAULT, _order_compare_options
+from scanpath_studio.utils import SAME_TEXT_MARKER, TRIAL_SORT_DEFAULT
 
 
 @pytest.fixture
 def options():
-    # (participant_id, trial_id, label, markers) — as build_comparison_options
-    # returns them; c-other is another text, so it carries no 📄 marker.
+    # build_comparison_options already puts related trials first. Deliberately
+    # leave the ids out of alphabetical/stat order so each sort is observable.
     return [
         ("p3", "c-diff", "📄 c-diff", SAME_TEXT_MARKER),
         ("p2", "c-same", "📄 c-same", SAME_TEXT_MARKER),
@@ -72,60 +21,48 @@ def options():
     ]
 
 
-def _ids(opts):
-    return [o[1] for o in opts]
+@pytest.fixture
+def sort_keys():
+    return {
+        "Fixations (n)": pd.Series(
+            {"c-diff": 6, "c-same": 4, "c-long": 8, "c-other": 2}
+        ),
+        # Missing values must remain last even for a descending sort.
+        "Reading time (s)": pd.Series({"c-diff": 1.2, "c-same": 0.8, "c-long": 3.5}),
+    }
+
+
+def _ids(ordered):
+    return [option[1] for option in ordered]
 
 
 class TestOrderCompareOptions:
-    def test_default_order_is_untouched(self, options, fixations_pool, trial_words):
-        ordered, note = _order_compare_options(
-            options, "Same text first", fixations_pool, trial_words, "p1", "t1"
-        )
+    def test_relation_default_preserves_candidate_priority(self, options, sort_keys):
+        ordered = _order_compare_options(options, _CMP_SORT_DEFAULT, sort_keys)
         assert ordered == options
-        assert note is None
 
-    def test_most_similar_puts_identical_reading_first(
-        self, options, fixations_pool, trial_words
-    ):
-        ordered, note = _order_compare_options(
-            options, "Most similar", fixations_pool, trial_words, "p1", "t1"
-        )
-        assert _ids(ordered)[0] == "c-same"  # NLD 0 — identical sequence
-        # The other-text candidate is unscored and stays last.
-        assert _ids(ordered)[-1] == "c-other"
-        assert note and "NLD" in note
+    def test_trial_id_matches_the_main_picker_default(self, options, sort_keys):
+        ordered = _order_compare_options(options, TRIAL_SORT_DEFAULT, sort_keys)
+        assert _ids(ordered) == ["c-diff", "c-long", "c-other", "c-same"]
 
-    def test_most_different_reverses_the_scored_group(
-        self, options, fixations_pool, trial_words
-    ):
-        ordered, _ = _order_compare_options(
-            options, "Most different", fixations_pool, trial_words, "p1", "t1"
+    def test_generated_stat_key_sorts_ascending_or_descending(self, options, sort_keys):
+        ascending = _order_compare_options(options, "Fixations (n)", sort_keys)
+        descending = _order_compare_options(
+            options, "Fixations (n)", sort_keys, descending=True
         )
-        scored = [t for t in _ids(ordered) if t != "c-other"]
-        assert scored[0] != "c-same"
-        assert scored[-1] == "c-same"
-        assert _ids(ordered)[-1] == "c-other"
+        assert _ids(ascending) == ["c-other", "c-same", "c-diff", "c-long"]
+        assert _ids(descending) == ["c-long", "c-diff", "c-same", "c-other"]
 
-    def test_most_fixations_and_longest_reading(
-        self, options, fixations_pool, trial_words
-    ):
-        by_count, _ = _order_compare_options(
-            options, "Most fixations", fixations_pool, trial_words, "p1", "t1"
+    def test_unranked_trial_stays_last_when_descending(self, options, sort_keys):
+        ordered = _order_compare_options(
+            options, "Reading time (s)", sort_keys, descending=True
         )
-        assert _ids(by_count)[0] == "c-long"  # 8 fixations
-        by_time, _ = _order_compare_options(
-            options, "Longest reading", fixations_pool, trial_words, "p1", "t1"
-        )
-        assert _ids(by_time)[0] == "c-long"  # 8 × 300 ms
+        assert _ids(ordered) == ["c-long", "c-diff", "c-same", "c-other"]
 
-    def test_two_options_pass_through(self, fixations_pool, trial_words):
-        short = [
-            ("p2", "c-same", "📄 c-same", SAME_TEXT_MARKER),
-            ("p3", "c-diff", "📄 c-diff", SAME_TEXT_MARKER),
-        ]
-        ordered, note = _order_compare_options(
-            short, "Most similar", fixations_pool, trial_words, "p1", "t1"
+    def test_single_candidate_is_untouched(self, options, sort_keys):
+        assert (
+            _order_compare_options(
+                options[:1], "Fixations (n)", sort_keys, descending=True
+            )
+            == options[:1]
         )
-        # len < 2 guard doesn't apply (2 options), so ordering still runs;
-        # identical reading leads either way.
-        assert _ids(ordered)[0] == "c-same"

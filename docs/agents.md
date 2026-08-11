@@ -48,6 +48,7 @@ names; everything downstream assumes them.
 |--------|---------|
 | `participant_id` | Reader id (string). Optional in the source: a stimulus-level word table with no reader column is broadcast across the readers found in the fixations. |
 | `trial_id` | One reading of one text by one reader. **Required.** (`unique_trial_id` rides along when the source ships one.) |
+| `screen_id`, `screen_index` | Optional child screen and 1-based order inside a multipart logical trial. Map in both reports. |
 | `text_id` | Which text/passage the row belongs to (plus `unique_text_id` when the source has a corpus-wide id). |
 | `word_id` | Word index within the trial. **Required** — it is the join key to fixations. |
 | `text` | The word itself (what gets drawn in the boxes). |
@@ -64,10 +65,12 @@ are carried through under their canonical / original names when present.
 |--------|---------|
 | `participant_id` | Reader id. Optional in the source (a dataset without one becomes a single anonymous reader). |
 | `trial_id` | Must match the words table. **Required.** |
+| `screen_id`, `screen_index` | Optional child screen and 1-based order; scientific operations never join across it. |
 | `text_id` | Text/passage id, when present. |
 | `x`, `y` | Fixation location in screen px. **Required unless** `word_id` is given — AOI-sequence data is placed at word-box centers. |
 | `duration_ms` | Fixation duration. **Required.** |
 | `timestamp_ms` | Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case. |
+| `screen_timestamp_ms`, `screen_fixation_id` | Optional local clock/id that resets per screen; retained alongside the parent-global columns. |
 | `word_id` | Source word/AOI assignment, carried through when the export has one — otherwise `NaN`. Nothing recomputes it at load time; the assignment (box containment, then nearest word center within 50 px) happens inside `compute_word_metrics` and the plots that need it. |
 | `order_in_trial` | 1-based fixation index, added during normalization. |
 | `fixation_id` | Always present — mapped from the source when it has one, otherwise synthesized as a per-trial running index (1, 2, 3, …). |
@@ -136,6 +139,12 @@ words, fixations = sps.load_scanpath_data(fixations="fix.parquet")     # one tab
   `sps.load_potec(dir)`, `sps.load_onestop(dir)`, `sps.load_multipleye(dir)` —
   they return the same normalized pair. See [OneStop](onestop.md) and
   [MultiplEYE](multipleye.md).
+
+For a multipart parent, inspect `sps.list_parts(words, fixations, pid, tid)`,
+pass `screen="…"` to `plot_scanpath` / `animate_scanpath`, or call
+`sps.render_parent_trial(...)` for an ordered mapping of per-screen figures.
+Data without explicit screen columns can use `trial_parts_manifest=`; see
+[Data format](data-format.md#multipart-logical-trials).
 
 ### When auto-detection can't find a column
 

@@ -14,6 +14,7 @@ the repo root (kept current as the code changes); this is the short version.
 | `tabs.py` | View renderers: Scanpath Visualization (Annotations / Stimulus & questions / Comparisons / Line assignment / Export / Data Inspection / Share subtabs), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections). |
 | `controls.py` | Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel. |
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
+| `multipart.py` | Ordered child-screen identity, validation, manifest assignment, screen catalogues, and per-screen canvas metadata. |
 | `measures.py` | Canonical reading measures (FFD/FPRT/RPD/TFD, regressions) + geometry helpers. |
 | `plots.py` | Plotly figure builders (scanpath, animation, comparison, trends, histograms, heatmaps). |
 | `authoring.py` / `authoring_component.py` | Deterministic text/word geometry, stable fixation-event reducers and JSON migration; bidirectional click/drag canvas for the Streamlit authoring source. |
@@ -23,8 +24,8 @@ the repo root (kept current as the code changes); this is the short version.
 | `export_status.py` | Shared honest export stages, validated real-unit progress, and deterministic static-result signatures. |
 | `api.py` | Headless public API (re-exported lazily from the package root). |
 | `cli.py` | Console entry point (`run` / `render`). |
-| `tour.py` | First-visit welcome tour + the dataset-setup guide card. |
-| `annotations.py` | Per-trial favorites / tags / notes (session state + JSON). |
+| `tour.py` | First-visit/setup guides plus the registry and progress for task-oriented in-app tutorials. |
+| `annotations.py` | Parent-trial and optional screen-scoped favorites / tags / notes (session state + JSON). |
 | `persistence.py` | On-device recovery cache for a local/desktop session (datasets, mappings, settings, annotations), inspected and cleared from the sidebar panel, `scanpath-studio cache`, and `api.cache_status`. |
 | `alignment.py` | Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. |
 | `datasets.py` | Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE). |
@@ -40,6 +41,7 @@ see the [Desktop app](desktop.md) page and the
 ```text
 uploaded / sample table(s)
     → infer_*_schema → normalize_*           (canonical columns)
+    → normalize/validate screen identity     (multipart data only)
     → filter_data → build_combo_options      (trial pool)
     → make_*_figure / compute_word_metrics / bulk_export
 ```

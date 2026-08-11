@@ -919,6 +919,20 @@ WORD_FIELD_SPECS: List[Dict] = [
         "help": _TRIAL_MAPPING_HELP,
     },
     {
+        "key": "screen_id",
+        "label": "Screen / part ID",
+        "required": False,
+        "help": "Child screen inside a logical trial. Leave empty for ordinary "
+        "single-screen trials.",
+    },
+    {
+        "key": "screen_index",
+        "label": "Screen order",
+        "required": False,
+        "help": "Positive 1-based screen order inside the parent trial. If only a "
+        "screen ID is mapped, order follows first appearance.",
+    },
+    {
         "key": "word_id",
         "label": "Word/IA ID",
         "required": True,
@@ -946,6 +960,18 @@ WORD_FIELD_SPECS: List[Dict] = [
         "(otherwise inferred from box Y).",
     },
     {
+        "key": "canvas_width",
+        "label": "Screen canvas width",
+        "required": False,
+        "help": "Recorded canvas width in pixels; must be constant within a screen.",
+    },
+    {
+        "key": "canvas_height",
+        "label": "Screen canvas height",
+        "required": False,
+        "help": "Recorded canvas height in pixels; must be constant within a screen.",
+    },
+    {
         "key": "box",
         "kind": "box",
         "label": "Word box",
@@ -967,6 +993,18 @@ FIX_FIELD_SPECS: List[Dict] = [
         "required": True,
         "multi": True,
         "help": _TRIAL_MAPPING_HELP,
+    },
+    {
+        "key": "screen_id",
+        "label": "Screen / part ID",
+        "required": False,
+        "help": "Child screen inside a logical trial. Map this in both reports.",
+    },
+    {
+        "key": "screen_index",
+        "label": "Screen order",
+        "required": False,
+        "help": "Positive 1-based screen order inside the parent trial.",
     },
     {
         "key": "x",
@@ -992,14 +1030,28 @@ FIX_FIELD_SPECS: List[Dict] = [
         "key": "timestamp",
         "label": "Timestamp (ms)",
         "required": False,
-        "help": "Fixation onset time (ms); orders fixations and drives the "
-        "animation clock. Defaults to row order.",
+        "help": "Parent-trial fixation onset (ms); orders the full trial and drives "
+        "animation. Defaults to row order.",
+    },
+    {
+        "key": "screen_timestamp",
+        "label": "Screen-local timestamp (ms)",
+        "required": False,
+        "help": "Optional onset that resets within each screen. Kept alongside the "
+        "parent-trial timestamp rather than replacing it.",
     },
     {
         "key": "fixation_id",
         "label": "Fixation ID",
         "required": False,
         "help": "Sequential fixation number within a trial. Defaults to row order.",
+    },
+    {
+        "key": "screen_fixation_id",
+        "label": "Screen-local fixation ID",
+        "required": False,
+        "help": "Optional fixation number that resets within each screen; the "
+        "parent-global fixation ID is retained separately.",
     },
     {
         "key": "text_id",
@@ -1015,6 +1067,18 @@ FIX_FIELD_SPECS: List[Dict] = [
         "help": "Which word/AOI each fixation landed on. Authoritative when "
         "present (overrides geometric assignment), and supplies the location "
         "when X/Y are absent.",
+    },
+    {
+        "key": "canvas_width",
+        "label": "Screen canvas width",
+        "required": False,
+        "help": "Recorded canvas width in pixels; must be constant within a screen.",
+    },
+    {
+        "key": "canvas_height",
+        "label": "Screen canvas height",
+        "required": False,
+        "help": "Recorded canvas height in pixels; must be constant within a screen.",
     },
     # pass_index / saccade_type / saccade_amplitude / eye are no longer explicit
     # mapping fields — they're auto-detected and offered under "fields to keep"
@@ -1036,6 +1100,18 @@ RAW_GAZE_FIELD_SPECS: List[Dict] = [
         "required": True,
         "multi": True,
         "help": _TRIAL_MAPPING_HELP,
+    },
+    {
+        "key": "screen_id",
+        "label": "Screen / part ID",
+        "required": False,
+        "help": "Child screen inside a logical trial.",
+    },
+    {
+        "key": "screen_index",
+        "label": "Screen order",
+        "required": False,
+        "help": "Positive 1-based order inside the parent trial.",
     },
     {
         "key": "x",

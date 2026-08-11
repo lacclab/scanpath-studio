@@ -60,6 +60,13 @@ from .constants import (  # noqa: E402
     palette_settings,
 )
 from .export import annotate_figure  # noqa: E402
+from .multipart import (  # noqa: E402
+    SCREEN_ID,
+    apply_trial_parts_manifest,
+    extract_part,
+    part_catalog,
+    screen_canvas_size,
+)
 from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
     STATIC_FIGURE_OPTIONS,
@@ -506,6 +513,7 @@ def load_scanpath_data(
     *,
     word_schema: Optional[dict] = None,
     fix_schema: Optional[dict] = None,
+    trial_parts_manifest: Optional[dict] = None,
     image_root: Optional[Union[str, Path]] = None,
     image_pattern: str = "{text_id}.png",
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -520,7 +528,11 @@ def load_scanpath_data(
     name, see ``controls.WORD_FIELD_SPECS``) to override detection. For
     per-word reading measures, pass the result to :func:`compute_word_metrics`.
 
-    Either table may be omitted for datasets that ship only one report: the
+    ``trial_parts_manifest`` accepts a nested parent-trial/parts definition for
+    datasets whose source tables identify screens through arbitrary selector
+    columns; explicit ``screen_id`` / ``screen_index`` columns can instead be
+    mapped directly in each schema. Either table may be omitted for datasets
+    that ship only one report: the
     missing side comes back as an empty canonical frame and the plots simply
     skip that layer. Words without a participant column (stimulus-level AoIs)
     are broadcast across the participants found in the fixations, and
@@ -544,6 +556,10 @@ def load_scanpath_data(
         if problems:
             raise _schema_error("words", words_df, word_schema, problems, explicit)
         words_norm = _data.normalize_words(words_df, word_schema)
+        if trial_parts_manifest is not None:
+            words_norm = apply_trial_parts_manifest(
+                words_norm, words_df, trial_parts_manifest, kind="words"
+            )
     else:
         words_norm = _data.empty_words_frame()
 
@@ -558,6 +574,13 @@ def load_scanpath_data(
                 "fixations", fixations_df, fix_schema, problems, explicit
             )
         fixations_norm = _data.normalize_fixations(fixations_df, fix_schema)
+        if trial_parts_manifest is not None:
+            fixations_norm = apply_trial_parts_manifest(
+                fixations_norm,
+                fixations_df,
+                trial_parts_manifest,
+                kind="fixations",
+            )
     else:
         fixations_norm = _data.empty_fixations_frame()
 
@@ -775,6 +798,28 @@ def list_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
     return combos.sort_values(cols).reset_index(drop=True)
 
 
+def list_parts(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    participant: Optional[str] = None,
+    trial: Optional[str] = None,
+) -> pd.DataFrame:
+    """Ordered screens in multipart data, optionally narrowed to one parent.
+
+    Legacy single-screen data returns an empty table: it has no synthetic
+    exported screen row, so existing callers can distinguish recorded part
+    identity from the compatibility default.
+    """
+    _require_normalized(words, "words")
+    _require_normalized(fixations, "fixations")
+    catalog = part_catalog(words, fixations)
+    if participant is not None:
+        catalog = catalog[catalog["participant_id"].astype(str) == str(participant)]
+    if trial is not None:
+        catalog = catalog[catalog["trial_id"].astype(str) == str(trial)]
+    return catalog.reset_index(drop=True)
+
+
 def _resolve_trial(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -873,6 +918,38 @@ def _select_trial(
             "placed at word-box centers."
         )
     return trial_words, trial_fixations, pid, tid
+
+
+def _select_part(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    participant: Optional[str],
+    trial: Optional[str],
+    screen: Optional[str],
+) -> Tuple[pd.DataFrame, pd.DataFrame, str, str, Optional[str]]:
+    """Resolve one logical trial and, for multipart data, exactly one screen."""
+    trial_words, trial_fixations, pid, tid = _select_trial(
+        words, fixations, participant, trial
+    )
+    catalog = part_catalog(trial_words, trial_fixations)
+    if catalog.empty:
+        if screen is not None:
+            raise ValueError("screen= was supplied for a single-screen trial.")
+        return trial_words, trial_fixations, pid, tid, None
+    available = catalog[SCREEN_ID].astype(str).tolist()
+    selected = str(screen) if screen is not None else available[0]
+    if selected not in available:
+        raise ValueError(
+            f"Unknown screen={selected!r} for participant={pid!r}, trial={tid!r}. "
+            f"Available: {', '.join(repr(value) for value in available)}."
+        )
+    return (
+        extract_part(trial_words, pid, tid, selected),
+        extract_part(trial_fixations, pid, tid, selected),
+        pid,
+        tid,
+        selected,
+    )
 
 
 def _apply_fix_index_range(
@@ -1064,6 +1141,7 @@ def plot_scanpath(
     participant: Optional[str] = None,
     trial: Optional[str] = None,
     *,
+    screen: Optional[str] = None,
     canvas_size: Optional[Tuple[int, int]] = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
@@ -1084,7 +1162,9 @@ def plot_scanpath(
     the frames contain exactly one combo. ``canvas_size`` is the monitor size
     in px; by default it is estimated from the data extents — pass the real
     monitor resolution (e.g. ``(2560, 1440)`` for OneStop) to keep coordinates
-    true to scale. ``raw_gaze`` is a normalized frame (see
+    true to scale. For a multipart trial, ``screen`` selects one child screen;
+    omitting it selects the first recorded screen and never concatenates
+    coordinate spaces. ``raw_gaze`` is a normalized frame (see
     :func:`data.normalize_raw_gaze`) and is filtered to the selected trial.
 
     ``drift_correction`` (PRE-3/PRE-17) names a method from
@@ -1129,8 +1209,8 @@ def plot_scanpath(
     _reject_unknown_options(
         figure_overrides, _STATIC_FIGURE_PARAMS | {"palette"}, "plot_scanpath"
     )
-    trial_words, trial_fixations, pid, tid = _select_trial(
-        words, fixations, participant, trial
+    trial_words, trial_fixations, pid, tid, selected_screen = _select_part(
+        words, fixations, participant, trial, screen
     )
     full_fix_range = None
     if not trial_fixations.empty and "order_in_trial" in trial_fixations.columns:
@@ -1140,7 +1220,11 @@ def plot_scanpath(
         if not order.empty:
             full_fix_range = (int(order.min()), int(order.max()))
     if canvas_size is None:
-        canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
+        canvas_size = screen_canvas_size(trial_words)
+        if canvas_size is None:
+            canvas_size = screen_canvas_size(trial_fixations)
+        if canvas_size is None:
+            canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
     # Window first, correct second — the app's order (tabs._slice_fix_range runs
     # before alignment.correct), so a windowed correction sees only the kept
     # fixations.
@@ -1174,6 +1258,8 @@ def plot_scanpath(
     if raw_gaze is not None:
         _require_normalized(raw_gaze, "raw_gaze")
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
+        if selected_screen is not None and SCREEN_ID in raw_gaze.columns:
+            raw_gaze = extract_part(raw_gaze, pid, tid, selected_screen)
         settings.setdefault("show_raw_gaze", True)
     render_settings = FigureSettings.from_mapping(
         settings,
@@ -1200,6 +1286,7 @@ def animate_scanpath(
     participant: Optional[str] = None,
     trial: Optional[str] = None,
     *,
+    screen: Optional[str] = None,
     canvas_size: Optional[Tuple[int, int]] = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
@@ -1212,7 +1299,8 @@ def animate_scanpath(
 ) -> go.Figure:
     """Build the animated scanpath replay for one trial.
 
-    Same trial selection and canvas semantics as :func:`plot_scanpath`. The
+    Same trial selection and canvas semantics as :func:`plot_scanpath`, including
+    ``screen`` selection for multipart trials. The
     returned Plotly figure plays in real reading time scaled by
     ``playback_speed``; save it as interactive HTML with :func:`save_figure`,
     or rasterize to GIF/MP4 with :func:`animation_export.export_animation`.
@@ -1257,12 +1345,16 @@ def animate_scanpath(
     # `plot_scanpath` and `animate_scanpath` don't render the same trial
     # differently (the app feeds both from one settings dict).
     animation_overrides = {**_animation_defaults(), **animation_overrides}
-    trial_words, trial_fixations, pid, tid = _select_trial(
-        words, fixations, participant, trial
+    trial_words, trial_fixations, pid, tid, _selected_screen = _select_part(
+        words, fixations, participant, trial, screen
     )
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
     if canvas_size is None:
-        canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
+        canvas_size = screen_canvas_size(trial_words)
+        if canvas_size is None:
+            canvas_size = screen_canvas_size(trial_fixations)
+        if canvas_size is None:
+            canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
     fixations_b = animation_overrides.pop("fixations_b", None)
     words_b = animation_overrides.pop("words_b", None)
     render_settings = FigureSettings.from_mapping(
@@ -1283,6 +1375,69 @@ def animate_scanpath(
     )
     annotate_figure(fig, title=title, caption=caption)
     return fig
+
+
+def render_parent_trial(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    participant: Optional[str] = None,
+    trial: Optional[str] = None,
+    *,
+    animate: bool = False,
+    transition_mode: str = "instant",
+    **options,
+) -> dict[str, go.Figure]:
+    """Render every screen of one logical trial without stitching coordinates.
+
+    The ordered mapping is keyed by ``screen_id``. Each value is the same figure
+    returned by :func:`plot_scanpath` or :func:`animate_scanpath`; callers can
+    save them into deterministic per-screen files. ``transition_mode`` is
+    ``"instant"`` or ``"recorded"``. For animated output, each figure's
+    ``layout.meta['transition_after_ms']`` records the delay before the next
+    screen (zero for instant mode, or the observed parent-clock gap). No visual
+    saccade is ever drawn across the boundary.
+    """
+    if transition_mode not in {"instant", "recorded"}:
+        raise ValueError("transition_mode must be 'instant' or 'recorded'.")
+    pid, tid = _resolve_trial(words, fixations, participant, trial)
+    catalog = list_parts(words, fixations, pid, tid)
+    if catalog.empty:
+        renderer = animate_scanpath if animate else plot_scanpath
+        return {"screen-1": renderer(words, fixations, pid, tid, **options)}
+
+    screen_ids = catalog[SCREEN_ID].astype(str).tolist()
+    rendered: dict[str, go.Figure] = {}
+    for position, screen_id in enumerate(screen_ids):
+        renderer = animate_scanpath if animate else plot_scanpath
+        fig = renderer(words, fixations, pid, tid, screen=screen_id, **options)
+        delay = 0.0
+        if animate and transition_mode == "recorded" and position < len(screen_ids) - 1:
+            current = extract_part(fixations, pid, tid, screen_id)
+            following = extract_part(fixations, pid, tid, screen_ids[position + 1])
+            if not current.empty and not following.empty:
+                current_end = (
+                    pd.to_numeric(current["timestamp_ms"], errors="coerce")
+                    + pd.to_numeric(current["duration_ms"], errors="coerce").fillna(0)
+                ).max()
+                next_start = pd.to_numeric(
+                    following["timestamp_ms"], errors="coerce"
+                ).min()
+                if pd.notna(current_end) and pd.notna(next_start):
+                    delay = max(0.0, float(next_start - current_end))
+        existing_meta = fig.layout.meta if isinstance(fig.layout.meta, dict) else {}
+        fig.update_layout(
+            meta={
+                **existing_meta,
+                "participant_id": pid,
+                "trial_id": tid,
+                "screen_id": screen_id,
+                "screen_index": position + 1,
+                "transition_mode": transition_mode,
+                "transition_after_ms": delay,
+            }
+        )
+        rendered[screen_id] = fig
+    return rendered
 
 
 def save_figure(

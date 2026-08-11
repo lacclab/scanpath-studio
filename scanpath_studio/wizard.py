@@ -1433,6 +1433,49 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "Texts (optional)",
         )
 
+    # DATA-21: optional child-screen identity lives beside (not inside) the
+    # logical trial id. Keep both reports explicit so a page/screen column can
+    # never be guessed in one table while silently absent from the other.
+    if has_words or has_fix:
+        sbox = toggle("Multipart screens (optional)", done=True)
+        sbox.caption(
+            "Map these only when one logical trial contains ordered screens. "
+            "Screen ID must be mapped in both reports; screen order is 1-based."
+        )
+        if has_words:
+            sbox.markdown("**Words / Interest Areas**")
+            word_schema.update(
+                _map_section(
+                    raw_words,
+                    WORD_FIELD_SPECS,
+                    prop_w,
+                    "col_map_words",
+                    sbox,
+                    ["screen_id", "screen_index", "canvas_width", "canvas_height"],
+                    step_title="Multipart screens (optional)",
+                )
+            )
+        if has_fix:
+            sbox.markdown("**Fixations**")
+            fix_schema.update(
+                _map_section(
+                    raw_fix,
+                    FIX_FIELD_SPECS,
+                    prop_f,
+                    "col_map_fix",
+                    sbox,
+                    [
+                        "screen_id",
+                        "screen_index",
+                        "screen_timestamp",
+                        "screen_fixation_id",
+                        "canvas_width",
+                        "canvas_height",
+                    ],
+                    step_title="Multipart screens (optional)",
+                )
+            )
+
     # Column mapping: Fixations — required fields (coordinates + duration) plus
     # the fixation id.
     if has_fix:
@@ -1531,7 +1574,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
             prop_g,
             "col_map_raw_gaze",
             rgbox,
-            ["participant", "trial", "x", "y", "timestamp", "text"],
+            [
+                "participant",
+                "trial",
+                "screen_id",
+                "screen_index",
+                "x",
+                "y",
+                "timestamp",
+                "text",
+            ],
             step_title=(
                 "Raw gaze overlay" if rg_required else "Raw gaze overlay (optional)"
             ),

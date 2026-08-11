@@ -9,6 +9,12 @@ Use the participant and trial pickers above the plot. Trial filters define which
 readings are available; ordering helps surface long, short, early, or late
 trials. The detail popover shows the active trial's summary fields.
 
+When a trial contains ordered screens, a second navigator appears below the
+trial picker. The plot always shows one screen in its own recorded canvas; use
+the previous/next buttons or screen menu to move between them. Figure links and
+saved configurations retain the active screen, and **Annotations** lets you
+choose parent-trial or current-screen scope.
+
 ## Control the layers
 
 The rail beside the plot groups the layers by what they describe. **Quick

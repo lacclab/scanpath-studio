@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import streamlit as st
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Per-trial annotation widgets use this prefix so they can be cleared on import
 # (forcing a re-seed from the freshly loaded store), e.g. by `restore_records`.
@@ -28,8 +28,10 @@ _WIDGET_PREFIX = "annotrial_"
 # Always-available tag suggestions (users can add their own on top).
 PRESET_TAGS = ["To exclude", "Review", "Good example", "Check alignment"]
 
-# (participant_id, trial_id) -> {"star": bool, "tags": list[str], "note": str}
-Key = Tuple[str, str]
+# Parent entries use ``(participant_id, trial_id)``; screen entries add a third
+# ``screen_id`` component. Keeping parent keys unchanged preserves filtering and
+# every schema-1 annotation sidecar.
+Key = Tuple[str, ...]
 Entry = Dict[str, object]
 
 
@@ -68,23 +70,31 @@ def records_to_store(records: List[dict]) -> Dict[Key, Entry]:
             rec.get("star", False), rec.get("tags", []), rec.get("note", "")
         )
         if not is_empty_entry(entry):
-            store[(str(pid), str(tid))] = entry
+            screen_id = rec.get("screen_id")
+            key = (
+                (str(pid), str(tid), str(screen_id))
+                if screen_id not in (None, "")
+                else (str(pid), str(tid))
+            )
+            store[key] = entry
     return store
 
 
 def store_to_records(store: Dict[Key, Entry]) -> List[dict]:
     """Flatten a store into a sorted list of records for JSON export."""
     records = []
-    for (pid, tid), entry in sorted(store.items()):
-        records.append(
-            {
-                "participant_id": pid,
-                "trial_id": tid,
-                "star": bool(entry.get("star", False)),
-                "tags": list(entry.get("tags", [])),
-                "note": str(entry.get("note", "")),
-            }
-        )
+    for key, entry in sorted(store.items()):
+        pid, tid, *screen = key
+        record = {
+            "participant_id": pid,
+            "trial_id": tid,
+            "star": bool(entry.get("star", False)),
+            "tags": list(entry.get("tags", [])),
+            "note": str(entry.get("note", "")),
+        }
+        if screen:
+            record["screen_id"] = screen[0]
+        records.append(record)
     return records
 
 
@@ -116,15 +126,32 @@ def _store() -> Dict[Key, Entry]:
     return st.session_state.setdefault(ANNOTATIONS_STATE_KEY, {})
 
 
-def get_entry(participant_id: str, trial_id: str) -> Entry:
-    return _store().get((str(participant_id), str(trial_id)), default_entry())
+def get_entry(
+    participant_id: str, trial_id: str, screen_id: Optional[str] = None
+) -> Entry:
+    key = (
+        (str(participant_id), str(trial_id), str(screen_id))
+        if screen_id not in (None, "")
+        else (str(participant_id), str(trial_id))
+    )
+    return _store().get(key, default_entry())
 
 
 def set_entry(
-    participant_id: str, trial_id: str, *, star: bool, tags: List[str], note: str
+    participant_id: str,
+    trial_id: str,
+    *,
+    star: bool,
+    tags: List[str],
+    note: str,
+    screen_id: Optional[str] = None,
 ) -> None:
     """Upsert an annotation; empty entries are pruned to keep the store small."""
-    key = (str(participant_id), str(trial_id))
+    key = (
+        (str(participant_id), str(trial_id), str(screen_id))
+        if screen_id not in (None, "")
+        else (str(participant_id), str(trial_id))
+    )
     entry = _normalize_entry(star, tags, note)
     store = _store()
     if is_empty_entry(entry):
@@ -179,13 +206,30 @@ def _add_tag_callback(tags_key: str, newtag_key: str) -> None:
 
 
 def render_trial_annotations(
-    participant_id: str, trial_id: str, *, bare: bool = False
+    participant_id: str,
+    trial_id: str,
+    *,
+    screen_id: Optional[str] = None,
+    bare: bool = False,
 ) -> None:
     """Render the per-trial annotations (star / tags / notes).
 
     ``bare=True`` drops the expander wrapper so it can sit inside a subtab."""
-    entry = get_entry(participant_id, trial_id)
-    slug = f"{participant_id}__{trial_id}"
+    annotation_screen = None
+    if screen_id is not None:
+        scope_key = f"{_WIDGET_PREFIX}scope_{participant_id}__{trial_id}"
+        scope = st.radio(
+            "Annotation scope",
+            ["Parent trial", "This screen"],
+            key=scope_key,
+            horizontal=True,
+            help="Parent annotations follow the logical trial; screen annotations "
+            "describe only the active coordinate space.",
+        )
+        if scope == "This screen":
+            annotation_screen = str(screen_id)
+    entry = get_entry(participant_id, trial_id, annotation_screen)
+    slug = f"{participant_id}__{trial_id}__{annotation_screen or 'parent'}"
     star_key = f"{_WIDGET_PREFIX}star_{slug}"
     tags_key = f"{_WIDGET_PREFIX}tags_{slug}"
     note_key = f"{_WIDGET_PREFIX}note_{slug}"
@@ -229,9 +273,20 @@ def render_trial_annotations(
             placeholder="Researcher notes for this trial…",
             height=100,
         )
-        set_entry(participant_id, trial_id, star=star, tags=tags, note=note)
+        set_entry(
+            participant_id,
+            trial_id,
+            star=star,
+            tags=tags,
+            note=note,
+            screen_id=annotation_screen,
+        )
+        scope_caption = (
+            f"screen `{annotation_screen}`" if annotation_screen else "the parent trial"
+        )
         st.caption(
-            "Saved for this session. Use the sidebar **💾 Save & restore** panel "
+            f"Saved for {scope_caption} in this session. Use the sidebar "
+            "**💾 Save & restore** panel "
             "to download all annotations as JSON or restore them."
         )
 

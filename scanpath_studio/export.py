@@ -53,6 +53,13 @@ from .constants import (
 from .data import compute_word_metrics
 from .export_status import ExportStage, StatusCallback, emit_status
 from .measures import assign_fixations_to_words, enrich_fixations
+from .multipart import (
+    SCREEN_ID,
+    SCREEN_INDEX,
+    extract_part,
+    part_catalog,
+    screen_canvas_size,
+)
 from .plots import (
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
@@ -607,10 +614,14 @@ def _plot_config_dict(
     y_field: str,
     settings: dict,
     *,
+    screen_id: Optional[str] = None,
     drift_applied: bool = False,
 ) -> dict:
+    selection = {"participant_id": participant, "trial_id": trial}
+    if screen_id not in (None, ""):
+        selection[SCREEN_ID] = str(screen_id)
     return {
-        "selection": {"participant_id": participant, "trial_id": trial},
+        "selection": selection,
         "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
         "axes": {
             "x_field": x_field,
@@ -1056,7 +1067,19 @@ def bulk_export(
     trial so the UI can update a progress bar.
     """
     combos = _apply_scope(combos, options)
-    progress = ExportProgress(total_trials=len(combos))
+    export_units: list[dict] = []
+    for combo in combos.to_dict("records"):
+        participant, trial = combo["participant_id"], combo["trial_id"]
+        parent_words = extract_trial(words, participant, trial)
+        parent_fixations = extract_trial(fixations, participant, trial)
+        screens = part_catalog(parent_words, parent_fixations)
+        if screens.empty:
+            export_units.append(combo)
+        else:
+            for screen in screens.to_dict("records"):
+                export_units.append({**combo, **screen})
+    units = pd.DataFrame(export_units)
+    progress = ExportProgress(total_trials=len(units))
     started = perf_counter()
     emit_status(
         status_callback,
@@ -1088,11 +1111,13 @@ def bulk_export(
         "",
         "## Layout",
         "- `per_trial/<participant>__<trial>/` holds artifacts for each trial.",
+        "- Multipart parents add `screens/screen-001-<id>/` below that trial.",
         "- `aggregate/` holds long-form tables across every trial in this run.",
         "",
         "## Data dictionary",
         "Canonical column names from the visualization tool:",
         "- participant_id, trial_id, text_id, word_id",
+        "- screen_id, screen_index (multipart trials only)",
         "- x, y, width, height (word bounding boxes in screen px)",
         "- x, y, duration_ms, timestamp_ms (fixations)",
         "- first_fixation_ms (FFD), first_pass_gaze_duration_ms (FPRT / gaze duration)",
@@ -1142,10 +1167,19 @@ def bulk_export(
         started_at=started,
     )
     with _figure_renderer(options.needs_kaleido()) as render_figure:
-        for combo in combos.itertuples(index=False):
+        for combo in units.itertuples(index=False):
             participant = getattr(combo, "participant_id")
             trial = getattr(combo, "trial_id")
+            screen_id = getattr(combo, SCREEN_ID, None)
+            screen_index = getattr(combo, SCREEN_INDEX, None)
+            screen_slug = (
+                f"screen-{int(screen_index):03d}-{_safe_id(screen_id)}"
+                if screen_id is not None and pd.notna(screen_id)
+                else ""
+            )
             slug = f"{_safe_id(participant)}__{_safe_id(trial)}"
+            if screen_slug:
+                slug += f"__{screen_slug}"
 
             # Slice via the same str-normalized position index the live view uses
             # (utils.extract_trial), so the export selects *exactly* what the trial
@@ -1153,6 +1187,21 @@ def bulk_export(
             # miss rows the view finds.
             trial_words = extract_trial(words, participant, trial)
             trial_fix = extract_trial(fixations, participant, trial)
+            trial_raw_gaze = (
+                extract_trial(raw_gaze, participant, trial)
+                if raw_gaze is not None and not raw_gaze.empty
+                else pd.DataFrame()
+            )
+            if screen_slug:
+                trial_words = extract_part(
+                    trial_words, participant, trial, str(screen_id)
+                )
+                trial_fix = extract_part(trial_fix, participant, trial, str(screen_id))
+                trial_raw_gaze = (
+                    extract_part(trial_raw_gaze, participant, trial, str(screen_id))
+                    if not trial_raw_gaze.empty and SCREEN_ID in trial_raw_gaze.columns
+                    else pd.DataFrame()
+                )
 
             # Skip only a genuinely empty trial (nothing to draw). The figure
             # builder renders from fixations alone (words optional — boxes/labels)
@@ -1178,6 +1227,8 @@ def bulk_export(
             )
 
             def _path(artifact: str, ext: str, _f=fields) -> str:
+                if screen_slug:
+                    artifact = f"screens/{screen_slug}/{artifact}"
                 return resolve_export_path(
                     options.path_pattern,
                     _f,
@@ -1220,10 +1271,17 @@ def bulk_export(
                         for name in STATIC_FIGURE_OPTIONS
                         if name in settings
                     }
+                    unit_canvas = screen_canvas_size(trial_words) or screen_canvas_size(
+                        trial_fix
+                    )
                     render_settings = FigureSettings.from_mapping(
                         render_values,
-                        canvas_width=int(canvas_width),
-                        canvas_height=int(canvas_height),
+                        canvas_width=int(
+                            unit_canvas[0] if unit_canvas else canvas_width
+                        ),
+                        canvas_height=int(
+                            unit_canvas[1] if unit_canvas else canvas_height
+                        ),
                         base_font_size=int(base_font_size),
                         font_family=font_family,
                         x_field=x_field,
@@ -1301,6 +1359,7 @@ def bulk_export(
                     x_field,
                     y_field,
                     settings,
+                    screen_id=str(screen_id) if screen_slug else None,
                     drift_applied=drift_applied,
                 )
                 # EXP-2: the title/caption are part of how the figure looked, so
@@ -1342,7 +1401,7 @@ def bulk_export(
                     "saccades": saccade_table(
                         analysis_fix,
                         pixels_per_degree=settings.get("pixels_per_degree"),
-                        raw_gaze=raw_gaze,
+                        raw_gaze=trial_raw_gaze,
                         words=trial_words,
                     ),
                     "sentence_measures": sentence_measures(measured, analysis_fix),

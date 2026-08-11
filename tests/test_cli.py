@@ -490,6 +490,63 @@ def test_render_from_files(tmp_path):
     assert out_file.is_file()
 
 
+def test_render_multipart_manifest_lists_and_renders_all_screens(tmp_path, capsys):
+    import json
+
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+
+    words, fixations = make_multipart_synthetic_data()
+    words["page_code"] = words.pop("screen_id")
+    fixations["page_code"] = fixations.pop("screen_id")
+    words = words.drop(columns=["screen_index", "canvas_width", "canvas_height"])
+    fixations = fixations.drop(
+        columns=["screen_index", "canvas_width", "canvas_height"]
+    )
+    words_path, fixations_path = tmp_path / "words.csv", tmp_path / "fixations.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fixations_path, index=False)
+    manifest = {
+        "trials": [
+            {
+                "participant_id": "synthetic",
+                "trial_id": "multipart_demo",
+                "parts": [
+                    {
+                        "screen_id": screen,
+                        "screen_index": index,
+                        "canvas_width": width,
+                        "canvas_height": height,
+                        "words": {"page_code": screen},
+                        "fixations": {"page_code": screen},
+                    }
+                    for index, (screen, (width, height)) in enumerate(
+                        (("intro", (640, 480)), ("question", (800, 600))), start=1
+                    )
+                ],
+            }
+        ]
+    }
+    manifest_path = tmp_path / "parts.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    common = [
+        "render",
+        "--words",
+        str(words_path),
+        "--fixations",
+        str(fixations_path),
+        "--trial-parts-manifest",
+        str(manifest_path),
+    ]
+    cli.main([*common, "--list-parts"])
+    assert "intro" in capsys.readouterr().out
+
+    output = tmp_path / "parent.html"
+    cli.main([*common, "--all-screens", "-o", str(output)])
+    assert (tmp_path / "parent__screen-001-intro.html").is_file()
+    assert (tmp_path / "parent__screen-002-question.html").is_file()
+
+
 def test_render_fixations_only_multifile(tmp_path):
     """Fixations-only, multi-file glob input renders without a words table."""
     from scanpath_studio import data as data_module

@@ -29,6 +29,7 @@ scanpath_studio/
 ├─ aggregation.py    pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry + per-reader/cohort word profiles, word-vs-feature, rates, reader distributions/summary/landing, group masks + difference/effect-size; plus the legacy trial-index/fixation-index trends)
 ├─ controls.py       the Scanpath rail's viz controls (VIZ-31: quick views + palette, then the collapsible 👁️ Fixations / ↗️ Saccades / 📄 Stimulus / 🔥 Overlays layer sections — each `toggle → ⚙️ style → 🧹 filter` — the canvas/text panel slot, and 📐 Figure & axes) + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
+├─ multipart.py      ordered child-screen identity + validation, nested manifest assignment, per-screen extraction/catalogue/canvas helpers
 ├─ datasets.py       public-corpus ownership (PoTeC, MultiplEYE, OneStop), including server-bundle discovery, feeding the app + headless API
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
 ├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables
@@ -42,7 +43,7 @@ scanpath_studio/
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
 ├─ animation_export.py rasterize the animated scanpath to GIF/MP4 (warm-Kaleido frame render + Pillow/imageio-ffmpeg encode)
 ├─ export_status.py  shared export stage/callback vocabulary + deterministic static-byte signatures
-├─ tour.py           first-visit welcome tutorial (spotlight/dialog styles), replayable from the sidebar
+├─ tour.py           first-visit/setup guides plus the independent task-tutorial registry, navigation, availability and progress
 ├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
 ├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state`/`set_persistence_paused` back the sidebar "🗄️ Recovery cache" panel (`app._render_recovery_cache_panel`), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
@@ -75,11 +76,17 @@ After `normalize_words` / `normalize_fixations`:
   `paragraph_id`; `unique_*` variants kept when present), `word_id`, `text`,
   `line_idx`, `x`, `y`, `width`, `height`. Plus EyeLink IA columns (`IA_*`
   renamed to `first_fixation_ms`, etc.) and linguistic features when shipped.
+- **Multipart words** additionally carry `screen_id`, positive 1-based
+  `screen_index`, and optional per-screen `canvas_width` / `canvas_height`.
 - **Fixations**: `participant_id`, `trial_id`, `text_id`, `x`, `y`,
   `duration_ms`, `timestamp_ms`, `fixation_id` (synthesized per trial when
   absent), `word_id`, `pass_index`, `saccade_type`, `saccade_amplitude`,
   `eye`, `order_in_trial`. (`noise_flag` was removed — it silently dropped
   fixations.)
+- **Multipart fixations** retain those parent-global clock/index columns and add
+  `screen_id`, `screen_index`, optional `screen_timestamp_ms`,
+  `screen_fixation_id`, and per-screen canvas metadata. Scientific grouping
+  uses `(participant_id, trial_id, screen_id)`; never connect coordinate spaces.
 
 ### Reading measures
 
@@ -109,8 +116,9 @@ often a constant in IA exports.
 
 ### Trial annotations & filtering
 
-`annotations.py` keeps per-trial favorites / tags / notes in session state
-(keyed by `(participant_id, trial_id)`), with a pure serialize/deserialize core
+`annotations.py` keeps parent-trial and optional screen-scoped favorites / tags /
+notes in session state (keyed by `(participant_id, trial_id)` or
+`(participant_id, trial_id, screen_id)`), with a pure serialize/deserialize core
 and JSON download/restore in the sidebar. `controls.render_trial_filters` (read back via
 `controls.read_trial_filters`) +
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition

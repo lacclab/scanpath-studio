@@ -133,6 +133,7 @@ from scanpath_studio.datasets import (
 )
 from scanpath_studio.debug_log import install_log_capture, render_debug_panel
 from scanpath_studio.experimental_setup import font_pt_to_px, pixels_per_degree
+from scanpath_studio.multipart import SCREEN_ID, extract_part
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
     STATE_DIR_ENV_VAR,
@@ -153,11 +154,14 @@ from scanpath_studio.tabs import (
     render_single_trial_tab,
 )
 from scanpath_studio.tour import (
+    build_tutorial_context,
     maybe_show_faq,
     maybe_show_welcome_tour,
     render_faq_button,
     render_spotlight_tour,
     render_tour_replay_button,
+    render_tutorial_library,
+    render_use_case_tutorial,
     spotlight_tour_pending,
 )
 from scanpath_studio.url_state import (
@@ -2923,6 +2927,9 @@ def main() -> None:
     # on_click callback, which runs before this point in the rerun.
     maybe_show_welcome_tour()
     render_spotlight_tour()
+    # UX-40: task-oriented tutorials share the spotlight mechanism but keep
+    # their own progress and do not inherit the welcome tour's opt-out.
+    render_use_case_tutorial()
     # UX-15: same deal for the FAQ dialog — the sidebar button that arms it
     # renders at the bottom of this function, so serving it here is what keeps
     # the modal from waiting out the whole rerun.
@@ -3361,18 +3368,19 @@ def main() -> None:
         # view without reopening the sidebar.
         _ds_col, _ = st.columns([2, 5])
         render_data_source_picker(host=_ds_col)
-        render_corpus_analysis_tab(
-            words_filtered,
-            fixations_filtered,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            viz_settings=viz_settings,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-            canvas_renderer=canvas_renderer,
-        )
+        with st.container(key="tutorial_corpus_analysis"):
+            render_corpus_analysis_tab(
+                words_filtered,
+                fixations_filtered,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                viz_settings=viz_settings,
+                line_spacing=line_spacing,
+                scale_text_to_boxes=scale_text_to_boxes,
+                canvas_renderer=canvas_renderer,
+            )
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys; re-read them below so Save & restore captures
@@ -3412,8 +3420,13 @@ def main() -> None:
     _sr_sel = st.session_state.get("_share_selection") or {}
     _sr_pid = str(_sr_sel.get("participant_id") or "")
     _sr_trial = str(_sr_sel.get("trial_id") or "")
+    _sr_screen = _sr_sel.get("screen_id")
     _sr_raw_gaze = (
-        extract_trial(raw_gaze_filtered, _sr_pid, _sr_trial)
+        (
+            extract_part(raw_gaze_filtered, _sr_pid, _sr_trial, _sr_screen)
+            if _sr_screen is not None and SCREEN_ID in raw_gaze_filtered.columns
+            else extract_trial(raw_gaze_filtered, _sr_pid, _sr_trial)
+        )
         if _sr_pid and _sr_trial and not raw_gaze_filtered.empty
         else pd.DataFrame()
     )
@@ -3451,6 +3464,9 @@ def main() -> None:
     # the About popover (moved here from the header).
     _sidebar_group("❓ Help")
     render_tour_replay_button()
+    render_tutorial_library(
+        build_tutorial_context(words_filtered, fixations_filtered, combos)
+    )
     # UX-15: a handful of recurring questions answered in-app, linking out to the
     # full FAQ / tutorials on the docs site for anything longer. Like the tour
     # button it only arms the dialog; maybe_show_faq (above) opens it.

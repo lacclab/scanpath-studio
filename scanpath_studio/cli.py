@@ -170,6 +170,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "'{text_id}.png' or '{participant_id}/{trial_id}.png'.",
     )
     src.add_argument(
+        "--trial-parts-manifest",
+        metavar="PATH",
+        help="JSON manifest that assigns arbitrary source rows to ordered screens "
+        "inside each logical trial. Use with --words/--fixations when the source "
+        "tables have no explicit screen columns.",
+    )
+    src.add_argument(
         "--potec",
         metavar="DIR",
         help="Load the PoTeC corpus (DiLi-Lab/PoTeC) from DIR, downloading "
@@ -245,9 +252,31 @@ def _render_parser() -> argparse.ArgumentParser:
         "-t", "--trial", help="Trial id (default: first for the participant)."
     )
     parser.add_argument(
+        "--screen",
+        help="Screen/part id inside a multipart trial (default: first screen).",
+    )
+    parser.add_argument(
         "--list-trials",
         action="store_true",
         help="Print the available (participant, trial) combos and exit.",
+    )
+    parser.add_argument(
+        "--list-parts",
+        action="store_true",
+        help="Print ordered multipart screens, optionally narrowed by -p/-t, and exit.",
+    )
+    parser.add_argument(
+        "--all-screens",
+        action="store_true",
+        help="Render every screen of the selected parent trial. Screen ids are "
+        "inserted before the output extension.",
+    )
+    parser.add_argument(
+        "--screen-transition",
+        choices=["instant", "recorded"],
+        default="instant",
+        help="For --all-screens --animate, record zero or observed inter-screen "
+        "delay in each output's metadata (default: instant).",
     )
     parser.add_argument(
         "-o",
@@ -781,8 +810,10 @@ def render(argv: List[str]) -> None:
             "--source NAME [--export DIR], or your own tables (--words and/or "
             "--fixations; one of them is enough for single-report datasets)."
         )
-    if not args.list_trials and not args.output:
-        raise SystemExit("Missing -o/--output (or use --list-trials).")
+    if not (args.list_trials or args.list_parts) and not args.output:
+        raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
+    if args.trial_parts_manifest and not (args.words or args.fixations):
+        raise SystemExit("--trial-parts-manifest requires --words and/or --fixations.")
     canvas = _parse_canvas(args.canvas)
     if args.coordinate_grid_spacing is not None and args.coordinate_grid_spacing <= 0:
         raise SystemExit("--coordinate-grid-spacing must be a positive number.")
@@ -858,11 +889,20 @@ def render(argv: List[str]) -> None:
         # to — coords are offset onto the centered stimulus on the real screen.
         canvas = canvas or MULTIPLEYE_MONITOR
     else:
+        manifest = None
+        if args.trial_parts_manifest:
+            try:
+                manifest = json.loads(
+                    Path(args.trial_parts_manifest).read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError) as exc:
+                raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
         words, fixations = api.load_scanpath_data(
             args.words,
             args.fixations,
             image_root=args.image_root,
             image_pattern=args.image_pattern,
+            trial_parts_manifest=manifest,
         )
 
     if args.image_root and not (args.words or args.fixations):
@@ -881,6 +921,13 @@ def render(argv: List[str]) -> None:
     if args.list_trials:
         combos = api.list_trials(words, fixations)
         print(combos.to_string(index=False))
+        return
+    if args.list_parts:
+        parts = api.list_parts(words, fixations, args.participant, args.trial)
+        if parts.empty:
+            print("No multipart screens (the selected data is single-screen).")
+        else:
+            print(parts.to_string(index=False))
         return
 
     try:
@@ -1114,11 +1161,7 @@ def render(argv: List[str]) -> None:
                     if k in overrides
                 }
             )
-            fig = api.animate_scanpath(
-                words,
-                fixations,
-                participant,
-                trial,
+            animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
                 anim_grid_step_ms=args.anim_grid_step_ms,
@@ -1126,21 +1169,80 @@ def render(argv: List[str]) -> None:
                 **anim_kwargs,
                 **common,
             )
+            if args.all_screens:
+                figures = api.render_parent_trial(
+                    words,
+                    fixations,
+                    participant,
+                    trial,
+                    animate=True,
+                    transition_mode=args.screen_transition,
+                    **animation_options,
+                )
+                fig = next(iter(figures.values()))
+            else:
+                fig = api.animate_scanpath(
+                    words,
+                    fixations,
+                    participant,
+                    trial,
+                    screen=args.screen,
+                    **animation_options,
+                )
         else:
-            fig = api.plot_scanpath(
-                words,
-                fixations,
-                participant,
-                trial,
-                # PRE-3: explicit plot_scanpath parameters, not figure
-                # overrides. Defaults (None / False) reproduce the raw
-                # fixations exactly.
+            static_options = dict(
                 drift_correction=args.drift_correction,
                 drift_connectors=args.drift_connectors,
                 illustration_label=args.illustration_label,
                 **overrides,
                 **common,
             )
+            if args.all_screens:
+                figures = api.render_parent_trial(
+                    words,
+                    fixations,
+                    participant,
+                    trial,
+                    **static_options,
+                )
+                fig = next(iter(figures.values()))
+            else:
+                fig = api.plot_scanpath(
+                    words,
+                    fixations,
+                    participant,
+                    trial,
+                    screen=args.screen,
+                    **static_options,
+                )
+        if args.all_screens:
+            target = Path(args.output)
+            written = []
+            for position, (screen_id, screen_figure) in enumerate(
+                figures.items(), start=1
+            ):
+                safe_screen = "".join(
+                    char if char.isalnum() or char in "-_" else "_"
+                    for char in str(screen_id)
+                )
+                screen_path = target.with_name(
+                    f"{target.stem}__screen-{position:03d}-{safe_screen}{target.suffix}"
+                )
+                written.append(
+                    api.save_figure(
+                        screen_figure,
+                        screen_path,
+                        scale=args.scale,
+                        width=args.width,
+                        height=args.height,
+                    )
+                )
+            print(
+                f"Wrote {len(written)} screen figure(s): "
+                + ", ".join(str(path) for path in written),
+                file=sys.stderr,
+            )
+            return
         out = api.save_figure(
             fig, args.output, scale=args.scale, width=args.width, height=args.height
         )
@@ -1184,6 +1286,10 @@ def analyze(argv: List[str]) -> None:
     )
     parser.add_argument("--words", nargs="+", required=True)
     parser.add_argument("--fixations", nargs="+", required=True)
+    parser.add_argument(
+        "--trial-parts-manifest",
+        help="JSON manifest assigning source rows to ordered screens.",
+    )
     parser.add_argument("--output-dir", required=True)
     parser.add_argument(
         "--short-policy",
@@ -1198,7 +1304,19 @@ def analyze(argv: List[str]) -> None:
 
     from . import api
 
-    words, fixations = api.load_scanpath_data(args.words, args.fixations)
+    manifest = None
+    if args.trial_parts_manifest:
+        try:
+            manifest = json.loads(
+                Path(args.trial_parts_manifest).read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"Could not read trial-parts manifest: {exc}") from exc
+    words, fixations = api.load_scanpath_data(
+        args.words,
+        args.fixations,
+        trial_parts_manifest=manifest,
+    )
     policy = {
         "off": "Off",
         "merge": "Merge",

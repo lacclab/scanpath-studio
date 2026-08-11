@@ -31,6 +31,8 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
+from .multipart import grouping_columns
+
 # Default line-misregistration tolerance (px): a fixation that falls outside
 # every word box snaps to the nearest word centre within this radius before it
 # is left unassigned. Shared by the grouped assigner here and the single-frame
@@ -131,7 +133,7 @@ def _sample_trial_words(words: pd.DataFrame) -> pd.DataFrame:
     positions, so clustering lines across a whole corpus would merge different
     trials' words into one "line" and read their interleaved x as gaps.
     """
-    keys = [c for c in ("participant_id", "trial_id") if c in words.columns]
+    keys = grouping_columns(words)
     if not keys:
         return words
     first = words[keys].iloc[0]
@@ -262,13 +264,17 @@ def assign_fixations_to_words(
 
     # Per (participant, trial), do a fast vectorized box-test against that
     # trial's words.
-    groups = out[need_idx].groupby(["participant_id", "trial_id"], sort=False)
-    word_groups = words.groupby(["participant_id", "trial_id"], sort=False)
+    keys = grouping_columns(out)
+    if keys != grouping_columns(words):
+        raise ValueError("Words and fixations use different multipart identities.")
+    groups = out[need_idx].groupby(keys, sort=False)
+    word_groups = words.groupby(keys, sort=False)
 
     assignments = pd.Series(np.nan, index=out.index[need_idx], dtype=float)
-    for (pid, tid), fix_chunk in groups:
+    for group_key, fix_chunk in groups:
+        lookup_key = group_key if len(keys) > 1 else group_key[0]
         try:
-            wchunk = word_groups.get_group((pid, tid))
+            wchunk = word_groups.get_group(lookup_key)
         except KeyError:
             continue
         if wchunk.empty:
@@ -303,7 +309,7 @@ def materialize_runs(fixations: pd.DataFrame) -> pd.DataFrame:
         out[column] = pd.NA
     if active.empty:
         return out.sort_index()
-    keys = [c for c in ("participant_id", "trial_id") if c in active]
+    keys = grouping_columns(active)
     order_cols = keys + (["timestamp_ms"] if "timestamp_ms" in out else [])
     active = active.sort_values(order_cols, kind="stable")
     group = active.groupby(keys, sort=False, dropna=False) if keys else [((), active)]
@@ -355,9 +361,10 @@ def enrich_fixations(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.DataFra
     if fixations.empty:
         return fixations
     out = fixations.copy()
-    out = out.sort_values(["participant_id", "trial_id", "timestamp_ms"])
+    keys = grouping_columns(out)
+    out = out.sort_values(keys + ["timestamp_ms"])
 
-    g = out.groupby(["participant_id", "trial_id"], sort=False)
+    g = out.groupby(keys, sort=False)
     dx = g["x"].diff()
     dy = g["y"].diff()
     if "saccade_amplitude" not in out.columns:
@@ -368,7 +375,7 @@ def enrich_fixations(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.DataFra
         )
     incoming = np.degrees(np.arctan2(-dy, dx))
     out["angle_incoming"] = incoming
-    g = out.groupby(["participant_id", "trial_id"], sort=False)
+    g = out.groupby(keys, sort=False)
     out["angle_outgoing"] = g["angle_incoming"].shift(-1)
 
     next_word = g["word_id"].shift(-1)
@@ -405,7 +412,7 @@ def classify_saccades(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.Series
     if fixations.empty:
         return pd.Series([], dtype=object, index=fixations.index)
 
-    keys = [k for k in ("participant_id", "trial_id") if k in fixations.columns]
+    keys = grouping_columns(fixations)
     sort_cols = keys + (["timestamp_ms"] if "timestamp_ms" in fixations.columns else [])
     order = fixations.sort_values(sort_cols).index if sort_cols else fixations.index
 
@@ -556,13 +563,11 @@ def _groupwise(fixations: pd.DataFrame, words: pd.DataFrame, fn) -> pd.Series:
 
     Falls back to a single group when the id columns are absent (e.g. the
     figure builders pass already-sliced single-trial frames)."""
-    keys = ["participant_id", "trial_id"]
+    keys = grouping_columns(fixations)
     # object dtype so a chunk fn may return bools (in-text) or floats (line ids)
     # without triggering a dtype-incompatibility cast; callers coerce the result.
     out = pd.Series(np.nan, index=fixations.index, dtype=object)
-    has_groups = set(keys).issubset(fixations.columns) and set(keys).issubset(
-        words.columns
-    )
+    has_groups = bool(keys) and keys == grouping_columns(words)
     if not has_groups:
         out.loc[:] = fn(fixations, words)
         return out
@@ -641,7 +646,7 @@ def compute_per_word_measures(
     )
 
     out = words.copy()
-    key_cols = ["participant_id", "trial_id", "word_id"]
+    key_cols = grouping_columns(words, include_word=True)
 
     # Initialize defaults
     computed = (
@@ -672,9 +677,12 @@ def compute_per_word_measures(
     if not analysis_fixations.empty and "word_id" in analysis_fixations.columns:
         per_word_rows = []
         # Group fixations by trial to walk them in temporal order.
-        for (pid, tid), fix_chunk in analysis_fixations.dropna(
+        trial_keys = grouping_columns(analysis_fixations)
+        for group_key, fix_chunk in analysis_fixations.dropna(
             subset=["word_id"]
-        ).groupby(["participant_id", "trial_id"], sort=False):
+        ).groupby(trial_keys, sort=False):
+            values = group_key if isinstance(group_key, tuple) else (group_key,)
+            identity = dict(zip(trial_keys, values))
             fix_chunk = fix_chunk.sort_values("timestamp_ms")
             # Total / n / first-fixation are per-word aggregations
             grp = fix_chunk.groupby("word_id")
@@ -776,11 +784,10 @@ def compute_per_word_measures(
                 regression_path.setdefault(k, v)
 
             for w in tot.index:
-                trial_word = words[
-                    (words["participant_id"] == pid)
-                    & (words["trial_id"] == tid)
-                    & (pd.to_numeric(words["word_id"], errors="coerce") == w)
-                ]
+                word_mask = pd.to_numeric(words["word_id"], errors="coerce") == w
+                for column, value in identity.items():
+                    word_mask &= words[column] == value
+                trial_word = words[word_mask]
                 landing_position = landing_distance = np.nan
                 if not trial_word.empty:
                     target = trial_word.iloc[0]
@@ -798,8 +805,7 @@ def compute_per_word_measures(
                         landing_distance = landing_position - (text_len + 1) / 2.0
                 per_word_rows.append(
                     dict(
-                        participant_id=pid,
-                        trial_id=tid,
+                        **identity,
                         word_id=w,
                         _first_fixation_ms=float(ffd.loc[w]),
                         _first_pass_gaze_ms=float(first_pass_gaze.get(w, np.nan)),

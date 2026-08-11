@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Multipart logical trials and task-oriented in-app tutorials** (DATA-21, UX-40) — ordered child screens now retain independent geometry/timing and never form cross-screen saccades, while five outcome-based tutorials can open and highlight the relevant app surfaces without changing research state.
 - **Author scanpaths directly on the stimulus canvas** (VIZ-33) — typed text now produces inspectable word geometry and one default fixation per word; click to add, drag to move, select/delete on the canvas, or edit stable-ID rows where X/Y are primary and target word is optional. Schema-2 authoring JSON preserves the layout and remains loadable from the app, CLI, and Python API.
 - **Optional monitor-pixel coordinate grid** (VIZ-34) — a zero-anchored X/Y grid with automatic or manual major spacing is available in static, animation, and all comparison layouts, and round-trips through Share links, saved configs, the CLI, Python API, and bulk manifests without changing the default off-state.
 - **Honest progress for every app export path** (EXP-6) — static, animation, and bulk exports now share visible stages, expose determinate counts only for real frames/trials, include encoding and zip finalization, retain successful downloads across reruns, and safely reuse identical static bytes by a full output signature.
@@ -19,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **One figure-settings contract now powers every renderer** (ENG-28) — the UI, headless API, bulk export, static scanpath, animation, and comparison paths share `FigureSettings` instead of forwarding dozens of parallel arguments. Public `plot_scanpath` and `animate_scanpath` keywords remain unchanged.
 - **Core module ownership is one-way** (ENG-28) — MultiplEYE server loading belongs to `datasets.py`, while run materialization belongs to `measures.py`, removing the `data`/`datasets` and `measures`/`preprocessing` import cycles.
+
+### Details
+
+#### Added
+
+- **Multipart trials** (DATA-21) — an optional `screen_id` + positive `screen_index` extends the existing participant/trial key without changing legacy data. The loader validates matching reports, unique order, and per-screen canvas metadata; parent-global and screen-local clocks/indices coexist. The main view navigates one screen at a time, annotations support parent or screen scope, measures/saccades cannot cross coordinate spaces, Share/save state retains the screen, and bulk output gets deterministic screen folders. Explicit columns work in the upload wizard; arbitrary source selectors work through an API/CLI JSON manifest. `list_parts`, `plot_scanpath(screen=…)`, `animate_scanpath(screen=…)`, and `render_parent_trial` expose the same model headlessly, with user-selected instant or recorded animation gaps.
+- **Use-case-specific tutorials** (UX-40) — **Help → Tutorials** now offers five short workflows: load/verify data, filter/annotate, build a publication figure, compare readings, and explore the corpus. Each entry states outcome, time, prerequisite, and availability; progress/completion are independent. Steps can open the needed top-level view or subtab, spotlight stable UI targets, restore the starting location on Exit, and link to matching written instructions. They remain available when the automatic welcome tour is opted out and do not mutate filters, annotations, data, or scientific settings.
 
 ## [0.28.0] - 2026-08-08
 

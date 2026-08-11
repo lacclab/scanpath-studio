@@ -23,6 +23,8 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from .multipart import grouping_columns
+
 
 def metric_by_trial_index(
     frame: pd.DataFrame, metric: str, *, agg: str = "mean"
@@ -725,21 +727,18 @@ def _trial_reading_time_ms(fixations: pd.DataFrame) -> pd.DataFrame:
     fixation durations when timestamps are missing)."""
     if fixations.empty or not {"participant_id", "trial_id"} <= set(fixations.columns):
         return pd.DataFrame(columns=["participant_id", "trial_id", "reading_time_ms"])
-    df = fixations[["participant_id", "trial_id"]].copy()
+    keys = grouping_columns(fixations)
+    df = fixations[keys].copy()
     dur = pd.to_numeric(fixations.get("duration_ms"), errors="coerce")
     if "timestamp_ms" in fixations.columns:
         ts = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
         df["_start"] = ts
         df["_end"] = ts + dur.fillna(0)
-        grp = df.groupby(["participant_id", "trial_id"])
+        grp = df.groupby(keys)
         out = (grp["_end"].max() - grp["_start"].min()).rename("reading_time_ms")
     else:
         df["_d"] = dur
-        out = (
-            df.groupby(["participant_id", "trial_id"])["_d"]
-            .sum()
-            .rename("reading_time_ms")
-        )
+        out = df.groupby(keys)["_d"].sum().rename("reading_time_ms")
     return out.reset_index()
 
 
@@ -822,45 +821,39 @@ def _run_summary(fixations: pd.DataFrame, n_words: int) -> Dict[str, float]:
 
 
 def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
-    """One export-ready summary row per ``(participant, trial)`` (AN-30).
+    """One export-ready summary row per trial screen (or legacy trial) (AN-30).
 
     Includes the standard reading totals plus run-derived refixation and
     first-pass/rereading measures. Missing source concepts stay absent/NaN
     rather than being silently invented (for example blink count).
     """
-    key_columns = ["participant_id", "trial_id"]
-    keys: list[tuple[str, str]] = []
+    source = fixations if fixations is not None and not fixations.empty else words
+    key_columns = grouping_columns(source)
+    keys: list[tuple] = []
     for frame in (fixations, words):
         if frame is None or frame.empty or not set(key_columns) <= set(frame.columns):
             continue
         pairs = frame[key_columns].drop_duplicates()
-        keys.extend(
-            (str(row.participant_id), str(row.trial_id)) for row in pairs.itertuples()
-        )
+        keys.extend(tuple(str(value) for value in row) for row in pairs.to_numpy())
     keys = list(dict.fromkeys(keys))
     rows: list[dict] = []
-    for participant_id, trial_id in keys:
-        fx = (
-            fixations[
-                (fixations["participant_id"].astype(str) == participant_id)
-                & (fixations["trial_id"].astype(str) == trial_id)
-            ]
-            if fixations is not None
-            and not fixations.empty
-            and set(key_columns) <= set(fixations.columns)
-            else pd.DataFrame()
-        )
-        wd = (
-            words[
-                (words["participant_id"].astype(str) == participant_id)
-                & (words["trial_id"].astype(str) == trial_id)
-            ]
-            if words is not None
-            and not words.empty
-            and set(key_columns) <= set(words.columns)
-            else pd.DataFrame()
-        )
-        row: dict = {"participant_id": participant_id, "trial_id": trial_id}
+    for identity in keys:
+        selected = dict(zip(key_columns, identity))
+
+        def _slice(frame: pd.DataFrame) -> pd.DataFrame:
+            if (
+                frame is None
+                or frame.empty
+                or not set(key_columns) <= set(frame.columns)
+            ):
+                return pd.DataFrame()
+            mask = pd.Series(True, index=frame.index)
+            for column, value in selected.items():
+                mask &= frame[column].astype(str) == value
+            return frame[mask]
+
+        fx, wd = _slice(fixations), _slice(words)
+        row: dict = dict(selected)
         text_id = _first_present(
             wd if not wd.empty else fx, ("text_id", "unique_text_id")
         )
@@ -1234,7 +1227,7 @@ def landing_positions(
         order_col = (
             "order_in_trial" if "order_in_trial" in fx.columns else "timestamp_ms"
         )
-        keys = [k for k in ("participant_id", "trial_id", "word_id") if k in fx.columns]
+        keys = grouping_columns(fx, include_word=True)
         first = (
             fx.sort_values(order_col)
             .dropna(subset=["word_id"])

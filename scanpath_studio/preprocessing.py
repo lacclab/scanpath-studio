@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .measures import materialize_runs
+from .multipart import SCREEN_ID, grouping_columns
 
 DEFAULT_PREPROCESSING = {
     "enabled": False,
@@ -41,7 +42,7 @@ def add_text_direction(words: pd.DataFrame) -> pd.DataFrame:
     if words.empty or "right_to_left" in words or "text" not in words:
         return words
     out = words.copy()
-    keys = [c for c in ("participant_id", "trial_id") if c in out]
+    keys = grouping_columns(out)
     if keys:
         joined = out.groupby(keys, sort=False)["text"].transform(
             lambda values: " ".join(values.astype(str))
@@ -75,7 +76,8 @@ def merge_short_fixations(
     if fixations.empty:
         return fixations.copy(), 0, 0
     out = fixations.sort_values(
-        [c for c in ("participant_id", "trial_id", "timestamp_ms") if c in fixations],
+        grouping_columns(fixations)
+        + (["timestamp_ms"] if "timestamp_ms" in fixations else []),
         kind="stable",
     ).copy()
     out["original_duration_ms"] = pd.to_numeric(out["duration_ms"], errors="coerce")
@@ -89,7 +91,7 @@ def merge_short_fixations(
         .copy()
     )
     merged = dropped = 0
-    keys = [c for c in ("participant_id", "trial_id") if c in out]
+    keys = grouping_columns(out)
     groups = out.groupby(keys, sort=False).groups.values() if keys else [out.index]
     for indices in groups:
         indices = list(indices)
@@ -163,7 +165,7 @@ def preprocess_fixations(
     out["excluded_reason"] = out.get("excluded_reason", "")
     blink = _blink_flags(out)
     out["is_blink"] = blink
-    keys = [c for c in ("participant_id", "trial_id") if c in out]
+    keys = grouping_columns(out)
     if keys:
         grouped = out.groupby(keys, sort=False)
         out["blink_before"] = grouped["is_blink"].shift(-1).fillna(False).astype(bool)
@@ -209,7 +211,7 @@ def cleaning_report(
     """One exportable QA/provenance row per trial (PRE-15)."""
     if fixations.empty:
         return pd.DataFrame()
-    keys = [c for c in ("participant_id", "trial_id") if c in fixations]
+    keys = grouping_columns(fixations)
     rows = []
     for identity, chunk in fixations.groupby(keys, sort=False, dropna=False):
         identity = identity if isinstance(identity, tuple) else (identity,)
@@ -257,7 +259,7 @@ def infer_sentence_ids(words: pd.DataFrame) -> pd.DataFrame:
     if words.empty or "sentence_id" in words:
         return words.copy()
     out = words.copy()
-    keys = [c for c in ("participant_id", "trial_id") if c in out]
+    keys = grouping_columns(out)
     pieces = []
     for _, chunk in out.groupby(keys, sort=False, dropna=False):
         chunk = chunk.sort_values([c for c in ("line_idx", "word_id") if c in chunk])
@@ -272,12 +274,10 @@ def sentence_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFr
     words = infer_sentence_ids(words)
     if words.empty:
         return pd.DataFrame()
-    join = words[
-        ["participant_id", "trial_id", "word_id", "sentence_id"]
-    ].drop_duplicates()
-    fix = materialize_runs(fixations).merge(
-        join, on=["participant_id", "trial_id", "word_id"], how="left"
-    )
+    identity = grouping_columns(words)
+    word_keys = [*identity, "word_id"]
+    join = words[[*word_keys, "sentence_id"]].drop_duplicates()
+    fix = materialize_runs(fixations).merge(join, on=word_keys, how="left")
     rows = []
     included = (
         ~fix["excluded"].fillna(False).astype(bool)
@@ -285,15 +285,15 @@ def sentence_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFr
         else pd.Series(True, index=fix.index)
     )
     analysis_fix = fix.loc[included]
-    for keys, wchunk in words.groupby(
-        ["participant_id", "trial_id", "sentence_id"], sort=False
-    ):
-        pid, tid, sentence_id = keys
-        fx = analysis_fix[
-            (analysis_fix["participant_id"] == pid)
-            & (analysis_fix["trial_id"] == tid)
-            & (analysis_fix["sentence_id"] == sentence_id)
-        ]
+    sentence_keys = [*identity, "sentence_id"]
+    for group_key, wchunk in words.groupby(sentence_keys, sort=False):
+        values = group_key if isinstance(group_key, tuple) else (group_key,)
+        selected = dict(zip(sentence_keys, values))
+        sentence_id = selected["sentence_id"]
+        fx_mask = pd.Series(True, index=analysis_fix.index)
+        for column, value in selected.items():
+            fx_mask &= analysis_fix[column] == value
+        fx = analysis_fix[fx_mask]
         first_run = pd.to_numeric(
             fx.get("word_run", pd.Series(1, index=fx.index)), errors="coerce"
         ).fillna(1)
@@ -303,9 +303,10 @@ def sentence_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFr
             fx.get("duration_ms", pd.Series(np.nan, index=fx.index)), errors="coerce"
         ).sum()
         n_words = int(wchunk["word_id"].nunique())
-        trial_sequence = analysis_fix[
-            (analysis_fix["participant_id"] == pid) & (analysis_fix["trial_id"] == tid)
-        ].sort_values("timestamp_ms")
+        trial_mask = pd.Series(True, index=analysis_fix.index)
+        for column in identity:
+            trial_mask &= analysis_fix[column] == selected[column]
+        trial_sequence = analysis_fix[trial_mask].sort_values("timestamp_ms")
         sentence_sequence = pd.to_numeric(
             trial_sequence.get("sentence_id"), errors="coerce"
         )
@@ -363,8 +364,7 @@ def sentence_measures(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFr
             )
         rows.append(
             {
-                "participant_id": pid,
-                "trial_id": tid,
+                **{column: selected[column] for column in identity},
                 "text_id": wchunk.iloc[0].get(
                     "text_id", wchunk.iloc[0].get("unique_text_id", pd.NA)
                 ),
@@ -443,7 +443,7 @@ def character_grid(words: pd.DataFrame) -> pd.DataFrame:
 
         words = words.copy()
         words["line_idx"] = cluster_word_lines(words)
-    keys = [c for c in ("participant_id", "trial_id") if c in words]
+    keys = grouping_columns(words)
     groups = words.groupby(keys, sort=False, dropna=False) if keys else [((), words)]
     for _, trial in groups:
         trial = trial.sort_values(["line_idx", "word_id"], kind="stable")
@@ -475,6 +475,11 @@ def character_grid(words: pd.DataFrame) -> pd.DataFrame:
                     {
                         "participant_id": getattr(word, "participant_id", pd.NA),
                         "trial_id": getattr(word, "trial_id", pd.NA),
+                        **(
+                            {SCREEN_ID: getattr(word, SCREEN_ID)}
+                            if hasattr(word, SCREEN_ID)
+                            else {}
+                        ),
                         "word_id": word.word_id,
                         "sentence_id": getattr(word, "sentence_id", pd.NA),
                         "line_idx": line_id,
@@ -516,7 +521,9 @@ def duration_mass_table(
     analysis = fixations
     if "excluded" in analysis:
         analysis = analysis.loc[~analysis["excluded"].fillna(False).astype(bool)]
-    keys = [c for c in ("participant_id", "trial_id") if c in out and c in analysis]
+    keys = grouping_columns(analysis)
+    if keys != grouping_columns(out):
+        raise ValueError("Character and fixation tables use different part identities.")
     groups = (
         analysis.groupby(keys, sort=False, dropna=False) if keys else [((), analysis)]
     )
@@ -623,7 +630,7 @@ def saccade_table(
     analysis = fixations
     if "excluded" in analysis:
         analysis = analysis.loc[~analysis["excluded"].fillna(False).astype(bool)]
-    keys = [c for c in ("participant_id", "trial_id") if c in analysis]
+    keys = grouping_columns(analysis)
     # PERF-3: the letter-position of a saccade's launch and landing used to be
     # resolved by scanning the WHOLE words frame per fixation — a `to_numeric`
     # over every word id plus a boolean mask, twice per saccade. On the bundled
@@ -704,11 +711,9 @@ def measure_sensitivity(
     from . import alignment
     from .measures import compute_per_word_measures
 
-    trial_keys = [
-        key
-        for key in ("participant_id", "trial_id")
-        if key in fixations and key in words
-    ]
+    trial_keys = grouping_columns(fixations)
+    if trial_keys != grouping_columns(words):
+        raise ValueError("Words and fixations use different part identities.")
     combined_parts = []
     report_parts = []
     groups = (
@@ -738,7 +743,7 @@ def measure_sensitivity(
         if report_parts
         else pd.DataFrame(columns=[*trial_keys, "algorithm"])
     )
-    keys = ["participant_id", "trial_id", "word_id"]
+    keys = grouping_columns(words, include_word=True)
     merged = words[keys].drop_duplicates().copy()
     headline = (
         "first_fixation_ms",

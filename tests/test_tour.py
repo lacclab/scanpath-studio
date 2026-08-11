@@ -148,6 +148,137 @@ def test_welcome_tour_text_is_concise():
 
 
 # -----------------------------------------------------------------------------
+# Task-oriented tutorials (UX-40)
+# -----------------------------------------------------------------------------
+
+
+def _use_case_tutorial_app():
+    import streamlit as st
+
+    from scanpath_studio.constants import _VIEW_CORPUS
+    from scanpath_studio.tour import _start_use_case, render_use_case_tutorial
+
+    st.session_state.setdefault(
+        "_tutorial_context",
+        {
+            "n_trials": 3,
+            "has_words": True,
+            "has_fixations": True,
+            "has_comparable_readings": True,
+            "has_corpus_variation": True,
+        },
+    )
+    st.session_state.setdefault("main_nav", _VIEW_CORPUS)
+    st.session_state.setdefault("single_subtab", "📝 Annotations")
+    if not st.session_state.get("_tutorial_armed_once"):
+        st.session_state["_tutorial_armed_once"] = True
+        _start_use_case("filter_annotate")
+    render_use_case_tutorial()
+
+
+def _tutorial_library_optout_app():
+    import streamlit as st
+
+    from scanpath_studio.tour import render_tutorial_library
+
+    st.session_state["tour_dont_show"] = True
+    render_tutorial_library(
+        {
+            "n_trials": 2,
+            "has_words": True,
+            "has_fixations": True,
+            "has_comparable_readings": True,
+            "has_corpus_variation": True,
+        }
+    )
+
+
+class TestUseCaseTutorials:
+    def test_registry_is_unique_concise_and_outcome_oriented(self):
+        from scanpath_studio.tour import TUTORIALS
+
+        assert len(TUTORIALS) == 5
+        assert len({tutorial.id for tutorial in TUTORIALS}) == len(TUTORIALS)
+        for tutorial in TUTORIALS:
+            assert tutorial.outcome.startswith("Finish")
+            assert tutorial.estimated_time.endswith("min")
+            assert tutorial.completion_test
+            assert tutorial.docs_url.startswith("https://")
+            assert tutorial.steps
+            assert all(len(step.body) <= 300 for step in tutorial.steps)
+
+    def test_availability_is_derived_from_loaded_data(self):
+        import pandas as pd
+
+        from scanpath_studio.tour import (
+            TUTORIALS,
+            build_tutorial_context,
+            tutorial_availability,
+        )
+
+        empty = build_tutorial_context(pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+        availability = {
+            tutorial.id: tutorial_availability(tutorial, empty)[0]
+            for tutorial in TUTORIALS
+        }
+        assert availability == {
+            "load_inspect": True,
+            "filter_annotate": False,
+            "publication_figure": False,
+            "compare_readings": False,
+            "explore_corpus": False,
+        }
+
+        combos = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "trial_id": ["t1", "t2"],
+                "text_id": ["same", "same"],
+            }
+        )
+        ready = build_tutorial_context(
+            pd.DataFrame({"word_id": [1]}),
+            pd.DataFrame({"fixation_id": [1]}),
+            combos,
+        )
+        assert all(tutorial_availability(tutorial, ready)[0] for tutorial in TUTORIALS)
+
+    def test_navigation_opens_panels_and_exit_restores_the_start_location(self):
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+
+        at = AppTest.from_function(_use_case_tutorial_app).run()
+        assert not at.exception, at.exception
+        assert at.session_state["main_nav"] == _VIEW_CORPUS
+        assert at.button(key="tutorial_open_surface")
+
+        at.button(key="tutorial_open_surface").click().run()
+        assert at.session_state["main_nav"] == _VIEW_SCANPATH
+        assert at.button(key="tutorial_next")
+
+        at.button(key="tutorial_exit").click().run()
+        assert at.session_state["tutorial_active"] is None
+        assert at.session_state["main_nav"] == _VIEW_CORPUS
+
+    def test_progress_and_completion_are_per_tutorial(self):
+        from scanpath_studio.tour import TUTORIALS
+
+        at = AppTest.from_function(_use_case_tutorial_app).run()
+        last = len(next(t for t in TUTORIALS if t.id == "filter_annotate").steps) - 1
+        at.session_state["tutorial_progress"] = {"filter_annotate": last}
+        at.run()
+        at.button(key="tutorial_done").click().run()
+        assert at.session_state["tutorial_completed"]["filter_annotate"] is True
+        assert "load_inspect" not in at.session_state["tutorial_completed"]
+
+    def test_library_remains_available_after_welcome_opt_out(self):
+        at = AppTest.from_function(_tutorial_library_optout_app).run()
+        assert not at.exception, at.exception
+        keys = {button.key for button in at.sidebar.button if button.key}
+        assert "tutorial_start_load_inspect" in keys
+        assert "tutorial_start_explore_corpus" in keys
+
+
+# -----------------------------------------------------------------------------
 # FAQ (UX-15)
 # -----------------------------------------------------------------------------
 
@@ -252,6 +383,21 @@ class TestSpotlightSelectorsResolve:
         assert not missing, (
             "these tour steps point at containers that no longer exist — the step "
             f"will highlight nothing: {missing}"
+        )
+
+    def test_every_use_case_selector_has_a_container(self):
+        from scanpath_studio.tour import TUTORIALS
+
+        keys = self._keyed_containers()
+        missing = [
+            step.selector
+            for tutorial in TUTORIALS
+            for step in tutorial.steps
+            if step.selector.removeprefix(".st-key-") not in keys
+        ]
+        assert not missing, (
+            "these use-case tutorial steps point at containers that no longer "
+            f"exist: {missing}"
         )
 
     def test_no_two_steps_spotlight_the_same_area(self):

@@ -20,6 +20,18 @@ import pandas as pd
 import streamlit as st
 
 from .constants import DEFAULT_FIGURE_SIZE, PACKAGE_NAME
+from .multipart import (
+    CANVAS_HEIGHT,
+    CANVAS_WIDTH,
+    PARENT_KEY,
+    SCREEN_FIXATION_ID,
+    SCREEN_ID,
+    SCREEN_INDEX,
+    SCREEN_TIMESTAMP,
+    grouping_columns,
+    normalize_screen_identity,
+    validate_matching_parts,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -434,6 +446,28 @@ TRIAL_CANDIDATES = [
     "trial",
     "trial_index",
 ]
+SCREEN_ID_CANDIDATES = ["screen_id", "part_id", "page_id", "screen", "page", "part"]
+SCREEN_INDEX_CANDIDATES = [
+    "screen_index",
+    "part_index",
+    "page_index",
+    "screen_order",
+    "page_number",
+]
+SCREEN_TIMESTAMP_CANDIDATES = [
+    "screen_timestamp_ms",
+    "screen_time_ms",
+    "page_timestamp_ms",
+    "local_timestamp_ms",
+]
+SCREEN_FIXATION_ID_CANDIDATES = [
+    "screen_fixation_id",
+    "screen_fixation_index",
+    "page_fixation_id",
+    "local_fixation_id",
+]
+CANVAS_WIDTH_CANDIDATES = ["canvas_width", "screen_width", "monitor_width"]
+CANVAS_HEIGHT_CANDIDATES = ["canvas_height", "screen_height", "monitor_height"]
 # Source column names that identify which *text* (passage) a row belongs to.
 # Output canonical column is `text_id` (was `paragraph_id`); the source names stay
 # as the real-world conventions so auto-detection keeps working.
@@ -524,6 +558,10 @@ def propose_word_schema(words: pd.DataFrame) -> Dict[str, Optional[str]]:
     return dict(
         participant=pick_column(words, PARTICIPANT_CANDIDATES),
         trial=pick_column(words, TRIAL_CANDIDATES),
+        screen_id=pick_column(words, SCREEN_ID_CANDIDATES),
+        screen_index=pick_column(words, SCREEN_INDEX_CANDIDATES),
+        canvas_width=pick_column(words, CANVAS_WIDTH_CANDIDATES),
+        canvas_height=pick_column(words, CANVAS_HEIGHT_CANDIDATES),
         text_id=pick_column(words, TEXT_ID_CANDIDATES),
         word_id=pick_column(words, WORD_ID_CANDIDATES),
         text=pick_column(words, TEXT_CANDIDATES),
@@ -548,6 +586,12 @@ def propose_fix_schema(fixations: pd.DataFrame) -> Dict[str, Optional[str]]:
     return dict(
         participant=pick_column(fixations, PARTICIPANT_CANDIDATES),
         trial=pick_column(fixations, TRIAL_CANDIDATES),
+        screen_id=pick_column(fixations, SCREEN_ID_CANDIDATES),
+        screen_index=pick_column(fixations, SCREEN_INDEX_CANDIDATES),
+        screen_timestamp=pick_column(fixations, SCREEN_TIMESTAMP_CANDIDATES),
+        screen_fixation_id=pick_column(fixations, SCREEN_FIXATION_ID_CANDIDATES),
+        canvas_width=pick_column(fixations, CANVAS_WIDTH_CANDIDATES),
+        canvas_height=pick_column(fixations, CANVAS_HEIGHT_CANDIDATES),
         text_id=pick_column(fixations, TEXT_ID_CANDIDATES),
         fixation_id=pick_column(fixations, FIX_FIXATION_ID_CANDIDATES),
         timestamp=pick_column(fixations, FIX_TIMESTAMP_CANDIDATES),
@@ -563,6 +607,8 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Dict[str, Optional[str]]:
     return dict(
         participant=pick_column(raw_gaze, PARTICIPANT_CANDIDATES),
         trial=pick_column(raw_gaze, TRIAL_CANDIDATES),
+        screen_id=pick_column(raw_gaze, SCREEN_ID_CANDIDATES),
+        screen_index=pick_column(raw_gaze, SCREEN_INDEX_CANDIDATES),
         text=pick_column(raw_gaze, TEXT_CANDIDATES),
         x=pick_column(raw_gaze, RAW_GAZE_X_CANDIDATES),
         y=pick_column(raw_gaze, RAW_GAZE_Y_CANDIDATES),
@@ -1183,6 +1229,7 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.Dat
     # dataset still works with the trial picker (utils.build_combo_options needs
     # a text_id column).
     df["text_id"] = df["trial_id"]
+    df = _copy_screen_fields(df, raw_gaze, schema)
     if schema.get("text"):
         df["text"] = raw_gaze[schema["text"]].astype(str)
     else:
@@ -1195,7 +1242,7 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.Dat
         )
     else:
         # Each row represents one millisecond, so use row index within trial as timestamp
-        df["timestamp_ms"] = df.groupby(["participant_id", "trial_id"]).cumcount()
+        df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
     df = _preserve_composite_columns(df, raw_gaze, schema["trial"])
     return df
 
@@ -1255,12 +1302,14 @@ def broadcast_stimulus_words(
             words = words.copy()
             words["participant_id"] = SYNTHETIC_PARTICIPANT
         return words
-    pairs = fixations[["participant_id", "trial_id"]].drop_duplicates()
+    join_columns = ["participant_id", "trial_id"]
+    if SCREEN_ID in words.columns and SCREEN_ID in fixations.columns:
+        join_columns.append(SCREEN_ID)
+    pairs = fixations[join_columns].drop_duplicates()
     pairs["participant_id"] = pairs["participant_id"].astype(str)
     pairs["trial_id"] = pairs["trial_id"].astype(str)
-    return words.drop(columns=["participant_id"]).merge(
-        pairs, on="trial_id", how="inner"
-    )
+    merge_on = [column for column in ("trial_id", SCREEN_ID) if column in join_columns]
+    return words.drop(columns=["participant_id"]).merge(pairs, on=merge_on, how="inner")
 
 
 def fill_fixation_xy_from_words(
@@ -1283,13 +1332,12 @@ def fill_fixation_xy_from_words(
 
     # BUG-11: place them at the *corrected* box centre, i.e. the glyph centre.
     x0, y0, x1, y1 = word_box_bounds(words)
-    centers = words[["participant_id", "trial_id", "word_id"]].copy()
+    keys = grouping_columns(words, include_word=True)
+    centers = words[keys].copy()
     centers["_word_cx"] = (x0 + x1) / 2.0
     centers["_word_cy"] = (y0 + y1) / 2.0
-    centers = centers.drop_duplicates(["participant_id", "trial_id", "word_id"])
-    merged = fixations[["participant_id", "trial_id", "word_id"]].merge(
-        centers, on=["participant_id", "trial_id", "word_id"], how="left"
-    )
+    centers = centers.drop_duplicates(keys)
+    merged = fixations[keys].merge(centers, on=keys, how="left")
     fixations = fixations.copy()
     fill = missing.to_numpy()
     fixations.loc[fill, "x"] = merged["_word_cx"].to_numpy()[fill]
@@ -1320,9 +1368,7 @@ def _reconcile_participant_asymmetry(
         return words
     words = words.copy()
     words["participant_id"] = SYNTHETIC_PARTICIPANT
-    subset = [
-        c for c in ("participant_id", "trial_id", "word_id") if c in words.columns
-    ]
+    subset = grouping_columns(words, include_word=True)
     if subset:
         words = words.drop_duplicates(subset=subset)
     return words
@@ -1337,13 +1383,11 @@ def _key_frame(frame: pd.DataFrame, ids: pd.Series) -> pd.DataFrame:
     ``ids`` is a NaN-dropped numeric word-id series taken from ``frame``, so the
     id columns are re-indexed onto its (subset) index.
     """
-    return pd.DataFrame(
-        {
-            "participant_id": frame["participant_id"].reindex(ids.index),
-            "trial_id": frame["trial_id"].reindex(ids.index),
-            "_id": ids,
-        }
-    )
+    data = {
+        column: frame[column].reindex(ids.index) for column in grouping_columns(frame)
+    }
+    data["_id"] = ids
+    return pd.DataFrame(data)
 
 
 def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
@@ -1370,7 +1414,9 @@ def detect_word_id_offset(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
     """
     if words is None or fixations is None or words.empty or fixations.empty:
         return 0
-    keys = ["participant_id", "trial_id"]
+    keys = grouping_columns(words)
+    if keys != grouping_columns(fixations):
+        return 0
     needed = set(keys) | {"word_id"}
     if not needed.issubset(words.columns) or not needed.issubset(fixations.columns):
         return 0
@@ -1449,6 +1495,9 @@ def harmonize_frames(
 
     words = add_text_direction(broadcast_stimulus_words(words, fixations))
     words = _reconcile_participant_asymmetry(words, fixations)
+    words = normalize_screen_identity(words)
+    fixations = normalize_screen_identity(fixations)
+    validate_matching_parts(words, fixations)
     fixations = correct_word_id_offset(words, fixations)
     fixations = fill_fixation_xy_from_words(fixations, words)
     return words, fixations
@@ -1866,6 +1915,27 @@ def compute_keep_columns(
     return keep
 
 
+def _copy_screen_fields(
+    df: pd.DataFrame, source: pd.DataFrame, schema: Dict
+) -> pd.DataFrame:
+    """Copy mapped part identity/metadata and normalize it in one place."""
+    fields = (
+        ("screen_id", SCREEN_ID, False),
+        ("screen_index", SCREEN_INDEX, True),
+        ("screen_timestamp", SCREEN_TIMESTAMP, True),
+        ("screen_fixation_id", SCREEN_FIXATION_ID, False),
+        ("canvas_width", CANVAS_WIDTH, True),
+        ("canvas_height", CANVAS_HEIGHT, True),
+    )
+    for schema_key, destination, numeric in fields:
+        column = schema.get(schema_key)
+        if not column:
+            continue
+        values = source[column]
+        df[destination] = pd.to_numeric(values, errors="coerce") if numeric else values
+    return normalize_screen_identity(df)
+
+
 def normalize_words(
     words: pd.DataFrame, schema: Dict[str, str], *, keep_columns: Optional[set] = None
 ) -> pd.DataFrame:
@@ -1904,6 +1974,7 @@ def normalize_words(
         df["text_id"] = trial_id_series(words, schema["text_id"])
     else:
         df["text_id"] = df["trial_id"]
+    df = _copy_screen_fields(df, words, schema)
     df["word_id"] = pd.to_numeric(words[schema["word_id"]], errors="coerce")
     if schema.get("text"):
         df["text"] = words[schema["text"]].astype(str)
@@ -1979,6 +2050,7 @@ def normalize_fixations(
         df["text_id"] = df["trial_id"]
     if "unique_paragraph_id" in fixations.columns:
         df["unique_text_id"] = fixations["unique_paragraph_id"].astype(str)
+    df = _copy_screen_fields(df, fixations, schema)
     # X/Y may be unmapped for AOI-sequence datasets (no pixel coordinates) —
     # left NaN here and filled from word-box centers by harmonize_frames().
     for coord in ("x", "y"):
@@ -1995,12 +2067,19 @@ def normalize_fixations(
             fixations[schema["timestamp"]], errors="coerce"
         ).fillna(0)
     else:
-        df["timestamp_ms"] = df.groupby(["participant_id", "trial_id"]).cumcount()
+        df["timestamp_ms"] = df.groupby(list(PARENT_KEY), sort=False).cumcount()
 
     if schema.get("fixation_id"):
         df["fixation_id"] = fixations[schema["fixation_id"]]
     else:
-        df["fixation_id"] = df.groupby(["participant_id", "trial_id"]).cumcount().add(1)
+        df["fixation_id"] = df.groupby(list(PARENT_KEY), sort=False).cumcount().add(1)
+
+    if SCREEN_ID in df.columns:
+        part_keys = grouping_columns(df)
+        if SCREEN_TIMESTAMP not in df.columns:
+            df[SCREEN_TIMESTAMP] = df.groupby(part_keys, sort=False).cumcount()
+        if SCREEN_FIXATION_ID not in df.columns:
+            df[SCREEN_FIXATION_ID] = df.groupby(part_keys, sort=False).cumcount().add(1)
 
     if schema.get("word_id"):
         df["word_id"] = pd.to_numeric(fixations[schema["word_id"]], errors="coerce")
@@ -2021,10 +2100,17 @@ def normalize_fixations(
 
     df["order_in_trial"] = (
         df.sort_values(["timestamp_ms", "duration_ms"])
-        .groupby(["participant_id", "trial_id"])
+        .groupby(list(PARENT_KEY), sort=False)
         .cumcount()
         + 1
     )
+    if SCREEN_ID in df.columns:
+        df["order_in_screen"] = (
+            df.sort_values([SCREEN_INDEX, SCREEN_TIMESTAMP, "duration_ms"])
+            .groupby(grouping_columns(df), sort=False)
+            .cumcount()
+            + 1
+        )
     return df
 
 

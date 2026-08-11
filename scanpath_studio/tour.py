@@ -55,11 +55,13 @@ Mechanics worth knowing before editing:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import streamlit as st
 
 from scanpath_studio.html_embed import embed_html_iframe
 
-from .constants import CITATION
+from .constants import CITATION, _VIEW_CORPUS, _VIEW_SCANPATH
 
 # UX-12: name of the first-party cookie holding the "don't show the welcome tour
 # again" opt-out ("1" = opted out). One year, path=/, SameSite=Lax — no personal
@@ -71,6 +73,185 @@ _TOUR_OPTOUT_MAX_AGE = 365 * 24 * 60 * 60
 # UI) or "dialog" (self-contained modal walkthrough). Both stay available in
 # code; this only picks which one auto-opens / the replay button launches.
 TOUR_STYLE = "spotlight"
+
+
+@dataclass(frozen=True)
+class TutorialStep:
+    """One reusable spotlight step in a task-oriented tutorial."""
+
+    title: str
+    body: str
+    selector: str
+    view: str = _VIEW_SCANPATH
+    subtab: str | None = None
+    optional: bool = False
+
+
+@dataclass(frozen=True)
+class TutorialDefinition:
+    """Registry entry shown by the Help chooser."""
+
+    id: str
+    title: str
+    outcome: str
+    estimated_time: str
+    prerequisite: str
+    availability: str
+    completion_test: str
+    docs_url: str
+    steps: tuple[TutorialStep, ...]
+
+
+DOCS_TUTORIALS_URL = f"{CITATION['docs_url']}tutorials/"
+
+TUTORIALS: tuple[TutorialDefinition, ...] = (
+    TutorialDefinition(
+        id="load_inspect",
+        title="Load and verify a dataset",
+        outcome="Finish with the parsed words, fixations, and mapping visibly checked.",
+        estimated_time="3 min",
+        prerequisite="A demo or uploaded dataset",
+        availability="always",
+        completion_test="Data Inspection opened",
+        docs_url=f"{DOCS_TUTORIALS_URL}#load-your-own-data",
+        steps=(
+            TutorialStep(
+                "Choose the data source",
+                "Use the current demo or open **Data source** to add your own tables. "
+                "The setup guide handles upload and column mapping.",
+                ".st-key-tour_grp_data_source",
+            ),
+            TutorialStep(
+                "Verify what was parsed",
+                "Open **Data Inspection**. Check counts, raw tables, multipart screens "
+                "when present, and the active column mapping before analysis.",
+                ".st-key-tutorial_data_inspection",
+                subtab="🔎 Data Inspection",
+            ),
+        ),
+    ),
+    TutorialDefinition(
+        id="filter_annotate",
+        title="Filter and mark trials",
+        outcome="Finish with reviewed trials annotated and ready for ID export.",
+        estimated_time="4 min",
+        prerequisite="At least one trial",
+        availability="has_trials",
+        completion_test="Export panel reached after annotation review",
+        docs_url=f"{DOCS_TUTORIALS_URL}#filter-and-annotate-trials",
+        steps=(
+            TutorialStep(
+                "Narrow the review pool",
+                "Use **Filter by** and **More** for participant, condition, favorites, "
+                "or tags. This tutorial only points; it never changes a filter.",
+                ".st-key-tour_grp_narrow_by",
+            ),
+            TutorialStep(
+                "Review one trial at a time",
+                "Use the picker and ◀ ▶ controls to inspect the narrowed pool. For a "
+                "multipart trial, use the screen navigator immediately below it.",
+                ".st-key-tour_grp_trial_picker",
+            ),
+            TutorialStep(
+                "Annotate at the right scope",
+                "Star, tag, or note the parent trial. Multipart data can instead attach "
+                "a separate annotation to the active screen.",
+                ".st-key-tutorial_annotations",
+                subtab="📝 Annotations",
+            ),
+            TutorialStep(
+                "Export the marked result",
+                "Open **Export** and choose the filtered scope and tabular files. "
+                "Screen identity is retained in multipart exports.",
+                ".st-key-tutorial_export",
+                subtab="Export",
+            ),
+        ),
+    ),
+    TutorialDefinition(
+        id="publication_figure",
+        title="Build a publication figure",
+        outcome="Finish at a ready figure download with a reproducible configuration.",
+        estimated_time="4 min",
+        prerequisite="Words or fixations for a selected trial",
+        availability="has_visual_data",
+        completion_test="Export panel reached",
+        docs_url=f"{DOCS_TUTORIALS_URL}#make-a-paper-ready-figure",
+        steps=(
+            TutorialStep(
+                "Choose the visual language",
+                "Use quick views, palette, and the layer controls. Heatmap and scanpath "
+                "are settings on the same figure, not separate data transformations.",
+                ".st-key-tour_grp_viz_controls",
+            ),
+            TutorialStep(
+                "Decide static or animated",
+                "Use **Animate** only when motion is the outcome. Multipart replay keeps "
+                "screen boundaries explicit and draws no connector between canvases.",
+                ".st-key-tour_grp_view_modes",
+            ),
+            TutorialStep(
+                "Download and preserve settings",
+                "Open **Export** for PNG/SVG/HTML or bulk output. Include the plot config "
+                "when the figure must be reproducible later.",
+                ".st-key-tutorial_export",
+                subtab="Export",
+            ),
+        ),
+    ),
+    TutorialDefinition(
+        id="compare_readings",
+        title="Compare readings of one text",
+        outcome="Finish with comparable same-text scanpaths and similarity scores.",
+        estimated_time="3 min",
+        prerequisite="Two readings sharing a text (and screen for multipart data)",
+        availability="has_comparable_readings",
+        completion_test="Comparisons panel reached",
+        docs_url=f"{DOCS_TUTORIALS_URL}#compare-two-readers",
+        steps=(
+            TutorialStep(
+                "Choose the reference reading",
+                "Pick the reading that should anchor the comparison. The comparison "
+                "panel reuses this exact parent trial and active screen.",
+                ".st-key-tour_grp_trial_picker",
+            ),
+            TutorialStep(
+                "Compare like with like",
+                "Open **Comparisons**, choose the grouping column, and inspect the grid "
+                "plus similarity ranking. Unmatched multipart screens are excluded.",
+                ".st-key-tutorial_comparisons",
+                subtab="🔬 Comparisons",
+            ),
+        ),
+    ),
+    TutorialDefinition(
+        id="explore_corpus",
+        title="Explore a corpus question",
+        outcome="Finish in Corpus Analysis with a reader/text/group question answered.",
+        estimated_time="3 min",
+        prerequisite="Variation across trials, readers, or texts",
+        availability="has_corpus_variation",
+        completion_test="Corpus Analysis opened",
+        docs_url=f"{DOCS_TUTORIALS_URL}#explore-the-corpus",
+        steps=(
+            TutorialStep(
+                "Switch analysis level",
+                "Open **Corpus Analysis** to aggregate instead of inspecting one trial. "
+                "Your loaded data and filters stay in place.",
+                ".st-key-header_buttons",
+            ),
+            TutorialStep(
+                "Answer one corpus question",
+                "Choose Per text, Per reader, or Groups and read the sample size with the "
+                "effect or distribution—not only the plotted mean.",
+                ".st-key-tutorial_corpus_analysis",
+                view=_VIEW_CORPUS,
+            ),
+        ),
+    ),
+)
+
+_TUTORIAL_BY_ID = {tutorial.id: tutorial for tutorial in TUTORIALS}
 
 # (title, markdown body) per step — keep bodies to a few lines each; the tour
 # should take well under a minute.
@@ -781,6 +962,334 @@ def render_tour_replay_button() -> None:
 
 
 # -----------------------------------------------------------------------------
+# Use-case tutorials (UX-40)
+# -----------------------------------------------------------------------------
+
+
+def build_tutorial_context(words, fixations, combos) -> dict[str, object]:
+    """Small, serializable availability snapshot for the tutorial chooser."""
+    n_trials = int(len(combos)) if combos is not None else 0
+    has_words = bool(words is not None and not words.empty)
+    has_fixations = bool(fixations is not None and not fixations.empty)
+    comparable = False
+    corpus_variation = n_trials >= 2
+    if combos is not None and not combos.empty:
+        source = (
+            fixations
+            if fixations is not None and not fixations.empty
+            else words
+            if words is not None and not words.empty
+            else combos
+        )
+        if not {"participant_id", "trial_id"}.issubset(source.columns):
+            source = combos
+        comparison_columns = [
+            column for column in ("text_id", "screen_id") if column in source.columns
+        ]
+        if "text_id" in comparison_columns:
+            readings = source[
+                [
+                    "participant_id",
+                    "trial_id",
+                    *comparison_columns,
+                ]
+            ].drop_duplicates()
+            comparable = bool(
+                readings.groupby(comparison_columns, dropna=False).size().max() >= 2
+            )
+        elif "text_id" in combos.columns:
+            comparable = bool(combos.groupby("text_id", dropna=False).size().max() >= 2)
+        if "text_id" in combos.columns:
+            corpus_variation |= combos["text_id"].nunique(dropna=True) >= 2
+        if "participant_id" in combos.columns:
+            corpus_variation |= combos["participant_id"].nunique(dropna=True) >= 2
+    return {
+        "n_trials": n_trials,
+        "has_words": has_words,
+        "has_fixations": has_fixations,
+        "has_comparable_readings": comparable,
+        "has_corpus_variation": corpus_variation,
+    }
+
+
+def tutorial_availability(
+    tutorial: TutorialDefinition, context: dict[str, object]
+) -> tuple[bool, str]:
+    """Whether a tutorial can start, plus an actionable explanation."""
+    rule = tutorial.availability
+    if rule == "always":
+        return True, ""
+    if rule == "has_trials":
+        available = int(context.get("n_trials", 0)) >= 1
+        return available, "Load at least one trial first."
+    if rule == "has_visual_data":
+        available = bool(context.get("has_words") or context.get("has_fixations"))
+        return available, "Load a words or fixations table first."
+    if rule == "has_comparable_readings":
+        available = bool(context.get("has_comparable_readings"))
+        return available, "Need two readings with the same text id."
+    if rule == "has_corpus_variation":
+        available = bool(context.get("has_corpus_variation"))
+        return available, "Need variation across trials, readers, or texts."
+    return False, f"Unknown availability rule: {rule}."
+
+
+def _tutorial_progress() -> dict[str, int]:
+    return st.session_state.setdefault("tutorial_progress", {})
+
+
+def _tutorial_completed() -> dict[str, bool]:
+    return st.session_state.setdefault("tutorial_completed", {})
+
+
+def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
+    """Start/resume one tutorial while remembering where Exit should return."""
+    if tutorial_id not in _TUTORIAL_BY_ID:
+        return
+    context = st.session_state.get("_tutorial_context") or {}
+    available, _ = tutorial_availability(_TUTORIAL_BY_ID[tutorial_id], context)
+    if not available:
+        return
+    st.session_state["tutorial_return"] = {
+        "main_nav": st.session_state.get("main_nav", _VIEW_SCANPATH),
+        "single_subtab": st.session_state.get("single_subtab", "📝 Annotations"),
+    }
+    if restart:
+        _tutorial_progress()[tutorial_id] = 0
+        _tutorial_completed().pop(tutorial_id, None)
+    else:
+        _tutorial_progress().setdefault(tutorial_id, 0)
+    st.session_state["tutorial_active"] = tutorial_id
+    # Never stack this task card over the automatic welcome/setup card.
+    st.session_state["tour_mode"] = None
+
+
+def _move_use_case(tutorial_id: str, delta: int) -> None:
+    tutorial = _TUTORIAL_BY_ID[tutorial_id]
+    current = int(_tutorial_progress().get(tutorial_id, 0))
+    _tutorial_progress()[tutorial_id] = max(
+        0, min(len(tutorial.steps) - 1, current + delta)
+    )
+
+
+def _finish_use_case(tutorial_id: str) -> None:
+    _tutorial_completed()[tutorial_id] = True
+    _tutorial_progress()[tutorial_id] = len(_TUTORIAL_BY_ID[tutorial_id].steps) - 1
+    st.session_state["tutorial_active"] = None
+
+
+def _restore_tutorial_return() -> None:
+    location = st.session_state.get("tutorial_return") or {}
+    if location.get("main_nav") is not None:
+        st.session_state["main_nav"] = location["main_nav"]
+    if location.get("single_subtab") is not None:
+        st.session_state["single_subtab"] = location["single_subtab"]
+    st.session_state["tutorial_active"] = None
+
+
+def _open_tutorial_surface(step: TutorialStep) -> None:
+    st.session_state["main_nav"] = step.view
+    if step.subtab is not None:
+        st.session_state["single_subtab"] = step.subtab
+
+
+def _tutorial_surface_is_open(step: TutorialStep) -> bool:
+    current_view = (
+        _VIEW_CORPUS
+        if st.session_state.get("main_nav") == _VIEW_CORPUS
+        else _VIEW_SCANPATH
+    )
+    if current_view != step.view:
+        return False
+    return (
+        step.subtab is None
+        or st.session_state.get("single_subtab", "📝 Annotations") == step.subtab
+    )
+
+
+def render_tutorial_library(context: dict[str, object]) -> None:
+    """Help-popover chooser listing outcome, prerequisites, time, and progress."""
+    st.session_state["_tutorial_context"] = dict(context)
+    with st.sidebar.popover("🧭 Tutorials", width="stretch"):
+        st.markdown("**Choose the outcome you want to reach.**")
+        st.caption("Each tutorial is independent from the automatic welcome tour.")
+        for tutorial in TUTORIALS:
+            available, reason = tutorial_availability(tutorial, context)
+            completed = bool(_tutorial_completed().get(tutorial.id))
+            progress = int(_tutorial_progress().get(tutorial.id, 0))
+            status = " · ✓ Complete" if completed else ""
+            st.markdown(f"**{tutorial.title}** · {tutorial.estimated_time}{status}")
+            st.caption(tutorial.outcome)
+            st.caption(f"Needs: {tutorial.prerequisite}")
+            if not available:
+                st.caption(f"Unavailable: {reason}")
+            button_label = "Resume" if progress > 0 and not completed else "Start"
+            start_col, restart_col = st.columns(2)
+            start_col.button(
+                button_label,
+                key=f"tutorial_start_{tutorial.id}",
+                disabled=not available,
+                on_click=_start_use_case,
+                args=(tutorial.id,),
+                width="stretch",
+            )
+            restart_col.button(
+                "Start over",
+                key=f"tutorial_restart_{tutorial.id}",
+                disabled=not available,
+                on_click=_start_use_case,
+                args=(tutorial.id,),
+                kwargs={"restart": True},
+                width="stretch",
+            )
+            st.divider()
+
+
+@st.fragment
+def render_use_case_tutorial() -> None:
+    """Render the active named tutorial with safe, explicit navigation."""
+    tutorial_id = st.session_state.get("tutorial_active")
+    tutorial = _TUTORIAL_BY_ID.get(tutorial_id)
+    if tutorial is None:
+        return
+    context = st.session_state.get("_tutorial_context") or {}
+    available, reason = tutorial_availability(tutorial, context)
+    if not available:
+        st.warning(f"Tutorial paused: {reason}")
+        return
+    step_index = min(
+        int(_tutorial_progress().get(tutorial.id, 0)), len(tutorial.steps) - 1
+    )
+    step = tutorial.steps[step_index]
+    surface_open = _tutorial_surface_is_open(step)
+    selector = step.selector if surface_open else None
+    accent = st.get_option("theme.primaryColor") or "#1f77b4"
+    theme = getattr(getattr(st, "context", None), "theme", None)
+    is_dark = getattr(theme, "type", "light") == "dark"
+    bg, border = ("#262730", "#41434e") if is_dark else ("#ffffff", "#d5d6d9")
+    highlight = (
+        f"{selector} {{ outline: 3px solid {accent}; outline-offset: 3px; "
+        "border-radius: .5rem; animation: tour-pulse 1.6s ease-in-out infinite; }}"
+        if selector
+        else ""
+    )
+    st.markdown(
+        "<style>"
+        + _CARD_CSS
+        + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
+        + highlight
+        + "</style>",
+        unsafe_allow_html=True,
+    )
+    with st.container(key="tour_card"):
+        st.markdown(f"## {tutorial.title}")
+        st.markdown(f"**{step.title}**")
+        st.markdown(step.body)
+        if not surface_open:
+            if st.button(
+                "Show me / Open this panel",
+                key="tutorial_open_surface",
+                type="primary",
+                width="stretch",
+            ):
+                _open_tutorial_surface(step)
+                st.rerun()
+        st.progress(
+            (step_index + 1) / len(tutorial.steps),
+            text=f"Step {step_index + 1} of {len(tutorial.steps)}",
+        )
+        st.link_button(
+            "Matching written tutorial ↗",
+            tutorial.docs_url,
+            width="stretch",
+        )
+        back_col, exit_col, next_col = st.columns(3)
+        back_col.button(
+            "← Back",
+            key="tutorial_back",
+            disabled=step_index == 0,
+            on_click=_move_use_case,
+            args=(tutorial.id, -1),
+            width="stretch",
+        )
+        if exit_col.button("Exit", key="tutorial_exit", width="stretch"):
+            _restore_tutorial_return()
+            st.rerun()
+        if step_index < len(tutorial.steps) - 1:
+            next_col.button(
+                "Next →",
+                key="tutorial_next",
+                type="primary",
+                on_click=_move_use_case,
+                args=(tutorial.id, 1),
+                width="stretch",
+            )
+        else:
+            if next_col.button(
+                "✓ Done",
+                key="tutorial_done",
+                type="primary",
+                width="stretch",
+            ):
+                # Completion leaves the app at the promised outcome even when
+                # the user did not press the last step's optional Open button.
+                _open_tutorial_surface(step)
+                _finish_use_case(tutorial.id)
+                st.rerun()
+
+        # A Streamlit popover is client-side state, so its server callback can
+        # start a tutorial but cannot close the chooser that contained the
+        # Start button. Close only the expanded Tutorials trigger once it
+        # appears later in this rerun; otherwise the chooser sits over the
+        # sidebar while the task card is already active.
+        embed_html_iframe(
+            """<script>
+            (function () {
+                const doc = window.parent.document;
+                let tries = 0;
+                (function closeTutorialChooser() {
+                    const trigger = [...doc.querySelectorAll(
+                        'button[aria-expanded="true"]'
+                    )].find((button) =>
+                        (button.textContent || '').includes('Tutorials')
+                    );
+                    if (trigger) {
+                        trigger.click();
+                        return;
+                    }
+                    if (++tries < 200) setTimeout(closeTutorialChooser, 150);
+                })();
+            })();
+            </script>""",
+            height=0,
+        )
+
+        if selector:
+            embed_html_iframe(
+                f"""<script>
+                (function () {{
+                    const doc = window.parent.document;
+                    let tries = 0;
+                    (function findAndScroll() {{
+                        const el = [...doc.querySelectorAll({selector!r})].find((e) => {{
+                            const r = e.getBoundingClientRect();
+                            const s = window.getComputedStyle(e);
+                            return r.width && r.height && s.display !== "none"
+                                && s.visibility !== "hidden";
+                        }});
+                        if (!el) {{
+                            if (++tries < 200) setTimeout(findAndScroll, 150);
+                            return;
+                        }}
+                        el.scrollIntoView({{behavior: "smooth", block: "center"}});
+                    }})();
+                }})();
+                </script>""",
+                height=0,
+            )
+
+
+# -----------------------------------------------------------------------------
 # FAQ (UX-15) — the handful of questions that come up over and over, answered
 # in-app so nobody has to leave to find out that (say) their measures are their
 # eye-tracker's, not ours. Deliberately SHORT: the canonical, complete version
@@ -789,7 +1298,6 @@ def render_tour_replay_button() -> None:
 # -----------------------------------------------------------------------------
 
 DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
-DOCS_TUTORIALS_URL = f"{CITATION['docs_url']}tutorials/"
 
 # (question, markdown answer). Two-to-four lines each — anything longer belongs
 # on the docs page.

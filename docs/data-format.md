@@ -34,6 +34,57 @@ The loader bends to fit real corpora:
   ID* to several columns (e.g. participant + paragraph + repeated-reading) and a
   combined unique id is built on the fly.
 
+## Multipart logical trials
+
+A logical `(participant_id, trial_id)` may contain several ordered screens. Map
+these optional fields in both words and fixations:
+
+| Canonical field | Meaning |
+| --- | --- |
+| `screen_id` | Stable child id inside the logical trial. |
+| `screen_index` | Positive, 1-based display order. If omitted, first appearance defines order. |
+| `canvas_width`, `canvas_height` | Optional monitor/canvas pixels, constant within that screen. |
+| `screen_timestamp_ms` | Optional fixation onset that resets within a screen. |
+| `screen_fixation_id` | Optional fixation id that resets within a screen. |
+
+`timestamp_ms`, `fixation_id`, and `order_in_trial` remain parent-global. The
+screen-local clock/id are retained alongside them; neither overwrites the other.
+Screen id and order must map one-to-one within a parent, and the words and
+fixations reports must contain the same set of screens. These validations reject
+orphan screens instead of silently joining the wrong coordinate spaces.
+
+All geometry-dependent operations group by screen: fixation-to-word assignment,
+saccades, passes, regressions, and word measures never cross a screen boundary.
+The main view shows one screen with previous/next navigation; annotations can be
+stored on the parent trial or the current screen. Bulk output uses deterministic
+`screens/screen-001-<id>/` folders.
+
+If source reports have arbitrary page markers instead of mappable screen
+columns, pass a nested manifest to the Python API or CLI. Selectors are exact and
+must cover every row in the declared parent:
+
+```json
+{
+  "trials": [{
+    "participant_id": "p1",
+    "trial_id": "t1",
+    "parts": [
+      {
+        "screen_id": "intro",
+        "screen_index": 1,
+        "canvas_width": 1920,
+        "canvas_height": 1080,
+        "words": {"page_code": "A"},
+        "fixations": {"page_code": "A"}
+      }
+    ]
+  }]
+}
+```
+
+Legacy data without screen identity keeps its original two-column trial key and
+behavior.
+
 ## Reading measures
 
 If your data carries only raw fixations, the app computes the canonical per-word

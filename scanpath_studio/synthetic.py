@@ -131,3 +131,80 @@ EXPECTED = {
     "regression_in_flag": {0: False, 1: True, 2: False, 3: False, 4: False, 5: False},
     "regression_out_flag": {0: False, 1: False, 2: True, 3: False, 4: False, 5: False},
 }
+
+
+def make_multipart_synthetic_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Two-screen executable specification for multipart trials (DATA-21).
+
+    Screen 1 contains a regression (word 2 → word 1); screen 2 has a different
+    canvas and resets the screen-local fixation index while the parent clock and
+    global fixation id remain monotonic. The fixture is intentionally tiny so
+    grouping, navigation, animation boundaries, and export paths have exact
+    hand-authored expectations.
+    """
+    words = pd.DataFrame(
+        [
+            ("intro", 1, 0, "Read", 50, 50, 70, 20, 640, 480),
+            ("intro", 1, 1, "this", 140, 50, 60, 20, 640, 480),
+            ("intro", 1, 2, "first", 220, 50, 70, 20, 640, 480),
+            ("question", 2, 0, "Answer", 100, 120, 90, 24, 800, 600),
+            ("question", 2, 1, "now", 215, 120, 55, 24, 800, 600),
+        ],
+        columns=[
+            "screen_id",
+            "screen_index",
+            "word_id",
+            "text",
+            "x",
+            "y",
+            "width",
+            "height",
+            "canvas_width",
+            "canvas_height",
+        ],
+    )
+    words.insert(0, "text_id", ["intro"] * 3 + ["question"] * 2)
+    words.insert(0, "trial_id", "multipart_demo")
+    words.insert(0, "participant_id", "synthetic")
+    words["line_idx"] = 1
+
+    fixations = pd.DataFrame(
+        [
+            ("intro", 1, 1, 1, 0, 0, 75, 60, 100, 0),
+            ("intro", 1, 2, 2, 100, 100, 165, 60, 110, 1),
+            ("intro", 1, 3, 3, 210, 210, 245, 60, 90, 2),
+            ("intro", 1, 4, 4, 300, 300, 165, 60, 80, 1),
+            ("question", 2, 5, 1, 1_000, 0, 145, 132, 120, 0),
+            ("question", 2, 6, 2, 1_120, 120, 240, 132, 100, 1),
+        ],
+        columns=[
+            "screen_id",
+            "screen_index",
+            "fixation_id",
+            "screen_fixation_id",
+            "timestamp_ms",
+            "screen_timestamp_ms",
+            "x",
+            "y",
+            "duration_ms",
+            "word_id",
+        ],
+    )
+    fixations.insert(0, "text_id", ["intro"] * 4 + ["question"] * 2)
+    fixations.insert(0, "trial_id", "multipart_demo")
+    fixations.insert(0, "participant_id", "synthetic")
+    fixations["order_in_trial"] = range(1, len(fixations) + 1)
+    fixations["order_in_screen"] = [1, 2, 3, 4, 1, 2]
+    fixations["canvas_width"] = [640] * 4 + [800] * 2
+    fixations["canvas_height"] = [480] * 4 + [600] * 2
+    return words, fixations
+
+
+MULTIPART_EXPECTED = {
+    "screens": ["intro", "question"],
+    "screen_indexes": [1, 2],
+    "canvas_sizes": [(640, 480), (800, 600)],
+    "fixations_per_screen": [4, 2],
+    "intro_regression_destination": 1,
+    "parent_timestamp_span": (0, 1_120),
+}

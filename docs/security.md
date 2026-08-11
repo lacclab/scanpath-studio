@@ -238,11 +238,11 @@ widget keys deliberately excluded by `tabs._collect_column_mapping` because an
 `UploadedFile` is not JSON-serializable. But it does write two things a reader
 should know about before mailing the file around:
 
-- `"selection": {"participant_id": …, "trial_id": …}` — the same identifiers as
+- `"selection": {"participant_id": …, "trial_id": …, "screen_id": …}` — the same identifiers as
   the link.
 - `"annotations": [...]` — the whole annotation store, flattened by
-  `annotations.store_to_records` into `{participant_id, trial_id, star, tags,
-  note}` for **every** annotated trial, not just the selected one. `note` is
+  `annotations.store_to_records` into `{participant_id, trial_id, screen_id?, star, tags,
+  note}` for **every** annotated trial or screen, not just the selected one. `note` is
   free text the researcher typed, so a config saved after a review session can
   contain clinical or subject-identifying prose that no other export carries.
 

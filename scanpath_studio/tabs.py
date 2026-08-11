@@ -110,6 +110,12 @@ from scanpath_studio.export_status import (
 )
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
+from scanpath_studio.multipart import (
+    SCREEN_ID,
+    extract_part,
+    part_catalog,
+    screen_canvas_size,
+)
 from scanpath_studio.plots import (
     FigureSettings,
     STATIC_FIGURE_OPTIONS,
@@ -160,6 +166,62 @@ from scanpath_studio.utils import (
 
 def _safe_filename(text: str) -> str:
     return "".join(c if c.isalnum() or c in "-_." else "_" for c in str(text))
+
+
+def _step_screen(options: tuple[str, ...], delta: int) -> None:
+    """Move the multipart navigator without touching the parent trial picker."""
+    if not options:
+        return
+    current = str(st.session_state.get("single_screen_id", options[0]))
+    position = options.index(current) if current in options else 0
+    st.session_state["single_screen_id"] = options[
+        max(0, min(len(options) - 1, position + delta))
+    ]
+
+
+def _render_screen_navigator(catalog: pd.DataFrame) -> Optional[str]:
+    """Compact previous/select/next navigator for one logical multipart trial."""
+    if catalog.empty:
+        st.session_state.pop("single_screen_id", None)
+        return None
+    options = tuple(catalog[SCREEN_ID].astype(str))
+    current = st.session_state.get("single_screen_id")
+    if current not in options:
+        st.session_state["single_screen_id"] = options[0]
+    labels = {
+        str(
+            row.screen_id
+        ): f"{int(row.screen_index)} of {len(catalog)} · {row.screen_id}"
+        for row in catalog.itertuples()
+    }
+    previous, picker, following = st.columns([0.7, 5, 0.7], vertical_alignment="bottom")
+    position = options.index(str(st.session_state["single_screen_id"]))
+    previous.button(
+        "◀",
+        key="single_screen_previous",
+        help="Previous screen in this logical trial",
+        disabled=position == 0,
+        on_click=_step_screen,
+        args=(options, -1),
+        width="stretch",
+    )
+    selected = picker.selectbox(
+        "Screen",
+        options,
+        key="single_screen_id",
+        format_func=labels.get,
+        help="One coordinate space at a time; the parent trial selection stays fixed.",
+    )
+    following.button(
+        "▶",
+        key="single_screen_next",
+        help="Next screen in this logical trial",
+        disabled=position == len(options) - 1,
+        on_click=_step_screen,
+        args=(options, 1),
+        width="stretch",
+    )
+    return str(selected)
 
 
 def _embed_html_iframe(html: str, *, height: int) -> None:
@@ -932,6 +994,7 @@ def _render_compare_selector(
     animate: bool = False,
     fixations_filtered: Optional[pd.DataFrame] = None,
     trial_words: Optional[pd.DataFrame] = None,
+    words_filtered: Optional[pd.DataFrame] = None,
 ) -> tuple[Optional[str], Optional[str]]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
@@ -945,8 +1008,57 @@ def _render_compare_selector(
     options = build_comparison_options(
         combos, selection_mode, selected_participant, selected_trial, selected_text
     )
+    active_screen = None
+    if (
+        trial_words is not None
+        and not trial_words.empty
+        and SCREEN_ID in trial_words.columns
+    ):
+        active_screen = str(trial_words[SCREEN_ID].iloc[0])
+        screen_source = (
+            fixations_filtered
+            if fixations_filtered is not None
+            and not fixations_filtered.empty
+            and SCREEN_ID in fixations_filtered.columns
+            else words_filtered
+        )
+        if (
+            screen_source is None
+            or screen_source.empty
+            or SCREEN_ID not in screen_source.columns
+        ):
+            options = []
+        else:
+            candidates_with_screen = set(
+                map(
+                    tuple,
+                    screen_source.loc[
+                        screen_source[SCREEN_ID].astype(str) == active_screen,
+                        ["participant_id", "trial_id"],
+                    ]
+                    .astype(str)
+                    .drop_duplicates()
+                    .to_numpy(),
+                )
+            )
+            options = [
+                option
+                for option in options
+                if (str(option[0]), str(option[1])) in candidates_with_screen
+            ]
+            if (
+                fixations_filtered is not None
+                and SCREEN_ID in fixations_filtered.columns
+            ):
+                fixations_filtered = fixations_filtered[
+                    fixations_filtered[SCREEN_ID].astype(str) == active_screen
+                ]
     if not options:
-        st.info("No other trials available for comparison.")
+        st.info(
+            "No other trials contain this screen."
+            if active_screen
+            else "No other trials available for comparison."
+        )
         return None, None
 
     # CMP-6: the candidate ordering is visually LAST in the picker row, after the
@@ -1743,6 +1855,11 @@ def _build_studio_config(
         "selection": {
             "participant_id": selected_participant,
             "trial_id": selected_trial,
+            **(
+                {"screen_id": str(st.session_state["single_screen_id"])}
+                if st.session_state.get("single_screen_id") not in (None, "")
+                else {}
+            ),
         },
         "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
         "experimental_setup": {
@@ -2081,6 +2198,7 @@ def _build_compare_meta(
     selected_trial: str,
     compare_participant: Optional[str],
     compare_trial: Optional[str],
+    selected_screen: Optional[str] = None,
 ) -> Optional[dict]:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active."""
@@ -2088,6 +2206,21 @@ def _build_compare_meta(
         return None
     compare_words = extract_trial(words_filtered, compare_participant, compare_trial)
     compare_fix = extract_trial(fixations_filtered, compare_participant, compare_trial)
+    if selected_screen is not None:
+        if not compare_words.empty:
+            if SCREEN_ID not in compare_words.columns:
+                return None
+            compare_words = extract_part(
+                compare_words, compare_participant, compare_trial, selected_screen
+            )
+        if not compare_fix.empty:
+            if SCREEN_ID not in compare_fix.columns:
+                return None
+            compare_fix = extract_part(
+                compare_fix, compare_participant, compare_trial, selected_screen
+            )
+        if compare_words.empty and compare_fix.empty:
+            return None
     # Short, distinct column headers: participant ids when comparing different
     # participants (the common same-text case), else the trial ids — the long
     # ids otherwise overflow the narrow panel.
@@ -2801,6 +2934,7 @@ def render_single_trial_tab(
                     fixations=fixations_filtered,
                 )
             )
+        screen_slot = st.container(key="tour_grp_screen_picker")
         # Slots filled once the selection is resolved (chips need the trial). The
         # compare-trial selector (CMP-1) sits above the chips, below the picker.
         # Keyed containers double as welcome-tour spotlight targets.
@@ -2818,13 +2952,47 @@ def render_single_trial_tab(
         "trial_id": selected_trial,
     }
 
-    trial_words = extract_trial(words_filtered, selected_participant, selected_trial)
-    trial_fixations = extract_trial(
+    parent_words = extract_trial(words_filtered, selected_participant, selected_trial)
+    parent_fixations = extract_trial(
         fixations_filtered, selected_participant, selected_trial
     )
-    trial_raw_gaze = pd.DataFrame()
+    parent_raw_gaze = pd.DataFrame()
     if raw_gaze is not None and not raw_gaze.empty:
-        trial_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
+        parent_raw_gaze = extract_trial(raw_gaze, selected_participant, selected_trial)
+    screens = part_catalog(parent_words, parent_fixations)
+    with screen_slot:
+        selected_screen = _render_screen_navigator(screens)
+    if selected_screen is not None:
+        trial_words = extract_part(
+            parent_words, selected_participant, selected_trial, selected_screen
+        )
+        trial_fixations = extract_part(
+            parent_fixations, selected_participant, selected_trial, selected_screen
+        )
+        if not parent_raw_gaze.empty and SCREEN_ID in parent_raw_gaze.columns:
+            trial_raw_gaze = extract_part(
+                parent_raw_gaze,
+                selected_participant,
+                selected_trial,
+                selected_screen,
+            )
+        else:
+            trial_raw_gaze = pd.DataFrame()
+            if not parent_raw_gaze.empty:
+                screen_slot.warning(
+                    "Raw gaze has no screen identity, so it is hidden for this "
+                    "multipart trial rather than concatenated across screens."
+                )
+        st.session_state["_share_selection"]["screen_id"] = selected_screen
+        per_screen_canvas = screen_canvas_size(trial_words) or screen_canvas_size(
+            trial_fixations
+        )
+        if per_screen_canvas is not None:
+            canvas_width, canvas_height = per_screen_canvas
+    else:
+        trial_words = parent_words
+        trial_fixations = parent_fixations
+        trial_raw_gaze = parent_raw_gaze
     trial_has_raw_gaze = not trial_raw_gaze.empty
     has_raw_gaze = raw_gaze is not None and not raw_gaze.empty
 
@@ -3135,6 +3303,7 @@ def render_single_trial_tab(
                 # selected trial (NLD), fixation count, or reading time.
                 fixations_filtered=fixations_filtered,
                 trial_words=trial_words,
+                words_filtered=words_filtered,
             )
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
@@ -3200,8 +3369,9 @@ def render_single_trial_tab(
         selected_trial,
         compare_participant,
         compare_trial,
+        selected_screen,
     )
-    comparing = compare_participant is not None and compare_trial is not None
+    comparing = compare_meta is not None
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
 
     # Fixation-index window (VIZ-7): the frames that feed the figure / animation
@@ -3269,17 +3439,14 @@ def render_single_trial_tab(
     # frame it is handed (its shared colour range included), so a frame holding
     # just those two corrected scanpaths is equivalent to patching the whole
     # filtered corpus — and far cheaper. Untouched when correction is off.
-    cmp_fixations = fixations_filtered
-    if comparing and (
-        drift_corrected_primary or plot_compare_fix is not fig_compare_fix
-    ):
-        if (str(compare_participant), str(compare_trial)) == (
-            str(selected_participant),
-            str(selected_trial),
-        ):
-            cmp_fixations = plot_fixations
-        else:
-            cmp_fixations = pd.concat([plot_fixations, plot_compare_fix])
+    cmp_words = (
+        pd.concat([trial_words, compare_meta["words"]])
+        if comparing and compare_meta is not None
+        else trial_words
+    )
+    cmp_fixations = (
+        pd.concat([plot_fixations, plot_compare_fix]) if comparing else plot_fixations
+    )
 
     # Condition chips above the plot — configurable via the sidebar picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
@@ -3423,7 +3590,7 @@ def render_single_trial_tab(
         elif comparing:
             displayed_fig = _render_comparison_figure(
                 combos,
-                words_filtered,
+                cmp_words,
                 cmp_fixations,
                 selected_participant,
                 selected_trial,
@@ -3526,7 +3693,13 @@ def render_single_trial_tab(
             on_change="rerun",
         )
     with tab_annot:
-        render_trial_annotations(selected_participant, selected_trial, bare=True)
+        with st.container(key="tutorial_annotations"):
+            render_trial_annotations(
+                selected_participant,
+                selected_trial,
+                screen_id=selected_screen,
+                bare=True,
+            )
     with tab_stim:
         _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
     with tab_compare:
@@ -3538,21 +3711,22 @@ def render_single_trial_tab(
             # generations, …), scored by similarity. It uses the main scanpath
             # selection and renders no picker of its own. Line assignment is now its
             # own top-level subtab (tab_align), not nested here.
-            render_multiple_comparison_tab(
-                trial_words,
-                trial_fixations,
-                words_filtered,
-                fixations_filtered,
-                selected_participant=selected_participant,
-                selected_trial=selected_trial,
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                base_font_size=base_font_size,
-                font_family=font_family,
-                viz_settings=viz_settings,
-                line_spacing=line_spacing,
-                scale_text_to_boxes=scale_text_to_boxes,
-            )
+            with st.container(key="tutorial_comparisons"):
+                render_multiple_comparison_tab(
+                    trial_words,
+                    trial_fixations,
+                    words_filtered,
+                    fixations_filtered,
+                    selected_participant=selected_participant,
+                    selected_trial=selected_trial,
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
+                    viz_settings=viz_settings,
+                    line_spacing=line_spacing,
+                    scale_text_to_boxes=scale_text_to_boxes,
+                )
 
     with tab_align:
         # PERF-3: only the selected tab's body runs (see the st.tabs call).
@@ -3578,27 +3752,28 @@ def render_single_trial_tab(
         # PERF-3: only the selected tab's body runs (see the st.tabs call).
         # Nothing to render when closed — a hidden panel is not on screen.
         if tab_export.open:
-            _render_export_panel(
-                displayed_fig,
-                animate=animate,
-                save_slug=save_slug,
-                playback_ms=anim_playback_ms,
-                file_stem=anim_file_stem,
-                combos=combos,
-                words_filtered=words_filtered,
-                fixations_filtered=fixations_filtered,
-                combos_all=combos_all,
-                words_all=words_all,
-                fixations_all=fixations_all,
-                raw_gaze=raw_gaze if raw_gaze is not None else pd.DataFrame(),
-                canvas_width=canvas_width,
-                canvas_height=canvas_height,
-                base_font_size=base_font_size,
-                font_family=font_family,
-                viz_settings=viz_settings,
-                line_spacing=line_spacing,
-                scale_text_to_boxes=scale_text_to_boxes,
-            )
+            with st.container(key="tutorial_export"):
+                _render_export_panel(
+                    displayed_fig,
+                    animate=animate,
+                    save_slug=save_slug,
+                    playback_ms=anim_playback_ms,
+                    file_stem=anim_file_stem,
+                    combos=combos,
+                    words_filtered=words_filtered,
+                    fixations_filtered=fixations_filtered,
+                    combos_all=combos_all,
+                    words_all=words_all,
+                    fixations_all=fixations_all,
+                    raw_gaze=raw_gaze if raw_gaze is not None else pd.DataFrame(),
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    base_font_size=base_font_size,
+                    font_family=font_family,
+                    viz_settings=viz_settings,
+                    line_spacing=line_spacing,
+                    scale_text_to_boxes=scale_text_to_boxes,
+                )
 
     with tab_inspect:
         # PERF-3: only the selected tab's body runs (see the st.tabs call).
@@ -3606,11 +3781,12 @@ def render_single_trial_tab(
         if tab_inspect.open:
             # The former Data Inspection view is now a subtab here (raw tables +
             # summary stats + column mapping). Uses the filtered frames in view.
-            render_data_inspection_tab(
-                words_filtered,
-                fixations_filtered,
-                raw_gaze if raw_gaze is not None else pd.DataFrame(),
-            )
+            with st.container(key="tutorial_data_inspection"):
+                render_data_inspection_tab(
+                    words_filtered,
+                    fixations_filtered,
+                    raw_gaze if raw_gaze is not None else pd.DataFrame(),
+                )
 
     with tab_share:
         # The former header Share popover, now a subtab. app.main passes the
@@ -5786,6 +5962,11 @@ def _collect_generations(
     if gen_col not in fixations_pool.columns or fixations_pool.empty:
         return {}, 0
     pool = fixations_pool
+    if SCREEN_ID in trial_fixations.columns and not trial_fixations.empty:
+        if SCREEN_ID not in pool.columns:
+            return {}, 0
+        active_screen = str(trial_fixations[SCREEN_ID].iloc[0])
+        pool = pool[pool[SCREEN_ID].astype(str) == active_screen]
     # Match the canonical text-column priority used elsewhere (utils / pickers):
     # the first present on the fixations frame identifies the text.
     text_col = next(
@@ -6782,7 +6963,8 @@ def render_data_inspection_tab(
     st.subheader("Dataset statistics")
     # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.
-    top_cols = st.columns(6)
+    parts = part_catalog(words_filtered, fixations_filtered)
+    top_cols = st.columns(7 if not parts.empty else 6)
     top_cols[0].metric(
         "Participants", f"{stats['n_participants']:,}", icon=":material/group:"
     )
@@ -6798,6 +6980,16 @@ def render_data_inspection_tab(
         help="Counts raw gaze samples if provided.",
         icon=":material/scatter_plot:",
     )
+    if not parts.empty:
+        top_cols[6].metric(
+            "Screens", f"{len(parts):,}", icon=":material/view_carousel:"
+        )
+        with st.expander("Multipart trial screens", expanded=False):
+            st.caption(
+                "Recorded parent/child identity and per-screen geometry. Each row is "
+                "one coordinate space; analysis and export retain this child key."
+            )
+            st.dataframe(parts, hide_index=True, width="stretch")
 
     st.divider()
 

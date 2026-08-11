@@ -393,6 +393,7 @@ def _apply_url_preset() -> Optional[str]:
         &trial_id=p001_3_Adv     → land on this exact trial id, any picker mode
                                    (applied after combos build — see
                                    _apply_url_trial_selection; emitted by Share)
+        &screen=intro            → open this child screen of a multipart trial
         &tab=animation           → pre-tick the Animate toggle (legacy; there's
                                    no separate Animated Scanpath tab anymore)
         &heatmap_colorscale=Greens
@@ -461,6 +462,8 @@ def _apply_url_preset() -> Optional[str]:
     # tab), so a legacy `?tab=animation` deep link just pre-ticks it.
     if (qp.get("tab") or "").lower() == "animation":
         st.session_state.setdefault("single_animate", True)
+    if qp.get("screen") not in (None, ""):
+        st.session_state.setdefault("single_screen_id", str(qp["screen"]))
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
     # the deep link too, seeded before the loader's widgets render. Validate each
@@ -680,6 +683,8 @@ def _restore_selection(
             "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
         )
         st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
+    if selection.get("screen_id") not in (None, ""):
+        st.session_state[f"{key_prefix}_screen_id"] = str(selection["screen_id"])
     return True
 
 
@@ -703,6 +708,7 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
     selection = {
         "participant_id": st.query_params.get("participant"),
         "trial_id": trial_id,
+        "screen_id": st.query_params.get("screen"),
     }
     # Stamp the once-flag only after the trial is actually found, so a rerun
     # where `combos` is still empty/partial (e.g. the OneStop shard is mid-load)
@@ -1566,10 +1572,13 @@ def _build_share_query(
     selection = st.session_state.get("_share_selection") or {}
     participant = selection.get("participant_id")
     trial_id = selection.get("trial_id")
+    screen_id = selection.get("screen_id")
     if include_participant and participant not in (None, ""):
         params["participant"] = str(participant)
     if include_trial and trial_id not in (None, ""):
         params["trial_id"] = str(trial_id)
+    if include_trial and screen_id not in (None, ""):
+        params["screen"] = str(screen_id)
 
     # Visualization toggles — emit an explicit 0/1 so a layer the user turned
     # *off* is shared as off (the URL coercion reads "0" as False).

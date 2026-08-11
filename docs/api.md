@@ -34,6 +34,8 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.list_trials
 
+::: scanpath_studio.api.list_parts
+
 ::: scanpath_studio.api.compute_word_metrics
 
 ::: scanpath_studio.api.preprocess_data
@@ -51,6 +53,8 @@ app's default view and change only the needed layers.
 ::: scanpath_studio.api.plot_scanpath
 
 ::: scanpath_studio.api.animate_scanpath
+
+::: scanpath_studio.api.render_parent_trial
 
 ::: scanpath_studio.api.plot_corpus_figure
 

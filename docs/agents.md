@@ -372,6 +372,8 @@ default); it is ignored when the column isn't there.
 |--------|---------|------|
 | `background_color` | `'#ffffff'` | yes |
 | `fit_to_monitor` | `True` | yes |
+| `show_coordinate_grid` | `False` | yes |
+| `coordinate_grid_spacing` | `None` | yes |
 | `x_field` | `'x'` | no |
 | `y_field` | `'y'` | no |
 | `background_image` | `None` | yes |
@@ -380,6 +382,9 @@ default); it is ignored when the column isn't there.
 | `background_image_opacity` | `1.0` | yes |
 
 `fit_to_monitor=True` frames the whole `canvas_size`; `False` crops to the data.
+`show_coordinate_grid=True` overlays zero-anchored monitor-pixel coordinates;
+`coordinate_grid_spacing=None` selects a readable 1/2/5×10ⁿ interval, while a
+positive number pins the major interval in pixels.
 `background_image` places a stimulus screenshot under the scanpath at data
 coordinates — see [Rendering](rendering.md).
 

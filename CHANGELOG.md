@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Author scanpaths directly on the stimulus canvas** (VIZ-33) — typed text now produces inspectable word geometry and one default fixation per word; click to add, drag to move, select/delete on the canvas, or edit stable-ID rows where X/Y are primary and target word is optional. Schema-2 authoring JSON preserves the layout and remains loadable from the app, CLI, and Python API.
+- **Optional monitor-pixel coordinate grid** (VIZ-34) — a zero-anchored X/Y grid with automatic or manual major spacing is available in static, animation, and all comparison layouts, and round-trips through Share links, saved configs, the CLI, Python API, and bulk manifests without changing the default off-state.
+- **Honest progress for every app export path** (EXP-6) — static, animation, and bulk exports now share visible stages, expose determinate counts only for real frames/trials, include encoding and zip finalization, retain successful downloads across reruns, and safely reuse identical static bytes by a full output signature.
+
 ### Fixed
 - **Quick-view and full-monitor transitions keep the current visualization state** (BUG-20, BUG-21) — leaving Illustration restores the styling it temporarily overrode, including after a restored/deep-linked Illustration state; Scanpath/Heatmap highlighting and the rendered figure now agree.
 - **Participant narrowing keeps eligible trial-sort fields** (BUG-22) — trial-level metadata is discovered from the scoped word/fixation tables instead of only the compact picker projection, with cross-table conflicts and event-level fields excluded.

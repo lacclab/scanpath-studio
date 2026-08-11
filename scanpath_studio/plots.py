@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import math
 import struct
 from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
@@ -123,6 +124,8 @@ class FigureSettings:
     background_image_origin: Optional[Tuple[float, float]] = None
     background_image_opacity: float = 1.0
     fit_to_monitor: bool = False
+    show_coordinate_grid: bool = False
+    coordinate_grid_spacing: Optional[float] = None
     word_heatmap_col: Optional[str] = None
     word_heatmap_title: Optional[str] = None
     word_hover_measure: Optional[str] = "total_fixation_duration_ms"
@@ -304,6 +307,165 @@ def _compute_axis_ranges(
     return x_range, y_range, x_min, x_max, y_min, y_max
 
 
+@dataclass(frozen=True)
+class CoordinateGridTicks:
+    """Deterministic, zero-anchored screen-coordinate tick contract."""
+
+    major_spacing: float
+    minor_spacing: float
+    x_values: tuple[float, ...]
+    x_labels: tuple[str, ...]
+    y_values: tuple[float, ...]
+    y_labels: tuple[str, ...]
+
+
+def _nice_grid_spacing(raw: float) -> float:
+    """Round a positive interval up to the 1/2/5×10ⁿ sequence."""
+    exponent = math.floor(math.log10(max(raw, 1e-12)))
+    unit = 10.0**exponent
+    normalized = raw / unit
+    for candidate in (1.0, 2.0, 5.0, 10.0):
+        if normalized <= candidate:
+            return candidate * unit
+    return 10.0 * unit
+
+
+def _anchored_grid_values(lo: float, hi: float, spacing: float) -> tuple[float, ...]:
+    """Ticks clipped to ``lo..hi`` and anchored at global screen coordinate 0."""
+    lo, hi = min(lo, hi), max(lo, hi)
+    first = math.ceil((lo - spacing * 1e-9) / spacing)
+    last = math.floor((hi + spacing * 1e-9) / spacing)
+    count = max(0, last - first + 1)
+    if count > 10_000:
+        raise ValueError(
+            "Coordinate-grid spacing creates more than 10,000 ticks; choose a larger interval."
+        )
+    return tuple(round(index * spacing, 10) for index in range(first, last + 1))
+
+
+def _grid_label(value: float) -> str:
+    return f"{value:g}"
+
+
+def coordinate_grid_ticks(
+    x_range: Sequence[float],
+    y_range: Sequence[float],
+    *,
+    spacing: Optional[float] = None,
+    rendered_width: int = 900,
+    rendered_height: int = 650,
+    monitor_bounds: Optional[tuple[float, float, float, float]] = None,
+) -> CoordinateGridTicks:
+    """Return screen-X/Y grid ticks without changing either visible range.
+
+    ``spacing=None`` chooses one shared 1/2/5×10ⁿ major interval for both axes.
+    Manual intervals stay exact. Labels are thinned when the rendered display
+    could not fit them, while the underlying tick/grid positions remain stable.
+    ``monitor_bounds`` is accepted to make the coordinate frame explicit; ticks
+    are intentionally clipped to the *visible* ranges and always anchored at
+    screen zero, so cropped/full-monitor transitions cannot shift the grid.
+    """
+    if len(x_range) != 2 or len(y_range) != 2:
+        raise ValueError("Coordinate-grid ranges must each contain two values.")
+    if monitor_bounds is not None and len(monitor_bounds) != 4:
+        raise ValueError("monitor_bounds must be (x_min, x_max, y_min, y_max).")
+    x_span = abs(float(x_range[1]) - float(x_range[0]))
+    y_span = abs(float(y_range[1]) - float(y_range[0]))
+    if spacing is None:
+        target_x = x_span / max(float(rendered_width) / 90.0, 1.0)
+        target_y = y_span / max(float(rendered_height) / 70.0, 1.0)
+        major = _nice_grid_spacing(max(target_x, target_y, 1.0))
+    else:
+        major = float(spacing)
+        if not math.isfinite(major) or major <= 0:
+            raise ValueError(
+                "Coordinate-grid spacing must be a positive finite number."
+            )
+    x_values = _anchored_grid_values(float(x_range[0]), float(x_range[1]), major)
+    y_values = _anchored_grid_values(float(y_range[0]), float(y_range[1]), major)
+
+    def _labels(
+        values: tuple[float, ...], pixels: int, minimum_px: int
+    ) -> tuple[str, ...]:
+        capacity = max(int(pixels) // minimum_px, 1)
+        stride = max(1, math.ceil(len(values) / capacity))
+        return tuple(
+            _grid_label(value) if index % stride == 0 else ""
+            for index, value in enumerate(values)
+        )
+
+    return CoordinateGridTicks(
+        major_spacing=major,
+        minor_spacing=major / 5.0,
+        x_values=x_values,
+        x_labels=_labels(x_values, rendered_width, 68),
+        y_values=y_values,
+        y_labels=_labels(y_values, rendered_height, 42),
+    )
+
+
+_GRID_LEFT_RESERVE_PX = 52
+_GRID_BOTTOM_RESERVE_PX = 36
+_GRID_TICK_FONT_PX = 18  # remains legible after true-scale responsive downscaling
+
+
+def _coordinate_grid_axis_options(
+    ticks: CoordinateGridTicks, *, axis: str
+) -> dict[str, Any]:
+    """Plotly axis options for one restrained major/minor coordinate grid."""
+    values = ticks.x_values if axis == "x" else ticks.y_values
+    labels = ticks.x_labels if axis == "x" else ticks.y_labels
+    return dict(
+        showticklabels=True,
+        showgrid=True,
+        tickmode="array",
+        tickvals=list(values),
+        ticktext=list(labels),
+        ticks="outside",
+        ticklen=4,
+        tickwidth=1,
+        tickcolor="#667085",
+        tickfont=dict(size=_GRID_TICK_FONT_PX, color="#475467"),
+        gridcolor="rgba(71,84,103,0.22)",
+        gridwidth=1,
+        zeroline=True,
+        zerolinecolor="rgba(16,24,40,0.42)",
+        zerolinewidth=1.25,
+        minor=dict(
+            showgrid=True,
+            dtick=ticks.minor_spacing,
+            gridcolor="rgba(71,84,103,0.09)",
+            gridwidth=0.5,
+            ticks="",
+        ),
+    )
+
+
+def _apply_coordinate_grid_axes(
+    xaxis: dict,
+    yaxis: dict,
+    *,
+    show: bool,
+    spacing: Optional[float],
+    x_range: Sequence[float],
+    y_range: Sequence[float],
+    rendered_width: int,
+    rendered_height: int,
+) -> None:
+    """Mutate spatial axis dicts only when the optional grid is enabled."""
+    if not show:
+        return
+    ticks = coordinate_grid_ticks(
+        x_range,
+        y_range,
+        spacing=spacing,
+        rendered_width=rendered_width,
+        rendered_height=rendered_height,
+    )
+    xaxis.update(_coordinate_grid_axis_options(ticks, axis="x"))
+    yaxis.update(_coordinate_grid_axis_options(ticks, axis="y"))
+
+
 # Cap the *fixed* render size so the true-to-scale plot (rendered at exactly
 # these pixels via tabs._render_true_scale_chart) fits a typical research display
 # without horizontal scrolling. Aspect ratio is preserved when shrinking — both
@@ -376,6 +538,7 @@ def _decoration_margins(
     legend: bool,
     bottom: int = 0,
     colorbar_horizontal: bool = False,
+    coordinate_grid: bool = False,
 ) -> dict:
     """Grow a spatial figure so a right/bottom colorbar + top legend sit in
     reserved margin instead of stealing space from the equal-aspect plot region.
@@ -389,10 +552,12 @@ def _decoration_margins(
     right = _COLORBAR_RESERVE_PX if (colorbar and not colorbar_horizontal) else 0
     cb_bottom = _COLORBAR_BOTTOM_PX if (colorbar and colorbar_horizontal) else 0
     top = _LEGEND_RESERVE_PX if legend else 0
+    left = _GRID_LEFT_RESERVE_PX if coordinate_grid else 0
+    grid_bottom = _GRID_BOTTOM_RESERVE_PX if coordinate_grid else 0
     return {
-        "width": fitted_w + right,
-        "height": fitted_h + top + bottom + cb_bottom,
-        "margin": dict(l=0, r=right, t=top, b=bottom + cb_bottom),
+        "width": fitted_w + left + right,
+        "height": fitted_h + top + bottom + cb_bottom + grid_bottom,
+        "margin": dict(l=left, r=right, t=top, b=bottom + cb_bottom + grid_bottom),
     }
 
 
@@ -1762,6 +1927,8 @@ def _render_scanpath_figure(
     background_image_origin = settings.background_image_origin
     background_image_opacity = settings.background_image_opacity
     fit_to_monitor = settings.fit_to_monitor
+    show_coordinate_grid = settings.show_coordinate_grid
+    coordinate_grid_spacing = settings.coordinate_grid_spacing
     word_heatmap_col = settings.word_heatmap_col
     word_heatmap_title = settings.word_heatmap_title
     word_hover_measure = settings.word_hover_measure
@@ -2347,6 +2514,16 @@ def _render_scanpath_figure(
             scaleratio=1,
             automargin=False,
         )
+        _apply_coordinate_grid_axes(
+            xaxis_cfg,
+            yaxis_cfg,
+            show=show_coordinate_grid,
+            spacing=coordinate_grid_spacing,
+            x_range=x_range,
+            y_range=y_range,
+            rendered_width=fitted_w,
+            rendered_height=fitted_h,
+        )
     else:
         xaxis_cfg.update(
             showticklabels=True, showgrid=True, title=x_field.replace("_", " ").title()
@@ -2382,6 +2559,7 @@ def _render_scanpath_figure(
             colorbar=show_colorbars and (is_numeric_color or heatmap_rendered),
             legend=legend_active,
             colorbar_horizontal=colorbar_orientation == "Horizontal",
+            coordinate_grid=show_coordinate_grid,
         )
         if spatial_axes
         else {"width": fitted_w, "height": fitted_h, "margin": dict(l=0, r=0, t=0, b=0)}
@@ -3317,6 +3495,8 @@ def _render_scanpath_animation(
     background_image_origin = settings.background_image_origin
     background_image_opacity = settings.background_image_opacity
     fit_to_monitor = settings.fit_to_monitor
+    show_coordinate_grid = settings.show_coordinate_grid
+    coordinate_grid_spacing = settings.coordinate_grid_spacing
     autoplay = settings.autoplay
     anim_grid_step_ms = settings.anim_grid_step_ms
     anim_max_frames = settings.anim_max_frames
@@ -3871,6 +4051,8 @@ def _render_scanpath_animation(
     bottom_reserve = _CONTROLS_MARGIN_PX + (
         _COLORBAR_BOTTOM_PX if horizontal_colorbar else 0
     )
+    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
+    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     # Stimulus-page background image (MultiplEYE) — same layout image as
     # make_scanpath_figure: placed at its (centered) origin, UNDER every trace,
     # and persisting across frames (a layout image, not per-frame data). Lets the
@@ -3882,32 +4064,49 @@ def _render_scanpath_animation(
         background_image_opacity,
     )
     bg_images = [bg_spec] if bg_spec else []
+    xaxis = dict(
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False,
+        title=None,
+        range=x_range,
+        constrain="domain",
+        automargin=False,
+    )
+    yaxis = dict(
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False,
+        title=None,
+        range=y_range,
+        constrain="domain",
+        scaleanchor="x",
+        scaleratio=1,
+        automargin=False,
+    )
+    _apply_coordinate_grid_axes(
+        xaxis,
+        yaxis,
+        show=show_coordinate_grid,
+        spacing=coordinate_grid_spacing,
+        x_range=x_range,
+        y_range=y_range,
+        rendered_width=fitted_w,
+        rendered_height=fitted_h,
+    )
     layout = dict(
-        height=fitted_h + bottom_reserve + _CONTROLS_SAFETY_PX,
-        width=fitted_w + right_reserve,
+        height=fitted_h + bottom_reserve + grid_bottom + _CONTROLS_SAFETY_PX,
+        width=fitted_w + grid_left + right_reserve,
         autosize=False,
         images=bg_images,
-        margin=dict(l=0, r=right_reserve, t=0, b=bottom_reserve),
-        xaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=x_range,
-            constrain="domain",
-            automargin=False,
+        margin=dict(
+            l=grid_left,
+            r=right_reserve,
+            t=0,
+            b=bottom_reserve + grid_bottom,
         ),
-        yaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=y_range,
-            constrain="domain",
-            scaleanchor="x",
-            scaleratio=1,
-            automargin=False,
-        ),
+        xaxis=xaxis,
+        yaxis=yaxis,
         template="plotly_white",
         plot_bgcolor=background_color,
         paper_bgcolor=background_color,
@@ -4385,6 +4584,8 @@ def _make_split_comparison_figure(
     background_image_origin = settings.background_image_origin
     background_image_opacity = settings.background_image_opacity
     fit_to_monitor = settings.fit_to_monitor
+    show_coordinate_grid = settings.show_coordinate_grid
+    coordinate_grid_spacing = settings.coordinate_grid_spacing
 
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     cb_style = dict(
@@ -4595,28 +4796,35 @@ def _make_split_comparison_figure(
 
         xaxis_key = "xaxis" if idx == 0 else f"xaxis{idx + 1}"
         yaxis_key = "yaxis" if idx == 0 else f"yaxis{idx + 1}"
-        fig.update_layout(
-            **{
-                xaxis_key: dict(
-                    showticklabels=False,
-                    showgrid=False,
-                    zeroline=False,
-                    title=None,
-                    range=x_range,
-                    constrain="domain",
-                ),
-                yaxis_key: dict(
-                    showticklabels=False,
-                    showgrid=False,
-                    zeroline=False,
-                    title=None,
-                    range=y_range,
-                    constrain="domain",
-                    scaleanchor=xref,
-                    scaleratio=1,
-                ),
-            }
+        xaxis = dict(
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+            title=None,
+            range=x_range,
+            constrain="domain",
         )
+        yaxis = dict(
+            showticklabels=False,
+            showgrid=False,
+            zeroline=False,
+            title=None,
+            range=y_range,
+            constrain="domain",
+            scaleanchor=xref,
+            scaleratio=1,
+        )
+        _apply_coordinate_grid_axes(
+            xaxis,
+            yaxis,
+            show=show_coordinate_grid,
+            spacing=coordinate_grid_spacing,
+            x_range=x_range,
+            y_range=y_range,
+            rendered_width=per_panel_w,
+            rendered_height=canvas_height,
+        )
+        fig.update_layout(**{xaxis_key: xaxis, yaxis_key: yaxis})
 
     if show_heatmap and show_colorbars and any(heatmap_maps):
         fig.add_trace(
@@ -4653,13 +4861,20 @@ def _make_split_comparison_figure(
         )
         else 0
     )
+    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
+    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
     fig.update_layout(
-        height=total_height + bottom_px,
-        width=total_width,
+        height=total_height + bottom_px + grid_bottom,
+        width=total_width + grid_left,
         autosize=False,
         # The t=40 band was the (now-removed) title; keep a slim band only for the
         # optional legend.
-        margin=dict(l=0, r=0, t=24 if show_legend else 0, b=bottom_px),
+        margin=dict(
+            l=grid_left,
+            r=0,
+            t=24 if show_legend else 0,
+            b=bottom_px + grid_bottom,
+        ),
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
         template="plotly_white",
         plot_bgcolor=background_color,
@@ -4724,6 +4939,8 @@ def _render_comparison_figure(
     background_image_origin = settings.background_image_origin
     background_image_opacity = settings.background_image_opacity
     fit_to_monitor = settings.fit_to_monitor
+    show_coordinate_grid = settings.show_coordinate_grid
+    coordinate_grid_spacing = settings.coordinate_grid_spacing
     if layout in {"side_by_side", "stacked"}:
         return _make_split_comparison_figure(
             words,
@@ -4939,32 +5156,46 @@ def _render_comparison_figure(
         )
         else 0
     )
+    grid_left = _GRID_LEFT_RESERVE_PX if show_coordinate_grid else 0
+    grid_bottom = _GRID_BOTTOM_RESERVE_PX if show_coordinate_grid else 0
+    xaxis = dict(
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False,
+        title=None,
+        range=x_range,
+        constrain="domain",
+        automargin=False,
+    )
+    yaxis = dict(
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False,
+        title=None,
+        range=y_range,
+        constrain="domain",
+        scaleanchor="x",
+        scaleratio=1,
+        automargin=False,
+    )
+    _apply_coordinate_grid_axes(
+        xaxis,
+        yaxis,
+        show=show_coordinate_grid,
+        spacing=coordinate_grid_spacing,
+        x_range=x_range,
+        y_range=y_range,
+        rendered_width=fitted_w,
+        rendered_height=fitted_h,
+    )
     fig.update_layout(
-        height=fitted_h + top_px + bottom_px,
-        width=fitted_w,
+        height=fitted_h + top_px + bottom_px + grid_bottom,
+        width=fitted_w + grid_left,
         autosize=False,
         showlegend=show_legend,
-        margin=dict(l=0, r=0, t=top_px, b=bottom_px),
-        xaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=x_range,
-            constrain="domain",
-            automargin=False,
-        ),
-        yaxis=dict(
-            showticklabels=False,
-            showgrid=False,
-            zeroline=False,
-            title=None,
-            range=y_range,
-            constrain="domain",
-            scaleanchor="x",
-            scaleratio=1,
-            automargin=False,
-        ),
+        margin=dict(l=grid_left, r=0, t=top_px, b=bottom_px + grid_bottom),
+        xaxis=xaxis,
+        yaxis=yaxis,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         template="plotly_white",
         plot_bgcolor=background_color,

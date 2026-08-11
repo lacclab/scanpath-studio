@@ -95,12 +95,18 @@ from scanpath_studio.data import (
     validate_word_schema,
 )
 from scanpath_studio.export import (
-    ExportProgress,
     annotate_figure,
     bulk_export,
     pattern_fields,
     render_export_options,
     render_pattern,
+    render_static_figure_bytes,
+)
+from scanpath_studio.export_status import (
+    EXPORTER_VERSION,
+    ExportStage,
+    ExportStatus,
+    static_export_signature,
 )
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
@@ -307,43 +313,90 @@ def _render_save_plot_button(
         return
 
     # PNG/SVG/PDF: render on click (Kaleido/Chrome), then reveal the download.
+    # The signature includes the complete figure JSON and every exporter option,
+    # so the durable result survives harmless reruns but can never leak across a
+    # trial, format, scale, size, or visual-setting change (EXP-6).
+    fig_width = int(fig.layout.width or canvas_width)
+    fig_height = int(fig.layout.height or canvas_height)
+    scale = 3 if fmt == "PNG" else 1
+    sig = static_export_signature(
+        fig,
+        fmt=fmt,
+        width=fig_width,
+        height=fig_height,
+        scale=scale,
+    )
+    cache_key = f"_{key_prefix}_static_export_cache"
+    inflight_key = f"_{key_prefix}_static_export_inflight"
+    cache = st.session_state.get(cache_key)
+    if cache and cache.get("sig") != sig:
+        st.session_state.pop(cache_key, None)
+        cache = None
+
     generate = st.button(
         f"Render {fmt}",
         key=f"{key_prefix}_save_generate",
         help="Renders the image (needs Chrome/Kaleido); the download button "
         "appears once it's ready.",
+        disabled=st.session_state.get(inflight_key) == sig,
     )
-    if not generate:
-        return
+    if generate:
+        status_box = st.status("Preparing export…", expanded=True)
 
-    fig_width = int(fig.layout.width or canvas_width)
-    fig_height = int(fig.layout.height or canvas_height)
-    try:
-        data = fig.to_image(
-            format=fmt.lower(),
-            width=fig_width,
-            height=fig_height,
-            # The on-screen figure is sized to fit the column; render raster
-            # PNG at 3x so saved figures stay paper-quality (SVG/PDF are
-            # vector and unaffected).
-            scale=3 if fmt == "PNG" else 1,
+        def _on_status(status: ExportStatus) -> None:
+            elapsed = f" · {status.elapsed_s:.1f}s" if status.elapsed_s else ""
+            state = (
+                "complete"
+                if status.stage == ExportStage.READY
+                else "error"
+                if status.stage == ExportStage.ERROR
+                else "running"
+            )
+            status_box.update(label=f"{status.message}{elapsed}", state=state)
+
+        st.session_state[inflight_key] = sig
+        try:
+            data = render_static_figure_bytes(
+                fig,
+                fmt=fmt.lower(),
+                width=fig_width,
+                height=fig_height,
+                scale=scale,
+                status_callback=_on_status,
+            )
+        except Exception as exc:
+            st.session_state.pop(cache_key, None)
+            hint = (
+                CHROME_INSTALL_HINT
+                if not chrome_available()
+                else "On Streamlit Cloud Chrome is installed via `packages.txt`; if it "
+                "still fails, choose the **HTML** format above — it needs no browser."
+            )
+            detail = str(exc)
+            message = f"Could not render {fmt}: {detail}"
+            # The renderer's missing-browser exception already contains the
+            # actionable hint. Appending it again produced two identical yellow
+            # paragraphs in the export panel (EXP-6 review feedback).
+            if hint not in detail:
+                message += f"\n\n{hint}"
+            st.warning(message)
+            cache = None
+        else:
+            cache = {"sig": sig, "data": data, "fmt": fmt}
+            st.session_state[cache_key] = cache
+        finally:
+            st.session_state.pop(inflight_key, None)
+
+    if cache and cache.get("sig") == sig:
+        data = cache["data"]
+        st.success(f"{fmt} ready · {len(data) / 1024:.0f} KB")
+        st.download_button(
+            f"⬇ Download {fmt}",
+            data=data,
+            file_name=f"{file_stem}.{fmt.lower()}",
+            mime=_MIME_FOR_FORMAT[fmt],
+            key=f"{key_prefix}_save_button",
         )
-    except Exception as exc:
-        hint = (
-            CHROME_INSTALL_HINT
-            if not chrome_available()
-            else "On Streamlit Cloud Chrome is installed via `packages.txt`; if it "
-            "still fails, choose the **HTML** format above — it needs no browser."
-        )
-        st.warning(f"Could not render {fmt}: {exc}\n\n{hint}")
-        return
-    st.download_button(
-        f"⬇ Download {fmt}",
-        data=data,
-        file_name=f"{file_stem}.{fmt.lower()}",
-        mime=_MIME_FOR_FORMAT[fmt],
-        key=f"{key_prefix}_save_button",
-    )
 
 
 # Above this many frames, offer to cap the rendered frame count: each frame is a
@@ -462,8 +515,20 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     # so toggling any of them invalidates a stale render instead of serving the
     # previous bytes. `scale`/`max_frames` are export-only (not in the figure),
     # so they're keyed separately.
-    sig = (file_stem, fmt, float(scale), max_frames, hash(fig.to_json()))
+    sig = static_export_signature(
+        fig,
+        fmt=fmt,
+        width=int(fig.layout.width or 900),
+        height=int(fig.layout.height or 600),
+        scale=float(scale),
+        exporter_version=(
+            f"{EXPORTER_VERSION}:animation:{file_stem}:{max_frames}:{frame_ms:.12g}"
+        ),
+    )
     cache = st.session_state.get("_anim_export_cache")
+    if cache and cache.get("sig") != sig:
+        st.session_state.pop("_anim_export_cache", None)
+        cache = None
 
     if st.button(
         f"Render {fmt}",
@@ -471,10 +536,31 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
         help="Renders each frame via Kaleido (headless Chrome); the download "
         "appears once it's ready.",
     ):
-        bar = st.progress(0.0, text=f"Rendering 0/{render_frames} frames…")
+        status_box = st.status("Preparing animation export…", expanded=True)
+        progress_slot = st.empty()
+        bar = None
 
-        def _on_progress(done: int, total: int) -> None:
-            bar.progress(done / total, text=f"Rendering {done}/{total} frames…")
+        def _on_status(status: ExportStatus) -> None:
+            nonlocal bar
+            elapsed = f" · {status.elapsed_s:.1f}s" if status.elapsed_s else ""
+            state = (
+                "complete"
+                if status.stage == ExportStage.READY
+                else "error"
+                if status.stage == ExportStage.ERROR
+                else "running"
+            )
+            status_box.update(label=f"{status.message}{elapsed}", state=state)
+            if status.fraction is not None:
+                text = (
+                    f"{status.completed}/{status.total} frames"
+                    if status.stage == ExportStage.RASTERIZING
+                    else status.message
+                )
+                if bar is None:
+                    bar = progress_slot.progress(status.fraction, text=text)
+                else:
+                    bar.progress(status.fraction, text=text)
 
         try:
             data = export_animation(
@@ -483,10 +569,10 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
                 frame_duration_ms=frame_ms,
                 scale=float(scale),
                 max_frames=max_frames,
-                progress_callback=_on_progress,
+                status_callback=_on_status,
             )
         except AnimationExportError as exc:
-            bar.empty()
+            progress_slot.empty()
             st.warning(
                 f"Could not render {fmt}: {exc}\n\n"
                 "GIF/MP4 export rasterizes each frame with a Chrome/Chromium browser "
@@ -494,8 +580,9 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
                 "if it still fails, use the **HTML** format above — it needs no browser."
             )
             cache = None
+            st.session_state.pop("_anim_export_cache", None)
         else:
-            bar.empty()
+            progress_slot.empty()
             cache = {"sig": sig, "data": data}
             st.session_state["_anim_export_cache"] = cache
 
@@ -507,6 +594,7 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
             if size >= 1_048_576
             else f"{size / 1024:.0f} KB"
         )
+        st.success(f"{fmt} ready · {size_label}")
         st.download_button(
             f"⬇ Download {fmt} ({size_label})",
             data=data,
@@ -593,6 +681,8 @@ def _build_figure_settings(viz_settings: dict, effective_show_raw_gaze: bool) ->
         heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
         duration_mass_sigma_chars=viz_settings.get("duration_mass_sigma_chars", 1.0),
         fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+        show_coordinate_grid=viz_settings.get("show_coordinate_grid", False),
+        coordinate_grid_spacing=viz_settings.get("coordinate_grid_spacing"),
         show_raw_gaze=effective_show_raw_gaze,
         color_by=viz_settings["color_by"],
         heatmap_metric=(
@@ -1670,7 +1760,17 @@ def _build_studio_config(
                 st.session_state.get("global_use_stimulus_font_pt", False)
             ),
         },
-        "axes": {"x_field": x_field, "y_field": y_field},
+        "axes": {
+            "x_field": x_field,
+            "y_field": y_field,
+            "coordinate_grid": bool(figure_settings.get("show_coordinate_grid", False)),
+            "coordinate_grid_auto": bool(
+                viz_settings.get("coordinate_grid_auto", True)
+            ),
+            "coordinate_grid_spacing": float(
+                st.session_state.get("global_coordinate_grid_spacing", 100.0)
+            ),
+        },
         "layers": {
             "words": figure_settings["show_words"],
             "word_labels": figure_settings["show_word_labels"],
@@ -3574,35 +3674,80 @@ def _render_bulk_export(
                 )
             ),
         )
-    progress_bar = info_col.progress(0.0, text="Idle")
+    sig = (
+        frame_fingerprint(active_combos),
+        frame_fingerprint(active_words),
+        frame_fingerprint(active_fix),
+        frame_fingerprint(raw_gaze),
+        int(canvas_width),
+        int(canvas_height),
+        int(base_font_size),
+        str(font_family),
+        str(x_field),
+        str(y_field),
+        json.dumps(figure_settings, sort_keys=True, default=str),
+        repr(options),
+        EXPORTER_VERSION,
+    )
+    cache = st.session_state.get("_bulk_export_cache")
+    if cache and cache.get("sig") != sig:
+        st.session_state.pop("_bulk_export_cache", None)
+        cache = None
+
     if run:
+        status_box = info_col.status("Preparing bulk export…", expanded=True)
+        progress_slot = info_col.empty()
+        progress_bar = None
 
-        def on_progress(p: ExportProgress) -> None:
-            frac = p.finished_trials / p.total_trials if p.total_trials else 1.0
-            progress_bar.progress(
-                min(max(frac, 0.0), 1.0),
-                text=(
-                    f"Exporting trial {p.finished_trials}/{p.total_trials} "
-                    f"— {p.bytes_written / 1024:.0f} KB so far"
-                ),
+        def on_status(status: ExportStatus) -> None:
+            nonlocal progress_bar
+            elapsed = f" · {status.elapsed_s:.1f}s" if status.elapsed_s else ""
+            state = (
+                "complete"
+                if status.stage == ExportStage.READY
+                else "error"
+                if status.stage == ExportStage.ERROR
+                else "running"
             )
+            status_box.update(label=f"{status.message}{elapsed}", state=state)
+            if status.fraction is not None:
+                text = f"{status.completed}/{status.total} trials · {status.message}"
+                if progress_bar is None:
+                    progress_bar = progress_slot.progress(status.fraction, text=text)
+                else:
+                    progress_bar.progress(status.fraction, text=text)
 
-        zip_bytes, progress = bulk_export(
-            active_combos,
-            active_words,
-            active_fix,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            base_font_size=base_font_size,
-            font_family=font_family,
-            x_field=x_field,
-            y_field=y_field,
-            settings=figure_settings,
-            options=options,
-            raw_gaze=raw_gaze,
-            progress_callback=on_progress,
-        )
-        progress_bar.progress(1.0, text="Ready")
+        try:
+            zip_bytes, progress = bulk_export(
+                active_combos,
+                active_words,
+                active_fix,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
+                base_font_size=base_font_size,
+                font_family=font_family,
+                x_field=x_field,
+                y_field=y_field,
+                settings=figure_settings,
+                options=options,
+                raw_gaze=raw_gaze,
+                status_callback=on_status,
+            )
+        except Exception as exc:
+            progress_slot.empty()
+            status_box.update(label=f"Export failed: {exc}", state="error")
+            st.session_state.pop("_bulk_export_cache", None)
+            st.warning(f"Could not build export: {exc}")
+            cache = None
+        else:
+            progress_slot.empty()
+            cache = {"sig": sig, "data": zip_bytes, "progress": progress}
+            st.session_state["_bulk_export_cache"] = cache
+
+    if cache and cache.get("sig") == sig:
+        zip_bytes = cache["data"]
+        progress = cache["progress"]
+        info_col.success(f"Ready · {len(zip_bytes) / 1_048_576:.1f} MB")
         if progress.errors:
             with st.expander("Export warnings"):
                 for err in progress.errors:

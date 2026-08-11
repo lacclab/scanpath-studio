@@ -400,6 +400,12 @@ _VIZ_WIDGET_DEFAULTS = {
     # Frame the view to the whole presentation monitor (scanpath sits at its true
     # on-screen position) rather than cropping to the data extent. Default on.
     "global_fit_to_monitor": True,
+    # VIZ-34: optional monitor-pixel coordinate grid. Auto chooses a stable
+    # 1/2/5×10ⁿ interval from the visible range; the stored manual value remains
+    # available while Auto is on so switching back does not lose it.
+    "global_show_coordinate_grid": False,
+    "global_coordinate_grid_auto": True,
+    "global_coordinate_grid_spacing": 100.0,
     "global_order_font_color": "#111111",
     "global_order_font_size": 10,
     "global_fixation_colorscale": DEFAULT_FIXATION_COLORSCALE,
@@ -1959,6 +1965,13 @@ def _collect_viz_settings(
         order_font_color=ss.get("global_order_font_color"),
         show_colorbars=bool(ss.get("global_show_colorbars")),
         fit_to_monitor=bool(ss.get("global_fit_to_monitor")),
+        show_coordinate_grid=bool(ss.get("global_show_coordinate_grid")),
+        coordinate_grid_auto=bool(ss.get("global_coordinate_grid_auto", True)),
+        coordinate_grid_spacing=(
+            None
+            if bool(ss.get("global_coordinate_grid_auto", True))
+            else float(ss.get("global_coordinate_grid_spacing", 100.0))
+        ),
         fixation_color_range=fixation_color_range,
         heatmap_range=heatmap_range,
         fixation_colorscale=ss.get("global_fixation_colorscale")
@@ -3173,6 +3186,32 @@ def sidebar_controls(
         help="Frame the whole presentation monitor so the scanpath sits where it "
         "appeared on screen. Turn off to crop the view tightly to the data.",
     )
+    show_coordinate_grid = axes.toggle(
+        "Coordinate grid",
+        key="global_show_coordinate_grid",
+        persist_state="session",
+        help="Overlay screen X/Y coordinates in monitor pixels. The grid uses "
+        "the same inverted-Y coordinate frame as word boxes and fixations.",
+    )
+    if show_coordinate_grid:
+        automatic_grid = axes.toggle(
+            "Automatic grid spacing",
+            key="global_coordinate_grid_auto",
+            persist_state="session",
+            help="Choose a readable 1/2/5×10ⁿ interval from the visible range. "
+            "Turn off to pin a reproducible pixel interval.",
+        )
+        if not automatic_grid:
+            axes.number_input(
+                "Major grid interval (px)",
+                min_value=10.0,
+                max_value=5000.0,
+                step=10.0,
+                key="global_coordinate_grid_spacing",
+                persist_state="session",
+                help="Major labels and lines repeat at this pixel interval; "
+                "minor lines divide it into fifths.",
+            )
     show_colorbars = axes.checkbox(
         "Show color bars", key="global_show_colorbars", persist_state="session"
     )

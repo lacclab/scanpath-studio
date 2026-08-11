@@ -12,6 +12,12 @@ Open the **Export** subtab in the Scanpath view.
 - **Separable layers** writes aligned text, boxes, fixations, saccades, heatmap,
   and image layers for editing.
 
+Every app export reports its current stage immediately. Frame and trial totals
+appear only when the exporter has real countable units; Chrome startup, one
+static rasterization, encoding, compression, and zip finalization use an honest
+indeterminate state. Ready downloads persist across reruns, while any
+output-affecting change invalidates the previous static result.
+
 HTML is interactive and needs no local browser engine. PNG, SVG, PDF, GIF, and
 MP4 use Chrome/Chromium through Kaleido. See
 [Export troubleshooting](../export-troubleshooting.md) if those formats fail.

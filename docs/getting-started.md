@@ -55,6 +55,23 @@ Select **➕ Add data** and work down the setup wizard:
 See [Loading public and own data](guides/loading-data.md) for accepted formats,
 manual mapping, and common checks.
 
+## Author a scanpath without files
+
+Choose **Author a scanpath** as the data source when you want to sketch a trial
+from text instead of uploading tables. Enter the stimulus, inspect the generated
+word boxes, then edit the scanpath in either place:
+
+- click empty canvas space to add a fixation;
+- drag a fixation to change its X/Y coordinate;
+- select and delete a fixation on the canvas; or
+- edit the event table directly.
+
+The editor starts with one centred fixation per word. X/Y is the authoritative
+location; **Target word** is optional metadata for reading measures, so a
+fixation may sit between or outside words. Download the authoring JSON to reopen
+the same layout later, render it with `scanpath-studio render --authoring`, or
+load it with `scanpath_studio.load_authored_scanpath`.
+
 ## Static export setup
 
 If HTML exports but static images do not, install the browser used by Plotly:

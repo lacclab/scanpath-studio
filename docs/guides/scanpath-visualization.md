@@ -32,6 +32,14 @@ collapsed, and a layer's settings appear only while that layer is on. Marker
 size already encodes duration by default, so uniform fixation color is usually
 the clearest starting point.
 
+### Show screen coordinates
+
+Open **📐 Figure & axes** and turn on **Coordinate grid** to read the stimulus in
+monitor pixels. Automatic spacing chooses a readable 1/2/5×10ⁿ interval for the
+current range; turn it off to enter an exact major interval. Ticks stay anchored
+to screen-coordinate zero even when the visible range is cropped or negative.
+The grid is off by default and does not shrink or rescale the spatial data area.
+
 ## Filter fixations and saccades
 
 **🧹 Fixation filter** contains duration thresholds, out-of-bounds handling, and

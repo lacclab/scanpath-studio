@@ -193,6 +193,8 @@ _SHARE_TOGGLE_PARAMS = {  # bool → "1"/"0"
     "show_heatmap": "global_show_heatmap",
     "show_raw_gaze": "global_show_raw_gaze",
     "show_colorbars": "global_show_colorbars",
+    "coordinate_grid": "global_show_coordinate_grid",
+    "coordinate_grid_auto": "global_coordinate_grid_auto",
     "hollow_fixations": "global_hollow_fixations",
     "scale_text_to_boxes": "global_scale_text_to_boxes",
     # EXP-5: title/caption on the figure — off by default.
@@ -273,6 +275,7 @@ _SHARE_FLOAT_PARAMS = {
     "stimulus_image_offset_x": "global_stimulus_image_offset_x",
     "stimulus_image_offset_y": "global_stimulus_image_offset_y",
     "stimulus_image_scale": "global_stimulus_image_scale",
+    "coordinate_grid_spacing": "global_coordinate_grid_spacing",
 }
 _SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
 _SHARE_FLOAT_RANGE_PARAMS = {
@@ -326,6 +329,7 @@ _URL_BOUNDED = {
     "global_stimulus_image_offset_x": (-5000.0, 5000.0),
     "global_stimulus_image_offset_y": (-5000.0, 5000.0),
     "global_stimulus_image_scale": (0.25, 3.0),
+    "global_coordinate_grid_spacing": (10.0, 5000.0),
 }
 
 
@@ -538,7 +542,7 @@ _MARKER_BOUNDS = (4, 40)
 # time. The field-by-field reader already tolerates *missing* sections, so a
 # migration is only needed when an old key must be *translated*, not merely when
 # new keys are added.
-PLOT_CONFIG_SCHEMA = 2
+PLOT_CONFIG_SCHEMA = 3
 
 
 def _detect_config_schema(config: dict) -> int:
@@ -570,10 +574,28 @@ def _migrate_config_1_to_2(config: dict) -> dict:
     return config
 
 
+def _migrate_config_2_to_3(config: dict) -> dict:
+    """Upgrade to the optional VIZ-34 coordinate-grid axes fields.
+
+    Stamp explicit defaults so a v1/v2 file restores the complete current
+    settings contract without changing its rendered result.
+    """
+    migrated = dict(config)
+    if "axes" in config and not isinstance(config.get("axes"), dict):
+        return migrated
+    axes = dict(config.get("axes") or {})
+    axes.setdefault("coordinate_grid", False)
+    axes.setdefault("coordinate_grid_auto", True)
+    axes.setdefault("coordinate_grid_spacing", 100.0)
+    migrated["axes"] = axes
+    return migrated
+
+
 # version N -> callable that upgrades an N config to N+1. Keyed by the *source*
 # version so `_migrate_plot_config` can walk an old config forward step by step.
 _PLOT_CONFIG_MIGRATIONS = {
     1: _migrate_config_1_to_2,
+    2: _migrate_config_2_to_3,
 }
 
 
@@ -1252,6 +1274,18 @@ def _restore_plot_config(
         val = axes.get(cfg_key)
         if val is not None:
             put_valid(val in numeric, state_key, val, label)
+    if "coordinate_grid" in axes:
+        put("global_show_coordinate_grid", bool(axes["coordinate_grid"]))
+    if "coordinate_grid_auto" in axes:
+        put("global_coordinate_grid_auto", bool(axes["coordinate_grid_auto"]))
+    if axes.get("coordinate_grid_spacing") is not None:
+        put_float(
+            axes["coordinate_grid_spacing"],
+            "global_coordinate_grid_spacing",
+            10.0,
+            5000.0,
+            "coordinate grid spacing",
+        )
 
     text = section("text")
     if "scale_text_to_boxes" in text:

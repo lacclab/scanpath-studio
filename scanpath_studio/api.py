@@ -94,16 +94,20 @@ def build_authored_scanpath(
 def load_authored_scanpath(
     source: Union[str, Path],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load a VIZ-20 authoring JSON path (or JSON payload) into canonical frames."""
-    from .authoring import parse_authoring_json
+    """Load an authoring JSON path (or payload), including schema-1 migration."""
+    from .authoring import parse_authoring_document
 
     raw = str(source)
     if raw.lstrip().startswith("{"):
         payload = raw
     else:
         payload = Path(source).read_text(encoding="utf-8")
-    text, events = parse_authoring_json(payload)
-    return build_authored_scanpath(text, events)
+    document = parse_authoring_document(payload)
+    return build_authored_scanpath(
+        document.text,
+        document.events,
+        **document.layout,
+    )
 
 
 TableLike = Union[pd.DataFrame, str, Path]
@@ -169,6 +173,8 @@ _CANONICAL_OPTION_NAMES = {
     "background_color",
     "color_by_line",
     "fit_to_monitor",
+    "show_coordinate_grid",
+    "coordinate_grid_spacing",
     "line_spacing",
     "scale_text_to_boxes",
     "background_image",

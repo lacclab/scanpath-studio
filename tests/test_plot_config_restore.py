@@ -620,6 +620,11 @@ class TestConfigMigration:
         assert note is None
         assert migrated["schema"] == PLOT_CONFIG_SCHEMA
         assert migrated["layers"] == {"words": False}  # content preserved
+        assert migrated["axes"] == {
+            "coordinate_grid": False,
+            "coordinate_grid_auto": True,
+            "coordinate_grid_spacing": 100.0,
+        }
 
     def test_migrate_does_not_mutate_input(self):
         from scanpath_studio.url_state import _migrate_plot_config
@@ -679,12 +684,12 @@ class TestConfigMigration:
         assert note is not None
         assert migrated["schema"] == 1  # couldn't advance past the gap
 
-    def test_schema_constant_is_two(self):
+    def test_schema_constant_is_three(self):
         # Pin the current version so a bump is a deliberate, reviewed change that
         # forces a matching migration + this assertion to move together.
         from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
-        assert PLOT_CONFIG_SCHEMA == 2
+        assert PLOT_CONFIG_SCHEMA == 3
 
     def test_schema1_config_still_restores_end_to_end(self):
         # A schema-1 file (no `schema` key) applies its plot settings through the

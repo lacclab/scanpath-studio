@@ -21,6 +21,11 @@ Use the visualization controls to set colors, opacity, labels, and saccade
 style. Prefer the defaults unless a change carries information. Check the whole
 canvas for clipped marks, unreadable text, and an unnecessary legend.
 
+For geometry review, **📐 Figure & axes → Coordinate grid** adds labelled
+screen-pixel axes. Keep automatic spacing for exploration or set a manual major
+interval when several exported figures must use identical grid marks. The grid
+is included in static images, animations, comparisons, and batch figures.
+
 Open **Export → This trial** and choose:
 
 | Need | Format |
@@ -31,6 +36,11 @@ Open **Export → This trial** and choose:
 | replay | HTML, GIF, or MP4 |
 
 Static image and video formats require Chrome/Chromium; HTML does not.
+Rendering begins with a visible stage message. Animation and bulk jobs show
+real frame/trial counts; single static rasterization stays indeterminate because
+the renderer exposes no truthful intermediate percentage. A successful result
+remains available after a rerun, and an unchanged static request reuses the
+already-rendered bytes.
 
 ## 3. Export a batch when needed
 

@@ -16,9 +16,11 @@ the repo root (kept current as the code changes); this is the short version.
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
 | `measures.py` | Canonical reading measures (FFD/FPRT/RPD/TFD, regressions) + geometry helpers. |
 | `plots.py` | Plotly figure builders (scanpath, animation, comparison, trends, histograms, heatmaps). |
+| `authoring.py` / `authoring_component.py` | Deterministic text/word geometry, stable fixation-event reducers and JSON migration; bidirectional click/drag canvas for the Streamlit authoring source. |
 | `aggregation.py` | Pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry, per-reader/cohort word profiles, distributions, group masks, difference + effect-size). |
 | `export.py` | Configurable bulk export (PNG/SVG/JSON/CSV/Parquet/mega-table). |
 | `animation_export.py` | Rasterize an animated figure to GIF/MP4. |
+| `export_status.py` | Shared honest export stages, validated real-unit progress, and deterministic static-result signatures. |
 | `api.py` | Headless public API (re-exported lazily from the package root). |
 | `cli.py` | Console entry point (`run` / `render`). |
 | `tour.py` | First-visit welcome tour + the dataset-setup guide card. |

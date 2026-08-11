@@ -617,6 +617,11 @@ class TestAuthoringEditorFlow:
         at.run(timeout=60)
         return at
 
+    @staticmethod
+    def _editor_key(at: AppTest) -> str:
+        revision = int(at.session_state["_author_events_editor_revision"])
+        return f"author_events_editor_{revision}"
+
     def test_the_editor_base_survives_repeated_reruns_with_a_live_edit(self):
         at = self._author()
         _clean(at, "authoring source:")
@@ -624,7 +629,7 @@ class TestAuthoringEditorFlow:
         original = base.copy()
 
         for _ in range(4):
-            at.session_state["author_events_editor"] = dict(self._DELTA)
+            at.session_state[self._editor_key(at)] = dict(self._DELTA)
             at = at.run(timeout=60)
             _clean(at, "after an authoring edit:")
             base = at.session_state["_authored_events_frame"]
@@ -643,18 +648,26 @@ class TestAuthoringEditorFlow:
         after = at.session_state["_authored_events_frame"]
         assert len(after) == 3 != before
         assert list(after.index) == [0, 1, 2]
+        geometry_tables = [
+            frame
+            for frame in at.dataframe
+            if {"text", "word_id", "line_idx", "x", "y", "width", "height"}
+            <= set(frame.value.columns)
+        ]
+        assert geometry_tables, "parsed word geometry preview is missing"
+        assert geometry_tables[0].value["text"].tolist() == ["one", "two", "three"]
 
-    def test_a_row_with_no_valid_target_word_is_called_out(self):
+    def test_a_row_with_neither_xy_nor_valid_target_is_called_out(self):
         at = self._author()
-        at.session_state["author_events_editor"] = {
-            "edited_rows": {1: {"word_id": 999}},
+        at.session_state[self._editor_key(at)] = {
+            "edited_rows": {1: {"word_id": 999, "x": None, "y": None}},
             "added_rows": [],
             "deleted_rows": [],
         }
         at = at.run(timeout=60)
         _clean(at, "with an unusable authoring row:")
         warnings = " ".join(str(w.value) for w in at.warning)
-        assert "Target word" in warnings, (
+        assert "finite X/Y" in warnings, (
             "an undrawable row was dropped without saying so"
         )
         assert "Row 2" in warnings

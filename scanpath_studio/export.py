@@ -35,6 +35,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
+from time import perf_counter
 from typing import List, Optional
 
 import pandas as pd
@@ -50,6 +51,7 @@ from .constants import (
     UNIFORM_COLOR_FIELD,
 )
 from .data import compute_word_metrics
+from .export_status import ExportStage, StatusCallback, emit_status
 from .measures import assign_fixations_to_words, enrich_fixations
 from .plots import (
     STATIC_FIGURE_OPTIONS,
@@ -465,9 +467,12 @@ def _figure_renderer(enabled: bool):
     if enabled:
         try:
             import kaleido
+            from .animation_export import chromium_browser_path
 
-            kaleido.start_sync_server(silence_warnings=True)
-            server = kaleido
+            browser_path = chromium_browser_path()
+            if browser_path is not None:
+                kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+                server = kaleido
         except Exception:
             server = None
 
@@ -495,6 +500,67 @@ def _figure_renderer(enabled: bool):
                 server.stop_sync_server(silence_warnings=True)
             except Exception:  # pragma: no cover - best-effort teardown
                 pass
+
+
+def render_static_figure_bytes(
+    fig,
+    *,
+    fmt: str,
+    width: int,
+    height: int,
+    scale: float,
+    status_callback: Optional[StatusCallback] = None,
+) -> bytes:
+    """Render one static figure with observable indeterminate job stages."""
+    from .animation_export import CHROME_INSTALL_HINT, chrome_available
+
+    started = perf_counter()
+    emit_status(
+        status_callback,
+        ExportStage.PREPARING,
+        "Preparing figure and checking export settings…",
+        started_at=started,
+    )
+    try:
+        if not chrome_available():
+            raise RuntimeError(CHROME_INSTALL_HINT)
+        emit_status(
+            status_callback,
+            ExportStage.STARTING_RENDERER,
+            "Starting the Chrome/Kaleido renderer (cold starts can take a few seconds)…",
+            started_at=started,
+        )
+        with _figure_renderer(True) as render:
+            emit_status(
+                status_callback,
+                ExportStage.RASTERIZING,
+                f"Rendering {fmt.upper()}…",
+                started_at=started,
+            )
+            data = render(fig, fmt.lower(), int(width), int(height), float(scale))
+        emit_status(
+            status_callback,
+            ExportStage.FINALIZING,
+            "Finalizing output bytes…",
+            started_at=started,
+        )
+        result = bytes(data)
+        emit_status(
+            status_callback,
+            ExportStage.READY,
+            "Ready to download.",
+            started_at=started,
+        )
+        return result
+    except Exception as exc:
+        emit_status(
+            status_callback,
+            ExportStage.ERROR,
+            "Export failed.",
+            started_at=started,
+            error=str(exc),
+        )
+        raise
 
 
 def _drift_corrected_for_figure(
@@ -546,7 +612,13 @@ def _plot_config_dict(
     return {
         "selection": {"participant_id": participant, "trial_id": trial},
         "canvas_px": {"width": int(canvas_width), "height": int(canvas_height)},
-        "axes": {"x_field": x_field, "y_field": y_field},
+        "axes": {
+            "x_field": x_field,
+            "y_field": y_field,
+            "coordinate_grid": bool(settings.get("show_coordinate_grid", False)),
+            "coordinate_grid_auto": settings.get("coordinate_grid_spacing") is None,
+            "coordinate_grid_spacing": settings.get("coordinate_grid_spacing"),
+        },
         "layers": {
             "words": settings.get("show_words"),
             "word_labels": settings.get("show_word_labels"),
@@ -976,6 +1048,7 @@ def bulk_export(
     options: ExportOptions,
     raw_gaze: Optional[pd.DataFrame] = None,
     progress_callback=None,
+    status_callback: Optional[StatusCallback] = None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
 
@@ -984,6 +1057,13 @@ def bulk_export(
     """
     combos = _apply_scope(combos, options)
     progress = ExportProgress(total_trials=len(combos))
+    started = perf_counter()
+    emit_status(
+        status_callback,
+        ExportStage.PREPARING,
+        "Preparing trials and export manifest…",
+        started_at=started,
+    )
     buf = io.BytesIO()
     zf = zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED)
 
@@ -1047,6 +1127,20 @@ def bulk_export(
     # the trial id, say). Two zip entries at one name silently loses a file, so
     # `resolve_export_path` disambiguates against what's already been written.
     used_paths: set = set()
+    emit_status(
+        status_callback,
+        (
+            ExportStage.STARTING_RENDERER
+            if options.needs_kaleido()
+            else ExportStage.ENCODING_WRITING
+        ),
+        (
+            "Starting one shared Chrome/Kaleido renderer…"
+            if options.needs_kaleido()
+            else "Writing selected files…"
+        ),
+        started_at=started,
+    )
     with _figure_renderer(options.needs_kaleido()) as render_figure:
         for combo in combos.itertuples(index=False):
             participant = getattr(combo, "participant_id")
@@ -1104,6 +1198,14 @@ def bulk_export(
             )
 
             if options.needs_figure():
+                emit_status(
+                    status_callback,
+                    ExportStage.RASTERIZING,
+                    f"Rendering trial {progress.finished_trials + 1}/{progress.total_trials}…",
+                    started_at=started,
+                    completed=progress.finished_trials,
+                    total=progress.total_trials,
+                )
                 fig = None
                 try:
                     # EXP-4 / VIZ-24: apply the PRE-3 drift correction to the
@@ -1282,6 +1384,14 @@ def bulk_export(
             progress.finished_trials += 1
             if progress_callback:
                 progress_callback(progress)
+            emit_status(
+                status_callback,
+                ExportStage.ENCODING_WRITING,
+                f"Wrote trial {progress.finished_trials}/{progress.total_trials}…",
+                started_at=started,
+                completed=progress.finished_trials,
+                total=progress.total_trials,
+            )
 
     if options.include_mega_table and (mega_fixations or mega_measures):
         for fmt in options.table_formats():
@@ -1327,6 +1437,23 @@ def bulk_export(
                     ),
                     fmt,
                 )
+    emit_status(
+        status_callback,
+        ExportStage.FINALIZING,
+        "Finalizing and compressing the zip archive…",
+        started_at=started,
+        completed=progress.finished_trials,
+        total=progress.total_trials,
+    )
     zf.close()
     buf.seek(0)
-    return buf.getvalue(), progress
+    result = buf.getvalue()
+    emit_status(
+        status_callback,
+        ExportStage.READY,
+        "Export archive is ready.",
+        started_at=started,
+        completed=progress.finished_trials,
+        total=progress.total_trials,
+    )
+    return result, progress

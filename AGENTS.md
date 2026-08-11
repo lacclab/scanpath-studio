@@ -32,7 +32,8 @@ scanpath_studio/
 ├─ datasets.py       public-corpus ownership (PoTeC, MultiplEYE, OneStop), including server-bundle discovery, feeding the app + headless API
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
 ├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables
-├─ authoring.py      deterministic text layout + hand-authored fixation events and JSON round-trip
+├─ authoring.py      deterministic text/word layout + stable hand-authored fixation reducers and versioned JSON round-trip
+├─ authoring_component.py bidirectional click/add/drag/select/delete canvas for authored events
 ├─ illustration.py   detects geometry-changing/synthetic views that require an Illustration disclosure
 ├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3)
 ├─ similarity.py     scanpath similarity metrics (NLD etc.) scoring the Comparisons subtab
@@ -40,6 +41,7 @@ scanpath_studio/
 ├─ plots.py          `FigureSettings` is the shared render contract used by UI, API, export, scanpath, animation, and comparison builders; also owns the Plotly builders, render helpers, and separable-layer export
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
 ├─ animation_export.py rasterize the animated scanpath to GIF/MP4 (warm-Kaleido frame render + Pillow/imageio-ffmpeg encode)
+├─ export_status.py  shared export stage/callback vocabulary + deterministic static-byte signatures
 ├─ tour.py           first-visit welcome tutorial (spotlight/dialog styles), replayable from the sidebar
 ├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export

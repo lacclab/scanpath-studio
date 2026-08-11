@@ -41,6 +41,7 @@ Chrome/Chromium (`plotly_get_chrome -y`).
 | hide a layer | `--no-words`, `--no-labels`, `--no-fixations`, `--no-saccades`, `--no-heatmap` |
 | animate | `--animate` and optionally `--playback-speed X` |
 | set display geometry | `--canvas WIDTHxHEIGHT` |
+| show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |
 | classify saccades | `--saccade-color-by-type` |
 | correct vertical drift | `--drift-correction ALGORITHM` |

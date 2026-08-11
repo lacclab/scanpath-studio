@@ -442,7 +442,13 @@ def _restore_config_app():
         },
         "animation": {"grid_step_ms": 100, "max_frames": 360},
         "canvas_px": {"width": 1000, "height": 800},
-        "axes": {"x_field": numeric[0], "y_field": numeric[1]},
+        "axes": {
+            "x_field": numeric[0],
+            "y_field": numeric[1],
+            "coordinate_grid": True,
+            "coordinate_grid_auto": False,
+            "coordinate_grid_spacing": 250.0,
+        },
         "text": {
             "scale_text_to_boxes": True,
             "line_spacing": 3.0,

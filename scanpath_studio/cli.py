@@ -502,6 +502,18 @@ def _render_parser() -> argparse.ArgumentParser:
         help="Monitor size in px, e.g. 2560x1440 (default: estimated from data; "
         "the bundled sample uses 2560x1440 automatically).",
     )
+    viz.add_argument(
+        "--coordinate-grid",
+        action="store_true",
+        help="Overlay a monitor-pixel X/Y grid on the scanpath (VIZ-34).",
+    )
+    viz.add_argument(
+        "--coordinate-grid-spacing",
+        type=float,
+        metavar="PX",
+        help="Pin the major coordinate-grid interval in pixels. Implies "
+        "--coordinate-grid; omit for automatic 1/2/5×10ⁿ spacing.",
+    )
     # VIZ-4: overlay an image stimulus (a screenshot of the reading screen) under
     # the scanpath. The API already supports background_image*; these expose it on
     # the CLI. Works with --animate too.
@@ -772,6 +784,8 @@ def render(argv: List[str]) -> None:
     if not args.list_trials and not args.output:
         raise SystemExit("Missing -o/--output (or use --list-trials).")
     canvas = _parse_canvas(args.canvas)
+    if args.coordinate_grid_spacing is not None and args.coordinate_grid_spacing <= 0:
+        raise SystemExit("--coordinate-grid-spacing must be a positive number.")
     if args.animate and args.output and not args.output.lower().endswith(".html"):
         raise SystemExit(
             "--animate writes interactive HTML — use a .html output "
@@ -892,6 +906,9 @@ def render(argv: List[str]) -> None:
             "show_saccade_arrows",
         )
     }
+    if args.coordinate_grid or args.coordinate_grid_spacing is not None:
+        overrides["show_coordinate_grid"] = True
+        overrides["coordinate_grid_spacing"] = args.coordinate_grid_spacing
     if args.word_hover_fields is not None:
         overrides["word_hover_fields"] = [
             field.strip()
@@ -1083,6 +1100,13 @@ def render(argv: List[str]) -> None:
                 "background_image_opacity",
             )
             anim_kwargs.update({k: overrides[k] for k in image_keys if k in overrides})
+            anim_kwargs.update(
+                {
+                    k: overrides[k]
+                    for k in ("show_coordinate_grid", "coordinate_grid_spacing")
+                    if k in overrides
+                }
+            )
             anim_kwargs.update(
                 {
                     k: overrides[k]

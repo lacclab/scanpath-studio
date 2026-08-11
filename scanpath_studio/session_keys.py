@@ -113,6 +113,10 @@ GLOBAL_FIXATION_COLOR_RANGE = "global_fixation_color_range"
 GLOBAL_HEATMAP_COLOR_RANGE = "global_heatmap_color_range"
 GLOBAL_SHOW_STIMULUS_IMAGE = "global_show_stimulus_image"
 GLOBAL_FIT_TO_MONITOR = "global_fit_to_monitor"
+# VIZ-34: optional screen-coordinate grid and its automatic/manual interval.
+GLOBAL_SHOW_COORDINATE_GRID = "global_show_coordinate_grid"
+GLOBAL_COORDINATE_GRID_AUTO = "global_coordinate_grid_auto"
+GLOBAL_COORDINATE_GRID_SPACING = "global_coordinate_grid_spacing"
 # EXP-5: title/caption on the figure (moved here from being Export-only).
 GLOBAL_SHOW_TITLE_CAPTION = "global_show_title_caption"
 GLOBAL_TITLE_PATTERN = "global_title_pattern"
@@ -222,6 +226,8 @@ SHARE_TOGGLE_PARAMS: Mapping[str, str] = MappingProxyType(
         "hollow_fixations": GLOBAL_HOLLOW_FIXATIONS,
         "scale_text_to_boxes": GLOBAL_SCALE_TEXT_TO_BOXES,
         "show_title_caption": GLOBAL_SHOW_TITLE_CAPTION,
+        "coordinate_grid": GLOBAL_SHOW_COORDINATE_GRID,
+        "coordinate_grid_auto": GLOBAL_COORDINATE_GRID_AUTO,
         "preproc_enabled": GLOBAL_PREPROC_ENABLED,
         "preproc_blink_adjacent": GLOBAL_PREPROC_BLINK_ADJACENT,
     }
@@ -292,6 +298,7 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "stimulus_image_offset_x": GLOBAL_STIMULUS_IMAGE_OFFSET_X,
         "stimulus_image_offset_y": GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         "stimulus_image_scale": GLOBAL_STIMULUS_IMAGE_SCALE,
+        "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
     }
 )
 
@@ -382,6 +389,7 @@ URL_BOUNDED_STATE_KEYS = frozenset(
         GLOBAL_DURATION_MASS_SIGMA_CHARS,
         GLOBAL_PREPROC_SHORT_THRESHOLD_MS,
         GLOBAL_PREPROC_MERGE_DISTANCE_CHARS,
+        GLOBAL_COORDINATE_GRID_SPACING,
     }
 )
 
@@ -409,7 +417,7 @@ URL_SEEDED_STATE_KEYS = frozenset(
 # The JSON schema version stamped by both writers and understood by the reader.
 # Bumping it in url_state without registering a migration (or without updating
 # this constant) is the failure the contract test catches.
-PLOT_CONFIG_SCHEMA_VERSION = 2
+PLOT_CONFIG_SCHEMA_VERSION = 3
 
 # `cmp{idx}_*` templates the config's `compare` list restores, per entry.
 COMPARE_STATE_KEY_TEMPLATES = frozenset(
@@ -441,6 +449,9 @@ PLOT_CONFIG_STATE_KEYS = frozenset(
         GLOBAL_SHOW_RAW_GAZE,
         GLOBAL_SHOW_STIMULUS_IMAGE,
         GLOBAL_FIT_TO_MONITOR,
+        GLOBAL_SHOW_COORDINATE_GRID,
+        GLOBAL_COORDINATE_GRID_AUTO,
+        GLOBAL_COORDINATE_GRID_SPACING,
         GLOBAL_ANIM_AUTOPLAY,
         # coloring
         GLOBAL_PALETTE,

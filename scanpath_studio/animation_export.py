@@ -29,10 +29,13 @@ browser renders each frame in a fraction of a second.
 from __future__ import annotations
 
 import io
+from time import perf_counter
 from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 import plotly.graph_objects as go
+
+from .export_status import ExportStage, StatusCallback, emit_status
 
 # The interactive formats live elsewhere; these are the rasterized clip formats.
 VIDEO_FORMATS: Tuple[str, ...] = ("gif", "mp4")
@@ -77,22 +80,36 @@ CHROME_INSTALL_HINT = (
 )
 
 
+def chromium_browser_path() -> Optional[str]:
+    """Return the browser path Kaleido would use, without launching it.
+
+    ``Chromium.find_browser`` is Choreographer's complete discovery path: it
+    honours ``BROWSER_PATH``, searches ``PATH``, checks platform-specific
+    locations for Chrome, Chromium, Edge, Brave, and Vivaldi, and can fall back
+    to Choreographer's managed Chrome download. We prefer a system browser: a
+    stale managed download must not shadow a working installed Edge/Chrome.
+
+    Passing the browser-info mapping to ``get_browser_path`` only searches for
+    the mapping's *keys* (``chrome``, ``edge``, …), which misses both managed
+    downloads and standard macOS app locations.
+    """
+    try:
+        from choreographer.browsers.chromium import Chromium
+    except Exception:
+        return None
+    for skip_local in (True, False):
+        try:
+            path = Chromium.find_browser(skip_local=skip_local)
+        except Exception:
+            continue
+        if path:
+            return str(path)
+    return None
+
+
 def chrome_available() -> bool:
-    """True if Kaleido can find a Chrome/Chromium binary, cheaply and without
-    launching it (ENG-10). Lets the UI pre-flight and gives a precise error
-    instead of a slow start-then-fail. Uses choreographer's resolver (honours the
-    ``BROWSER_PATH`` env override); returns ``False`` if it can't be probed."""
-    try:
-        from choreographer.browsers.chromium import (
-            chromium_based_browsers,
-            get_browser_path,
-        )
-    except Exception:
-        return False
-    try:
-        return get_browser_path(chromium_based_browsers) is not None
-    except Exception:
-        return False
+    """Whether Kaleido can find a compatible Chromium-family browser."""
+    return chromium_browser_path() is not None
 
 
 def mime_for(fmt: str) -> str:
@@ -193,11 +210,12 @@ def render_png_frames(
     # present (a transient/port/profile issue), mirroring export._figure_renderer.
     # When Chrome is genuinely missing, abort early with the actionable hint.
     cold_fallback = False
+    browser_path = chromium_browser_path()
+    if browser_path is None:
+        raise AnimationExportError(CHROME_INSTALL_HINT)
     try:
-        kaleido.start_sync_server(silence_warnings=True)
-    except Exception as exc:
-        if not chrome_available():
-            raise AnimationExportError(CHROME_INSTALL_HINT) from exc
+        kaleido.start_sync_server(path=browser_path, silence_warnings=True)
+    except Exception:
         cold_fallback = True
 
     pngs: List[bytes] = []
@@ -363,6 +381,7 @@ def export_animation(
     show_elapsed: bool = True,
     max_frames: Optional[int] = None,
     progress_callback: Optional[ProgressCallback] = None,
+    status_callback: Optional[StatusCallback] = None,
 ) -> bytes:
     """Render a scanpath-animation figure to GIF or MP4 bytes.
 
@@ -384,6 +403,7 @@ def export_animation(
         ValueError: unknown ``fmt``.
         AnimationExportError: rendering or encoding failed.
     """
+    started = perf_counter()
     fmt = fmt.lower()
     if fmt not in VIDEO_FORMATS:
         raise ValueError(
@@ -397,13 +417,72 @@ def export_animation(
     if indices and len(indices) < n_total:
         effective_duration = frame_duration_ms * n_total / len(indices)
 
-    pngs, _size = render_png_frames(
-        fig,
-        scale=scale,
-        show_elapsed=show_elapsed,
-        frame_indices=indices,
-        progress_callback=progress_callback,
+    emit_status(
+        status_callback,
+        ExportStage.PREPARING,
+        f"Preparing {len(indices)} animation frames…",
+        started_at=started,
     )
-    if fmt == "gif":
-        return encode_gif(pngs, effective_duration)
-    return encode_mp4(pngs, effective_duration)
+    try:
+        emit_status(
+            status_callback,
+            ExportStage.STARTING_RENDERER,
+            "Starting one shared Chrome/Kaleido renderer…",
+            started_at=started,
+        )
+
+        def _on_frame(done: int, total: int) -> None:
+            if progress_callback is not None:
+                progress_callback(done, total)
+            emit_status(
+                status_callback,
+                ExportStage.RASTERIZING,
+                f"Rendered frame {done}/{total}…",
+                started_at=started,
+                completed=done,
+                total=total,
+            )
+
+        pngs, _size = render_png_frames(
+            fig,
+            scale=scale,
+            show_elapsed=show_elapsed,
+            frame_indices=indices,
+            progress_callback=_on_frame,
+        )
+        emit_status(
+            status_callback,
+            ExportStage.ENCODING_WRITING,
+            f"Encoding {fmt.upper()}…",
+            started_at=started,
+        )
+        result = (
+            encode_gif(pngs, effective_duration)
+            if fmt == "gif"
+            else encode_mp4(pngs, effective_duration)
+        )
+        emit_status(
+            status_callback,
+            ExportStage.FINALIZING,
+            "Finalizing animation bytes…",
+            started_at=started,
+        )
+        result = bytes(result)
+        emit_status(
+            status_callback,
+            ExportStage.READY,
+            "Animation is ready to download.",
+            started_at=started,
+            completed=len(indices),
+            total=len(indices),
+        )
+        return result
+    except Exception as exc:
+        emit_status(
+            status_callback,
+            ExportStage.ERROR,
+            "Animation export failed.",
+            started_at=started,
+            error=str(exc),
+        )
+        raise

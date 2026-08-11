@@ -2539,19 +2539,26 @@ def render_sidebar_canvas_controls(
 def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Standalone editor whose result joins the ordinary plot/export pipeline."""
     from scanpath_studio.authoring import (
+        DEFAULT_LAYOUT,
+        apply_authoring_event,
         authored_fixations,
         authoring_json,
         default_events,
+        event_problems,
         layout_text,
-        parse_authoring_json,
+        layout_problems,
+        parse_authoring_document,
+        reconcile_event_table,
         unusable_event_rows,
     )
+    from scanpath_studio.authoring_component import render_authoring_canvas
 
     st.subheader("✏️ Author a scanpath")
     st.caption(
-        "Write the stimulus, then edit the fixation order, word target, position, "
-        "and duration. Add or delete rows in the table; the finished trial uses "
-        "the same visualization and export tools as imported eye-tracking data."
+        "Write the stimulus, then click or drag directly on the canvas. X/Y are "
+        "the primary authored values; the optional target word is useful for "
+        "measures but does not constrain where a fixation can be placed. The "
+        "numeric table remains a complete keyboard-accessible editor."
     )
     restored = st.file_uploader(
         "Restore authoring file",
@@ -2563,16 +2570,18 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         identity = (restored.name, restored.size)
         if st.session_state.get("_author_restore_identity") != identity:
             try:
-                restored_text, restored_events = parse_authoring_json(
-                    restored.getvalue().decode("utf-8")
-                )
+                document = parse_authoring_document(restored.getvalue().decode("utf-8"))
             except (ValueError, UnicodeDecodeError) as exc:
                 st.error(str(exc))
             else:
-                st.session_state["author_text"] = restored_text
-                st.session_state["_authored_events_frame"] = restored_events
-                st.session_state["_author_text_for_events"] = restored_text
-                st.session_state.pop("author_events_editor", None)
+                st.session_state["author_text"] = document.text
+                st.session_state["_author_layout"] = document.layout
+                st.session_state["_authored_events_frame"] = document.events
+                st.session_state["_author_text_for_events"] = document.text
+                st.session_state["_author_selected_fixation"] = None
+                st.session_state["_author_events_editor_revision"] = (
+                    int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+                )
                 st.session_state["_author_restore_identity"] = identity
 
     text = st.text_area(
@@ -2581,20 +2590,44 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         key="author_text",
         height=100,
     )
-    words = layout_text(text)
+    layout = {**DEFAULT_LAYOUT, **st.session_state.get("_author_layout", {})}
+    words = layout_text(text, **layout)
+    st.markdown("**Parsed word geometry**")
+    if words.empty:
+        st.info(
+            "Enter stimulus text to create word boxes. The empty canvas is still valid."
+        )
+    else:
+        line_count = int(words["line_idx"].max()) + 1
+        st.caption(
+            f"{len(words)} {'word' if len(words) == 1 else 'words'} across "
+            f"{line_count} {'line' if line_count == 1 else 'lines'} · word ids are "
+            "1-based; line indices are 0-based. Explicit blank lines are retained."
+        )
+        st.dataframe(
+            words[["text", "word_id", "line_idx", "x", "y", "width", "height"]],
+            hide_index=True,
+            width="stretch",
+        )
+    for problem in layout_problems(
+        words, canvas_width=layout["canvas_width"], margin=layout["margin"]
+    ):
+        st.warning(problem)
+
     if st.session_state.get("_author_text_for_events") != text:
         st.session_state["_authored_events_frame"] = default_events(words)
-        st.session_state.pop("author_events_editor", None)
+        st.session_state["_author_events_editor_revision"] = (
+            int(st.session_state.get("_author_events_editor_revision", 0)) + 1
+        )
         st.session_state["_author_text_for_events"] = text
+        st.session_state["_author_selected_fixation"] = None
     seed = st.session_state.get("_authored_events_frame", default_events(words))
     last_word = int(words["word_id"].max()) if not words.empty else 1
     st.caption(
-        f"One row per fixation, in reading order. **Target word** is the word it "
-        f"lands on — **1** is the first word of the stimulus above and "
-        f"**{last_word}** the last — and it is what the per-word reading measures "
-        "(first-fixation duration, regressions, …) are computed against. **X** and "
-        "**Y** place the marker on the canvas; leave them and the fixation sits at "
-        "its target word's centre."
+        "One row per fixation. **Fixation id** is stable; **Order** controls the "
+        "reading sequence. X/Y place the marker in screen pixels. **Target word** "
+        f"is optional (1–{last_word}) and may be edited independently; blank X/Y "
+        "fall back to that word's centre."
     )
     # BUG-19: the editor's own key holds the edits as a delta against `seed`, so
     # `seed` must stay the STABLE base — it is reseeded only when the stimulus
@@ -2602,28 +2635,40 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
     # applies that delta twice, and after a row deletion leaves a gapped index,
     # which `num_rows="dynamic"` cannot add rows to: from there edits land on the
     # wrong rows and rows disappear. Read the edits from the return value only.
+    editor_revision = int(st.session_state.get("_author_events_editor_revision", 0))
     events = st.data_editor(
         seed,
-        key="author_events_editor",
+        key=f"author_events_editor_{editor_revision}",
         num_rows="dynamic",
         hide_index=True,
         column_config={
+            "fixation_id": st.column_config.NumberColumn(
+                "Fixation id",
+                disabled=True,
+                help="Stable marker identity used to synchronize canvas and table edits.",
+            ),
+            "order_in_trial": st.column_config.NumberColumn(
+                "Order",
+                min_value=1,
+                step=1,
+                help="Reading order. Each fixation needs a unique whole number.",
+            ),
             "word_id": st.column_config.NumberColumn(
-                "Target word",
+                "Target word (optional)",
                 min_value=1,
                 max_value=last_word,
                 step=1,
                 help=(
-                    "Which word of the stimulus this fixation lands on, counting "
-                    f"from 1. The current text has {last_word} "
-                    f"{'word' if last_word == 1 else 'words'}."
+                    "Optional measure target, counting from 1. It does not move "
+                    "the marker or change X/Y."
                 ),
             ),
             "x": st.column_config.NumberColumn(
-                "X (px)", help="Horizontal position. Blank = the target word's centre."
+                "X (px)",
+                help="Horizontal screen coordinate; independent of target word.",
             ),
             "y": st.column_config.NumberColumn(
-                "Y (px)", help="Vertical position. Blank = the target word's centre."
+                "Y (px)", help="Vertical screen coordinate; independent of target word."
             ),
             "duration_ms": st.column_config.NumberColumn(
                 "Duration (ms)",
@@ -2633,24 +2678,67 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         },
         width="stretch",
     )
-    # A row that names no usable word produces no fixation. Say so — silently
-    # dropping it is what read as "my edit didn't take" (BUG-19).
+    selected = st.session_state.get("_author_selected_fixation")
+    try:
+        effective_events, selected = reconcile_event_table(events, selected)
+    except ValueError as exc:
+        st.error(f"Fix the event table before these edits can be drawn or saved: {exc}")
+        effective_events, selected = reconcile_event_table(seed, selected)
+        events_valid = False
+    else:
+        events_valid = True
+    st.session_state["_author_selected_fixation"] = selected
+
+    for problem in event_problems(words, events):
+        if not problem.startswith(("Fixation id", "Order")):
+            st.warning(problem)
     dropped = unusable_event_rows(words, events)
     if dropped:
-        listed = ", ".join(str(number) for number in dropped[:10])
-        more = f" (+{len(dropped) - 10} more)" if len(dropped) > 10 else ""
-        st.warning(
-            f"Row {listed}{more} {'has' if len(dropped) == 1 else 'have'} no valid "
-            f"**Target word**, so {'it is' if len(dropped) == 1 else 'they are'} "
-            f"not drawn. Enter a whole number from 1 to {last_word}."
+        st.caption(
+            "Rows without finite X/Y or a valid target are not drawn until corrected."
         )
+
+    canvas_height = max(
+        480,
+        int(words["y"].max() + words["height"].max() + layout["margin"])
+        if not words.empty
+        else 480,
+    )
+    canvas_event = render_authoring_canvas(
+        words,
+        effective_events,
+        canvas_width=layout["canvas_width"],
+        canvas_height=canvas_height,
+        selected_fixation_id=selected,
+    )
+    if canvas_event:
+        try:
+            updated, selected = apply_authoring_event(
+                effective_events,
+                canvas_event,
+                selected_fixation_id=selected,
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state["_authored_events_frame"] = updated
+            st.session_state["_author_selected_fixation"] = selected
+            # A data editor's browser delta is keyed against the frame it first
+            # mounted with. Give canvas-authored data a fresh key so the visible
+            # table mounts from the new coordinates instead of retaining its old
+            # client-side base (the same invariant as BUG-19, in the other
+            # direction).
+            st.session_state["_author_events_editor_revision"] = editor_revision + 1
+            st.rerun()
+
     st.download_button(
         "💾 Save authoring file",
-        data=authoring_json(text, events),
+        data=authoring_json(text, effective_events, layout=layout),
         file_name="authored-scanpath.json",
         mime="application/json",
+        disabled=not events_valid,
     )
-    return words, authored_fixations(words, events)
+    return words, authored_fixations(words, effective_events)
 
 
 #: PRE-1 control defaults. These keys are a wire format — a deep link or a saved

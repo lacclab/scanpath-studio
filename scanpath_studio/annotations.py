@@ -285,9 +285,14 @@ def render_trial_annotations(
             f"screen `{annotation_screen}`" if annotation_screen else "the parent trial"
         )
         st.caption(
-            f"Saved for {scope_caption} in this session. Use the sidebar "
-            "**💾 Save & restore** panel "
-            "to download all annotations as JSON or restore them."
+            f"Saved for {scope_caption} in this session. Download all annotations "
+            "as JSON or restore them from the sidebar."
+        )
+        st.button(
+            "💾 Open Save & restore",
+            key="annotation_open_save_restore",
+            type="tertiary",
+            on_click=lambda: st.session_state.__setitem__("_open_save_restore", True),
         )
 
 

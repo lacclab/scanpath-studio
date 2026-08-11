@@ -9554,6 +9554,38 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "UX-46",
+   "prefix": "UX",
+   "num": 46,
+   "sub": "",
+   "title": "Open Save & restore from annotations",
+   "status": "Review",
+   "note": "Implemented 2026-08-11 — awaiting sign-off",
+   "date": "2026-08-11",
+   "added": "2026-08-11",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "body": [
+    "**Request.** Make the annotation note's Save & restore reference clickable and take",
+    "the user to the sidebar panel.",
+    "",
+    "**What was done.** Replaced the passive panel reference with an **💾 Open",
+    "Save & restore** action. Clicking it expands the Save & restore panel and opens",
+    "a collapsed sidebar before scrolling the panel into view.",
+    "",
+    "**What's left.** Review the action from an annotation: it should open the sidebar",
+    "Save & restore panel directly, with no change to the annotation itself.",
+    "",
+    "**Background (technical).** The annotation editor sets `_open_save_restore`;",
+    "`tabs._render_save_restore_expander` consumes it as the expander's `expanded` state",
+    "and runs a same-origin iframe helper that clicks Streamlit's sidebar-expand control",
+    "when needed. Ruff/format checks pass. The broader AppTest is presently blocked by the",
+    "installed Streamlit rejecting the existing project-wide `persist_state=` argument",
+    "before this UI reaches render."
+   ]
+  },
+  {
    "id": "VAL-5",
    "prefix": "VAL",
    "num": 5,

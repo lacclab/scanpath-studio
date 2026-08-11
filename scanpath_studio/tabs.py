@@ -84,6 +84,7 @@ from scanpath_studio.controls import (
     render_viz_reset,
     sidebar_controls,
 )
+from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.data import (
     compute_word_metrics,
     derive_trial_index,
@@ -109,7 +110,6 @@ from scanpath_studio.export_status import (
     ExportStatus,
     static_export_signature,
 )
-from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
     SCREEN_ID,
@@ -2054,7 +2054,36 @@ def _render_save_restore_expander(
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
     )
-    with container.expander("💾 Save & restore", expanded=False):
+    open_requested = bool(st.session_state.pop("_open_save_restore", False))
+    if open_requested:
+        with container:
+            embed_html_iframe(
+                """<script>
+                (function () {
+                    const doc = window.parent.document;
+                    let tries = 0;
+                    (function openSidebar() {
+                        const sidebar = doc.querySelector(
+                            'section[data-testid="stSidebar"]');
+                        if (!sidebar) return;
+                        if (sidebar.getAttribute("aria-expanded") !== "true") {
+                            doc.querySelector(
+                                'button[data-testid="stExpandSidebarButton"]'
+                            )?.click();
+                            if (++tries < 20) setTimeout(openSidebar, 100);
+                            return;
+                        }
+                        doc.querySelector(".st-key-tour_grp_save_restore")
+                            ?.scrollIntoView({block: "nearest"});
+                    })();
+                })();
+                </script>""",
+                height=0,
+            )
+    with container.expander(
+        "💾 Save & restore",
+        expanded=open_requested,
+    ):
         n_anno = len(annotation_records)
         st.caption(
             "Save the full plot configuration **and** all annotations "

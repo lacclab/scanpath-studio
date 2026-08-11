@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import json
 import os
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional
 
 import numpy as np
 import pandas as pd
@@ -52,7 +52,6 @@ from scanpath_studio.animation_export import (
 from scanpath_studio.annotations import render_trial_annotations
 from scanpath_studio.constants import (
     DEFAULT_FIXATION_COLOR,
-    DEFAULT_FIXATION_COLORSCALE,
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_HEATMAP_COLORSCALE,
     DEFAULT_LINE_SPACING,
@@ -106,6 +105,8 @@ from scanpath_studio.export import (
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.plots import (
+    FigureSettings,
+    STATIC_FIGURE_OPTIONS,
     _discard_flagged_fixations,
     _png_pixel_size,
     add_illustration_label,
@@ -676,14 +677,20 @@ def _figure_input_key(
 
 @st.cache_data(show_spinner="Rendering scanpath…")
 def _cached_scanpath_figure(
-    _words: pd.DataFrame, _fixations: pd.DataFrame, _build_kwargs: dict, fig_key
+    _words: pd.DataFrame,
+    _fixations: pd.DataFrame,
+    _settings: FigureSettings,
+    _raw_gaze: Optional[pd.DataFrame],
+    fig_key,
 ):
     """Build + cache a static single-trial scanpath figure.
 
-    Frames and kwargs are passed un-hashed; ``fig_key`` (from
+    Frames and settings are passed un-hashed; ``fig_key`` (from
     ``_figure_input_key``) is the cache key, so a rerun with the same trial and
     settings reuses the figure instead of rebuilding all its traces/shapes."""
-    return make_scanpath_figure(_words, _fixations, **_build_kwargs)
+    return make_scanpath_figure(
+        _words, _fixations, settings=_settings, raw_gaze=_raw_gaze
+    )
 
 
 # CMP-6: how many same-text candidates the "Most similar / different" orderings
@@ -2225,19 +2232,10 @@ def _build_and_render_animation(
     compare_participant: Optional[str],
     compare_trial: Optional[str],
     *,
-    canvas_width: int,
-    canvas_height: int,
-    base_font_size: int,
-    font_family: str,
+    settings: FigureSettings,
     viz_settings: dict,
     playback_speed: float,
-    line_spacing: float,
-    scale_text_to_boxes: bool,
     drift_corrected: bool = False,
-    background_image: Optional[str] = None,
-    background_image_size: Optional[Tuple[float, float]] = None,
-    background_image_origin: Optional[Tuple[float, float]] = None,
-    background_image_opacity: float = 1.0,
 ):
     """Build + render the animation figure (single or dual co-animation) in the
     main column. Returns ``(fig, playback_ms, save_slug, file_stem)``.
@@ -2257,62 +2255,15 @@ def _build_and_render_animation(
     )
     # The reading-time / playback info box renders in the side panel under the
     # Animate toggle (see _render_anim_info_box), not here.
-    fig = make_scanpath_animation(
-        trial_words,
-        trial_fixations,
-        canvas_width=int(canvas_width),
-        canvas_height=int(canvas_height),
-        base_font_size=int(base_font_size),
-        font_family=font_family,
+    animation_settings = settings.with_overrides(
         playback_speed=playback_speed,
-        show_words=viz_settings["show_words"],
-        show_word_labels=viz_settings["show_labels"],
-        show_saccades=viz_settings["show_saccades"],
-        show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
-        show_order=viz_settings["show_order"],
-        marker_size_range=viz_settings["marker_size_range"],
-        order_font_size=viz_settings["order_font_size"],
-        order_font_color=viz_settings["order_font_color"],
-        color_by=viz_settings["color_by"],
         # Drift correction colours the replay by assigned line, exactly as the
         # static figure does once an algorithm is picked.
-        color_by_line=bool(viz_settings.get("color_by_line", False) or drift_corrected),
-        fixation_colorscale=viz_settings["fixation_colorscale"],
-        fixation_color_range=viz_settings["fixation_color_range"],
-        fixation_flags=viz_settings.get("fixation_flags"),
-        show_colorbars=viz_settings["show_colorbars"],
-        colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
-        colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
-        colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
-        saccade_color=viz_settings.get("saccade_color", SACCADE_COLOR),
-        saccade_style=SACCADE_DASH_OPTIONS.get(
-            viz_settings.get("saccade_style", "Solid"), "solid"
-        ),
-        saccade_width=viz_settings.get("saccade_width", DEFAULT_SACCADE_WIDTH),
-        hollow_fixations=viz_settings.get("hollow_fixations", False),
-        fixation_opacity=viz_settings.get("fixation_opacity", 1.0),
-        fixation_color=viz_settings.get("fixation_color", DEFAULT_FIXATION_COLOR),
-        fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
-        text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
-        # The replay marks the critical span in the word *labels* only — it has no
-        # border-overlay layer — so gate on "Mark text" exactly as
-        # `make_scanpath_figure` does internally for its text channel.
+        color_by_line=bool(settings.color_by_line or drift_corrected),
+        # The replay has no border-overlay layer, so only the text-marking mode
+        # carries a highlight column.
         highlight_column=_marked_text_column(viz_settings),
-        highlight_text_color=viz_settings.get(
-            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
-        ),
-        word_hover_measure=viz_settings.get(
-            "word_hover_measure", "total_fixation_duration_ms"
-        ),
-        word_hover_fields=viz_settings.get("word_hover_fields"),
-        fixation_hover_fields=viz_settings.get("fixation_hover_fields"),
-        background_color=viz_settings.get("background_color"),
-        fit_to_monitor=viz_settings.get("fit_to_monitor", True),
         show_legend=viz_settings.get("show_compare_legend", False),
-        fixations_b=fixations_b if dual else None,
-        words_b=words_b if dual else None,
-        # UX-31: an explicit `cmp{idx}_label_pattern` (set in the ⚙️ Compare
-        # options popover, EXP-2-style) overrides the auto label.
         label_a=(
             _resolve_compare_label(
                 0, selected_participant, selected_trial, trial_words, trial_fixations
@@ -2327,15 +2278,16 @@ def _build_and_render_animation(
             if dual
             else "Scanpath B"
         ),
-        line_spacing=line_spacing,
-        scale_text_to_boxes=scale_text_to_boxes,
-        background_image=background_image,
-        background_image_size=background_image_size,
-        background_image_origin=background_image_origin,
-        background_image_opacity=background_image_opacity,
         autoplay=viz_settings.get("anim_autoplay", True),
         anim_grid_step_ms=grid_step_ms,
         anim_max_frames=max_frames,
+    )
+    fig = make_scanpath_animation(
+        trial_words,
+        trial_fixations,
+        settings=animation_settings,
+        fixations_b=fixations_b if dual else None,
+        words_b=words_b if dual else None,
     )
     add_illustration_label(fig, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig, selected_participant, selected_trial)
@@ -3088,7 +3040,7 @@ def render_single_trial_tab(
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
     effective_show_raw_gaze = bool(global_raw_toggle and trial_has_raw_gaze)
     figure_settings = _build_figure_settings(viz_settings, effective_show_raw_gaze)
-    figure_settings["raw_gaze"] = trial_raw_gaze if trial_has_raw_gaze else None
+    figure_raw_gaze = trial_raw_gaze if trial_has_raw_gaze else None
     # Stimulus-image background layer (VIZ-4) — only when toggled on. A
     # user-uploaded image WINS over the dataset's built-in one (VIZ-4 fix): the
     # upload is an explicit override, so it must beat the bundled demo's / a
@@ -3179,6 +3131,15 @@ def render_single_trial_tab(
     )
     viz_settings["illustration_reasons"] = label_reasons
     figure_settings["illustration_reasons"] = label_reasons
+    render_settings = FigureSettings.from_mapping(
+        figure_settings,
+        canvas_width=int(canvas_width),
+        canvas_height=int(canvas_height),
+        base_font_size=int(base_font_size),
+        font_family=font_family,
+        x_field=x_field,
+        y_field=y_field,
+    )
 
     # PRE-3 drift correction (VIZ-23) — hoisted ABOVE the render-mode split, so the
     # two Drift-correction controls apply on ALL THREE paths instead of the static
@@ -3348,25 +3309,10 @@ def render_single_trial_tab(
                         selected_trial,
                         compare_participant,
                         compare_trial,
-                        canvas_width=canvas_width,
-                        canvas_height=canvas_height,
-                        base_font_size=base_font_size,
-                        font_family=font_family,
+                        settings=render_settings,
                         viz_settings=viz_settings,
                         playback_speed=playback_speed,
-                        line_spacing=line_spacing,
-                        scale_text_to_boxes=scale_text_to_boxes,
                         drift_corrected=drift_corrected_primary,
-                        background_image=figure_settings.get("background_image"),
-                        background_image_size=figure_settings.get(
-                            "background_image_size"
-                        ),
-                        background_image_origin=figure_settings.get(
-                            "background_image_origin"
-                        ),
-                        background_image_opacity=figure_settings.get(
-                            "background_image_opacity", 1.0
-                        ),
                     )
                 )
             if comparing and compare_fix.empty:
@@ -3384,21 +3330,10 @@ def render_single_trial_tab(
                 selected_text,
                 compare_participant,
                 compare_trial,
-                canvas_width,
-                canvas_height,
-                font_family,
-                base_font_size,
+                render_settings,
                 viz_settings,
                 layout=compare_layout,
-                line_spacing=line_spacing,
-                scale_text_to_boxes=scale_text_to_boxes,
                 fix_index_range=fix_range,
-                background_image=figure_settings.get("background_image"),
-                background_image_size=figure_settings.get("background_image_size"),
-                background_image_origin=figure_settings.get("background_image_origin"),
-                background_image_opacity=figure_settings.get(
-                    "background_image_opacity", 1.0
-                ),
             )
             save_slug = (
                 f"{selected_participant}__{selected_trial}__vs__"
@@ -3419,23 +3354,15 @@ def render_single_trial_tab(
                     extra_settings["connector_y"] = tuple(
                         pd.to_numeric(fig_fixations["y"], errors="coerce")
                     )
-            build_kwargs = dict(
-                canvas_width=int(canvas_width),
-                canvas_height=int(canvas_height),
-                base_font_size=int(base_font_size),
-                font_family=font_family,
-                x_field=x_field,
-                y_field=y_field,
-                **figure_settings,
-            )
-            # Drift-correction overrides (color_by_line / connectors) win over the
-            # base figure settings.
-            build_kwargs.update(extra_settings)
+            static_settings = render_settings.with_overrides(**extra_settings)
+            build_inputs = static_settings.for_builder(STATIC_FIGURE_OPTIONS)
+            build_inputs["raw_gaze"] = figure_raw_gaze
             displayed_fig = _cached_scanpath_figure(
                 trial_words,
                 plot_fixations,
-                build_kwargs,
-                fig_key=_figure_input_key(trial_words, plot_fixations, build_kwargs),
+                static_settings,
+                figure_raw_gaze,
+                fig_key=_figure_input_key(trial_words, plot_fixations, build_inputs),
             )
             _apply_preprocessing_caption(
                 displayed_fig, selected_participant, selected_trial
@@ -3698,27 +3625,16 @@ def _render_comparison_figure(
     selected_text: Optional[str],
     compare_participant: str,
     compare_trial: str,
-    canvas_width: int,
-    canvas_height: int,
-    font_family: str,
-    base_font_size: int,
+    settings: FigureSettings,
     viz_settings: dict,
     layout: str = "overlay",
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
     fix_index_range=None,
-    background_image: Optional[str] = None,
-    background_image_size: Optional[Tuple[float, float]] = None,
-    background_image_origin: Optional[Tuple[float, float]] = None,
-    background_image_opacity: float = 1.0,
 ):
     """Render comparison figure for two trials.
 
     ``fix_index_range`` (VIZ-7) windows both scanpaths to a ``(start, end)``
-    ``order_in_trial`` range; ``None`` shows the full readings. The
-    ``background_image*`` group is the VIZ-4 stimulus-page layer, resolved by the
-    caller (dataset image vs. upload, plus the manual nudge) and shared with the
-    static + animation paths (VIZ-23).
+    ``order_in_trial`` range; ``None`` shows the full readings. Shared visual
+    choices, canvas geometry, and the stimulus image arrive in ``settings``.
 
     ``fixations_filtered`` may already carry PRE-3 drift-corrected ``y`` values —
     correction happens once, upstream of the render-mode split."""
@@ -3765,66 +3681,23 @@ def _render_comparison_figure(
             extract_trial(fixations_filtered, compare_participant, compare_trial),
         )
 
+    comparison_settings = settings.with_overrides(
+        trial_labels=(primary_label, compare_label),
+        layout=layout,
+        style_a=viz_settings.get("compare_style_a"),
+        style_b=viz_settings.get("compare_style_b"),
+        show_legend=viz_settings.get("show_compare_legend", False),
+        # Comparison retains its count-vs-duration spelling; the static builder
+        # translates "counts" to None internally.
+        heatmap_metric=viz_settings.get("heatmap_metric", "duration_ms"),
+        highlight_column=_marked_text_column(viz_settings),
+    )
     fig_compare = make_comparison_figure(
         words_filtered,
         fixations_filtered,
         (selected_participant, selected_trial),
         (compare_participant, compare_trial),
-        canvas_width=int(canvas_width),
-        canvas_height=int(canvas_height),
-        font_family=font_family,
-        base_font_size=int(base_font_size),
-        show_words=viz_settings["show_words"],
-        show_word_labels=viz_settings["show_labels"],
-        trial_labels=(primary_label, compare_label),
-        layout=layout,
-        style_a=viz_settings.get("compare_style_a"),
-        style_b=viz_settings.get("compare_style_b"),
-        marker_size_range=viz_settings.get("marker_size_range", (8, 24)),
-        # CMP-7: the Fixations toggle reaches Compare too — two full sets of
-        # markers bury the split-box heatmap the mode is there to show.
-        show_fixations=viz_settings.get("show_fix", True),
-        show_saccades=viz_settings.get("show_saccades", True),
-        show_saccade_arrows=viz_settings.get("show_saccade_arrows", False),
-        show_order=viz_settings.get("show_order", False),
-        show_legend=viz_settings.get("show_compare_legend", False),
-        order_font_size=viz_settings.get("order_font_size"),
-        # "Color fixations by" (the metric → hue) applies in compare too.
-        color_by=viz_settings.get("color_by"),
-        fixation_colorscale=viz_settings.get(
-            "fixation_colorscale", DEFAULT_FIXATION_COLORSCALE
-        ),
-        fixation_color_range=viz_settings.get("fixation_color_range"),
-        # Marker *shape* is a global (the channel a greyscale print keeps); the
-        # per-scanpath cmp{idx}_* styles own colour / size / opacity / hollow and
-        # keep overriding the globals inside the builder.
-        fixation_symbol=viz_settings.get("fixation_symbol", DEFAULT_FIXATION_SYMBOL),
-        show_colorbars=viz_settings.get("show_colorbars", False),
-        show_heatmap=viz_settings.get("show_heatmap", False),
-        heatmap_metric=viz_settings.get("heatmap_metric", "duration_ms"),
-        heatmap_colorscale=viz_settings.get(
-            "heatmap_colorscale", DEFAULT_HEATMAP_COLORSCALE
-        ),
-        heatmap_range=viz_settings.get("heatmap_range"),
-        heatmap_norm=viz_settings.get("heatmap_norm", "Linear"),
-        colorbar_orientation=viz_settings.get("colorbar_orientation", "Vertical"),
-        colorbar_tickangle=viz_settings.get("colorbar_tickangle", 0),
-        colorbar_tickfont_size=viz_settings.get("colorbar_tickfont_size", 12),
-        text_color=viz_settings.get("text_color", WORD_LABEL_COLOR),
-        # No border-overlay layer here either — text marking only (see
-        # `_marked_text_column`). Without it `highlight_text_color` was inert.
-        highlight_column=_marked_text_column(viz_settings),
-        highlight_text_color=viz_settings.get(
-            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
-        ),
-        background_color=viz_settings.get("background_color"),
-        line_spacing=line_spacing,
-        scale_text_to_boxes=scale_text_to_boxes,
-        background_image=background_image,
-        background_image_size=background_image_size,
-        background_image_origin=background_image_origin,
-        background_image_opacity=background_image_opacity,
-        fit_to_monitor=viz_settings.get("fit_to_monitor", True),
+        settings=comparison_settings,
     )
     add_illustration_label(fig_compare, viz_settings.get("illustration_reasons"))
     _apply_preprocessing_caption(fig_compare, selected_participant, selected_trial)

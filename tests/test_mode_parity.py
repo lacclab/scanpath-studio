@@ -109,6 +109,13 @@ def _viz(**overrides) -> dict:
         "show_saccades": True,
         "show_saccade_arrows": False,
         "show_order": False,
+        "show_heatmap": False,
+        "heatmap_style": "Word boxes",
+        "heatmap_norm": "Linear",
+        "duration_mass_sigma_chars": 1.0,
+        "heatmap_metric": "counts",
+        "heatmap_range": None,
+        "heatmap_colorscale": "Viridis",
         "marker_size_range": (8, 24),
         "order_font_size": 10,
         "order_font_color": "#000000",
@@ -133,6 +140,20 @@ def _viz(**overrides) -> dict:
     }
     settings.update(overrides)
     return settings
+
+
+def _figure_settings(viz: dict, **overrides) -> plots.FigureSettings:
+    """Build the same shared render contract the Scanpath view constructs."""
+    values = tabs._build_figure_settings(viz, effective_show_raw_gaze=False)
+    values.update(line_spacing=1.0, scale_text_to_boxes=True)
+    values.update(overrides)
+    return plots.FigureSettings.from_mapping(
+        values,
+        canvas_width=800,
+        canvas_height=600,
+        base_font_size=14,
+        font_family="Arial",
+    )
 
 
 @pytest.fixture
@@ -218,6 +239,7 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
     real = plots.make_scanpath_animation
 
     def spy(words, fixations, **kwargs):
+        seen.update(vars(kwargs["settings"]))
         seen.update(kwargs)
         seen["_fixations"] = fixations
         return real(words, fixations, **kwargs)
@@ -232,14 +254,9 @@ def _animate(viz: dict, monkeypatch, *, drift_corrected: bool = False, dual=Fals
         "t1",
         "B" if dual else None,
         "t1" if dual else None,
-        canvas_width=800,
-        canvas_height=600,
-        base_font_size=14,
-        font_family="Arial",
+        settings=_figure_settings(viz),
         viz_settings=viz,
         playback_speed=1.0,
-        line_spacing=1.0,
-        scale_text_to_boxes=True,
         drift_corrected=drift_corrected,
     )
     return fig, seen
@@ -353,6 +370,7 @@ def _compare(viz: dict, monkeypatch, *, fixations=None, layout="overlay", **extr
     real = plots.make_comparison_figure
 
     def spy(words, fix, trial_a, trial_b, **kwargs):
+        seen.update(vars(kwargs["settings"]))
         seen.update(kwargs)
         seen["_fixations"] = fix
         return real(words, fix, trial_a, trial_b, **kwargs)
@@ -370,13 +388,9 @@ def _compare(viz: dict, monkeypatch, *, fixations=None, layout="overlay", **extr
         "para",
         "B",
         "t1",
-        800,
-        600,
-        "Arial",
-        14,
+        _figure_settings(viz, **extra),
         viz,
         layout=layout,
-        **extra,
     )
     return fig, seen
 
@@ -603,12 +617,13 @@ class TestDriftCorrectionReachesEveryPath:
         real_anim = plots.make_scanpath_animation
         real_compare = plots.make_comparison_figure
 
-        def static(words, fixations, build_kwargs, fig_key):
+        def static(words, fixations, settings, raw_gaze, fig_key):
             seen["static"].append((words, fixations))
-            return real_static(words, fixations, build_kwargs, fig_key)
+            return real_static(words, fixations, settings, raw_gaze, fig_key)
 
         def anim(words, fixations, **kwargs):
-            seen["anim"].append((words, fixations, kwargs))
+            flattened = {**vars(kwargs["settings"]), **kwargs}
+            seen["anim"].append((words, fixations, flattened))
             return real_anim(words, fixations, **kwargs)
 
         def compare(words, fixations, trial_a, trial_b, **kwargs):

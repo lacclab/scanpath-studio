@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode
 
@@ -772,6 +773,50 @@ def _seed_column_mapping(mapping, *, overwrite: bool = False) -> None:
             st.session_state.setdefault(key, value)
 
 
+@dataclass
+class _RestoreContext:
+    """Validated writes and diagnostics for one plot-config restoration."""
+
+    config: dict
+    applied: int = 0
+    skipped: list = field(default_factory=list)
+
+    def section(self, name: str) -> dict:
+        value = self.config.get(name)
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def number(value) -> Optional[float]:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def put(self, key: str, value) -> None:
+        st.session_state[key] = value
+        self.applied += 1
+
+    def put_valid(self, valid: bool, key: str, value, skip_label: str) -> None:
+        if valid:
+            self.put(key, value)
+        else:
+            self.skipped.append(skip_label)
+
+    def put_int(self, value, key: str, lo: int, hi: int, skip_label: str) -> None:
+        number = self.number(value)
+        if number is None:
+            self.skipped.append(skip_label)
+        else:
+            self.put(key, max(lo, min(int(number), hi)))
+
+    def put_float(self, value, key: str, lo: float, hi: float, skip_label: str) -> None:
+        number = self.number(value)
+        if number is None:
+            self.skipped.append(skip_label)
+        else:
+            self.put(key, max(lo, min(float(number), hi)))
+
+
 def _restore_plot_config(
     config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
 ) -> Tuple[int, list]:
@@ -789,8 +834,14 @@ def _restore_plot_config(
     if migration_note:
         st.toast(migration_note, icon="⚠️")
 
-    applied = 0
-    skipped: list = []
+    restore = _RestoreContext(config)
+    section = restore.section
+    number = restore.number
+    put = restore.put
+    put_valid = restore.put_valid
+    put_int = restore.put_int
+    put_float = restore.put_float
+    skipped = restore.skipped
 
     # Older valid configs predate the illustration/preprocessing sections. They
     # still need deterministic defaults for the newly frozen state keys, while
@@ -807,47 +858,6 @@ def _restore_plot_config(
             "highlighting",
         )
     )
-
-    def section(name):
-        """A config sub-section as a dict — empty if absent or the wrong type,
-        so a hand-edited upload with a malformed section can't crash the rest."""
-        value = config.get(name)
-        return value if isinstance(value, dict) else {}
-
-    def number(value):
-        """Coerce a JSON scalar to float, or None for a non-numeric upload."""
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    def put(key, value):
-        nonlocal applied
-        st.session_state[key] = value
-        applied += 1
-
-    def put_valid(valid, key, value, skip_label):
-        """Apply ``value`` when ``valid``, else record ``skip_label``."""
-        if valid:
-            put(key, value)
-        else:
-            skipped.append(skip_label)
-
-    def put_int(value, key, lo, hi, skip_label):
-        """Apply an int clamped to ``[lo, hi]``; skip a non-numeric upload."""
-        n = number(value)
-        if n is None:
-            skipped.append(skip_label)
-        else:
-            put(key, max(lo, min(int(n), hi)))
-
-    def put_float(value, key, lo, hi, skip_label):
-        """Apply a float clamped to ``[lo, hi]``; skip a non-numeric upload."""
-        n = number(value)
-        if n is None:
-            skipped.append(skip_label)
-        else:
-            put(key, max(lo, min(float(n), hi)))
 
     # Re-apply the saved column mapping + kept-field choices (so restoring a
     # config skips re-mapping). Seeded before the mapping widgets render.
@@ -1406,7 +1416,7 @@ def _restore_plot_config(
     selection = section("selection")
     if selection:
         if _restore_selection(selection, combos):
-            applied += 1
+            restore.applied += 1
         else:
             skipped.append("trial selection")
 
@@ -1414,10 +1424,10 @@ def _restore_plot_config(
     # when the key is present, so a plot-config-only file never clears them.
     if "annotations" in config and isinstance(config["annotations"], list):
         n_anno = restore_records(config["annotations"])
-        applied += 1
+        restore.applied += 1
         st.toast(f"Restored {n_anno} annotation(s) from config.", icon="📝")
 
-    return applied, skipped
+    return restore.applied, skipped
 
 
 def _apply_uploaded_plot_config(combos: pd.DataFrame, fixations: pd.DataFrame) -> None:

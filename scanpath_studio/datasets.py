@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import urllib.request
 import zipfile
@@ -1449,6 +1450,61 @@ def load_multipleye(
             MULTIPLEYE_FIX_SCHEMA,
             word_id="word_idx" if "word_idx" in fixations_raw.columns else None,
         ),
+    )
+
+
+MULTIPLEYE_DATA_DIR_ENV = "MULTIPLEYE_DATA_DIR"
+MULTIPLEYE_BUNDLE_FIXATION_SOURCE = "scanpaths"
+
+
+def multipleye_bundle_dir() -> Optional[Path]:
+    """Resolve the configured MultiplEYE raw-export root, if any."""
+    raw = os.environ.get(MULTIPLEYE_DATA_DIR_ENV, "").strip()
+    if not raw:
+        from .constants import MULTIPLEYE_BUNDLE_DEFAULT_DIR
+
+        raw = MULTIPLEYE_BUNDLE_DEFAULT_DIR.strip()
+    return Path(raw) if raw else None
+
+
+def _resolve_multipleye_session(
+    root: Path, participant: str, fixation_source: str
+) -> Optional[str]:
+    """Match a case-insensitive deep-link participant to its session id."""
+    sessions, _ = multipleye_inventory(root, fixation_source=fixation_source)
+    wanted = participant.strip().lower()
+    return next((session for session in sessions if session.lower() == wanted), None)
+
+
+def load_multipleye_server_bundle(
+    participant: Optional[str] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load the configured raw MultiplEYE export for the app review source.
+
+    A participant narrows the load to its case-insensitively matched session;
+    omitting it loads the full export. Missing roots return empty frames, while
+    malformed exports and unknown named sessions raise a descriptive error for
+    the UI boundary to display.
+    """
+    root = multipleye_bundle_dir()
+    if root is None or not root.is_dir():
+        return pd.DataFrame(), pd.DataFrame()
+    sessions = None
+    if participant:
+        session = _resolve_multipleye_session(
+            root, participant, MULTIPLEYE_BUNDLE_FIXATION_SOURCE
+        )
+        if session is None:
+            raise ValueError(
+                f"No MultiplEYE session matching participant {participant!r} "
+                f"under {root / MULTIPLEYE_BUNDLE_FIXATION_SOURCE}."
+            )
+        sessions = [session]
+    return multipleye_raw_frames(
+        root,
+        sessions=sessions,
+        stimuli=None,
+        fixation_source=MULTIPLEYE_BUNDLE_FIXATION_SOURCE,
     )
 
 

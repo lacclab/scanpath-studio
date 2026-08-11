@@ -371,7 +371,7 @@ class TestBulkDriftCorrection:
 
         def spy(words, fix, **kwargs):
             captured["y"] = list(fix["y"])
-            captured["color_by_line"] = kwargs.get("color_by_line")
+            captured["color_by_line"] = kwargs["settings"].color_by_line
             return real_builder(words, fix, **kwargs)
 
         monkeypatch.setattr(export_mod, "make_scanpath_figure", spy)

@@ -9524,6 +9524,36 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "UX-45",
+   "prefix": "UX",
+   "num": 45,
+   "sub": "",
+   "title": "Hide the local-install tip from local uploads",
+   "status": "Review",
+   "note": "Implemented 2026-08-11 — awaiting sign-off",
+   "date": "2026-08-11",
+   "added": "2026-08-11",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "body": [
+    "**Request.** Do not show the upload screen's large-dataset prompt to install and",
+    "run Scanpath Studio locally when the app is already being used locally.",
+    "",
+    "**What was done.** Added `is_loopback_url` as the shared URL classifier and",
+    "show the install/run-local prompt only for non-loopback sessions. The ordinary",
+    "upload instruction remains visible in both local and hosted runs.",
+    "",
+    "**What's left.** Review the Upload screen in a local launch and in the hosted demo:",
+    "the tip should be absent locally and present only on the hosted page.",
+    "",
+    "**Background (technical).** `persistence.py` already uses loopback URLs for",
+    "local-session persistence. The new pure helper lets `wizard.py` reuse that browser-facing",
+    "signal without treating `SCANPATH_STUDIO_PERSIST` overrides as a claim that a hosted",
+    "deployment is local. Focused persistence tests (16) plus Ruff and formatting checks pass."
+   ]
+  },
+  {
    "id": "VAL-5",
    "prefix": "VAL",
    "num": 5,

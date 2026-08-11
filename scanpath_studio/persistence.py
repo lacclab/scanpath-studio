@@ -57,6 +57,12 @@ _SESSION_KEYS = frozenset(PLOT_CONFIG_STATE_KEYS) | {
 }
 
 
+def is_loopback_url(url: str = "") -> bool:
+    """Return whether ``url`` is addressed to this machine's loopback interface."""
+    host = (urlparse(str(url or "")).hostname or "").lower()
+    return host in {"localhost", "127.0.0.1", "::1"}
+
+
 def persistence_enabled(url: str = "", environ: Optional[dict] = None) -> bool:
     """Return whether disk persistence is safe for this process.
 
@@ -70,8 +76,7 @@ def persistence_enabled(url: str = "", environ: Optional[dict] = None) -> bool:
         return True
     if override in {"0", "false", "no", "off"}:
         return False
-    host = (urlparse(str(url or "")).hostname or "").lower()
-    return host in {"localhost", "127.0.0.1", "::1"}
+    return is_loopback_url(url)
 
 
 def state_directory(environ: Optional[dict] = None) -> Path:

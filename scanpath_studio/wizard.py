@@ -62,6 +62,7 @@ from .data import (
     validate_raw_gaze_schema,
     validate_word_schema,
 )
+from .persistence import is_loopback_url
 from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
@@ -1267,11 +1268,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     )
     if active and not already_uploaded:
         intro.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
-        intro.markdown(
-            "💡 **Working with a large dataset?** It's faster — and keeps your "
-            "data on your own machine — to run Scanpath Studio locally:\n\n"
-            "```bash\npip install scanpath-studio\nscanpath-studio\n```"
-        )
+        app_url = str(getattr(st.context, "url", "") or "")
+        if not is_loopback_url(app_url):
+            intro.markdown(
+                "💡 **Working with a large dataset?** It's faster — and keeps your "
+                "data on your own machine — to run Scanpath Studio locally:\n\n"
+                "```bash\npip install scanpath-studio\nscanpath-studio\n```"
+            )
 
     def upload_box(title, *, label, help_text, prefix, multi, noun, expanded):
         # Keep a table's box open once it has an upload, so its row count and

@@ -11,6 +11,7 @@ from scanpath_studio.persistence import (
     clear_local_state,
     forget_state,
     human_size,
+    is_loopback_url,
     persistence_enabled,
     persistence_paused,
     restore_state,
@@ -42,6 +43,13 @@ def test_enabled_only_for_loopback_without_override():
     assert not persistence_enabled(
         "http://localhost:8501", {"SCANPATH_STUDIO_PERSIST": "0"}
     )
+
+
+def test_is_loopback_url_is_independent_of_persistence_overrides():
+    assert is_loopback_url("http://localhost:8501")
+    assert is_loopback_url("http://127.0.0.1:8501/path")
+    assert is_loopback_url("http://[::1]:8501")
+    assert not is_loopback_url("https://scanpath-studio.example")
 
 
 def test_round_trip_datasets_settings_mappings_and_annotations(tmp_path):

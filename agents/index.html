@@ -2317,9 +2317,12 @@ change <em>which fixations are drawn</em> rather than how:</p>
   first, then the correction — the app's order.</li>
 </ul>
 <h2 id="every-figure-option">Every figure option<a class="headerlink" href="#every-figure-option" title="Permanent link">&para;</a></h2>
-<p><code>plot_scanpath</code> forwards any extra keyword to the figure builder; an unknown one
-raises a <code>TypeError</code> naming the closest valid options. The authoritative list is
-<code>api.figure_options()</code> (<code>"animation"</code> for the replay's subset):</p>
+<p><code>plot_scanpath</code> validates its figure keywords against the shared
+<code>plots.FigureSettings</code> contract; an unknown one raises a <code>TypeError</code> naming the
+closest valid options. The UI, headless API, bulk export, static scanpath,
+animation, and comparison renderers all consume that same settings object. The
+authoritative public list remains <code>api.figure_options()</code> (<code>"animation"</code> for the
+replay's subset):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">scanpath_studio</span><span class="w"> </span><span class="kn">import</span> <span class="n">api</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">api</span><span class="o">.</span><span class="n">figure_options</span><span class="p">()</span>                    <span class="c1"># {option: default} for plot_scanpath</span>

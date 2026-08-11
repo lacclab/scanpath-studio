@@ -26,7 +26,6 @@ is the task-oriented guide to this module for scripted / agent use.
 from __future__ import annotations
 
 import difflib
-import inspect
 import logging
 from copy import deepcopy
 from pathlib import Path
@@ -53,23 +52,18 @@ for _name in (
 from . import data as _data  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
-    DEFAULT_FIXATION_COLOR,
-    DEFAULT_FIXATION_COLORSCALE,
-    DEFAULT_FIXATION_SYMBOL,
-    DEFAULT_HEATMAP_COLORSCALE,
-    DEFAULT_LINE_SPACING,
-    DEFAULT_MARKER_SIZE_RANGE,
     DEFAULT_ORDER_FONT_COLOR,
-    DEFAULT_SACCADE_WIDTH,
     FONT_FAMILY,
     PALETTES,
     SACCADE_CLASS_ORDER,
-    SACCADE_COLOR,
     UNIFORM_COLOR_FIELD,
     palette_settings,
 )
 from .export import annotate_figure  # noqa: E402
 from .plots import (  # noqa: E402
+    ANIMATION_FIGURE_OPTIONS,
+    STATIC_FIGURE_OPTIONS,
+    FigureSettings,
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
     make_difference_profile_figure,
@@ -126,72 +120,75 @@ TablesLike = Union[TableLike, "list[TableLike]"]
 # (controls._VIZ_WIDGET_DEFAULTS → controls._collect_viz_settings →
 # tabs._build_figure_settings), so the same call renders the same picture
 # headless as on screen. `figure_options()` prints the merged result.
-CANONICAL_FIGURE_DEFAULTS: dict = dict(
-    show_words=True,
-    show_word_labels=True,
-    show_fixations=True,
-    show_order=True,
-    show_saccades=True,
-    show_saccade_arrows=False,
+_FIGURE_CONTEXT_FIELDS = frozenset(
+    {"canvas_width", "canvas_height", "base_font_size", "font_family"}
+)
+_STATIC_FIGURE_PARAMS = frozenset(STATIC_FIGURE_OPTIONS) - _FIGURE_CONTEXT_FIELDS
+_ANIMATION_FIGURE_PARAMS = (
+    frozenset(ANIMATION_FIGURE_OPTIONS)
+    - _FIGURE_CONTEXT_FIELDS
+    - {"playback_speed", "autoplay"}
+) | {"fixations_b", "words_b"}
+
+_CANONICAL_OPTION_NAMES = {
+    "show_words",
+    "show_word_labels",
+    "show_fixations",
+    "show_order",
+    "show_saccades",
+    "show_saccade_arrows",
+    "show_heatmap",
+    "heatmap_style",
+    "heatmap_norm",
+    "x_field",
+    "y_field",
+    "color_by",
+    "heatmap_metric",
+    "marker_size_range",
+    "order_font_size",
+    "order_font_color",
+    "show_colorbars",
+    "fixation_color_range",
+    "heatmap_range",
+    "fixation_colorscale",
+    "heatmap_colorscale",
+    "critical_span_style",
+    "highlight_column",
+    "saccade_color",
+    "saccade_style",
+    "saccade_width",
+    "saccade_color_mode",
+    "saccade_class_colors",
+    "saccade_type_legend",
+    "saccade_classes",
+    "saccade_render_mode",
+    "fixation_snap_to_word",
+    "fixation_color",
+    "fixation_symbol",
+    "fixation_opacity",
+    "background_color",
+    "color_by_line",
+    "fit_to_monitor",
+    "line_spacing",
+    "scale_text_to_boxes",
+    "background_image",
+    "background_image_size",
+    "background_image_origin",
+    "background_image_opacity",
+    "word_hover_fields",
+    "fixation_hover_fields",
+}
+
+CANONICAL_FIGURE_DEFAULTS: dict = FigureSettings.defaults(
+    _CANONICAL_OPTION_NAMES
+) | dict(
     show_heatmap=True,
-    heatmap_style="Word boxes",
-    heatmap_norm="Linear",
-    # Spatial fields: which fixation columns drive the axes. Defaults to the gaze
-    # coordinates; `x_field="order_in_trial"` gives the time-ordered variant.
-    x_field="x",
-    y_field="y",
-    # VIZ-17: no variable mapped to fixation hue by default. Marker *size* already
-    # encodes duration, so the old `color_by="duration_ms"` spent the colour
-    # channel restating it. Pass an explicit `color_by=` for a second variable.
-    color_by=UNIFORM_COLOR_FIELD,
     heatmap_metric="duration_ms",
-    marker_size_range=DEFAULT_MARKER_SIZE_RANGE,
-    # Fixation-index labels: 10 px, matching the app's `global_order_font_size`
-    # (and the animation builder's own default) — 16 px overflowed the markers.
-    order_font_size=10,
     order_font_color=DEFAULT_ORDER_FONT_COLOR,
-    show_colorbars=False,
-    fixation_color_range=None,
-    heatmap_range=None,
-    fixation_colorscale=DEFAULT_FIXATION_COLORSCALE,
-    heatmap_colorscale=DEFAULT_HEATMAP_COLORSCALE,
-    critical_span_style="Mark text",
-    highlight_column="is_in_aspan",
-    saccade_color=SACCADE_COLOR,
-    saccade_style="solid",
-    saccade_width=DEFAULT_SACCADE_WIDTH,
-    saccade_color_mode="Uniform",
-    saccade_class_colors=None,
-    saccade_type_legend=True,
-    # VIZ-31: the reading-class filter — which classes are drawn at all, as
-    # opposed to what colour they are drawn in. Spelled out as the full list
-    # rather than the equivalent `None` so this matches what the app's
-    # all-selected multiselect resolves to key-for-key; the builder treats a
-    # complete list as "no filter" and skips the classification pass.
     saccade_classes=list(SACCADE_CLASS_ORDER),
-    saccade_render_mode="Straight",
-    fixation_snap_to_word=False,
-    # VIZ-17 uniform fixation colour · VIZ-15 marker shape — the flat colour and
-    # symbol every marker wears while `color_by` is the uniform sentinel.
-    fixation_color=DEFAULT_FIXATION_COLOR,
-    fixation_symbol=DEFAULT_FIXATION_SYMBOL,
-    # VIZ-6: translucent markers so overlapping fixations show through, matching
-    # the app's `global_fixation_opacity`. 1.0 = fully opaque.
     fixation_opacity=0.7,
     background_color=DEFAULT_BACKGROUND_COLOR,
-    color_by_line=False,
-    # Frame the whole presentation monitor (`canvas_size`) instead of cropping to
-    # the data extent, so the scanpath sits at its true on-screen position — the
-    # app's default. `fit_to_monitor=False` crops to the fixations + word boxes.
     fit_to_monitor=True,
-    line_spacing=DEFAULT_LINE_SPACING,
-    scale_text_to_boxes=True,
-    background_image=None,
-    background_image_size=None,
-    background_image_origin=None,
-    background_image_opacity=1.0,
-    # VIZ-26: None preserves the classic tooltip; pass an ordered field list to
-    # choose the exact word/fixation rows shown on hover.
     word_hover_fields=["text", "word_id", "line_idx", "total_fixation_duration_ms"],
     fixation_hover_fields=["order_in_trial", "duration_ms", "word_id"],
 )
@@ -954,23 +951,6 @@ def _expand_palette(overrides: dict) -> dict:
     return expanded
 
 
-# Figure keywords each builder accepts, minus the ones the wrappers own (frames,
-# canvas, fonts, playback). Derived from the signatures so they can't drift.
-_BUILDER_OWNED = frozenset(
-    {"words", "fixations", "canvas_width", "canvas_height", "base_font_size"}
-)
-_STATIC_FIGURE_PARAMS = (
-    frozenset(inspect.signature(make_scanpath_figure).parameters)
-    - _BUILDER_OWNED
-    - {"font_family", "raw_gaze"}
-)
-_ANIMATION_FIGURE_PARAMS = (
-    frozenset(inspect.signature(make_scanpath_animation).parameters)
-    - _BUILDER_OWNED
-    - {"font_family", "playback_speed", "autoplay"}
-)
-
-
 def _reject_unknown_options(overrides: dict, valid, func_name: str) -> None:
     """Fail on a misspelled/unsupported keyword, naming the closest valid ones.
 
@@ -1006,12 +986,10 @@ def figure_options(kind: str = "static") -> dict:
     """
     if kind == "static":
         params = _STATIC_FIGURE_PARAMS
-        signature = inspect.signature(make_scanpath_figure)
-        defaults = CANONICAL_FIGURE_DEFAULTS
+        defaults = FigureSettings.defaults(params) | CANONICAL_FIGURE_DEFAULTS
     elif kind == "animation":
         params = _ANIMATION_FIGURE_PARAMS
-        signature = inspect.signature(make_scanpath_animation)
-        defaults = _animation_defaults()
+        defaults = FigureSettings.defaults(params) | _animation_defaults()
     else:
         raise ValueError(f"Unknown kind {kind!r}; use 'static' or 'animation'.")
     options = {}
@@ -1021,9 +999,8 @@ def figure_options(kind: str = "static") -> dict:
             # value so callers can edit the option reference without changing the
             # canonical defaults used by every later plot.
             options[name] = deepcopy(defaults[name])
-        else:
-            fallback = signature.parameters[name].default
-            options[name] = None if fallback is inspect.Parameter.empty else fallback
+        else:  # pragma: no cover - every option is a FigureSettings field
+            options[name] = None
     return options
 
 
@@ -1192,17 +1169,20 @@ def plot_scanpath(
         _require_normalized(raw_gaze, "raw_gaze")
         raw_gaze = _data.filter_raw_gaze(raw_gaze, [pid], [tid])
         settings.setdefault("show_raw_gaze", True)
-    fig = make_scanpath_figure(
-        trial_words,
-        trial_fixations,
+    render_settings = FigureSettings.from_mapping(
+        settings,
         canvas_width=int(canvas_size[0]),
         canvas_height=int(canvas_size[1]),
         base_font_size=int(base_font_size),
         font_family=font_family,
         x_field=x_field,
         y_field=y_field,
+    )
+    fig = make_scanpath_figure(
+        trial_words,
+        trial_fixations,
+        settings=render_settings,
         raw_gaze=raw_gaze,
-        **settings,
     )
     annotate_figure(fig, title=title, caption=caption)
     return fig
@@ -1277,16 +1257,23 @@ def animate_scanpath(
     trial_fixations = _apply_fix_index_range(trial_fixations, fix_index_range, pid, tid)
     if canvas_size is None:
         canvas_size = _data.compute_canvas_size(trial_words, trial_fixations)
-    fig = make_scanpath_animation(
-        trial_words,
-        trial_fixations,
+    fixations_b = animation_overrides.pop("fixations_b", None)
+    words_b = animation_overrides.pop("words_b", None)
+    render_settings = FigureSettings.from_mapping(
+        animation_overrides,
         canvas_width=int(canvas_size[0]),
         canvas_height=int(canvas_size[1]),
         base_font_size=int(base_font_size),
         font_family=font_family,
         playback_speed=playback_speed,
         autoplay=autoplay,
-        **animation_overrides,
+    )
+    fig = make_scanpath_animation(
+        trial_words,
+        trial_fixations,
+        settings=render_settings,
+        fixations_b=fixations_b,
+        words_b=words_b,
     )
     annotate_figure(fig, title=title, caption=caption)
     return fig

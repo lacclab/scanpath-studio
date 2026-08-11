@@ -281,6 +281,75 @@ def assign_fixations_to_words(
     return out
 
 
+def materialize_runs(fixations: pd.DataFrame) -> pd.DataFrame:
+    """Add trial run, line run, and per-word visit/pass columns (PRE-16)."""
+    if fixations.empty:
+        return fixations.copy()
+    derived = (
+        "run",
+        "linerun",
+        "word_runid",
+        "word_run",
+        "word_run_fix",
+        "nrun",
+        "reread",
+    )
+    out = fixations.drop(columns=[c for c in derived if c in fixations]).copy()
+    if "word_id" not in out:
+        out["word_id"] = pd.Series(pd.NA, index=out.index, dtype="Float64")
+    excluded = out.get("excluded", pd.Series(False, index=out.index)).fillna(False)
+    active = out.loc[~excluded.astype(bool)].copy()
+    for column in derived:
+        out[column] = pd.NA
+    if active.empty:
+        return out.sort_index()
+    keys = [c for c in ("participant_id", "trial_id") if c in active]
+    order_cols = keys + (["timestamp_ms"] if "timestamp_ms" in out else [])
+    active = active.sort_values(order_cols, kind="stable")
+    group = active.groupby(keys, sort=False, dropna=False) if keys else [((), active)]
+    pieces = []
+    for _, chunk in group:
+        chunk = chunk.copy()
+        word = pd.to_numeric(
+            chunk.get("word_id", pd.Series(pd.NA, index=chunk.index)),
+            errors="coerce",
+        )
+        line_source = (
+            chunk["line_id"]
+            if "line_id" in chunk
+            else chunk.get("line_idx", pd.Series(pd.NA, index=chunk.index))
+        )
+        line = pd.to_numeric(line_source, errors="coerce")
+        chunk["run"] = (word.diff().fillna(0) < 0).cumsum().astype("Int64") + 1
+        chunk["linerun"] = (
+            (line.ne(line.shift()) & line.notna()).cumsum().astype("Int64")
+        )
+        visit_start = word.ne(word.shift()) | word.isna()
+        chunk["word_runid"] = visit_start.cumsum().astype("Int64")
+        valid = chunk[word.notna()].copy()
+        if not valid.empty:
+            visits = valid[["word_id", "word_runid"]].drop_duplicates()
+            visits["word_run"] = visits.groupby("word_id", sort=False).cumcount() + 1
+            lookup = visits.set_index(["word_id", "word_runid"])["word_run"]
+            visit_keys = pd.MultiIndex.from_frame(chunk[["word_id", "word_runid"]])
+            chunk["word_run"] = lookup.reindex(visit_keys).to_numpy()
+            chunk["word_run_fix"] = (
+                chunk.groupby(["word_id", "word_runid"], dropna=False).cumcount() + 1
+            )
+        else:
+            chunk["word_run"] = pd.NA
+            chunk["word_run_fix"] = pd.NA
+        chunk["nrun"] = chunk.groupby("word_id", dropna=False)["word_runid"].transform(
+            "nunique"
+        )
+        chunk["reread"] = pd.to_numeric(chunk["word_run"], errors="coerce").gt(1)
+        pieces.append(chunk)
+    computed = pd.concat(pieces).sort_index() if pieces else active
+    for column in derived:
+        out.loc[computed.index, column] = computed[column]
+    return out.sort_index()
+
+
 def enrich_fixations(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     """Add saccade_amplitude, progression, and is_regression to fixations."""
     if fixations.empty:
@@ -307,8 +376,6 @@ def enrich_fixations(fixations: pd.DataFrame, words: pd.DataFrame) -> pd.DataFra
 
     running_max = g["word_id"].cummax()
     out["is_regression"] = (out["word_id"] < running_max).fillna(False).astype(bool)
-    from .preprocessing import materialize_runs
-
     return materialize_runs(out)
 
 

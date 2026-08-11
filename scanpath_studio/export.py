@@ -46,16 +46,17 @@ from .constants import (
     DEFAULT_FIXATION_SYMBOL,
     DEFAULT_LINE_SPACING,
     DEFAULT_PALETTE,
-    DEFAULT_SACCADE_WIDTH,
-    HIGHLIGHTED_TEXT_COLOR,
     SACCADE_CLASS_ORDER,
-    SACCADE_COLOR,
     UNIFORM_COLOR_FIELD,
-    WORD_LABEL_COLOR,
 )
 from .data import compute_word_metrics
 from .measures import assign_fixations_to_words, enrich_fixations
-from .plots import make_scanpath_figure, split_scanpath_layers
+from .plots import (
+    STATIC_FIGURE_OPTIONS,
+    FigureSettings,
+    make_scanpath_figure,
+    split_scanpath_layers,
+)
 from .preprocessing import (
     character_grid,
     cleaning_report,
@@ -1112,9 +1113,19 @@ def bulk_export(
                     fig_fix, connector_y = _drift_corrected_for_figure(
                         trial_fix, trial_words, settings
                     )
-                    fig = make_scanpath_figure(
-                        trial_words,
-                        fig_fix,
+                    render_values = {
+                        name: settings[name]
+                        for name in STATIC_FIGURE_OPTIONS
+                        if name in settings
+                    }
+                    render_settings = FigureSettings.from_mapping(
+                        render_values,
+                        canvas_width=int(canvas_width),
+                        canvas_height=int(canvas_height),
+                        base_font_size=int(base_font_size),
+                        font_family=font_family,
+                        x_field=x_field,
+                        y_field=y_field,
                         show_connectors=connector_y is not None,
                         connector_y=connector_y,
                         # A corrected figure colours by line, exactly as the
@@ -1122,84 +1133,9 @@ def bulk_export(
                         # overrides) — else the batch differs in colouring.
                         color_by_line=bool(settings.get("color_by_line", False))
                         or fig_fix is not trial_fix,
-                        canvas_width=int(canvas_width),
-                        canvas_height=int(canvas_height),
-                        base_font_size=int(base_font_size),
-                        font_family=font_family,
-                        x_field=x_field,
-                        y_field=y_field,
-                        show_words=settings.get("show_words", True),
-                        show_word_labels=settings.get("show_word_labels", True),
-                        show_fixations=settings.get("show_fixations", True),
-                        show_order=settings.get("show_order", True),
-                        show_saccades=settings.get("show_saccades", True),
-                        show_saccade_arrows=settings.get("show_saccade_arrows", False),
-                        show_heatmap=settings.get("show_heatmap", False),
-                        heatmap_style=settings.get("heatmap_style", "Word boxes"),
-                        fit_to_monitor=settings.get("fit_to_monitor", True),
-                        color_by=settings.get("color_by", "duration_ms"),
-                        heatmap_metric=settings.get("heatmap_metric"),
-                        marker_size_range=tuple(
-                            settings.get("marker_size_range", (8, 24))
-                        ),
-                        order_font_size=int(settings.get("order_font_size", 10)),
-                        order_font_color=settings.get("order_font_color", "#111111"),
-                        show_colorbars=settings.get("show_colorbars", False),
-                        fixation_color_range=settings.get("fixation_color_range"),
-                        heatmap_range=settings.get("heatmap_range"),
-                        fixation_colorscale=settings.get(
-                            "fixation_colorscale", "Blues"
-                        ),
-                        heatmap_colorscale=settings.get(
-                            "heatmap_colorscale", "Oranges"
-                        ),
-                        background_color=settings.get("background_color"),
-                        fixation_flags=settings.get("fixation_flags"),
-                        saccade_color=settings.get("saccade_color", SACCADE_COLOR),
-                        saccade_style=settings.get("saccade_style", "solid"),
-                        saccade_width=settings.get(
-                            "saccade_width", DEFAULT_SACCADE_WIDTH
-                        ),
-                        hollow_fixations=settings.get("hollow_fixations", False),
-                        fixation_opacity=settings.get("fixation_opacity", 1.0),
-                        # VIZ-17 flat fixation colour · VIZ-15 marker shape.
-                        fixation_color=settings.get(
-                            "fixation_color", DEFAULT_FIXATION_COLOR
-                        ),
-                        fixation_symbol=settings.get(
-                            "fixation_symbol", DEFAULT_FIXATION_SYMBOL
-                        ),
-                        # VIZ-8/19 saccade colour mode + VIZ-9 linear-reading mode:
-                        # the bulk export rebuilds the figure from scratch, so it
-                        # has to restate these or a batch silently comes out styled
-                        # differently from the on-screen figure it was launched from.
-                        saccade_color_mode=settings.get(
-                            "saccade_color_mode", "Uniform"
-                        ),
-                        saccade_class_colors=settings.get("saccade_class_colors"),
-                        saccade_type_legend=settings.get("saccade_type_legend", True),
-                        # VIZ-31: the reading-class filter. A batch launched from
-                        # a regressions-only view must export regressions-only
-                        # figures, not the full scanpath.
-                        saccade_classes=settings.get("saccade_classes"),
-                        saccade_render_mode=settings.get(
-                            "saccade_render_mode", "Straight"
-                        ),
-                        fixation_snap_to_word=settings.get(
-                            "fixation_snap_to_word", False
-                        ),
-                        critical_span_style=settings.get(
-                            "critical_span_style", "Mark text"
-                        ),
-                        highlight_column=settings.get(
-                            "highlight_column", "is_in_aspan"
-                        ),
-                        text_color=settings.get("text_color", WORD_LABEL_COLOR),
-                        highlight_text_color=settings.get(
-                            "highlight_text_color", HIGHLIGHTED_TEXT_COLOR
-                        ),
-                        line_spacing=settings.get("line_spacing", DEFAULT_LINE_SPACING),
-                        scale_text_to_boxes=settings.get("scale_text_to_boxes", True),
+                    )
+                    fig = make_scanpath_figure(
+                        trial_words, fig_fix, settings=render_settings
                     )
                     # EXP-2: stamp the title/caption BEFORE measuring the output
                     # size — the bands grow the figure, and rendering at the

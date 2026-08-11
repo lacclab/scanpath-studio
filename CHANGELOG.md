@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **One figure-settings contract now powers every renderer** (ENG-28) — the UI, headless API, bulk export, static scanpath, animation, and comparison paths share `FigureSettings` instead of forwarding dozens of parallel arguments. Public `plot_scanpath` and `animate_scanpath` keywords remain unchanged.
+- **Core module ownership is one-way** (ENG-28) — MultiplEYE server loading belongs to `datasets.py`, while run materialization belongs to `measures.py`, removing the `data`/`datasets` and `measures`/`preprocessing` import cycles.
+
 ## [0.28.0] - 2026-08-08
 
 ### Added

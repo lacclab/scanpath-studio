@@ -228,9 +228,12 @@ fig = sps.plot_scanpath(
 
 ## Every figure option
 
-`plot_scanpath` forwards any extra keyword to the figure builder; an unknown one
-raises a `TypeError` naming the closest valid options. The authoritative list is
-`api.figure_options()` (`"animation"` for the replay's subset):
+`plot_scanpath` validates its figure keywords against the shared
+`plots.FigureSettings` contract; an unknown one raises a `TypeError` naming the
+closest valid options. The UI, headless API, bulk export, static scanpath,
+animation, and comparison renderers all consume that same settings object. The
+authoritative public list remains `api.figure_options()` (`"animation"` for the
+replay's subset):
 
 ```python
 from scanpath_studio import api

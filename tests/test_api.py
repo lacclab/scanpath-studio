@@ -1,5 +1,6 @@
 """Tests for the headless programmatic API (scanpath_studio.api)."""
 
+import dataclasses
 import inspect
 import re
 from pathlib import Path
@@ -578,6 +579,25 @@ def test_figure_options_returns_independent_mutable_defaults():
     assert "caller_only" not in api.CANONICAL_FIGURE_DEFAULTS["word_hover_fields"]
 
 
+def test_figure_settings_validate_and_override_without_mutating():
+    settings = plots.FigureSettings.from_mapping(
+        {
+            "canvas_width": 800,
+            "canvas_height": 600,
+            "base_font_size": 18,
+            "show_saccades": False,
+            "fixation_color": "#123456",
+        }
+    )
+    changed = settings.with_overrides(show_saccades=True)
+
+    assert settings.show_saccades is False
+    assert changed.show_saccades is True
+    assert changed.fixation_color == "#123456"
+    with pytest.raises(TypeError, match="Unknown figure setting"):
+        settings.with_overrides(show_saccade=True)
+
+
 def test_agent_guide_option_tables_match_the_code():
     """docs/agents.md documents every option and default — keep it honest."""
     guide = (Path(__file__).resolve().parents[1] / "docs" / "agents.md").read_text()
@@ -605,15 +625,21 @@ def test_agent_guide_option_tables_match_the_code():
 
 
 def test_canonical_defaults_supply_every_required_builder_argument():
-    """Any make_scanpath_figure parameter without its own default has to be in
-    CANONICAL_FIGURE_DEFAULTS, or plot_scanpath() would raise a TypeError."""
+    """The public builder exposes one settings seam, not rendering parameters."""
     signature = inspect.signature(plots.make_scanpath_figure)
-    required = {
-        name
-        for name, param in signature.parameters.items()
-        if param.default is inspect.Parameter.empty
-    } - {"words", "fixations", "canvas_width", "canvas_height", "base_font_size"}
-    assert required <= set(api.CANONICAL_FIGURE_DEFAULTS) | {"font_family"}
+    assert list(signature.parameters) == [
+        "words",
+        "fixations",
+        "settings",
+        "raw_gaze",
+        "overrides",
+    ]
+    required_settings = {
+        field.name
+        for field in dataclasses.fields(plots.FigureSettings)
+        if field.default is dataclasses.MISSING
+    }
+    assert required_settings == {"canvas_width", "canvas_height", "base_font_size"}
 
 
 def _app_figure_defaults(words, fixations, monkeypatch):
@@ -651,14 +677,13 @@ def test_headless_defaults_match_the_app_for_every_non_layer_option(
     headless = api._figure_kwargs({})
     headless.setdefault("show_raw_gaze", False)
 
-    builder = inspect.signature(plots.make_scanpath_figure).parameters
+    builder_defaults = plots.FigureSettings.defaults(api._STATIC_FIGURE_PARAMS)
 
     def effective(settings, key):
         """What the builder actually sees: the setting, or its signature default."""
         if key in settings:
             return settings[key]
-        fallback = builder[key].default
-        return None if fallback is inspect.Parameter.empty else fallback
+        return builder_defaults.get(key)
 
     # Two settings the app spells out and the API leaves to the builder, which
     # fills in the very same values — assert the equivalence instead of the

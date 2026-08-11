@@ -254,32 +254,12 @@ _ALIGN_OPTIONS = ["Off", *(a.title() for a in ALIGN_ALGORITHMS)]
 
 
 # --- VIZ-21/23: which rail controls actually apply in Animate / Compare -------
-# The rail hosts ONE set of controls for THREE render paths —
-# `plots.make_scanpath_figure` (static), `plots.make_scanpath_animation`
-# (Animate) and the comparison builders (Compare). Not every setting reaches
-# every builder: the animation has no heatmap / raw-gaze / arc-and-snap layer and
-# draws saccades in one colour; the comparison overlay uses the per-scanpath
-# `cmp*_` styling instead of the global fixation/saccade appearance and has
-# neither a heatmap nor a colour-by-line path. Those controls used to be either
-# hidden (`if not comparing:`) or — for Animate — silently ignored.
-#
-# VIZ-23 then closed most of the gap rather than papering over it: drift
-# correction, direction arrows, the fixation flags, the word-label colour /
-# span-text marking / hover measure, the marker shape, the stimulus image and the
-# colour-bar styling all reach the builders that used to drop them, so those
-# widgets are LIVE again. Un-gating is the fix; disabling is the fallback.
-#
-# So each affected widget now declares which paths honour it and is rendered
-# DISABLED with the reason when the active mode isn't one of them. Disabling is
-# deliberately preferred over hiding: the user sees the control and learns why
-# it's inert. A disabled Streamlit widget still owns its key and keeps its
-# value, so a mode toggle never rewrites a `global_*` / `single_*` setting that
-# a deep link or a saved config carries — nothing is passed as `value=`/`index=`
-# here for exactly that reason.
-#
-# The authoritative setting → render-path table lives in `CLAUDE.md` ("Which viz
-# settings apply in which render path"); keep it in sync when a builder grows or
-# loses a parameter.
+# One rail feeds the static, animation, and comparison renderers, but some layers
+# do not exist in every mode. Each affected control therefore declares which
+# render paths consume it. Unsupported controls stay visible but disabled so the
+# reason is discoverable, and their stored values survive mode switches, deep
+# links, and restored configs. Keep the authoritative setting → render-path
+# table in `CLAUDE.md` in sync with these gates.
 
 
 def _mode_gate(

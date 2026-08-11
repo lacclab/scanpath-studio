@@ -103,11 +103,9 @@ from scanpath_studio.data import (
     frame_fingerprint,
     harmonize_frames,
     infer_raw_gaze_schema,
-    load_multipleye_server_bundle,
     load_onestop_server_bundle,
     load_sample_data,
     load_sample_raw_gaze,
-    multipleye_bundle_dir,
     normalize_fixations,
     normalize_raw_gaze,
     normalize_words,
@@ -128,6 +126,10 @@ from scanpath_studio.data import (
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
+)
+from scanpath_studio.datasets import (
+    load_multipleye_server_bundle,
+    multipleye_bundle_dir,
 )
 from scanpath_studio.debug_log import install_log_capture, render_debug_panel
 from scanpath_studio.experimental_setup import font_pt_to_px, pixels_per_degree
@@ -1410,6 +1412,13 @@ def _stimulus_font_install_hint(css_family: Optional[str]) -> Optional[Tuple[str
     return name, url
 
 
+@st.cache_data(show_spinner="Loading MultiplEYE server bundle…")
+def _cached_multipleye_server_bundle(
+    participant: Optional[str] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    return load_multipleye_server_bundle(participant)
+
+
 def load_words_and_fixations(
     data_choice: str,
     participant: Optional[str] = None,
@@ -1468,7 +1477,11 @@ def load_words_and_fixations(
             return load_sample_data()
         return words, fixations
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
-        words, fixations = load_multipleye_server_bundle(participant=participant)
+        try:
+            words, fixations = _cached_multipleye_server_bundle(participant=participant)
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            st.error(f"Couldn't load the MultiplEYE bundle: {exc}")
+            st.stop()
         if words.empty or fixations.empty:
             _note_dataset_unavailable(
                 label="MultiplEYE bundle",
@@ -2710,6 +2723,36 @@ def _preprocessing_settings() -> dict:
         }
 
 
+def _activate_data_source(data_choice: str) -> dict:
+    """Reset source-scoped state and return the active preprocessing settings."""
+    st.session_state["_active_data_source"] = data_choice
+    preprocessing = _preprocessing_settings()
+    if st.session_state.get("_share_selection_source") != data_choice:
+        st.session_state.pop("_share_selection", None)
+        st.session_state["_share_selection_source"] = data_choice
+
+    source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    if st.session_state.get("_filters_for") == source_key:
+        return preprocessing
+
+    previous = st.session_state.get("_filters_for")
+    stash = st.session_state.setdefault("_filter_stash", {})
+    if previous is not None:
+        stash[previous] = dict(st.session_state.get("_trial_filters_raw", {}))
+    stale_keys = [
+        key
+        for key in st.session_state
+        if isinstance(key, str) and key.startswith("filter_")
+    ]
+    for key in stale_keys:
+        del st.session_state[key]
+    st.session_state.pop("_trial_filters", None)
+    restored = stash.get(source_key)
+    st.session_state["_trial_filters_raw"] = dict(restored) if restored else {}
+    st.session_state["_filters_for"] = source_key
+    return preprocessing
+
+
 def main() -> None:
     """Main application entry point.
 
@@ -2805,41 +2848,7 @@ def main() -> None:
     # precede the load); the picker itself renders in the main view — on the
     # Scanpath "Filter by" row, or at the top of the Corpus view.
     data_choice = render_sidebar_data_source()
-    st.session_state["_active_data_source"] = data_choice
-    preproc_settings = _preprocessing_settings()
-    # Drop a stale share/save selection when the data source changes — its trial
-    # id won't exist in the new dataset, so a Share link or saved config must not
-    # carry it over. The active view rewrites _share_selection for the new source.
-    if st.session_state.get("_share_selection_source") != data_choice:
-        st.session_state.pop("_share_selection", None)
-        st.session_state["_share_selection_source"] = data_choice
-    # Reset the active trial filter when the data source changes (BUG-1). A filter
-    # selection (participant / text id / condition value) from the previous dataset
-    # may be meaningless or, worse, silently valid in the new one (e.g. OneStop and
-    # MultiplEYE both have a `text_id`), so it must not carry over. Keyed on the
-    # same (source, public-corpus) tuple as the col-map reset so switching
-    # PoTeC<->MultiplEYE also resets; the previous source's selections are stashed
-    # so switching back restores them. Runs before read_trial_filters() below.
-    _filter_source_key = (data_choice, st.session_state.get("public_dataset_choice"))
-    if st.session_state.get("_filters_for") != _filter_source_key:
-        prev_key = st.session_state.get("_filters_for")
-        stash = st.session_state.setdefault("_filter_stash", {})
-        if prev_key is not None:
-            stash[prev_key] = dict(st.session_state.get("_trial_filters_raw", {}))
-        for _stale in [
-            k
-            for k in list(st.session_state)
-            if isinstance(k, str) and k.startswith("filter_")
-        ]:
-            del st.session_state[_stale]
-        st.session_state.pop("_trial_filters", None)
-        # Restore this source's previously-stashed selections (if any), else clear
-        # the mirror so nothing seeds back in. _seed_filter_widget re-seeds the
-        # widget keys from _trial_filters_raw; render_trial_filters / render_narrow_by
-        # then recompute _trial_filters this run.
-        _restored = stash.get(_filter_source_key)
-        st.session_state["_trial_filters_raw"] = dict(_restored) if _restored else {}
-        st.session_state["_filters_for"] = _filter_source_key
+    preproc_settings = _activate_data_source(data_choice)
     # Just-finalized upload: paint a "loading" bridge into the main area now so it
     # repaints over the wizard (instead of the wizard lingering until the slow
     # first figure finishes). Cleared just before the tabs render below.

@@ -5,8 +5,9 @@ from __future__ import annotations
 import base64
 import copy
 import struct
+from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -47,6 +48,142 @@ from .constants import (
 )
 
 COLORBAR_LEN_FRACTION = 0.33
+
+
+@dataclass(frozen=True)
+class FigureSettings:
+    """Immutable rendering settings shared by every scanpath figure builder.
+
+    The app, headless API, CLI, and exporters used to forward parallel keyword
+    lists into three builders with 45–69 parameters each.  This object is the
+    single rendering contract instead.  Builder-specific fields live together
+    deliberately: switching between static, animated, and comparison views must
+    preserve the common visual choices without another translation layer.
+
+    ``canvas_width``, ``canvas_height``, and ``base_font_size`` are the only
+    context-dependent required values.  Everything else has the builder's
+    behavior-preserving default and may be changed with :meth:`with_overrides`.
+    """
+
+    canvas_width: int
+    canvas_height: int
+    base_font_size: int
+    font_family: str = FONT_FAMILY
+    x_field: str = "x"
+    y_field: str = "y"
+    show_words: bool = True
+    show_word_labels: bool = True
+    show_fixations: bool = True
+    show_order: bool = True
+    show_saccades: bool = True
+    show_heatmap: bool = False
+    color_by: Optional[str] = UNIFORM_COLOR_FIELD
+    heatmap_metric: Optional[str] = None
+    show_saccade_arrows: bool = False
+    heatmap_style: str = "Word boxes"
+    heatmap_norm: str = "Linear"
+    duration_mass_sigma_chars: float = 1.0
+    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
+    order_font_size: Optional[int] = 10
+    order_font_color: str = "#111111"
+    show_colorbars: bool = False
+    fixation_color_range: Optional[Tuple[float, float]] = None
+    heatmap_range: Optional[Tuple[float, float]] = None
+    fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE
+    heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE
+    show_raw_gaze: bool = False
+    critical_span_style: str = "Mark text"
+    highlight_column: Optional[str] = "is_in_aspan"
+    saccade_color: str = SACCADE_COLOR
+    saccade_style: str = "solid"
+    saccade_width: float = DEFAULT_SACCADE_WIDTH
+    saccade_color_mode: str = "Uniform"
+    saccade_class_colors: Optional[dict] = None
+    saccade_type_legend: bool = True
+    saccade_classes: Optional[Iterable[str]] = None
+    saccade_render_mode: str = "Straight"
+    fixation_snap_to_word: bool = False
+    hollow_fixations: bool = False
+    fixation_opacity: float = 1.0
+    fixation_color: Optional[str] = DEFAULT_FIXATION_COLOR
+    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL
+    text_color: str = WORD_LABEL_COLOR
+    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR
+    background_color: Optional[str] = None
+    color_by_line: bool = False
+    fixation_flags: Optional[dict] = None
+    span_border_color: str = "#000000"
+    colorbar_orientation: str = "Vertical"
+    colorbar_tickangle: int = 0
+    colorbar_tickfont_size: int = 12
+    line_spacing: float = DEFAULT_LINE_SPACING
+    scale_text_to_boxes: bool = True
+    background_image: Optional[str] = None
+    background_image_size: Optional[Tuple[float, float]] = None
+    background_image_origin: Optional[Tuple[float, float]] = None
+    background_image_opacity: float = 1.0
+    fit_to_monitor: bool = False
+    word_heatmap_col: Optional[str] = None
+    word_heatmap_title: Optional[str] = None
+    word_hover_measure: Optional[str] = "total_fixation_duration_ms"
+    word_hover_fields: Optional[Sequence[str]] = None
+    fixation_hover_fields: Optional[Sequence[str]] = None
+    show_connectors: bool = False
+    connector_y: Optional[Sequence[float]] = None
+    illustration_reasons: Optional[Sequence[str]] = None
+    playback_speed: float = 1.0
+    label_a: str = "Scanpath A"
+    label_b: str = "Scanpath B"
+    show_legend: bool = False
+    autoplay: bool = True
+    anim_grid_step_ms: Optional[float] = None
+    anim_max_frames: Optional[int] = None
+    trial_labels: Optional[Tuple[str, str]] = None
+    layout: str = "overlay"
+    style_a: Optional[dict] = None
+    style_b: Optional[dict] = None
+
+    @classmethod
+    def from_mapping(
+        cls,
+        settings: Optional["FigureSettings | Mapping[str, Any]"] = None,
+        /,
+        **overrides: Any,
+    ) -> "FigureSettings":
+        """Build settings from another instance or a plain option mapping."""
+        valid = {field.name for field in fields(cls)}
+        unknown = sorted(set(overrides) - valid)
+        if isinstance(settings, cls):
+            if unknown:
+                raise TypeError(f"Unknown figure settings: {', '.join(unknown)}")
+            return replace(settings, **overrides) if overrides else settings
+        values = dict(settings or {})
+        unknown = sorted((set(values) | set(overrides)) - valid)
+        if unknown:
+            raise TypeError(f"Unknown figure settings: {', '.join(unknown)}")
+        values.update(overrides)
+        return cls(**values)
+
+    def with_overrides(self, **overrides: Any) -> "FigureSettings":
+        """Return a copy with the named settings replaced."""
+        return self.from_mapping(self, **overrides)
+
+    def for_builder(self, names: Iterable[str]) -> dict[str, Any]:
+        """Return just the fields consumed by one concrete renderer."""
+        return {name: getattr(self, name) for name in names}
+
+    @classmethod
+    def defaults(cls, names: Iterable[str]) -> dict[str, Any]:
+        """Return dataclass defaults for the requested non-context fields."""
+        defaults: dict[str, Any] = {}
+        by_name = {field.name: field for field in fields(cls)}
+        for name in names:
+            field = by_name.get(name)
+            if field is None:
+                continue
+            if field.default is not MISSING:
+                defaults[name] = field.default
+        return defaults
 
 
 def _sample_colorscale_colors(
@@ -1560,78 +1697,79 @@ def _discard_flagged_fixations(
     return fixations[~drop] if bool(drop.any()) else fixations
 
 
-def make_scanpath_figure(
+def _render_scanpath_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    canvas_width: int,
-    canvas_height: int,
-    base_font_size: int,
-    font_family: str,
-    x_field: str,
-    y_field: str,
-    show_words: bool,
-    show_word_labels: bool,
-    show_fixations: bool,
-    show_order: bool,
-    show_saccades: bool,
-    show_heatmap: bool,
-    color_by: str,
-    heatmap_metric: Optional[str],
-    show_saccade_arrows: bool = False,
-    heatmap_style: str = "Word boxes",
-    heatmap_norm: str = "Linear",
-    duration_mass_sigma_chars: float = 1.0,
-    marker_size_range: Tuple[int, int],
-    order_font_size: int,
-    order_font_color: str,
-    show_colorbars: bool,
-    fixation_color_range: Optional[Tuple[float, float]],
-    heatmap_range: Optional[Tuple[float, float]],
-    fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
-    heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
+    settings: FigureSettings,
     raw_gaze: Optional[pd.DataFrame] = None,
-    show_raw_gaze: bool = False,
-    critical_span_style: str = "Mark text",
-    highlight_column: Optional[str] = "is_in_aspan",
-    saccade_color: str = SACCADE_COLOR,
-    saccade_style: str = "solid",
-    saccade_width: float = DEFAULT_SACCADE_WIDTH,
-    saccade_color_mode: str = "Uniform",
-    saccade_class_colors: Optional[dict] = None,
-    saccade_type_legend: bool = True,
-    saccade_classes: Optional[Iterable[str]] = None,
-    saccade_render_mode: str = "Straight",
-    fixation_snap_to_word: bool = False,
-    hollow_fixations: bool = False,
-    fixation_opacity: float = 1.0,
-    fixation_color: str = DEFAULT_FIXATION_COLOR,
-    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
-    text_color: str = WORD_LABEL_COLOR,
-    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
-    background_color: Optional[str] = None,
-    color_by_line: bool = False,
-    fixation_flags: Optional[dict] = None,
-    span_border_color: str = _CRITICAL_FRAME_COLOR,
-    colorbar_orientation: str = "Vertical",
-    colorbar_tickangle: int = 0,
-    colorbar_tickfont_size: int = 12,
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
-    background_image: Optional[str] = None,
-    background_image_size: Optional[Tuple[float, float]] = None,
-    background_image_origin: Optional[Tuple[float, float]] = None,
-    background_image_opacity: float = 1.0,
-    fit_to_monitor: bool = False,
-    word_heatmap_col: Optional[str] = None,
-    word_heatmap_title: Optional[str] = None,
-    word_hover_measure: Optional[str] = "total_fixation_duration_ms",
-    word_hover_fields: Optional[Sequence[str]] = None,
-    fixation_hover_fields: Optional[Sequence[str]] = None,
-    show_connectors: bool = False,
-    connector_y: Optional[Sequence[float]] = None,
-    illustration_reasons: Optional[Sequence[str]] = None,
 ) -> go.Figure:
+    canvas_width = settings.canvas_width
+    canvas_height = settings.canvas_height
+    base_font_size = settings.base_font_size
+    font_family = settings.font_family
+    x_field = settings.x_field
+    y_field = settings.y_field
+    show_words = settings.show_words
+    show_word_labels = settings.show_word_labels
+    show_fixations = settings.show_fixations
+    show_order = settings.show_order
+    show_saccades = settings.show_saccades
+    show_heatmap = settings.show_heatmap
+    color_by = settings.color_by
+    heatmap_metric = settings.heatmap_metric
+    show_saccade_arrows = settings.show_saccade_arrows
+    heatmap_style = settings.heatmap_style
+    heatmap_norm = settings.heatmap_norm
+    duration_mass_sigma_chars = settings.duration_mass_sigma_chars
+    marker_size_range = settings.marker_size_range
+    order_font_size = settings.order_font_size
+    order_font_color = settings.order_font_color
+    show_colorbars = settings.show_colorbars
+    fixation_color_range = settings.fixation_color_range
+    heatmap_range = settings.heatmap_range
+    fixation_colorscale = settings.fixation_colorscale
+    heatmap_colorscale = settings.heatmap_colorscale
+    show_raw_gaze = settings.show_raw_gaze
+    critical_span_style = settings.critical_span_style
+    highlight_column = settings.highlight_column
+    saccade_color = settings.saccade_color
+    saccade_style = settings.saccade_style
+    saccade_width = settings.saccade_width
+    saccade_color_mode = settings.saccade_color_mode
+    saccade_class_colors = settings.saccade_class_colors
+    saccade_type_legend = settings.saccade_type_legend
+    saccade_classes = settings.saccade_classes
+    saccade_render_mode = settings.saccade_render_mode
+    fixation_snap_to_word = settings.fixation_snap_to_word
+    hollow_fixations = settings.hollow_fixations
+    fixation_opacity = settings.fixation_opacity
+    fixation_color = settings.fixation_color
+    fixation_symbol = settings.fixation_symbol
+    text_color = settings.text_color
+    highlight_text_color = settings.highlight_text_color
+    background_color = settings.background_color
+    color_by_line = settings.color_by_line
+    fixation_flags = settings.fixation_flags
+    span_border_color = settings.span_border_color
+    colorbar_orientation = settings.colorbar_orientation
+    colorbar_tickangle = settings.colorbar_tickangle
+    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    line_spacing = settings.line_spacing
+    scale_text_to_boxes = settings.scale_text_to_boxes
+    background_image = settings.background_image
+    background_image_size = settings.background_image_size
+    background_image_origin = settings.background_image_origin
+    background_image_opacity = settings.background_image_opacity
+    fit_to_monitor = settings.fit_to_monitor
+    word_heatmap_col = settings.word_heatmap_col
+    word_heatmap_title = settings.word_heatmap_title
+    word_hover_measure = settings.word_hover_measure
+    word_hover_fields = settings.word_hover_fields
+    fixation_hover_fields = settings.fixation_hover_fields
+    show_connectors = settings.show_connectors
+    connector_y = settings.connector_y
+    illustration_reasons = settings.illustration_reasons
     fig = go.Figure()
     spatial_axes = x_field == "x" and y_field == "y"
     # Track whether a colorbar / legend will render, to reserve margin for them
@@ -3080,61 +3218,13 @@ def _animation_time_slider(frame_times, total_ms):
     ]
 
 
-def make_scanpath_animation(
+def _render_scanpath_animation(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    canvas_width: int,
-    canvas_height: int,
-    base_font_size: int,
-    font_family: str,
-    playback_speed: float = 1.0,
-    show_words: bool = True,
-    show_word_labels: bool = True,
-    show_saccades: bool = True,
-    show_saccade_arrows: bool = False,
-    show_order: bool = True,
-    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
-    order_font_size: int = 10,
-    order_font_color: str = "#000000",
-    color_by: Optional[str] = None,
-    color_by_line: bool = False,
-    fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
-    fixation_color_range: Optional[Tuple[float, float]] = None,
-    fixation_flags: Optional[dict] = None,
-    show_colorbars: bool = False,
-    colorbar_orientation: str = "Vertical",
-    colorbar_tickangle: int = 0,
-    colorbar_tickfont_size: int = 12,
-    saccade_color: str = SACCADE_COLOR,
-    saccade_style: str = "solid",
-    saccade_width: float = DEFAULT_SACCADE_WIDTH,
-    hollow_fixations: bool = False,
-    fixation_opacity: float = 1.0,
-    fixation_color: Optional[str] = None,
-    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
-    text_color: str = WORD_LABEL_COLOR,
-    highlight_column: Optional[str] = None,
-    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
-    word_hover_measure: Optional[str] = None,
-    word_hover_fields: Optional[Sequence[str]] = None,
-    fixation_hover_fields: Optional[Sequence[str]] = None,
-    background_color: Optional[str] = None,
+    settings: FigureSettings,
     fixations_b: Optional[pd.DataFrame] = None,
     words_b: Optional[pd.DataFrame] = None,
-    label_a: str = "Scanpath A",
-    label_b: str = "Scanpath B",
-    show_legend: bool = False,
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
-    background_image: Optional[str] = None,
-    background_image_size: Optional[Tuple[float, float]] = None,
-    background_image_origin: Optional[Tuple[float, float]] = None,
-    background_image_opacity: float = 1.0,
-    fit_to_monitor: bool = False,
-    autoplay: bool = True,
-    anim_grid_step_ms: Optional[float] = None,
-    anim_max_frames: Optional[int] = None,
 ) -> go.Figure:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
@@ -3181,6 +3271,55 @@ def make_scanpath_animation(
     :func:`animation_autoplay_post_script`. The figure itself is always built
     paused; autoplay is a kick-off layered on top by the embedder.
     """
+    canvas_width = settings.canvas_width
+    canvas_height = settings.canvas_height
+    base_font_size = settings.base_font_size
+    font_family = settings.font_family
+    playback_speed = settings.playback_speed
+    show_words = settings.show_words
+    show_word_labels = settings.show_word_labels
+    show_saccades = settings.show_saccades
+    show_saccade_arrows = settings.show_saccade_arrows
+    show_order = settings.show_order
+    marker_size_range = settings.marker_size_range
+    order_font_size = settings.order_font_size
+    order_font_color = settings.order_font_color
+    color_by = settings.color_by
+    color_by_line = settings.color_by_line
+    fixation_colorscale = settings.fixation_colorscale
+    fixation_color_range = settings.fixation_color_range
+    fixation_flags = settings.fixation_flags
+    show_colorbars = settings.show_colorbars
+    colorbar_orientation = settings.colorbar_orientation
+    colorbar_tickangle = settings.colorbar_tickangle
+    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    saccade_color = settings.saccade_color
+    saccade_style = settings.saccade_style
+    saccade_width = settings.saccade_width
+    hollow_fixations = settings.hollow_fixations
+    fixation_opacity = settings.fixation_opacity
+    fixation_color = settings.fixation_color
+    fixation_symbol = settings.fixation_symbol
+    text_color = settings.text_color
+    highlight_column = settings.highlight_column
+    highlight_text_color = settings.highlight_text_color
+    word_hover_measure = settings.word_hover_measure
+    word_hover_fields = settings.word_hover_fields
+    fixation_hover_fields = settings.fixation_hover_fields
+    background_color = settings.background_color
+    label_a = settings.label_a
+    label_b = settings.label_b
+    show_legend = settings.show_legend
+    line_spacing = settings.line_spacing
+    scale_text_to_boxes = settings.scale_text_to_boxes
+    background_image = settings.background_image
+    background_image_size = settings.background_image_size
+    background_image_origin = settings.background_image_origin
+    background_image_opacity = settings.background_image_opacity
+    fit_to_monitor = settings.fit_to_monitor
+    autoplay = settings.autoplay
+    anim_grid_step_ms = settings.anim_grid_step_ms
+    anim_max_frames = settings.anim_max_frames
     fig = go.Figure()
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
 
@@ -4197,46 +4336,9 @@ def _make_split_comparison_figure(
     trial_a: Tuple[str, str],
     trial_b: Tuple[str, str],
     *,
-    canvas_width: int,
-    canvas_height: int,
-    font_family: str,
-    base_font_size: int,
-    show_words: bool,
-    show_word_labels: bool,
-    trial_labels: Optional[Tuple[str, str]],
+    settings: FigureSettings,
     orientation: str,
-    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
     styles: Optional[Tuple[dict, dict]] = None,
-    show_fixations: bool = True,
-    show_saccades: bool = True,
-    show_saccade_arrows: bool = False,
-    show_order: bool = False,
-    show_legend: bool = False,
-    order_font_size: Optional[int] = None,
-    color_by: Optional[str] = None,
-    fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
-    fixation_color_range: Optional[Tuple[float, float]] = None,
-    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
-    show_colorbars: bool = False,
-    show_heatmap: bool = False,
-    heatmap_metric: str = "duration_ms",
-    heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
-    heatmap_range: Optional[Tuple[float, float]] = None,
-    heatmap_norm: str = "Linear",
-    colorbar_orientation: str = "Vertical",
-    colorbar_tickangle: int = 0,
-    colorbar_tickfont_size: int = 12,
-    text_color: str = WORD_LABEL_COLOR,
-    highlight_column: Optional[str] = None,
-    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
-    background_color: Optional[str] = None,
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
-    background_image: Optional[str] = None,
-    background_image_size: Optional[Tuple[float, float]] = None,
-    background_image_origin: Optional[Tuple[float, float]] = None,
-    background_image_opacity: float = 1.0,
-    fit_to_monitor: bool = False,
 ) -> go.Figure:
     """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
 
@@ -4244,6 +4346,45 @@ def _make_split_comparison_figure(
     readings are of the same text, so the same page sits under each.
     """
     from plotly.subplots import make_subplots
+
+    canvas_width = settings.canvas_width
+    canvas_height = settings.canvas_height
+    font_family = settings.font_family
+    base_font_size = settings.base_font_size
+    show_words = settings.show_words
+    show_word_labels = settings.show_word_labels
+    trial_labels = settings.trial_labels
+    marker_size_range = settings.marker_size_range
+    show_fixations = settings.show_fixations
+    show_saccades = settings.show_saccades
+    show_saccade_arrows = settings.show_saccade_arrows
+    show_order = settings.show_order
+    show_legend = settings.show_legend
+    order_font_size = settings.order_font_size
+    color_by = settings.color_by
+    fixation_colorscale = settings.fixation_colorscale
+    fixation_color_range = settings.fixation_color_range
+    fixation_symbol = settings.fixation_symbol
+    show_colorbars = settings.show_colorbars
+    show_heatmap = settings.show_heatmap
+    heatmap_metric = settings.heatmap_metric
+    heatmap_colorscale = settings.heatmap_colorscale
+    heatmap_range = settings.heatmap_range
+    heatmap_norm = settings.heatmap_norm
+    colorbar_orientation = settings.colorbar_orientation
+    colorbar_tickangle = settings.colorbar_tickangle
+    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    text_color = settings.text_color
+    highlight_column = settings.highlight_column
+    highlight_text_color = settings.highlight_text_color
+    background_color = settings.background_color
+    line_spacing = settings.line_spacing
+    scale_text_to_boxes = settings.scale_text_to_boxes
+    background_image = settings.background_image
+    background_image_size = settings.background_image_size
+    background_image_origin = settings.background_image_origin
+    background_image_opacity = settings.background_image_opacity
+    fit_to_monitor = settings.fit_to_monitor
 
     font_settings = dict(family=font_family or FONT_FAMILY, size=base_font_size)
     cb_style = dict(
@@ -4529,108 +4670,69 @@ def _make_split_comparison_figure(
     return fig
 
 
-def make_comparison_figure(
+def _render_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     trial_a: Tuple[str, str],
     trial_b: Tuple[str, str],
     *,
-    canvas_width: int,
-    canvas_height: int,
-    font_family: str,
-    base_font_size: int,
-    show_words: bool = True,
-    show_word_labels: bool = False,
-    trial_labels: Optional[Tuple[str, str]] = None,
-    layout: str = "overlay",
-    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
-    style_a: Optional[dict] = None,
-    style_b: Optional[dict] = None,
-    show_fixations: bool = True,
-    show_saccades: bool = True,
-    show_saccade_arrows: bool = False,
-    show_order: bool = False,
-    show_legend: bool = False,
-    order_font_size: Optional[int] = None,
-    color_by: Optional[str] = None,
-    fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE,
-    fixation_color_range: Optional[Tuple[float, float]] = None,
-    fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
-    show_colorbars: bool = False,
-    show_heatmap: bool = False,
-    heatmap_metric: str = "duration_ms",
-    heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
-    heatmap_range: Optional[Tuple[float, float]] = None,
-    heatmap_norm: str = "Linear",
-    colorbar_orientation: str = "Vertical",
-    colorbar_tickangle: int = 0,
-    colorbar_tickfont_size: int = 12,
-    text_color: str = WORD_LABEL_COLOR,
-    highlight_column: Optional[str] = None,
-    highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR,
-    background_color: Optional[str] = None,
-    line_spacing: float = DEFAULT_LINE_SPACING,
-    scale_text_to_boxes: bool = True,
-    background_image: Optional[str] = None,
-    background_image_size: Optional[Tuple[float, float]] = None,
-    background_image_origin: Optional[Tuple[float, float]] = None,
-    background_image_opacity: float = 1.0,
-    fit_to_monitor: bool = False,
+    settings: FigureSettings,
 ) -> go.Figure:
     """Two scanpaths on one canvas — overlaid, side by side, or stacked.
 
-    VIZ-23 brought the shared viz controls the overlay used to drop across, each
-    defaulting to the previous behaviour: ``fixation_symbol`` (shape is the
-    channel a greyscale print keeps), ``highlight_column`` (without it the
-    already-accepted ``highlight_text_color`` could never take effect), the
-    ``background_image*`` stimulus layer, and the ``colorbar_*`` styling.
+    The shared settings contract keeps marker shape, highlighted text, stimulus
+    image, and colorbar styling consistent across all three layouts (VIZ-23).
     """
+    canvas_width = settings.canvas_width
+    canvas_height = settings.canvas_height
+    font_family = settings.font_family
+    base_font_size = settings.base_font_size
+    show_words = settings.show_words
+    show_word_labels = settings.show_word_labels
+    trial_labels = settings.trial_labels
+    layout = settings.layout
+    marker_size_range = settings.marker_size_range
+    style_a = settings.style_a
+    style_b = settings.style_b
+    show_fixations = settings.show_fixations
+    show_saccades = settings.show_saccades
+    show_saccade_arrows = settings.show_saccade_arrows
+    show_order = settings.show_order
+    show_legend = settings.show_legend
+    order_font_size = settings.order_font_size
+    color_by = settings.color_by
+    fixation_colorscale = settings.fixation_colorscale
+    fixation_color_range = settings.fixation_color_range
+    fixation_symbol = settings.fixation_symbol
+    show_colorbars = settings.show_colorbars
+    show_heatmap = settings.show_heatmap
+    heatmap_metric = settings.heatmap_metric
+    heatmap_colorscale = settings.heatmap_colorscale
+    heatmap_range = settings.heatmap_range
+    heatmap_norm = settings.heatmap_norm
+    colorbar_orientation = settings.colorbar_orientation
+    colorbar_tickangle = settings.colorbar_tickangle
+    colorbar_tickfont_size = settings.colorbar_tickfont_size
+    text_color = settings.text_color
+    highlight_column = settings.highlight_column
+    highlight_text_color = settings.highlight_text_color
+    background_color = settings.background_color
+    line_spacing = settings.line_spacing
+    scale_text_to_boxes = settings.scale_text_to_boxes
+    background_image = settings.background_image
+    background_image_size = settings.background_image_size
+    background_image_origin = settings.background_image_origin
+    background_image_opacity = settings.background_image_opacity
+    fit_to_monitor = settings.fit_to_monitor
     if layout in {"side_by_side", "stacked"}:
         return _make_split_comparison_figure(
             words,
             fixations,
             trial_a,
             trial_b,
-            canvas_width=canvas_width,
-            canvas_height=canvas_height,
-            font_family=font_family,
-            base_font_size=base_font_size,
-            show_words=show_words,
-            show_word_labels=show_word_labels,
-            trial_labels=trial_labels,
+            settings=settings,
             orientation=layout,
-            marker_size_range=marker_size_range,
             styles=(style_a, style_b),
-            show_fixations=show_fixations,
-            show_saccades=show_saccades,
-            show_saccade_arrows=show_saccade_arrows,
-            show_order=show_order,
-            show_legend=show_legend,
-            order_font_size=order_font_size,
-            color_by=color_by,
-            fixation_colorscale=fixation_colorscale,
-            fixation_color_range=fixation_color_range,
-            fixation_symbol=fixation_symbol,
-            show_colorbars=show_colorbars,
-            show_heatmap=show_heatmap,
-            heatmap_metric=heatmap_metric,
-            heatmap_colorscale=heatmap_colorscale,
-            heatmap_range=heatmap_range,
-            heatmap_norm=heatmap_norm,
-            colorbar_orientation=colorbar_orientation,
-            colorbar_tickangle=colorbar_tickangle,
-            colorbar_tickfont_size=colorbar_tickfont_size,
-            text_color=text_color,
-            highlight_column=highlight_column,
-            highlight_text_color=highlight_text_color,
-            background_color=background_color,
-            line_spacing=line_spacing,
-            scale_text_to_boxes=scale_text_to_boxes,
-            background_image=background_image,
-            background_image_size=background_image_size,
-            background_image_origin=background_image_origin,
-            background_image_opacity=background_image_opacity,
-            fit_to_monitor=fit_to_monitor,
         )
 
     # Shared metric colour range across BOTH trials (when colouring by a numeric
@@ -6030,3 +6132,155 @@ def make_difference_profile_figure(
         yaxis=dict(title=f"Δ {measure_label}"),
     )
     return fig
+
+
+def _setting_names(excluded: Iterable[str]) -> tuple[str, ...]:
+    excluded = set(excluded)
+    return tuple(
+        field.name for field in fields(FigureSettings) if field.name not in excluded
+    )
+
+
+def _resolve_figure_settings(
+    settings: Optional[FigureSettings | Mapping[str, Any]],
+    overrides: Mapping[str, Any],
+    *,
+    legacy_defaults: Optional[Mapping[str, Any]] = None,
+) -> FigureSettings:
+    """Resolve a settings object while preserving old builder-only defaults."""
+    if settings is None and legacy_defaults:
+        return FigureSettings.from_mapping({**legacy_defaults, **overrides})
+    return FigureSettings.from_mapping(settings, **dict(overrides))
+
+
+STATIC_FIGURE_OPTIONS = _setting_names(
+    {
+        "playback_speed",
+        "label_a",
+        "label_b",
+        "show_legend",
+        "autoplay",
+        "anim_grid_step_ms",
+        "anim_max_frames",
+        "trial_labels",
+        "layout",
+        "style_a",
+        "style_b",
+    }
+)
+ANIMATION_FIGURE_OPTIONS = _setting_names(
+    {
+        "x_field",
+        "y_field",
+        "show_fixations",
+        "show_heatmap",
+        "heatmap_metric",
+        "heatmap_style",
+        "heatmap_norm",
+        "duration_mass_sigma_chars",
+        "heatmap_range",
+        "heatmap_colorscale",
+        "show_raw_gaze",
+        "critical_span_style",
+        "saccade_color_mode",
+        "saccade_class_colors",
+        "saccade_type_legend",
+        "saccade_classes",
+        "saccade_render_mode",
+        "fixation_snap_to_word",
+        "span_border_color",
+        "word_heatmap_col",
+        "word_heatmap_title",
+        "show_connectors",
+        "connector_y",
+        "illustration_reasons",
+        "trial_labels",
+        "layout",
+        "style_a",
+        "style_b",
+    }
+)
+
+
+def make_scanpath_figure(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    settings: Optional[FigureSettings | Mapping[str, Any]] = None,
+    raw_gaze: Optional[pd.DataFrame] = None,
+    **overrides: Any,
+) -> go.Figure:
+    """Build a static scanpath from one shared rendering-settings object.
+
+    Keyword overrides remain useful for focused programmatic calls and tests;
+    application code should pass ``settings=FigureSettings(...)`` so the same
+    object can flow unchanged through UI, export, and headless surfaces.
+    """
+    resolved = _resolve_figure_settings(settings, overrides)
+    return _render_scanpath_figure(
+        words,
+        fixations,
+        settings=resolved,
+        raw_gaze=raw_gaze,
+    )
+
+
+def make_scanpath_animation(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    settings: Optional[FigureSettings | Mapping[str, Any]] = None,
+    fixations_b: Optional[pd.DataFrame] = None,
+    words_b: Optional[pd.DataFrame] = None,
+    **overrides: Any,
+) -> go.Figure:
+    """Build an animated replay from the shared rendering settings."""
+    resolved = _resolve_figure_settings(
+        settings,
+        overrides,
+        legacy_defaults={
+            "order_font_color": "#000000",
+            "color_by": None,
+            "fixation_color": None,
+            "highlight_column": None,
+            "word_hover_measure": None,
+        },
+    )
+    return _render_scanpath_animation(
+        words,
+        fixations,
+        settings=resolved,
+        fixations_b=fixations_b,
+        words_b=words_b,
+    )
+
+
+def make_comparison_figure(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    trial_a: Tuple[str, str],
+    trial_b: Tuple[str, str],
+    *,
+    settings: Optional[FigureSettings | Mapping[str, Any]] = None,
+    **overrides: Any,
+) -> go.Figure:
+    """Build a two-scanpath comparison from the shared rendering settings."""
+    resolved = _resolve_figure_settings(
+        settings,
+        overrides,
+        legacy_defaults={
+            "show_word_labels": False,
+            "show_order": False,
+            "order_font_size": None,
+            "color_by": None,
+            "highlight_column": None,
+            "heatmap_metric": "duration_ms",
+        },
+    )
+    return _render_comparison_figure(
+        words,
+        fixations,
+        trial_a,
+        trial_b,
+        settings=resolved,
+    )

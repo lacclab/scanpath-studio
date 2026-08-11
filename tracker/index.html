@@ -643,7 +643,7 @@
         ${priority !== "Normal" ? `<span class="priority priority-${priority.toLowerCase()}">${priority}</span>` : ""}
         <span class="status"><span class="dot" style="background:${color(it.status)}"></span>${it.status}</span>
       </button>
-      ${open ? `<div class="body">${decideBox}${note}${markdown(it.body)}${editor}</div>` : ""}
+      ${open ? `<div class="body">${editor}${decideBox}${note}${markdown(it.body)}</div>` : ""}
     </article>`;
   }
 

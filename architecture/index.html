@@ -1665,6 +1665,10 @@ the repo root (kept current as the code changes); this is the short version.</p>
 <td>Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation.</td>
 </tr>
 <tr>
+<td><code>multipart.py</code></td>
+<td>Ordered child-screen identity, validation, manifest assignment, screen catalogues, and per-screen canvas metadata.</td>
+</tr>
+<tr>
 <td><code>measures.py</code></td>
 <td>Canonical reading measures (FFD/FPRT/RPD/TFD, regressions) + geometry helpers.</td>
 </tr>
@@ -1702,11 +1706,11 @@ the repo root (kept current as the code changes); this is the short version.</p>
 </tr>
 <tr>
 <td><code>tour.py</code></td>
-<td>First-visit welcome tour + the dataset-setup guide card.</td>
+<td>First-visit/setup guides plus the registry and progress for task-oriented in-app tutorials.</td>
 </tr>
 <tr>
 <td><code>annotations.py</code></td>
-<td>Per-trial favorites / tags / notes (session state + JSON).</td>
+<td>Parent-trial and optional screen-scoped favorites / tags / notes (session state + JSON).</td>
 </tr>
 <tr>
 <td><code>persistence.py</code></td>
@@ -1730,8 +1734,9 @@ see the <a href="../desktop/">Desktop app</a> page and the
 <h2 id="pipeline">Pipeline<a class="headerlink" href="#pipeline" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uploaded / sample table(s)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    → infer_*_schema → normalize_*           (canonical columns)
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    → filter_data → build_combo_options      (trial pool)
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    → make_*_figure / compute_word_metrics / bulk_export
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    → normalize/validate screen identity     (multipart data only)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    → filter_data → build_combo_options      (trial pool)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    → make_*_figure / compute_word_metrics / bulk_export
 </code></pre></div>
 <h2 id="develop">Develop<a class="headerlink" href="#develop" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[test]&quot;</span><span class="w">     </span><span class="c1"># add ,docs for the docs site</span>

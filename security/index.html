@@ -2215,11 +2215,11 @@ widget keys deliberately excluded by <code>tabs._collect_column_mapping</code> b
 <code>UploadedFile</code> is not JSON-serializable. But it does write two things a reader
 should know about before mailing the file around:</p>
 <ul>
-<li><code>"selection": {"participant_id": …, "trial_id": …}</code> — the same identifiers as
+<li><code>"selection": {"participant_id": …, "trial_id": …, "screen_id": …}</code> — the same identifiers as
   the link.</li>
 <li><code>"annotations": [...]</code> — the whole annotation store, flattened by
-  <code>annotations.store_to_records</code> into <code>{participant_id, trial_id, star, tags,
-  note}</code> for <strong>every</strong> annotated trial, not just the selected one. <code>note</code> is
+  <code>annotations.store_to_records</code> into <code>{participant_id, trial_id, screen_id?, star, tags,
+  note}</code> for <strong>every</strong> annotated trial or screen, not just the selected one. <code>note</code> is
   free text the researcher typed, so a config saved after a review session can
   contain clinical or subject-identifying prose that no other export carries.</li>
 </ul>

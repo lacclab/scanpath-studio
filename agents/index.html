@@ -2114,6 +2114,10 @@ names; everything downstream assumes them.</p>
 <td>One reading of one text by one reader. <strong>Required.</strong> (<code>unique_trial_id</code> rides along when the source ships one.)</td>
 </tr>
 <tr>
+<td><code>screen_id</code>, <code>screen_index</code></td>
+<td>Optional child screen and 1-based order inside a multipart logical trial. Map in both reports.</td>
+</tr>
+<tr>
 <td><code>text_id</code></td>
 <td>Which text/passage the row belongs to (plus <code>unique_text_id</code> when the source has a corpus-wide id).</td>
 </tr>
@@ -2156,6 +2160,10 @@ are carried through under their canonical / original names when present.</p>
 <td>Must match the words table. <strong>Required.</strong></td>
 </tr>
 <tr>
+<td><code>screen_id</code>, <code>screen_index</code></td>
+<td>Optional child screen and 1-based order; scientific operations never join across it.</td>
+</tr>
+<tr>
 <td><code>text_id</code></td>
 <td>Text/passage id, when present.</td>
 </tr>
@@ -2170,6 +2178,10 @@ are carried through under their canonical / original names when present.</p>
 <tr>
 <td><code>timestamp_ms</code></td>
 <td>Fixation onset. Falls back to the row's position within the trial (0, 1, 2, …) when the source has no timestamp — it drives the ordering, so rows must already be in reading order in that case.</td>
+</tr>
+<tr>
+<td><code>screen_timestamp_ms</code>, <code>screen_fixation_id</code></td>
+<td>Optional local clock/id that resets per screen; retained alongside the parent-global columns.</td>
 </tr>
 <tr>
 <td><code>word_id</code></td>
@@ -2245,6 +2257,11 @@ here, so both frames come back under one synthetic reader: <code>list_trials</co
   they return the same normalized pair. See <a href="../onestop/">OneStop</a> and
   <a href="../multipleye/">MultiplEYE</a>.</li>
 </ul>
+<p>For a multipart parent, inspect <code>sps.list_parts(words, fixations, pid, tid)</code>,
+pass <code>screen="…"</code> to <code>plot_scanpath</code> / <code>animate_scanpath</code>, or call
+<code>sps.render_parent_trial(...)</code> for an ordered mapping of per-screen figures.
+Data without explicit screen columns can use <code>trial_parts_manifest=</code>; see
+<a href="../data-format/#multipart-logical-trials">Data format</a>.</p>
 <h3 id="when-auto-detection-cant-find-a-column">When auto-detection can't find a column<a class="headerlink" href="#when-auto-detection-cant-find-a-column" title="Permanent link">&para;</a></h3>
 <p>The <code>ValueError</code> names the canonical field, the column names that were tried,
 and the columns your table actually has. In full, for a words table whose

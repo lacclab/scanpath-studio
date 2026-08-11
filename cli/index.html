@@ -1670,6 +1670,14 @@ one trial without opening the UI.</p>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
 <a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Render a portable file saved by the in-app scanpath author</span>
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--authoring<span class="w"> </span>authored-scanpath.json<span class="w"> </span>-o<span class="w"> </span>authored.html
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Inspect and render an ordered multipart trial</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span>--list-parts
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--screen<span class="w"> </span>question<span class="w"> </span>-o<span class="w"> </span>question.svg
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t3<span class="w"> </span>--all-screens<span class="w"> </span>--animate<span class="w"> </span>--screen-transition<span class="w"> </span>recorded<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">  </span>-o<span class="w"> </span>replay.html
 </code></pre></div>
 <p>HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
@@ -1731,6 +1739,18 @@ Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
 <td><code>--authoring PATH</code></td>
 </tr>
 <tr>
+<td>select or inspect a child screen</td>
+<td><code>--screen ID</code>, <code>--list-parts</code></td>
+</tr>
+<tr>
+<td>render every ordered screen</td>
+<td><code>--all-screens</code>, optionally <code>--screen-transition instant|recorded</code></td>
+</tr>
+<tr>
+<td>map arbitrary source rows to screens</td>
+<td><code>--trial-parts-manifest manifest.json</code></td>
+</tr>
+<tr>
 <td>export editable layers</td>
 <td><code>--separable-layers</code></td>
 </tr>
@@ -1748,6 +1768,11 @@ and run-configuration files. <code>scanpath-studio corpus</code> produces a tidy
 corpus-analysis table for scripting. The <code>render</code> command still renders one
 trial per invocation; use the <a href="../automation/#batch-pattern">Python batch pattern</a>
 or <strong>Export → Multiple trials</strong> for many figures.</p>
+<p><code>--all-screens</code> is the multipart exception: it writes one deterministic
+<code>__screen-001-&lt;id&gt;</code> file per screen of the selected parent trial. The recorded
+transition option stores the observed parent-clock gap in animation metadata;
+it does not invent a visual saccade between screens. The same manifest flag is
+accepted by <code>analyze</code>.</p>
 <h2 id="recovery-cache">Recovery cache<a class="headerlink" href="#recovery-cache" title="Permanent link">&para;</a></h2>
 <p>A local or desktop run caches your session on your own machine — uploaded
 datasets, column mappings, view settings, and annotations — so a refresh or a

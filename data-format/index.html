@@ -1068,6 +1068,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#multipart-logical-trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multipart logical trials
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#reading-measures" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1617,6 +1628,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#multipart-logical-trials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multipart logical trials
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#reading-measures" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1720,6 +1742,71 @@ pre-aggregated reading measures.</p>
   ID</em> to several columns (e.g. participant + paragraph + repeated-reading) and a
   combined unique id is built on the fly.</li>
 </ul>
+<h2 id="multipart-logical-trials">Multipart logical trials<a class="headerlink" href="#multipart-logical-trials" title="Permanent link">&para;</a></h2>
+<p>A logical <code>(participant_id, trial_id)</code> may contain several ordered screens. Map
+these optional fields in both words and fixations:</p>
+<table>
+<thead>
+<tr>
+<th>Canonical field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>screen_id</code></td>
+<td>Stable child id inside the logical trial.</td>
+</tr>
+<tr>
+<td><code>screen_index</code></td>
+<td>Positive, 1-based display order. If omitted, first appearance defines order.</td>
+</tr>
+<tr>
+<td><code>canvas_width</code>, <code>canvas_height</code></td>
+<td>Optional monitor/canvas pixels, constant within that screen.</td>
+</tr>
+<tr>
+<td><code>screen_timestamp_ms</code></td>
+<td>Optional fixation onset that resets within a screen.</td>
+</tr>
+<tr>
+<td><code>screen_fixation_id</code></td>
+<td>Optional fixation id that resets within a screen.</td>
+</tr>
+</tbody>
+</table>
+<p><code>timestamp_ms</code>, <code>fixation_id</code>, and <code>order_in_trial</code> remain parent-global. The
+screen-local clock/id are retained alongside them; neither overwrites the other.
+Screen id and order must map one-to-one within a parent, and the words and
+fixations reports must contain the same set of screens. These validations reject
+orphan screens instead of silently joining the wrong coordinate spaces.</p>
+<p>All geometry-dependent operations group by screen: fixation-to-word assignment,
+saccades, passes, regressions, and word measures never cross a screen boundary.
+The main view shows one screen with previous/next navigation; annotations can be
+stored on the parent trial or the current screen. Bulk output uses deterministic
+<code>screens/screen-001-&lt;id&gt;/</code> folders.</p>
+<p>If source reports have arbitrary page markers instead of mappable screen
+columns, pass a nested manifest to the Python API or CLI. Selectors are exact and
+must cover every row in the declared parent:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;trials&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">&quot;participant_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;p1&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">&quot;trial_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;t1&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">&quot;parts&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">        </span><span class="nt">&quot;screen_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;intro&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">        </span><span class="nt">&quot;screen_index&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">        </span><span class="nt">&quot;canvas_width&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1920</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">        </span><span class="nt">&quot;canvas_height&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1080</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">        </span><span class="nt">&quot;words&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;page_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A&quot;</span><span class="p">},</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">        </span><span class="nt">&quot;fixations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;page_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A&quot;</span><span class="p">}</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span><span class="p">}]</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="p">}</span>
+</code></pre></div>
+<p>Legacy data without screen identity keeps its original two-column trial key and
+behavior.</p>
 <h2 id="reading-measures">Reading measures<a class="headerlink" href="#reading-measures" title="Permanent link">&para;</a></h2>
 <p>If your data carries only raw fixations, the app computes the canonical per-word
 measures itself — <strong>FFD</strong>, <strong>FPRT</strong> (gaze duration), <strong>RPD</strong> (go-past),

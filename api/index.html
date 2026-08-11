@@ -1085,6 +1085,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.list_parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.compute_word_metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1183,6 +1194,17 @@
     <span class="md-ellipsis">
       
         animate_scanpath
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.render_parent_trial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render_parent_trial
       
     </span>
   </a>
@@ -1929,6 +1951,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.list_parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_parts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.compute_word_metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2027,6 +2060,17 @@
     <span class="md-ellipsis">
       
         animate_scanpath
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.render_parent_trial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render_parent_trial
       
     </span>
   </a>
@@ -2171,7 +2215,7 @@ app's default view and change only the needed layers.</p>
 
 
 <a href="#scanpath_studio.api.load_scanpath_data" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_scanpath_data</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">TablesLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">TablesLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">word_schema</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fix_schema</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_root</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_pattern</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">{text_id}</span><span class="s1">.png&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_scanpath_data</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">TablesLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">TablesLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">word_schema</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fix_schema</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial_parts_manifest</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_root</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">image_pattern</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">{text_id}</span><span class="s1">.png&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2185,7 +2229,11 @@ Column schemas are auto-detected (EyeLink, Gazepoint, and snake_case
 names); pass <code>word_schema</code> / <code>fix_schema</code> mappings (field → column
 name, see <code>controls.WORD_FIELD_SPECS</code>) to override detection. For
 per-word reading measures, pass the result to :func:<code>compute_word_metrics</code>.</p>
-<p>Either table may be omitted for datasets that ship only one report: the
+<p><code>trial_parts_manifest</code> accepts a nested parent-trial/parts definition for
+datasets whose source tables identify screens through arbitrary selector
+columns; explicit <code>screen_id</code> / <code>screen_index</code> columns can instead be
+mapped directly in each schema. Either table may be omitted for datasets
+that ship only one report: the
 missing side comes back as an empty canonical frame and the plots simply
 skip that layer. Words without a participant column (stimulus-level AoIs)
 are broadcast across the participants found in the fixations, and
@@ -2325,6 +2373,29 @@ data.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="scanpath_studio.api.list_parts" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.list_parts</span>
+
+
+<a href="#scanpath_studio.api.list_parts" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">list_parts</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Ordered screens in multipart data, optionally narrowed to one parent.</p>
+<p>Legacy single-screen data returns an empty table: it has no synthetic
+exported screen row, so existing callers can distinguish recorded part
+identity from the compatibility default.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="scanpath_studio.api.compute_word_metrics" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">scanpath_studio.api.compute_word_metrics</span>
 
@@ -2454,7 +2525,7 @@ the normalized frames from :func:<code>load_scanpath_data</code>.</p>
 
 
 <a href="#scanpath_studio.api.plot_scanpath" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">raw_gaze</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DataFrame</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_correction</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_connectors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">illustration</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">illustration_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;auto&#39;</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">caption</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">figure_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">plot_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">screen</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">raw_gaze</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DataFrame</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_correction</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_connectors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">illustration</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">illustration_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;auto&#39;</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">caption</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">figure_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2465,7 +2536,9 @@ the normalized frames from :func:<code>load_scanpath_data</code>.</p>
 the frames contain exactly one combo. <code>canvas_size</code> is the monitor size
 in px; by default it is estimated from the data extents — pass the real
 monitor resolution (e.g. <code>(2560, 1440)</code> for OneStop) to keep coordinates
-true to scale. <code>raw_gaze</code> is a normalized frame (see
+true to scale. For a multipart trial, <code>screen</code> selects one child screen;
+omitting it selects the first recorded screen and never concatenates
+coordinate spaces. <code>raw_gaze</code> is a normalized frame (see
 :func:<code>data.normalize_raw_gaze</code>) and is filtered to the selected trial.</p>
 <p><code>drift_correction</code> (PRE-3/PRE-17) names a method from
 <code>alignment.ALGORITHMS</code>: the ten Carr et al. (2021) algorithms plus
@@ -2500,13 +2573,14 @@ raises a <code>TypeError</code> naming the closest valid options, and
 
 
 <a href="#scanpath_studio.api.animate_scanpath" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">playback_speed</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">autoplay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">caption</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">animation_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">animate_scanpath</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">screen</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">playback_speed</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">autoplay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">caption</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">animation_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
 
         <p>Build the animated scanpath replay for one trial.</p>
-<p>Same trial selection and canvas semantics as :func:<code>plot_scanpath</code>. The
+<p>Same trial selection and canvas semantics as :func:<code>plot_scanpath</code>, including
+<code>screen</code> selection for multipart trials. The
 returned Plotly figure plays in real reading time scaled by
 <code>playback_speed</code>; save it as interactive HTML with :func:<code>save_figure</code>,
 or rasterize to GIF/MP4 with :func:<code>animation_export.export_animation</code>.
@@ -2528,6 +2602,33 @@ matches the static figure. <code>palette=</code> (VIZ-18) works here too; the co
 it implies that the animation doesn't support are dropped rather than
 raising, since the caller named a look, not those individual keys.</p>
 <p><code>title</code> / <code>caption</code> (EXP-5) — same as :func:<code>plot_scanpath</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.render_parent_trial" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.render_parent_trial</span>
+
+
+<a href="#scanpath_studio.api.render_parent_trial" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">render_parent_trial</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">participant</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">trial</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">animate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">transition_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;instant&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Render every screen of one logical trial without stitching coordinates.</p>
+<p>The ordered mapping is keyed by <code>screen_id</code>. Each value is the same figure
+returned by :func:<code>plot_scanpath</code> or :func:<code>animate_scanpath</code>; callers can
+save them into deterministic per-screen files. <code>transition_mode</code> is
+<code>"instant"</code> or <code>"recorded"</code>. For animated output, each figure's
+<code>layout.meta['transition_after_ms']</code> records the delay before the next
+screen (zero for instant mode, or the observed parent-clock gap). No visual
+saccade is ever drawn across the boundary.</p>
 
 
     </div>

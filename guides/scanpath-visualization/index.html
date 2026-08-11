@@ -1710,9 +1710,8 @@ the previous/next buttons or screen menu to move between them. Figure links and
 saved configurations retain the active screen, and <strong>Annotations</strong> lets you
 choose parent-trial or current-screen scope.</p>
 <h2 id="control-the-layers">Control the layers<a class="headerlink" href="#control-the-layers" title="Permanent link">&para;</a></h2>
-<p>The rail beside the plot groups the layers by what they describe. <strong>Quick
-views</strong> and <strong>Palette</strong> sit at the top — often all you need — followed by six
-collapsible sections:</p>
+<p>The <strong>Plot controls</strong> rail beside the plot starts with three <strong>Quick views</strong> and
+a <strong>Palette</strong> — often all you need — followed by five collapsible sections:</p>
 <table>
 <thead>
 <tr>
@@ -1743,38 +1742,33 @@ collapsible sections:</p>
 <td>spatial concentration by count or duration; millisecond-level gaze samples</td>
 </tr>
 <tr>
-<td>🖥️ Canvas &amp; text</td>
+<td>📐 Figure &amp; canvas</td>
 <td>—</td>
-<td>monitor geometry, viewing distance, fonts, text colour, plot background</td>
-</tr>
-<tr>
-<td>📐 Figure &amp; axes</td>
-<td>—</td>
-<td>full-monitor framing, colour bars, axis fields, illustration label</td>
+<td>monitor geometry, fonts, plot background, full-monitor framing, colour bars, axes and labels</td>
 </tr>
 </tbody>
 </table>
 <p>Each layer section opens the same way: the <strong>on/off toggle</strong> first, then
 <strong>⚙️ style</strong> and <strong>🧹 filter</strong> — appearance and visibility kept apart, so
 "colour the regressions red" and "show only the regressions" don't sit in the
-same list. The two scanpath sections are open by default; the rest start
-collapsed, and a layer's settings appear only while that layer is on. Marker
+same list. Fixations is open by default; the rest start collapsed, and a layer's
+settings appear only while that layer is on. Marker
 size already encodes duration by default, so uniform fixation color is usually
 the clearest starting point.</p>
 <h3 id="show-screen-coordinates">Show screen coordinates<a class="headerlink" href="#show-screen-coordinates" title="Permanent link">&para;</a></h3>
-<p>Open <strong>📐 Figure &amp; axes</strong> and turn on <strong>Coordinate grid</strong> to read the stimulus in
+<p>Open <strong>📐 Figure &amp; canvas</strong> and turn on <strong>Coordinate grid</strong> to read the stimulus in
 monitor pixels. Automatic spacing chooses a readable 1/2/5×10ⁿ interval for the
 current range; turn it off to enter an exact major interval. Ticks stay anchored
 to screen-coordinate zero even when the visible range is cropped or negative.
 The grid is off by default and does not shrink or rescale the spatial data area.</p>
 <h2 id="filter-fixations-and-saccades">Filter fixations and saccades<a class="headerlink" href="#filter-fixations-and-saccades" title="Permanent link">&para;</a></h2>
-<p><strong>🧹 Fixation filter</strong> contains duration thresholds, out-of-bounds handling, and
+<p><strong>Fixations → 🧹 Filter</strong> contains duration thresholds, out-of-bounds handling, and
 the fixation-index range. Marking preserves context; discarding removes points
 from the rendered scanpath.</p>
-<p><strong>🧹 Saccade filter</strong> picks which reading classes are drawn at all — forward,
+<p><strong>Saccades → 🧹 Filter</strong> picks which reading classes are drawn at all — forward,
 skip, refixation, return sweep, regression. Hidden classes lose their line
 <em>and</em> their direction arrow, which is how you get a regressions-only figure.
-Classes come from the same split as ⚙️ Saccade style → <strong>By type</strong>, so the two
+Classes come from the same split as Saccades → ⚙️ Style → <strong>By type</strong>, so the two
 always agree on what a regression is; clearing the list means <em>no filter</em>, not
 an empty plot. Both filters show a badge on the popover button while they are
 active, so a thinned figure never looks like missing data.</p>

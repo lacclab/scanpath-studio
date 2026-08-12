@@ -200,10 +200,31 @@ def _step_screen(options: tuple[str, ...], delta: int) -> None:
     ]
 
 
+def _on_screen_slider() -> None:
+    """Mirror a scrub of the screen slider onto the canonical selectbox.
+
+    ``single_screen_id`` stays the one selection every other reader consults
+    (``_step_screen``, ``extract_part``); the slider is a second view of it, the
+    same arrangement ``utils._select_trial_none_mode`` uses for the trial picker.
+    """
+    st.session_state["single_screen_id"] = st.session_state["single_screen_pos"]
+
+
 def _render_screen_navigator(catalog: pd.DataFrame) -> Optional[str]:
-    """Compact previous/select/next navigator for one logical multipart trial."""
+    """Select/scrub/step navigator for one logical multipart trial.
+
+    **UX-47**: this row carries the same grammar as the trial picker directly
+    above it (``utils._select_trial_none_mode``) — a ``[3, 5, 1.9]`` split with
+    the selectbox, a scrubbing slider, then ◀ ▶ in a right-packed ``railbtn_*``
+    cluster. It used to be ``[0.7, 5, 0.7]`` with the two steps *straddling* the
+    selectbox as ``width="stretch"`` buttons outside the railbtn system, so the
+    screen dropdown started ~11% in (against the trial dropdown's 0) at 78% wide
+    (against 30%), and its steps rendered as wide rectangles beside the pill
+    clusters on every neighbouring row.
+    """
     if catalog.empty:
         st.session_state.pop("single_screen_id", None)
+        st.session_state.pop("single_screen_pos", None)
         return None
     options = tuple(catalog[SCREEN_ID].astype(str))
     current = st.session_state.get("single_screen_id")
@@ -215,32 +236,56 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> Optional[str]:
         ): f"{int(row.screen_index)} of {len(catalog)} · {row.screen_id}"
         for row in catalog.itertuples()
     }
-    previous, picker, following = st.columns([0.7, 5, 0.7], vertical_alignment="bottom")
+    sel_col, slider_col, trail_col = st.columns(
+        [3, 5, 1.9], vertical_alignment="bottom"
+    )
     position = options.index(str(st.session_state["single_screen_id"]))
-    previous.button(
+    selected = sel_col.selectbox(
+        "**Screen**",
+        options,
+        key="single_screen_id",
+        format_func=labels.get,
+        help="One coordinate space at a time; the parent trial selection stays fixed.",
+    )
+    if len(options) > 1:
+        # Mirror the canonical selection onto the slider BEFORE it renders, so
+        # picking a screen in the dropdown (or stepping with ◀ ▶) moves the thumb
+        # too; the drag callback writes back the other way, reconciling next run.
+        st.session_state["single_screen_pos"] = str(
+            st.session_state["single_screen_id"]
+        )
+        with slider_col:
+            st.select_slider(
+                "Screen position",
+                options=options,
+                key="single_screen_pos",
+                on_change=_on_screen_slider,
+                format_func=labels.get,
+                help=f"Scrub through this trial's {len(options)} screens; the "
+                "dropdown jumps straight to one.",
+                label_visibility="collapsed",
+            )
+    # Both steps in ONE keyed container: styles.py lays every `railbtn_*` out as a
+    # right-packed flex ROW, which is what puts them on the same edge, at the same
+    # 3px spacing and in the same pill shape as the trial row's ◀ ▶ ⇅ above and
+    # the chip strip below. `width="stretch"` is deliberately gone — it fought the
+    # `width: auto` that makes the cluster content-sized.
+    trail = trail_col.container(key="railbtn_single_screen_trail")
+    trail.button(
         "◀",
         key="single_screen_previous",
         help="Previous screen in this logical trial",
         disabled=position == 0,
         on_click=_step_screen,
         args=(options, -1),
-        width="stretch",
     )
-    selected = picker.selectbox(
-        "Screen",
-        options,
-        key="single_screen_id",
-        format_func=labels.get,
-        help="One coordinate space at a time; the parent trial selection stays fixed.",
-    )
-    following.button(
+    trail.button(
         "▶",
         key="single_screen_next",
         help="Next screen in this logical trial",
         disabled=position == len(options) - 1,
         on_click=_step_screen,
         args=(options, 1),
-        width="stretch",
     )
     return str(selected)
 

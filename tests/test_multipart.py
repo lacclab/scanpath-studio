@@ -223,3 +223,71 @@ def test_in_app_screen_navigator_keeps_parent_and_steps_in_recorded_order():
     at.button(key="single_screen_next").click().run()
     assert at.selectbox(key="single_screen_id").value == "question"
     assert at.button(key="single_screen_next").disabled
+
+
+def _single_screen_navigator_app():
+    from scanpath_studio.multipart import part_catalog
+    from scanpath_studio.synthetic import make_multipart_synthetic_data
+    from scanpath_studio.tabs import _render_screen_navigator
+
+    words, fixations = make_multipart_synthetic_data()
+    # One row = one screen: the case the slider must NOT render for.
+    _render_screen_navigator(part_catalog(words, fixations).head(1))
+
+
+def test_ux47_screen_slider_and_selectbox_stay_in_sync_both_ways():
+    """UX-47: the screen row gained the trial picker's scrubbing slider.
+
+    The slider is a second view of ``single_screen_id``, never a second source of
+    truth — stepping or picking must move the thumb, and scrubbing must move the
+    canonical selection back.
+    """
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_multipart_navigator_app).run()
+    assert not at.exception, at.exception
+    assert at.select_slider(key="single_screen_pos").value == "intro"
+
+    # ◀ ▶ write the selectbox; the slider must follow on the next run.
+    at.button(key="single_screen_next").click().run()
+    assert at.select_slider(key="single_screen_pos").value == "question"
+
+    # ...and a drag writes back, via the _on_screen_slider callback.
+    at.select_slider(key="single_screen_pos").set_value("intro").run()
+    assert at.selectbox(key="single_screen_id").value == "intro"
+    assert at.button(key="single_screen_previous").disabled
+
+
+def test_ux47_single_screen_trial_renders_no_slider():
+    """A one-option ``st.select_slider`` throws ``RangeError`` in the browser and
+    blanks the tab. AppTest runs no frontend, so it cannot catch that directly —
+    what it *can* pin is the guard: at one screen, no slider is built at all."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_single_screen_navigator_app).run()
+    assert not at.exception, at.exception
+    assert at.selectbox(key="single_screen_id").value == "intro"
+    assert len(at.select_slider) == 0
+
+
+def test_ux47_screen_steps_live_in_a_railbtn_cluster():
+    """The ◀ ▶ pair must sit in a ``railbtn_*`` container.
+
+    That key is the whole mechanism behind the alignment: styles.py lays every
+    ``[class*="st-key-railbtn_"]`` out as a right-packed flex row with a shared
+    pill shape, so the screen row lands on the same edge as the trial picker's
+    ◀ ▶ ⇅ and the Filter-by **More**. No DOM exists under AppTest, so this is
+    pinned structurally — the same approach test_tour.py takes for its CSS hooks.
+    """
+    import inspect
+
+    from scanpath_studio.styles import get_app_css
+    from scanpath_studio.tabs import _render_screen_navigator
+
+    source = inspect.getsource(_render_screen_navigator)
+    assert 'container(key="railbtn_single_screen_trail")' in source
+    # The steps must be children of that container, not of the columns.
+    assert 'trail.button(\n        "◀"' in source
+    assert 'trail.button(\n        "▶"' in source
+    # ...and the shared rule must actually match that key.
+    assert '[class*="st-key-railbtn_"] {' in get_app_css()

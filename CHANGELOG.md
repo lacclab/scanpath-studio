@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One figure-settings contract now powers every renderer** (ENG-28)
 - **Core module ownership is one-way** (ENG-28)
 - **The visualization rail scrolls independently and packs controls more tightly** (UX-43, UX-44)
+- **The screen selector lines up with the trial picker** (UX-47)
 
 ### Details
 
@@ -59,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The visualization rail scrolls independently and packs controls more tightly** (UX-43, UX-44) — the rail now matches the plot row's height and scrolls without moving the plot or the plot-width subtabs below it. One **🎛️ Plot controls** heading replaces separate mode/visualization headings; the presets retain their **Quick views** caption; Fixation/Saccade popovers use contextual **Style** and **Filter** labels; Saccades starts collapsed; canvas/text and axes/labels share **📐 Figure & canvas**; and the scoped **↺ Reset** popover sits beside the heading. At very narrow rail widths that header stacks, and the popover reserves enough room for Streamlit's disclosure chevron.
 - **One figure-settings contract now powers every renderer** (ENG-28) — the UI, headless API, bulk export, static scanpath, animation, and comparison paths share `FigureSettings` instead of forwarding dozens of parallel arguments. Public `plot_scanpath` and `animate_scanpath` keywords remain unchanged.
 - **Core module ownership is one-way** (ENG-28) — MultiplEYE server loading belongs to `datasets.py`, while run materialization belongs to `measures.py`, removing the `data`/`datasets` and `measures`/`preprocessing` import cycles.
+- **The screen selector lines up with the trial picker** (UX-47) — on a multipart trial, the child-screen row now uses the same layout as the trial picker above it: the dropdown starts at the same left edge and width, a scrubbing slider sits beside it, and ◀ ▶ join the shared right-packed pill cluster instead of straddling the dropdown as full-width buttons. A single-screen trial shows the dropdown alone. Screen selection, stepping and deep links are unchanged.
 
 ## [0.28.0] - 2026-08-08
 

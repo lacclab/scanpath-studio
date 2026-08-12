@@ -111,7 +111,7 @@ def _build_combo_options_cached(
         if col in fixations.columns and col not in combo_cols:
             combo_cols.append(col)
     # Carry the composite trial id's component columns through, so the trial
-    # picker can offer one cascading selector per part (see select_trial).
+    # picker can detect a composite id and cascade on identity (see select_trial).
     for col in composite_cols:
         if col in fixations.columns and col not in combo_cols:
             combo_cols.append(col)
@@ -862,6 +862,32 @@ def _composite_columns_for(combos: pd.DataFrame) -> list[str]:
     return [c for c in cols if c in combos.columns]
 
 
+def composite_identity_cascade(combos: pd.DataFrame, text_field: str) -> list[str]:
+    """The columns the composite trial picker cascades on: **Participant**, then
+    **Text**.
+
+    A trial is a reader reading a text, so those two are what the picker asks
+    for — regardless of how many source columns the user mapped into either one.
+    Both are already resolved to a single value by normalization
+    (``data.trial_id_series`` joins a multi-column Participant ID or Text ID
+    mapping the same way it joins the trial id), so a composite identity needs no
+    extra selectors: it *is* one value in ``participant_id`` / ``text_field``.
+
+    BUG-23. The picker used to cascade on the trial id's raw *component* columns
+    instead, which made the number and meaning of the selectors an accident of
+    the mapping — OneStop's five parts rendered as Participant, a bare paragraph
+    index labelled "Text", and three selectors for `article_id`, `article_batch`
+    and `difficulty_level`, none of which identifies anything on its own. UX-5
+    had then hidden the parts that were also **More** filter columns, which in
+    OneStop is all three of those *plus* the article/batch/difficulty that carry
+    the text's identity, leaving a cascade that could not reach a single trial.
+    Asking for participant and text sidesteps both."""
+    cascade = ["participant_id"]
+    if text_field != "participant_id":
+        cascade.append(text_field)
+    return cascade
+
+
 def _select_trial_composite_mode(
     combos: pd.DataFrame,
     component_cols: list[str],
@@ -871,24 +897,17 @@ def _select_trial_composite_mode(
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Trial selection when the trial id was composed from several columns.
 
-    Renders one cascading selector per component (each narrowed by the previous
-    picks), mirroring the Text / Participant modes instead of a single opaque
-    ``a_b_c`` dropdown. Selectors render into ``picker_host`` (the column between
-    Browse-by and Filter), defaulting to the current container.
+    Renders a **Participant** then a **Text** selector (the second narrowed by
+    the first), instead of a single opaque ``a_b_c`` dropdown. Selectors render
+    into ``picker_host``, defaulting to the current container.
 
-    ``component_cols`` is *every* component the user mapped into the trial id.
-    UX-5 used to drop the ones that were also **More**-popover filter columns, so
-    the picker showed the same canonical Participant / Text selectors on every
-    dataset; BUG-16 undid that. Mapping a column into the trial id is a statement
-    that it is part of trial identity, and pruning it left the cascade unable to
-    reach a single trial whenever the *text* identity itself spans several
-    columns (OneStop: paragraph + article + batch + difficulty, all of them
-    registered ``meta`` and so all of them pruned) — which dumped the user into
-    the "Reading" fallback below on an id it could otherwise resolve exactly.
-    Narrowing by those columns under **More** still works; it is just no longer
-    the only way to reach them."""
+    ``component_cols`` is the cascade from ``composite_identity_cascade`` — see
+    there for why it is participant + text and not the trial id's raw parts. When
+    the trial id carries something *beyond* those two (a condition such as
+    ``repeated_reading_trial``), participant + text land on several trials and the
+    "Reading" selector below picks between them; that is the one case it is for."""
     host = picker_host if picker_host is not None else st
-    host.caption("Composite trial id — pick each part to narrow to a trial.")
+    host.caption("Pick a participant and a text to narrow to a trial.")
     filtered = combos
     for col in component_cols:
         options = sorted(filtered[col].dropna().astype(str).unique())
@@ -961,7 +980,7 @@ def select_trial(
     **Narrow by** Text / Participant multiselects + the **More** filters
     (``controls.render_narrow_by`` / ``render_trial_filters``), and this picks one
     trial via a selectbox + slider + ◀ ▶ arrows. A composite trial id (built from
-    several mapped columns) instead renders one cascading selector per component.
+    several mapped columns) instead cascades on Participant then Text.
 
     ``picker_host`` is the container to render into (defaults to the current one);
     the picker builds its own row of columns, so call it where columns are allowed.
@@ -987,7 +1006,11 @@ def select_trial(
     composite_cols = _composite_columns_for(combos)
     if len(composite_cols) >= 2:
         participant, trial, text = _select_trial_composite_mode(
-            combos, composite_cols, text_field, key_prefix, picker_host=picker_host
+            combos,
+            composite_identity_cascade(combos, text_field),
+            text_field,
+            key_prefix,
+            picker_host=picker_host,
         )
     else:
         participant, trial, text = _select_trial_none_mode(

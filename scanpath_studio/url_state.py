@@ -64,6 +64,7 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
+from .utils import composite_identity_cascade
 
 # URL query-param → session_state key map for the deep-link API. Used by
 # `_apply_url_preset()` to preset widgets when the page is opened from an
@@ -772,7 +773,13 @@ def _restore_selection(
         if c in combos.columns
     ]
     if len(composite_cols) >= 2:
-        for col in composite_cols:
+        # Seed the cascade the composite picker actually renders (participant +
+        # text), not one key per mapped component — BUG-23 changed those to the
+        # two identity fields, and a key no widget reads restores nothing.
+        text_field = (
+            "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
+        )
+        for col in composite_identity_cascade(combos, text_field):
             st.session_state[f"{key_prefix}_composite_{col}"] = str(row[col])
         st.session_state[f"{key_prefix}_composite_reading"] = str(row["trial_id"])
     else:

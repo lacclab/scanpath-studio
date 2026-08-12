@@ -3283,9 +3283,6 @@ def render_single_trial_tab(
             more_pop.caption("More ways to narrow — conditions & annotations.")
             render_trial_filters(words_all, fixations_all, host=more_pop)
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
-        # It takes no filter-column list: BUG-16 stopped pruning composite
-        # components that are also **More** conditions, since mapping a column
-        # into the trial id is a statement that it is part of trial identity.
         with st.container(key="tour_grp_trial_picker"):
             selected_participant, selected_trial, selection_mode, selected_text = (
                 select_trial(

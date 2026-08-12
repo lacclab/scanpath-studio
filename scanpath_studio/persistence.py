@@ -344,6 +344,84 @@ def forget_state(root: Path) -> None:
                 pass
 
 
+def _reslug_entry(entry: Any, slug: str) -> dict:
+    """One manifest dataset entry with its frame paths moved onto ``slug``."""
+    frames = {
+        frame_key: f"datasets/{slug}-{frame_key}.parquet"
+        for frame_key in dict(entry.get("frames", {}))
+    }
+    return {**dict(entry), "frames": frames}
+
+
+def rename_cached_dataset(
+    session: MutableMapping[str, Any],
+    old: str,
+    new: str,
+    root: Optional[Path] = None,
+) -> bool:
+    """Follow a dataset rename (DATA-23) through the cache instead of rewriting it.
+
+    A dataset's Parquet files are named after ``_dataset_slug(name)``, so a rename
+    would otherwise leave the old slug's files behind as orphans nothing deletes,
+    and make the next save re-encode every frame under the new slug. Renaming the
+    files, re-keying ``manifest.json`` and re-keying this session's reuse
+    bookkeeping keeps the next :func:`save_state` on the cheap ``reuse_datasets``
+    path — it rewrites the manifest only.
+
+    Call it **after** the store itself has been re-keyed: the new reuse identity is
+    read from the live ``session["_datasets"]``. Best-effort like the rest of this
+    module — on any failure the session's bookkeeping is dropped so the next save
+    rebuilds the cache in full rather than trusting a half-moved one.
+    """
+    if old == new:
+        return False
+    directory = state_directory() if root is None else root
+    with _STATE_LOCK:
+        try:
+            old_slug, new_slug = _dataset_slug(old), _dataset_slug(new)
+            frames_dir = directory / "datasets"
+            for frame_key in _FRAME_KEYS:
+                source = frames_dir / f"{old_slug}-{frame_key}.parquet"
+                if source.is_file():
+                    os.replace(source, frames_dir / f"{new_slug}-{frame_key}.parquet")
+            manifest_path = directory / "manifest.json"
+            if manifest_path.is_file():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                datasets = dict(manifest.get("datasets", {}))
+                if old in datasets:
+                    datasets[new] = _reslug_entry(datasets.pop(old), new_slug)
+                    manifest["datasets"] = datasets
+                    values = dict(manifest.get("session", {}))
+                    if values.get("data_source_choice") == old:
+                        values["data_source_choice"] = new
+                        manifest["session"] = values
+                    _atomic_text(
+                        json.dumps(
+                            manifest, ensure_ascii=False, sort_keys=True, indent=2
+                        ),
+                        manifest_path,
+                    )
+            entries = session.get(_LAST_DATASET_ENTRIES_KEY)
+            if isinstance(entries, dict) and old in entries:
+                entries = dict(entries)
+                entries[new] = _reslug_entry(entries.pop(old), new_slug)
+                session[_LAST_DATASET_ENTRIES_KEY] = entries
+                session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
+            return True
+        except (OSError, ValueError, TypeError, KeyError):
+            for key in (
+                _LAST_FINGERPRINT_KEY,
+                _LAST_DATASET_IDENTITY_KEY,
+                _LAST_DATASET_ENTRIES_KEY,
+            ):
+                session.pop(key, None)
+            _LOGGER.warning(
+                "Could not follow a dataset rename through the local cache.",
+                exc_info=True,
+            )
+            return False
+
+
 def restore_local_state(
     session, url: str, *, protect_data_source: bool = False
 ) -> bool:

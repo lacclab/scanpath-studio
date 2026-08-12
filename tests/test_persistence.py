@@ -14,6 +14,7 @@ from scanpath_studio.persistence import (
     is_loopback_url,
     persistence_enabled,
     persistence_paused,
+    rename_cached_dataset,
     restore_state,
     restored_from_cache,
     save_local_state,
@@ -320,3 +321,72 @@ def test_a_cache_written_before_the_setup_key_still_restores(tmp_path):
     assert "setup" not in entry
     fallback = SetupSnapshot(canvas_width=999)
     assert SetupSnapshot.from_dict(entry.get("setup"), fallback=fallback) == fallback
+
+
+# DATA-23 — a rename moves the cached Parquet files instead of re-encoding them,
+# so the cache never accumulates orphans under the old name's slug.
+
+
+def test_rename_moves_the_cached_frames_and_keeps_the_restore(tmp_path):
+    session = {"_datasets": {"Corpus": _dataset()}, "data_source_choice": "Corpus"}
+    assert save_state(session, tmp_path)
+    before = sorted(path.name for path in (tmp_path / "datasets").glob("*.parquet"))
+
+    session["_datasets"] = {"Renamed": session["_datasets"].pop("Corpus")}
+    session["data_source_choice"] = "Renamed"
+    assert rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
+
+    after = sorted(path.name for path in (tmp_path / "datasets").glob("*.parquet"))
+    assert len(after) == len(before) and after != before, (
+        "the frames should have been renamed in place, not duplicated or rewritten"
+    )
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["datasets"]) == {"Renamed"}
+    assert manifest["session"]["data_source_choice"] == "Renamed"
+
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert set(restored["_datasets"]) == {"Renamed"}
+    pd.testing.assert_frame_equal(
+        restored["_datasets"]["Renamed"]["words"],
+        _dataset()["words"],
+    )
+
+
+def test_the_save_after_a_rename_does_not_rewrite_the_frames(tmp_path):
+    """The whole point of moving the files: the next save is manifest-only."""
+    session = {"_datasets": {"Corpus": _dataset()}}
+    assert save_state(session, tmp_path)
+
+    session["_datasets"] = {"Renamed": session["_datasets"].pop("Corpus")}
+    assert rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
+    frame_path = next((tmp_path / "datasets").glob("*-words.parquet"))
+    before = frame_path.stat().st_mtime_ns
+
+    assert save_state(session, tmp_path)
+    assert frame_path.stat().st_mtime_ns == before
+    assert len(list((tmp_path / "datasets").glob("*.parquet"))) == 3
+
+
+def test_rename_without_a_cache_on_disk_is_a_no_op_not_an_error(tmp_path):
+    session = {"_datasets": {"Renamed": _dataset()}}
+    assert rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
+    assert not (tmp_path / "manifest.json").exists()
+
+
+def test_a_failed_rename_forces_a_full_rewrite_next_save(tmp_path):
+    """A half-moved cache must never be trusted — drop the reuse bookkeeping."""
+    session = {"_datasets": {"Corpus": _dataset()}}
+    assert save_state(session, tmp_path)
+    (tmp_path / "manifest.json").write_text("{not json", encoding="utf-8")
+
+    session["_datasets"] = {"Renamed": session["_datasets"].pop("Corpus")}
+    assert not rename_cached_dataset(session, "Corpus", "Renamed", tmp_path)
+    assert persistence._LAST_DATASET_ENTRIES_KEY not in session
+
+    assert save_state(session, tmp_path)
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["datasets"]) == {"Renamed"}
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    assert set(restored["_datasets"]) == {"Renamed"}

@@ -91,8 +91,9 @@ class TestAppLaunches:
         Each popover is the *disclosure* for a group that used to be an
         ``st.sidebar`` expander, so a missing one means an unreachable panel —
         not a cosmetic difference. DATA-26 took ⚙️ Configure and 🧹 Preprocessing
-        off this bar onto the 🗂️ Data page; what is left is genuinely
-        session-wide (see ``test_configure_and_preprocessing_left_the_menu_bar``).
+        off this bar onto the 🗂️ Data page and UX-38 merged 💾 Save & restore
+        with 🗄️ Recovery cache, leaving two groups plus 🐛 Debug (see
+        ``test_configure_and_preprocessing_left_the_menu_bar``).
         """
         at = _make_apptest()
         at.run(timeout=30)
@@ -100,14 +101,39 @@ class TestAppLaunches:
         # AppTest has no `.popover` accessor and its Block wrapper exposes no
         # `.label`, so read the label off the element proto.
         labels = {p.proto.popover.label for p in at.get("popover")}
-        for expected in (
-            "💾 Save & restore",
-            "🗄️ Recovery cache",
-            "❓ Help",
-        ):
+        for expected in ("❓ Help", "💾 Session"):
             assert expected in labels, f"{expected} missing from the menu bar"
         # 🐛 Debug only joins the bar once ❓ Help's debug toggle is on (UX-37).
         assert "🐛 Debug" not in labels
+
+    def test_help_leads_the_menu_bar(self):
+        """UX-38: ❓ Help first — the one group a first-time user is after, and
+        the only one reachable before they have a dataset."""
+        at = _make_apptest()
+        at.run(timeout=30)
+        bar = [
+            p.proto.popover.label
+            for p in at.get("popover")
+            if p.proto.popover.label in ("❓ Help", "💾 Session")
+        ]
+        assert bar[:2] == ["❓ Help", "💾 Session"], bar
+
+    def test_the_session_group_holds_both_ways_work_is_kept(self):
+        """UX-38 merged the two into one 💾 Session popover — the portable JSON
+        and the on-device cache — keeping the tour's historical trigger key."""
+        from scanpath_studio.menu import SAVE_RESTORE_KEY
+
+        at = _make_apptest()
+        at.run(timeout=30)
+        labels = {p.proto.popover.label for p in at.get("popover")}
+        assert "💾 Save & restore" not in labels
+        assert "🗄️ Recovery cache" not in labels
+        # Both panels still render, one popover down: their headings are inside.
+        body = " ".join(m.value for m in at.markdown)
+        assert "**💾 Save & restore**" in body
+        assert "**🗄️ Recovery cache**" in body
+        # The spotlight tour and annotations.py both target this key.
+        assert SAVE_RESTORE_KEY == "tour_grp_save_restore"
 
     def test_configure_and_preprocessing_left_the_menu_bar(self):
         """DATA-26: the two setup groups are the Data page's, not the bar's.

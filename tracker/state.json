@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 311,
+  "revision": 312,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -842,6 +842,13 @@
       "priority": "Normal",
       "implementationBrief": "",
       "status": "Review",
+      "archived": false,
+      "updated": "2026-08-13"
+    },
+    "BUG-26": {
+      "status": "Review",
+      "priority": "Normal",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-13"
     }

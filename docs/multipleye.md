@@ -129,13 +129,17 @@ the loaded frames so the app's existing panels render them:
   (Hebrew/Arabic) will additionally need text-direction handling. The stimulus
   page-image background is the reliable fallback for scripts the renderer can't
   lay out.
-- **Corpus Analysis aggregates a stimulus' word ids across its screens.** Word
-  ids are unique within a *screen*, so the per-text views pool page 1's word 0
-  with page 2's word 0 — and now with each question screen's first word too. Use
-  the Scanpath view (one screen at a time) for anything that depends on which
-  word a number belongs to. Making word ids stimulus-global would diverge from
-  the corpus's published `word_idx`, so it is deliberately left as its own piece
-  of work.
+- **Corpus Analysis describes one screen at a time.** Word ids are unique within
+  a *screen*, so the per-text views take a **Screen** picker beside the Text
+  picker and every figure — per-reader profiles, the word × reader heatmap, the
+  cohort band, word difficulty on the stimulus, the feature scatter and the
+  skip/regression rates — describes the screen you picked. There is no
+  "all screens" option on purpose: a profile across screens would be keyed on a
+  `word_id` that means a different word per page, and the stimulus view draws
+  word *boxes*, which are measured against their own screen's origin, so two
+  screens' geometry would be drawn on top of each other. The Groups tab's word
+  profile shows the first screen and says so. (Making word ids stimulus-global
+  instead would diverge from the corpus's published `word_idx`.)
 - **Don't write into the dataset tree** — treat the corpus as read-only.
 
 ## Uploading via the browser

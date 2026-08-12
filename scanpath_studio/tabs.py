@@ -37,6 +37,7 @@ from scanpath_studio.aggregation import (
     reader_vs_cohort_values,
     saccade_vs_duration,
     text_read_counts,
+    text_screen_options,
     trial_summary_table,
     two_group_values,
     two_group_word_profiles,
@@ -130,6 +131,7 @@ from scanpath_studio.illustration import illustration_reasons, resolve_label_rea
 from scanpath_studio.multipart import (
     SCREEN_ID,
     extract_part,
+    has_screen_identity,
     part_catalog,
     screen_canvas_size,
 )
@@ -4789,15 +4791,32 @@ def _render_comparison_figure(
 
 
 @st.cache_data(show_spinner=False)
-def _c_per_reader_word(_words, text_col, text_id, mkey, agg, normalize, fkey):
+def _c_per_reader_word(
+    _words, text_col, text_id, mkey, agg, normalize, fkey, screen=None
+):
     return per_reader_word_measure(
-        _words, text_col, text_id, MEASURES[mkey], agg=agg, normalize=normalize
+        _words,
+        text_col,
+        text_id,
+        MEASURES[mkey],
+        agg=agg,
+        normalize=normalize,
+        screen_id=screen,
     )
 
 
 @st.cache_data(show_spinner=False)
 def _c_cohort_profile(
-    _words, text_col, text_id, mkey, agg, spread, normalize, min_readers, fkey
+    _words,
+    text_col,
+    text_id,
+    mkey,
+    agg,
+    spread,
+    normalize,
+    min_readers,
+    fkey,
+    screen=None,
 ):
     return cohort_word_profile(
         _words,
@@ -4808,16 +4827,21 @@ def _c_cohort_profile(
         spread=spread,
         normalize=normalize,
         min_readers=min_readers,
+        screen_id=screen,
     )
 
 
 @st.cache_data(show_spinner=False)
-def _c_word_box_aggregate(_words, text_col, text_id, mkey, agg, fkey):
-    return word_box_aggregate(_words, text_col, text_id, MEASURES[mkey], agg=agg)
+def _c_word_box_aggregate(_words, text_col, text_id, mkey, agg, fkey, screen=None):
+    return word_box_aggregate(
+        _words, text_col, text_id, MEASURES[mkey], agg=agg, screen_id=screen
+    )
 
 
 @st.cache_data(show_spinner=False)
-def _c_word_feature(_words, text_col, text_id, mkey, feature_col, agg, normalize, fkey):
+def _c_word_feature(
+    _words, text_col, text_id, mkey, feature_col, agg, normalize, fkey, screen=None
+):
     return word_measure_vs_feature(
         _words,
         text_col,
@@ -4826,12 +4850,15 @@ def _c_word_feature(_words, text_col, text_id, mkey, feature_col, agg, normalize
         feature_col,
         agg=agg,
         normalize=normalize,
+        screen_id=screen,
     )
 
 
 @st.cache_data(show_spinner=False)
-def _c_word_rate(_words, text_col, text_id, min_readers, fkey):
-    return word_rate_profile(_words, text_col, text_id, min_readers=min_readers)
+def _c_word_rate(_words, text_col, text_id, min_readers, fkey, screen=None):
+    return word_rate_profile(
+        _words, text_col, text_id, min_readers=min_readers, screen_id=screen
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -5317,6 +5344,30 @@ def _text_picker(words: pd.DataFrame, *, key: str, host=None, label: str = "Text
     return text_col, host.selectbox(label, vals, key=key)
 
 
+def _screen_picker(words, text_col, text_id, *, key: str, host=None):
+    """Pick which screen of a multipart text the per-text views describe (BUG-26).
+
+    Returns the chosen ``screen_id``, or ``None`` when the text is a single
+    screen — which is every dataset without DATA-21 screen identity, where no
+    control renders and the aggregation helpers ignore the argument.
+
+    It has to be a *pick*, not a pooled "all screens": a ``word_id`` is unique
+    only within a screen, and the stimulus view draws word **boxes**, which are
+    measured against their own screen's origin. Pooling would stack two canvases.
+    """
+    options = text_screen_options(words, text_col, text_id)
+    if len(options) < 2:
+        return options[0] if options else None
+    host = host or st
+    return host.selectbox(
+        "Screen",
+        options,
+        key=key,
+        help="This text spans several screens. Word ids restart on each one, so "
+        "these views describe one screen at a time.",
+    )
+
+
 def _participant_picker(words, fixations, *, key, host=None, label="Reader"):
     host = host or st
     for frame in (fixations, words):
@@ -5357,11 +5408,23 @@ def render_per_text_tab(
         st.info("Per-text views need a word-level table (word ids + reading measures).")
         return
     fkey = frame_fingerprint(words_filtered)
-    top = st.columns([3, 2])
+    # BUG-26: a multipart corpus needs a third control — word ids restart on each
+    # screen. The *frame* decides the layout (known before any picker runs); the
+    # picker itself only renders once the chosen text turns out to span more than
+    # one screen.
+    multipart = has_screen_identity(words_filtered)
+    top = st.columns([3, 2, 2] if multipart else [3, 2])
     text_col, text_id = _text_picker(words_filtered, key="ptext_text", host=top[0])
     if text_col is None or text_id is None:
         st.info("No text/passage column found.")
         return
+    screen_id = (
+        _screen_picker(
+            words_filtered, text_col, text_id, key="ptext_screen", host=top[2]
+        )
+        if multipart
+        else None
+    )
     view = top[1].selectbox(
         "View",
         [
@@ -5382,7 +5445,9 @@ def render_per_text_tab(
 
     if view == "Skip / regression rate":  # AN-6 — no measure picker
         min_readers = _min_readers_input(st, key="ptext6_min")
-        rate = _c_word_rate(words_filtered, text_col, text_id, min_readers, fkey)
+        rate = _c_word_rate(
+            words_filtered, text_col, text_id, min_readers, fkey, screen_id
+        )
         rate = _apply_min_readers(st, rate, min_readers, key="ptext6_min_note")
         _chart(make_word_rate_figure(rate, **fw))
         _download_tidy(st, rate, name=f"word_rates_{text_id}.csv", key="dl_ptext6")
@@ -5416,7 +5481,14 @@ def render_per_text_tab(
     if view == "Per-reader profiles":  # AN-1
         overlay = c[2].checkbox("Cohort mean", value=True, key="ptext1_overlay")
         per = _c_per_reader_word(
-            words_filtered, text_col, text_id, measure.key, agg, normalize, fkey
+            words_filtered,
+            text_col,
+            text_id,
+            measure.key,
+            agg,
+            normalize,
+            fkey,
+            screen_id,
         )
         cohort = None
         if overlay:
@@ -5430,6 +5502,7 @@ def render_per_text_tab(
                 normalize,
                 1,
                 fkey,
+                screen_id,
             )
             cohort = coh[["word_id", "value"]] if not coh.empty else None
         _chart(
@@ -5442,7 +5515,14 @@ def render_per_text_tab(
         )
     elif view == "Word × reader heatmap":  # AN-2
         per = _c_per_reader_word(
-            words_filtered, text_col, text_id, measure.key, agg, normalize, fkey
+            words_filtered,
+            text_col,
+            text_id,
+            measure.key,
+            agg,
+            normalize,
+            fkey,
+            screen_id,
         )
         _chart(
             make_word_matrix_heatmap(
@@ -5477,6 +5557,7 @@ def render_per_text_tab(
             normalize,
             min_readers,
             fkey,
+            screen_id,
         )
         prof = _apply_min_readers(st, prof, min_readers, key="ptext3_min_note")
         _chart(
@@ -5496,7 +5577,7 @@ def render_per_text_tab(
         )
     elif view == "Word difficulty on stimulus":  # AN-4 (+ AN-28: reads viz_settings)
         agg_words = _c_word_box_aggregate(
-            words_filtered, text_col, text_id, measure.key, agg, fkey
+            words_filtered, text_col, text_id, measure.key, agg, fkey, screen_id
         )
         if agg_words.empty:
             st.info("This text has no word geometry to tint.")
@@ -5568,6 +5649,7 @@ def render_per_text_tab(
             agg,
             normalize,
             fkey,
+            screen_id,
         )
         _chart(
             make_feature_scatter_figure(
@@ -5961,6 +6043,12 @@ def render_per_group_tab(
         )
         spread = c[3].selectbox("Spread", _SPREAD_OPTIONS, key="pgrp15_spread")
         min_readers = _min_readers_input(st, key="pgrp15_min")
+        # BUG-26: same single-screen scoping as the Per text views. There is no
+        # free column on this row for a picker, so the helper's default (the
+        # first screen in reading order) stands and the caption names it — a
+        # profile pooled across screens would be keyed on a `word_id` that means
+        # a different word per screen.
+        grp_screens = text_screen_options(words_g, text_col, text_id)
         prof = _c_cohort_profile(
             words_g,
             text_col,
@@ -5971,7 +6059,14 @@ def render_per_group_tab(
             False,
             min_readers,
             frame_fingerprint(words_g),
+            grp_screens[0] if grp_screens else None,
         )
+        if len(grp_screens) > 1:
+            st.caption(
+                f"This text spans {len(grp_screens)} screens; showing "
+                f"**{grp_screens[0]}**. Word ids restart on each screen, so a "
+                "profile across them would not describe one word axis."
+            )
         prof = _apply_min_readers(st, prof, min_readers, key="pgrp15_note")
         _chart(
             make_word_profile_figure(

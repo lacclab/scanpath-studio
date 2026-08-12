@@ -23,7 +23,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-from .multipart import grouping_columns
+from .multipart import SCREEN_ID, SCREEN_INDEX, grouping_columns, has_screen_identity
 
 
 def metric_by_trial_index(
@@ -124,7 +124,7 @@ def grouped_metric_values(
 
 
 def aggregate_word_measures_by_text(
-    words: pd.DataFrame, text_col: str, text_id, *, agg: str = "mean"
+    words: pd.DataFrame, text_col: str, text_id, *, agg: str = "mean", screen_id=None
 ) -> pd.DataFrame:
     """One-row-per-word frame for a text: word boxes + reading measures averaged
     across every participant who read it.
@@ -137,7 +137,9 @@ def aggregate_word_measures_by_text(
     """
     if words.empty or "word_id" not in words.columns:
         return pd.DataFrame()
-    sub = words[words[text_col] == text_id] if text_col in words.columns else words
+    # One screen only, like every other per-text helper (BUG-26) — grouping on
+    # `word_id` across screens pools two coordinate spaces.
+    sub = _text_subset(words, text_col, text_id, screen_id)
     if sub.empty:
         return pd.DataFrame()
     measure_cols = [
@@ -451,12 +453,80 @@ def add_normalized_column(
     return out
 
 
-def _text_subset(frame: pd.DataFrame, text_col: str, text_id) -> pd.DataFrame:
+#: Sentinel for "every screen" — only :func:`text_screen_options` passes it, to
+#: enumerate the screens *before* one has been picked. It is deliberately not
+#: part of the public helpers' contract: pooling across screens is the defect
+#: BUG-26 fixed, so there is no user-reachable way back to it.
+_ALL_SCREENS = object()
+
+
+def text_screen_options(frame: pd.DataFrame, text_col: str, text_id) -> List[str]:
+    """The screens one text is spread over, in reading order (BUG-26).
+
+    Empty for a single-screen dataset — which is every corpus without DATA-21
+    screen identity, so callers can treat "no options" as "there is nothing to
+    pick". Ordered by ``screen_index`` when present (MultiplEYE ranks it by first
+    fixation onset, i.e. the order the reader actually went through the pages),
+    else by first appearance.
+    """
+    if frame is None or frame.empty or not has_screen_identity(frame):
+        return []
+    sub = _text_subset(frame, text_col, text_id, screen_id=_ALL_SCREENS)
+    if sub.empty:
+        return []
+    if SCREEN_INDEX in sub.columns:
+        order = (
+            sub[[SCREEN_ID, SCREEN_INDEX]]
+            .assign(**{SCREEN_INDEX: pd.to_numeric(sub[SCREEN_INDEX], errors="coerce")})
+            .groupby(SCREEN_ID, sort=False)[SCREEN_INDEX]
+            .min()
+            .sort_values(kind="stable")
+        )
+        return [str(value) for value in order.index]
+    return [str(value) for value in sub[SCREEN_ID].astype(str).unique()]
+
+
+def _text_subset(
+    frame: pd.DataFrame, text_col: str, text_id, screen_id=None
+) -> pd.DataFrame:
+    """One text's rows, scoped to **one screen** when the frame has screens.
+
+    BUG-26: ``word_id`` is unique only *within* a screen (which is why
+    :func:`multipart.grouping_columns` appends ``screen_id``), so a per-text
+    aggregation keyed on ``(text_id, word_id)`` pools page 1's word 0 with page
+    2's — and, on MultiplEYE since DATA-24, with each comprehension-question
+    screen's first word as well.
+
+    ``screen_id=None`` therefore does **not** mean "all screens": on a frame with
+    screen identity it scopes to the *first* screen in reading order, so a caller
+    that hasn't been updated gets a coherent single-screen answer rather than a
+    silently pooled one. Frames without screen identity ignore the argument
+    entirely, which is every dataset that is not multipart.
+    """
     if frame is None or frame.empty:
         return pd.DataFrame()
-    if text_col and text_col in frame.columns:
-        return frame[frame[text_col].astype(str) == str(text_id)]
-    return frame
+    sub = frame
+    if text_col and text_col in sub.columns:
+        sub = sub[sub[text_col].astype(str) == str(text_id)]
+    if screen_id is _ALL_SCREENS or not has_screen_identity(sub) or sub.empty:
+        return sub
+    screens = sub[SCREEN_ID].astype(str)
+    if screen_id is None:
+        wanted = _first_screen(sub, screens)
+        if wanted is None:
+            return sub
+    else:
+        wanted = str(screen_id)
+    return sub[screens == wanted]
+
+
+def _first_screen(sub: pd.DataFrame, screens: pd.Series) -> Optional[str]:
+    """The lowest-``screen_index`` screen id in ``sub``, else the first seen."""
+    if SCREEN_INDEX in sub.columns:
+        index = pd.to_numeric(sub[SCREEN_INDEX], errors="coerce")
+        if index.notna().any():
+            return str(screens[index.idxmin()])
+    return str(screens.iloc[0]) if len(screens) else None
 
 
 def _measure_series(frame: pd.DataFrame, measure: Measure) -> pd.Series:
@@ -480,14 +550,17 @@ def per_reader_word_measure(
     *,
     agg: str = "mean",
     normalize: bool = False,
+    screen_id=None,
 ) -> pd.DataFrame:
     """Tidy ``[participant_id, word_id, value, word_text]`` for one text (AN-1/2).
 
     One row per (reader, word). ``agg`` collapses any repeated readings; values
-    are optionally z-scored within reader first (AN-25).
+    are optionally z-scored within reader first (AN-25). ``screen_id`` picks the
+    screen on a multipart text — see :func:`_text_subset` for why there is no
+    "all screens".
     """
     cols = {"participant_id", "word_id", measure.column}
-    sub = _text_subset(words, text_col, text_id)
+    sub = _text_subset(words, text_col, text_id, screen_id)
     if sub.empty or not cols <= set(sub.columns):
         return pd.DataFrame(columns=["participant_id", "word_id", "value", "word_text"])
     df = sub[["participant_id", "word_id"]].copy()
@@ -517,6 +590,7 @@ def cohort_word_profile(
     spread: str = "SD",
     normalize: bool = False,
     min_readers: int = 1,
+    screen_id=None,
 ) -> pd.DataFrame:
     """Per-word cohort centre + spread band across readers (AN-3 / AN-15).
 
@@ -526,7 +600,13 @@ def cohort_word_profile(
     min-readers guard (AN-26).
     """
     per = per_reader_word_measure(
-        words, text_col, text_id, measure, agg=agg, normalize=normalize
+        words,
+        text_col,
+        text_id,
+        measure,
+        agg=agg,
+        normalize=normalize,
+        screen_id=screen_id,
     )
     cols = ["word_id", "value", "lo", "hi", "n", "enough", "word_text"]
     if per.empty:
@@ -564,15 +644,18 @@ def word_box_aggregate(
     measure: Measure,
     *,
     agg: str = "mean",
+    screen_id=None,
 ) -> pd.DataFrame:
     """One-row-per-word frame: word-box geometry + a ``value`` column = the
     ``measure`` aggregated across readers (AN-4 stimulus tint).
 
     Carries the canonical geometry (x/y/width/height/text/line_idx) + a synthetic
     participant/trial so it feeds straight into ``plots.make_scanpath_figure``'s
-    words-only path.
+    words-only path. One screen only (BUG-26): the boxes are measured against
+    their own screen's origin, so two screens' geometry would draw on top of each
+    other however the values were keyed.
     """
-    sub = _text_subset(words, text_col, text_id)
+    sub = _text_subset(words, text_col, text_id, screen_id)
     if sub.empty or "word_id" not in sub.columns or measure.column not in sub.columns:
         return pd.DataFrame()
     geom_cols = [
@@ -600,14 +683,21 @@ def word_measure_vs_feature(
     *,
     agg: str = "mean",
     normalize: bool = False,
+    screen_id=None,
 ) -> pd.DataFrame:
     """Per-word ``[word_id, value, feature, word_text]`` for a measure vs a
     bundled linguistic feature (AN-5). ``value`` is the cross-reader aggregate;
     ``feature`` is the per-word feature (constant across readers)."""
     per = per_reader_word_measure(
-        words, text_col, text_id, measure, agg=agg, normalize=normalize
+        words,
+        text_col,
+        text_id,
+        measure,
+        agg=agg,
+        normalize=normalize,
+        screen_id=screen_id,
     )
-    sub = _text_subset(words, text_col, text_id)
+    sub = _text_subset(words, text_col, text_id, screen_id)
     if per.empty or feature_col not in sub.columns:
         return pd.DataFrame(columns=["word_id", "value", "feature", "word_text"])
     center_agg = {"value": ("value", lambda s: aggregate_value(s.to_numpy(), agg))}
@@ -621,13 +711,18 @@ def word_measure_vs_feature(
 
 
 def word_rate_profile(
-    words: pd.DataFrame, text_col: str, text_id, *, min_readers: int = 1
+    words: pd.DataFrame,
+    text_col: str,
+    text_id,
+    *,
+    min_readers: int = 1,
+    screen_id=None,
 ) -> pd.DataFrame:
     """Per-word skip / regression-in rates across readers (AN-6).
 
     Returns ``[word_id, skip_rate, regression_in_rate, n, enough, word_text]``.
     """
-    sub = _text_subset(words, text_col, text_id)
+    sub = _text_subset(words, text_col, text_id, screen_id)
     cols = ["word_id", "skip_rate", "regression_in_rate", "n", "enough", "word_text"]
     if sub.empty or "word_id" not in sub.columns:
         return pd.DataFrame(columns=cols)

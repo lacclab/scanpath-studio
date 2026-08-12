@@ -1900,6 +1900,10 @@ class TestCorpusAnalysisTab:
         # when 'Compare a second group' is on (see test_each_analysis_view_renders).
         for view_key in ("ptext_view", "prdr_view", "pgrp_view"):
             assert view_key in keys, f"{view_key} view selector not found"
+        # BUG-26: the Screen picker is offered only by a multipart corpus. The
+        # demo has no `screen_id`, so it must not appear — and its absence is
+        # what pins that every single-screen dataset is untouched by the fix.
+        assert "ptext_screen" not in keys
 
     @pytest.mark.parametrize(
         ("view_key", "view"),

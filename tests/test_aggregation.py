@@ -50,6 +50,7 @@ from scanpath_studio.aggregation import (
     saccade_vs_duration,
     spread_bounds,
     text_read_counts,
+    text_screen_options,
     trial_summary_table,
     two_group_values,
     two_group_word_profiles,
@@ -1290,3 +1291,153 @@ class TestGroupComparison:
         res = group_effect_size(np.array([1.0, 1, 1]), np.array([2.0, 2, 2]))
         assert res["mean_diff"] == -1.0
         assert np.isnan(res["cohen_d"])
+
+
+# -----------------------------------------------------------------------------
+# BUG-26 — per-text views are scoped to ONE screen
+# -----------------------------------------------------------------------------
+
+
+def _multipart_words() -> pd.DataFrame:
+    """One text spread over two screens, word ids restarting on each.
+
+    This is the MultiplEYE shape after DATA-24: ``text_id`` is the stimulus, a
+    trial is the whole reading, and each page (and each comprehension-question
+    screen) is a ``screen_id`` with its own ``word_id`` space **and its own
+    coordinate space** — note that word 0 sits at x=0 on both screens.
+
+    The two screens carry deliberately different values so a pooled aggregate is
+    arithmetically distinguishable from either screen's own.
+    """
+    return pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1", "p1", "p1", "p2", "p2", "p2", "p2"],
+            "trial_id": ["t1", "t1", "t1", "t1", "t2", "t2", "t2", "t2"],
+            "text_id": ["A"] * 8,
+            "screen_id": [
+                "page_1",
+                "page_1",
+                "question_9",
+                "question_9",
+                "page_1",
+                "page_1",
+                "question_9",
+                "question_9",
+            ],
+            # Deliberately NOT in id order: the question screen was read second
+            # by p1 and the ordering has to come from screen_index, not the name.
+            "screen_index": [1, 1, 2, 2, 1, 1, 2, 2],
+            "word_id": [0, 1, 0, 1, 0, 1, 0, 1],
+            "x": [0.0, 20.0, 0.0, 20.0, 0.0, 20.0, 0.0, 20.0],
+            "y": [0.0] * 8,
+            "width": [10.0] * 8,
+            "height": [10.0] * 8,
+            "text": ["the", "cat", "Q1", "opt", "the", "cat", "Q1", "opt"],
+            "total_fixation_duration_ms": [
+                100.0,
+                200.0,
+                1000.0,
+                2000.0,
+                300.0,
+                400.0,
+                3000.0,
+                4000.0,
+            ],
+            "skip_flag": [False] * 8,
+            "regression_in_flag": [False] * 8,
+            "gpt2_surprisal": [2.0, 8.0, 1.0, 9.0, 2.0, 8.0, 1.0, 9.0],
+        }
+    )
+
+
+class TestScreenScoping:
+    """A ``word_id`` is unique only within a screen, so a per-text aggregate keyed
+    on ``(text_id, word_id)`` pooled page 1's word 0 with the question screen's.
+    """
+
+    MEASURE = MEASURES["tfd"]
+
+    def test_screens_are_listed_in_reading_order(self):
+        assert text_screen_options(_multipart_words(), "text_id", "A") == [
+            "page_1",
+            "question_9",
+        ]
+
+    def test_a_single_screen_dataset_offers_nothing_to_pick(self):
+        """Every non-multipart corpus: no `screen_id` column, no options, and the
+        argument is inert — which is what keeps their figures byte-identical."""
+        assert text_screen_options(_tidy_words(), "text_id", "A") == []
+
+    def test_the_default_is_the_first_screen_not_every_screen(self):
+        """The load-bearing half of the fix: a caller that never learned about
+        screens gets one coherent screen, not a silently pooled average."""
+        out = per_reader_word_measure(
+            _multipart_words(), "text_id", "A", self.MEASURE, agg="mean"
+        )
+        p1 = out[out["participant_id"] == "p1"].set_index("word_id")["value"]
+        # page_1 only: 100 / 200. Pooled with the question screen it would be
+        # (100+1000)/2 = 550 and (200+2000)/2 = 1100.
+        assert p1.loc[0] == pytest.approx(100.0)
+        assert p1.loc[1] == pytest.approx(200.0)
+
+    def test_picking_the_other_screen_changes_the_answer(self):
+        out = per_reader_word_measure(
+            _multipart_words(),
+            "text_id",
+            "A",
+            self.MEASURE,
+            agg="mean",
+            screen_id="question_9",
+        )
+        p1 = out[out["participant_id"] == "p1"].set_index("word_id")["value"]
+        assert p1.loc[0] == pytest.approx(1000.0)
+        assert p1.loc[1] == pytest.approx(2000.0)
+
+    def test_one_row_per_word_per_reader_not_one_per_screen(self):
+        """The visible symptom: two screens' worth of rows under one word axis."""
+        out = per_reader_word_measure(
+            _multipart_words(), "text_id", "A", self.MEASURE, agg="mean"
+        )
+        assert len(out) == 4  # 2 readers x 2 words on one screen
+        assert sorted(out["word_id"].unique()) == [0, 1]
+
+    def test_the_stimulus_tint_never_mixes_two_coordinate_spaces(self):
+        """`word_box_aggregate` feeds `make_scanpath_figure`'s words-only path, so
+        pooling would draw the question screen's boxes on top of page 1's — both
+        sets start at x=0 on their own screen."""
+        page = word_box_aggregate(_multipart_words(), "text_id", "A", self.MEASURE)
+        assert list(page["text"]) == ["the", "cat"]
+        question = word_box_aggregate(
+            _multipart_words(), "text_id", "A", self.MEASURE, screen_id="question_9"
+        )
+        assert list(question["text"]) == ["Q1", "opt"]
+        # One box per word on each screen — the defect showed up as one row per
+        # word with a value averaged across two unrelated boxes.
+        assert len(page) == len(question) == 2
+
+    def test_the_cohort_band_and_rates_scope_too(self):
+        words = _multipart_words()
+        prof = cohort_word_profile(words, "text_id", "A", self.MEASURE)
+        assert list(prof["word_text"]) == ["the", "cat"]
+        rate = word_rate_profile(words, "text_id", "A")
+        assert list(rate["word_text"]) == ["the", "cat"]
+
+    def test_measure_vs_feature_scopes_too(self):
+        out = word_measure_vs_feature(
+            _multipart_words(),
+            "text_id",
+            "A",
+            self.MEASURE,
+            "gpt2_surprisal",
+            screen_id="question_9",
+        )
+        assert sorted(out["feature"]) == [1.0, 9.0]
+
+    def test_a_single_screen_frame_is_unchanged_by_the_new_argument(self):
+        """Regression net for every non-multipart corpus."""
+        words = _tidy_words()
+        before = per_reader_word_measure(words, "text_id", "A", self.MEASURE)
+        after = per_reader_word_measure(
+            words, "text_id", "A", self.MEASURE, screen_id="anything"
+        )
+        pd.testing.assert_frame_equal(before, after)

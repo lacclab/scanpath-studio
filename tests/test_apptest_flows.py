@@ -365,6 +365,7 @@ class TestTrialFilterFlow:
         assert at.session_state["_trial_filters"] == {
             "participants": None,
             "metadata": {},
+            "ranges": {},  # UX-49's continuous filters, likewise unconstrained
             "metadata_keys": {},
             "favorites_only": False,
             "required_tags": [],

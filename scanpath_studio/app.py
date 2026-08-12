@@ -311,6 +311,17 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
                 (keys_by_col.get(col, f"filter_{col}"),),
             )
         )
+    # UX-49: a range narrows too, so it is one of the things that can empty the
+    # pool and has to be named in the diagnosis alongside the categorical ones.
+    for col, bounds in (trial_filters.get("ranges") or {}).items():
+        steps.append(
+            (
+                f"{col.replace('_', ' ').capitalize()} between "
+                f"{bounds[0]:g} and {bounds[1]:g}",
+                lambda w, f, c=col, b=bounds: filter_trials(w, f, ranges={c: b}),
+                (keys_by_col.get(col, f"filter_{col}_range"),),
+            )
+        )
 
     def _annotation_step(name: str, keys: tuple, **kwargs):
         def _apply(w, f):
@@ -3431,6 +3442,7 @@ def main() -> None:
         fixations_df,
         participants=trial_filters["participants"],
         metadata=trial_filters["metadata"],
+        ranges=trial_filters.get("ranges"),
     )
     # BUG-12: the raw-gaze samples table has to travel through the same
     # annotation filter as words + fixations, or a sample row for an unstarred

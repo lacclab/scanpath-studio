@@ -1055,6 +1055,7 @@ def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDatas
         source.fixations,
         participants=filters["participants"],
         metadata=filters["metadata"],
+        ranges=filters.get("ranges"),
     )
     if fixations is source.fixations and words is source.words:
         return source

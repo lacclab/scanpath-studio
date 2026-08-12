@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 from streamlit.errors import StreamlitAPIException
@@ -3488,6 +3489,53 @@ def _column_unique_strs(_df: pd.DataFrame, column: str, cache_key) -> List[str]:
 
 
 @st.cache_data(show_spinner=False)
+def _numeric_column_bounds(_df: pd.DataFrame, column: str, cache_key):
+    """``(lo, hi, distinct)`` over a column's **finite** values, or ``None``.
+
+    UX-49's slider needs finite bounds and at least two distinct values — a
+    one-option range control is the same family as the single-option
+    ``st.select_slider`` that throws ``RangeError`` in the browser. ``None`` here
+    means "render no slider", not "render a degenerate one". Infinities are
+    dropped along with NaN: one ``inf`` would otherwise pin the whole slider.
+
+    A full-column scan, hence the cache — keyed on the frame fingerprint by the
+    caller, exactly like ``_column_unique_strs``.
+    """
+    if column not in _df.columns:
+        return None
+    values = pd.to_numeric(_df[column], errors="coerce")
+    finite = values[np.isfinite(values)] if len(values) else values
+    if finite.empty:
+        return None
+    distinct = int(finite.nunique())
+    if distinct < 2:
+        return None
+    return float(finite.min()), float(finite.max()), distinct
+
+
+@st.cache_data(show_spinner=False)
+def _trials_missing_column(_df: pd.DataFrame, column: str, cache_key) -> int:
+    """How many trials carry no numeric value for ``column``.
+
+    Counted in *trials*, not rows, because that is the unit the filter keeps or
+    drops — and it is what makes the "kept anyway" caption honest.
+    """
+    if column not in _df.columns or "trial_id" not in _df.columns:
+        return 0
+    keys = (
+        ["participant_id", "trial_id"]
+        if "participant_id" in _df.columns
+        else ["trial_id"]
+    )
+    values = pd.to_numeric(_df[column], errors="coerce")
+    usable = pd.DataFrame({"_v": np.isfinite(values)})
+    for k in keys:
+        usable[k] = _df[k].astype(str).to_numpy()
+    per_trial = usable.groupby(keys, dropna=False)["_v"].any()
+    return int((~per_trial).sum())
+
+
+@st.cache_data(show_spinner=False)
 def _column_present_bools(_df: pd.DataFrame, column: str, cache_key) -> frozenset:
     if column not in _df.columns:
         return frozenset()
@@ -3576,6 +3624,10 @@ _DEFAULT_FILTER_FIELDS = [
 _EMPTY_TRIAL_FILTERS: Dict = {
     "participants": None,
     "metadata": {},
+    # UX-49: column → (lo, hi) for the numeric trial-level range filters. Kept
+    # apart from `metadata` because that one is membership (`.isin`) and
+    # enumerating a float column's values is exactly what doesn't work.
+    "ranges": {},
     "favorites_only": False,
     "required_tags": [],
     "excluded_tags": [],
@@ -3711,6 +3763,7 @@ def has_active_trial_filters(prefix: str = "") -> bool:
     return bool(
         f.get("participants")
         or f.get("metadata")
+        or f.get("ranges")
         or f.get("favorites_only")
         or f.get("required_tags")
         or f.get("excluded_tags")
@@ -3844,18 +3897,13 @@ def render_trial_chip_picker(
     value would mislead. The trial-level set is computed once (sampling the first
     trial) and cached per column-signature; a **Refresh** button recomputes it.
     Default seeded once (participant + text + common conditions + summary)."""
-    # Cache the trial-level field set per column-signature (stable across trials /
-    # filters within a dataset), recomputed on a dataset/column change or Refresh.
+    # Cached per column-signature (stable across trials / filters within a
+    # dataset), recomputed on a dataset/column change or Refresh. Shared with
+    # UX-49's range filters, which gate on the same answer.
     signature = (tuple(words.columns), tuple(fixations.columns))
-    cache = st.session_state.get("_trial_level_cache")
-    if not cache or cache.get("signature") != signature:
-        cache = {
-            "signature": signature,
-            "fields": _trial_level_columns(words, fixations),
-        }
-        st.session_state["_trial_level_cache"] = cache
-
-    available = _chip_field_options(words, fixations, cache["fields"])
+    available = _chip_field_options(
+        words, fixations, cached_trial_level_columns(words, fixations)
+    )
     if not available:
         return
 
@@ -3958,6 +4006,35 @@ def _seed_filter_widget(
         st.session_state[key] = list(default)
 
 
+def _seed_range_widget(col: str, lo: float, hi: float, *, prefix: str = "") -> None:
+    """Pre-seed a range slider from the persistent mirror, clamped to the column.
+
+    The range twin of :func:`_seed_filter_widget`, and it needs its own because
+    the stored value is a *pair*, not a list of options to intersect. A stored
+    range outside the current column's extent (a dataset switch, or a filter that
+    shrank the pool) is clamped rather than dropped, so the slider never renders
+    a value Streamlit would reject.
+    """
+    key = _range_filter_key(col, prefix)
+    if key in st.session_state:
+        stored = st.session_state[key]
+        if isinstance(stored, (tuple, list)) and len(stored) == 2:
+            st.session_state[key] = (
+                float(min(max(stored[0], lo), hi)),
+                float(min(max(stored[1], lo), hi)),
+            )
+            return
+    mirror = st.session_state.get(f"{prefix}_trial_filters_raw", {})
+    stored = mirror.get(key)
+    if isinstance(stored, (tuple, list)) and len(stored) == 2:
+        st.session_state[key] = (
+            float(min(max(stored[0], lo), hi)),
+            float(min(max(stored[1], lo), hi)),
+        )
+    else:
+        st.session_state[key] = (lo, hi)
+
+
 def _filter_fields_for(words: pd.DataFrame, fixations: pd.DataFrame) -> list:
     """Trial-level condition columns to offer as filters (wizard-chosen for an
     upload, else the built-in defaults present in the data)."""
@@ -3969,6 +4046,71 @@ def _filter_fields_for(words: pd.DataFrame, fixations: pd.DataFrame) -> list:
             if c in words.columns or c in fixations.columns
         ]
     return filter_fields
+
+
+def cached_trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
+    """``_trial_level_columns`` memoized per column-signature for this session.
+
+    Trial-level-ness is a property of the dataset's shape, so the signature is
+    the two frames' column tuples — stable across trials and filters. Shared by
+    the ✏️ Edit chips picker and UX-49's range filters, which need the *same*
+    answer: a column that varies inside a trial would filter rows rather than
+    trials, silently cutting a scanpath in half.
+    """
+    signature = (tuple(words.columns), tuple(fixations.columns))
+    cache = st.session_state.get("_trial_level_cache")
+    if not cache or cache.get("signature") != signature:
+        cache = {
+            "signature": signature,
+            "fields": _trial_level_columns(words, fixations),
+        }
+        st.session_state["_trial_level_cache"] = cache
+    return cache["fields"]
+
+
+def _range_filter_key(col: str, prefix: str = "") -> str:
+    """Session key of ``col``'s range slider (prefix-scoped, CMP-8 §5.2).
+
+    Under the ``filter_`` prefix on purpose: that is what gets it swept by
+    *✕ Clear all filters* and kept out of compare-mode B's namespace for free.
+    """
+    return f"{prefix}filter_{col}_range"
+
+
+def _numeric_filter_fields(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> Dict[str, tuple]:
+    """UX-49: which of the offered filter fields render as a *range*, and over what.
+
+    Maps column → ``(frame, lo, hi)``. The set of columns the panel offers does
+    **not** grow — this only auto-detects the *dtype* of what
+    ``_filter_fields_for`` already returns, so a numeric one renders as a
+    two-ended slider instead of a multiselect with one option per distinct float.
+    That also bounds the panel's size: it can show no more rows than it does now.
+
+    Two gates, both load-bearing. **Trial-level**: a column that varies inside a
+    trial (fixation duration, word surprisal) would filter *rows*, not trials —
+    that is PRE-2's render-layer territory, not this one. **Two distinct finite
+    values**: fewer, and there is no range to pick.
+    """
+    trial_level = cached_trial_level_columns(words, fixations)
+    fields: Dict[str, tuple] = {}
+    for col in _filter_fields_for(words, fixations):
+        if col not in trial_level:
+            continue
+        frame = words if col in words.columns else fixations
+        if col not in frame.columns or pd.api.types.is_bool_dtype(frame[col]):
+            continue
+        if not pd.api.types.is_numeric_dtype(frame[col]):
+            continue
+        bounds = _numeric_column_bounds(
+            frame, col, cache_key=(frame_fingerprint(frame), col)
+        )
+        if bounds is None:
+            continue
+        lo, hi, _distinct = bounds
+        fields[col] = (frame, lo, hi)
+    return fields
 
 
 def _compute_trial_filters(
@@ -3986,6 +4128,7 @@ def _compute_trial_filters(
     result: Dict = {
         "participants": None,
         "metadata": {},
+        "ranges": {},
         # column -> the session key holding it, so "clear just this filter"
         # (UX-7) can reset one widget. Not derivable from the column name: the
         # Narrow-by Text multiselect lands in `metadata` under the *text column*
@@ -4019,7 +4162,22 @@ def _compute_trial_filters(
             # UX-7's per-filter clear pops exactly this key, so it must be
             # emitted already-prefixed or clearing one of B's filters no-ops.
             result["metadata_keys"][text_field] = f"{prefix}filter_text_id"
+    # UX-49: numeric trial-level columns narrow by range, not by membership. A
+    # slider still at full extent is "no filter" and contributes nothing.
+    numeric_fields = _numeric_filter_fields(words, fixations)
+    for col, (_frame, lo, hi) in numeric_fields.items():
+        key = _range_filter_key(col, prefix)
+        chosen = st.session_state.get(key)
+        if not (isinstance(chosen, (tuple, list)) and len(chosen) == 2):
+            continue
+        sel_lo, sel_hi = float(chosen[0]), float(chosen[1])
+        if sel_lo <= lo and sel_hi >= hi:
+            continue
+        result["ranges"][col] = (sel_lo, sel_hi)
+        result["metadata_keys"][col] = key
     for col in _filter_fields_for(words, fixations):
+        if col in numeric_fields:
+            continue
         frame = words if col in words.columns else fixations
         if col not in frame.columns:
             continue
@@ -4148,7 +4306,37 @@ def render_trial_filters(
 
     # Text + Participant narrowing now lives in the inline "Narrow by" row
     # (``render_narrow_by``); this popover keeps the condition + annotation filters.
+    #
+    # UX-49: a numeric trial-level column gets a two-ended range slider instead
+    # of a multiselect over its distinct floats. Rendered first, as extra rows
+    # among the categorical ones rather than in a section of their own.
+    numeric_fields = _numeric_filter_fields(words, fixations)
+    for col, (frame, lo, hi) in numeric_fields.items():
+        spec = _FILTER_FIELD_LABELS.get(col, {})
+        label = spec.get("label", col.replace("_", " ").strip().title())
+        _seed_range_widget(col, lo, hi, prefix=prefix)
+        host.slider(
+            label,
+            min_value=lo,
+            max_value=hi,
+            key=_range_filter_key(col, prefix),
+            on_change=_apply,
+            help="Keep only trials whose value falls in this range. Trials with "
+            "no value are kept — a range narrows, it doesn't exclude the "
+            "unmeasured.",
+        )
+        missing = _trials_missing_column(
+            frame, col, cache_key=(frame_fingerprint(frame), col)
+        )
+        if missing:
+            # Say it, or the kept-anyway trials look like the range isn't working.
+            host.caption(
+                f"{missing} trial{'s' if missing != 1 else ''} have no "
+                f"**{label}** value and are kept regardless."
+            )
     for col in _filter_fields_for(words, fixations):
+        if col in numeric_fields:
+            continue
         frame = words if col in words.columns else fixations
         if col not in frame.columns:
             continue
@@ -4225,12 +4413,20 @@ def render_trial_filters(
     # Mirror the rendered widget values so _seed_filter_widget can restore them on
     # a run where this panel isn't shown (the keys get cleared); then publish the
     # derived result for read_trial_filters (covers no-change runs).
-    keys = [
-        f"{prefix}filter_participants",
-        f"{prefix}filter_text_id",
-        f"{prefix}filter_req_tags",
-        f"{prefix}filter_exc_tags",
-    ] + [f"{prefix}filter_{c}" for c in _filter_fields_for(words, fixations)]
+    # UX-49: the range keys have to be listed explicitly. Without them a range
+    # silently resets on any run where this popover isn't rendered — a trip
+    # through Corpus Analysis is enough, since Streamlit drops the key and
+    # `_seed_range_widget` would then find nothing to restore.
+    keys = (
+        [
+            f"{prefix}filter_participants",
+            f"{prefix}filter_text_id",
+            f"{prefix}filter_req_tags",
+            f"{prefix}filter_exc_tags",
+        ]
+        + [f"{prefix}filter_{c}" for c in _filter_fields_for(words, fixations)]
+        + [_range_filter_key(c, prefix) for c in numeric_fields]
+    )
     st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state
     }

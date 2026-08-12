@@ -2273,13 +2273,22 @@ def filter_trials(
     fixations: pd.DataFrame,
     participants: Optional[list] = None,
     metadata: Optional[Dict[str, set]] = None,
+    ranges: Optional[Dict[str, Tuple[float, float]]] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Narrow words + fixations by participant and categorical trial metadata.
+    """Narrow words + fixations by participant and by trial metadata.
 
-    ``metadata`` maps a column name to the set of allowed values. Only columns
-    present on a frame are applied, so a condition like ``question_preview``
-    (Hunting/Gathering) narrows both words and fixations — the column is copied
-    onto both during normalization. A falsy selection means "no constraint".
+    ``metadata`` maps a column name to the set of allowed values (membership).
+    Only columns present on a frame are applied, so a condition like
+    ``question_preview`` (Hunting/Gathering) narrows both words and fixations —
+    the column is copied onto both during normalization. A falsy selection means
+    "no constraint".
+
+    ``ranges`` (UX-49) is the *continuous* counterpart: column → ``(lo, hi)``
+    inclusive bounds for a numeric trial-level column, where enumerating the
+    distinct values would be useless. **Rows with no value survive**: a range is
+    a narrowing control, so a reader missing a comprehension score is not what
+    the user asked to exclude — and pandas compares ``NaN`` as ``False``, so the
+    obvious bare ``.between()`` would silently drop every one of them.
     """
     w, f = words, fixations
     if participants:
@@ -2296,6 +2305,20 @@ def filter_trials(
             w = w[w[col].isin(allowed)]
         if col in f.columns:
             f = f[f[col].isin(allowed)]
+    for col, bounds in (ranges or {}).items():
+        if not bounds:
+            continue
+        lo, hi = bounds
+        for frame_name in ("w", "f"):
+            frame = w if frame_name == "w" else f
+            if col not in frame.columns:
+                continue
+            values = pd.to_numeric(frame[col], errors="coerce")
+            mask = values.between(lo, hi) | values.isna()
+            if frame_name == "w":
+                w = w[mask]
+            else:
+                f = f[mask]
     return w, f
 
 

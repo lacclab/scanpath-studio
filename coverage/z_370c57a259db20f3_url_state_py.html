@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 15:21 +0000
+            created at 2026-08-12 20:54 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -2015,24 +2015,32 @@
     <p class="pln"><span class="n"><a id="t1933" href="#t1933">1933</a></span><span class="t"><span class="com"># -----------------------------------------------------------------------------</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1934" href="#t1934">1934</a></span><span class="t"><span class="com"># Data loading</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1935" href="#t1935">1935</a></span><span class="t"><span class="com"># -----------------------------------------------------------------------------</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1936" href="#t1936">1936</a></span><span class="t"><span class="key">def</span> <span class="nam">_go_corpus</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1937" href="#t1937">1937</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;main_nav&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">_VIEW_CORPUS</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1938" href="#t1938">1938</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1939" href="#t1939">1939</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1940" href="#t1940">1940</a></span><span class="t"><span class="key">def</span> <span class="nam">_go_scanpath</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t1941" href="#t1941">1941</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;main_nav&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">_VIEW_SCANPATH</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1942" href="#t1942">1942</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1936" href="#t1936">1936</a></span><span class="t"><span class="com"># These *request* a view by writing `main_nav`; `menu.render_nav` reconciles the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1937" href="#t1937">1937</a></span><span class="t"><span class="com"># router to it on the next run. They are used as `on_click` callbacks, where</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1938" href="#t1938">1938</a></span><span class="t"><span class="com"># Streamlit forbids `st.switch_page` &#8212; hence the request-then-reconcile split</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1939" href="#t1939">1939</a></span><span class="t"><span class="com"># rather than navigating directly (`menu.switch_to_view` is the direct form, for</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1940" href="#t1940">1940</a></span><span class="t"><span class="com"># top-level script code).</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1941" href="#t1941">1941</a></span><span class="t"><span class="key">def</span> <span class="nam">_go_corpus</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1942" href="#t1942">1942</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;main_nav&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">_VIEW_CORPUS</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1943" href="#t1943">1943</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1944" href="#t1944">1944</a></span><span class="t"><span class="key">def</span> <span class="nam">_active_view</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1945" href="#t1945">1945</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The active top-level view, normalized to one of the two pages.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1946" href="#t1946">1946</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1947" href="#t1947">1947</a></span><span class="t"><span class="str">    ``main_nav`` may carry a legacy/stale value (e.g. &quot;Data Inspection&quot;, now a</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t1948" href="#t1948">1948</a></span><span class="t"><span class="str">    subtab); anything that isn&#x27;t Corpus resolves to the Scanpath page.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1949" href="#t1949">1949</a></span><span class="t">    <span class="key">return</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1950" href="#t1950">1950</a></span><span class="t">        <span class="nam">_VIEW_CORPUS</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1951" href="#t1951">1951</a></span><span class="t">        <span class="key">if</span> <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;main_nav&quot;</span><span class="op">)</span> <span class="op">==</span> <span class="nam">_VIEW_CORPUS</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1952" href="#t1952">1952</a></span><span class="t">        <span class="key">else</span> <span class="nam">_VIEW_SCANPATH</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t1953" href="#t1953">1953</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1944" href="#t1944">1944</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1945" href="#t1945">1945</a></span><span class="t"><span class="key">def</span> <span class="nam">_go_scanpath</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1946" href="#t1946">1946</a></span><span class="t">    <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">[</span><span class="str">&quot;main_nav&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="nam">_VIEW_SCANPATH</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1947" href="#t1947">1947</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1948" href="#t1948">1948</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1949" href="#t1949">1949</a></span><span class="t"><span class="key">def</span> <span class="nam">_active_view</span><span class="op">(</span><span class="op">)</span> <span class="op">-&gt;</span> <span class="nam">str</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1950" href="#t1950">1950</a></span><span class="t">    <span class="str">&quot;&quot;&quot;The active top-level view, normalized to one of the two pages.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1951" href="#t1951">1951</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1952" href="#t1952">1952</a></span><span class="t"><span class="str">    Reads the `main_nav` mirror `menu.render_nav` writes from the router&#x27;s</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1953" href="#t1953">1953</a></span><span class="t"><span class="str">    selection, so it stays the one answer every caller shares. It may also carry</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1954" href="#t1954">1954</a></span><span class="t"><span class="str">    a legacy/stale value (e.g. &quot;Data Inspection&quot;, now a subtab), or a view</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1955" href="#t1955">1955</a></span><span class="t"><span class="str">    *requested* for the next run; anything that isn&#x27;t Corpus resolves to the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1956" href="#t1956">1956</a></span><span class="t"><span class="str">    Scanpath page.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t1957" href="#t1957">1957</a></span><span class="t">    <span class="key">return</span> <span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1958" href="#t1958">1958</a></span><span class="t">        <span class="nam">_VIEW_CORPUS</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1959" href="#t1959">1959</a></span><span class="t">        <span class="key">if</span> <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;main_nav&quot;</span><span class="op">)</span> <span class="op">==</span> <span class="nam">_VIEW_CORPUS</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1960" href="#t1960">1960</a></span><span class="t">        <span class="key">else</span> <span class="nam">_VIEW_SCANPATH</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t1961" href="#t1961">1961</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -2042,7 +2050,7 @@
             <a class="nav" href="z_370c57a259db20f3_utils_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 15:21 +0000
+            created at 2026-08-12 20:54 +0000
         </p>
     </div>
 </footer>

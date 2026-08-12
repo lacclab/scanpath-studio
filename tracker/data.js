@@ -10605,6 +10605,44 @@ window.TRACKER = {
     "Which numeric columns get a slider — every trial-level numeric column auto-detected, or an opt-in picker like the ✏️ *Edit chips* one, so the panel isn't 40 sliders on a rich corpus?",
     "Does a trial whose value is missing (NaN) survive a range, or get dropped? And is the control a two-ended `st.slider` (needs finite bounds, awkward on a heavy-tailed column) or a min/max number-input pair?"
    ]
+  },
+  {
+   "id": "UX-50",
+   "prefix": "UX",
+   "num": 50,
+   "sub": "",
+   "title": "A layer section's own toggle reads \"Visible\", not its section name",
+   "status": "Review",
+   "note": "",
+   "date": "2026-08-12",
+   "added": "2026-08-12",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "body": [
+    "**Request.** Inside the plot rail's **👁️ Fixations** and **↗️ Saccades** sections, the",
+    "first control was a toggle labelled **Fixations** / **Saccades** — the section header",
+    "repeated one line below itself. Rename those inner toggles to **Visible**.",
+    "",
+    "**What was done.** The two toggles in",
+    "[`controls.sidebar_controls`](scanpath_studio/controls.py:2459) now read **Visible**;",
+    "the saccade-class filter's help text, which pointed at \"the **Saccades** toggle",
+    "above\", now names it as the ↗️ Saccades **Visible** toggle. Keys",
+    "(`global_show_fix` / `global_show_saccades`), help text, gating and every other surface",
+    "are untouched — this is a label change only.",
+    "",
+    "**What's left.** Your review: the two renamed toggles in the rail, and whether the",
+    "other sections should follow. They were deliberately left alone — 📄 Stimulus holds",
+    "**Text** / **Bounding boxes** / **Stimulus image** and 🔥 Overlays holds **Heatmap** /",
+    "**Raw gaze data**, so those toggles name distinct layers rather than repeating their",
+    "section, and \"Visible\" would make them ambiguous.",
+    "",
+    "**Background (technical).** The section shape is VIZ-31's `layer toggle → ⚙️ style →",
+    "🧹 filter`; only the two single-layer sections had a toggle that duplicated its",
+    "header. Nothing in the wire format moves: the labels are not keys, so share links,",
+    "saved configs, the CLI and the headless API are unaffected. Related: **VIZ-31**",
+    "(the grouped rail), **UX-48** (the Figure & canvas sub-grouping)."
+   ]
   }
  ]
 };

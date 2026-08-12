@@ -2457,7 +2457,7 @@ def sidebar_controls(
         animating, comparing, in_animation=False, in_compare=True
     )
     show_fix = fix_grp.toggle(
-        "**Fixations**",
+        "**Visible**",
         key="global_show_fix",
         persist_state="session",
         disabled=fix_off_disabled,
@@ -2726,7 +2726,7 @@ def sidebar_controls(
 
     # --- Saccades ---------------------------------------------------------
     show_saccades = sac_grp.toggle(
-        "**Saccades**", key="global_show_saccades", persist_state="session"
+        "**Visible**", key="global_show_saccades", persist_state="session"
     )
     if show_saccades:
         with sac_grp.popover("⚙️ Style", width="stretch"):
@@ -2881,7 +2881,7 @@ def sidebar_controls(
                     "Hidden classes are dropped from the figure entirely — line "
                     "**and** direction arrow. Clearing the list means *no "
                     "filter*, not an empty plot; to hide the whole layer use the "
-                    "**Saccades** toggle above.",
+                    "↗️ Saccades **Visible** toggle above.",
                     _cls_reason,
                 ),
             )

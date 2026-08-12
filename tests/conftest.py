@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from scanpath_studio import tabs
 from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 
 #: Absolute path to the app entry point driven by ``AppTest.from_file``.
@@ -12,6 +13,28 @@ from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 #: ``from_file`` (previously the process CWD), so ``"streamlit_app.py"`` would
 #: look for ``tests/streamlit_app.py``. Always pass this constant.
 APP_SCRIPT = str(Path(__file__).resolve().parents[1] / "streamlit_app.py")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _experimental_features_on():
+    """Run the suite with PRE-21's gated features **exposed**.
+
+    Vertical drift correction and the NLD similarity scoring are hidden by
+    default ahead of publication, but they still work and are still covered —
+    hiding them must not quietly delete their test coverage. So the whole suite
+    runs with ``SCANPATH_EXPERIMENTAL=1``, and the tests that assert the *hidden*
+    build (``tests/test_experimental_gate.py``) unset it themselves. Every gate
+    reads the env var at call time, which is what makes that work.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("SCANPATH_EXPERIMENTAL", "1")
+        yield
+
+
+@pytest.fixture
+def experimental_off(monkeypatch):
+    """Force PRE-21's gated features **hidden**, as a default build sees them."""
+    monkeypatch.delenv("SCANPATH_EXPERIMENTAL", raising=False)
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -141,12 +164,14 @@ def normalized_fixations_df():
 #: selects one. PERF-3 made the four expensive panels render only when their tab
 #: is open (`st.tabs(key=…)` + `tab.open`), so a test that wants Export or Data
 #: Inspection must open it first, exactly as a user does.
+#: Re-exported from ``tabs`` rather than repeated, since PRE-21 made the set
+#: conditional (📐 Line assignment is offered only while drift correction is).
 SUBTAB_KEY = "single_subtab"
-SUBTAB_ANNOTATIONS = "📝 Annotations"
-SUBTAB_COMPARISONS = "🔬 Comparisons"
-SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
-SUBTAB_EXPORT = "Export"
-SUBTAB_DATA_INSPECTION = "🔎 Data Inspection"
+SUBTAB_ANNOTATIONS = tabs.SUBTAB_ANNOTATIONS
+SUBTAB_COMPARISONS = tabs.SUBTAB_COMPARISONS
+SUBTAB_LINE_ASSIGNMENT = tabs.SUBTAB_LINE_ASSIGNMENT
+SUBTAB_EXPORT = tabs.SUBTAB_EXPORT
+SUBTAB_DATA_INSPECTION = tabs.SUBTAB_DATA_INSPECTION
 
 
 def open_subtab(at, label: str):

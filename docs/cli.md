@@ -122,7 +122,7 @@ the recorded setup.
 | show monitor-pixel axes | `--coordinate-grid` and optionally `--coordinate-grid-spacing PX` |
 | color fixations | `--color-by FIELD` |
 | classify saccades | `--saccade-color-by-type` |
-| correct vertical drift | `--drift-correction ALGORITHM` |
+| correct vertical drift (needs `SCANPATH_EXPERIMENTAL=1`) | `--drift-correction ALGORITHM` |
 | add the stimulus image | `--stimulus-image PATH` |
 | resolve per-trial images | `--image-root DIR --image-pattern '{text_id}.png'` |
 | use Gaussian duration mass | `--heatmap-style 'Duration mass' --duration-mass-sigma 1.0` |

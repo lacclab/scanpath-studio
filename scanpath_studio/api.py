@@ -53,10 +53,12 @@ from . import data as _data  # noqa: E402
 from .constants import (  # noqa: E402
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_ORDER_FONT_COLOR,
+    EXPERIMENTAL_ENV_VAR,
     FONT_FAMILY,
     PALETTES,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
+    drift_correction_enabled,
     palette_settings,
 )
 from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
@@ -716,7 +718,17 @@ def alignment_sensitivity(
     fixations: pd.DataFrame,
     methods: Tuple[str, ...] = ("attach", "slice", "consensus"),
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Word-measure sensitivity and correction QA across line algorithms."""
+    """Word-measure sensitivity and correction QA across line algorithms.
+
+    PRE-21: a derived surface of vertical drift correction, so it is gated with
+    it and raises rather than returning something that looks like a result.
+    """
+    if not drift_correction_enabled():
+        raise ValueError(
+            "alignment_sensitivity is not available in this build (PRE-21: "
+            "vertical drift correction is not fully integrated yet). Set "
+            f"{EXPERIMENTAL_ENV_VAR}=1 to enable it."
+        )
     from .preprocessing import measure_sensitivity
 
     return measure_sensitivity(words, fixations, methods)
@@ -1132,6 +1144,16 @@ def _apply_drift_correction(
     """
     if method is None or str(method).lower() == "off":
         return trial_fixations
+    # PRE-21: raise rather than ignore. A share link degrades silently because a
+    # human can see the figure and the rail; a script cannot, so quietly
+    # returning uncorrected fixations under a stated `drift_correction=` would
+    # be a wrong result with no signal. Name the env var so it is one step to fix.
+    if not drift_correction_enabled():
+        raise ValueError(
+            "drift_correction is not available in this build (PRE-21: vertical "
+            f"drift correction is not fully integrated yet). Set "
+            f"{EXPERIMENTAL_ENV_VAR}=1 to enable it, or pass drift_correction=None."
+        )
     from . import alignment as _alignment  # local: pulls in scipy
 
     name = str(method).lower()
@@ -1634,6 +1656,13 @@ def compare_scanpaths(
     trial_fix_a = _apply_fix_index_range(trial_fix_a, fix_index_range, pid_a, tid_a)
     trial_fix_b = _apply_fix_index_range(trial_fix_b, fix_index_range, pid_b, tid_b)
     if drift_correction:
+        # PRE-21: same contract as plot_scanpath — raise, don't silently skip.
+        if not drift_correction_enabled():
+            raise ValueError(
+                "drift_correction is not available in this build (PRE-21). Set "
+                f"{EXPERIMENTAL_ENV_VAR}=1 to enable it, or pass "
+                "drift_correction=None."
+            )
         from .alignment import correct
 
         trial_fix_a, _ = correct(trial_fix_a, trial_words_a, drift_correction)

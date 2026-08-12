@@ -55,6 +55,7 @@ from .constants import (
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     SYNTHETIC_CHOICE,
+    drift_correction_enabled,
 )
 from .controls import (
     _ALIGN_OPTIONS,
@@ -333,6 +334,16 @@ _SHARE_FLOAT_RANGE_PARAMS = {
     "heatmap_color_range": "global_heatmap_color_range",
 }
 
+#: PRE-21: URL params that belong to a gated feature. Each maps to the predicate
+#: that says whether it is exposed; while it isn't, the param is neither read nor
+#: emitted. Kept *in* the contract (`session_keys.py` still pins it, the parser
+#: still knows how to read it) — this is a visibility gate, not a wire-format
+#: change, so turning the flag on makes existing links work again.
+_GATED_URL_PARAMS = {
+    "align_algorithm": drift_correction_enabled,
+    "align_connectors": drift_correction_enabled,
+}
+
 _URL_PRESETS = {
     # Booleans (read side of _SHARE_TOGGLE_PARAMS) + the legacy aliases.
     "hide_fixation_numbers": ("global_show_order", lambda v: not _coerce_bool(v)),
@@ -511,6 +522,12 @@ def _apply_url_preset() -> Optional[str]:
 
     for url_key, (state_key, coerce) in _URL_PRESETS.items():
         if url_key not in qp:
+            continue
+        # PRE-21: a link naming a gated-off feature is ignored *silently* — no
+        # "unavailable in this build" warning. The app hasn't been released, so
+        # no such link exists in the world yet; this only has to not crash, and
+        # not leave a value the rail can't show but the Share writer would emit.
+        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
             continue
         raw = qp[url_key]
         try:
@@ -1135,15 +1152,19 @@ def _restore_plot_config(
         put("global_fixation_snap_to_word", bool(coloring["fixation_snap_to_word"]))
     # PRE-3 / ENG-23: vertical drift correction. Validated like the deep link —
     # an algorithm the build no longer ships must not reach the selectbox.
-    if "drift_correction" in coloring:
-        put_valid(
-            coloring["drift_correction"] in _ALIGN_OPTIONS,
-            "global_align_algorithm",
-            coloring["drift_correction"],
-            "drift correction",
-        )
-    if "drift_connectors" in coloring:
-        put("global_align_connectors", bool(coloring["drift_connectors"]))
+    # PRE-21: and skipped entirely while the feature is gated off, silently, for
+    # the same reason the deep link is (there is no such config in the world yet
+    # — this only has to not crash).
+    if drift_correction_enabled():
+        if "drift_correction" in coloring:
+            put_valid(
+                coloring["drift_correction"] in _ALIGN_OPTIONS,
+                "global_align_algorithm",
+                coloring["drift_correction"],
+                "drift correction",
+            )
+        if "drift_connectors" in coloring:
+            put("global_align_connectors", bool(coloring["drift_connectors"]))
     # VIZ-8: colour-by-reading-type mode + per-class palette + optional legend.
     mode = coloring.get("saccade_color_mode")
     if mode is not None:
@@ -1744,10 +1765,14 @@ def _build_share_query(
     # Visualization toggles — emit an explicit 0/1 so a layer the user turned
     # *off* is shared as off (the URL coercion reads "0" as False).
     for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
+        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
+            continue  # PRE-21
         if state_key in st.session_state:
             params[url_key] = "1" if st.session_state[state_key] else "0"
     # Strings / choices / colours / numbers — emit only when set.
     for url_key, state_key in {**_SHARE_VALUE_PARAMS, **_SHARE_INT_PARAMS}.items():
+        if url_key in _GATED_URL_PARAMS and not _GATED_URL_PARAMS[url_key]():
+            continue  # PRE-21: don't put a gated setting on a link.
         value = st.session_state.get(state_key)
         if value not in (None, ""):
             params[url_key] = (

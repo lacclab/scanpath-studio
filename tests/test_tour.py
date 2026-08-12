@@ -313,7 +313,9 @@ class TestFaq:
     """The in-app FAQ dialog (UX-15) and its links out to the docs site."""
 
     def test_button_opens_a_dialog_with_every_item(self):
-        from scanpath_studio.tour import _FAQ_ITEMS
+        # PRE-21: the set is conditional — a gated feature's entry is only
+        # offered when that feature is. `faq_items()` is the resolved list.
+        from scanpath_studio.tour import faq_items
 
         at = AppTest.from_function(_faq_app)
         at.run()
@@ -322,7 +324,7 @@ class TestFaq:
 
         at.button(key="faq_open").click().run()
         assert not at.error
-        assert len(at.expander) == len(_FAQ_ITEMS)
+        assert len(at.expander) == len(faq_items())
 
     def test_button_only_arms_the_dialog(self):
         """The click must set a flag, not open the dialog from its return value.
@@ -356,10 +358,10 @@ class TestFaq:
 
     def test_answers_stay_short(self):
         """Same rule as the tour steps: the long version lives in docs/faq.md."""
-        from scanpath_studio.tour import _FAQ_ITEMS
+        from scanpath_studio.tour import faq_items
 
-        assert _FAQ_ITEMS, "the FAQ must not be empty"
-        for question, answer in _FAQ_ITEMS:
+        assert faq_items(), "the FAQ must not be empty"
+        for question, answer in faq_items():
             assert question.endswith(("?", ".")), f"not a question: {question!r}"
             assert len(answer) <= 480, f"FAQ answer too long: {question!r}"
 

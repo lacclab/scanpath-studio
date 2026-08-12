@@ -29,7 +29,7 @@ scanpath_studio/
 ├─ wizard_shell.py   DATA-22: the wizard's six-step registry, keyed-expander accordion, progress chips and navigation (no column/frame knowledge)
 ├─ experimental_setup.py  pure display-geometry conversions + `SetupSnapshot` — one dataset's screen/typography with a per-group `Provenance` (measured/estimated/assumed/skipped)
 ├─ compare_source.py  CMP-8: the *second* dataset a comparison draws scanpath B from — a widget-free readiness gate + loader (`secondary_dataset_options` / `load_secondary_dataset` → `SecondaryDataset`)
-├─ tabs.py           tab implementations (Scanpath Visualization [Annotations + Stimulus & questions + Comparisons (same-text scanpaths grouped by a chosen column, scored by similarity) + Line assignment (drift-correction grid) + Export subtabs — all top-level, no nesting; Export folds in single-trial + bulk export], Corpus Analysis [Per text · Per reader · Groups (one cohort, or two behind a Compare toggle) subtabs — the question-oriented analysis sections, AN-1..28], Data Inspection)
+├─ tabs.py           tab implementations (Scanpath Visualization [Annotations + Stimulus & questions + Comparisons (same-text scanpaths grouped by a chosen column; NLD scoring + the Line assignment drift-correction grid are gated off by default — PRE-21) + Export subtabs — all top-level, no nesting; Export folds in single-trial + bulk export], Corpus Analysis [Per text · Per reader · Groups (one cohort, or two behind a Compare toggle) subtabs — the question-oriented analysis sections, AN-1..28], Data Inspection)
 ├─ aggregation.py    pure corpus-level aggregation helpers for the Corpus Analysis sections (measure registry + per-reader/cohort word profiles, word-vs-feature, rates, reader distributions/summary/landing, group masks + difference/effect-size; plus the legacy trial-index/fixation-index trends)
 ├─ controls.py       the Scanpath rail's plot controls (presets + palette, then collapsible 👁️ Fixations / ↗️ Saccades / 📄 Stimulus / 🔥 Overlays sections — each `toggle → ⚙️ style → 🧹 filter` — and merged 📐 Figure & canvas, itself grouped into 🖥️ Screen & geometry / 🔤 Text & fonts / 📊 Axes & grid / 🏷️ Title & labels) + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
@@ -40,7 +40,7 @@ scanpath_studio/
 ├─ authoring.py      deterministic text/word layout + stable hand-authored fixation reducers and versioned JSON round-trip
 ├─ authoring_component.py bidirectional click/add/drag/select/delete canvas for authored events
 ├─ illustration.py   detects geometry-changing/synthetic views that require an Illustration disclosure
-├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3)
+├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3). Not exposed by default — PRE-21 gates it (and similarity.py) behind SCANPATH_EXPERIMENTAL=1
 ├─ similarity.py     scanpath similarity metrics (NLD etc.) scoring the Comparisons subtab
 ├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (Comparisons placeholder data)
 ├─ plots.py          `FigureSettings` is the shared render contract used by UI, API, export, scanpath, animation, and comparison builders; also owns the Plotly builders, render helpers, and separable-layer export

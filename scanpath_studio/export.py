@@ -49,6 +49,7 @@ from .constants import (
     DEFAULT_PALETTE,
     SACCADE_CLASS_ORDER,
     UNIFORM_COLOR_FIELD,
+    drift_correction_enabled,
 )
 from .data import compute_word_metrics
 from .export_status import ExportStage, StatusCallback, emit_status
@@ -664,8 +665,19 @@ def _plot_config_dict(
             # & restore config (ENG-23). `color_by_line` records the EFFECTIVE
             # value: a corrected figure is force-coloured by line, like the
             # on-screen static path.
-            "drift_correction": str(settings.get("align_algorithm", "Off") or "Off"),
-            "drift_connectors": bool(settings.get("align_connectors", False)),
+            # PRE-21: omitted entirely while drift correction is gated off —
+            # recording `"drift_correction": "Off"` in every bundle would
+            # advertise a control the build doesn't have.
+            **(
+                {
+                    "drift_correction": str(
+                        settings.get("align_algorithm", "Off") or "Off"
+                    ),
+                    "drift_connectors": bool(settings.get("align_connectors", False)),
+                }
+                if drift_correction_enabled()
+                else {}
+            ),
             "color_by_line": bool(settings.get("color_by_line", False))
             or drift_applied,
         },

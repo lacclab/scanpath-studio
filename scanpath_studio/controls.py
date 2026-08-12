@@ -25,6 +25,7 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
+    drift_correction_enabled,
     HIGHLIGHTED_TEXT_COLOR,
     OUT_OF_TEXT_COLOR,
     PALETTES,
@@ -2117,8 +2118,18 @@ def _collect_viz_settings(
         # PRE-3: in-place drift correction. `tabs._drift_corrected` applies it once
         # above the render-mode split, so it reaches all three builders (VIZ-23);
         # only the connector layer is still static-figure-only.
-        align_algorithm=ss.get("global_align_algorithm") or "Off",
-        align_connectors=bool(ss.get("global_align_connectors"))
+        #
+        # PRE-21: resolved to "Off" while the feature is gated, rather than each
+        # consumer gating separately. That is what makes an old share link or
+        # saved config carrying `align_algorithm=warp` degrade *silently* — the
+        # setting is read, then ignored, and nothing downstream can disagree.
+        align_algorithm=(
+            (ss.get("global_align_algorithm") or "Off")
+            if drift_correction_enabled()
+            else "Off"
+        ),
+        align_connectors=drift_correction_enabled()
+        and bool(ss.get("global_align_connectors"))
         and (ss.get("global_align_algorithm") or "Off") != "Off",
         # EXP-5: empty when the toggle is off, regardless of stored pattern text,
         # so turning it off can never leave a stale pattern silently applied.
@@ -2538,28 +2549,32 @@ def sidebar_controls(
             static_disabled, static_reason = _mode_gate(
                 animating, comparing, **_static_only
             )
-            align_algo = st.selectbox(
-                "Drift correction",
-                options=_ALIGN_OPTIONS,
-                key="global_align_algorithm",
-                persist_state="session",
-                help="Snap fixations to their assigned text line using a "
-                "vertical drift-correction algorithm (Carr et al., 2021). "
-                "'Off' shows the raw fixations. See also the 📐 Line "
-                "assignment subtab to compare all algorithms side by side.",
-            )
-            if align_algo != "Off":
-                st.checkbox(
-                    "Show drift connectors",
-                    key="global_align_connectors",
+            # PRE-21: not fully integrated, so hidden unless SCANPATH_EXPERIMENTAL
+            # is set. The keys keep their defaults ("Off"), so nothing downstream
+            # needs a second gate to render correctly.
+            if drift_correction_enabled():
+                align_algo = st.selectbox(
+                    "Drift correction",
+                    options=_ALIGN_OPTIONS,
+                    key="global_align_algorithm",
                     persist_state="session",
-                    disabled=static_disabled,
-                    help=_gated_help(
-                        "Draw a faint line from each fixation's original "
-                        "position to its corrected (snapped) position.",
-                        static_reason,
-                    ),
+                    help="Snap fixations to their assigned text line using a "
+                    "vertical drift-correction algorithm (Carr et al., 2021). "
+                    "'Off' shows the raw fixations. See also the 📐 Line "
+                    "assignment subtab to compare all algorithms side by side.",
                 )
+                if align_algo != "Off":
+                    st.checkbox(
+                        "Show drift connectors",
+                        key="global_align_connectors",
+                        persist_state="session",
+                        disabled=static_disabled,
+                        help=_gated_help(
+                            "Draw a faint line from each fixation's original "
+                            "position to its corrected (snapped) position.",
+                            static_reason,
+                        ),
+                    )
             # UX-13: "Snap fixations above words" used to sit flush under the
             # Drift-correction selectbox, which made it read as a
             # drift-correction option. It is not — it's the fixation half of

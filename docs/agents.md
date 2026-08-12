@@ -231,7 +231,8 @@ fig = sps.plot_scanpath(
 - `fix_index_range` is the app's fixation-index window; `animate_scanpath`
   accepts it too, and replays only that stretch. A window that lands outside the
   trial raises rather than drawing an empty scanpath.
-- `drift_correction` snaps each fixation to its assigned text line and colours by
+- `drift_correction` needs `SCANPATH_EXPERIMENTAL=1` (PRE-21) and raises without
+  it. It snaps each fixation to its assigned text line and colours by
   line, exactly like the app's *Drift correction* control. Windowing is applied
   first, then the correction — the app's order.
 

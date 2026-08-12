@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import html
 import json
 import os
@@ -74,6 +75,8 @@ from scanpath_studio.constants import (
     SACCADE_DASH_OPTIONS,
     WORD_LABEL_COLOR,
     compare_palette_color,
+    drift_correction_enabled,
+    similarity_enabled,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -196,6 +199,18 @@ from scanpath_studio.utils import (
 # -----------------------------------------------------------------------------
 # Single Trial Tab
 # -----------------------------------------------------------------------------
+
+#: The Scanpath view's subtab labels. Named because the set is no longer fixed:
+#: PRE-21 offers 📐 Line assignment only while drift correction is exposed, so
+#: the tabs are built as a list and mapped back by label. `tests/conftest.py`
+#: imports these rather than repeating the strings.
+SUBTAB_ANNOTATIONS = "📝 Annotations"
+SUBTAB_STIMULUS = "Stimulus & questions"
+SUBTAB_COMPARISONS = "🔬 Comparisons"
+SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
+SUBTAB_EXPORT = "Export"
+SUBTAB_DATA_INSPECTION = "🔎 Data Inspection"
+SUBTAB_SHARE = "🔗 Share"
 
 
 def _safe_filename(text: str) -> str:
@@ -3753,8 +3768,8 @@ def render_single_trial_tab(
                     selected_trial,
                     selected_text,
                     animate=animate,
-                    # CMP-6: lets the selector order candidates by similarity to
-                    # the selected trial (NLD), fixation count, or reading time.
+                    # CMP-6: lets the selector order candidates by the main
+                    # picker's own sort keys (fixation count, reading time, …).
                     fixations_filtered=fixations_filtered,
                     trial_words=trial_words,
                     words_filtered=words_filtered,
@@ -4225,24 +4240,15 @@ def render_single_trial_tab(
     # conditions and summary stats (configurable via the ✏️ chip editor).
     # The reserved keyed slot remains the welcome-tour spotlight target.
     with subtabs_slot:
-        (
-            tab_annot,
-            tab_stim,
-            tab_compare,
-            tab_align,
-            tab_export,
-            tab_inspect,
-            tab_share,
-        ) = st.tabs(
-            [
-                "📝 Annotations",
-                "Stimulus & questions",
-                "🔬 Comparisons",
-                "📐 Line assignment",
-                "Export",
-                "🔎 Data Inspection",
-                "🔗 Share",
-            ],
+        # PRE-21: 📐 Line assignment is only offered while drift correction is
+        # exposed. Built as a list rather than a fixed tuple for exactly that
+        # reason — the tab count is now a function of the flag.
+        subtab_labels = [SUBTAB_ANNOTATIONS, SUBTAB_STIMULUS, SUBTAB_COMPARISONS]
+        if drift_correction_enabled():
+            subtab_labels.append(SUBTAB_LINE_ASSIGNMENT)
+        subtab_labels += [SUBTAB_EXPORT, SUBTAB_DATA_INSPECTION, SUBTAB_SHARE]
+        _subtabs = st.tabs(
+            subtab_labels,
             # PERF-3: `st.tabs` executes EVERY tab's body on every run — only the
             # display is client-side — so the four expensive panels below were
             # rebuilt on every rail tweak whether or not the user had ever opened
@@ -4258,6 +4264,14 @@ def render_single_trial_tab(
             key="single_subtab",
             on_change="rerun",
         )
+        by_label = dict(zip(subtab_labels, _subtabs))
+        tab_annot = by_label[SUBTAB_ANNOTATIONS]
+        tab_stim = by_label[SUBTAB_STIMULUS]
+        tab_compare = by_label[SUBTAB_COMPARISONS]
+        tab_align = by_label.get(SUBTAB_LINE_ASSIGNMENT)
+        tab_export = by_label[SUBTAB_EXPORT]
+        tab_inspect = by_label[SUBTAB_DATA_INSPECTION]
+        tab_share = by_label[SUBTAB_SHARE]
     with tab_annot:
         with st.container(key="tutorial_annotations"):
             render_trial_annotations(
@@ -4294,10 +4308,11 @@ def render_single_trial_tab(
                     scale_text_to_boxes=scale_text_to_boxes,
                 )
 
-    with tab_align:
+    # PRE-21: absent entirely while drift correction is gated off.
+    with tab_align if tab_align is not None else contextlib.nullcontext():
         # PERF-3: only the selected tab's body runs (see the st.tabs call).
         # Nothing to render when closed — a hidden panel is not on screen.
-        if tab_align.open:
+        if tab_align is not None and tab_align.open:
             # PRE-3: the drift-correction algorithm comparison grid, on the same
             # selected trial. Unnested from Comparisons to its own subtab (ENG-8).
             render_alignment_comparison_tab(
@@ -6529,9 +6544,16 @@ _GEN_COL_EXCLUDE = {
 # than this exist they're ranked by similarity to the selected scanpath and the
 # *closest* ones are shown — never an arbitrary label-sorted subset.
 _GEN_MAX_PANELS = 24
+# PRE-21: with similarity gated off there is no ranking, so the 24 cap loses its
+# reason to exist — it was there to keep a *ranked* grid readable, not to bound
+# rendering cost. Raised, but still finite and still stated in the caption, so
+# the grid never silently truncates.
+_GEN_MAX_PANELS_UNRANKED = 60
 # Score at most this many generations (bounds the NLD cost for a high-cardinality
 # column like participant_id on a big corpus). A safety budget above the grid cap
 # so the "most similar" ranking still sees more candidates than it displays.
+# Dead while similarity is gated off — nothing is scored — which is why
+# `_collect_generations` only applies it when it is on.
 _GEN_MAX_SCORE = 60
 
 
@@ -6672,7 +6694,10 @@ def _collect_generations(
     n_total = len(generations)
     # Cap the SCORING budget only (the grid/ranking cut to _GEN_MAX_PANELS by
     # similarity happens in the tab, after scoring). Sorted for determinism.
-    ordered = dict(sorted(generations.items())[:_GEN_MAX_SCORE])
+    # PRE-21: it is a *scoring* budget, so with similarity gated off it would
+    # only drop panels for no reason — the grid's own cap is what applies then.
+    budget = _GEN_MAX_SCORE if similarity_enabled() else _GEN_MAX_PANELS_UNRANKED
+    ordered = dict(sorted(generations.items())[:budget])
     return ordered, n_total
 
 
@@ -6833,35 +6858,61 @@ def render_multiple_comparison_tab(
         # Score every collected generation against the selected scanpath. The
         # per-generation NLD annotates each grid panel and orders both the grid and
         # the table; the full table is shown beneath the grid.
-        table = compute_similarity_table(sliced_real, sliced_gens, trial_words)
+        #
+        # PRE-21: with similarity gated off nothing is scored, so the grid orders
+        # alphabetically by the comparison-column value and shows more panels —
+        # the 24 cap existed to keep the *ranked* grid readable, and there is no
+        # ranking left to keep.
+        scoring = similarity_enabled()
+        table = (
+            compute_similarity_table(sliced_real, sliced_gens, trial_words)
+            if scoring
+            else pd.DataFrame()
+        )
         nld_by_gen = (
             dict(zip(table["Model"], table["NLD"])) if "NLD" in table.columns else {}
         )
 
         # Rank by similarity (lowest NLD = most similar; unscored/NaN last) and show
         # the closest _GEN_MAX_PANELS in the grid — never an arbitrary label subset.
-        ranked = sorted(
-            sliced_gens,
-            key=lambda n: (
-                pd.isna(nld_by_gen.get(n)),
-                nld_by_gen.get(n) if pd.notna(nld_by_gen.get(n)) else 0.0,
-            ),
-        )
-        grid_names = ranked[:_GEN_MAX_PANELS]
-        grid_capped = len(sliced_gens) > _GEN_MAX_PANELS
+        if scoring:
+            ranked = sorted(
+                sliced_gens,
+                key=lambda n: (
+                    pd.isna(nld_by_gen.get(n)),
+                    nld_by_gen.get(n) if pd.notna(nld_by_gen.get(n)) else 0.0,
+                ),
+            )
+        else:
+            ranked = sorted(sliced_gens)
+        panel_cap = _GEN_MAX_PANELS if scoring else _GEN_MAX_PANELS_UNRANKED
+        grid_names = ranked[:panel_cap]
+        grid_capped = len(sliced_gens) > panel_cap
 
         st.markdown("#### Other scanpaths")
         # CMP-5: state the grouping and the ranking rule in the tab itself —
         # one panel per value of the chosen column, ranked by similarity.
-        rank_note = (
-            f"One panel per **{gen_col}** value over the same text, ranked by "
-            "NLD similarity to the selected scanpath above (most similar first)."
-        )
-        if grid_capped:
-            rank_note += (
-                f" Showing the **{_GEN_MAX_PANELS} most similar** of "
-                f"{len(sliced_gens)} scored."
+        if scoring:
+            rank_note = (
+                f"One panel per **{gen_col}** value over the same text, ranked by "
+                "NLD similarity to the selected scanpath above (most similar first)."
             )
+            if grid_capped:
+                rank_note += (
+                    f" Showing the **{_GEN_MAX_PANELS} most similar** of "
+                    f"{len(sliced_gens)} scored."
+                )
+        else:
+            rank_note = (
+                f"One panel per **{gen_col}** value over the same text, in "
+                "alphabetical order."
+            )
+            if grid_capped:
+                # Whatever cap survives has to be stated, or the grid silently
+                # truncates and reads as "that's all of them".
+                rank_note += (
+                    f" Showing the **first {panel_cap}** of {len(sliced_gens)}."
+                )
         st.caption(rank_note)
         # CMP-5: a value that groups several readings draws them concatenated in
         # one panel — flag it rather than letting it pass as one scanpath. The
@@ -6908,6 +6959,14 @@ def render_multiple_comparison_tab(
                         key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )
+
+        # PRE-21: the scoring half of this panel — the similarity table (where
+        # three of the four metrics still read "Not yet computed", the clearest
+        # instance of the not-fully-integrated smell driving the gate) and the
+        # convergence plots. The generations grid above stays; only the scoring
+        # comes off it.
+        if not scoring:
+            return
 
         st.markdown("#### Similarity to the selected scanpath")
         st.dataframe(

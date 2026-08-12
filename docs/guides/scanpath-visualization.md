@@ -148,6 +148,12 @@ Compare mode is also available headlessly — see
 
 ## Correct vertical drift
 
+!!! note "Not available by default"
+    Vertical drift correction and NLD scanpath similarity are gated off in
+    the released app (PRE-21) — they work, but are not fully integrated yet.
+    Set `SCANPATH_EXPERIMENTAL=1` to expose them in the app, the CLI and the
+    Python API.
+
 Fixations that follow the text horizontally but sit above or below their line
 may need line assignment. Choose a drift-correction algorithm in the fixation
 controls, or use **Line assignment** to compare algorithms before applying one.

@@ -34,6 +34,7 @@ from .constants import (
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
+    drift_correction_enabled,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
@@ -456,26 +457,35 @@ def _render_parser() -> argparse.ArgumentParser:
     # for `--help`; `alignment.ALGORITHMS` stays the source of truth (the flag
     # validates against it via _drift_algorithm, and a test pins the two lists
     # together).
-    viz.add_argument(
-        "--drift-correction",
-        metavar="ALGORITHM",
-        type=_drift_algorithm,
-        default=None,
-        help="Correct vertical drift before plotting (PRE-3): snap each "
-        "fixation to its assigned text line and colour the fixations by line, "
-        "exactly like the app's Fixations ⚙️ → Drift correction. ALGORITHM is "
-        f"one of: {', '.join(ALGORITHMS)} "
-        "(default: no correction). Static figures only — not honored with "
-        "--animate.",
-    )
-    viz.add_argument(
-        "--drift-connectors",
-        dest="drift_connectors",
-        action="store_true",
-        help="With --drift-correction: draw a faint line from each fixation's "
-        "original y to its corrected one, so the size of the shift stays "
-        "visible (PRE-3).",
-    )
+    #
+    # PRE-21: the flags are not *added* while the feature is gated off, so
+    # `--help` doesn't advertise something that would then refuse, and passing
+    # one is an ordinary argparse "unrecognized arguments" error. `args` still
+    # carries the attributes below via `set_defaults`, so no downstream branch
+    # needs to know whether the flag exists.
+    if drift_correction_enabled():
+        viz.add_argument(
+            "--drift-correction",
+            metavar="ALGORITHM",
+            type=_drift_algorithm,
+            default=None,
+            help="Correct vertical drift before plotting (PRE-3): snap each "
+            "fixation to its assigned text line and colour the fixations by "
+            "line, exactly like the app's Fixations ⚙️ → Drift correction. "
+            f"ALGORITHM is one of: {', '.join(ALGORITHMS)} "
+            "(default: no correction). Static figures only — not honored with "
+            "--animate.",
+        )
+        viz.add_argument(
+            "--drift-connectors",
+            dest="drift_connectors",
+            action="store_true",
+            help="With --drift-correction: draw a faint line from each "
+            "fixation's original y to its corrected one, so the size of the "
+            "shift stays visible (PRE-3).",
+        )
+    else:
+        viz.set_defaults(drift_correction=None, drift_connectors=False)
     viz.add_argument(
         "--palette",
         choices=list(PALETTES),

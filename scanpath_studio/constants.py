@@ -2,7 +2,49 @@
 
 from __future__ import annotations
 
+import os
+
 PACKAGE_NAME = "scanpath_studio"
+
+
+# --- PRE-21: features that are built but not fully integrated ----------------
+# Vertical drift correction (the PRE-3 port of Carr et al. 2021) and the NLD
+# similarity scoring under 🔬 Comparisons both work, and both are half-wired:
+# the similarity table still shows three metrics as "Not yet computed", and the
+# drift-correction subtab's follow-ups (PRE-9, PRE-10) are unfinished. Shipping
+# them visible invites users to lean on them, so ahead of publication they are
+# gated off — a **visibility gate, not a removal**: `alignment.py` and
+# `similarity.py` stay exactly where they are and stay reachable for us.
+#
+# Polarity is the opposite of `app.public_datasets_enabled`: these default
+# **off** and the env var turns them on. Read at *call time*, which is both what
+# lets a test toggle them and what stops a stale import-time read from making
+# one surface disagree with another.
+EXPERIMENTAL_ENV_VAR = "SCANPATH_EXPERIMENTAL"
+
+
+def experimental_features_enabled() -> bool:
+    """Whether the not-fully-integrated features are exposed (PRE-21).
+
+    Off unless ``SCANPATH_EXPERIMENTAL`` is set to something truthy.
+    """
+    return os.environ.get(EXPERIMENTAL_ENV_VAR, "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def drift_correction_enabled() -> bool:
+    """Whether vertical drift correction / line assignment is exposed (PRE-21)."""
+    return experimental_features_enabled()
+
+
+def similarity_enabled() -> bool:
+    """Whether NLD scanpath-similarity scoring is exposed (PRE-21)."""
+    return experimental_features_enabled()
+
 
 # Default text font. A single generic family that renders (monospaced) on every
 # platform including the Streamlit Cloud demo; the sidebar field accepts any CSS

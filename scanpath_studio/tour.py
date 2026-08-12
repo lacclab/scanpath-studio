@@ -62,7 +62,12 @@ import streamlit as st
 from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import NAV_SELECTOR
 
-from .constants import CITATION, _VIEW_CORPUS, _VIEW_SCANPATH
+from .constants import (
+    CITATION,
+    _VIEW_CORPUS,
+    _VIEW_SCANPATH,
+    drift_correction_enabled,
+)
 
 # UX-12: name of the first-party cookie holding the "don't show the welcome tour
 # again" opt-out ("1" = opted out). One year, path=/, SameSite=Lax — no personal
@@ -1325,13 +1330,6 @@ _FAQ_ITEMS = [
         "randomised.",
     ),
     (
-        "What does drift correction do?",
-        "It reassigns each fixation to the text **line** it most likely belongs "
-        "to and snaps it there — the ten algorithms from Carr et al. (2021). It "
-        "changes the figure, not your data. Apply one via **Fixations ⚙️ → Drift "
-        "correction**, or compare all ten in the **📐 Line assignment** subtab.",
-    ),
-    (
         "Where does my data go?",
         "Nowhere. No accounts, no database, no analytics — files are read into "
         "memory and disappear when the session ends. Two caveats: a plain "
@@ -1364,10 +1362,30 @@ _FAQ_ITEMS = [
     (
         "How do I cite Scanpath Studio?",
         "See **ℹ️ About** under ❓ Help (and `CITATION.cff` in the "
-        "repository). Cite the bundled demo data as OneStop Eye Movements too, "
-        "and Carr et al. (2021) if you used the drift-correction algorithms.",
+        "repository). Cite the bundled demo data as OneStop Eye Movements too.",
     ),
 ]
+
+# PRE-21: FAQ entries that only make sense while a gated feature is exposed.
+# Appended by `faq_items()` rather than living in `_FAQ_ITEMS`, so the default
+# build never offers an answer about a control it doesn't have.
+_DRIFT_FAQ_ITEMS = [
+    (
+        "What does drift correction do?",
+        "It reassigns each fixation to the text **line** it most likely belongs "
+        "to and snaps it there — the ten algorithms from Carr et al. (2021). It "
+        "changes the figure, not your data. Apply one via **Fixations ⚙️ → Drift "
+        "correction**, or compare all ten in the **📐 Line assignment** subtab.",
+    ),
+]
+
+
+def faq_items() -> list:
+    """The FAQ entries this build can honestly answer (PRE-21)."""
+    items = list(_FAQ_ITEMS)
+    if drift_correction_enabled():
+        items.extend(_DRIFT_FAQ_ITEMS)
+    return items
 
 
 @st.dialog("❓ Frequently asked questions", width="large")
@@ -1388,7 +1406,7 @@ def _faq_dialog() -> None:
         "Short answers to the questions that come up most. The full version — "
         "with the long explanations — lives on the documentation site."
     )
-    for question, answer in _FAQ_ITEMS:
+    for question, answer in faq_items():
         with st.expander(question):
             st.markdown(answer)
 

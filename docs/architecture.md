@@ -11,7 +11,7 @@ the repo root (kept current as the code changes); this is the short version.
 | `app.py` | Streamlit entry point: page config, sidebar, data load, filtering, and dispatch to the two top-level views (Scanpath Visualization ⇄ Corpus Analysis, toggled from the header). |
 | `url_state.py` | Deep links + plot-config save/restore (versioned schema + migrations) + the Share link, split out of `app.py`. |
 | `wizard.py` | The Upload / Add-dataset guided setup flow. |
-| `tabs.py` | View renderers: Scanpath Visualization (Annotations / Stimulus & questions / Comparisons / Line assignment / Export / Data Inspection / Share subtabs), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections). |
+| `tabs.py` | View renderers: Scanpath Visualization (Annotations / Stimulus & questions / Comparisons / Export / Data Inspection / Share subtabs; Line assignment only under `SCANPATH_EXPERIMENTAL=1`), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections). |
 | `controls.py` | Visualization controls (rendered into the Scanpath tab's right-hand rail), column-mapping UI, trial-filter panel. |
 | `data.py` | Schema inference, normalization, filtering, sample/OneStop loaders, trial-index derivation. |
 | `multipart.py` | Ordered child-screen identity, validation, manifest assignment, screen catalogues, and per-screen canvas metadata. |
@@ -27,7 +27,7 @@ the repo root (kept current as the code changes); this is the short version.
 | `tour.py` | First-visit/setup guides plus the registry and progress for task-oriented in-app tutorials. |
 | `annotations.py` | Parent-trial and optional screen-scoped favorites / tags / notes (session state + JSON). |
 | `persistence.py` | On-device recovery cache for a local/desktop session (datasets, mappings, settings, annotations), inspected and cleared from the sidebar panel, `scanpath-studio cache`, and `api.cache_status`. |
-| `alignment.py` | Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. |
+| `alignment.py` | Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. Gated off by default (PRE-21). |
 | `datasets.py` | Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE). |
 | `compare_source.py` | The second dataset compare mode can draw scanpath B from: a widget-free readiness gate + loader, so a comparison can cross corpora without the picker having to render a corpus' folder/download controls. |
 

@@ -106,7 +106,7 @@ class TestAppLaunches:
             "❓ Help",
         ):
             assert expected in labels, f"{expected} missing from the menu bar"
-        # 🐛 Debug is only offered under ?debug=1.
+        # 🐛 Debug only joins the bar once ❓ Help's debug toggle is on (UX-37).
         assert "🐛 Debug" not in labels
 
     def test_synthetic_data_source_renders(self):

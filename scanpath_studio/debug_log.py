@@ -6,9 +6,13 @@ browser. This module bridges that gap: a :class:`logging.Handler` captures log
 records into a capped buffer in ``st.session_state`` so they can be rendered
 inside the app, behind a debug toggle.
 
-Activation is two-stage: the ``?debug=1`` URL param reveals a "🐛 Debug mode"
-toggle in the sidebar, and the toggle controls whether the panel is shown. The
-panel offers a level filter, an app/session-state snapshot, and a JSON export.
+Activation is a single toggle (**UX-37**): "🐛 Debug mode" under ❓ Help puts the
+🐛 Debug popover on the menu bar, and that popover holds a level filter, an
+app/session-state snapshot, and a JSON export. It used to be two-stage and the
+first stage was a URL param — ``?debug=1`` revealed the toggle — which meant the
+whole feature was reachable only by someone who already knew it existed. The
+param is still honoured as a *seed* so old links keep working, but it is no
+longer the way in.
 """
 
 from __future__ import annotations
@@ -24,6 +28,14 @@ import streamlit as st
 # Keep the buffer small: it lives in session_state and is re-rendered every run.
 _MAX_RECORDS = 500
 _BUFFER_KEY = "_debug_log_records"
+
+#: Session key of the "🐛 Debug mode" toggle under ❓ Help. This *is* the gate —
+#: :func:`debug_enabled` reads nothing else.
+DEBUG_STATE_KEY = "_debug_mode_on"
+
+#: The legacy URL param. Kept as a one-shot seed for links already in the world;
+#: see :func:`seed_debug_mode`.
+DEBUG_URL_PARAM = "debug"
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 _LEVEL_COLOR = {
@@ -99,9 +111,37 @@ def install_log_capture(level: int = logging.INFO) -> None:
     root.addHandler(handler)
 
 
+def seed_debug_mode() -> None:
+    """Honour a legacy ``?debug=1`` link by pre-arming the toggle, once.
+
+    ``setdefault`` rather than a write: the toggle is the gate now, so a user who
+    turns debug mode *off* on a ``?debug=1`` URL must stay off for the rest of
+    the session instead of having the param switch it back on every rerun. Call
+    from ``main`` before :func:`debug_enabled` is read.
+    """
+    if (st.query_params.get(DEBUG_URL_PARAM) or "").lower() in {"1", "true", "yes"}:
+        st.session_state.setdefault(DEBUG_STATE_KEY, True)
+
+
 def debug_enabled() -> bool:
-    """True when the ``?debug=1`` URL param is present (reveals the toggle)."""
-    return (st.query_params.get("debug") or "").lower() in {"1", "true", "yes"}
+    """True when the ❓ Help → "🐛 Debug mode" toggle is on."""
+    return bool(st.session_state.get(DEBUG_STATE_KEY))
+
+
+def render_debug_toggle(host=None) -> None:
+    """Render the "🐛 Debug mode" toggle into the ❓ Help popover.
+
+    The single gate (**UX-37**). Flipping it on puts the 🐛 Debug popover on the
+    menu bar *next* run — ``menu.render_top_menu`` runs at the top of ``main``
+    and this renders at the bottom — which is the ordinary Streamlit widget
+    round-trip, not a delay worth engineering around.
+    """
+    (host if host is not None else st).toggle(
+        "🐛 Debug mode",
+        key=DEBUG_STATE_KEY,
+        help="Add a 🐛 Debug panel to the menu bar: the captured log, a snapshot "
+        "of what's loaded, and a JSON download to attach to a bug report.",
+    )
 
 
 def _state_snapshot() -> List[Dict[str, str]]:
@@ -132,21 +172,18 @@ def _state_snapshot() -> List[Dict[str, str]]:
 
 
 def render_debug_panel(host=None) -> None:
-    """Render the debug toggle + panel into the 🐛 Debug menu popover.
+    """Render the debug panel into the 🐛 Debug menu popover.
 
-    No-op unless ``?debug=1`` is set — which is also what puts the popover on
-    the menu bar (``menu.render_top_menu(show_debug=…)``), so ``host`` is None
-    in exactly the sessions this returns early for. The toggle then reveals the
-    captured-log view, a state snapshot, and a JSON download, rendered bare: a
-    popover nests no expander.
+    No-op unless the ❓ Help toggle is on — which is also what puts the popover
+    on the menu bar (``menu.render_top_menu(show_debug=…)``), so ``host`` is None
+    in exactly the sessions this returns early for. The panel is the captured-log
+    view, a state snapshot and a JSON download, rendered bare: a popover nests no
+    expander.
     """
     if not debug_enabled():
         return
 
     panel = host if host is not None else st.container()
-    if not panel.toggle("🐛 Debug mode", key="_debug_mode_on"):
-        return
-
     records = list(_buffer())
 
     with panel:

@@ -37,7 +37,12 @@ class TestTheNoteIsOnEverySurface:
         assert "AI assistance" in body, path
         # The actionable half — without it the note is unfalsifiable.
         assert "cross-check" in body.lower(), path
-        assert "?source=synthetic" in body, path
+        # UX-37: the note names the picker entry, not a URL param. A reader who
+        # has to hand-edit a URL doesn't verify anything. Scoped to the note
+        # itself, since app.py also *explains* the old param in a code comment.
+        note = body[body.lower().find("ai assistance") :][:2000]
+        assert "Synthetic test" in note, path
+        assert "?source=synthetic" not in note, path
 
     @pytest.mark.parametrize("path", ["README.md", "docs/index.md"])
     def test_it_points_somewhere_a_report_can_land(self, path):
@@ -60,10 +65,21 @@ class TestTheNoteIsOnEverySurface:
 
 @pytest.mark.timeout(90)
 class TestTheClaimsHold:
+    def test_the_ground_truth_trial_is_offered_in_the_picker(self):
+        """UX-37: the note tells the reader to pick **🧪 Synthetic test trial**,
+        so it has to actually be an option on a plain visit — not something you
+        can only reach once a URL param has already selected it."""
+        at = AppTest.from_file(APP_SCRIPT)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        entries = at.session_state["_data_source_entries"]
+        assert "Synthetic test trial" in entries, entries
+
     def test_the_ground_truth_trial_is_reachable_the_way_the_note_says(self):
-        """The note tells the reader to add `?source=synthetic`. The synthetic
-        source is deliberately NOT offered in the data-source picker, so this
-        deep link is the only route — if it breaks, the note is a dead end."""
+        """Selecting it loads the ground-truth trial. The old `?source=synthetic`
+        link still resolves (the token stays in the share-link wire format), so
+        this drives it the same way — what changed is that it is no longer the
+        *only* route."""
         at = AppTest.from_file(APP_SCRIPT)
         at.query_params["source"] = "synthetic"
         at.run(timeout=60)

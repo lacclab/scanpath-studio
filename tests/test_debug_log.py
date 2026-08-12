@@ -101,22 +101,24 @@ def test_the_handler_swallows_a_record_it_cannot_file():
     handler.emit(record)  # no session-state context here — must not raise
 
 
-def test_the_panel_is_hidden_without_the_debug_url_param():
+def test_the_toggle_is_offered_without_any_url_param():
+    """UX-37: the toggle *is* the way in, so a plain visit has to show it."""
     at = AppTest.from_file(APP_SCRIPT)
     at.session_state["data_source_choice"] = "Synthetic test trial"
     at.run(timeout=90)
     assert not at.exception, at.exception
-    assert not [t for t in at.toggle if t.key == "_debug_mode_on"]
+    toggles = [t for t in at.toggle if t.key == debug_log.DEBUG_STATE_KEY]
+    assert toggles, "the 🐛 Debug mode toggle is not on the ❓ Help menu"
+    assert toggles[0].value is False, "debug mode must default off"
+    # …and with it off, the panel draws nothing.
+    assert not [s for s in at.selectbox if s.key == "_debug_level"]
 
 
-def test_the_debug_url_param_reveals_the_toggle():
+def test_the_toggle_reveals_the_panel():
     at = AppTest.from_file(APP_SCRIPT)
-    at.query_params["debug"] = "1"
     at.session_state["data_source_choice"] = "Synthetic test trial"
     at.run(timeout=90)
-    assert not at.exception, at.exception
-    toggles = [t for t in at.toggle if t.key == "_debug_mode_on"]
-    assert toggles, "?debug=1 did not reveal the 🐛 Debug mode toggle"
+    toggles = [t for t in at.toggle if t.key == debug_log.DEBUG_STATE_KEY]
 
     # Turning it on renders the panel: a level filter, a Clear button, a state
     # snapshot and the JSON download.
@@ -125,3 +127,31 @@ def test_the_debug_url_param_reveals_the_toggle():
     assert [s for s in at.selectbox if s.key == "_debug_level"]
     assert [b for b in at.button if b.key == "_debug_clear"]
     assert any(d.key == "_debug_download" for d in at.get("download_button"))
+    # …and the 🐛 Debug popover joins the menu bar to host it.
+    labels = {p.proto.popover.label for p in at.get("popover")}
+    assert "🐛 Debug" in labels
+
+
+def test_a_legacy_debug_url_param_still_arms_it():
+    """`?debug=1` links are already in the world; they keep working as a seed."""
+    at = AppTest.from_file(APP_SCRIPT)
+    at.query_params["debug"] = "1"
+    at.session_state["data_source_choice"] = "Synthetic test trial"
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    assert at.session_state[debug_log.DEBUG_STATE_KEY] is True
+    assert [s for s in at.selectbox if s.key == "_debug_level"]
+
+
+def test_the_url_param_does_not_override_turning_it_off():
+    """A seed, not a lock: on a ?debug=1 URL the toggle still wins, or it would
+    switch itself back on every rerun."""
+    at = AppTest.from_file(APP_SCRIPT)
+    at.query_params["debug"] = "1"
+    at.session_state["data_source_choice"] = "Synthetic test trial"
+    at.run(timeout=90)
+    toggle = next(t for t in at.toggle if t.key == debug_log.DEBUG_STATE_KEY)
+    at = toggle.set_value(False).run(timeout=90)
+    assert not at.exception, at.exception
+    assert at.session_state[debug_log.DEBUG_STATE_KEY] is False
+    assert not [s for s in at.selectbox if s.key == "_debug_level"]

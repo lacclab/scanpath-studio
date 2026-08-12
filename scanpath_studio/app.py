@@ -135,6 +135,8 @@ from scanpath_studio.debug_log import (
     debug_enabled,
     install_log_capture,
     render_debug_panel,
+    render_debug_toggle,
+    seed_debug_mode,
 )
 from scanpath_studio.easter_egg import render_easter_egg
 from scanpath_studio.experimental_setup import (
@@ -656,10 +658,10 @@ If you use the bundled demo data, also cite
     st.markdown(
         f"""
 Scanpath Studio was built with AI assistance. Cross-check results before
-publishing; verify the ground-truth trial with `?source=synthetic`, and note
-that EyeLink `IA_*` measures already in your export are passed through, not
-recomputed. If something looks wrong, [open an issue]({CITATION["url"]}/issues) ↗
-with your **💾 Save & restore** JSON.
+publishing; verify the ground-truth trial by picking **🧪 Synthetic test trial**
+in the data-source picker, and note that EyeLink `IA_*` measures already in your
+export are passed through, not recomputed. If something looks wrong,
+[open an issue]({CITATION["url"]}/issues) ↗ with your **💾 Save & restore** JSON.
 """
     )
 
@@ -2016,11 +2018,13 @@ def render_sidebar_data_source() -> str:
         for label in PUBLIC_DATASET_REGISTRY:
             entries.append(label)
             kinds[label] = "🌐"
-    # The synthetic trial is no longer offered fresh (a tiny demo variant) but
-    # stays selectable when something already chose it (e.g. tests).
-    if st.session_state.get("data_source_choice") == SYNTHETIC_CHOICE:
-        entries.append(SYNTHETIC_CHOICE)
-        kinds[SYNTHETIC_CHOICE] = "🧪"
+    # UX-37: the ground-truth trial is a normal entry in the picker. It used to
+    # be offered only once something had already selected it — i.e. only via
+    # `?source=synthetic`, a URL the About note and the docs had to spell out.
+    # The AI-assistance note tells readers to verify the measures against it, so
+    # the route to it has to be one they can see.
+    entries.append(SYNTHETIC_CHOICE)
+    kinds[SYNTHETIC_CHOICE] = "🧪"
 
     # Migrate a legacy `PUBLIC_DATASETS_CHOICE` selection (old saved state / deep
     # link / the former category radio) to the concrete corpus token so it lands on
@@ -3112,6 +3116,7 @@ def main() -> None:
     # directory inputs, download buttons and column-mapping panels fill the bar's
     # popovers by `host=`, so those slots have to exist first — the same
     # reserve-then-fill discipline the sidebar containers had.
+    seed_debug_mode()  # UX-37: a legacy ?debug=1 link pre-arms the Help toggle.
     menu = render_top_menu(show_debug=debug_enabled())
     _render_about_panel()
 
@@ -3714,9 +3719,16 @@ def main() -> None:
         "a new tab.",
     )
     render_about_button(help_menu)
+    # UX-37: the way *in* to debug mode. It used to be a `?debug=1` URL param,
+    # which meant only someone who already knew about it could find it — the
+    # same "hidden behind a URL" problem as the synthetic trial. The toggle sits
+    # at the foot of ❓ Help, below the user-facing entries, because it is a
+    # developer/bug-report affordance rather than something to reach for daily.
+    help_menu.divider()
+    render_debug_toggle(help_menu)
 
-    # Developer debug panel — hidden unless the URL carries ?debug=1, which is
-    # also what put the 🐛 Debug popover on the menu bar to host it.
+    # Developer debug panel — hidden unless that toggle is on, which is also
+    # what put the 🐛 Debug popover on the menu bar to host it.
     render_debug_panel(menu.debug)
 
     # Persist after all view/menu widgets have written their current values.

@@ -2,7 +2,7 @@
 
 Two interchangeable styles, both introducing the app's main surfaces (data
 sources, filters, viz controls, tabs, annotations) the first time a session
-opens the app, re-playable any time via the sidebar's tutorial button:
+opens the app, re-playable any time from the ❓ Help menu's tutorial button:
 
 - ``"spotlight"`` (default): a floating card that walks through the *actual*
   UI — each step scrolls the target section into view and pulses an outline
@@ -26,7 +26,7 @@ Mechanics worth knowing before editing:
   (``_dismiss_listener_script``) hides them instantly on click; the button's
   native click still clears ``tour_mode`` once Streamlit catches up.
 - Spotlight targets are ``.st-key-tour_grp_*`` classes from keyed wrapper
-  containers around the sidebar sections (app.py / controls.py /
+  containers around the page + menu sections (app.py / controls.py /
   annotations.py) plus Streamlit's stable ``data-testid``/``data-baseweb``
   attributes for the tab strip. Keep ``_SPOTLIGHT_STEPS`` in sync with them.
 - ``tour_seen`` is set **before** the tour is shown, not when it's finished.
@@ -43,7 +43,7 @@ Mechanics worth knowing before editing:
   component to get the value back to the server. The checkbox writes it via a
   same-origin script (``_tour_optout_script``); ``tour_opted_out()`` reads it.
   The replay button ignores the opt-out entirely, so the tour is never lost.
-- **The FAQ (UX-15)** is the other half of the sidebar's Help group: a short
+- **The FAQ (UX-15)** is the other half of the ❓ Help menu group: a short
   ``st.dialog`` of recurring questions (``render_faq_button``), deliberately
   kept to a handful of answers with the complete version on the docs site
   (``docs/faq.md``). It is armed exactly like the tour — the button's
@@ -60,6 +60,7 @@ from dataclasses import dataclass
 import streamlit as st
 
 from scanpath_studio.html_embed import embed_html_iframe
+from scanpath_studio.menu import NAV_SELECTOR
 
 from .constants import CITATION, _VIEW_CORPUS, _VIEW_SCANPATH
 
@@ -238,7 +239,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Switch analysis level",
                 "Open **Corpus Analysis** to aggregate instead of inspecting one trial. "
                 "Your loaded data and filters stay in place.",
-                ".st-key-header_buttons",
+                NAV_SELECTOR,
             ),
             TutorialStep(
                 "Answer one corpus question",
@@ -350,7 +351,7 @@ def _render_tour_optout() -> None:
         "Don't show this again",
         key="tour_dont_show",
         value=tour_opted_out(),
-        help="Skip the tour on future visits. **🎓 Show tutorial** in the sidebar "
+        help="Skip the tour on future visits. **🎓 Show tutorial** under ❓ Help "
         "always brings it back.",
     )
     embed_html_iframe(_tour_optout_script(opted_out), height=0)
@@ -408,10 +409,10 @@ def _tour_dialog() -> None:
 # Bodies are markdown, kept short — the card is ~400 px wide.
 # Walks the whole Scanpath screen in reading order (UX-2): the plot → the
 # selection/controls above it → the chips → the rail (view modes + controls) →
-# the bottom panel → the left sidebar. Main-area steps pass ``in_sidebar: False``;
-# the sidebar steps are kept LAST and contiguous so the sidebar opens once (the
-# welcome step starts it collapsed). Keep selectors in sync with the keyed
-# wrappers in tabs.py / app.py.
+# the bottom panel → the top menu bar. There is no `in_sidebar` flag any more:
+# every target is in the page or on the menu bar, so no step has to expand a
+# panel before it can scroll to it. Keep selectors in sync with the keyed
+# wrappers in tabs.py / app.py / menu.py.
 _SPOTLIGHT_STEPS = [
     {
         "selector": None,
@@ -422,14 +423,12 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_plot",
-        "in_sidebar": False,
         "title": "🗺️ The scanpath",
         "body": "This is the main plot. Each dot is a **fixation**, sized by "
         "duration; the lines are **saccades** between them.",
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "in_sidebar": False,
         "title": "📂 Data source",
         "body": "Your **data source** (demo or your own upload) sits at the left "
         "of the filter row — ➕ beside it adds or removes datasets. Columns "
@@ -442,21 +441,18 @@ _SPOTLIGHT_STEPS = [
     # the whole block.
     {
         "selector": ".st-key-tour_grp_narrow_by",
-        "in_sidebar": False,
         "title": "🔍 Narrow the pool",
         "body": "**Filter by** Text or Participant to shrink the trial list; "
         "**More** adds condition & annotation filters (favorites, tags).",
     },
     {
         "selector": ".st-key-tour_grp_trial_picker",
-        "in_sidebar": False,
         "title": "🎯 Pick a trial",
         "body": "Step through trials with the selector and ◀ ▶, or scrub the "
         "slider — it shows the trial's position and id.",
     },
     {
         "selector": ".st-key-tour_grp_chips",
-        "in_sidebar": False,
         "title": "🏷️ Trial at a glance",
         "body": "These chips show the trial's **identity, conditions, and summary "
         "stats**. Choose which fields appear — and drag to reorder — with "
@@ -464,7 +460,6 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_view_modes",
-        "in_sidebar": False,
         "title": "🎬 Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation, and "
         "**Compare** adds a second scanpath beside it — from this dataset or, "
@@ -473,33 +468,31 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_viz_controls",
-        "in_sidebar": False,
         "title": "🎛️ Plot controls",
         "body": "Toggle and style every layer — fixations, saccades, heatmap, word "
         "boxes, text. **Quick views** jump between Scanpath and Heatmap presets.",
     },
     {
         "selector": ".st-key-tour_grp_subtabs",
-        "in_sidebar": False,
         "title": "📑 Per-trial panels",
         "body": "Below the plot: **📝 Annotations**, **Stimulus & questions**, "
         "**🔬 Comparisons**, **Export** (this trial or bulk), "
         "**🔎 Data Inspection**, and **🔗 Share** a deep link.",
     },
     {
-        "selector": ".st-key-header_buttons",
-        "in_sidebar": False,
+        "selector": NAV_SELECTOR,
         "title": "📊 Corpus Analysis",
-        "body": "Switch here to aggregate across readers, texts and groups "
-        "instead of one trial at a time — question-oriented views per text, per "
-        "reader, or per cohort.",
+        "body": "The nav at the very top moves between the two halves of the "
+        "app. **📊 Corpus Analysis** aggregates across readers, texts and groups "
+        "instead of one trial at a time — per text, per reader, or per cohort.",
     },
     {
-        "selector": ".st-key-tour_grp_save_restore",
-        "title": "📚 The left sidebar",
-        "body": "**💾 Save & restore** saves the whole setup + annotations to "
-        "JSON; the rest of the sidebar holds the recovery cache, debug tools and "
-        "this tutorial. Replay it any time from **🎓 Show tutorial**. 👀",
+        "selector": ".st-key-top_menu",
+        "title": "📚 The menu bar",
+        "body": "**⚙️ Configure** holds the data source and its column mapping, "
+        "**💾 Save & restore** saves the whole setup + annotations to JSON, and "
+        "**❓ Help** has the tutorials and the FAQ. Replay this tour any time "
+        "from **🎓 Show tutorial**. 👀",
     },
 ]
 
@@ -672,15 +665,21 @@ def _highlight_css(selector: str, accent: str) -> str:
 """
 
 
-def _scroll_into_view_script(selector: str, *, in_sidebar: bool) -> str:
+def _scroll_into_view_script(selector: str) -> str:
     """Centre `selector`'s first *visible* match within its own scroller.
 
     Every subtlety here was observed live; see the call site in
     `render_spotlight_tour` for the full list. The short version: match the first
-    visible element (inactive tab panels hold invisible duplicates), gate sidebar
-    targets on `aria-expanded` rather than on visibility (a collapsed sidebar
-    keeps nonzero layout rects), and scroll the nearest scrollable ancestor
-    instead of calling `scrollIntoView` (which moves the document).
+    visible element (inactive tab panels hold invisible duplicates), and scroll
+    the nearest scrollable ancestor instead of calling `scrollIntoView` (which
+    moves the document).
+
+    There is no sidebar branch any more. Targets used to need an
+    ``aria-expanded`` gate plus a retrying click on ``stExpandSidebarButton``,
+    because a *collapsed* sidebar still reports nonzero layout rects so plain
+    visibility couldn't tell whether the panel was really on screen. Every step
+    now points at something in the page or on the top menu bar, where
+    ``findVisible()`` answers correctly on its own.
     """
     return f"""<script>
                 (function () {{
@@ -695,20 +694,6 @@ def _scroll_into_view_script(selector: str, *, in_sidebar: bool) -> str:
                         }});
                     let tries = 0;
                     (function attempt() {{
-                        if ({str(in_sidebar).lower()}) {{
-                            // The collapsed sidebar keeps its layout (nonzero
-                            // rects), so gate on aria-expanded, not on
-                            // findVisible(). Retries ride out hydration.
-                            const sb = doc.querySelector(
-                                'section[data-testid="stSidebar"]');
-                            if (sb && sb.getAttribute("aria-expanded") !== "true") {{
-                                doc.querySelector(
-                                    'button[data-testid="stExpandSidebarButton"]'
-                                )?.click();
-                                if (++tries < 20) setTimeout(attempt, 150);
-                                return;
-                            }}
-                        }}
                         const el = findVisible();
                         if (!el) {{
                             if (++tries < 20) setTimeout(attempt, 150);
@@ -835,78 +820,28 @@ def render_spotlight_tour() -> None:
             # Bring the highlighted section into view. Same-origin iframe
             # trick as _close_dialog_clientside; no-op if the selector is
             # gone. Subtleties, all observed live:
-            # - Sidebar steps first click Streamlit's expand control, since
-            #   tour sessions start with the sidebar collapsed
-            #   (spotlight_tour_pending → initial_sidebar_state).
             # - The find+scroll retries until the target is visible, riding
-            #   out the sidebar-expand animation.
+            #   out Streamlit's re-render.
             # - Match the first *visible* element, not the first match:
             #   Streamlit keeps inactive tab panels laid out but
             #   visibility-hidden, so a selector can hit an invisible
             #   duplicate (e.g. the Raw Data panel's inner tab strip) and
             #   scroll the page to nowhere.
             # - No scrollIntoView: smooth gets cancelled by Streamlit's
-            #   re-renders, and instant also scrolls the document, moving
-            #   the main column for sidebar targets. Instead, center the
-            #   target within its nearest scrollable ancestor only.
+            #   re-renders, and instant also scrolls the document. Instead,
+            #   center the target within its nearest scrollable ancestor only.
             # - Skip targets that are already fully on screen.
             # - The iframe stays INSIDE the fixed-position card: when it sat
             #   at the bottom of the main column, its (re)mount could yank
             #   the main scroller to the page bottom to reveal it.
-            # Most keyed-wrapper targets live in the sidebar, but some (the viz
-            # controls now sit in the Scanpath rail) are in the main area — let a
-            # step opt out explicitly; otherwise fall back to the prefix rule.
-            in_sidebar = step.get(
-                "in_sidebar",
-                bool(step["selector"])
-                and step["selector"].startswith(".st-key-tour_grp_"),
-            )
+            # The sidebar branch is gone with the sidebar: every target is now
+            # either in the page or on the top menu bar, both of which are
+            # always laid out and visible, so there is nothing to expand first
+            # and no `in_sidebar` flag to carry.
             embed_html_iframe(
-                _scroll_into_view_script(step["selector"], in_sidebar=in_sidebar),
+                _scroll_into_view_script(step["selector"]),
                 height=0,
             )
-        else:
-            # Welcome step: close the sidebar so the centered card sits over
-            # a quiet page. initial_sidebar_state="collapsed" (configure_page)
-            # covers fresh visitors, but the frontend's per-tab stored sidebar
-            # state overrides it for returning tabs — so also click the
-            # collapse control. Retries because a click during initial React
-            # hydration is silently lost. The first sidebar step reopens it.
-            embed_html_iframe(
-                """<script>
-                (function () {
-                    const doc = window.parent.document;
-                    let tries = 0;
-                    (function attempt() {
-                        const sb = doc.querySelector('section[data-testid="stSidebar"]');
-                        if (!sb || sb.getAttribute("aria-expanded") !== "true") return;
-                        (doc.querySelector(
-                            '[data-testid="stSidebarCollapseButton"] button')
-                            || doc.querySelector('section[data-testid="stSidebar"]'
-                                + ' [data-testid="stBaseButton-headerNoPadding"]'))
-                            ?.click();
-                        if (++tries < 25) setTimeout(attempt, 200);
-                    })();
-                })();
-                </script>""",
-                height=0,
-            )
-
-
-def spotlight_tour_pending() -> bool:
-    """True when this session is about to auto-open the spotlight tour.
-
-    Read by ``app.configure_page`` *before* ``maybe_show_welcome_tour`` sets
-    ``tour_seen``: tour sessions start with the sidebar collapsed so the
-    centered welcome renders over a quiet page; the first sidebar step then
-    opens it (the step script clicks Streamlit's expand control).
-    """
-    return (
-        TOUR_STYLE == "spotlight"
-        and not st.session_state.get("tour_seen")
-        and not tour_suppressed(st.query_params)
-        and not tour_opted_out()
-    )
 
 
 def tour_suppressed(query_params) -> bool:
@@ -935,7 +870,7 @@ def _arm_tour() -> None:
     """``on_click`` callback for the replay button: arm the tour from step 0.
 
     Callbacks run *before* the rerun, so the tour's render call early in
-    ``main()`` — which executes long before the sidebar button — picks the
+    ``main()`` — which executes long before the menu button — picks the
     request up within the same run. Dialogs can't be opened from callbacks,
     so the dialog style sets a request flag that ``maybe_show_welcome_tour``
     (the early call site) serves.
@@ -958,7 +893,7 @@ def maybe_show_welcome_tour() -> None:
     after it; the spotlight style just arms ``tour_mode``.
     """
     if st.session_state.pop("_tour_dialog_requested", False):
-        # Replay request from the sidebar button's on_click callback.
+        # Replay request from the menu button's on_click callback.
         _tour_dialog()
         return
     if st.session_state.get("tour_seen"):
@@ -971,14 +906,14 @@ def maybe_show_welcome_tour() -> None:
     _start_tour()
 
 
-def render_tour_replay_button() -> None:
-    """Sidebar button that replays the tour from the first step.
+def render_tour_replay_button(host=None) -> None:
+    """Button in the ❓ Help menu popover that replays the tour from step one.
 
     Deliberately ignores the UX-12 opt-out — "don't show this again" means "stop
     greeting me", not "take the tutorial away". The card's checkbox renders
     pre-ticked on a replay so the choice can be reversed from the same place.
     """
-    st.sidebar.button(
+    (host if host is not None else st).button(
         "🎓 Show tutorial",
         key="tour_replay",
         width="stretch",
@@ -1133,42 +1068,80 @@ def _tutorial_surface_is_open(step: TutorialStep) -> bool:
     )
 
 
-def render_tutorial_library(context: dict[str, object]) -> None:
-    """Help-popover chooser listing outcome, prerequisites, time, and progress."""
+def _arm_tutorial_library() -> None:
+    """``on_click`` callback for the Tutorials button: request the dialog."""
+    st.session_state["_tutorial_library_requested"] = True
+
+
+def maybe_show_tutorial_library() -> None:
+    """Open the tutorial chooser if the ❓ Help menu button armed it.
+
+    Served early in ``main()`` beside :func:`maybe_show_faq`, for the same
+    reason: the button renders at the bottom of the run.
+    """
+    if st.session_state.pop("_tutorial_library_requested", False):
+        _tutorial_library_dialog()
+
+
+def render_tutorial_library(context: dict[str, object], *, host=None) -> None:
+    """Button in the ❓ Help menu popover that opens the tutorial chooser.
+
+    A dialog rather than the nested ``🧭 Tutorials`` popover it used to be: the
+    Help group is itself a popover now, and Streamlit nests no popover in a
+    popover. The chooser is a modal-shaped thing anyway — pick an outcome, start,
+    and the tutorial takes over the page.
+    """
     st.session_state["_tutorial_context"] = dict(context)
-    with st.sidebar.popover("🧭 Tutorials", width="stretch"):
-        st.markdown("**Choose the outcome you want to reach.**")
-        st.caption("Each tutorial is independent from the automatic welcome tour.")
-        for tutorial in TUTORIALS:
-            available, reason = tutorial_availability(tutorial, context)
-            completed = bool(_tutorial_completed().get(tutorial.id))
-            progress = int(_tutorial_progress().get(tutorial.id, 0))
-            status = " · ✓ Complete" if completed else ""
-            st.markdown(f"**{tutorial.title}** · {tutorial.estimated_time}{status}")
-            st.caption(tutorial.outcome)
-            st.caption(f"Needs: {tutorial.prerequisite}")
-            if not available:
-                st.caption(f"Unavailable: {reason}")
-            button_label = "Resume" if progress > 0 and not completed else "Start"
-            start_col, restart_col = st.columns(2)
-            start_col.button(
-                button_label,
-                key=f"tutorial_start_{tutorial.id}",
-                disabled=not available,
-                on_click=_start_use_case,
-                args=(tutorial.id,),
-                width="stretch",
-            )
-            restart_col.button(
-                "Start over",
-                key=f"tutorial_restart_{tutorial.id}",
-                disabled=not available,
-                on_click=_start_use_case,
-                args=(tutorial.id,),
-                kwargs={"restart": True},
-                width="stretch",
-            )
-            st.divider()
+    (host if host is not None else st).button(
+        "🧭 Tutorials",
+        key="tutorial_library_open",
+        width="stretch",
+        help="Task-oriented walkthroughs, independent of the welcome tour.",
+        on_click=_arm_tutorial_library,
+    )
+
+
+@st.dialog("🧭 Tutorials", width="large")
+def _tutorial_library_dialog() -> None:
+    """The chooser: outcome, prerequisites, time, and progress per tutorial."""
+    from scanpath_studio.menu import close_open_popovers
+
+    # Opened from a button inside the ❓ Help popover, whose open state is
+    # client-side — without this it floats on top of the modal.
+    close_open_popovers()
+    context = st.session_state.get("_tutorial_context") or {}
+    st.markdown("**Choose the outcome you want to reach.**")
+    st.caption("Each tutorial is independent from the automatic welcome tour.")
+    for tutorial in TUTORIALS:
+        available, reason = tutorial_availability(tutorial, context)
+        completed = bool(_tutorial_completed().get(tutorial.id))
+        progress = int(_tutorial_progress().get(tutorial.id, 0))
+        status = " · ✓ Complete" if completed else ""
+        st.markdown(f"**{tutorial.title}** · {tutorial.estimated_time}{status}")
+        st.caption(tutorial.outcome)
+        st.caption(f"Needs: {tutorial.prerequisite}")
+        if not available:
+            st.caption(f"Unavailable: {reason}")
+        button_label = "Resume" if progress > 0 and not completed else "Start"
+        start_col, restart_col = st.columns(2)
+        start_col.button(
+            button_label,
+            key=f"tutorial_start_{tutorial.id}",
+            disabled=not available,
+            on_click=_start_use_case,
+            args=(tutorial.id,),
+            width="stretch",
+        )
+        restart_col.button(
+            "Start over",
+            key=f"tutorial_restart_{tutorial.id}",
+            disabled=not available,
+            on_click=_start_use_case,
+            args=(tutorial.id,),
+            kwargs={"restart": True},
+            width="stretch",
+        )
+        st.divider()
 
 
 @st.fragment
@@ -1267,7 +1240,7 @@ def render_use_case_tutorial() -> None:
         # start a tutorial but cannot close the chooser that contained the
         # Start button. Close only the expanded Tutorials trigger once it
         # appears later in this rerun; otherwise the chooser sits over the
-        # sidebar while the task card is already active.
+        # menu while the task card is already active.
         embed_html_iframe(
             """<script>
             (function () {
@@ -1384,13 +1357,13 @@ _FAQ_ITEMS = [
         "Streamlit doesn't reload already-imported modules on a rerun, and "
         "`st.cache_data` doesn't hash the helpers a cached loader calls — a "
         "rerun or **Clear cache** isn't enough after editing code. Restart the "
-        "server process. This is a different cache from the sidebar's "
+        "server process. This is a different cache from the menu bar's "
         "**🗄️ Recovery cache** panel, which stores your data and settings, "
         "not code.",
     ),
     (
         "How do I cite Scanpath Studio?",
-        "See the **ℹ️ About** panel in this sidebar (and `CITATION.cff` in the "
+        "See **ℹ️ About** under ❓ Help (and `CITATION.cff` in the "
         "repository). Cite the bundled demo data as OneStop Eye Movements too, "
         "and Carr et al. (2021) if you used the drift-correction algorithms.",
     ),
@@ -1406,6 +1379,11 @@ def _faq_dialog() -> None:
     the link buttons at the bottom are also the app's route into the docs from
     a help context.
     """
+    from scanpath_studio.menu import close_open_popovers
+
+    # Opened from a button inside the ❓ Help popover, whose open state is
+    # client-side — without this it floats on top of the modal.
+    close_open_popovers()
     st.caption(
         "Short answers to the questions that come up most. The full version — "
         "with the long explanations — lives on the documentation site."
@@ -1444,7 +1422,7 @@ def _arm_faq() -> None:
 
 
 def maybe_show_faq() -> None:
-    """Open the FAQ dialog if the sidebar button armed it.
+    """Open the FAQ dialog if the ❓ Help menu button armed it.
 
     Call from ``main()`` next to :func:`maybe_show_welcome_tour`, BEFORE the
     heavy data / plot work. The button sits at the *bottom* of ``main()``, so
@@ -1457,15 +1435,15 @@ def maybe_show_faq() -> None:
         _faq_dialog()
 
 
-def render_faq_button() -> None:
-    """Sidebar button that opens the in-app FAQ dialog.
+def render_faq_button(host=None) -> None:
+    """Button in the ❓ Help menu popover that opens the in-app FAQ dialog.
 
-    Sits in the sidebar's Help group next to :func:`render_tour_replay_button`,
-    and is armed the same way: an ``on_click`` callback sets a request flag that
-    the early :func:`maybe_show_faq` call serves, so the modal doesn't wait on
-    the heavy data / plot work this button renders after.
+    Sits next to :func:`render_tour_replay_button` and is armed the same way: an
+    ``on_click`` callback sets a request flag that the early
+    :func:`maybe_show_faq` call serves, so the modal doesn't wait on the heavy
+    data / plot work this button renders after.
     """
-    st.sidebar.button(
+    (host if host is not None else st).button(
         "❓ FAQ",
         key="faq_open",
         width="stretch",
@@ -1635,10 +1613,7 @@ def render_spotlight_wizard_guide() -> None:
         unsafe_allow_html=True,
     )
     if selector:
-        # The wizard is a main-area flow, so never the sidebar branch.
-        embed_html_iframe(
-            _scroll_into_view_script(selector, in_sidebar=False), height=0
-        )
+        embed_html_iframe(_scroll_into_view_script(selector), height=0)
 
     with st.container(key="tour_card"):
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.

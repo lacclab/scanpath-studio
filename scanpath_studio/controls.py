@@ -1191,10 +1191,10 @@ def column_mapping_ui(
                 st.caption(f"✨ {detected_label} `{default}`")
         return None if chosen == NONE_OPTION else chosen
 
-    host = container if container is not None else st.sidebar
+    host = container if container is not None else st.container()
     # Render inside an expander by default; ``use_expander=False`` renders inline
-    # (the collapsed wizard panel already lives in an expander — Streamlit forbids
-    # nesting expanders).
+    # (the collapsed wizard panel already lives in an expander, and the ⚙️ Configure
+    # menu popover nests no expander either — Streamlit forbids both).
     section = (
         host.expander(f"Column mapping — {table_label}", expanded=expanded)
         if use_expander
@@ -2286,9 +2286,9 @@ def sidebar_controls(
     other visual controls; when it is ``None`` (the wizard, the non-rendering
     readers) nothing is drawn there and the panel keeps its own home.
 
-    ``host`` is the container to render into; it defaults to ``st.sidebar`` for
-    backwards compatibility, but the app passes the scanpath rail
-    (``tabs.render_single_trial_tab``). The returned dict is built by
+    ``host`` is the container to render into — the app passes the scanpath rail
+    (``tabs.render_single_trial_tab``); ``None`` renders in place. The returned
+    dict is built by
     ``_collect_viz_settings`` (shared with ``viz_settings_from_state``) so the
     rendered controls and the non-rendering readers can't drift.
 
@@ -2309,9 +2309,7 @@ def sidebar_controls(
     # (`.st-key-tour_grp_viz_controls`). Values for controls not rendered this run
     # are read back from session_state by `_collect_viz_settings`, so the returned
     # dict always carries every key the figure builders depend on.
-    viz = (host if host is not None else st.sidebar).container(
-        key="tour_grp_viz_controls"
-    )
+    viz = (host if host is not None else st).container(key="tour_grp_viz_controls")
 
     # --- Quick views ------------------------------------------------------
     # Focused presets stay one compact row; Reading-order / Everything

@@ -177,11 +177,21 @@ def _use_case_tutorial_app():
 
 
 def _tutorial_library_optout_app():
+    """Mirrors app.main's ordering: serve the chooser early, render its button late.
+
+    The chooser is a dialog off the ❓ Help menu group (the menu bar made the old
+    nested ``🧭 Tutorials`` popover a popover-inside-a-popover), armed the same
+    way as the FAQ — see ``tour.maybe_show_tutorial_library``.
+    """
     import streamlit as st
 
-    from scanpath_studio.tour import render_tutorial_library
+    from scanpath_studio.tour import (
+        maybe_show_tutorial_library,
+        render_tutorial_library,
+    )
 
     st.session_state["tour_dont_show"] = True
+    maybe_show_tutorial_library()
     render_tutorial_library(
         {
             "n_trials": 2,
@@ -273,7 +283,11 @@ class TestUseCaseTutorials:
     def test_library_remains_available_after_welcome_opt_out(self):
         at = AppTest.from_function(_tutorial_library_optout_app).run()
         assert not at.exception, at.exception
-        keys = {button.key for button in at.sidebar.button if button.key}
+        # Opening the chooser is a click on the ❓ Help menu button, which arms
+        # the dialog the next run serves.
+        at.button(key="tutorial_library_open").click().run()
+        assert not at.exception, at.exception
+        keys = {button.key for button in at.button if button.key}
         assert "tutorial_start_load_inspect" in keys
         assert "tutorial_start_explore_corpus" in keys
 
@@ -303,10 +317,10 @@ class TestFaq:
 
         at = AppTest.from_function(_faq_app)
         at.run()
-        assert any(b.key == "faq_open" for b in at.sidebar.button)
+        assert any(b.key == "faq_open" for b in at.button)
         assert not at.error
 
-        at.sidebar.button(key="faq_open").click().run()
+        at.button(key="faq_open").click().run()
         assert not at.error
         assert len(at.expander) == len(_FAQ_ITEMS)
 
@@ -326,7 +340,7 @@ class TestFaq:
 
         at = AppTest.from_function(_button_only)
         at.run()
-        at.sidebar.button(key="faq_open").click().run()
+        at.button(key="faq_open").click().run()
         assert not at.error
         assert not at.expander, "the button opened the dialog itself"
         assert at.session_state["_faq_dialog_requested"] is True
@@ -359,27 +373,52 @@ class TestSpotlightSelectorsResolve:
     it just points at nothing, which no other test would notice.
     """
 
+    #: Selectors that point at Streamlit's own chrome rather than a container we
+    #: key ourselves — the native top nav has no `.st-key-*` of ours to target.
+    #: Allowlisted rather than skipped, so a typo in one still fails here.
+    PLATFORM_SELECTORS = {'[data-testid="stTopNavLinkContainer"]'}
+
     def _keyed_containers(self) -> set[str]:
         import re
         from pathlib import Path
 
+        from scanpath_studio import menu
+
         root = Path(__file__).resolve().parents[1] / "scanpath_studio"
         source = "".join(
             (root / f"{module}.py").read_text()
-            for module in ("tabs", "app", "controls", "annotations")
+            for module in ("tabs", "app", "controls", "annotations", "menu")
         )
-        return set(re.findall(r'key="([\w]+)"', source))
+        keys = set(re.findall(r'key="([\w]+)"', source))
+        # menu.py names its container keys as module constants rather than
+        # inline literals — styles.py and the tour selectors both refer to them,
+        # so they are single-sourced there. Resolve them instead of regexing.
+        return keys | {menu.MENU_KEY, menu.SAVE_RESTORE_KEY}
+
+    def _unresolved(self, selectors) -> list[str]:
+        keys = self._keyed_containers()
+        return [
+            selector
+            for selector in selectors
+            if selector
+            and selector not in self.PLATFORM_SELECTORS
+            and selector.removeprefix(".st-key-") not in keys
+        ]
+
+    def test_platform_selectors_are_current(self):
+        """The allowlist must name the selector `menu` actually uses.
+
+        Otherwise a renamed Streamlit test id would sail through the two tests
+        below on the strength of a stale allowlist entry.
+        """
+        from scanpath_studio.menu import NAV_SELECTOR
+
+        assert NAV_SELECTOR in self.PLATFORM_SELECTORS
 
     def test_every_selector_has_a_container(self):
         from scanpath_studio.tour import _SPOTLIGHT_STEPS
 
-        keys = self._keyed_containers()
-        missing = [
-            step["selector"]
-            for step in _SPOTLIGHT_STEPS
-            if step.get("selector")
-            and step["selector"].removeprefix(".st-key-") not in keys
-        ]
+        missing = self._unresolved(step.get("selector") for step in _SPOTLIGHT_STEPS)
         assert not missing, (
             "these tour steps point at containers that no longer exist — the step "
             f"will highlight nothing: {missing}"
@@ -388,13 +427,9 @@ class TestSpotlightSelectorsResolve:
     def test_every_use_case_selector_has_a_container(self):
         from scanpath_studio.tour import TUTORIALS
 
-        keys = self._keyed_containers()
-        missing = [
-            step.selector
-            for tutorial in TUTORIALS
-            for step in tutorial.steps
-            if step.selector.removeprefix(".st-key-") not in keys
-        ]
+        missing = self._unresolved(
+            step.selector for tutorial in TUTORIALS for step in tutorial.steps
+        )
         assert not missing, (
             "these use-case tutorial steps point at containers that no longer "
             f"exist: {missing}"

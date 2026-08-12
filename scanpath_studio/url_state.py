@@ -1933,6 +1933,11 @@ def _render_share_body(data_choice: str) -> None:
 # -----------------------------------------------------------------------------
 # Data loading
 # -----------------------------------------------------------------------------
+# These *request* a view by writing `main_nav`; `menu.render_nav` reconciles the
+# router to it on the next run. They are used as `on_click` callbacks, where
+# Streamlit forbids `st.switch_page` — hence the request-then-reconcile split
+# rather than navigating directly (`menu.switch_to_view` is the direct form, for
+# top-level script code).
 def _go_corpus() -> None:
     st.session_state["main_nav"] = _VIEW_CORPUS
 
@@ -1944,8 +1949,11 @@ def _go_scanpath() -> None:
 def _active_view() -> str:
     """The active top-level view, normalized to one of the two pages.
 
-    ``main_nav`` may carry a legacy/stale value (e.g. "Data Inspection", now a
-    subtab); anything that isn't Corpus resolves to the Scanpath page."""
+    Reads the `main_nav` mirror `menu.render_nav` writes from the router's
+    selection, so it stays the one answer every caller shares. It may also carry
+    a legacy/stale value (e.g. "Data Inspection", now a subtab), or a view
+    *requested* for the next run; anything that isn't Corpus resolves to the
+    Scanpath page."""
     return (
         _VIEW_CORPUS
         if st.session_state.get("main_nav") == _VIEW_CORPUS

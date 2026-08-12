@@ -10,9 +10,12 @@ render" checks there.
 
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
 from scanpath_studio import controls
+from scanpath_studio import menu as menu_mod
 from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
@@ -63,6 +66,48 @@ class TestAppLaunches:
         at.run(timeout=30)
         titles = [t.value for t in at.title]
         assert any("Scanpath Studio" in v for v in titles)
+
+    def test_nothing_renders_into_the_sidebar(self):
+        """The sidebar is gone — every group it held is a top-menu popover now.
+
+        Streamlit only draws sidebar chrome when something is written there, so
+        one stray ``st.sidebar.*`` call anywhere in the render path brings the
+        whole panel back, half-populated. Assert the container is empty rather
+        than trusting a grep: the call could be behind any branch.
+        """
+        at = _make_apptest()
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        stray = [
+            name
+            for name in ("button", "selectbox", "toggle", "expander", "markdown")
+            if len(getattr(at.sidebar, name))
+        ]
+        assert not stray, f"these still render into the sidebar: {stray}"
+
+    def test_menu_bar_hosts_every_former_sidebar_group(self):
+        """The five menu popovers exist, and the debug one stays hidden.
+
+        Each popover is the *disclosure* for a group that used to be an
+        ``st.sidebar`` expander, so a missing one means an unreachable panel —
+        not a cosmetic difference.
+        """
+        at = _make_apptest()
+        at.run(timeout=30)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # AppTest has no `.popover` accessor and its Block wrapper exposes no
+        # `.label`, so read the label off the element proto.
+        labels = {p.proto.popover.label for p in at.get("popover")}
+        for expected in (
+            "⚙️ Configure",
+            "🧹 Preprocessing",
+            "💾 Save & restore",
+            "🗄️ Recovery cache",
+            "❓ Help",
+        ):
+            assert expected in labels, f"{expected} missing from the menu bar"
+        # 🐛 Debug is only offered under ?debug=1.
+        assert "🐛 Debug" not in labels
 
     def test_synthetic_data_source_renders(self):
         # The "Synthetic test trial" source should load + render without error.
@@ -462,9 +507,13 @@ class TestDataInspectionTab:
         assert (table["Mapped column"].astype(str).str.len() > 0).all()
 
     def test_top_level_nav_views(self):
-        # Top-level navigation is now a header button toggling the two views
-        # (Scanpath ⇄ Corpus Analysis) — not a sidebar radio. Data Inspection and
-        # Share moved to subtabs of the Scanpath view.
+        # Top-level navigation is Streamlit's own top nav — `st.navigation(
+        # position="top")` — not a sidebar radio, and not the single toggling
+        # header button it replaced. `main_nav` survives as the mirror every
+        # other reader (the tour, persistence, `_active_view`) still consults.
+        # Data Inspection and Share are subtabs of the Scanpath view.
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -472,17 +521,67 @@ class TestDataInspectionTab:
         assert not [r for r in at.radio if r.key == "main_nav"], (
             "top-level nav should no longer be a radio"
         )
-        # On the Scanpath page, the header offers the Corpus Analysis toggle.
-        btn_keys = {b.key for b in at.button if b.key}
-        assert "nav_to_corpus" in btn_keys, "Corpus Analysis header button missing"
+        # The router lands on the default page, and `main_nav` mirrors it.
+        assert at.session_state["main_nav"] == _VIEW_SCANPATH
 
-        # Switching to Corpus shows the back-to-Scanpath toggle instead.
-        at2 = _make_apptest(synthetic=True)
-        at2.session_state["main_nav"] = "Corpus Analysis"
-        at2.run(timeout=60)
-        assert not at2.exception, f"Streamlit exceptions: {at2.exception}"
-        btn_keys2 = {b.key for b in at2.button if b.key}
-        assert "nav_to_scanpath" in btn_keys2, "back-to-Scanpath header button missing"
+        # A view *requested* by writing `main_nav` (what `_go_corpus` and the
+        # tour do from `on_click` callbacks, where `st.switch_page` is illegal)
+        # is honoured: `render_nav` reconciles the router to it.
+        at.session_state["main_nav"] = _VIEW_CORPUS
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["main_nav"] == _VIEW_CORPUS
+
+    def test_nav_click_is_not_bounced_back_by_the_reconciler(self):
+        """Clicking the nav must stick — it must not read as "go back".
+
+        `render_nav` reconciles a programmatically-requested view (written to
+        `main_nav` from a callback, where `st.switch_page` is illegal) against
+        the router's selection. The first cut compared `main_nav` to the
+        selection directly, so a user's click — which moves the router while
+        `main_nav` still holds last run's view — looked exactly like a request
+        to return, and the nav bounced straight back. The fix compares against
+        what the reconciler itself last mirrored; this pins it.
+        """
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+        from scanpath_studio.menu import _MIRROR_KEY, _NAV_PAGES, _PAGES, render_nav
+
+        class _FakePage:
+            def __init__(self, title):
+                self.title = title
+
+        state = {"main_nav": _VIEW_SCANPATH, _MIRROR_KEY: _VIEW_SCANPATH}
+        switched: list[str] = []
+
+        # Stand in for the router: the user just clicked "Corpus Analysis".
+        clicked = _FakePage(_NAV_PAGES[_VIEW_CORPUS][0])
+        with (
+            mock.patch.object(menu_mod.st, "session_state", state),
+            mock.patch.object(
+                menu_mod.st, "Page", lambda *a, **k: _FakePage(k["title"])
+            ),
+            mock.patch.object(menu_mod.st, "navigation", lambda *a, **k: clicked),
+        ):
+            _PAGES.clear()
+            with mock.patch.object(
+                menu_mod, "switch_to_view", lambda view: switched.append(view)
+            ):
+                active = render_nav()
+
+        assert active == _VIEW_CORPUS, "the click must land on Corpus Analysis"
+        assert switched == [], f"the click was bounced back to {switched}"
+        assert state["main_nav"] == _VIEW_CORPUS
+
+    def test_nav_pages_cover_both_views(self):
+        """The nav offers exactly the two top-level views, Scanpath first.
+
+        `_PAGES` is what `switch_to_view` navigates through, so a missing entry
+        is a view nothing can reach programmatically.
+        """
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+        from scanpath_studio.menu import _NAV_PAGES
+
+        assert list(_NAV_PAGES) == [_VIEW_SCANPATH, _VIEW_CORPUS]
 
 
 @pytest.mark.timeout(90)

@@ -2229,7 +2229,7 @@ def _render_save_restore_expander(
     font_family: str,
     slot=None,
 ):
-    """Render the "💾 Save & restore" sidebar panel (DATA-9).
+    """Render the "💾 Save & restore" menu panel (DATA-9).
 
     Merges the former Plot-configuration and Annotations panels into one: a
     single JSON sidecar that captures the full figure configuration (layers,
@@ -2237,14 +2237,18 @@ def _render_save_restore_expander(
     every per-trial annotation, with a matching uploader to restore it all. So a
     reviewer can save, share, and reload the exact state behind a figure. The
     upload is *applied* in ``app._apply_uploaded_plot_config`` (it runs before
-    the widgets render). ``slot`` is a keyed sidebar container reserved by
-    ``app.main`` so the panel sits under the controls rather than after the tab.
+    the widgets render). ``slot`` is the 💾 Save & restore popover ``app.main``
+    reserves on the top menu bar, so the panel is reachable from every view
+    instead of landing after whichever tab happened to render it.
+
+    Renders bare into ``slot``: the popover trigger is the disclosure, and a
+    popover nests no expander (see :mod:`scanpath_studio.menu`).
     """
     from datetime import datetime
 
     from scanpath_studio import __version__, annotations
 
-    container = slot if slot is not None else st.sidebar
+    container = slot if slot is not None else st.container()
     annotation_records = annotations.current_records()
     # Provenance: which data source + how its columns were mapped +
     # the app version + when it was exported, so a saved config records the full
@@ -2293,36 +2297,29 @@ def _render_save_restore_expander(
         exported_at=datetime.now().isoformat(timespec="seconds"),
         compare_styles=compare_styles,
     )
-    open_requested = bool(st.session_state.pop("_open_save_restore", False))
-    if open_requested:
+    # The annotations panel's "save these too" shortcut asks for this panel to
+    # open. It used to expand the sidebar and then the expander inside it; now
+    # the panel *is* a menu popover, so one click on its trigger is the whole
+    # job — no aria-expanded gate, because a popover trigger is always laid out.
+    # Still retried: a click during React hydration is silently lost.
+    if st.session_state.pop("_open_save_restore", False):
         with container:
             embed_html_iframe(
                 """<script>
                 (function () {
                     const doc = window.parent.document;
                     let tries = 0;
-                    (function openSidebar() {
-                        const sidebar = doc.querySelector(
-                            'section[data-testid="stSidebar"]');
-                        if (!sidebar) return;
-                        if (sidebar.getAttribute("aria-expanded") !== "true") {
-                            doc.querySelector(
-                                'button[data-testid="stExpandSidebarButton"]'
-                            )?.click();
-                            if (++tries < 20) setTimeout(openSidebar, 100);
-                            return;
-                        }
-                        doc.querySelector(".st-key-tour_grp_save_restore")
-                            ?.scrollIntoView({block: "nearest"});
+                    (function openMenu() {
+                        const trigger = doc.querySelector(
+                            ".st-key-tour_grp_save_restore button");
+                        if (trigger) { trigger.click(); return; }
+                        if (++tries < 20) setTimeout(openMenu, 100);
                     })();
                 })();
                 </script>""",
                 height=0,
             )
-    with container.expander(
-        "💾 Save & restore",
-        expanded=open_requested,
-    ):
+    with container:
         n_anno = len(annotation_records)
         st.caption(
             "Save the full plot configuration **and** all annotations "

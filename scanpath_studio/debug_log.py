@@ -131,21 +131,25 @@ def _state_snapshot() -> List[Dict[str, str]]:
     return rows
 
 
-def render_debug_panel() -> None:
-    """Render the sidebar debug toggle + panel.
+def render_debug_panel(host=None) -> None:
+    """Render the debug toggle + panel into the 🐛 Debug menu popover.
 
-    No-op unless ``?debug=1`` is set. The toggle then controls the expander
-    holding the captured-log view, a state snapshot, and a JSON download.
+    No-op unless ``?debug=1`` is set — which is also what puts the popover on
+    the menu bar (``menu.render_top_menu(show_debug=…)``), so ``host`` is None
+    in exactly the sessions this returns early for. The toggle then reveals the
+    captured-log view, a state snapshot, and a JSON download, rendered bare: a
+    popover nests no expander.
     """
     if not debug_enabled():
         return
 
-    if not st.sidebar.toggle("🐛 Debug mode", key="_debug_mode_on"):
+    panel = host if host is not None else st.container()
+    if not panel.toggle("🐛 Debug mode", key="_debug_mode_on"):
         return
 
     records = list(_buffer())
 
-    with st.sidebar.expander("🐛 Debug log", expanded=True):
+    with panel:
         cols = st.columns([3, 1])
         with cols[0]:
             min_level = st.selectbox(

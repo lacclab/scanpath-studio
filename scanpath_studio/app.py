@@ -131,13 +131,22 @@ from scanpath_studio.datasets import (
     load_multipleye_server_bundle,
     multipleye_bundle_dir,
 )
-from scanpath_studio.debug_log import install_log_capture, render_debug_panel
+from scanpath_studio.debug_log import (
+    debug_enabled,
+    install_log_capture,
+    render_debug_panel,
+)
 from scanpath_studio.easter_egg import render_easter_egg
 from scanpath_studio.experimental_setup import (
     Provenance,
     SetupSnapshot,
     font_pt_to_px,
     pixels_per_degree,
+)
+from scanpath_studio.menu import (
+    close_open_popovers,
+    render_top_menu,
+    view_label,
 )
 from scanpath_studio.multipart import SCREEN_ID, extract_part
 from scanpath_studio.persistence import (
@@ -163,13 +172,13 @@ from scanpath_studio.tabs import (
 from scanpath_studio.tour import (
     build_tutorial_context,
     maybe_show_faq,
+    maybe_show_tutorial_library,
     maybe_show_welcome_tour,
     render_faq_button,
     render_spotlight_tour,
     render_tour_replay_button,
     render_tutorial_library,
     render_use_case_tutorial,
-    spotlight_tour_pending,
 )
 from scanpath_studio.url_state import (
     _active_view,
@@ -178,8 +187,6 @@ from scanpath_studio.url_state import (
     _apply_url_preset,
     _apply_url_trial_selection,
     _build_share_query,  # noqa: F401  re-exported for tests
-    _go_corpus,
-    _go_scanpath,
     _render_share_body,
 )
 
@@ -229,70 +236,33 @@ def public_datasets_enabled() -> bool:
 def configure_page() -> None:
     """Streamlit page config + custom CSS.
 
-    When loaded from an iframe with `?embed=true`, Streamlit's built-in embed
-    mode already hides the header/menu — we additionally collapse the sidebar
-    so the iframe is mostly the plot. Welcome-tour sessions also start with
-    the sidebar closed: the centered welcome renders over a quiet page, and
-    the tour's first sidebar step opens it (see tour.spotlight_tour_pending).
+    No ``initial_sidebar_state``: nothing writes to ``st.sidebar`` any more (the
+    former sidebar groups are popovers on the top menu bar — see
+    :mod:`scanpath_studio.menu`), so Streamlit renders no sidebar chrome to
+    collapse. Embeds and welcome-tour sessions used to ask for it explicitly;
+    both now get a page with no sidebar at all, which is what they wanted.
     """
-    is_embed = (st.query_params.get("embed") or "").lower() in {"true", "1"}
     st.set_page_config(
         page_title="Scanpath Studio - Visualization of Eye Movements in Reading",
         page_icon="👀",
         layout="wide",
-        initial_sidebar_state=(
-            "collapsed" if (is_embed or spotlight_tour_pending()) else "auto"
-        ),
     )
     st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
 def _render_about_panel() -> None:
-    """Compact header: title + caption + the Corpus Analysis ⇄ Scanpath toggle.
+    """The page heading: title + caption.
 
-    The header button switches between the two top-level views (it replaced the
-    former Share button — Share is now a subtab of the Scanpath view). The
-    **About** popover lives in the sidebar Help group (``_render_about_sidebar``),
-    keeping the header lean.
+    Sits *below* the two chrome rows (nav switch, then the settings menu bar —
+    both drawn by ``menu.render_top_menu``), so navigation is the first thing on
+    the page. The view switch used to live up here as a single right-aligned
+    button; it is now a persistent two-way ``st.segmented_control`` on the nav
+    row (``menu.render_nav``). **About** is a dialog off the ❓ Help menu group.
     """
     header = st.container(key="about_header")
-    # Same ratio + gap as the Scanpath view's plot/control-rail split
-    # (`tabs.render_single_trial_tab`: `st.columns([4, 1], gap="large")`), so the
-    # full-width nav button lines up exactly with the rail card below it.
-    title_col, buttons_col = header.columns(
-        [4, 1], gap="large", vertical_alignment="center"
-    )
-    with title_col:
+    with header:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")
-    # The keyed wrapper right-aligns the content-sized trigger (see
-    # `.st-key-header_buttons` in styles.py). It's also the spotlight-tour target.
-    #
-    # UX-18: this button is the *only* door to the whole Corpus Analysis half of
-    # the app, and as a plain secondary button it was routinely missed. Outbound
-    # it renders `primary` with a → cue; the return trip stays quiet (secondary,
-    # ← cue) so the two don't compete. Still one button, not a second navigation
-    # system.
-    button_row = buttons_col.container(key="header_buttons")
-    with button_row:
-        if _active_view() == _VIEW_CORPUS:
-            st.button(
-                "← Scanpath",
-                key="nav_to_scanpath",
-                on_click=_go_scanpath,
-                width="stretch",
-                help="Back to the single-trial scanpath visualization.",
-            )
-        else:
-            st.button(
-                "📊 Corpus Analysis →",
-                key="nav_to_corpus",
-                type="primary",
-                on_click=_go_corpus,
-                width="stretch",
-                help="Switch to the corpus-level half of the app: aggregate "
-                "across readers, texts and groups instead of one trial at a time.",
-            )
 
 
 # Base URL for the DiLi Lab (UZH) people pages — three co-author links hang off
@@ -471,7 +441,7 @@ def _toggle_recovery_saving() -> None:
 
 
 def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
-    """Render the "🗄️ Recovery cache" sidebar panel (ENG-30).
+    """Render the "🗄️ Recovery cache" menu panel (ENG-30).
 
     ENG-26 made a local session survive a refresh or a restart, but silently:
     nothing in the app said that a copy of the loaded tables was being written
@@ -482,21 +452,25 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
     stored instead of hiding, so the difference between deployments is visible
     from the same place.
 
-    ``slot`` is the sidebar container ``main`` reserves in place, so the panel
-    can render *after* this run's ``save_local_state`` and still sit under 💾
-    Save & restore. ``cache_status`` re-reads the manifest each run (a few
-    ``stat`` calls plus a small JSON) rather than being cached — a status panel
-    that lags the thing it reports is worse than no panel.
+    ``slot`` is the 🗄️ Recovery cache popover ``main`` reserves on the top menu
+    bar, so the panel can render *after* this run's ``save_local_state`` and
+    still sit in its own menu group. ``cache_status`` re-reads the manifest each
+    run (a few ``stat`` calls plus a small JSON) rather than being cached — a
+    status panel that lags the thing it reports is worse than no panel.
+
+    Renders **bare** into ``slot``: the popover trigger is the disclosure, so
+    the old ``expander("🗄️ Recovery cache")`` would only repeat the label (and a
+    popover nests no expander anyway). See :mod:`scanpath_studio.menu`.
     """
-    container = slot if slot is not None else st.sidebar
+    container = slot if slot is not None else st.container()
     status = cache_status(url=app_url)
-    with container.expander("🗄️ Recovery cache", expanded=False):
+    with container:
         if not status["enabled"]:
             st.caption(
                 "**Off here.** This deployment keeps your session in memory "
                 "only — a refresh or a restart loses uploaded datasets, "
-                "mappings, and annotations. Use **💾 Save & restore** above to "
-                "keep your work, or run Scanpath Studio locally (or as the "
+                "mappings, and annotations. Use **💾 Save & restore** on the "
+                "menu bar to keep your work, or run Scanpath Studio locally (or as the "
                 "desktop app), where the session is restored automatically."
             )
             if status["override"] == "off":
@@ -572,14 +546,53 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         )
 
 
-def _render_about_sidebar() -> None:
-    """Render the **About** popover in the sidebar Help group.
+def _arm_about() -> None:
+    """``on_click`` callback for the About button: request the dialog.
 
-    Holds the version, authors, code link, and citation. Lives in the sidebar
-    (next to **🎓 Show tutorial**) rather than the header so the header stays
-    lean; Share remains in the header because the link it builds is contextual to
-    the current trial/view."""
+    Same shape as ``tour._arm_faq`` — a dialog can't be opened from a callback,
+    so this only sets a flag :func:`maybe_show_about` serves early in ``main``.
+    """
+    st.session_state["_about_dialog_requested"] = True
+
+
+def maybe_show_about() -> None:
+    """Open the About dialog if the ❓ Help menu button armed it.
+
+    Call from ``main()`` beside ``maybe_show_faq``, BEFORE the heavy data / plot
+    work: the button renders at the very *bottom* of ``main()``, so serving the
+    dialog from its return value would leave the modal waiting on the whole
+    rerun (including the ~10 s plot embeds).
+    """
+    if st.session_state.pop("_about_dialog_requested", False):
+        _about_dialog()
+
+
+def render_about_button(host=None) -> None:
+    """Render the **ℹ️ About** button in the top menu's ❓ Help popover.
+
+    A dialog rather than the popover it used to be: a popover nests no popover,
+    and About is long (authors, links, BibTeX, the AI-assistance note) — inline
+    in Help it would bury the tour and tutorial buttons above it. It is also
+    pure display, so unlike ⚙️ Configure it loses nothing by only rendering while
+    open (see :mod:`scanpath_studio.menu`).
+    """
+    (host if host is not None else st).button(
+        "ℹ️ About",
+        key="about_open",
+        width="stretch",
+        help="Version, authors, licence, and how to cite Scanpath Studio.",
+        on_click=_arm_about,
+    )
+
+
+@st.dialog("ℹ️ About Scanpath Studio", width="large")
+def _about_dialog() -> None:
+    """The About modal: version, authors, links, citation, AI-assistance note."""
     from scanpath_studio import __version__
+
+    # The button that opened this sits inside the ❓ Help popover, whose open
+    # state is client-side — without this it floats on top of the modal.
+    close_open_popovers()
 
     bibtex = (
         "@software{Shubi_Scanpath_Studio_2026,\n"
@@ -594,9 +607,8 @@ def _render_about_sidebar() -> None:
         "year = {2026}\n"
         "}"
     )
-    with st.sidebar.popover("ℹ️ About", width="stretch"):
-        st.markdown(
-            f"""
+    st.markdown(
+        f"""
 **Scanpath Studio** v{__version__} — interactive visualization of eye
 movements in reading.
 
@@ -619,37 +631,37 @@ University of Zurich
 
 🧪 [ACL 2025 Tutorial: Eye Tracking and NLP](https://acl2025-eyetracking-and-nlp.github.io/) ↗
 """
-        )
-        # UX-16: the BibTeX block is tall enough to push everything above it out
-        # of view, so it opens on demand — but it stays a named section of its
-        # own (divider + bold label) rather than a footnote, since "how do I cite
-        # this?" is the single most common reason to open About.
-        st.divider()
-        st.markdown("**📖 Citing Scanpath Studio** — a paper is in preparation.")
-        with st.expander("Show BibTeX", expanded=False):
-            st.code(bibtex, language="bibtex", wrap_lines=True)
-            st.markdown(
-                """
+    )
+    # UX-16: the BibTeX block is tall enough to push everything above it out
+    # of view, so it opens on demand — but it stays a named section of its
+    # own (divider + bold label) rather than a footnote, since "how do I cite
+    # this?" is the single most common reason to open About.
+    st.divider()
+    st.markdown("**📖 Citing Scanpath Studio** — a paper is in preparation.")
+    with st.expander("Show BibTeX", expanded=False):
+        st.code(bibtex, language="bibtex", wrap_lines=True)
+        st.markdown(
+            """
 If you use the bundled demo data, also cite
 [OneStop Eye Movements](https://doi.org/10.1038/s41597-025-06272-2)
 (Berzak et al., 2025, *Scientific Data*).
 """
-            )
-        # UX-20. A bare "built with AI, there may be bugs" is unfalsifiable, so
-        # this points at what the reader can verify — not at how much effort went
-        # in, which they have no way to check. Deliberately not a liability
-        # disclaimer either: MIT already carries that.
-        st.divider()
-        st.markdown("**🤖 Built with AI assistance**")
-        st.markdown(
-            f"""
+        )
+    # UX-20. A bare "built with AI, there may be bugs" is unfalsifiable, so
+    # this points at what the reader can verify — not at how much effort went
+    # in, which they have no way to check. Deliberately not a liability
+    # disclaimer either: MIT already carries that.
+    st.divider()
+    st.markdown("**🤖 Built with AI assistance**")
+    st.markdown(
+        f"""
 Scanpath Studio was built with AI assistance. Cross-check results before
 publishing; verify the ground-truth trial with `?source=synthetic`, and note
 that EyeLink `IA_*` measures already in your export are passed through, not
 recomputed. If something looks wrong, [open an issue]({CITATION["url"]}/issues) ↗
 with your **💾 Save & restore** JSON.
 """
-        )
+    )
 
 
 # --- Public-dataset access UI (directory + expected files + download) --------
@@ -1060,7 +1072,7 @@ def _load_potec_source(
     """
     from scanpath_studio import datasets
 
-    loc = location_host if location_host is not None else st.sidebar
+    loc = location_host if location_host is not None else st.container()
     root = _dataset_dir_input(
         loc,
         default_dir=POTEC_DEFAULT_DIR,
@@ -1127,8 +1139,8 @@ def _load_multipleye_source(
     fixation-source radio above, the data location below); default to their own
     expanders when called standalone.
     """
-    opt = options_host if options_host is not None else st.sidebar
-    loc = location_host if location_host is not None else st.sidebar
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
     fixation_source = opt.radio(
         "Fixation source",
         options=["scanpaths", "fixations"],
@@ -1208,8 +1220,8 @@ def _load_onestop_public_source(
     """
     from scanpath_studio import datasets
 
-    opt = options_host if options_host is not None else st.sidebar
-    loc = location_host if location_host is not None else st.sidebar
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
     variant = opt.selectbox(
         "Variant",
         options=list(ONESTOP_VARIANT_LABELS),
@@ -1354,7 +1366,7 @@ def _load_public_dataset(
         chosen = next(iter(PUBLIC_DATASET_REGISTRY))
         st.session_state["public_dataset_choice"] = chosen
     spec = PUBLIC_DATASET_REGISTRY[chosen]
-    desc = description_host if description_host is not None else st.sidebar
+    desc = description_host if description_host is not None else st.container()
     facts = " · ".join(f for f in (spec.get("language"), spec.get("size")) if f)
     if facts:
         desc.caption(facts)
@@ -1652,6 +1664,9 @@ def prepare_data(
                 proposed=word_proposed,
                 problems=validate_word_schema(word_proposed),
                 container=mapping_host,
+                # The host is the ⚙️ Configure menu popover, which nests no
+                # expander — render the panel inline with its own bold header.
+                use_expander=False,
             )
         else:
             word_schema = word_proposed
@@ -1670,6 +1685,7 @@ def prepare_data(
                 proposed=fix_proposed,
                 problems=validate_fix_schema(fix_proposed),
                 container=mapping_host,
+                use_expander=False,
             )
         else:
             fix_schema = fix_proposed
@@ -1792,7 +1808,7 @@ def _read_uploaded_frame(
     ``_uploaded_file_key``) so a large uploaded table is read once, not re-parsed
     on every rerun. Isolated from the mapping render so tests can inject frames
     without a real upload (AppTest can't drive ``st.file_uploader``)."""
-    host = container if container is not None else st.sidebar
+    host = container if container is not None else st.container()
     uploaded = host.file_uploader(
         uploader_label,
         type=_UPLOAD_TYPES,
@@ -1834,7 +1850,7 @@ def _read_uploaded_frame(
     return _read_uploaded_table_cached(uploaded, _uploaded_file_key(uploaded))
 
 
-def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
+def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataFrame:
     """Load and normalize optional raw gaze data (millisecond-level eye positions).
 
     Raw gaze data provides finer temporal resolution than fixation-level data
@@ -1845,6 +1861,11 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
             bundled sample gaze; other built-in sources have none). The Upload
             source and stored datasets carry their own raw gaze, so ``main``
             doesn't call this for them.
+        host: Where the optional uploader + its column mapping render — the
+            ⚙️ Configure popover on the top menu bar.
+        notices: Where the "raw gaze ignored" warnings render. Deliberately the
+            **main area**, not ``host``: a warning inside a closed popover is
+            invisible, which the always-visible sidebar never was.
 
     Returns:
         Normalized raw gaze DataFrame with canonical columns, or empty DataFrame
@@ -1859,6 +1880,8 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
         - Shows info message if sample data unavailable
     """
     raw_gaze_df = pd.DataFrame()
+    cfg = host if host is not None else st.container()
+    warn = notices if notices is not None else st.container()
 
     if data_choice in (SYNTHETIC_CHOICE, PUBLIC_DATASETS_CHOICE):
         # Neither the synthetic trial nor the public corpora ship raw gaze;
@@ -1873,10 +1896,10 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
                 _stash_active_mapping("raw_gaze", raw_gaze_schema)
                 raw_gaze_df = normalize_raw_gaze(raw_gaze_df, raw_gaze_schema)
             else:
-                st.sidebar.warning("Could not infer raw gaze schema from sample data")
+                warn.warning("Could not infer raw gaze schema from sample data")
                 raw_gaze_df = pd.DataFrame()
     else:
-        uploaded_raw_gaze = st.sidebar.file_uploader(
+        uploaded_raw_gaze = cfg.file_uploader(
             "Raw gaze table (optional)",
             type=["csv", "parquet", "feather", "zip"],
             help="Optional: millisecond-level gaze with participant_id, trial_id, x, y.",
@@ -1885,17 +1908,18 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
             raw_gaze_df = read_table(uploaded_raw_gaze)
             proposed = propose_raw_gaze_schema(raw_gaze_df)
             initial_problems = validate_raw_gaze_schema(proposed)
-            raw_gaze_schema = column_mapping_ui(
-                raw_gaze_df,
-                table_label="Raw gaze",
-                state_key_prefix="col_map_raw_gaze",
-                field_specs=RAW_GAZE_FIELD_SPECS,
-                proposed=proposed,
-                problems=initial_problems,
-            )
+            with cfg:
+                raw_gaze_schema = column_mapping_ui(
+                    raw_gaze_df,
+                    table_label="Raw gaze",
+                    state_key_prefix="col_map_raw_gaze",
+                    field_specs=RAW_GAZE_FIELD_SPECS,
+                    proposed=proposed,
+                    problems=initial_problems,
+                )
             problems = validate_raw_gaze_schema(raw_gaze_schema)
             if problems:
-                st.sidebar.warning("Raw gaze ignored — " + "; ".join(problems))
+                warn.warning("Raw gaze ignored — " + "; ".join(problems))
                 raw_gaze_df = pd.DataFrame()
             else:
                 _stash_active_mapping("raw_gaze", raw_gaze_schema)
@@ -1905,13 +1929,12 @@ def load_raw_gaze_data(data_choice: str) -> pd.DataFrame:
 
 
 # -----------------------------------------------------------------------------
-# Sidebar controls
+# Data-source resolution + the panels the top menu bar hosts
+#
+# `_sidebar_group` is gone with the sidebar: each former group is now its own
+# popover on the menu bar (see `menu.render_top_menu`), and the popover's trigger
+# label is the group heading. Nothing left to title.
 # -----------------------------------------------------------------------------
-
-
-def _sidebar_group(title: str) -> None:
-    """Render a section title that groups the toggles below it in the sidebar."""
-    st.sidebar.markdown(f"### {title}")
 
 
 def render_sidebar_data_source() -> str:
@@ -2468,7 +2491,7 @@ def render_sidebar_canvas_controls(
     """
     seed_canvas_state(words_filtered, fixations_filtered, data_choice)
     _, font_css = _dataset_font(words_filtered)
-    host = slot if slot is not None else st.sidebar
+    host = slot if slot is not None else st.container()
     display = host if bare else host.expander(title, expanded=expanded)
     # Both sub-groups are created up front (Streamlit lays containers out in
     # creation order), so the code below keeps its order while landing in the
@@ -2916,11 +2939,16 @@ _PREPROC_DEFAULTS: dict = {
 }
 
 
-def _preprocessing_settings() -> dict:
-    """Render the PRE-1 controls and return their cache-key-safe settings."""
+def _preprocessing_settings(host=None) -> dict:
+    """Render the PRE-1 controls and return their cache-key-safe settings.
+
+    ``host`` is the 🧹 Preprocessing popover on the top menu bar. Renders bare
+    into it — the trigger is the disclosure, and a popover nests no expander
+    (see :mod:`scanpath_studio.menu`).
+    """
     for key, default in _PREPROC_DEFAULTS.items():
         st.session_state.setdefault(key, default)
-    with st.sidebar.expander("🧹 Preprocessing", expanded=False):
+    with host if host is not None else st.container():
         enabled = st.toggle(
             "Enable preprocessing",
             key="global_preproc_enabled",
@@ -2969,10 +2997,13 @@ def _preprocessing_settings() -> dict:
         }
 
 
-def _activate_data_source(data_choice: str) -> dict:
-    """Reset source-scoped state and return the active preprocessing settings."""
+def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
+    """Reset source-scoped state and return the active preprocessing settings.
+
+    ``preproc_host`` is the 🧹 Preprocessing popover on the top menu bar.
+    """
     st.session_state["_active_data_source"] = data_choice
-    preprocessing = _preprocessing_settings()
+    preprocessing = _preprocessing_settings(preproc_host)
     if st.session_state.get("_share_selection_source") != data_choice:
         st.session_state.pop("_share_selection", None)
         st.session_state["_share_selection_source"] = data_choice
@@ -3031,9 +3062,6 @@ def main() -> None:
     # Start capturing log records into the in-app debug buffer before any data
     # or plot work runs, so the debug panel (?debug=1) sees this run's logs.
     install_log_capture()
-    # The header holds the title + the Corpus Analysis ⇄ Scanpath view toggle.
-    _render_about_panel()
-
     # Apply deep-link presets BEFORE any widget renders — see _apply_url_preset
     # for the full URL schema. External tools can deep-link into this app with
     # `?source=...&participant=...&trial=...&...` to land on a specific trial
@@ -3051,10 +3079,10 @@ def main() -> None:
     ):
         # ENG-30: say it once, where the user is looking. Silently repopulating a
         # session reads as "the app kept my data somewhere" without saying where;
-        # the toast points at the sidebar panel that answers that.
+        # the toast points at the menu panel that answers that.
         st.toast(
             "Restored your last session from this computer — see 🗄️ Recovery "
-            "cache in the sidebar.",
+            "cache on the menu bar.",
             icon="↩️",
         )
     if url_source == "onestop" and onestop_data_dir() is not None:
@@ -3074,6 +3102,19 @@ def main() -> None:
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
 
+    # Chrome first, page heading second: Streamlit's native top nav, then the
+    # settings menu bar, then the title.
+    #
+    # AFTER `restore_local_state`, deliberately: `render_nav` resolves the active
+    # view and writes `main_nav`, so running it earlier would pin the view to the
+    # router's default before the recovery cache could restore the one the user
+    # was last on. BEFORE any data loading, equally deliberately: the loaders'
+    # directory inputs, download buttons and column-mapping panels fill the bar's
+    # popovers by `host=`, so those slots have to exist first — the same
+    # reserve-then-fill discipline the sidebar containers had.
+    menu = render_top_menu(show_debug=debug_enabled())
+    _render_about_panel()
+
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
     # work, so the welcome streams to the browser immediately instead of
@@ -3089,20 +3130,49 @@ def main() -> None:
     # doesn't care about DOM order, being a height-0 script that retries until the
     # heading has hydrated.
     render_easter_egg()
-    # UX-15: same deal for the FAQ dialog — the sidebar button that arms it
+    # UX-15: same deal for the FAQ dialog — the ❓ Help menu button that arms it
     # renders at the bottom of this function, so serving it here is what keeps
-    # the modal from waiting out the whole rerun.
+    # the modal from waiting out the whole rerun. Ditto ℹ️ About, a dialog since
+    # the menu bar made it a popover inside a popover.
     maybe_show_faq()
+    maybe_show_about()
+    maybe_show_tutorial_library()
 
-    # Active top-level view (set by the header Corpus⇄Scanpath button). Read here
-    # so the dispatch below renders only the active page.
+    # Active top-level view (set by the nav switch). Read here so the dispatch
+    # below renders only the active page.
     active_view = _active_view()
+
+    # Switching view is a full rerun — data load, filters, then a page of fresh
+    # figures — and Streamlit leaves the OLD view painted until the new run
+    # overwrites each element. So a click on "Corpus Analysis" left the scanpath
+    # sitting there, looking like nothing had happened. Paint a bridge the
+    # moment we know the view changed: it lands high on the page, before the
+    # slow work, so the click gets an immediate answer. Cleared just before the
+    # real view renders. Same pattern (and reasoning) as `_finalizing_bridge`
+    # above — see ENG-36 for why the message keeps its own line above the
+    # skeleton rather than relying on a bare skeleton to explain itself.
+    #
+    # The container is created on EVERY run, not only on a switch, and only
+    # *filled* on a switch. Streamlit reconciles the element tree by position:
+    # a run that skipped creating it left the previous run's banner + skeleton
+    # sitting there unclaimed, so the "Loading…" never went away. Always
+    # claiming the slot means the next run overwrites it with an empty
+    # container, which is what clears it.
+    _view_bridge = st.container()
+    if st.session_state.get("_last_rendered_view") not in (None, active_view):
+        _view_bridge.info(f"Loading {view_label(active_view)}…", icon="⏳")
+        _view_bridge.skeleton(height=420)
+    else:
+        _view_bridge = None
+    st.session_state["_last_rendered_view"] = active_view
 
     # Data source selection. UX-25: only the *resolution* happens here (it must
     # precede the load); the picker itself renders in the main view — on the
     # Scanpath "Filter by" row, or at the top of the Corpus view.
     data_choice = render_sidebar_data_source()
-    preproc_settings = _activate_data_source(data_choice)
+    preproc_settings = _activate_data_source(
+        data_choice, preproc_host=menu.preprocessing
+    )
     # Just-finalized upload: paint a "loading" bridge into the main area now so it
     # repaints over the wizard (instead of the wizard lingering until the slow
     # first figure finishes). Cleared just before the tabs render below.
@@ -3127,18 +3197,15 @@ def main() -> None:
     #     Options          (source-specific: OneStop regime + parts + variant, …)
     #     Data location    (path input + Expected files + found/download status)
     #     Column mapping
-    # A neutral "Configure" header replaces the old "<name> options" (the source
-    # name is already shown in the picker above). The slot is a plain container so
-    # the Column mapping panel keeps its own expander (container → expander is
-    # fine; only expander-in-expander is not).
+    # The group is now the ⚙️ Configure popover itself, so it needs no "Configure"
+    # header of its own — the trigger label carries it. Column mapping renders as
+    # a plain bordered section rather than the expander it was: a popover nests
+    # no expander (see `menu.py`).
     #
     # VIZ-31 removed the "Experimental Setup" slot from this group: monitor
     # geometry, fonts, text colour and plot background are figure settings, and
     # they now render in the Scanpath rail beside the layers they restyle.
-    dataset_options_slot = st.sidebar.container()
-    # The Upload wizard owns the page (and its own mapping) — no config group.
-    if data_choice != UPLOAD_CHOICE:
-        dataset_options_slot.markdown("**⚙️ Configure**")
+    dataset_options_slot = menu.configure
     description_slot = dataset_options_slot.container()
     source_options_slot = dataset_options_slot.container()
     data_location_slot = dataset_options_slot.container()
@@ -3311,7 +3378,9 @@ def main() -> None:
     # Optional raw gaze: the Upload source already mapped + normalized it above;
     # every other source loads it here (bundled demo sample, OneStop uploader).
     if raw_gaze_df is None:
-        raw_gaze_df = load_raw_gaze_data(data_choice)
+        raw_gaze_df = load_raw_gaze_data(
+            data_choice, host=menu.configure, notices=menu.notices
+        )
 
     if preproc_settings["enabled"]:
         fixations_df, preproc_report = preprocess_fixation_stage(
@@ -3406,7 +3475,7 @@ def main() -> None:
             # Informational, not an error: the loaded raw-gaze samples just
             # don't cover any trial in the current filter (raw gaze typically
             # exists for only a subset of trials). The overlay is optional.
-            st.sidebar.caption(
+            menu.notices.caption(
                 f"ℹ️ The loaded raw-gaze samples ({len(raw_gaze_df):,} rows) don't "
                 "overlap the current trial filter, so the raw-gaze overlay is "
                 "unavailable here."
@@ -3488,16 +3557,15 @@ def main() -> None:
         fixations_filtered, base_font_size, words=words_filtered
     )
 
-    # Reserve the "💾 Save & restore" slot here (a keyed container so the
-    # spotlight tour can target it); the active view fills it later (it needs the
-    # live selection + figure settings for the download). See
+    # The "💾 Save & restore" slot is its own popover on the menu bar (keyed
+    # `tour_grp_save_restore`, which the spotlight tour and the annotations
+    # panel's "jump here" affordance both target). The active view fills it later
+    # — it needs the live selection + figure settings for the download. See
     # tabs._render_save_restore_expander. This single panel merges the former
-    # Plot-configuration and Annotations sidebar panels. Under DATA-9, it's
-    # its own top-level section (a divider separates it from the data-source
-    # config above), since saving/restoring plot config + annotations is a global
+    # Plot-configuration and Annotations panels; it is a top-level menu group of
+    # its own, since saving/restoring plot config + annotations is a global
     # session feature, not part of any one source's setup.
-    st.sidebar.divider()
-    save_restore_slot = st.sidebar.container(key="tour_grp_save_restore")
+    save_restore_slot = menu.save_restore
 
     # Whole-dataset combos for the Bulk Export tab's "Export the whole dataset"
     # option, mirroring how `combos` is built from the filtered frames.
@@ -3509,10 +3577,12 @@ def main() -> None:
         else raw_gaze_df
     )
 
-    # Clear the post-finalize "loading" bridge now that the real content is about
-    # to render in its place.
+    # Clear the "loading" bridges now that the real content is about to render
+    # in their place — the post-finalize one, and the view-switch one.
     if _finalizing_bridge is not None:
         _finalizing_bridge.empty()
+    if _view_bridge is not None:
+        _view_bridge.empty()
 
     # Render tabbed interface. Animation is now a checkbox inside the Scanpath
     # Visualization tab (no separate Animated Scanpath tab); Bulk Export has its
@@ -3608,46 +3678,48 @@ def main() -> None:
         slot=save_restore_slot,
     )
     # ENG-30: the automatic counterpart to the portable JSON above — what the app
-    # is keeping on this machine, and the controls for it. Only the slot is
-    # reserved here (so the panel sits under Save & restore); it is FILLED after
+    # is keeping on this machine, and the controls for it. It is FILLED after
     # this run's save_local_state, or it would report the previous run's cache
-    # and read "nothing stored yet" on the run that first stores something.
-    recovery_cache_slot = st.sidebar.container()
+    # and read "nothing stored yet" on the run that first stores something —
+    # which is exactly why the slot has to be a popover reserved up front rather
+    # than something rendered in place down here.
+    recovery_cache_slot = menu.recovery_cache
 
     # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
     # share_renderer passed into render_single_trial_tab), so it builds its deep
     # link from the resolved trial + live viz settings right where it's shown.
 
-    # Sidebar Help group (bottom): replay the welcome tour (the tour itself
-    # renders early in this function — see the maybe_show_welcome_tour call) and
-    # the About popover (moved here from the header).
-    _sidebar_group("❓ Help")
-    render_tour_replay_button()
+    # The ❓ Help menu group: replay the welcome tour (the tour itself renders
+    # early in this function — see the maybe_show_welcome_tour call), the task
+    # tutorials, the FAQ, the docs, and About.
+    help_menu = menu.help
+    render_tour_replay_button(help_menu)
     render_tutorial_library(
-        build_tutorial_context(words_filtered, fixations_filtered, combos)
+        build_tutorial_context(words_filtered, fixations_filtered, combos),
+        host=help_menu,
     )
     # UX-15: a handful of recurring questions answered in-app, linking out to the
     # full FAQ / tutorials on the docs site for anything longer. Like the tour
     # button it only arms the dialog; maybe_show_faq (above) opens it.
-    render_faq_button()
+    render_faq_button(help_menu)
     # UX-17: the docs site is the full reference — link it directly here, not
-    # only from inside the About popover.
+    # only from inside the About dialog.
     # The "↗" marks it as leaving the app — a link_button opens a new browser tab,
-    # unlike every other control in the sidebar.
-    st.sidebar.link_button(
+    # unlike every other control on the menu bar.
+    help_menu.link_button(
         "📚 Documentation ↗",
         CITATION["docs_url"],
         width="stretch",
         help="Guides, the column-mapping reference, and the Python API. Opens in "
         "a new tab.",
     )
-    _render_about_sidebar()
+    render_about_button(help_menu)
 
-    # Developer debug panel — hidden unless the URL carries ?debug=1, which
-    # reveals a "🐛 Debug mode" toggle that opens the captured-log view.
-    render_debug_panel()
+    # Developer debug panel — hidden unless the URL carries ?debug=1, which is
+    # also what put the 🐛 Debug popover on the menu bar to host it.
+    render_debug_panel(menu.debug)
 
-    # Persist after all view/sidebar widgets have written their current values.
+    # Persist after all view/menu widgets have written their current values.
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
     # …then report on what that just wrote, into the slot reserved above.

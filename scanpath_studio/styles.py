@@ -43,42 +43,28 @@ def get_app_css() -> str:
     [data-stale="true"] {
         opacity: 1 !important;
     }
-    /* Header button row (the Corpus Analysis ⇄ Scanpath view toggle): right-align
-       the content-sized trigger so it lines up with the page content's right edge. */
-    .st-key-header_buttons {
-        flex-direction: row;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .st-key-header_buttons button p { white-space: nowrap; }
-    /* === UX-8: make leaving the sidebar as easy as entering it ==============
-       Streamlit's only exit from an open sidebar is the "«" collapse control,
-       and it ships `visibility: hidden` until the pointer is already inside the
-       sidebar — so dismissing a sidebar you drifted into means hunting for a
-       target that is invisible *and* icon-small. Pin it visible (muted, so it
-       isn't shouty) and give it a real hit area; the matching "»" expand control
-       in the header gets the same treatment so the pair reads as one toggle. */
-    [data-testid="stSidebarCollapseButton"] {
-        visibility: visible !important;
-        opacity: 0.6;
-        transition: opacity 0.15s ease, background 0.15s ease;
-        border-radius: 8px;
-    }
-    [data-testid="stSidebarCollapseButton"]:hover { opacity: 1; }
-    [data-testid="stSidebarCollapseButton"] button,
-    button[data-testid="stExpandSidebarButton"] {
-        display: inline-flex !important;
-        align-items: center;
-        justify-content: center;
-        min-width: 2.4rem;
-        min-height: 2.4rem;
-        border-radius: 8px;
-        transition: background 0.15s ease;
-    }
-    [data-testid="stSidebarCollapseButton"] button:hover,
-    button[data-testid="stExpandSidebarButton"]:hover {
-        background: var(--sps-accent-soft);
+    /* Navigation (Scanpath ⇄ Corpus Analysis) is Streamlit's own top nav —
+       `st.navigation(position="top")`, rendered into the header strip. It needs
+       no CSS from us: it is platform chrome, it costs no page height, and
+       styling it would just make it look less like the rest of Streamlit. The
+       old right-aligned `.st-key-header_buttons` rule went with the single
+       toggle button it aligned. */
+    /* === The top menu bar ====================================================
+       Replaced the left sidebar: every group that used to be an
+       `st.sidebar` section is a popover in this one row (see menu.py). The row
+       itself is a horizontal flex container, so all this adds is a hairline
+       under it separating the menu from the page, and a little breathing room.
+       Deliberately NOT sticky — pinning it would mean positioning against
+       Streamlit's internal DOM, and these are setup controls touched once a
+       session, not once a scroll.
+
+       (UX-8's sidebar collapse/expand styling lived here. It is gone with the
+       sidebar: there is no longer any chrome to collapse.) */
+    .st-key-top_menu {
+        border-bottom: 1px solid var(--sps-border);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+        flex-wrap: wrap;
     }
 
     div[data-testid="stPopover"] button { border-radius: 999px; }
@@ -217,8 +203,9 @@ def get_app_css() -> str:
     }
 
     /* Expander / bordered-container cards: rounder corners + a subtle hover lift.
-       Covers the side-panel expanders (Annotations, Trial metadata, Export) and
-       the sidebar group cards (Data source, Experimental Setup, Filter trials). */
+       Covers the in-page expanders (Annotations, Trial metadata, Export) and the
+       rail's grouped layer sections. The former sidebar group cards are gone —
+       those groups are menu popovers now. */
     [data-testid="stExpander"] details {
         border: 1px solid var(--sps-border);
         border-radius: 10px;
@@ -252,7 +239,7 @@ def get_app_css() -> str:
        whatever didn't fit, with a "More" disclosure that re-listed every chip so
        the clipped ones stayed reachable — the same facts twice, because which
        chips fit is a live-width question Python can't answer. Wrapping means
-       nothing is ever cut at any width or sidebar state, so the duplicate list
+       nothing is ever cut at any window width, so the duplicate list
        (and the whole floating-dropdown mechanism) is gone; the derived summary
        stats live in a real "Details" popover beside the strip instead. This is
        also the first half of UX-19 — the strip was what broke first on a narrow
@@ -405,9 +392,10 @@ def get_app_css() -> str:
         overscroll-behavior-y: auto;
         scrollbar-gutter: stable;
         /* UX-29: lets the Quick-view rule below query the rail's own rendered
-           width, not the viewport's — the wrap it reacts to comes from the
-           sidebar being open/closed, which changes this column's width without
-           necessarily crossing a viewport breakpoint. */
+           width, not the viewport's — the rail is a fraction of the row, so its
+           width changes with the window without necessarily crossing a viewport
+           breakpoint. (It used to swing with the sidebar opening and closing
+           too; that is gone, but querying the rail is still the right test.) */
         container-type: inline-size;
         container-name: sps-rail;
     }
@@ -474,8 +462,8 @@ def get_app_css() -> str:
         padding-top: 0.1rem;
     }
     /* UX-29: the three Quick-view buttons ("👁️ Scanpath" / "🔥 Heatmap" / "✏️
-       Illustration") wrap to 2-3 lines once the rail column narrows — closing
-       the sidebar buys back some width, but not always enough. Rather than
+       Illustration") wrap to 2-3 lines once the rail column narrows on a small
+       window. Rather than
        widen the rail (shrinks the plot column) or drop to a 2×2 grid, fall back
        to the emoji alone: the label text is collapsed to zero size (so it takes
        no layout space) and a `::before` re-adds just the emoji at normal size —
@@ -637,8 +625,6 @@ def get_app_css() -> str:
             > [data-testid="stColumn"] {
             min-width: 100%;
         }
-        /* Same for the header nav button, whose label is the longest in the app. */
-        .st-key-header_buttons button p { white-space: normal; }
         /* The typed boxes beside each slider (UX-9) give up width first — the
            slider is the primary control. */
         div[class*="st-key-"][class*="__num"] [data-testid="stNumberInputContainer"] {

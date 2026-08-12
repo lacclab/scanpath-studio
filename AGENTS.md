@@ -22,7 +22,8 @@ docs at <https://lacclab.github.io/OneStop-Eye-Movements/>), shipped under
 ```text
 scanpath_studio/
 ├─ app.py            entry point: page config, data load, trial filters, dispatch to tabs
-├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link, incl. the DATA-16/S3 "What the link includes" identity picker (`_SHARE_IDENTITY_MODES` → `_build_share_query(include_participant=, include_trial=)`) + Corpus⇄Scanpath view toggle (split from app.py)
+├─ url_state.py      deep links + plot-config save/restore (versioned via `PLOT_CONFIG_SCHEMA` + `_migrate_plot_config` — ENG-11) + Share link, incl. the DATA-16/S3 "What the link includes" identity picker (`_SHARE_IDENTITY_MODES` → `_build_share_query(include_participant=, include_trial=)`) + the `main_nav` view helpers (`_active_view`/`_go_corpus`/`_go_scanpath`) the top nav reconciles against (split from app.py)
+├─ menu.py          UX-38: the top menu bar that replaced the sidebar — `render_top_menu` reserves one popover per former sidebar group (Configure · Preprocessing · Save & restore · Recovery cache · Help · Debug) plus a main-area `notices` slot, and `render_nav` draws Streamlit's native `st.navigation(position="top")` and returns the active view. Nothing in the app writes to `st.sidebar`
 ├─ session_keys.py   the session-state keys / URL params that are a wire format (share links + saved configs), as constants + frozen groupings — pinned by tests/test_session_key_contract.py so a rename fails a test instead of a user's old link (ENG-6)
 ├─ wizard.py         the Upload / Add-dataset wizard — guided data-setup flow (split from app.py)
 ├─ wizard_shell.py   DATA-22: the wizard's six-step registry, keyed-expander accordion, progress chips and navigation (no column/frame knowledge)
@@ -49,7 +50,7 @@ scanpath_studio/
 ├─ tour.py           first-visit/setup guides plus the independent task-tutorial registry, navigation, availability and progress
 ├─ debug_log.py      in-app debug log + state inspector (logging/print only reach the server terminal)
 ├─ annotations.py    per-trial favorites/tags/notes (session state) + JSON import/export
-├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state`/`set_persistence_paused` back the sidebar "🗄️ Recovery cache" panel (`app._render_recovery_cache_panel`), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
+├─ persistence.py    ENG-26 on-device recovery cache (localhost/desktop only): uploaded datasets as Parquet + a JSON manifest of mappings/settings/annotations, restored on the next session. ENG-30 exposed it — `cache_status`/`clear_local_state`/`set_persistence_paused` back the "🗄️ Recovery cache" menu panel (`app._render_recovery_cache_panel`), `scanpath-studio cache`, `run --no-persist`, and `api.cache_status`/`clear_cache`
 ├─ synthetic.py      hand-built ground-truth trial (shared by tests + the "Synthetic test trial" data source)
 ├─ utils.py          trial-combo construction, trial-selection UI, comparison helpers
 ├─ constants.py      palette, defaults, citation metadata
@@ -122,7 +123,7 @@ often a constant in IA exports.
 `annotations.py` keeps parent-trial and optional screen-scoped favorites / tags /
 notes in session state (keyed by `(participant_id, trial_id)` or
 `(participant_id, trial_id, screen_id)`), with a pure serialize/deserialize core
-and JSON download/restore in the sidebar. `controls.render_trial_filters` (read back via
+and JSON download/restore in the 💾 Save & restore menu panel. `controls.render_trial_filters` (read back via
 `controls.read_trial_filters`) +
 `data.filter_trials` / `data.filter_to_keys` narrow the trial pool by condition
 (Hunting/Gathering via `question_preview`, difficulty, repeated reading,

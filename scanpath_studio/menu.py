@@ -105,6 +105,9 @@ class TopMenu:
     recovery_cache: DeltaGenerator
     help: DeltaGenerator
     notices: DeltaGenerator
+    #: The page heading's slot — the left half of the row the menu shares.
+    #: ``app._render_about_panel`` fills it; see :func:`render_top_menu`.
+    title: DeltaGenerator | None = None
     debug: DeltaGenerator | None = None
 
 
@@ -231,17 +234,37 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
     Call this once, early in ``app.main`` — before any data loading, so the
     loaders' UI lands in the bar rather than after the page content.
 
+    **The bar shares the title's row.** Once UX-38 got it down to two triggers,
+    a whole page row for two buttons was the wrong trade, so the row is a
+    ``st.columns`` split: the heading on the left, the triggers right-aligned
+    over roughly where the Scanpath view's control rail begins. The split
+    mirrors that view's ``[4, 1]`` plot/rail proportion so the buttons land above
+    the rail rather than at some unrelated offset.
+
+    It is deliberately *not* lifted into Streamlit's own header strip beside the
+    nav. There is no supported way to put a widget there — ``st.navigation``
+    takes pages and ``st.logo`` takes a logo — so it would mean ``position:
+    fixed`` against an internal test id, with a right offset that has to clear a
+    toolbar whose width depends on which buttons that deployment shows.
+
     Args:
         show_debug: Add the 🐛 Debug popover. Only ``?debug=1`` sessions want it
             (``debug_log.debug_enabled``).
 
     Returns:
-        The bar's empty slots. The active view is *not* among them — read it from
+        The bar's empty slots, plus the heading's — ``app._render_about_panel``
+        fills ``title``. The active view is *not* among them: read it from
         :func:`render_nav`'s return value, which ``app.main`` calls for its
         dispatch; this function calls it only so the nav is drawn.
     """
     render_nav()
-    bar = st.container(key=MENU_KEY, horizontal=True, vertical_alignment="center")
+    title_col, menu_col = st.columns([4, 1], vertical_alignment="bottom")
+    bar = menu_col.container(
+        key=MENU_KEY,
+        horizontal=True,
+        horizontal_alignment="right",
+        vertical_alignment="center",
+    )
     # UX-38: ❓ Help leads. It is the one group a first-time user is looking for,
     # and it is the only one they can reach before they have a dataset.
     help_ = bar.popover(
@@ -280,5 +303,6 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
         recovery_cache=recovery_cache,
         help=help_,
         notices=st.container(key=NOTICES_KEY),
+        title=title_col,
         debug=debug,
     )

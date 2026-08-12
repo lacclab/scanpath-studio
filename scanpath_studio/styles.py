@@ -51,19 +51,22 @@ def get_app_css() -> str:
        toggle button it aligned. */
     /* === The top menu bar ====================================================
        Replaced the left sidebar: every group that used to be an
-       `st.sidebar` section is a popover in this one row (see menu.py). The row
-       itself is a horizontal flex container, so all this adds is a hairline
-       under it separating the menu from the page, and a little breathing room.
-       Deliberately NOT sticky — pinning it would mean positioning against
-       Streamlit's internal DOM, and these are setup controls touched once a
-       session, not once a scroll.
+       `st.sidebar` section is a popover in this one row (see menu.py).
+
+       UX-38 got it down to two triggers (❓ Help · 💾 Session, plus 🐛 Debug),
+       at which point a whole page row for two buttons was the wrong trade — so
+       it now shares the **title row**, right-aligned over where the Scanpath
+       view's control rail begins. That is plain `st.columns`, not CSS: there is
+       no supported way to put widgets in Streamlit's own header strip, and
+       positioning them into it means `position: fixed` against an internal test
+       id whose width depends on which toolbar buttons that deployment shows.
+
+       So all this rule does now is stop the buttons stretching to fill their
+       column; the alignment is the container's own `horizontal_alignment`.
 
        (UX-8's sidebar collapse/expand styling lived here. It is gone with the
        sidebar: there is no longer any chrome to collapse.) */
     .st-key-top_menu {
-        border-bottom: 1px solid var(--sps-border);
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.75rem;
         flex-wrap: wrap;
     }
 

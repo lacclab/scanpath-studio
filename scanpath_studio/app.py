@@ -262,16 +262,16 @@ def configure_page() -> None:
     st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
-def _render_about_panel() -> None:
+def _render_about_panel(host=None) -> None:
     """The page heading: title + caption.
 
-    Sits *below* the two chrome rows (nav switch, then the settings menu bar —
-    both drawn by ``menu.render_top_menu``), so navigation is the first thing on
-    the page. The view switch used to live up here as a single right-aligned
-    button; it is now a persistent two-way ``st.segmented_control`` on the nav
-    row (``menu.render_nav``). **About** is a dialog off the ❓ Help menu group.
+    Sits below Streamlit's own top nav, so navigation is the first thing on the
+    page. ``host`` is ``menu.TopMenu.title`` — the left side of the row the
+    settings triggers share, so ❓ Help and 💾 Session sit at the title's height
+    instead of costing a page row of their own (see ``menu.render_top_menu``).
+    **About** is a dialog off the ❓ Help menu group.
     """
-    header = st.container(key="about_header")
+    header = (host if host is not None else st).container(key="about_header")
     with header:
         st.title("Scanpath Studio")
         st.caption("Interactive visualization of eye movements in reading.")
@@ -3169,8 +3169,8 @@ def main() -> None:
         # session reads as "the app kept my data somewhere" without saying where;
         # the toast points at the menu panel that answers that.
         st.toast(
-            "Restored your last session from this computer — see 🗄️ Recovery "
-            "cache on the menu bar.",
+            "Restored your last session from this computer — see 💾 Session → "
+            "🗄️ Recovery cache, beside the title.",
             icon="↩️",
         )
     if url_source == "onestop" and onestop_data_dir() is not None:
@@ -3202,7 +3202,7 @@ def main() -> None:
     # reserve-then-fill discipline the sidebar containers had.
     seed_debug_mode()  # UX-37: a legacy ?debug=1 link pre-arms the Help toggle.
     menu = render_top_menu(show_debug=debug_enabled())
-    _render_about_panel()
+    _render_about_panel(menu.title)
 
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot

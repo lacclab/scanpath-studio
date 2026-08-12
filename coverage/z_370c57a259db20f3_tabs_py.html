@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/tabs.py: 84%</title>
+    <title>Coverage for scanpath_studio/tabs.py: 85%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>tabs.py</b>:
-            <span class="pc_cov">84%</span>
+            <span class="pc_cov">85%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">2345 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">1978<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">367<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">1983<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">362<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_tour_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 09:24 +0000
+            created at 2026-08-12 09:37 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -2760,26 +2760,26 @@
     <p class="run"><span class="n"><a id="t2678" href="#t2678">2678</a></span><span class="t">    <span class="nam">caption_pattern</span> <span class="op">=</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;caption_pattern&quot;</span><span class="op">)</span> <span class="key">or</span> <span class="str">&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2679" href="#t2679">2679</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">title_pattern</span> <span class="key">and</span> <span class="key">not</span> <span class="nam">caption_pattern</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2680" href="#t2680">2680</a></span><span class="t">        <span class="key">return</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t2681" href="#t2681">2681</a></span><span class="t">    <span class="nam">settings_summary_input</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2682" href="#t2682">2682</a></span><span class="t">        <span class="str">&quot;show_words&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_words&quot;</span><span class="op">,</span> <span class="key">False</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2683" href="#t2683">2683</a></span><span class="t">        <span class="str">&quot;show_word_labels&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_labels&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2684" href="#t2684">2684</a></span><span class="t">        <span class="str">&quot;show_fixations&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_fix&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2685" href="#t2685">2685</a></span><span class="t">        <span class="str">&quot;show_saccades&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_saccades&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2686" href="#t2686">2686</a></span><span class="t">        <span class="str">&quot;show_heatmap&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_heatmap&quot;</span><span class="op">,</span> <span class="key">False</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2687" href="#t2687">2687</a></span><span class="t">        <span class="str">&quot;color_by&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;color_by&quot;</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2688" href="#t2688">2688</a></span><span class="t">        <span class="str">&quot;palette&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;palette&quot;</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2689" href="#t2689">2689</a></span><span class="t">    <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t2690" href="#t2690">2690</a></span><span class="t">    <span class="nam">fields</span> <span class="op">=</span> <span class="nam">pattern_fields</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2691" href="#t2691">2691</a></span><span class="t">        <span class="nam">participant</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2692" href="#t2692">2692</a></span><span class="t">        <span class="nam">trial</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2693" href="#t2693">2693</a></span><span class="t">        <span class="nam">trial_words</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2694" href="#t2694">2694</a></span><span class="t">        <span class="nam">trial_fixations</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2695" href="#t2695">2695</a></span><span class="t">        <span class="nam">settings_summary_input</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2696" href="#t2696">2696</a></span><span class="t">        <span class="nam">combo_row</span><span class="op">=</span><span class="nam">combo_row</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t2697" href="#t2697">2697</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t2698" href="#t2698">2698</a></span><span class="t">    <span class="nam">title</span> <span class="op">=</span> <span class="nam">render_pattern</span><span class="op">(</span><span class="nam">title_pattern</span><span class="op">,</span> <span class="nam">fields</span><span class="op">)</span> <span class="key">if</span> <span class="nam">title_pattern</span> <span class="key">else</span> <span class="str">&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t2699" href="#t2699">2699</a></span><span class="t">    <span class="nam">caption</span> <span class="op">=</span> <span class="nam">render_pattern</span><span class="op">(</span><span class="nam">caption_pattern</span><span class="op">,</span> <span class="nam">fields</span><span class="op">)</span> <span class="key">if</span> <span class="nam">caption_pattern</span> <span class="key">else</span> <span class="str">&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t2700" href="#t2700">2700</a></span><span class="t">    <span class="nam">annotate_figure</span><span class="op">(</span><span class="nam">fig</span><span class="op">,</span> <span class="nam">title</span><span class="op">=</span><span class="nam">title</span><span class="op">,</span> <span class="nam">caption</span><span class="op">=</span><span class="nam">caption</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2681" href="#t2681">2681</a></span><span class="t">    <span class="nam">settings_summary_input</span> <span class="op">=</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2682" href="#t2682">2682</a></span><span class="t">        <span class="str">&quot;show_words&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_words&quot;</span><span class="op">,</span> <span class="key">False</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2683" href="#t2683">2683</a></span><span class="t">        <span class="str">&quot;show_word_labels&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_labels&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2684" href="#t2684">2684</a></span><span class="t">        <span class="str">&quot;show_fixations&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_fix&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2685" href="#t2685">2685</a></span><span class="t">        <span class="str">&quot;show_saccades&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_saccades&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2686" href="#t2686">2686</a></span><span class="t">        <span class="str">&quot;show_heatmap&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;show_heatmap&quot;</span><span class="op">,</span> <span class="key">False</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2687" href="#t2687">2687</a></span><span class="t">        <span class="str">&quot;color_by&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;color_by&quot;</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2688" href="#t2688">2688</a></span><span class="t">        <span class="str">&quot;palette&quot;</span><span class="op">:</span> <span class="nam">viz_settings</span><span class="op">.</span><span class="nam">get</span><span class="op">(</span><span class="str">&quot;palette&quot;</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2689" href="#t2689">2689</a></span><span class="t">    <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2690" href="#t2690">2690</a></span><span class="t">    <span class="nam">fields</span> <span class="op">=</span> <span class="nam">pattern_fields</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2691" href="#t2691">2691</a></span><span class="t">        <span class="nam">participant</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2692" href="#t2692">2692</a></span><span class="t">        <span class="nam">trial</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2693" href="#t2693">2693</a></span><span class="t">        <span class="nam">trial_words</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2694" href="#t2694">2694</a></span><span class="t">        <span class="nam">trial_fixations</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2695" href="#t2695">2695</a></span><span class="t">        <span class="nam">settings_summary_input</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2696" href="#t2696">2696</a></span><span class="t">        <span class="nam">combo_row</span><span class="op">=</span><span class="nam">combo_row</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t2697" href="#t2697">2697</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2698" href="#t2698">2698</a></span><span class="t">    <span class="nam">title</span> <span class="op">=</span> <span class="nam">render_pattern</span><span class="op">(</span><span class="nam">title_pattern</span><span class="op">,</span> <span class="nam">fields</span><span class="op">)</span> <span class="key">if</span> <span class="nam">title_pattern</span> <span class="key">else</span> <span class="str">&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2699" href="#t2699">2699</a></span><span class="t">    <span class="nam">caption</span> <span class="op">=</span> <span class="nam">render_pattern</span><span class="op">(</span><span class="nam">caption_pattern</span><span class="op">,</span> <span class="nam">fields</span><span class="op">)</span> <span class="key">if</span> <span class="nam">caption_pattern</span> <span class="key">else</span> <span class="str">&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2700" href="#t2700">2700</a></span><span class="t">    <span class="nam">annotate_figure</span><span class="op">(</span><span class="nam">fig</span><span class="op">,</span> <span class="nam">title</span><span class="op">=</span><span class="nam">title</span><span class="op">,</span> <span class="nam">caption</span><span class="op">=</span><span class="nam">caption</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2701" href="#t2701">2701</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2702" href="#t2702">2702</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2703" href="#t2703">2703</a></span><span class="t"><span class="com">#: The auto A/B legend label, written in the pattern language (UX-31). Kept as</span>&nbsp;</span><span class="r"></span></p>
@@ -7778,7 +7778,7 @@
             <a class="nav" href="z_370c57a259db20f3_tour_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 09:24 +0000
+            created at 2026-08-12 09:37 +0000
         </p>
     </div>
 </footer>

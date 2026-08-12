@@ -1778,7 +1778,7 @@ a <strong>Palette</strong> — often all you need — followed by five collapsib
 <tr>
 <td>📐 Figure &amp; canvas</td>
 <td>—</td>
-<td>monitor geometry, fonts, plot background, full-monitor framing, colour bars, axes and labels</td>
+<td>monitor geometry, fonts, plot background, full-monitor framing, colour bars, axes, title and labels</td>
 </tr>
 </tbody>
 </table>
@@ -1786,14 +1786,20 @@ a <strong>Palette</strong> — often all you need — followed by five collapsib
 <strong>⚙️ style</strong> and <strong>🧹 filter</strong> — appearance and visibility kept apart, so
 "colour the regressions red" and "show only the regressions" don't sit in the
 same list. Fixations is open by default; the rest start collapsed, and a layer's
-settings appear only while that layer is on. Marker
-size already encodes duration by default, so uniform fixation color is usually
-the clearest starting point.</p>
+settings appear only while that layer is on. Marker size already encodes duration
+by default, so uniform fixation color is usually the clearest starting point.</p>
+<p><strong>📐 Figure &amp; canvas</strong> has no layer to switch on, so it keeps <strong>Show full
+monitor</strong> in view and groups the rest the same way: <strong>🖥️ Screen &amp; geometry</strong>
+(monitor pixels, physical size, viewing distance, DPI), <strong>🔤 Text &amp; fonts</strong> (text
+scaling, font size and typeface, text and background colour), <strong>📊 Axes &amp; grid</strong>
+(coordinate grid, colour bars, axis fields) and <strong>🏷️ Title &amp; labels</strong>
+(Illustration label, figure title and caption).</p>
 <h3 id="show-screen-coordinates">Show screen coordinates<a class="headerlink" href="#show-screen-coordinates" title="Permanent link">&para;</a></h3>
-<p>Open <strong>📐 Figure &amp; canvas</strong> and turn on <strong>Coordinate grid</strong> to read the stimulus in
-monitor pixels. Automatic spacing chooses a readable 1/2/5×10ⁿ interval for the
-current range; turn it off to enter an exact major interval. Ticks stay anchored
-to screen-coordinate zero even when the visible range is cropped or negative.
+<p>Open <strong>📐 Figure &amp; canvas → 📊 Axes &amp; grid</strong> and turn on <strong>Coordinate grid</strong> to
+read the stimulus in monitor pixels. Automatic spacing chooses a readable
+1/2/5×10ⁿ interval for the current range; turn it off to enter an exact major
+interval. Ticks stay anchored to screen-coordinate zero even when the visible
+range is cropped or negative.
 The grid is off by default and does not shrink or rescale the spatial data area.</p>
 <h2 id="filter-fixations-and-saccades">Filter fixations and saccades<a class="headerlink" href="#filter-fixations-and-saccades" title="Permanent link">&para;</a></h2>
 <p><strong>Fixations → 🧹 Filter</strong> contains duration thresholds, out-of-bounds handling, and

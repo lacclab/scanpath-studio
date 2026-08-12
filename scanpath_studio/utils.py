@@ -648,6 +648,111 @@ def _render_trial_sort_popover(
     return keys[choice], bool(descending), choice
 
 
+# --- CMP-13: one ◀ ▶ that advances both compared trials ----------------------
+# The two pickers are built in different modules (A here, B in `tabs.py`), so the
+# linked step is a callback on one side writing the *other* side's selection. It
+# needs the other list, which is why each picker publishes what it just rendered.
+# Both directions clamp independently: per the settled call, a side that has run
+# out simply stays put while the other keeps stepping.
+
+#: The ⚙️ Compare options checkbox that arms the link. UI-only — a navigation
+#: control, not a render setting, so it is deliberately not on the share link or
+#: in a saved config (same call as ``share_identity_mode``).
+COMPARE_STEP_LINK_KEY = "single_compare_step_linked"
+
+#: Scanpath B's canonical selection (a *label*; see the snapshot note below).
+COMPARE_TRIAL_KEY = "single_compare_trial"
+
+#: What the *Compare To* picker last rendered: ``(label, participant, trial)``
+#: per candidate, in display order.
+COMPARE_OPTIONS_SNAPSHOT_KEY = "_compare_options_snapshot"
+
+
+def trial_options_snapshot_key(key_prefix: str) -> str:
+    """Session key holding the trial picker's options as it last rendered them."""
+    return f"_{key_prefix}_trial_options" if key_prefix else "_trial_options"
+
+
+def compare_step_linked() -> bool:
+    """True when ◀ ▶ should advance scanpath A **and** B (CMP-13).
+
+    Both halves matter: the checkbox only exists while compare mode is on, and
+    Streamlit drops an unrendered widget's key, so a stale ``True`` must not
+    quietly steer the main picker once the user has left compare mode.
+    """
+    return bool(
+        st.session_state.get("single_compare_toggle")
+        and st.session_state.get(COMPARE_STEP_LINK_KEY)
+    )
+
+
+def step_within(options: List[str], state_key: str, delta: int) -> Optional[int]:
+    """Move ``state_key``'s selection ``delta`` places within ``options``.
+
+    Clamped to the ends, and clamped *independently* of any other picker — the
+    linked step is "advance both", not "keep them aligned": the two pools have
+    different sizes (B excludes A, and a cross-dataset B is another corpus
+    entirely), so their indices carry no shared meaning.
+
+    Returns the new index, or ``None`` when there was nothing to step.
+    """
+    opts = list(options or [])
+    if not opts:
+        return None
+    try:
+        pos = opts.index(st.session_state.get(state_key))
+    except ValueError:
+        pos = 0
+    new_pos = max(0, min(pos + delta, len(opts) - 1))
+    st.session_state[state_key] = opts[new_pos]
+    return new_pos
+
+
+def at_list_end(options: List[str], state_key: str, delta: int) -> bool:
+    """True when ``state_key``'s selection cannot move ``delta`` within ``options``.
+
+    Used to decide whether a step button is dead. An unknown list answers
+    **False** so the button stays live: a click that turns out to be a no-op is a
+    better failure than a button greyed out while the other side could still move.
+    """
+    opts = list(options or [])
+    if not opts:
+        return False
+    try:
+        pos = opts.index(st.session_state.get(state_key))
+    except ValueError:
+        return False
+    return not (0 <= pos + delta < len(opts))
+
+
+def step_linked_compare(delta: int) -> None:
+    """Advance scanpath **B** by ``delta``, resolved against the list A last saw.
+
+    Written as an *identity* rather than an index or a label, because both are
+    unstable across this step: ``build_comparison_options`` builds B's pool
+    relative to A (📄 same-text first, then 👤 same-participant, A itself
+    excluded), so once A moves, B's list is re-ordered *and* re-labelled — the
+    same trial can gain or lose its 📄 marker. Parking the identity in the same
+    pending slot the ``?compare=`` deep link uses lets the rebuilt picker re-find
+    the trial the user was actually looking at.
+    """
+    from .session_keys import PENDING_COMPARE_STATE_KEY
+
+    snapshot = list(st.session_state.get(COMPARE_OPTIONS_SNAPSHOT_KEY) or [])
+    if not snapshot:
+        return
+    labels = [row[0] for row in snapshot]
+    try:
+        pos = labels.index(st.session_state.get(COMPARE_TRIAL_KEY))
+    except ValueError:
+        pos = 0
+    _, participant, trial = snapshot[max(0, min(pos + delta, len(snapshot) - 1))]
+    st.session_state[PENDING_COMPARE_STATE_KEY] = {
+        "participant_id": participant,
+        "trial_id": trial,
+    }
+
+
 def _select_trial_none_mode(
     combos: pd.DataFrame,
     trial_field: str,
@@ -725,13 +830,10 @@ def _select_trial_none_mode(
             # ◀ / ▶ : move the canonical selection one trial earlier/later.
             if not trial_id_key:
                 return
-            try:
-                pos = trial_options.index(st.session_state.get(trial_id_key))
-            except ValueError:
-                pos = 0
-            st.session_state[trial_id_key] = trial_options[
-                max(0, min(pos + delta, n_trials - 1))
-            ]
+            step_within(trial_options, trial_id_key, delta)
+            # CMP-13: while the link is armed, the same ±1 also moves scanpath B.
+            if compare_step_linked():
+                step_linked_compare(delta)
 
         def _slider_label(value: str) -> str:
             # index/TOTAL first, then the id — the slider doubles as the counter,
@@ -785,6 +887,11 @@ def _select_trial_none_mode(
     else:
         sel_col = host
 
+    # CMP-13: publish the list as rendered (post-sort), so the *Compare To*
+    # picker's linked ◀ ▶ can step this picker without rebuilding its ordering.
+    if trial_id_key:
+        st.session_state[trial_options_snapshot_key(key_prefix)] = list(trial_options)
+
     # The label is shown so its help "?" icon (the type-to-search hint) is visible
     # — a collapsed label hides it.
     selected_trial_label = sel_col.selectbox(
@@ -814,21 +921,37 @@ def _select_trial_none_mode(
         # lays out as a flex ROW (a Streamlit vertical block stacks its children
         # by default).
         steps = step_col
+        # CMP-13: linked, a button stays live until BOTH sides have run out — a
+        # side at the end of its own list just stays put while the other keeps
+        # stepping. `at_list_end` answers False for a list it can't see, so the
+        # worst case is a click that moves only one scanpath.
+        linked = compare_step_linked()
+        compare_snapshot = (
+            [
+                row[0]
+                for row in (st.session_state.get(COMPARE_OPTIONS_SNAPSHOT_KEY) or [])
+            ]
+            if linked
+            else []
+        )
+        step_help = " Linked: also steps the compared trial." if linked else ""
         steps.button(
             "◀",
             key=f"{key_prefix}_prev_trial" if key_prefix else "prev_trial",
             on_click=_step_trial,
             args=(-1,),
-            disabled=current_idx == 0,
-            help="Previous trial",
+            disabled=current_idx == 0
+            and (not linked or at_list_end(compare_snapshot, COMPARE_TRIAL_KEY, -1)),
+            help="Previous trial." + step_help,
         )
         steps.button(
             "▶",
             key=f"{key_prefix}_next_trial" if key_prefix else "next_trial",
             on_click=_step_trial,
             args=(1,),
-            disabled=current_idx == n_trials - 1,
-            help="Next trial",
+            disabled=current_idx == n_trials - 1
+            and (not linked or at_list_end(compare_snapshot, COMPARE_TRIAL_KEY, 1)),
+            help="Next trial." + step_help,
         )
 
     if not selected_trial_label:

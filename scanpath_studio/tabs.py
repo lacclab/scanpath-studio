@@ -171,10 +171,14 @@ from scanpath_studio.similarity import (
 )
 from scanpath_studio.utils import (
     COMPARE_DATASET_SEP,
+    COMPARE_OPTIONS_SNAPSHOT_KEY,
+    COMPARE_STEP_LINK_KEY,
     TRIAL_SORT_DEFAULT,
     align_compare_columns,
+    at_list_end,
     build_combo_options_for,
     build_comparison_options,
+    compare_step_linked,
     compute_trial_stats,
     extract_trial,
     friendly_trial_label,
@@ -183,6 +187,8 @@ from scanpath_studio.utils import (
     safe_summary,
     select_trial,
     sort_trial_options,
+    step_within,
+    trial_options_snapshot_key,
     trial_sort_keys,
     unqualify_for_export,
 )
@@ -1234,6 +1240,12 @@ def _render_compare_selector(
         current = labels[0]
         st.session_state[sel_key] = current
 
+    # CMP-13: publish the candidates as rendered — label plus identity, because
+    # the labels are rebuilt relative to A and only the identity survives A moving.
+    st.session_state[COMPARE_OPTIONS_SNAPSHOT_KEY] = [
+        (opt[2], str(opt[0]), str(opt[1])) for opt in options
+    ]
+
     if n > 1:
         idx_of = {lbl: i for i, lbl in enumerate(labels)}
         # Mirror the slider to the current selection before it renders.
@@ -1243,11 +1255,16 @@ def _render_compare_selector(
             st.session_state[sel_key] = st.session_state[pos_key]
 
         def _step_compare(delta: int) -> None:
-            try:
-                pos = labels.index(st.session_state.get(sel_key))
-            except ValueError:
-                pos = 0
-            st.session_state[sel_key] = labels[max(0, min(pos + delta, n - 1))]
+            step_within(labels, sel_key, delta)
+            # CMP-13: the link works in both directions — B's ◀ ▶ move A too.
+            # A's ids are stable (they don't depend on B), so this steps A's
+            # canonical key straight from the list its picker last rendered.
+            if compare_step_linked():
+                step_within(
+                    st.session_state.get(trial_options_snapshot_key("single")) or [],
+                    "single_trial_id",
+                    delta,
+                )
 
         current_idx = labels.index(current)
 
@@ -1275,21 +1292,32 @@ def _render_compare_selector(
                 ),
                 help=f"Scrub through the {n} candidate trials.",
             )
+        # CMP-13: mirror of the main picker — linked, a button dies only when
+        # *both* lists have run out.
+        linked = compare_step_linked()
+        primary_options = (
+            st.session_state.get(trial_options_snapshot_key("single")) or []
+            if linked
+            else []
+        )
+        step_help = " Linked: also steps the main trial." if linked else ""
         step_col.button(
             "◀",
             key="single_compare_prev",
             on_click=_step_compare,
             args=(-1,),
-            disabled=current_idx == 0,
-            help="Previous candidate",
+            disabled=current_idx == 0
+            and (not linked or at_list_end(primary_options, "single_trial_id", -1)),
+            help="Previous candidate." + step_help,
         )
         step_col.button(
             "▶",
             key="single_compare_next",
             on_click=_step_compare,
             args=(1,),
-            disabled=current_idx == n - 1,
-            help="Next candidate",
+            disabled=current_idx == n - 1
+            and (not linked or at_list_end(primary_options, "single_trial_id", 1)),
+            help="Next candidate." + step_help,
         )
 
     if selected_compare_label:
@@ -3582,6 +3610,19 @@ def render_single_trial_tab(
             # read into `compare_layout` below.
             if compare_enabled:
                 with st.popover("⚙️ Compare options", width="stretch"):
+                    # CMP-13. Deliberately "Step both trials together" and not
+                    # "keep them in sync": the two pools have different sizes
+                    # (B excludes A, and a cross-dataset B is another corpus), so
+                    # their positions carry no shared meaning — the control
+                    # advances each by the same ±1, nothing more.
+                    st.checkbox(
+                        "Step both trials together",
+                        key=COMPARE_STEP_LINK_KEY,
+                        persist_state="session",
+                        help="◀ ▶ on either picker moves this trial *and* the "
+                        "compared one by one. A side that reaches the end of its "
+                        "own list stays put while the other keeps going.",
+                    )
                     if not animate:
                         # Seed so the control shows "Overlay" selected by default
                         # (the body reads this key to resolve compare_layout).

@@ -1,7 +1,10 @@
-"""The trial picker breaks a composite trial id into one selector per part.
+"""A composite trial id is picked as **Participant** then **Text**, not as one
+opaque ``a_b_c`` dropdown (utils._select_trial_composite_mode).
 
-Mirrors the Text / Participant cascading modes instead of one opaque
-``a_b_c`` dropdown (utils._select_trial_composite_mode).
+Either identity may itself be mapped from several columns; normalization has
+already joined each into one value, so the cascade is two selectors whatever the
+mapping's shape (BUG-23 — it used to be one selector per raw component, minus
+UX-5's pruning of the ones that were also trial-filter columns).
 """
 
 from __future__ import annotations
@@ -48,16 +51,17 @@ def _picker_app():
 
 @pytest.mark.timeout(60)
 class TestCompositeTrialPicker:
-    def test_renders_one_selector_per_component(self):
+    def test_cascade_is_participant_then_text(self):
+        # BUG-23: a trial is a reader reading a text, so the picker asks for those
+        # two — never for the trial id's raw component columns, whose number and
+        # meaning are an accident of the mapping.
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        # Canonical components reuse the friendly Participant / Text wording;
-        # the extra component shows its raw column name.
-        assert "Text" in labels
         assert "Participant" in labels
-        assert "repeated_reading_trial" in labels
+        assert "Text" in labels
+        assert "repeated_reading_trial" not in labels, labels
 
     def test_no_opaque_unique_trial_dropdown(self):
         at = AppTest.from_function(_picker_app)
@@ -65,10 +69,11 @@ class TestCompositeTrialPicker:
         labels = [s.label for s in at.selectbox]
         assert not any(label.startswith("Trial ID") for label in labels), labels
 
-    def test_filter_col_component_dropped_from_cascade(self):
-        # UX-5: a composite component that is also a More-popover filter column
-        # (repeated_reading_trial) is NOT given a dedicated trial selector — it
-        # narrows via More instead, keeping the picker stable across datasets.
+    def test_condition_beyond_participant_and_text_falls_to_reading(self):
+        # The one case the "Reading" selector is for: the trial id carries a
+        # condition (repeated_reading_trial) *beyond* participant + text, so those
+        # two land on both readings and the fallback picks between them. It is not
+        # a selector for the condition column — it lists the trials themselves.
         def _filtered_picker_app():
             import pandas as pd
             import streamlit as st
@@ -97,27 +102,86 @@ class TestCompositeTrialPicker:
                 "repeated_reading_trial",
             ]
             combos, _, _ = build_combo_options(fixations)
-            select_trial(
-                combos,
-                key_prefix="single",
-                filter_cols=["repeated_reading_trial"],
-            )
+            select_trial(combos, key_prefix="single")
 
         at = AppTest.from_function(_filtered_picker_app)
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        assert "repeated_reading_trial" not in labels
-        # The canonical identity selectors stay.
-        assert "Text" in labels
         assert "Participant" in labels
+        assert "Text" in labels
+        assert "repeated_reading_trial" not in labels, labels
+        assert any(label.startswith("Reading") for label in labels), labels
+
+    def test_select_trial_takes_no_prune_list(self):
+        # The behavioural tests above can't catch a reintroduced prune on their
+        # own: UX-5's version fired only when the caller passed the More-filter
+        # column list, so a test that doesn't pass one passes either way. Pin the
+        # decision at the seam instead — the picker takes no such input.
+        import inspect
+
+        from scanpath_studio.utils import select_trial
+
+        params = set(inspect.signature(select_trial).parameters)
+        assert "filter_cols" not in params, params
+
+    def test_onestop_composite_identity_is_two_selectors(self):
+        # BUG-23, the reported shape: Trial ID maps to participant + the four
+        # columns that jointly ARE the paragraph identity (paragraph_id,
+        # article_id, article_batch, difficulty_level), and Text ID maps to those
+        # same four — so normalization already joined them into one `text_id`.
+        # The picker is Participant + Text, and that resolves the trial exactly.
+        # It used to render five selectors' worth of raw components, of which
+        # UX-5 then hid the three that are also filter columns, leaving
+        # Participant + a bare paragraph index that matched four trials.
+        def _onestop_app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.utils import build_combo_options, select_trial
+
+            text_cols = ["paragraph_id", "article_id", "article_batch", "difficulty"]
+            comp = ["participant_id", *text_cols]
+            # One participant, paragraph 1 of two different articles, two
+            # difficulties: four trials that collide on (participant, paragraph).
+            fixations = pd.DataFrame(
+                {
+                    "participant_id": ["l10_338"] * 4,
+                    "paragraph_id": [1, 1, 1, 1],
+                    "article_id": [10, 10, 11, 11],
+                    "article_batch": [3, 3, 3, 3],
+                    "difficulty": ["Adv", "Ele", "Adv", "Ele"],
+                }
+            )
+            # What `data.normalize_fixations` writes for a multi-column Text ID
+            # mapping (`trial_id_series` joins it the same way as the trial id).
+            fixations["text_id"] = (
+                fixations[text_cols].astype(str).agg("_".join, axis=1)
+            )
+            fixations["trial_id"] = fixations[comp].astype(str).agg("_".join, axis=1)
+            fixations["unique_trial_id"] = fixations["trial_id"]
+            st.session_state["_composite_trial_columns"] = comp
+            # What the wizard ticks under "Filter trials by" (every detected meta
+            # column) must not shape the picker.
+            st.session_state["wizard_filter_fields"] = list(text_cols)
+            combos, _, _ = build_combo_options(fixations)
+            st.session_state["_picked"] = select_trial(combos, key_prefix="single")
+
+        at = AppTest.from_function(_onestop_app)
+        at.run(timeout=15)
+        assert not at.exception
+        labels = [s.label for s in at.selectbox]
+        assert labels == ["Participant", "Text"], labels
+        # Participant + text determine the trial, so no ambiguity fallback.
+        assert not any(label.startswith("Reading") for label in labels), labels
+        _, trial, _, text = at.session_state["_picked"]
+        assert trial == "l10_338_1_10_3_Adv"
+        assert text == "1_10_3_Adv"
 
     def test_cascading_selection_resolves_a_trial(self):
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
-        at.selectbox(key="single_composite_unique_paragraph_id").set_value("B").run(
-            timeout=15
-        )
+        at.selectbox(key="single_composite_text_id").set_value("B").run(timeout=15)
         participant, trial, mode, text = at.session_state["_picked"]
         assert mode == "Trial"
         assert trial == "B_p1_False"
@@ -125,21 +189,19 @@ class TestCompositeTrialPicker:
         assert text == "B"
 
     def test_later_selector_narrows_to_valid_options(self):
-        # Text A has participants p1 and p2; Text B only p1. After picking B the
-        # Participant selector must drop p2 (no stale value, no crash).
+        # Participant is the first selector, so it narrows Text: p1 read A and B,
+        # p2 only A. Selecting B and then switching to p2 leaves a stored "B" that
+        # is no longer an option — it must fall back to A, not crash.
         at = AppTest.from_function(_picker_app)
         at.run(timeout=15)
+        at.selectbox(key="single_composite_text_id").set_value("B").run(timeout=15)
         at.selectbox(key="single_composite_participant_id").set_value("p2").run(
             timeout=15
         )
-        at.selectbox(key="single_composite_unique_paragraph_id").set_value("B").run(
-            timeout=15
-        )
         assert not at.exception
-        participant = at.selectbox(key="single_composite_participant_id").value
-        assert participant == "p1"
+        assert at.selectbox(key="single_composite_text_id").value == "A"
         _, trial, _, _ = at.session_state["_picked"]
-        assert trial == "B_p1_False"
+        assert trial == "A_p2_False"
 
     def test_header_breaks_out_composite_parts(self):
         # The trial-info header spells out the composite id's remaining parts on
@@ -254,6 +316,48 @@ def test_annotation_markers_compose():
     assert marks["tag"] == "🏷️"
     assert marks["note"] == "📝"
     assert marks["all"] == "★🏷️📝"
+
+
+def test_restore_selection_seeds_the_participant_text_cascade(monkeypatch):
+    """A deep link / saved config must seed the keys the composite picker really
+    renders. BUG-23 changed those from one-per-mapped-component to participant +
+    text; a seeded key no widget reads restores nothing, and the link would land
+    on whatever trial the cascade defaulted to instead of the requested one."""
+    import pandas as pd
+
+    from scanpath_studio import url_state as url_state_module
+
+    class _FakeSt:
+        def __init__(self):
+            self.session_state: dict = {}
+
+    fake = _FakeSt()
+    fake.session_state["_composite_trial_columns"] = [
+        "participant_id",
+        "paragraph_id",
+        "difficulty",
+    ]
+    monkeypatch.setattr(url_state_module, "st", fake)
+    combos = pd.DataFrame(
+        {
+            "participant_id": ["p1", "p1"],
+            "text_id": ["1_Adv", "1_Ele"],
+            "paragraph_id": [1, 1],
+            "difficulty": ["Adv", "Ele"],
+            "trial_id": ["p1_1_Adv", "p1_1_Ele"],
+        }
+    )
+    ok = url_state_module._restore_selection(
+        {"participant_id": "p1", "trial_id": "p1_1_Ele"}, combos
+    )
+    assert ok is True
+    state = fake.session_state
+    assert state["single_composite_participant_id"] == "p1"
+    assert state["single_composite_text_id"] == "1_Ele"
+    assert state["single_composite_reading"] == "p1_1_Ele"
+    # No key for a raw component the picker no longer renders.
+    assert "single_composite_difficulty" not in state
+    assert "single_composite_paragraph_id" not in state
 
 
 def test_trial_display_label_prettifies_multipleye_pages():

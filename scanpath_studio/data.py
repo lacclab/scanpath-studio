@@ -412,7 +412,7 @@ def _preserve_composite_columns(
 
     A multi-column trial mapping gets joined into a single opaque ``trial_id``
     (e.g. ``2_1_1_Ele_l37_1129_False``). Keeping the individual component
-    columns lets the trial picker offer one cascading selector per part —
+    columns lets the trial picker tell a composite id apart from a real one —
     mirroring the Text / Participant modes (see
     ``utils._select_trial_composite_mode``). No-op for single-column mappings.
     Rows are 1:1 with ``source`` here (no filtering in the composite path), so a

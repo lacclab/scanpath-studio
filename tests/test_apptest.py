@@ -486,6 +486,103 @@ class TestDataInspectionTab:
 
 
 @pytest.mark.timeout(90)
+class TestDatasetRename:
+    """DATA-23: a dataset the user added can be renamed after the fact, from the
+    page that is about that dataset — Data Inspection. The name is the key into
+    the ``_datasets`` store, so the test is really about everything that key had
+    to drag along with it."""
+
+    NAME = "My corpus"
+
+    def _stored_apptest(self, name=None, extra=None):
+        """An app booted on a stored uploaded dataset, Data Inspection open."""
+        from scanpath_studio import api
+        from scanpath_studio.data import load_sample_data
+        import pandas as pd
+
+        words, fixations = api.load_scanpath_data(*load_sample_data())
+        entry = {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": pd.DataFrame(),
+            "filter_fields": [],
+            "composite_trial_columns": [],
+        }
+        at = AppTest.from_file(APP_SCRIPT)
+        store = {name or self.NAME: entry}
+        store.update({other: dict(entry) for other in (extra or [])})
+        at.session_state["_datasets"] = store
+        at.session_state["data_source_choice"] = name or self.NAME
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        return at
+
+    def _rename(self, at, old, typed):
+        [t for t in at.text_input if t.key == f"dataset_rename_{old}"][0].set_value(
+            typed
+        )
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        at.run(timeout=90)
+        [b for b in at.button if b.key == f"dataset_rename_apply_{old}"][0].click()
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+    def test_rename_rekeys_the_store_and_follows_the_selection(self):
+        at = self._stored_apptest()
+        self._rename(at, self.NAME, "Reading study 2026")
+
+        assert set(at.session_state["_datasets"]) == {"Reading study 2026"}
+        # The selection followed, so the app is still showing the same data
+        # rather than falling back to the demo (the healing branch in
+        # render_sidebar_data_source drops a name that is no longer an entry).
+        assert at.session_state["data_source_choice"] == "Reading study 2026"
+        pickers = [s for s in at.selectbox if s.key == "data_source_picker"]
+        assert pickers and pickers[0].value == "Reading study 2026"
+
+    def test_a_taken_name_is_suffixed_and_said_so(self):
+        at = self._stored_apptest(extra=["Other corpus"])
+        self._rename(at, self.NAME, "Other corpus")
+
+        assert "Other corpus (2)" in at.session_state["_datasets"]
+        # Both datasets survive — a rename must never overwrite another entry's
+        # frames, which is what an un-suffixed re-key would do.
+        assert "Other corpus" in at.session_state["_datasets"]
+        assert any("already taken" in s.value for s in at.success)
+
+    def test_the_compare_dataset_follows_the_rename(self):
+        """CMP-8's scanpath B names its corpus by the same string."""
+        from scanpath_studio.session_keys import COMPARE_SOURCE_STATE_KEY
+
+        at = self._stored_apptest()
+        at.session_state[COMPARE_SOURCE_STATE_KEY] = self.NAME
+        self._rename(at, self.NAME, "Renamed corpus")
+
+        assert at.session_state[COMPARE_SOURCE_STATE_KEY] == "Renamed corpus"
+
+    def test_a_built_in_source_label_cannot_be_shadowed(self):
+        """A stored dataset named exactly like a built-in source would put a
+        duplicate option in the picker and hijack that source's load branch."""
+        from scanpath_studio.constants import DEMO_CHOICE
+
+        at = self._stored_apptest()
+        self._rename(at, self.NAME, DEMO_CHOICE)
+
+        assert DEMO_CHOICE not in at.session_state["_datasets"]
+        assert f"{DEMO_CHOICE} (uploaded)" in at.session_state["_datasets"]
+
+    def test_a_built_in_source_offers_no_rename(self):
+        """The demo / synthetic / public corpora are named by the app or by the
+        corpus, and the load path dispatches on that name."""
+        at = _make_apptest(synthetic=True)
+        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [t for t in at.text_input if str(t.key).startswith("dataset_rename")]
+
+
+@pytest.mark.timeout(90)
 class TestUnmappedRawDataView:
     """When a required column is unmapped, the app must show the raw uploaded
     data (so the user can pick the mapping) instead of halting."""

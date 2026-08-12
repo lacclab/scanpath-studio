@@ -3202,7 +3202,7 @@ def main() -> None:
         # "Filter trials" panel offers the same dynamic conditions.
         st.session_state["wizard_filter_fields"] = list(stored.get("filter_fields", []))
         # Restore the composite trial-id components (session-only state) so the
-        # trial picker offers one cascading selector per part — every other load
+        # trial picker renders its Participant/Text cascade — every other load
         # path sets this, but the stored branch doesn't re-normalize. Without it
         # the picker would inherit whatever source was loaded last.
         composite = list(stored.get("composite_trial_columns") or [])

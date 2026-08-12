@@ -73,7 +73,8 @@ from .experimental_setup import (
     font_pt_to_px,
     pixels_per_degree,
 )
-from .persistence import is_loopback_url
+from .persistence import is_loopback_url, rename_cached_dataset
+from .session_keys import COMPARE_SOURCE_STATE_KEY
 from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
@@ -174,14 +175,22 @@ _RESERVED_SOURCE_NAMES = frozenset(
 )
 
 
-def _safe_dataset_name(name: Optional[str]) -> str:
+def _safe_dataset_name(name: Optional[str], *, exclude: Optional[str] = None) -> str:
     """A non-empty dataset name that collides with neither a built-in source label
     nor an already-stored dataset (suffixed ``(2)``, ``(3)``… rather than silently
-    overwriting an existing entry's frames)."""
+    overwriting an existing entry's frames).
+
+    ``exclude`` drops one stored name from the collision check — a rename (DATA-23)
+    must not read the dataset being renamed as a clash with itself and turn
+    "My corpus" into "My corpus (2)" on a capitalisation fix."""
     name = (name or "").strip() or _default_dataset_name()
     if name in _RESERVED_SOURCE_NAMES:
         name = f"{name} (uploaded)"
-    existing = st.session_state.get("_datasets", {})
+    existing = {
+        key: value
+        for key, value in st.session_state.get("_datasets", {}).items()
+        if key != exclude
+    }
     if name in existing:
         base, n = name, 2
         while f"{base} ({n})" in existing:
@@ -228,6 +237,41 @@ def _remove_dataset(name: str) -> None:
     store.pop(name, None)
     if st.session_state.get("data_source_choice") == name:
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
+
+
+def rename_dataset(old: str, new: str) -> Optional[str]:
+    """Rename a stored dataset (DATA-23). Returns the name it actually took.
+
+    The name is the **key** into the ``_datasets`` store, so a rename is a re-key,
+    and every other holder of that string has to move with it: the canonical
+    ``data_source_choice`` (through the pre-widget ``_pending_source_choice`` seam,
+    like `_remove_dataset`'s fallback — assigning the widget key inline is
+    unreliable in a browser), the wizard's ``_prev_source`` return address, and
+    CMP-8's ``cmp_dataset`` when the comparison draws scanpath B from it. The
+    ENG-26 recovery cache follows in :func:`persistence.rename_cached_dataset`,
+    which moves the Parquet files rather than re-encoding them.
+
+    Returns ``None`` when there is nothing to rename (unknown dataset, or the new
+    name resolves to the one it already has). The store is rebuilt in order rather
+    than re-inserted, so the renamed dataset keeps its place in the source picker.
+    """
+    store = st.session_state.get("_datasets", {})
+    if old not in store:
+        return None
+    name = _safe_dataset_name(new, exclude=old)
+    if name == old:
+        return None
+    st.session_state["_datasets"] = {
+        (name if key == old else key): value for key, value in store.items()
+    }
+    if st.session_state.get("data_source_choice") == old:
+        st.session_state["_pending_source_choice"] = name
+    if st.session_state.get("_prev_source") == old:
+        st.session_state["_prev_source"] = name
+    if st.session_state.get(COMPARE_SOURCE_STATE_KEY) == old:
+        st.session_state[COMPARE_SOURCE_STATE_KEY] = name
+    rename_cached_dataset(st.session_state, old, name)
+    return name
 
 
 def _enter_add_data_wizard() -> None:

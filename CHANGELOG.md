@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Author scanpaths directly on the stimulus canvas** (VIZ-33)
 - **Optional monitor-pixel coordinate grid** (VIZ-34)
 - **Honest progress for every app export path** (EXP-6)
+- **Rename a dataset after you have added it** (DATA-23)
 
 ### Fixed
 - **Wizard steps no longer collapse while you are editing them** (DATA-22, supersedes DATA-19)
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Switching to a stored upload no longer keeps the previous source's monitor** (CMP-8)
 - **Quick-view and full-monitor transitions keep the current visualization state** (BUG-20, BUG-21)
 - **Participant narrowing keeps eligible trial-sort fields** (BUG-22)
+- **The trial picker is Participant + Text however the ids are mapped** (BUG-23)
 
 ### Changed
 - **One figure-settings contract now powers every renderer** (ENG-28)
@@ -49,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Author scanpaths directly on the stimulus canvas** (VIZ-33) — typed text now produces inspectable word geometry and one default fixation per word; click to add, drag to move, select/delete on the canvas, or edit stable-ID rows where X/Y are primary and target word is optional. Schema-2 authoring JSON preserves the layout and remains loadable from the app, CLI, and Python API.
 - **Optional monitor-pixel coordinate grid** (VIZ-34) — a zero-anchored X/Y grid with automatic or manual major spacing is available in static, animation, and all comparison layouts, and round-trips through Share links, saved configs, the CLI, Python API, and bulk manifests without changing the default off-state.
 - **Honest progress for every app export path** (EXP-6) — static, animation, and bulk exports now share visible stages, expose determinate counts only for real frames/trials, include encoding and zip finalization, retain successful downloads across reruns, and safely reuse identical static bytes by a full output signature.
+- **Rename a dataset after you have added it** (DATA-23) — the name you type in the wizard's last step used to be final: a dataset added as “Dataset 3”, or misspelled, kept that label in the Data source picker for the rest of the session, and the only fix was to upload it again. **Data Inspection** now names the active dataset at the top of the page with an **✏️ Rename** control beside it, for datasets you added (a built-in source, the synthetic trial and the public corpora are named by the app or by the corpus, and the load path dispatches on that name). The new name carries the same rules as the wizard's — it cannot shadow a built-in source's label or overwrite another dataset's frames, and a clash is suffixed and reported rather than applied silently — and the selection, the comparison's second dataset and the on-device recovery cache all follow it, the cache by renaming its stored files rather than re-encoding them.
 
 #### Fixed
 
@@ -59,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A public corpus now reports its declared monitor, not its data extents** (CMP-11) — `app.resolve_source_monitor` recognised a public corpus only when it was reached through the *Public datasets* picker, but the active source is held as the corpus's own registry **label** (DATA-9's flat picker), and compare mode names scanpath B by label too. So PoTeC reported its rounded data extents instead of the 1680×1050 its registry entry declares, marked "estimated" rather than "measured". Harmless while only the side-by-side panels' canvas read it; load-bearing once CMP-11 started gating the overlay on the canvas, where it refused precisely the same-screen pairs that feature exists to allow. `app.active_setup_snapshot` already had the label fallback; `resolve_source_monitor` now has it too.
 - **Switching to a stored upload no longer keeps the previous source's monitor** (CMP-8) — a stored upload recorded no geometry at all, so the canvas snap (which only fires for sources declaring an authoritative monitor) skipped it and the figure was drawn to whichever corpus was loaded before. A stored dataset now answers for itself from its setup snapshot.
 - **Quick-view and full-monitor transitions keep the current visualization state** (BUG-20, BUG-21) — leaving Illustration restores the styling it temporarily overrode, including after a restored/deep-linked Illustration state; Scanpath/Heatmap highlighting and the rendered figure now agree.
+- **The trial picker is Participant + Text however the ids are mapped** (BUG-23) — a trial is a reader reading a text, so the picker asks for those two. When the Trial ID mapping named several columns it used to ask for the *columns* instead — one selector each — which made the picker's shape an accident of the mapping, and UX-5 then hid the ones that were also trial-filter columns so it would at least look the same across datasets. On a OneStop upload that combination left the picker unable to reach a trial: a paragraph is identified by batch + article + paragraph + difficulty, all four are detected as trial-level metadata, so the wizard ticks all four under *Filter trials by* and all four were hidden — leaving Participant and a bare paragraph number, which is a per-article index. Every (participant, paragraph) pair then matched several trials, and the picker fell through to an opaque **Reading (multiple trials available)** list of joined ids for a trial it could have named exactly. Both identities are already single values by the time the picker sees them (a multi-column Participant ID or Text ID mapping is joined during normalization exactly like the trial id), so two selectors resolve the trial no matter how many columns went into either. The **Reading** selector remains for the case it was meant for — a trial id carrying something *beyond* participant and text, such as first vs. repeated reading — and those columns still narrow under **More** as before.
 - **Participant narrowing keeps eligible trial-sort fields** (BUG-22) — trial-level metadata is discovered from the scoped word/fixation tables instead of only the compact picker projection, with cross-table conflicts and event-level fields excluded.
 
 #### Changed

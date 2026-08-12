@@ -1789,7 +1789,7 @@ def cache_status() -> dict:
     ``directory``, ``datasets`` (name + per-frame row counts), ``rows``,
     ``annotations``, ``settings``, ``bytes``, ``saved_at``, plus ``exists`` /
     ``readable`` for a missing or unreadable manifest. Delete it with
-    :func:`clear_cache`; the same information is in the app's 🗄️ Recovery cache
+    :func:`clear_cache`; the same information is in the app's 💾 Session → 🗄️ Recovery cache
     panel and in ``scanpath-studio cache``."""
     from .persistence import cache_status as _cache_status
 

@@ -289,7 +289,7 @@ def render_trial_annotations(
             "as JSON or restore them from the sidebar."
         )
         st.button(
-            "💾 Open Save & restore",
+            "💾 Open Session",
             key="annotation_open_save_restore",
             type="tertiary",
             on_click=lambda: st.session_state.__setitem__("_open_save_restore", True),

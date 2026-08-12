@@ -947,7 +947,7 @@ def _wizard_restore_config(host) -> None:
         type=["json"],
         key="wizard_config_restore",
         help="Re-apply a column mapping + field choices you exported earlier "
-        "(from the 💾 Save & restore panel).",
+        "(from the 💾 Session panel).",
     )
     if uploaded is None:
         return

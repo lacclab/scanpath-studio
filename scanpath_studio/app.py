@@ -475,8 +475,8 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
     stored instead of hiding, so the difference between deployments is visible
     from the same place.
 
-    ``slot`` is the 🗄️ Recovery cache popover ``main`` reserves on the top menu
-    bar, so the panel can render *after* this run's ``save_local_state`` and
+    ``slot`` is the 🗄️ Recovery cache block of the 💾 Session popover ``main``
+    reserves on the top menu bar (UX-38), so the panel can render *after* this run's ``save_local_state`` and
     still sit in its own menu group. ``cache_status`` re-reads the manifest each
     run (a few ``stat`` calls plus a small JSON) rather than being cached — a
     status panel that lags the thing it reports is worse than no panel.
@@ -492,7 +492,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             st.caption(
                 "**Off here.** This deployment keeps your session in memory "
                 "only — a refresh or a restart loses uploaded datasets, "
-                "mappings, and annotations. Use **💾 Save & restore** on the "
+                "mappings, and annotations. Use **💾 Session → Save & restore** "
                 "menu bar to keep your work, or run Scanpath Studio locally (or as the "
                 "desktop app), where the session is restored automatically."
             )
@@ -680,7 +680,7 @@ If you use the bundled demo data, also cite
         f"""
 Scanpath Studio was built with AI assistance. Cross-check results before
 publishing. If something looks wrong,
-[open an issue]({CITATION["url"]}/issues) ↗ with your **💾 Save & restore** JSON.
+[open an issue]({CITATION["url"]}/issues) ↗ with your **💾 Session** JSON.
 """
     )
 

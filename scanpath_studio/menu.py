@@ -85,9 +85,11 @@ MENU_KEY = "top_menu"
 #: so these stay in the page where the user can't miss them.
 NOTICES_KEY = "top_menu_notices"
 
-#: The Save & restore trigger keeps the tour's historical key: the spotlight
+#: The 💾 Session trigger keeps the tour's historical key: the spotlight
 #: selector (``tour._SPOTLIGHT_STEPS``) and the "jump to Save & restore"
 #: affordance in ``annotations.py`` both look for ``.st-key-tour_grp_save_restore``.
+#: UX-38 merged 💾 Save & restore and 🗄️ Recovery cache under it rather than
+#: renaming the key — the two blocks are still there, one popover down.
 SAVE_RESTORE_KEY = "tour_grp_save_restore"
 
 
@@ -240,20 +242,37 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
     """
     render_nav()
     bar = st.container(key=MENU_KEY, horizontal=True, vertical_alignment="center")
-    save_restore = bar.popover(
-        "💾 Save & restore",
-        key=SAVE_RESTORE_KEY,
-        help="Save the plot configuration and every annotation to one JSON "
-        "file, or restore them.",
-    )
-    recovery_cache = bar.popover(
-        "🗄️ Recovery cache",
-        help="What this app is keeping on this computer, and how to stop or delete it.",
-    )
+    # UX-38: ❓ Help leads. It is the one group a first-time user is looking for,
+    # and it is the only one they can reach before they have a dataset.
     help_ = bar.popover(
         "❓ Help",
         help="The guided tour, the task tutorials, the FAQ, the documentation, "
         "and what this app is.",
+    )
+    # UX-38: 💾 Save & restore and 🗄️ Recovery cache merged into one **💾 Session**
+    # group. Both answer the same question — *what is kept, and how do I get it
+    # back* — differing only in whether the state travels to another machine,
+    # which is why neither sat comfortably beside dataset setup or figure
+    # styling. Two containers, not one body: `main` fills them at very different
+    # points (Save & restore after the view renders, the cache after this run's
+    # `save_local_state`), and creation order is what keeps them in this order.
+    session = bar.popover(
+        "💾 Session",
+        key=SAVE_RESTORE_KEY,
+        help="Save the plot configuration and every annotation to one JSON "
+        "file or restore them, and see what is kept on this computer.",
+    )
+    save_restore = session.container()
+    save_restore.markdown("**💾 Save & restore**")
+    save_restore.caption(
+        "One portable JSON file — the plot configuration plus every annotation. "
+        "Travels to another machine."
+    )
+    recovery_cache = session.container()
+    recovery_cache.divider()
+    recovery_cache.markdown("**🗄️ Recovery cache**")
+    recovery_cache.caption(
+        "What this app keeps on *this* computer so a refresh doesn't lose your session."
     )
     debug = bar.popover("🐛 Debug") if show_debug else None
     return TopMenu(

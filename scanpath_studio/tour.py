@@ -291,7 +291,7 @@ _STEPS = [
     ),
     (
         "📝 Annotate & save",
-        "Star, tag, and note trials, then filter to them. **💾 Save & restore** "
+        "Star, tag, and note trials, then filter to them. **💾 Session** "
         "saves the whole setup + annotations to JSON. Replay this via "
         "**🎓 Show tutorial**. 👀",
     ),
@@ -491,16 +491,16 @@ _SPOTLIGHT_STEPS = [
         "title": "📊 Corpus Analysis · 🗂️ Data",
         "body": "The nav at the very top moves between the three views. "
         "**📊 Corpus Analysis** aggregates across readers, texts and groups "
-        "instead of one trial at a time. **🗂️ Data** is where a dataset is set "
-        "up and checked — its source, column mapping, contents and preprocessing.",
+        "instead of one trial at a time; **🗂️ Data** is where a dataset is set "
+        "up and checked.",
     },
     {
         "selector": ".st-key-top_menu",
         "title": "📚 The menu bar",
-        "body": "**💾 Save & restore** saves the whole setup + annotations to "
-        "JSON, **🗄️ Recovery cache** shows what is kept on this computer, and "
-        "**❓ Help** has the tutorials and the FAQ. Replay this tour any time "
-        "from **🎓 Show tutorial**. 👀",
+        "body": "**❓ Help** has the tutorials, the FAQ and the docs. "
+        "**💾 Session** keeps your work — a portable JSON of the whole setup + "
+        "annotations, plus the on-device cache. Replay this tour from "
+        "**🎓 Show tutorial**. 👀",
     },
 ]
 
@@ -1343,7 +1343,7 @@ _FAQ_ITEMS = [
     (
         "My uploaded data vanished after a refresh.",
         "Expected — uploads, wizard datasets and annotations live in session "
-        "state, which dies with the session. Use **💾 Save & restore** for the "
+        "state, which dies with the session. Use **💾 Session → Save & restore** for the "
         "plot config + annotations, and **⬇️ Download setup (JSON)** in the "
         "wizard for the column mapping; both are re-importable.",
     ),
@@ -1359,7 +1359,7 @@ _FAQ_ITEMS = [
         "`st.cache_data` doesn't hash the helpers a cached loader calls — a "
         "rerun or **Clear cache** isn't enough after editing code. Restart the "
         "server process. This is a different cache from the menu bar's "
-        "**🗄️ Recovery cache** panel, which stores your data and settings, "
+        "**💾 Session → 🗄️ Recovery cache** panel, which stores your data and settings, "
         "not code.",
     ),
     (

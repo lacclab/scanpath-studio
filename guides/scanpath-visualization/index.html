@@ -827,6 +827,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Replay and compare">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparing-across-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing across datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1664,6 +1681,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Replay and compare">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparing-across-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparing across datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1778,10 +1812,54 @@ computation.</p>
 <ul>
 <li><strong>Animate</strong> replays the selected trial. <strong>⚙ Playback</strong> controls speed,
   autoplay, and frame quality.</li>
-<li><strong>Compare</strong> adds a second reading on the same text and shared canvas.</li>
+<li><strong>Compare</strong> adds a second reading beside the selected one.</li>
 <li><strong>Comparisons</strong> ranks other same-text scanpaths using the selected grouping
   and similarity settings.</li>
 </ul>
+<h3 id="comparing-across-datasets">Comparing across datasets<a class="headerlink" href="#comparing-across-datasets" title="Permanent link">&para;</a></h3>
+<p><strong>Compare with</strong> (above the <em>Compare To</em> picker) chooses which dataset scanpath
+B comes from. It defaults to <em>This dataset</em>; pick another and the candidate list,
+the <strong>Filter B by</strong> controls beside it, and the trial's screen geometry all come
+from that dataset instead.</p>
+<p>Any loaded upload, the bundled demo and the synthetic trial are always
+available. A public corpus is offered too, but only loads when its files are
+already where you last pointed the app — otherwise it shows <em>(needs setup)</em> and
+tells you to open that corpus as the main dataset once, because the compare
+picker deliberately cannot draw the download and folder controls that would
+normally set that up.</p>
+<p>Three things behave differently across datasets, each on purpose:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Overlay is unavailable</strong></td>
+<td>Overlay pools both readings into one coordinate space; two datasets don't share one. Side by side and Stacked are used instead, and your Overlay choice is remembered for same-dataset pairs.</td>
+</tr>
+<tr>
+<td><strong>Each panel is drawn to its own screen</strong></td>
+<td>A caption under the figure names both monitors. Box and text sizes are true-to-scale <em>within</em> a panel and <strong>not</strong> comparable across panels.</td>
+</tr>
+<tr>
+<td><strong>Only shared metrics can colour it</strong></td>
+<td>A measure one corpus ships and the other doesn't would colour one panel and blank the other, so it falls back with a note.</td>
+</tr>
+</tbody>
+</table>
+<p>B carries its own filters (they never touch the main pool) and never shows 👤
+markers — two corpora don't share readers. 📄 still appears when a text id
+matches across them.</p>
+<p><strong>⚖️ Download this comparison as a bundle</strong> (Export → <em>This trial</em>) writes the
+figure plus both scanpaths' tables and a manifest naming each side's dataset,
+trial and recording setup. The image alone can't be reproduced; the bundle can.</p>
+<p>A share link carries the comparison as <code>?compare=&lt;participant&gt;:&lt;trial&gt;</code> plus
+<code>&amp;cmp_source=&lt;dataset&gt;</code>. An uploaded dataset lives only in your session, so a
+link can't rebuild it — the Share panel says so rather than sending half a
+comparison.</p>
 <h2 id="correct-vertical-drift">Correct vertical drift<a class="headerlink" href="#correct-vertical-drift" title="Permanent link">&para;</a></h2>
 <p>Fixations that follow the text horizontally but sit above or below their line
 may need line assignment. Choose a drift-correction algorithm in the fixation

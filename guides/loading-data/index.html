@@ -827,6 +827,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Use the setup wizard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-recording-setup-asks-how-you-know" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The recording setup asks how you know
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1619,6 +1636,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Use the setup wizard">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-recording-setup-asks-how-you-know" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The recording setup asks how you know
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1699,18 +1733,76 @@ and precomputed reading measures are optional but enable more features. Accepted
 files are CSV, TSV, Parquet, and Feather. See <a href="../../data-format/">Data format</a>
 for canonical fields.</p>
 <h2 id="use-the-setup-wizard">Use the setup wizard<a class="headerlink" href="#use-the-setup-wizard" title="Permanent link">&para;</a></h2>
+<p>The wizard is six steps. Work down them in order, or jump straight to one with
+the progress chips at the top; your answers are kept as you move around.</p>
 <ol>
-<li>Enter a dataset name, monitor resolution, and stimulus font details.</li>
-<li>Add the word/IA and fixation files; several files per table are allowed.</li>
-<li>Check the automatically proposed participant, trial, text, geometry, and
-   timing columns.</li>
-<li>Build a composite ID when one column is not unique enough.</li>
-<li>Keep any extra condition or analysis fields you will need later.</li>
-<li>Select <strong>Add dataset</strong>.</li>
+<li><strong>Your data</strong> — add the word/IA and fixation files; several files per table are
+   allowed. A summary card names the columns that were auto-detected and the ones
+   still missing — it is a report, not a shortcut: detection matches column
+   <em>names</em>, so steps 2 and 3 are where you confirm it actually picked the right
+   ones. Raw gaze and <em>Restore a saved setup</em> live behind the two popovers.</li>
+<li><strong>Trials &amp; readers</strong> — check the proposed trial ID, and the optional
+   participant and text IDs. Pick several columns to build a composite ID when one
+   is not unique enough. The readout below the pickers is the fastest sanity
+   check: <em>N trials · N readers · N texts</em>.</li>
+<li><strong>Fixations &amp; text</strong> — fixation x/y/duration and the word ID/text/box. Anything
+   unusual (word ID on fixations, timestamps, line index, character-AOI
+   aggregation) is behind <strong>⚙️ Advanced</strong>.</li>
+<li><strong>Recording setup</strong> — see below.</li>
+<li><strong>Extra fields</strong> — keep any condition or analysis fields you will need later,
+   and choose which become trial filters.</li>
+<li><strong>Name &amp; add</strong> — review every decision in one table, then <strong>Add dataset</strong>.</li>
 </ol>
-<p>The distinct-value counts shown beside ID mappings are the fastest sanity check.
-After loading, open <strong>Data Inspection</strong> and confirm that both tables share the
+<p>After loading, open <strong>Data Inspection</strong> and confirm that both tables share the
 expected trials and coordinate range.</p>
+<h3 id="the-recording-setup-asks-how-you-know">The recording setup asks how you know<a class="headerlink" href="#the-recording-setup-asks-how-you-know" title="Permanent link">&para;</a></h3>
+<p>Step 4 describes the screen the data was <strong>recorded</strong> on — not the screen you are
+reading this on. It has <strong>no defaults</strong>: a wrong monitor size silently rescales
+every figure, so the app will not guess one for you. Each of the three groups asks
+how you know the value:</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Recorded as</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>I know these</em></td>
+<td><code>measured</code></td>
+<td>You have the real numbers.</td>
+</tr>
+<tr>
+<td><em>Estimate from my data</em></td>
+<td><code>estimated</code></td>
+<td>You don't. Derived from the extent of your word boxes and fixations — always available, always succeeds, and reported as a <strong>lower bound</strong>, since text rarely fills the whole screen.</td>
+</tr>
+<tr>
+<td><em>Use a named default</em></td>
+<td><code>assumed</code></td>
+<td>A typical lab value is good enough for what you are doing.</td>
+</tr>
+<tr>
+<td><em>Skip</em></td>
+<td><code>skipped</code></td>
+<td>Only on <strong>physical size &amp; viewing distance</strong>, when you don't need visual-angle units.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Add dataset</strong> stays disabled until all three are answered. Nothing derived from
+a skipped group is shown: with no physical width there is no honest pixels-per-
+degree or point-to-pixel conversion, so those are hidden rather than computed from
+a default.</p>
+<p>The answer travels with the dataset. It appears in the step-6 review table and
+under <strong>Data Inspection → Recording setup</strong>, rides a share link as <code>setup_prov</code>,
+and is written into the saved-setup JSON and into <code>plot_config.json</code> in a bulk
+export — so a figure set records that its monitor size was assumed, and whoever
+opens your link can tell your measurements from the app's guesses.</p>
+<p>Answers are remembered across datasets in a session as <strong>pre-filled values with
+the choice reset</strong>: quick for a second export from the same lab, while still
+making you assert that the setup applies to this dataset too.</p>
 <h2 id="derived-and-preserved-fields">Derived and preserved fields<a class="headerlink" href="#derived-and-preserved-fields" title="Permanent link">&para;</a></h2>
 <p>When x/y fixations and word boxes are available, the app can assign fixations to
 words and compute standard per-word reading measures. Recognized precomputed

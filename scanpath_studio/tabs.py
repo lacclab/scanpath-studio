@@ -210,7 +210,6 @@ SUBTAB_STIMULUS = "Stimulus & questions"
 SUBTAB_COMPARISONS = "🔬 Comparisons"
 SUBTAB_LINE_ASSIGNMENT = "📐 Line assignment"
 SUBTAB_EXPORT = "Export"
-SUBTAB_DATA_INSPECTION = "🔎 Data Inspection"
 SUBTAB_SHARE = "🔗 Share"
 
 
@@ -3332,12 +3331,12 @@ def render_single_trial_tab(
        **visualization controls** (formerly in the sidebar — see
        ``controls.sidebar_controls``, rendered here with ``host=``).
     3. A plot-width **subtab bar** directly below it: 📝 Annotations · Stimulus & questions ·
-       Export · 🔎 Data Inspection · 🔗 Share. Export folds in the former Bulk
-       Export tab (``_render_export_panel``); Data Inspection (the former
-       standalone view) renders inline here; Share (the former header popover)
+       🔬 Comparisons · Export · 🔗 Share. Export folds in the former Bulk
+       Export tab (``_render_export_panel``); Share (the former header popover)
        builds the deep link via ``share_renderer`` (passed by ``app.main``). The
-       former Trial Info subtab was folded into the chips above the plot. Save &
-       restore lives in the sidebar.
+       former Trial Info subtab was folded into the chips above the plot, and
+       **DATA-26** moved 🔎 Data Inspection off this bar onto the 🗂️ Data page.
+       Save & restore is a popover on the top menu bar.
 
     ``combos_all`` / ``words_all`` / ``fixations_all`` are the unfiltered frames
     the Export subtab's bulk section uses for its "whole dataset" scope; they
@@ -4312,7 +4311,10 @@ def render_single_trial_tab(
         subtab_labels = [SUBTAB_ANNOTATIONS, SUBTAB_STIMULUS, SUBTAB_COMPARISONS]
         if drift_correction_enabled():
             subtab_labels.append(SUBTAB_LINE_ASSIGNMENT)
-        subtab_labels += [SUBTAB_EXPORT, SUBTAB_DATA_INSPECTION, SUBTAB_SHARE]
+        # DATA-26: 🔎 Data Inspection left this bar for the **Data** page —
+        # inspecting a dataset is setting it up, and it was on the opposite side
+        # of the app from the source picker and the column mapping.
+        subtab_labels += [SUBTAB_EXPORT, SUBTAB_SHARE]
         _subtabs = st.tabs(
             subtab_labels,
             # PERF-3: `st.tabs` executes EVERY tab's body on every run — only the
@@ -4336,7 +4338,6 @@ def render_single_trial_tab(
         tab_compare = by_label[SUBTAB_COMPARISONS]
         tab_align = by_label.get(SUBTAB_LINE_ASSIGNMENT)
         tab_export = by_label[SUBTAB_EXPORT]
-        tab_inspect = by_label[SUBTAB_DATA_INSPECTION]
         tab_share = by_label[SUBTAB_SHARE]
     with tab_annot:
         with st.container(key="tutorial_annotations"):
@@ -4421,19 +4422,6 @@ def render_single_trial_tab(
                     line_spacing=line_spacing,
                     scale_text_to_boxes=scale_text_to_boxes,
                     compare_export=compare_export_sides,
-                )
-
-    with tab_inspect:
-        # PERF-3: only the selected tab's body runs (see the st.tabs call).
-        # Nothing to render when closed — a hidden panel is not on screen.
-        if tab_inspect.open:
-            # The former Data Inspection view is now a subtab here (raw tables +
-            # summary stats + column mapping). Uses the filtered frames in view.
-            with st.container(key="tutorial_data_inspection"):
-                render_data_inspection_tab(
-                    words_filtered,
-                    fixations_filtered,
-                    raw_gaze if raw_gaze is not None else pd.DataFrame(),
                 )
 
     with tab_share:
@@ -7557,6 +7545,11 @@ def _render_dataset_rename() -> None:
         # Keyed by the dataset so switching sources reseeds the box rather than
         # carrying the previous dataset's half-typed name into it.
         key=f"dataset_rename_{name}",
+        # DATA-26 put this on the 🗂️ Data page, so it renders only while that
+        # view is active — and Streamlit drops the key of a widget that did not
+        # render, which would silently reset a half-typed name to the current
+        # one (`value=name`) on the way back. Same rule as ENG-36's rail widgets.
+        persist_state="session",
         help="Shown in the Data source list.",
     )
     editor.button(
@@ -7654,8 +7647,11 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     Renders one ``column_mapping_ui`` per present table seeded with the current
     mapping, a note listing columns dropped at import, and an Apply button. The
     widget keys are namespaced by dataset name so switching datasets never feeds
-    a stale column to a selectbox (which would raise)."""
-    st.subheader("Column mapping")
+    a stale column to a selectbox (which would raise).
+
+    DATA-26: the *Column mapping* heading is the page section's, rendered by
+    ``app.main`` above whichever of the three modes applies — this one no longer
+    titles itself."""
     st.caption(
         "Change how this dataset's columns map to the app's canonical fields. "
         "Only columns that survived the original import are available."
@@ -7792,19 +7788,34 @@ def _render_trial_identity_section() -> None:
     )
 
 
-def _render_column_mapping_section() -> None:
-    """Show how each source column was mapped to the app's canonical fields.
+def _render_column_mapping_section(*, editor_rendered: bool = False) -> None:
+    """The body of the Data page's **Column mapping** section (DATA-26).
 
-    For a stored uploaded dataset the mapping is **editable** — the user can
-    remap among the columns that survived normalization (``_render_remap_editor``).
-    Every other source is read-only, built from the schemas stashed by the
-    data-loading paths in ``app`` under ``st.session_state['_active_column_mapping']``."""
+    One section, three modes — a *presentation* merge, not a code merge. Two
+    editors side by side on one page would read as a bug, but underneath they
+    genuinely are two code paths: before normalization there are no canonical
+    frames to remap, and after it there is no raw table to map from.
+
+    * ``editor_rendered`` — mode **A**: the pre-normalization
+      ``controls.column_mapping_ui`` panels were already drawn into this section
+      by ``app.prepare_data`` (a raw source with ``allow_override``), so all
+      that is left to add is the recording-setup note.
+    * A stored uploaded dataset — mode **B**: the post-normalization
+      ``_render_remap_editor``, offering only the columns that survived import.
+    * Anything else — mode **C**: a read-only table built from the schemas the
+      loaders stash under ``st.session_state['_active_column_mapping']``.
+
+    The heading belongs to the page, not to any one mode — ``app.main`` renders
+    it into a slot reserved above all three.
+    """
+    if editor_rendered:
+        _render_setup_provenance_note()
+        return
     active = _active_stored_dataset()
     if active is not None:
         _render_remap_editor(*active)
         _render_setup_provenance_note()
         return
-    st.subheader("Column mapping")
     mapping = st.session_state.get("_active_column_mapping") or {}
     rows = _column_mapping_rows(mapping)
     if not rows:
@@ -8070,7 +8081,6 @@ def render_data_inspection_tab(
     # 4. VAL-7 — does one trial_id actually cover several readings?
     _render_trial_identity_section()
 
-    st.divider()
-
-    # 5. The active column mapping (data source → canonical fields).
-    _render_column_mapping_section()
+    # DATA-26: the column mapping is no longer the last thing on this panel — it
+    # is its own section *above* it on the Data page, next to the source and its
+    # location, where the question is actually asked. `app.main` renders it.

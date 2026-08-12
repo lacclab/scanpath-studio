@@ -39,7 +39,7 @@ minutes.*
 1. Open **Data source → Add data**, upload either or both reports, and check the
    proposed mappings. Map **Multipart screens** only when one logical trial has
    several coordinate spaces.
-2. Finish setup, choose a trial, and open **Data Inspection**.
+2. Finish setup, choose a trial, and open the 🗂️ **Data** page.
 3. Check row and trial counts, coordinate ranges, the active mapping, and—when
    present—the ordered screen catalogue and per-screen canvas sizes.
 

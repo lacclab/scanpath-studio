@@ -65,6 +65,7 @@ from scanpath_studio.menu import NAV_SELECTOR
 from .constants import (
     CITATION,
     _VIEW_CORPUS,
+    _VIEW_DATA,
     _VIEW_SCANPATH,
     drift_correction_enabled,
 )
@@ -118,7 +119,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         estimated_time="3 min",
         prerequisite="A demo or uploaded dataset",
         availability="always",
-        completion_test="Data Inspection opened",
+        completion_test="Data page opened",
         docs_url=f"{DOCS_TUTORIALS_URL}#load-your-own-data",
         steps=(
             TutorialStep(
@@ -129,10 +130,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Verify what was parsed",
-                "Open **Data Inspection**. Check counts, raw tables, multipart screens "
+                "On the 🗂️ **Data** page: check counts, raw tables, multipart screens "
                 "when present, and the active column mapping before analysis.",
                 ".st-key-tutorial_data_inspection",
-                subtab="🔎 Data Inspection",
+                view=_VIEW_DATA,
             ),
         ),
     ),
@@ -285,7 +286,8 @@ _STEPS = [
     (
         "🗂 Three views",
         "**Scanpath** (tick *Animate* to replay) · **Corpus Analysis** · "
-        "**Data Inspection**. Bulk export is the **Export** subtab in Scanpath.",
+        "**Data** (set up and inspect the dataset). Bulk export is the "
+        "**Export** subtab in Scanpath.",
     ),
     (
         "📝 Annotate & save",
@@ -481,21 +483,22 @@ _SPOTLIGHT_STEPS = [
         "selector": ".st-key-tour_grp_subtabs",
         "title": "📑 Per-trial panels",
         "body": "Below the plot: **📝 Annotations**, **Stimulus & questions**, "
-        "**🔬 Comparisons**, **Export** (this trial or bulk), "
-        "**🔎 Data Inspection**, and **🔗 Share** a deep link.",
+        "**🔬 Comparisons**, **Export** (this trial or bulk), and "
+        "**🔗 Share** a deep link.",
     },
     {
         "selector": NAV_SELECTOR,
-        "title": "📊 Corpus Analysis",
-        "body": "The nav at the very top moves between the two halves of the "
-        "app. **📊 Corpus Analysis** aggregates across readers, texts and groups "
-        "instead of one trial at a time — per text, per reader, or per cohort.",
+        "title": "📊 Corpus Analysis · 🗂️ Data",
+        "body": "The nav at the very top moves between the three views. "
+        "**📊 Corpus Analysis** aggregates across readers, texts and groups "
+        "instead of one trial at a time. **🗂️ Data** is where a dataset is set "
+        "up and checked — its source, column mapping, contents and preprocessing.",
     },
     {
         "selector": ".st-key-top_menu",
         "title": "📚 The menu bar",
-        "body": "**⚙️ Configure** holds the data source and its column mapping, "
-        "**💾 Save & restore** saves the whole setup + annotations to JSON, and "
+        "body": "**💾 Save & restore** saves the whole setup + annotations to "
+        "JSON, **🗄️ Recovery cache** shows what is kept on this computer, and "
         "**❓ Help** has the tutorials and the FAQ. Replay this tour any time "
         "from **🎓 Show tutorial**. 👀",
     },
@@ -1317,7 +1320,7 @@ _FAQ_ITEMS = [
     ),
     (
         "A column was mapped to the wrong field. Where do I fix it?",
-        "🔎 **Data Inspection → Column mapping** — an editable form that "
+        "🗂️ **Data → Column mapping** — an editable form that "
         "re-derives everything in place, no re-upload. It can only offer columns "
         "that survived the import; anything dropped needs a re-upload.",
     ),

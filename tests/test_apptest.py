@@ -20,11 +20,11 @@ from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
     SUBTAB_COMPARISONS,
-    SUBTAB_DATA_INSPECTION,
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     SUBTAB_LINE_ASSIGNMENT,
     answer_setup_step,
+    pin_data_view,
 )
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -85,12 +85,14 @@ class TestAppLaunches:
         ]
         assert not stray, f"these still render into the sidebar: {stray}"
 
-    def test_menu_bar_hosts_every_former_sidebar_group(self):
-        """The five menu popovers exist, and the debug one stays hidden.
+    def test_menu_bar_hosts_every_session_wide_group(self):
+        """The menu popovers exist, and the debug one stays hidden.
 
         Each popover is the *disclosure* for a group that used to be an
         ``st.sidebar`` expander, so a missing one means an unreachable panel —
-        not a cosmetic difference.
+        not a cosmetic difference. DATA-26 took ⚙️ Configure and 🧹 Preprocessing
+        off this bar onto the 🗂️ Data page; what is left is genuinely
+        session-wide (see ``test_configure_and_preprocessing_left_the_menu_bar``).
         """
         at = _make_apptest()
         at.run(timeout=30)
@@ -99,8 +101,6 @@ class TestAppLaunches:
         # `.label`, so read the label off the element proto.
         labels = {p.proto.popover.label for p in at.get("popover")}
         for expected in (
-            "⚙️ Configure",
-            "🧹 Preprocessing",
             "💾 Save & restore",
             "🗄️ Recovery cache",
             "❓ Help",
@@ -108,6 +108,18 @@ class TestAppLaunches:
             assert expected in labels, f"{expected} missing from the menu bar"
         # 🐛 Debug only joins the bar once ❓ Help's debug toggle is on (UX-37).
         assert "🐛 Debug" not in labels
+
+    def test_configure_and_preprocessing_left_the_menu_bar(self):
+        """DATA-26: the two setup groups are the Data page's, not the bar's.
+
+        Leaving a stale trigger behind would give one job two doors again, which
+        is the whole complaint the page exists to answer.
+        """
+        at = _make_apptest()
+        at.run(timeout=30)
+        labels = {p.proto.popover.label for p in at.get("popover")}
+        assert "⚙️ Configure" not in labels
+        assert "🧹 Preprocessing" not in labels
 
     def test_synthetic_data_source_renders(self):
         # The "Synthetic test trial" source should load + render without error.
@@ -453,14 +465,15 @@ class TestLazySubtabs:
 
 @pytest.mark.timeout(90)
 class TestDataInspectionTab:
-    """The merged Data Inspection tab folds the former Raw Data + Data Statistics
-    tabs into one: headline counts, raw tables, the summary-stats table, and the
-    new column-mapping table — while dropping the second stats row, the fixation
-    histogram, and the per-word measure section."""
+    """The 🗂️ Data page's lower half — the former Raw Data + Data Statistics
+    tabs merged into one panel: headline counts, raw tables, the summary-stats
+    table, and (as its own section above them since DATA-26) the column-mapping
+    table — while dropping the second stats row, the fixation histogram, and the
+    per-word measure section."""
 
     def test_merged_sections_present_and_old_removed(self):
         at = _make_apptest(synthetic=True)
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -469,7 +482,7 @@ class TestDataInspectionTab:
             "Dataset statistics",
             "Raw data",
             "Summary statistics",
-            "Column mapping",
+            "🔤 Column mapping",
         ):
             assert section in subheaders, f"missing section {section}: {subheaders}"
 
@@ -490,7 +503,7 @@ class TestDataInspectionTab:
 
     def test_column_mapping_table_renders(self):
         at = _make_apptest(synthetic=True)
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -572,16 +585,18 @@ class TestDataInspectionTab:
         assert switched == [], f"the click was bounced back to {switched}"
         assert state["main_nav"] == _VIEW_CORPUS
 
-    def test_nav_pages_cover_both_views(self):
-        """The nav offers exactly the two top-level views, Scanpath first.
+    def test_nav_pages_cover_every_view(self):
+        """The nav offers exactly the three top-level views, Scanpath first.
 
         `_PAGES` is what `switch_to_view` navigates through, so a missing entry
-        is a view nothing can reach programmatically.
+        is a view nothing can reach programmatically. DATA-26 added 🗂️ Data
+        **last**: setup comes first in time, but the two analysis views are
+        where the work happens and moving them would cost every user their aim.
         """
-        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
         from scanpath_studio.menu import _NAV_PAGES
 
-        assert list(_NAV_PAGES) == [_VIEW_SCANPATH, _VIEW_CORPUS]
+        assert list(_NAV_PAGES) == [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 
 
 @pytest.mark.timeout(90)
@@ -595,9 +610,10 @@ class TestDatasetRename:
 
     def _stored_apptest(self, name=None, extra=None):
         """An app booted on a stored uploaded dataset, Data Inspection open."""
+        import pandas as pd
+
         from scanpath_studio import api
         from scanpath_studio.data import load_sample_data
-        import pandas as pd
 
         words, fixations = api.load_scanpath_data(*load_sample_data())
         entry = {
@@ -612,7 +628,7 @@ class TestDatasetRename:
         store.update({other: dict(entry) for other in (extra or [])})
         at.session_state["_datasets"] = store
         at.session_state["data_source_choice"] = name or self.NAME
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         return at
@@ -621,10 +637,10 @@ class TestDatasetRename:
         [t for t in at.text_input if t.key == f"dataset_rename_{old}"][0].set_value(
             typed
         )
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=90)
         [b for b in at.button if b.key == f"dataset_rename_apply_{old}"][0].click()
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -675,7 +691,7 @@ class TestDatasetRename:
         """The demo / synthetic / public corpora are named by the app or by the
         corpus, and the load path dispatches on that name."""
         at = _make_apptest(synthetic=True)
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert not [t for t in at.text_input if str(t.key).startswith("dataset_rename")]
@@ -712,7 +728,7 @@ class TestUnmappedRawDataView:
         # mapping still surfaces the raw data so the user can fix it. The raw
         # tables show in the Data Inspection view.
         at.session_state["setup_complete"] = True
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=60)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -1445,7 +1461,7 @@ class TestSetupWizard:
         assert "junk_col" in entry["dropped_columns"]["words"]
         # The remap form lives in the Data Inspection subtab, which since PERF-3
         # renders only when it is the open tab.
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The editable remap form renders for a stored dataset.
@@ -1456,7 +1472,7 @@ class TestSetupWizard:
         text_box = [s for s in at.selectbox if s.key == text_key]
         assert text_box, "word-text remap selectbox not rendered"
         text_box[0].set_value("difficulty_level")
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         apply_button = [b for b in at.button if b.key == f"remap_apply_{name}"]
@@ -2539,7 +2555,7 @@ class TestLazySubtabBodiesStillRender:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert [r for r in at.radio if r.key == "bulk_export_scope"]
 
-        at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+        pin_data_view(at)
         at.run(timeout=120)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         headings = " ".join(m.value for m in at.markdown)

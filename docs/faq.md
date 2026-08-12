@@ -2,7 +2,7 @@
 
 ## Why is the plot empty or misaligned?
 
-Check **Data Inspection**. The words and fixations must share trial IDs and the
+Check the 🗂️ **Data** page. The words and fixations must share trial IDs and the
 same pixel coordinate system. Also set the monitor size used in the experiment;
 the app cannot infer it from an export. See [Loading data](guides/loading-data.md).
 

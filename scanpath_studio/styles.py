@@ -67,6 +67,19 @@ def get_app_css() -> str:
         flex-wrap: wrap;
     }
 
+    /* === The Data page, off-screen ===========================================
+       DATA-26. The setup widgets — the loaders' directory input and ⬇ Download
+       button, the source options, the column-mapping selectboxes — *drive*
+       `prepare_data` on every rerun, and Streamlit drops the key of a widget
+       that did not render. So `app.main` builds the page every run and switches
+       only its key: visible under `data_setup_page`, hidden under this one.
+
+       `display: none` (not `visibility`/`opacity`/off-viewport): the widgets
+       must keep executing but must contribute no layout, and the tour's
+       `findVisible()` picks targets by their layout rect, so a hidden copy of a
+       spotlight target has to measure zero rather than sit off to one side. */
+    .st-key-data_setup_page_offscreen { display: none !important; }
+
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
     div[data-testid="stPopoverBody"] {

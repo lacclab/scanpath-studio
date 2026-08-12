@@ -5,8 +5,8 @@ source and trial filters with the Scanpath view.
 
 ## Inspect before analysing
 
-Open **Data Inspection** from the Scanpath subtabs to check headline counts,
-column mappings, stimulus rows, fixations, and raw gaze. Use it to confirm:
+Open the 🗂️ **Data** page to check headline counts, column mappings, stimulus
+rows, fixations, and raw gaze. Use it to confirm:
 
 - participant, text, and trial IDs have the intended meaning;
 - word boxes and fixations use the same coordinate system;

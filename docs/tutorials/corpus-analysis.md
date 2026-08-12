@@ -6,7 +6,7 @@ or group-level result.
 ## 1. Define the analysis pool
 
 Load the corpus and apply **Trial filters** before opening Corpus Analysis. Check
-the participant, text, and trial counts in **Data Inspection**. A text ID must
+the participant, text, and trial counts on the 🗂️ **Data** page. A text ID must
 identify the same stimulus across readers; a trial ID identifies one reading.
 
 ## 2. Open Corpus Analysis

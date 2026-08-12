@@ -52,9 +52,12 @@ from scanpath_studio.annotations import (
 )
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
+    _VIEW_DATA,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     CITATION,
+    DATA_PAGE_KEY,
+    DATA_PAGE_OFFSCREEN_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
@@ -171,8 +174,10 @@ from scanpath_studio.persistence import (
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _build_figure_settings,
+    _render_column_mapping_section,
     _render_save_restore_expander,
     render_corpus_analysis_tab,
+    render_data_inspection_tab,
     render_single_trial_tab,
 )
 from scanpath_studio.tour import (
@@ -193,6 +198,7 @@ from scanpath_studio.url_state import (
     _apply_url_preset,
     _apply_url_trial_selection,
     _build_share_query,  # noqa: F401  re-exported for tests
+    _go_data,
     _render_share_body,
 )
 
@@ -386,8 +392,8 @@ def _render_empty_after_filtering(
         with st.container(border=True, key="empty_state_panel"):
             st.markdown("#### This dataset has no trials to show")
             st.markdown(
-                "Pick another **Data source** in the sidebar, or check the column "
-                "mapping under **Data Inspection**."
+                "Pick another **Data source**, or check the column mapping on "
+                "the 🗂️ **Data** page."
             )
         return
 
@@ -1779,8 +1785,8 @@ def _render_unmapped_view(
     """
     st.warning(
         "**Finish the column mapping to draw scanpaths.** Map the missing "
-        "field(s) in the **Column mapping** panel below each upload box in the "
-        "sidebar — the raw uploaded data is shown below to help you choose. "
+        "field(s) in the **Column mapping** section above — the raw data is "
+        "shown below to help you choose. "
         "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
     )
     if (raw_words_df is None or raw_words_df.empty) and (
@@ -1789,6 +1795,29 @@ def _render_unmapped_view(
         st.info("No data loaded yet.")
     _render_raw_preview("Words / IA", raw_words_df)
     _render_raw_preview("Fixations", raw_fixations_df)
+
+
+def _render_offpage_setup_notice(data_view: bool) -> None:
+    """Point at the **Data** page when setup is unfinished and we're elsewhere.
+
+    DATA-26: an unfinished dataset (a wizard mid-flight, or a required column
+    still unmapped) leaves the analysis views with nothing to draw — `main`
+    returns before them, exactly as it did before the page existed. What it used
+    to leave behind was a blank screen; the setup UI now lives on a page that is
+    rendered but hidden, so say where it went and offer one click to get there.
+
+    Deliberately *not* a forced `switch_to_view`: bouncing the user back every
+    run would make the other two views unreachable until the mapping is fixed,
+    and that is a worse trap than an empty page with a signpost.
+    """
+    if data_view:
+        return
+    st.info(
+        "**This dataset isn't set up yet**, so there's nothing to plot. "
+        "Finish it on the 🗂️ **Data** page.",
+        icon="🗂️",
+    )
+    st.button("🗂️ Go to Data setup", on_click=_go_data, type="primary")
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
@@ -1898,10 +1927,11 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
             source and stored datasets carry their own raw gaze, so ``main``
             doesn't call this for them.
         host: Where the optional uploader + its column mapping render — the
-            ⚙️ Configure popover on the top menu bar.
+            *Data location* section of the 🗂️ Data page (DATA-26).
         notices: Where the "raw gaze ignored" warnings render. Deliberately the
-            **main area**, not ``host``: a warning inside a closed popover is
-            invisible, which the always-visible sidebar never was.
+            strip under the menu bar, not ``host``: a warning on a page the user
+            isn't looking at is invisible, which the always-visible sidebar
+            never was.
 
     Returns:
         Normalized raw gaze DataFrame with canonical columns, or empty DataFrame
@@ -1973,7 +2003,7 @@ def load_raw_gaze_data(data_choice: str, *, host=None, notices=None) -> pd.DataF
 # -----------------------------------------------------------------------------
 
 
-def render_sidebar_data_source() -> str:
+def render_sidebar_data_source(host=None) -> str:
     """Resolve the active data source (renders no picker widget — UX-25).
 
     Returns the selected source: ``DEMO_CHOICE`` ("Bundled Demo"), a stored
@@ -1991,6 +2021,11 @@ def render_sidebar_data_source() -> str:
     publishes the entry list the picker renders from (``_data_source_entries``).
     ``data_source_choice`` remains the canonical key (``?source=…`` deep links and
     the wizard's finalize / cancel path both write it).
+
+    ``host`` is the Data page's *Data source* slot (DATA-26). The one thing this
+    function *does* render — the wizard's "✕ Cancel" bar, which stands in for the
+    picker while an upload is being added — goes there, so it takes the picker's
+    place on the page rather than appearing above it in the bare main area.
     """
     # Apply a programmatic source switch (the wizard's finalize / Cancel, or the
     # main-view picker's on_change) BEFORE anything reads data_source_choice. It
@@ -2015,7 +2050,9 @@ def render_sidebar_data_source() -> str:
         st.session_state.get("_show_upload_wizard")
         or st.session_state.get("data_source_choice") == UPLOAD_CHOICE
     ):
-        source = st.container(key="tour_grp_data_source")
+        source = (host if host is not None else st).container(
+            key="tour_grp_data_source"
+        )
         source.caption("➕ Adding a dataset — fill in the setup wizard below.")
         if source.button("✕ Cancel", key="cancel_add_data"):
             st.session_state["_pending_source_choice"] = st.session_state.get(
@@ -2986,9 +3023,15 @@ _PREPROC_DEFAULTS: dict = {
 def _preprocessing_settings(host=None) -> dict:
     """Render the PRE-1 controls and return their cache-key-safe settings.
 
-    ``host`` is the 🧹 Preprocessing popover on the top menu bar. Renders bare
-    into it — the trigger is the disclosure, and a popover nests no expander
-    (see :mod:`scanpath_studio.menu`).
+    ``host`` is the 🧹 Preprocessing section of the Data page (DATA-26). Renders
+    bare into it — the section heading is the page's, written into the slot above
+    these widgets by ``main``.
+
+    It belongs on the page rather than in the Scanpath rail (where UX-38 floated
+    putting it) because ``app._preprocessing_settings`` reshapes the frames
+    *every* view reads, including Corpus Analysis, which has no rail: a
+    dataset-wide control must not be unreachable from one of the views it
+    changes.
     """
     for key, default in _PREPROC_DEFAULTS.items():
         st.session_state.setdefault(key, default)
@@ -3044,7 +3087,8 @@ def _preprocessing_settings(host=None) -> dict:
 def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
     """Reset source-scoped state and return the active preprocessing settings.
 
-    ``preproc_host`` is the 🧹 Preprocessing popover on the top menu bar.
+    ``preproc_host`` is the 🧹 Preprocessing section of the Data page (DATA-26 —
+    it was a popover on the top menu bar until the page took it).
     """
     st.session_state["_active_data_source"] = data_choice
     preprocessing = _preprocessing_settings(preproc_host)
@@ -3211,12 +3255,75 @@ def main() -> None:
         _view_bridge = None
     st.session_state["_last_rendered_view"] = active_view
 
+    # DATA-26 — the **Data** page ("Set up your dataset"). One place for
+    # everything about the dataset itself, instead of a ⚙️ Configure menu group
+    # at the top and a 🔎 Data Inspection subtab on the far side of the Scanpath
+    # view asking the same questions at two points in the pipeline.
+    #
+    # The page is built on EVERY run and merely hidden when another view is
+    # active (`DATA_PAGE_OFFSCREEN_KEY` → `display: none` in styles.py). That is
+    # not laziness: the slots below are filled by the loaders' directory input,
+    # ⬇ Download button, source options and column-mapping selectboxes, all of
+    # which *drive* `prepare_data` on every rerun — and Streamlit drops the key
+    # of a widget that did not render. Rendering-then-hiding keeps the popovers'
+    # every-run semantics exactly, so this stays a re-host rather than a rewrite
+    # of every loader into a render/resolve pair.
+    #
+    # Sub-slots are reserved in page order and filled at whatever point of the
+    # load reaches them (Streamlit lays containers out in creation order):
+    #     Data source     (picker + ➕ manage)
+    #     Description     (public-dataset caption / home link)
+    #     Options         (source-specific: OneStop regime + parts + variant, …)
+    #     Data location   (path input + Expected files + found/download status)
+    #     Add a dataset   (the upload wizard, while one is being added)
+    #     Column mapping  (ONE section, three modes — see _render_setup_mapping)
+    #     What's in it    (name + counts + raw tables + stats + recording setup)
+    #     Preprocessing
+    data_view = active_view == _VIEW_DATA
+    setup_page = st.container(
+        key=DATA_PAGE_KEY if data_view else DATA_PAGE_OFFSCREEN_KEY
+    )
+    if data_view:
+        setup_page.header("Set up your dataset")
+        setup_page.caption(
+            "Where the data comes from, how its columns map onto the app's "
+            "canonical fields, what is actually in it, and the optional "
+            "preprocessing applied before anything is measured."
+        )
+    setup_source_slot = setup_page.container()
+    description_slot = setup_page.container()
+    source_options_slot = setup_page.container()
+    data_location_slot = setup_page.container()
+    setup_wizard_slot = setup_page.container()
+    column_mapping_slot = setup_page.container()
+    # The heading belongs to the *section*, not to any one of its three modes —
+    # mode A's panels are written into the body by `prepare_data` during the
+    # load, long before the dispatch below picks a mode, so the title needs a
+    # slot of its own above them (see tabs._render_column_mapping_section).
+    mapping_head_slot = column_mapping_slot.container()
+    mapping_body_slot = column_mapping_slot.container()
+    setup_body_slot = setup_page.container()
+    setup_preproc_slot = setup_page.container()
+
     # Data source selection. UX-25: only the *resolution* happens here (it must
     # precede the load); the picker itself renders in the main view — on the
-    # Scanpath "Filter by" row, or at the top of the Corpus view.
-    data_choice = render_sidebar_data_source()
+    # Scanpath "Filter by" row, at the top of the Corpus view, or (DATA-26) in
+    # the page slot above. The resolver takes the same slot because while the
+    # add-dataset wizard is open it renders a "✕ Cancel" bar *instead of* a
+    # picker, and rendering both would duplicate the `tour_grp_data_source` key.
+    data_choice = render_sidebar_data_source(host=setup_source_slot)
+    if data_view and data_choice != UPLOAD_CHOICE:
+        render_data_source_picker(host=setup_source_slot)
+    if data_view:
+        setup_preproc_slot.divider()
+        setup_preproc_slot.subheader("🧹 Preprocessing")
+        setup_preproc_slot.caption(
+            "Optional soft exclusion and merging of short fixations, applied to "
+            "every view. Off by default; original rows remain available."
+        )
+
     preproc_settings = _activate_data_source(
-        data_choice, preproc_host=menu.preprocessing
+        data_choice, preproc_host=setup_preproc_slot
     )
     # Just-finalized upload: paint a "loading" bridge into the main area now so it
     # repaints over the wizard (instead of the wizard lingering until the slow
@@ -3233,28 +3340,11 @@ def main() -> None:
         _finalizing_bridge = st.container()
         _finalizing_bridge.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
         _finalizing_bridge.skeleton(height=420)
-    # DATA-9: render ALL of a source's config in ONE clean group, in a fixed
-    # order, right below the source picker (instead of scattered sibling
-    # expanders + a duplicative "<name> options" label). The order — set here by
-    # reserving a sub-slot per section, since each fills at a different point
-    # downstream — is:
-    #     Description      (public-dataset caption / home link)
-    #     Options          (source-specific: OneStop regime + parts + variant, …)
-    #     Data location    (path input + Expected files + found/download status)
-    #     Column mapping
-    # The group is now the ⚙️ Configure popover itself, so it needs no "Configure"
-    # header of its own — the trigger label carries it. Column mapping renders as
-    # a plain bordered section rather than the expander it was: a popover nests
-    # no expander (see `menu.py`).
-    #
-    # VIZ-31 removed the "Experimental Setup" slot from this group: monitor
+    # (DATA-9's ordered source-config group — description · options · data
+    # location · column mapping — is now the top of the Data page reserved
+    # above. VIZ-31 had already moved "Experimental Setup" out of it: monitor
     # geometry, fonts, text colour and plot background are figure settings, and
-    # they now render in the Scanpath rail beside the layers they restyle.
-    dataset_options_slot = menu.configure
-    description_slot = dataset_options_slot.container()
-    source_options_slot = dataset_options_slot.container()
-    data_location_slot = dataset_options_slot.container()
-    column_mapping_slot = dataset_options_slot.container()
+    # they render in the Scanpath rail beside the layers they restyle.)
 
     # Load + map core data. The **Upload** source renders each table as an
     # [upload box → mapping] group in the sidebar (words, fixations, raw gaze) and
@@ -3283,23 +3373,33 @@ def main() -> None:
     else:
         deep_link_pid = None
     raw_gaze_df: Optional[pd.DataFrame] = None
+    # Did this load already draw the editable pre-normalization mapping panels
+    # into the page's Column mapping section? (Mode A — see the dispatch below.)
+    mapping_editor_rendered = False
     # Start each load with a clean column-mapping stash; each branch below
-    # records the schema it used for the Data Inspection tab.
+    # records the schema it used for the Data page's mapping section.
     _reset_active_mapping()
     if data_choice == UPLOAD_CHOICE:
-        # Hybrid setup wizard: a main-area guided flow on first load, then a
-        # compact collapsed "Data & mapping" panel. While the wizard is active
-        # (setup not finalized) it owns the page — return before rendering tabs.
+        # Hybrid setup wizard: a guided flow on first load, then a compact
+        # collapsed "Data & mapping" panel. DATA-26 made it the **Data page's
+        # add-a-dataset mode** — adding a dataset *is* setup, and a wizard that
+        # lived anywhere else would re-create the two-places-for-one-job problem
+        # the page exists to fix. It still owns the page while active: there is
+        # nothing for the other views to draw until it finishes, so `main`
+        # returns here exactly as before. `_enter_add_data_wizard` requests the
+        # Data view when the ➕ button is clicked, so the user is already here.
         wizard_active = not st.session_state.get("setup_complete", False)
         # Imported lazily (not at module top) to avoid the app⇄wizard import cycle.
         from scanpath_studio.wizard import _render_data_setup
 
-        setup = _render_data_setup(active=wizard_active)
+        with setup_wizard_slot:
+            setup = _render_data_setup(active=wizard_active)
         words_df, fixations_df = setup.words, setup.fixations
         raw_gaze_df = setup.raw_gaze
         raw_words_df, raw_fixations_df = setup.raw_words, setup.raw_fixations
         mapping_problems = setup.problems
         if wizard_active:
+            _render_offpage_setup_notice(data_view)
             return
     elif data_choice == AUTHOR_CHOICE:
         words_df, fixations_df = _render_authoring_source()
@@ -3370,14 +3470,18 @@ def main() -> None:
             # default first-load source; pre-filled with auto-detection, so an
             # untouched mapping normalizes identically.
             allow_override=(data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)),
-            # Nest the panels under the "<dataset> options" group (DATA-9).
-            mapping_host=column_mapping_slot,
+            # Mode A of the Data page's one Column mapping section (DATA-26).
+            mapping_host=mapping_body_slot,
         )
+        mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
     if mapping_problems:
         # A required column is still unmapped. Rather than halt the whole app
         # (which hid the data the user needs to choose the mapping), show the
-        # raw uploaded tables; the sidebar Column-mapping panels stay editable.
-        _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
+        # raw tables on the Data page, right under the still-editable Column
+        # mapping section — and, from any other view, say where that page is.
+        with setup_body_slot:
+            _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
+        _render_offpage_setup_notice(data_view)
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
@@ -3424,7 +3528,7 @@ def main() -> None:
     # every other source loads it here (bundled demo sample, OneStop uploader).
     if raw_gaze_df is None:
         raw_gaze_df = load_raw_gaze_data(
-            data_choice, host=menu.configure, notices=menu.notices
+            data_choice, host=data_location_slot, notices=menu.notices
         )
 
     if preproc_settings["enabled"]:
@@ -3486,8 +3590,8 @@ def main() -> None:
     identity_warning = trial_identity_warning(identity_report)
     if identity_warning:
         menu.notices.warning(
-            f"{identity_warning} The evidence is in **🔎 Data Inspection → "
-            "Trial identity**.",
+            f"{identity_warning} The evidence is on the 🗂️ **Data** page, "
+            "under **Trial identity**.",
             icon="⚠️",
         )
 
@@ -3682,7 +3786,33 @@ def main() -> None:
         fixations=len(fixations_filtered),
     )
 
-    if active_view == _VIEW_CORPUS:
+    if data_view:
+        # DATA-26 — fill the page reserved before the load. Everything above the
+        # dispatch already landed in its slot (source picker · description ·
+        # options · data location · wizard · mode-A mapping panels); what is left
+        # needs the loaded frames, so it renders here.
+        mapping_head_slot.divider()
+        mapping_head_slot.subheader("🔤 Column mapping")
+        mapping_head_slot.caption(
+            "How each source column maps onto the app's canonical fields — the "
+            "one thing that decides what every measure downstream is computed "
+            "from."
+        )
+        with mapping_body_slot:
+            _render_column_mapping_section(editor_rendered=mapping_editor_rendered)
+        with setup_body_slot:
+            st.divider()
+            st.subheader("🔎 What's in this dataset")
+            # Keyed wrapper → the stable `.st-key-…` selector the "Load and
+            # verify a dataset" tutorial spotlights (it kept its name across the
+            # move off the Scanpath subtab bar).
+            with st.container(key="tutorial_data_inspection"):
+                render_data_inspection_tab(
+                    words_filtered,
+                    fixations_filtered,
+                    raw_gaze_filtered,
+                )
+    elif active_view == _VIEW_CORPUS:
         # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets its
         # own compact row at the top of the page — it stays reachable on every
         # view without reopening the sidebar.

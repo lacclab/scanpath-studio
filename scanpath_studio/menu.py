@@ -6,14 +6,22 @@ any more (so Streamlit draws no sidebar chrome at all and the main content gets
 the full page width).
 
 **Why popovers and not ``st.dialog``.** A dialog body only executes while the
-dialog is open, but these panels are not passive display: the ⚙️ Configure
-group's data-location input, ⬇ Download button and column-mapping selectboxes
-*drive* ``app.prepare_data`` on every rerun, and Streamlit drops the state of a
-widget that does not render. A popover is a plain ``DeltaGenerator`` — it
-executes every run and can be filled long after later elements were written,
-which is exactly the ``st.sidebar`` semantics being replaced. That is what keeps
-this a host swap rather than a restructure: ``main`` still reserves a slot here
-and downstream code still fills it by ``host=``.
+dialog is open, but these panels are not passive display — several of them drive
+``app.prepare_data`` on every rerun, and Streamlit drops the state of a widget
+that does not render. A popover is a plain ``DeltaGenerator`` — it executes every
+run and can be filled long after later elements were written, which is exactly
+the ``st.sidebar`` semantics being replaced. That is what keeps this a host swap
+rather than a restructure: ``main`` still reserves a slot here and downstream
+code still fills it by ``host=``.
+
+**DATA-26 took two groups off this bar.** ⚙️ Configure and 🧹 Preprocessing are
+now sections of the **Data** page (``constants._VIEW_DATA``), because setting a
+dataset up was split across a menu group and a subtab on the other side of the
+app. Their widgets keep the every-run execution the popovers gave them: the page
+container is built every run and merely hidden off-screen when another view is
+active (``constants.DATA_PAGE_OFFSCREEN_KEY`` + the ``display: none`` rule in
+``styles.py``). What is left here is genuinely session-wide: 💾 Save & restore ·
+🗄️ Recovery cache · ❓ Help (+ 🐛 Debug).
 
 **Consequences for panel authors.** A popover nests neither an expander nor
 another popover, so a group that used to wrap itself in
@@ -33,7 +41,7 @@ from typing import TYPE_CHECKING
 
 import streamlit as st
 
-from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
+from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -46,9 +54,14 @@ NAV_SELECTOR = '[data-testid="stTopNavLinkContainer"]'
 #: Nav entries: view constant → (label, icon, url path). The labels are short —
 #: "Scanpath", not "Scanpath Visualization" — because the nav sits in Streamlit's
 #: header strip beside the toolbar, where a long label crowds it.
+#: **Data comes last** (DATA-26) even though setting a dataset up comes first in
+#: time: it is visited occasionally, while the two analysis views are where the
+#: work happens, and moving them rightwards to make room for a setup page would
+#: cost every existing user their aim.
 _NAV_PAGES = {
     _VIEW_SCANPATH: ("Scanpath", "🗺️", "scanpath"),
     _VIEW_CORPUS: ("Corpus Analysis", "📊", "corpus-analysis"),
+    _VIEW_DATA: ("Data", "🗂️", "data"),
 }
 
 #: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
@@ -86,8 +99,6 @@ class TopMenu:
     ``host=``, in whatever order the load happens to reach it.
     """
 
-    configure: DeltaGenerator
-    preprocessing: DeltaGenerator
     save_restore: DeltaGenerator
     recovery_cache: DeltaGenerator
     help: DeltaGenerator
@@ -229,15 +240,6 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
     """
     render_nav()
     bar = st.container(key=MENU_KEY, horizontal=True, vertical_alignment="center")
-    configure = bar.popover(
-        "⚙️ Configure",
-        help="The data source: where its files are, which options it was loaded "
-        "with, and how its columns are mapped.",
-    )
-    preprocessing = bar.popover(
-        "🧹 Preprocessing",
-        help="Optional soft exclusion and merging of short fixations. Off by default.",
-    )
     save_restore = bar.popover(
         "💾 Save & restore",
         key=SAVE_RESTORE_KEY,
@@ -255,8 +257,6 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
     )
     debug = bar.popover("🐛 Debug") if show_debug else None
     return TopMenu(
-        configure=configure,
-        preprocessing=preprocessing,
         save_restore=save_restore,
         recovery_cache=recovery_cache,
         help=help_,

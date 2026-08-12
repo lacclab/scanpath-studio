@@ -222,7 +222,7 @@ def test_data_inspection_reports_the_verdict():
     wrong reads as an error box, and "we checked and it's fine" is the answer
     the user gets most of the time."""
     streamlit_testing = pytest.importorskip("streamlit.testing.v1")
-    from tests.conftest import APP_SCRIPT, SUBTAB_DATA_INSPECTION, SUBTAB_KEY
+    from tests.conftest import APP_SCRIPT, pin_data_view
 
     at = streamlit_testing.AppTest.from_file(APP_SCRIPT)
     at.run(timeout=90)
@@ -230,7 +230,7 @@ def test_data_inspection_reports_the_verdict():
     # Computed on the unfiltered frames, before the view renders.
     assert at.session_state["_trial_identity_report"]["trials"] > 0
 
-    at.session_state[SUBTAB_KEY] = SUBTAB_DATA_INSPECTION
+    pin_data_view(at)
     at.run(timeout=90)
     assert not at.exception, at.exception
     headers = [s.value for s in at.subheader]

@@ -3,7 +3,6 @@
 import ast
 from pathlib import Path
 
-
 PACKAGE = Path(__file__).resolve().parents[1] / "scanpath_studio"
 
 

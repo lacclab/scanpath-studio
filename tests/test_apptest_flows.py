@@ -31,13 +31,14 @@ from typing import Optional
 import pandas as pd
 import pytest
 
-from scanpath_studio.constants import AUTHOR_CHOICE
+from scanpath_studio.constants import _VIEW_SCANPATH, AUTHOR_CHOICE
 from scanpath_studio.data import load_sample_data
 from tests.conftest import (
     APP_SCRIPT,
-    SUBTAB_DATA_INSPECTION,
     SUBTAB_EXPORT,
     SUBTAB_KEY,
+    VIEW_DATA,
+    pin_view,
 )
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -73,28 +74,43 @@ _POS_TAGS = {
 
 
 def _boot(
-    *, synthetic: bool = False, timeout: int = 60, subtab: Optional[str] = None
+    *,
+    synthetic: bool = False,
+    timeout: int = 60,
+    subtab: Optional[str] = None,
+    view: Optional[str] = None,
 ) -> AppTest:
     """Boot the app. ``synthetic=True`` picks the 6-word synthetic trial (one
     trial, no raw gaze) instead of the bundled demo.
 
     ``subtab`` opens one of the per-trial subtabs: since PERF-3 the expensive
     ones render only when they are the selected tab, so a flow that reads Export
-    or Data Inspection content has to open it, exactly as a user does.
+    content has to open it, exactly as a user does. ``view`` switches top-level
+    page — DATA-26 moved the dataset's tables and stats onto the 🗂️ Data page,
+    so a flow reading those asks for ``VIEW_DATA`` instead of a subtab.
     """
     at = AppTest.from_file(APP_SCRIPT)
     if synthetic:
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
     if subtab:
         at.session_state[SUBTAB_KEY] = subtab
+    if view:
+        pin_view(at, view)
     at.run(timeout=timeout)
     return at
 
 
-def _rerun(at: AppTest, subtab: Optional[str] = None, timeout: int = 60) -> AppTest:
-    """Rerun, re-asserting the open subtab — a widget interaction can drop it."""
+def _rerun(
+    at: AppTest,
+    subtab: Optional[str] = None,
+    timeout: int = 60,
+    view: Optional[str] = None,
+) -> AppTest:
+    """Rerun, re-asserting the open subtab/view — an interaction can drop it."""
     if subtab:
         at.session_state[SUBTAB_KEY] = subtab
+    if view:
+        pin_view(at, view)
     return at.run(timeout=timeout)
 
 
@@ -155,7 +171,7 @@ class TestColumnMappingOverrideFlow:
     not just relabel the mapping table."""
 
     def test_remapping_word_text_re_derives_every_consumer(self):
-        at = _boot(subtab=SUBTAB_DATA_INSPECTION)
+        at = _boot(view=VIEW_DATA)
         before = _word_labels(at)
         # Auto-detection maps the word label to EyeLink's IA_LABEL — real words,
         # not POS tags.
@@ -163,7 +179,7 @@ class TestColumnMappingOverrideFlow:
         assert not before <= _POS_TAGS, "demo should start with real word labels"
 
         at.selectbox(key="col_map_words_text").set_value("universal_pos")
-        _rerun(at, SUBTAB_DATA_INSPECTION)
+        _rerun(at, view=VIEW_DATA)
         _clean(at, "after remapping word text:")
 
         # The mapping the app normalized with — and the read-only table that
@@ -172,13 +188,10 @@ class TestColumnMappingOverrideFlow:
             at.session_state["_active_column_mapping"]["words"]["text"]
             == "universal_pos"
         )
-        mapping_tables = _frames_with(at, "Table", "Field", "Mapped column")
-        assert mapping_tables, "column-mapping table not rendered"
-        table = mapping_tables[0]
-        row = table[
-            (table["Table"] == "Words/IA") & (table["Field"] == "Word text/label")
-        ]
-        assert list(row["Mapped column"]) == ["universal_pos"]
+        # DATA-26: mode A of the one Column mapping section is the *editable*
+        # panel, so the selectbox itself is the report — a read-only table
+        # repeating it underneath is the duplication the page exists to remove.
+        assert at.selectbox(key="col_map_words_text").value == "universal_pos"
         # The panel says the auto-detected pick was overridden (ENG-9).
         assert any(
             "IA_LABEL" in c.value and "overridden" in c.value for c in at.caption
@@ -207,7 +220,7 @@ class TestColumnMappingOverrideFlow:
         after_expected = list(raw_fix["NEXT_SAC_AMPLITUDE"].head(5))
         assert before_expected != after_expected  # the remap must be observable
 
-        at = _boot(subtab=SUBTAB_DATA_INSPECTION)
+        at = _boot(view=VIEW_DATA)
         assert (
             at.session_state["_active_column_mapping"]["fixations"]["duration"]
             == "CURRENT_FIX_DURATION"
@@ -217,7 +230,7 @@ class TestColumnMappingOverrideFlow:
         assert _fixation_durations(at)[:5] == before_expected
 
         at.selectbox(key="col_map_fix_duration").set_value("NEXT_SAC_AMPLITUDE")
-        _rerun(at, SUBTAB_DATA_INSPECTION)
+        _rerun(at, view=VIEW_DATA)
         _clean(at, "after remapping the fixation duration:")
 
         assert (
@@ -225,11 +238,7 @@ class TestColumnMappingOverrideFlow:
             == "NEXT_SAC_AMPLITUDE"
         )
         assert _fixation_durations(at)[:5] == after_expected
-        table = _frames_with(at, "Table", "Field", "Mapped column")[0]
-        row = table[
-            (table["Table"] == "Fixations") & (table["Field"] == "Duration (ms)")
-        ]
-        assert list(row["Mapped column"]) == ["NEXT_SAC_AMPLITUDE"]
+        assert at.selectbox(key="col_map_fix_duration").value == "NEXT_SAC_AMPLITUDE"
 
     def test_clearing_a_required_field_shows_guidance_and_recovers(self):
         # Un-mapping a *required* field must degrade to the guidance view (the
@@ -265,9 +274,13 @@ class TestTrialFilterFlow:
     UX-7 guidance state."""
 
     def test_condition_then_annotation_filter_narrow_the_pool(self):
-        at = _boot(subtab=SUBTAB_DATA_INSPECTION)
+        # DATA-26 split this flow across two pages: the filter widgets, the
+        # picker and the star live on Scanpath, while the counts and the raw
+        # tables that prove the narrowing reached the *data* are the 🗂️ Data
+        # page's. So the interactions run here and the evidence is read on one
+        # hop over, below.
+        at = _boot()
         assert len(_trial_ids(at)) == DEMO_TRIALS_IN_PICKER
-        assert _metric(at, "Trials") == str(DEMO_TRIALS_IN_WORDS)
 
         # (1) Condition filter: keep only the advanced-level readings.
         difficulty = at.multiselect(key="filter_difficulty_level")
@@ -279,12 +292,19 @@ class TestTrialFilterFlow:
             "difficulty_level": {"Adv"}
         }
         assert len(_trial_ids(at)) == DEMO_ADV_TRIALS_IN_PICKER
+
+        # The narrowing reached the data, not just the picker — checked on the
+        # 🗂️ Data page, then back to the filters.
+        _rerun(at, view=VIEW_DATA)
+        _clean(at, "on the Data page after the difficulty filter:")
         assert _metric(at, "Trials") == str(DEMO_ADV_TRIALS_IN_WORDS)
-        # The narrowing reached the data, not just the picker.
         graded = _frames_with(at, "difficulty_level")
         assert graded, "no rendered frame carries difficulty_level"
         for frame in graded:
             assert set(frame["difficulty_level"].dropna().unique()) == {"Adv"}
+        _rerun(at, view=_VIEW_SCANPATH)
+        _clean(at, "back on Scanpath:")
+        assert len(_trial_ids(at)) == DEMO_ADV_TRIALS_IN_PICKER
 
         # (2) Annotation: star the selected trial. Starring alone must not filter.
         stars = [

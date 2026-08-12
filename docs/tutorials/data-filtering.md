@@ -36,8 +36,8 @@ review decisions into the active pool without deleting the source data.
 
 ## 4. Verify the retained pool
 
-Check at least one trial from each participant or condition. Then open
-**Data Inspection** and confirm the remaining participant, text, trial,
+Check at least one trial from each participant or condition. Then open the
+🗂️ **Data** page and confirm the remaining participant, text, trial,
 fixation, and word counts are plausible.
 
 ## 5. Export the record

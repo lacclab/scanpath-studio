@@ -462,4 +462,23 @@ MULTIPLEYE_BUNDLE_CHOICE = "MultiplEYE server bundle"
 MULTIPLEYE_BUNDLE_DEFAULT_DIR = ""
 _VIEW_SCANPATH = "Scanpath Visualization"
 _VIEW_CORPUS = "Corpus Analysis"
-_MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS]
+# DATA-26: the third top-level view — everything about the dataset *itself*
+# (source, location, column mapping, contents, recording setup, preprocessing),
+# which used to be split between the ⚙️ Configure / 🧹 Preprocessing menu
+# popovers and a 🔎 Data Inspection subtab buried in the Scanpath view.
+_VIEW_DATA = "Data"
+_MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
+
+# DATA-26: the two keys the Data page's outer container is built with — visible
+# when that view is active, off-screen otherwise.
+#
+# The setup widgets (the loaders' directory input and ⬇ Download button, the
+# source options, the column-mapping selectboxes) *drive* `prepare_data` on
+# every rerun, and Streamlit drops the key of a widget that did not render. The
+# menu popovers they used to live in executed every run for exactly that reason;
+# a page body only executes while its view is selected. So the page is rendered
+# every run either way and simply hidden — `styles.py` gives the off-screen key
+# `display: none` — which keeps this a re-host rather than a rewrite of every
+# loader into a render/resolve pair.
+DATA_PAGE_KEY = "data_setup_page"
+DATA_PAGE_OFFSCREEN_KEY = "data_setup_page_offscreen"

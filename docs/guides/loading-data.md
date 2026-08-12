@@ -48,7 +48,7 @@ the progress chips at the top; your answers are kept as you move around.
    and choose which become trial filters.
 6. **Name & add** — review every decision in one table, then **Add dataset**.
 
-After loading, open **Data Inspection** and confirm that both tables share the
+After loading, open the 🗂️ **Data** page and confirm that both tables share the
 expected trials and coordinate range.
 
 ### The recording setup asks how you know
@@ -71,7 +71,7 @@ degree or point-to-pixel conversion, so those are hidden rather than computed fr
 a default.
 
 The answer travels with the dataset. It appears in the step-6 review table and
-under **Data Inspection → Recording setup**, rides a share link as `setup_prov`,
+under 🗂️ **Data → Recording setup**, rides a share link as `setup_prov`,
 and is written into the saved-setup JSON and into `plot_config.json` in a bulk
 export — so a figure set records that its monitor size was assumed, and whoever
 opens your link can tell your measurements from the app's guesses.
@@ -91,5 +91,5 @@ may be dropped during normalization.
 
 Download the setup JSON from the wizard and restore it for the next export from
 the same pipeline. If a mapping was wrong, edit it under
-**Data Inspection → Column mapping** or reload the files when a required column
+🗂️ **Data → Column mapping** or reload the files when a required column
 was not retained.

@@ -1920,10 +1920,10 @@ def _secondary_stored_upload_app():
     """A stored upload carries the snapshot its wizard captured."""
     import streamlit as st
 
+    from scanpath_studio import api
     from scanpath_studio.compare_source import load_secondary_dataset
     from scanpath_studio.data import load_sample_data
     from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
-    from scanpath_studio import api
 
     words, fixations = api.load_scanpath_data(*load_sample_data())
     st.session_state["_datasets"] = {

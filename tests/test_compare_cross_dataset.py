@@ -484,9 +484,9 @@ class TestRestoredSetupCannotInventAMonitor:
     """
 
     def test_a_section_without_a_canvas_does_not_pre_answer_the_screen(self):
-        from scanpath_studio import wizard
-
         import streamlit as st
+
+        from scanpath_studio import wizard
 
         st.session_state["_wizard_restored_setup"] = {
             "monitor_width_mm": 500.0,
@@ -504,9 +504,9 @@ class TestRestoredSetupCannotInventAMonitor:
         assert {"geometry", "text"} <= answerable
 
     def test_a_section_carrying_a_canvas_still_pre_answers(self):
-        from scanpath_studio import wizard
-
         import streamlit as st
+
+        from scanpath_studio import wizard
 
         st.session_state["_wizard_restored_setup"] = {
             "canvas_width": 1920,

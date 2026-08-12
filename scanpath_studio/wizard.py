@@ -23,6 +23,7 @@ import streamlit as st
 
 from . import app, wizard_shell
 from .constants import (
+    _VIEW_DATA,
     DEMO_CHOICE,
     FONT_FAMILY,
     ONESTOP_CHOICE,
@@ -289,6 +290,11 @@ def _enter_add_data_wizard() -> None:
     )
     st.session_state["_show_upload_wizard"] = True
     st.session_state["setup_complete"] = False
+    # DATA-26: the wizard is the 🗂️ Data page's add-a-dataset mode, so take the
+    # user there. Written as a *request* (`menu.render_nav` reconciles it on the
+    # next run) rather than a `switch_to_view` — this is an `on_click` callback,
+    # where Streamlit forbids `st.switch_page`.
+    st.session_state["main_nav"] = _VIEW_DATA
     _reset_wizard_widgets()
 
 

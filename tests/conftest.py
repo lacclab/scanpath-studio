@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from scanpath_studio import tabs
+from scanpath_studio.constants import _VIEW_DATA
 from tests.synthetic_data import make_synthetic_fixations, make_synthetic_words
 
 #: Absolute path to the app entry point driven by ``AppTest.from_file``.
@@ -171,13 +172,45 @@ SUBTAB_ANNOTATIONS = tabs.SUBTAB_ANNOTATIONS
 SUBTAB_COMPARISONS = tabs.SUBTAB_COMPARISONS
 SUBTAB_LINE_ASSIGNMENT = tabs.SUBTAB_LINE_ASSIGNMENT
 SUBTAB_EXPORT = tabs.SUBTAB_EXPORT
-SUBTAB_DATA_INSPECTION = tabs.SUBTAB_DATA_INSPECTION
+
+#: DATA-26: 🔎 Data Inspection is no longer a subtab of the Scanpath view — its
+#: content is the lower half of the 🗂️ **Data** page, a third top-level view.
+#: Reaching it is a nav switch, not a tab click.
+NAV_KEY = "main_nav"
+NAV_MIRROR_KEY = "_nav_mirrored"
+VIEW_DATA = _VIEW_DATA
 
 
 def open_subtab(at, label: str):
     """Select a per-trial subtab and rerun, so its body renders (PERF-3)."""
     at.session_state[SUBTAB_KEY] = label
     return at.run()
+
+
+def pin_view(at, view: str) -> None:
+    """Ask for ``view`` on the *next* run, without running (DATA-26).
+
+    Clearing ``menu._MIRROR_KEY`` alongside the request is what makes this work
+    twice. ``render_nav`` honours a ``main_nav`` request only when it differs
+    from what it last mirrored — the check that stops a nav *click* reading as
+    "go back" — and it relies on the router remembering the selected page across
+    reruns, which a browser does through the URL and ``AppTest`` does not. So a
+    second ``main_nav = Data`` on an app already showing Data is ignored, the
+    router falls back to its default page, and the assertions land on Scanpath.
+    """
+    at.session_state[NAV_KEY] = view
+    at.session_state[NAV_MIRROR_KEY] = None
+
+
+def pin_data_view(at) -> None:
+    """:func:`pin_view` for the 🗂️ Data page — the common case."""
+    pin_view(at, VIEW_DATA)
+
+
+def open_data_view(at, timeout: int = 60):
+    """Switch to the 🗂️ Data page and rerun, so its body renders (DATA-26)."""
+    pin_data_view(at)
+    return at.run(timeout=timeout)
 
 
 def answer_setup_step(at, *, screen=None, geometry=None, text=None):

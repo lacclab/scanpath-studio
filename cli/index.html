@@ -1040,6 +1040,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#compare-two-scanpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare two scanpaths
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#common-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1606,6 +1617,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#compare-two-scanpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compare two scanpaths
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#common-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1681,6 +1703,92 @@ one trial without opening the UI.</p>
 </code></pre></div>
 <p>HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
+<h2 id="compare-two-scanpaths">Compare two scanpaths<a class="headerlink" href="#compare-two-scanpaths" title="Permanent link">&para;</a></h2>
+<p><code>--compare-with PARTICIPANT:TRIAL</code> draws a second reading beside or over the
+first — the headless form of the app's <strong>Compare</strong> mode.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Two readings from the same dataset</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>p2:t5<span class="w"> </span>-o<span class="w"> </span>compare.html
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># Side by side, showing only B&#39;s word boxes and text</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>p2:t5<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span>-o<span class="w"> </span>compare.svg
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># B from a second dataset</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>-p<span class="w"> </span><span class="m">12</span><span class="w"> </span>-t<span class="w"> </span>b0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">&quot;Our lab&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Option</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>pick B</td>
+<td><code>--compare-with PARTICIPANT:TRIAL</code></td>
+</tr>
+<tr>
+<td>arrange the panels</td>
+<td><code>--compare-layout {overlay,side-by-side,stacked}</code> (default <code>overlay</code>)</td>
+</tr>
+<tr>
+<td>whose stimulus an overlay draws</td>
+<td><code>--compare-stimulus {both,a,b}</code> (default <code>both</code>)</td>
+</tr>
+<tr>
+<td>B from another dataset</td>
+<td><code>--compare-words PATH… --compare-fixations PATH…</code></td>
+</tr>
+<tr>
+<td>name that dataset</td>
+<td><code>--compare-dataset-name NAME</code></td>
+</tr>
+<tr>
+<td>declare the screens</td>
+<td><code>--canvas WxH</code>, <code>--compare-canvas WxH</code></td>
+</tr>
+<tr>
+<td>co-animate both readings</td>
+<td>add <code>--animate</code> (HTML output)</td>
+</tr>
+</tbody>
+</table>
+<p><code>--animate --compare-with</code> replays <strong>both</strong> readings on one clock, the same dual
+co-animation the app renders with Animate and Compare both on. That is an
+overlay, so it needs one shared screen on the same terms as <code>--compare-layout
+overlay</code>. <code>--compare-with</code> cannot be combined with <code>--all-screens</code>: a comparison
+is a single figure of two readings, so render one screen at a time with
+<code>--screen</code>.</p>
+<p><strong>Overlay across two datasets requires matching canvases.</strong> Overlaying pools both
+readings into one set of pixel coordinates, so <code>--compare-layout overlay</code> on two
+different screens <strong>fails</strong> rather than quietly falling back:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>scanpath-studio<span class="w"> </span>render<span class="w"> </span>…<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="go">These readings were recorded on different screens — 2560x1440 and 1680x1050. …</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="go">Pass layout=&#39;side_by_side&#39; (or &#39;stacked&#39;) to compare them anyway, each panel</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="go">drawn to its own screen.</span>
+</code></pre></div>
+<p>The app resolves that case to Side by side because a user can see what they got;
+a script cannot, so the CLI refuses instead of returning a differently-shaped
+figure. Nothing is ever rescaled to force an overlay.</p>
+<p>Matching canvases that neither dataset actually <em>recorded</em> (most public corpora
+report a default) still overlay — you get a warning on stderr rather than an
+error, since the app can't prove the two displays matched but you usually can.</p>
+<p>A second dataset is loaded from <strong>files only</strong>. Any corpus reachable from Python
+can still be scanpath B via
+<a href="../api/#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a>, which takes
+B's frames directly.</p>
+<p><code>--monitor-mm</code> / <code>--viewing-distance</code> (and their <code>--compare-*</code> twins) record
+physical display geometry on each side's setup. Nothing in the comparison reads
+them today — the overlay rule is about pixels, not degrees — but they complete
+the recorded setup.</p>
 <h2 id="common-options">Common options<a class="headerlink" href="#common-options" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1757,11 +1865,11 @@ Chrome/Chromium (<code>plotly_get_chrome -y</code>).</p>
 </tbody>
 </table>
 <p>Use the installed command as the authoritative full reference:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scanpath-studio<span class="w"> </span>--help
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--help
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scanpath-studio<span class="w"> </span>--help
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--help
 </code></pre></div>
 <p>The <code>analyze</code> command writes the full tabular family without opening the app:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scanpath-studio<span class="w"> </span>analyze<span class="w"> </span>--words<span class="w"> </span>ia.csv<span class="w"> </span>--fixations<span class="w"> </span>fixations.csv<span class="w"> </span>--output-dir<span class="w"> </span>analysis
 </code></pre></div>
 <p>This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
 and run-configuration files. <code>scanpath-studio corpus</code> produces a tidy
@@ -1777,10 +1885,10 @@ accepted by <code>analyze</code>.</p>
 <p>A local or desktop run caches your session on your own machine — uploaded
 datasets, column mappings, view settings, and annotations — so a refresh or a
 restart resumes where you left off. <code>cache</code> shows what is stored and removes it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>scanpath-studio<span class="w"> </span>cache<span class="w">            </span><span class="c1"># datasets, rows, size, folder, last written</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--path<span class="w">     </span><span class="c1"># just the folder</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--json<span class="w">     </span><span class="c1"># the same status as JSON</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>scanpath-studio<span class="w"> </span>cache<span class="w"> </span>--clear<span class="w">    </span><span class="c1"># delete the stored session</span>
 </code></pre></div>
 <p>The same information (and a <strong>Forget saved session</strong> button) is in the app's
 sidebar under <strong>🗄️ Recovery cache</strong>. <code>SCANPATH_STUDIO_PERSIST=0</code> turns caching

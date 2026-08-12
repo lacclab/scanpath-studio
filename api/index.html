@@ -1201,6 +1201,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.compare_scanpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compare_scanpaths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.render_parent_trial" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2067,6 +2078,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scanpath_studio.api.compare_scanpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compare_scanpaths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scanpath_studio.api.render_parent_trial" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2602,6 +2624,57 @@ matches the static figure. <code>palette=</code> (VIZ-18) works here too; the co
 it implies that the animation doesn't support are dropped rather than
 raising, since the caller named a look, not those individual keys.</p>
 <p><code>title</code> / <code>caption</code> (EXP-5) — same as :func:<code>plot_scanpath</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.compare_scanpaths" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.compare_scanpaths</span>
+
+
+<a href="#scanpath_studio.api.compare_scanpaths" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compare_scanpaths</span><span class="p">(</span><span class="n">words</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">fixations</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">trial_a</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">trial_b</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">words_b</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DataFrame</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fixations_b</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DataFrame</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dataset_b</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;Dataset B&#39;</span><span class="p">,</span> <span class="n">layout</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;overlay&#39;</span><span class="p">,</span> <span class="n">compare_stimulus</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;both&#39;</span><span class="p">,</span> <span class="n">setup</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SetupSnapshot</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">setup_b</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SetupSnapshot</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">canvas_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">style_a</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">style_b</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">base_font_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">font_family</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">FONT_FAMILY</span><span class="p">,</span> <span class="n">fix_index_range</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drift_correction</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">caption</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">figure_overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">go</span><span class="o">.</span><span class="n">Figure</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Build a two-scanpath comparison figure (CMP-9).</p>
+<p>The headless form of the app's <strong>Compare</strong> mode. <code>trial_a</code> / <code>trial_b</code>
+are <code>(participant, trial)</code> pairs; <code>layout</code> is <code>"overlay"</code>,
+<code>"side_by_side"</code> (<code>"side-by-side"</code> also accepted) or <code>"stacked"</code>.</p>
+<p><strong>Two datasets.</strong> Pass <code>words_b</code> / <code>fixations_b</code> to draw B from a
+<em>different</em> corpus. Two corpora can hold the same <code>(participant_id,
+trial_id)</code> and the builder slices by exactly that pair, so B's participant
+ids are namespaced with <code>dataset_b</code> inside the throwaway merged frames —
+without it one reading would silently render as two. The frames you pass in
+are never modified, and nothing in the returned figure's data depends on the
+namespace beyond the trace labels.</p>
+<p><strong>The overlay gate.</strong> Overlaying pools both readings into one axis range, so
+across datasets it is allowed only when both were recorded on the same known
+screen (<code>experimental_setup.setups_comparable</code>). Unlike the app — which
+resolves an incomparable overlay to side-by-side, because a user can see
+what they got — this <strong>raises</strong> <code>ValueError</code>: silently returning a
+differently-shaped figure than the one a script asked for is the wrong
+failure mode headlessly. Ask for <code>layout="side_by_side"</code> to get the app's
+fallback. Nothing is ever rescaled or reprojected.</p>
+<p><code>setup</code> / <code>setup_b</code> are :class:<code>experimental_setup.SetupSnapshot</code>
+values — what the gate reads. <code>canvas_size</code> covers A when you only have a
+resolution; omit both and the canvas is read off the data.</p>
+<p><code>compare_stimulus</code> picks whose word boxes and text an <strong>overlay</strong> draws —
+<code>"both"</code> (default), <code>"a"</code> or <code>"b"</code>. Two datasets' AOIs coincide only
+when the text is identical. Split layouts ignore it; each panel owns its own
+stimulus.</p>
+<p>Remaining keywords are forwarded to :func:<code>plots.make_comparison_figure</code>
+(e.g. <code>show_words=False</code>, <code>color_by="duration_ms"</code>); an unknown one
+raises <code>TypeError</code> naming the closest valid options. Which settings a
+comparison figure actually honours is the table in
+<code>scanpath_studio/CLAUDE.md</code> → <em>Which viz settings apply in which render
+path</em>.</p>
 
 
     </div>

@@ -372,6 +372,39 @@ def get_app_css() -> str:
         font-variant-numeric: tabular-nums;
     }
 
+    /* UX-51 — the rail's `label | field` rows. Every control in the rail and in
+       its ⚙️/🧹 popovers used to stack its title ABOVE its field, so one style
+       panel ran well past a screen. The title now sits in a column to the LEFT
+       of the field. The split itself is built in Python (controls._labeled, one
+       `st.columns` per row) precisely so it does not depend on Streamlit's own
+       label DOM; all this rule set owns is how the title TEXT behaves inside the
+       column we made for it.
+       It must never wrap — a two-line title would push its own field down and
+       undo the compaction — so it truncates instead, and hands the full text to
+       the browser's native hover title. That title is also where the `?` tooltip
+       went: the help text is appended to it, which buys back the icon's width on
+       every row. Scoped to our own class name, so it cannot reach any other
+       widget label in the app. */
+    .sps-flabel {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        /* Match the widget labels this replaced (see the VIZ-2 block below). */
+        font-size: 0.92rem;
+        line-height: 1.4;
+    }
+    /* A row whose title carries help. The dotted underline is the only remaining
+       hint that there is something to hover, now that the `?` icon is folded
+       into the title itself. */
+    .sps-flabel-help {
+        text-decoration: underline dotted;
+        text-decoration-color: rgba(128, 128, 128, 0.6);
+        text-underline-offset: 3px;
+        cursor: help;
+    }
+
     /* Control rail: a subtle card so it reads as a panel, with a hair more
        breathing room between the stacked toggles than the app-wide gap:0 rule.
        UX-43 gives it its own scroll area exactly as tall as the plot row: the

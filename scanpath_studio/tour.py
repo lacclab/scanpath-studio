@@ -273,7 +273,8 @@ _STEPS = [
     (
         "🎛️ Plot controls",
         "Toggle and style every layer — fixations, saccades, heatmap, word boxes, "
-        "text. **Experimental Setup** sets your monitor so it stays true-to-scale.",
+        "text. **📐 Figure & canvas → 🖥️ Screen & geometry** sets your monitor so "
+        "it stays true-to-scale.",
     ),
     (
         "🗂 Three views",

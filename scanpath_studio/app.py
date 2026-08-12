@@ -2440,6 +2440,15 @@ def render_sidebar_canvas_controls(
     `seed_canvas_state` does the state work and is called first here, so rendering
     and not-rendering resolve identically.
 
+    **UX-48 sub-grouping.** In ``bare`` mode these ~19 controls share the rail's
+    "📐 Figure & canvas" disclosure with the axes/label controls, which made one
+    ~26-row scroll with no internal structure. So the compact form splits them
+    into two popovers — **🖥️ Screen & geometry** (the monitor the experiment ran
+    on) and **🔤 Text & fonts** (how the reading text is drawn, plus the two
+    colours) — the same `expander → popover` shape every layer group uses. The
+    wizard's standalone expander stays flat: that step *is* the setup form, and
+    hiding half of it behind buttons would be a step you can't read at a glance.
+
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
         line_spacing, scale_text_to_boxes).
@@ -2448,7 +2457,14 @@ def render_sidebar_canvas_controls(
     _, font_css = _dataset_font(words_filtered)
     host = slot if slot is not None else st.sidebar
     display = host if bare else host.expander(title, expanded=expanded)
-    canvas_width = display.number_input(
+    # Both sub-groups are created up front (Streamlit lays containers out in
+    # creation order), so the code below keeps its order while landing in the
+    # right group. Flat mode points both names at the one container.
+    screen = (
+        display.popover("🖥️ Screen & geometry", width="stretch") if bare else display
+    )
+    text = display.popover("🔤 Text & fonts", width="stretch") if bare else display
+    canvas_width = screen.number_input(
         "Monitor width (px)",
         min_value=100,
         max_value=10000,
@@ -2457,7 +2473,7 @@ def render_sidebar_canvas_controls(
         key="global_canvas_width",
         persist_state="session",
     )
-    canvas_height = display.number_input(
+    canvas_height = screen.number_input(
         "Monitor height (px)",
         min_value=100,
         max_value=10000,
@@ -2469,7 +2485,7 @@ def render_sidebar_canvas_controls(
     # DATA-2: physical setup values live beside the pixel canvas they explain.
     # They are persisted with the plot config and immediately yield a px/degree
     # scale for downstream saccade/reporting work.
-    monitor_width_mm = display.number_input(
+    monitor_width_mm = screen.number_input(
         "Monitor physical width (mm)",
         min_value=100.0,
         max_value=3000.0,
@@ -2478,7 +2494,7 @@ def render_sidebar_canvas_controls(
         persist_state="session",
         help="Width of the visible display area, not the diagonal size.",
     )
-    viewing_distance_mm = display.number_input(
+    viewing_distance_mm = screen.number_input(
         "Viewing distance (mm)",
         min_value=100.0,
         max_value=3000.0,
@@ -2488,7 +2504,7 @@ def render_sidebar_canvas_controls(
         help="Eye-to-screen distance during the experiment.",
     )
     derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
-    display_dpi = display.number_input(
+    display_dpi = screen.number_input(
         "Display DPI",
         min_value=20.0,
         max_value=1000.0,
@@ -2501,15 +2517,17 @@ def render_sidebar_canvas_controls(
     px_per_degree = pixels_per_degree(
         float(viewing_distance_mm), float(canvas_width), float(monitor_width_mm)
     )
-    display.caption(
+    screen.caption(
         f"Geometry: **{px_per_degree:.1f} px/degree** · "
         f"{1.0 / px_per_degree:.4f}° per pixel."
     )
+
+    # --- 🔤 Text & fonts (sub-group in bare mode) -------------------------
     # Reading text is true-to-scale by default: it auto-sizes to the word boxes
     # (text height = box_height / line_spacing) and scales with the figure, so it
     # always fills the real line slot. Untick to fall back to a fixed font size.
     # Keyed (+ seeded) so the Save & restore panel can capture/reapply them.
-    scale_text_to_boxes = display.checkbox(
+    scale_text_to_boxes = text.checkbox(
         "Scale text to boxes",
         key="global_scale_text_to_boxes",
         persist_state="session",
@@ -2517,7 +2535,7 @@ def render_sidebar_canvas_controls(
         "line spacing) so it stays true to the real experiment at any zoom. "
         "Untick to use the fixed 'Figure font size' below instead.",
     )
-    line_spacing = display.number_input(
+    line_spacing = text.number_input(
         "Line spacing",
         min_value=1.0,
         max_value=10.0,
@@ -2528,7 +2546,7 @@ def render_sidebar_canvas_controls(
         help="Line slots per line of text. OneStop rendered one blank line above "
         "and one below each text line, so the box spans 3 line heights → 3.",
     )
-    use_stimulus_font_pt = display.checkbox(
+    use_stimulus_font_pt = text.checkbox(
         "Use stimulus font size in points",
         key="global_use_stimulus_font_pt",
         persist_state="session",
@@ -2536,7 +2554,7 @@ def render_sidebar_canvas_controls(
         help="Convert the original stimulus point size with the DPI above. "
         "Scale-to-boxes still takes precedence when enabled.",
     )
-    stimulus_font_pt = display.number_input(
+    stimulus_font_pt = text.number_input(
         "Stimulus font size (pt)",
         min_value=4.0,
         max_value=144.0,
@@ -2549,7 +2567,7 @@ def render_sidebar_canvas_controls(
         st.session_state["global_base_font_size"] = int(
             min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
         )
-    base_font_size = display.number_input(
+    base_font_size = text.number_input(
         "Figure font size (px)",
         min_value=6,
         max_value=72,
@@ -2563,14 +2581,14 @@ def render_sidebar_canvas_controls(
     )
     # VIZ-1: every font-size control here is in pixels, but stimulus typography
     # is usually specified in points. Spell out the difference + the conversion.
-    display.caption(
+    text.caption(
         "ℹ️ Font sizes here are in **pixels (px)**, but stimuli are usually "
         "specified in **points (pt)**. To match the original, convert via the "
         "experiment's DPI: `px = pt × DPI ÷ 72` (e.g. 12 pt ≈ 16 px at 96 DPI). "
         "Prefer **Scale text to boxes** when the data ships word boxes — it sizes "
         "the text from the real geometry and sidesteps the conversion."
     )
-    display.button(
+    text.button(
         "Use multilingual font stack",
         on_click=lambda: st.session_state.update(
             global_font_family=(
@@ -2580,7 +2598,7 @@ def render_sidebar_canvas_controls(
         ),
         help="A CJK/Hebrew/Arabic-capable CSS fallback stack (PRE-6).",
     )
-    font_family = display.text_input(
+    font_family = text.text_input(
         "Text font",
         key="global_font_family",
         persist_state="session",
@@ -2588,7 +2606,7 @@ def render_sidebar_canvas_controls(
         "(e.g. 'Courier New') or a CSS fallback stack.",
     )
     if "right_to_left" in words_filtered and words_filtered["right_to_left"].any():
-        display.caption(
+        text.caption(
             "↔ RTL script detected. Landing positions are measured from the "
             "logical word start; browser bidi shaping is used for labels."
         )
@@ -2600,7 +2618,7 @@ def render_sidebar_canvas_controls(
     hint = _stimulus_font_install_hint(font_css)
     if hint is not None:
         font_name, font_url = hint
-        display.caption(
+        text.caption(
             f"ℹ️ This corpus was rendered in **{font_name}**. For the overlaid text "
             "to match the stimulus image exactly, install that font on this "
             "computer (it isn't bundled), then reload — otherwise the browser "
@@ -2613,7 +2631,7 @@ def render_sidebar_canvas_controls(
 
     # Base reading-text colour (highlighted-text colour lives in Visualization
     # controls). Read back into viz_settings by controls.sidebar_controls.
-    display.color_picker(
+    text.color_picker(
         "Text color",
         key="global_text_color",
         persist_state="session",
@@ -2623,7 +2641,7 @@ def render_sidebar_canvas_controls(
     # Plot background lives here (Experimental Setup) rather than under
     # Visualization; sidebar_controls reads the chosen value from session state.
     bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    display.selectbox(
+    text.selectbox(
         "Plot background",
         options=bg_options,
         key="global_bg_choice",
@@ -2639,7 +2657,7 @@ def render_sidebar_canvas_controls(
         # widget's own `persist_state="session"` (ENG-36) rather than by
         # re-asserting the value from Python on every run.
         _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
-        display.color_picker(
+        text.color_picker(
             "Custom background color",
             key="global_bg_custom",
             persist_state="session",

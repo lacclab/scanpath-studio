@@ -2266,6 +2266,10 @@ def sidebar_controls(
          popovers is the only two-level shape available — which is also why
          Fixations and Saccades are peer sections rather than sub-sections of a
          single "Scanpath" group.
+      4. **📐 Figure & canvas** follows the same shape with no layer to toggle
+         (UX-48): the framing toggle inline, then four popovers — 🖥️ Screen &
+         geometry · 🔤 Text & fonts (both from ``canvas_renderer``) · 📊 Axes &
+         grid · 🏷️ Title & labels.
 
     The sections are created up front (Streamlit lays containers out in creation
     order), so each block below renders into its section without moving in this
@@ -2435,7 +2439,8 @@ def sidebar_controls(
     ovl_grp = viz.expander("🔥 Overlays", expanded=False)
     # Canvas/text and the former Figure/axes controls share one disclosure: both
     # describe the figure's framing rather than a data layer. The injected canvas
-    # renderer writes directly into this expander (not a nested expander).
+    # renderer writes directly into this expander (not a nested expander), as its
+    # own popover sub-groups — see the "Figure & canvas" block below.
     figure_grp = viz.expander("📐 Figure & canvas", expanded=False)
 
     # --- Fixations --------------------------------------------------------
@@ -3236,37 +3241,41 @@ def sidebar_controls(
         )
 
     # --- Figure & canvas --------------------------------------------------
-    # The renderer is bound by app.main and writes its canvas/text controls
-    # directly into the shared disclosure, followed by the figure/axis controls.
-    if canvas_renderer is not None:
-        figure_grp.caption("**Canvas & text**")
-        canvas_renderer(figure_grp)
-
-    figure_grp.divider()
-    figure_grp.caption("**Axes & labels**")
-    # --- Figure & axes (figure-level presentation, rarely changed) --------
-    # VIZ-31 renamed this group from "Axes & color bars": it now also carries the
-    # Illustration-label override, which used to sit as a top-level row directly
-    # under the view presets. It is a publication-disclosure setting about how the
-    # figure is *presented*, so it belongs with the framing controls rather than
-    # in the layer run — the ✏️ Illustration quick view is still the thing that
-    # turns the mode on.
-    axes = figure_grp
-    axes.selectbox(
-        "Illustration label",
-        options=["Auto", "Show", "Hide"],
-        key="global_illustration_label",
-        persist_state="session",
-        help="Auto labels figures when geometry or data is transformed. Show "
-        "forces the label; Hide is an explicit publication override.",
-    )
-    axes.toggle(
+    # UX-48: this group merged two former sections (canvas/text + axes/labels)
+    # and read as one ~26-row flat run — two `**bold caption**` lines were the
+    # only structure in it. It now follows the same shape as every layer group:
+    # ONE headline control inline, everything else behind named popovers.
+    #
+    #   **Show full monitor**   (inline — the framing decision, cheap to reach)
+    #   🖥️ Screen & geometry    ┐ rendered by `canvas_renderer`
+    #   🔤 Text & fonts         ┘ (app.render_sidebar_canvas_controls, bare mode)
+    #   📊 Axes & grid          ┐ rendered here
+    #   🏷️ Title & labels       ┘
+    #
+    # The two containers below are created up front so each block keeps its place
+    # in this file while rendering into its own sub-group (same trick as the
+    # section expanders above). Popovers, not expanders, because Streamlit nests
+    # neither expander-in-expander nor popover-in-popover — and this group is
+    # already an expander.
+    figure_grp.toggle(
         "**Show full monitor**",
         key="global_fit_to_monitor",
         persist_state="session",
         help="Frame the whole presentation monitor so the scanpath sits where it "
         "appeared on screen. Turn off to crop the view tightly to the data.",
     )
+    # The renderer is bound by app.main and writes its canvas/text sub-groups
+    # directly into the shared disclosure, followed by the figure/axis ones.
+    if canvas_renderer is not None:
+        canvas_renderer(figure_grp)
+
+    # The plot frame itself: the coordinate grid, the colour bar and which
+    # fixation columns the two axes plot.
+    axes = figure_grp.popover("📊 Axes & grid", width="stretch")
+    # Everything the figure says in words: the Illustration disclosure label and
+    # the EXP-5 title/caption.
+    labels = figure_grp.popover("🏷️ Title & labels", width="stretch")
+
     show_coordinate_grid = axes.toggle(
         "Coordinate grid",
         key="global_show_coordinate_grid",
@@ -3381,7 +3390,15 @@ def sidebar_controls(
             if not st.session_state.get("global_caption_pattern"):
                 st.session_state["global_caption_pattern"] = DEFAULT_CAPTION_PATTERN
 
-    show_title_caption = axes.toggle(
+    labels.selectbox(
+        "Illustration label",
+        options=["Auto", "Show", "Hide"],
+        key="global_illustration_label",
+        persist_state="session",
+        help="Auto labels figures when geometry or data is transformed. Show "
+        "forces the label; Hide is an explicit publication override.",
+    )
+    show_title_caption = labels.toggle(
         "Title & caption on the figure",
         key="global_show_title_caption",
         persist_state="session",
@@ -3400,30 +3417,31 @@ def sidebar_controls(
             {},
         )
         # EXP-5: two text boxes, two previews and a field list is far too tall
-        # for the rail — inline it ran "very long and narrow". Behind the ⚙️
-        # popover it follows the same `toggle → ⚙️ style` shape as every layer.
-        with axes.popover("⚙️ Title & caption", width="stretch"):
-            box = st.container()
-            render_pattern_input(
-                box,
-                "Title",
-                "global_title_pattern",
-                _title_caption_fields,
-                # No placeholder here, unlike the Compare A/B labels: a
-                # placeholder promises "this is what an empty box gives you",
-                # and an empty box here gives *no title at all*. Both boxes are
-                # pre-filled with the defaults on the run the toggle is switched
-                # on, so there is nothing an empty one needs to explain (UX-31).
-                help="Leave empty for no title.",
-            )
-            render_pattern_input(
-                box,
-                "Caption",
-                "global_caption_pattern",
-                _title_caption_fields,
-                help="Leave empty for no caption.",
-            )
-            render_pattern_help(box, _title_caption_fields)
+        # for the rail — inline it ran "very long and narrow", so it opened in a
+        # nested ⚙️ popover. UX-48 made the *group* a popover instead, and
+        # Streamlit won't nest popover-in-popover — the pattern boxes are simply
+        # inline here now, where the overlay's width is the point.
+        box = labels.container()
+        render_pattern_input(
+            box,
+            "Title",
+            "global_title_pattern",
+            _title_caption_fields,
+            # No placeholder here, unlike the Compare A/B labels: a
+            # placeholder promises "this is what an empty box gives you",
+            # and an empty box here gives *no title at all*. Both boxes are
+            # pre-filled with the defaults on the run the toggle is switched
+            # on, so there is nothing an empty one needs to explain (UX-31).
+            help="Leave empty for no title.",
+        )
+        render_pattern_input(
+            box,
+            "Caption",
+            "global_caption_pattern",
+            _title_caption_fields,
+            help="Leave empty for no caption.",
+        )
+        render_pattern_help(box, _title_caption_fields)
 
     # Build the dict from session_state so it matches viz_settings_from_state
     # exactly; then fill in the per-scanpath comparison styling, shown only when

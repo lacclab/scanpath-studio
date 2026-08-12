@@ -21,8 +21,9 @@ Use the visualization controls to set colors, opacity, labels, and saccade
 style. Prefer the defaults unless a change carries information. Check the whole
 canvas for clipped marks, unreadable text, and an unnecessary legend.
 
-For geometry review, **📐 Figure & canvas → Coordinate grid** adds labelled
-screen-pixel axes. Keep automatic spacing for exploration or set a manual major
+For geometry review, **📐 Figure & canvas → 📊 Axes & grid → Coordinate grid**
+adds labelled screen-pixel axes. Keep automatic spacing for exploration or set a
+manual major
 interval when several exported figures must use identical grid marks. The grid
 is included in static images, animations, comparisons, and batch figures.
 

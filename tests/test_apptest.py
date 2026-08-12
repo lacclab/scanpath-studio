@@ -2081,6 +2081,66 @@ class TestGenericFilenamePowers:
 
 
 @pytest.mark.timeout(120)
+class TestFigureAndCanvasSubGroups:
+    """UX-48: the 📐 Figure & canvas group renders as four popover sub-groups.
+
+    The controls moved *containers*, not keys — and every conditional body in
+    the group (the title/caption pattern boxes, the manual grid interval, the
+    colour-bar styling, the custom background picker) now sits one level deeper
+    than before. Streamlit raises on a container it won't nest, so booting with
+    all four bodies open is the regression that catches a bad move; the key
+    assertions are what pin that no setting was dropped on the way.
+    """
+
+    def test_every_sub_group_body_renders_with_its_settings_intact(self):
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=30)
+        # Open the four conditional bodies at once.
+        at.session_state["global_show_title_caption"] = True
+        at.session_state["global_title_pattern"] = "{participant_id}"
+        at.session_state["global_show_coordinate_grid"] = True
+        at.session_state["global_coordinate_grid_auto"] = False
+        at.session_state["global_show_colorbars"] = True
+        at.session_state["global_bg_choice"] = "Custom…"
+        at.run(timeout=30)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # Widgets from every sub-group: 🖥️ Screen, 🔤 Text, 📊 Axes, 🏷️ Labels.
+        keys = {w.key for w in at.number_input} | {w.key for w in at.selectbox}
+        assert {
+            "global_canvas_width",
+            "global_coordinate_grid_spacing",
+            "global_bg_choice",
+            "global_illustration_label",
+            "global_x_field",
+        } <= keys
+        assert at.session_state["global_title_pattern"] == "{participant_id}"
+        assert at.session_state["global_colorbar_orientation"] in (
+            "Vertical",
+            "Horizontal",
+        )
+
+    def test_the_group_keeps_one_inline_toggle_and_four_popovers(self):
+        """The shape itself: framing inline, everything else behind a name."""
+        import inspect
+
+        from scanpath_studio import app, controls
+
+        control_source = inspect.getsource(controls.sidebar_controls)
+        canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
+
+        assert 'figure_grp.popover("📊 Axes & grid"' in control_source
+        assert 'figure_grp.popover("🏷️ Title & labels"' in control_source
+        assert '"🖥️ Screen & geometry"' in canvas_source
+        assert '"🔤 Text & fonts"' in canvas_source
+        # The framing toggle is the group's one inline control.
+        assert 'figure_grp.toggle(\n        "**Show full monitor**"' in control_source
+        # …and the old flat captions are gone.
+        assert 'figure_grp.caption("**Canvas & text**")' not in control_source
+        assert 'figure_grp.caption("**Axes & labels**")' not in control_source
+
+
+@pytest.mark.timeout(120)
 class TestResetSettings:
     """UX-26: the rail's Reset settings action puts the visualization back."""
 

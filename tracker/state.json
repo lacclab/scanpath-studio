@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 253,
+  "revision": 259,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -72,6 +72,13 @@
       "archived": true,
       "updated": "2026-08-11"
     },
+    "BUG-23": {
+      "status": "Review",
+      "priority": "Normal",
+      "implementationBrief": "Yes leave it verbatim",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
     "BUG-4": {
       "status": "On hold",
       "priority": "Normal",
@@ -114,10 +121,10 @@
       "updated": "2026-08-08"
     },
     "CMP-8": {
-      "status": "Planned",
+      "status": "Closed",
       "priority": "High",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-12"
     },
     "CMP-9": {
@@ -191,10 +198,10 @@
       "updated": "2026-08-12"
     },
     "DATA-22": {
-      "status": "Planned",
+      "status": "Closed",
       "priority": "High",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-12"
     },
     "DATA-23": {
@@ -587,16 +594,16 @@
       "updated": "2026-08-07"
     },
     "UX-39": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "Maybe pressing three times on the title? and show something like big eyes popping up? something nice",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-12"
     },
     "UX-40": {
       "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "Improve them. This is a good start but could be improved.\n\nTutorials should guide as much as possible. Really opening up and highlighting relevant parts.\nDraft of tutorials and steps (I might have missed something):\n\n\\subsection{Example use cases}\n\\item \\textbf{Data collection}\n        \\begin{itemize}\n            \\item For: Researchers designing an experiment\n            \\item Trying to: Qualitatively compare two eye trackers\n            \\item Should do:\n            \\begin{itemize}\n                \\item 1. Upload data from eye tracker #1\n                \\item 2. Upload data from eye tracker #2\n                \\item 3. Visually compare scanpaths on the same text\n            \\end{itemize}\n        \\end{itemize}\n        \\item \\textbf{Data Filtering}\n            \\begin{itemize}\n                \\item For: Researchers using preexisting data for their research\n                \\item Trying to: Mark trials for inclusion (e.g. participants with a specific native language that have good calibration; or for any other reason)\n                \\item Should do:\n                \\begin{itemize}\n                \\item 1. Upload your data\n                \\item Filter trials\n                \\item 2. Go over trials \n                \\item 3. Annotate\n                \\item 4. Export marked trial IDs\n            \\end{itemize}\n    \\end{itemize}\n    \\item Publication-ready figures\n    \\begin{itemize}\n        \\item For: Researchers making an presentation about their research\n        \\item Trying to: showcase an example of a real scanpath\n        \\item Should do:\n        \\begin{itemize}\n            \\item Upload your data\n            \\item Choose a trial\n            \\item Configure visualization -\n            \\begin{itemize}\n                \\item 1 - heatmap\n                \\item 2 - animation\n            \\end{itemize}\n            \\begin{itemize}\n                \\item Bonus: save favorite settings for later (and then import)\n            \\end{itemize}\n            \\item export figure\n        \\end{itemize}\n    \\end{itemize}\n    \\item Comparison\n    \\begin{itemize}\n        \\item For: Researchers analyzing data\n        \\item Trying to: See progression over time\n        \\item should do: upload data; go to corpus view; select appropriate view.\n    \\end{itemize}",
+      "implementationBrief": "Improve them. This is a good start but could be improved.",
       "archived": false,
       "updated": "2026-08-12"
     },
@@ -630,7 +637,7 @@
     },
     "UX-47": {
       "status": "Planned",
-      "priority": "High",
+      "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-12"

@@ -64,7 +64,6 @@ from .controls import (
     numeric_field_options,
     palette_state,
 )
-from .utils import composite_identity_cascade
 
 # URL query-param → session_state key map for the deep-link API. Used by
 # `_apply_url_preset()` to preset widgets when the page is opened from an
@@ -746,8 +745,8 @@ def _restore_selection(
     """Best-effort: point a tab's trial picker at the saved ``(participant,
     trial)``. Returns True when a matching trial is found in the current
     (filtered) data. Mirrors the key scheme of ``utils.select_trial`` for the
-    given ``key_prefix`` — including its composite vs. single-dropdown branch —
-    so the seeded keys land on the right selectors.
+    given ``key_prefix``, which is now one scheme for every dataset (BUG-23 —
+    a composite trial id no longer gets a picker, or keys, of its own).
 
     The trial id is sufficient on its own: a missing/blank participant (e.g. a
     ``?trial_id=`` link with no ``?participant=``) falls through to the trial-id-
@@ -767,30 +766,16 @@ def _restore_selection(
         return False
     row = match.iloc[0]
     st.session_state[f"{key_prefix}_select_trial_mode"] = "Trial"
-    composite_cols = [
-        c
-        for c in (st.session_state.get("_composite_trial_columns") or [])
-        if c in combos.columns
-    ]
-    if len(composite_cols) >= 2:
-        # Seed the cascade the composite picker actually renders (participant +
-        # text), not one key per mapped component — BUG-23 changed those to the
-        # two identity fields, and a key no widget reads restores nothing.
-        text_field = (
-            "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
-        )
-        for col in composite_identity_cascade(combos, text_field):
-            st.session_state[f"{key_prefix}_composite_{col}"] = str(row[col])
-        st.session_state[f"{key_prefix}_composite_reading"] = str(row["trial_id"])
-    else:
-        # None/Trial mode renders a single dropdown keyed `<prefix>_trial_id`
-        # whose *options* are the trial_field values (`unique_trial_id` when
-        # present), so seed that one key with this row's option value — not a
-        # `<prefix>_<trial_field>` key, which no widget reads.
-        trial_field = (
-            "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
-        )
-        st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
+    # The picker renders a single dropdown keyed `<prefix>_trial_id` whose
+    # *options* are the trial_field values (`unique_trial_id` when present), so
+    # seed that one key with this row's option value — not a
+    # `<prefix>_<trial_field>` key, which no widget reads. The slider
+    # (`<prefix>_trial_pos`) needs no seeding: the picker mirrors it onto the
+    # selectbox's value before it renders.
+    trial_field = (
+        "unique_trial_id" if "unique_trial_id" in combos.columns else "trial_id"
+    )
+    st.session_state[f"{key_prefix}_trial_id"] = str(row[trial_field])
     if selection.get("screen_id") not in (None, ""):
         st.session_state[f"{key_prefix}_screen_id"] = str(selection["screen_id"])
     return True

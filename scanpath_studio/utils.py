@@ -841,131 +841,6 @@ def _select_trial_none_mode(
     return chosen["participant_id"], chosen["trial_id"], selected_text
 
 
-_COMPONENT_LABELS = {
-    "participant_id": "Participant",
-    "unique_text_id": "Text",
-    "text_id": "Text",
-    "unique_paragraph_id": "Text",
-    "paragraph_id": "Text",
-}
-
-
-def _component_label(col: str) -> str:
-    return _COMPONENT_LABELS.get(col, col)
-
-
-def _composite_columns_for(combos: pd.DataFrame) -> list[str]:
-    """Composite trial-id component columns that are actually present in
-    ``combos`` — empty unless the trial id was built from several columns
-    (set in ``app.prepare_data`` / preserved by ``data._preserve_composite_columns``)."""
-    cols = st.session_state.get("_composite_trial_columns") or []
-    return [c for c in cols if c in combos.columns]
-
-
-def composite_identity_cascade(combos: pd.DataFrame, text_field: str) -> list[str]:
-    """The columns the composite trial picker cascades on: **Participant**, then
-    **Text**.
-
-    A trial is a reader reading a text, so those two are what the picker asks
-    for — regardless of how many source columns the user mapped into either one.
-    Both are already resolved to a single value by normalization
-    (``data.trial_id_series`` joins a multi-column Participant ID or Text ID
-    mapping the same way it joins the trial id), so a composite identity needs no
-    extra selectors: it *is* one value in ``participant_id`` / ``text_field``.
-
-    BUG-23. The picker used to cascade on the trial id's raw *component* columns
-    instead, which made the number and meaning of the selectors an accident of
-    the mapping — OneStop's five parts rendered as Participant, a bare paragraph
-    index labelled "Text", and three selectors for `article_id`, `article_batch`
-    and `difficulty_level`, none of which identifies anything on its own. UX-5
-    had then hidden the parts that were also **More** filter columns, which in
-    OneStop is all three of those *plus* the article/batch/difficulty that carry
-    the text's identity, leaving a cascade that could not reach a single trial.
-    Asking for participant and text sidesteps both."""
-    cascade = ["participant_id"]
-    if text_field != "participant_id":
-        cascade.append(text_field)
-    return cascade
-
-
-def _select_trial_composite_mode(
-    combos: pd.DataFrame,
-    component_cols: list[str],
-    text_field: str,
-    key_prefix: str,
-    picker_host=None,
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Trial selection when the trial id was composed from several columns.
-
-    Renders a **Participant** then a **Text** selector (the second narrowed by
-    the first), instead of a single opaque ``a_b_c`` dropdown. Selectors render
-    into ``picker_host``, defaulting to the current container.
-
-    ``component_cols`` is the cascade from ``composite_identity_cascade`` — see
-    there for why it is participant + text and not the trial id's raw parts. When
-    the trial id carries something *beyond* those two (a condition such as
-    ``repeated_reading_trial``), participant + text land on several trials and the
-    "Reading" selector below picks between them; that is the one case it is for."""
-    host = picker_host if picker_host is not None else st
-    host.caption("Pick a participant and a text to narrow to a trial.")
-    filtered = combos
-    for col in component_cols:
-        options = sorted(filtered[col].dropna().astype(str).unique())
-        if not options:
-            st.warning("No trials available after filtering.")
-            return None, None, None
-        state_key = (
-            f"{key_prefix}_composite_{col}" if key_prefix else f"composite_{col}"
-        )
-        # A change to an earlier selector can drop the stored value out of this
-        # selector's (now narrower) option set — clear it so st.selectbox falls
-        # back to the first valid option instead of raising.
-        if state_key in st.session_state and st.session_state[state_key] not in options:
-            del st.session_state[state_key]
-        chosen = host.selectbox(_component_label(col), options=options, key=state_key)
-        filtered = filtered[filtered[col].astype(str) == str(chosen)]
-        if filtered.empty:
-            st.warning("No trial matches the selected combination.")
-            return None, None, None
-
-    candidates = filtered.drop_duplicates(subset=["trial_id"]).sort_values("trial_id")
-    if candidates.empty:
-        return None, None, None
-    if len(candidates) > 1:
-        # The components didn't fully determine a single trial — offer the
-        # remaining ones, like the other modes' "Reading" selector.
-        trial_options = candidates["trial_id"].astype(str).tolist()
-        trial_to_pid = {
-            str(r["trial_id"]): r["participant_id"]
-            for r in candidates.to_dict("records")
-        }
-
-        def _reading_label(value: str) -> str:
-            marks = annotation_markers(trial_to_pid.get(value), value)
-            base = _trial_display_label(value)
-            return f"{marks} {base}" if marks else base
-
-        selected_trial = host.selectbox(
-            "Reading (multiple trials available)",
-            options=trial_options,
-            key=f"{key_prefix}_composite_reading"
-            if key_prefix
-            else "composite_reading",
-            format_func=_reading_label,
-            help="More than one trial shares these values. "
-            "★ favorite · 🏷️ tagged · 📝 has notes.",
-        )
-        row = candidates[
-            candidates["trial_id"].astype(str) == str(selected_trial)
-        ].iloc[0]
-    else:
-        row = candidates.iloc[0]
-        selected_trial = row["trial_id"]
-
-    text = str(row[text_field]) if text_field in row.index else None
-    return row["participant_id"], selected_trial, text
-
-
 def select_trial(
     combos: pd.DataFrame,
     key_prefix: str = "",
@@ -976,11 +851,19 @@ def select_trial(
 ) -> Tuple[Optional[str], Optional[str], str, Optional[str]]:
     """Pick a specific trial from the (already-narrowed) pool.
 
-    There are no Browse-by modes anymore: the pool is narrowed by the inline
-    **Narrow by** Text / Participant multiselects + the **More** filters
-    (``controls.render_narrow_by`` / ``render_trial_filters``), and this picks one
-    trial via a selectbox + slider + ◀ ▶ arrows. A composite trial id (built from
-    several mapped columns) instead cascades on Participant then Text.
+    There are no Browse-by modes anymore, and no per-mapping variants either: the
+    pool is narrowed by the inline **Narrow by** Text / Participant multiselects +
+    the **More** filters (``controls.render_narrow_by`` /
+    ``render_trial_filters``), and this always picks one trial via the same
+    selectbox + slider + ◀ ▶ arrows — whatever the Trial ID mapping looks like.
+
+    BUG-23: a composite trial id (built from several mapped columns) used to get a
+    picker of its own — first one selector per mapped component, then a Participant
+    → Text cascade. Both made the *shape of the mapping* visible in the UI, and
+    neither offered the slider or the step buttons, so stepping through trials
+    worked on some datasets and not others. Participant and Text are what **Narrow
+    by** is for; the composite flag now only tells the chip strip to spell the
+    joined id out (``tabs._render_trial_condition_chips``).
 
     ``picker_host`` is the container to render into (defaults to the current one);
     the picker builds its own row of columns, so call it where columns are allowed.
@@ -1003,25 +886,15 @@ def select_trial(
     )
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
 
-    composite_cols = _composite_columns_for(combos)
-    if len(composite_cols) >= 2:
-        participant, trial, text = _select_trial_composite_mode(
-            combos,
-            composite_identity_cascade(combos, text_field),
-            text_field,
-            key_prefix,
-            picker_host=picker_host,
-        )
-    else:
-        participant, trial, text = _select_trial_none_mode(
-            combos,
-            trial_field,
-            text_field,
-            key_prefix,
-            picker_host=picker_host,
-            words=words,
-            fixations=fixations,
-        )
+    participant, trial, text = _select_trial_none_mode(
+        combos,
+        trial_field,
+        text_field,
+        key_prefix,
+        picker_host=picker_host,
+        words=words,
+        fixations=fixations,
+    )
 
     return participant, trial, "Trial", text
 

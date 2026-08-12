@@ -411,10 +411,11 @@ def _preserve_composite_columns(
     under their original names.
 
     A multi-column trial mapping gets joined into a single opaque ``trial_id``
-    (e.g. ``2_1_1_Ele_l37_1129_False``). Keeping the individual component
-    columns lets the trial picker tell a composite id apart from a real one —
-    mirroring the Text / Participant modes (see
-    ``utils._select_trial_composite_mode``). No-op for single-column mappings.
+    (e.g. ``2_1_1_Ele_l37_1129_False``). Keeping the individual component columns
+    is what lets the trial chips spell that id back out part by part
+    (``tabs._render_trial_condition_chips``). It no longer changes how the trial
+    is *picked* — BUG-23 made the picker the same for every mapping.
+    No-op for single-column mappings.
     Rows are 1:1 with ``source`` here (no filtering in the composite path), so a
     positional copy stays aligned."""
     cols = trial_mapping_columns(trial_mapping)

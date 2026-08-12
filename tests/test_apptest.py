@@ -1638,8 +1638,10 @@ class TestSetupWizard:
 
     def test_composite_trial_dataset_restores_picker_on_switch_back(self, monkeypatch):
         """Regression for the review's HIGH finding: a stored dataset whose trial
-        id is composite must restore _composite_trial_columns (and its cascading
-        picker) on reselect, overriding whatever source was loaded last."""
+        id is composite must restore _composite_trial_columns on reselect,
+        overriding whatever source was loaded last. Since BUG-23 the flag no longer
+        changes the *picker* (there is one picker for every mapping) — it is what
+        lets the trial chips spell the joined id back out."""
         import pandas as pd
 
         from scanpath_studio import app
@@ -1710,7 +1712,8 @@ class TestSetupWizard:
             "paragraph_id",
         }
         keys = {w.key for w in at2.selectbox if w.key}
-        assert any(k.startswith("single_composite_") for k in keys), keys
+        assert "single_trial_id" in keys, keys
+        assert not any(k.startswith("single_composite_") for k in keys), keys
 
     def test_recording_setup_writes_shared_global_key(self, monkeypatch):
         """DATA-22: the Recording-setup step still feeds the shared ``global_*``

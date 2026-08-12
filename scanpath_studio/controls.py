@@ -1422,7 +1422,7 @@ def _drop_stale(state_key: str, options: list) -> None:
     """Clear a persisted selectbox value that isn't valid for the current
     ``options`` (e.g. after switching datasets, or restoring a config built on
     different data) so ``st.selectbox`` falls back to its ``index=`` default
-    instead of raising. Mirrors the guard in ``utils._select_trial_composite_mode``."""
+    instead of raising."""
     if state_key in st.session_state and st.session_state[state_key] not in options:
         del st.session_state[state_key]
 

@@ -3525,7 +3525,16 @@ def _numeric_column_bounds(_df: pd.DataFrame, column: str, cache_key):
     distinct = int(finite.nunique())
     if distinct < 2:
         return None
-    return float(finite.min()), float(finite.max()), distinct
+    lo, hi = finite.min(), finite.max()
+    # A whole-numbered column gets whole-numbered bounds, so the slider steps in
+    # 1s and reads "3 – 17" rather than "3.00 – 17.00". Streamlit picks int vs
+    # float behaviour from the *type* of min_value/max_value, so the decision has
+    # to be made here, on the data. `%` on a float that happens to be whole (an
+    # int column with NaNs is float64) counts as whole — the point is the values,
+    # not the dtype pandas landed on.
+    if bool((finite % 1 == 0).all()):
+        return int(lo), int(hi), distinct
+    return float(lo), float(hi), distinct
 
 
 @st.cache_data(show_spinner=False)
@@ -4021,7 +4030,7 @@ def _seed_filter_widget(
         st.session_state[key] = list(default)
 
 
-def _seed_range_widget(col: str, lo: float, hi: float, *, prefix: str = "") -> None:
+def _seed_range_widget(col: str, lo, hi, *, prefix: str = "") -> None:
     """Pre-seed a range slider from the persistent mirror, clamped to the column.
 
     The range twin of :func:`_seed_filter_widget`, and it needs its own because
@@ -4029,23 +4038,29 @@ def _seed_range_widget(col: str, lo: float, hi: float, *, prefix: str = "") -> N
     range outside the current column's extent (a dataset switch, or a filter that
     shrank the pool) is clamped rather than dropped, so the slider never renders
     a value Streamlit would reject.
+
+    The seeded pair keeps ``lo``/``hi``'s own type: Streamlit reads int-vs-float
+    slider behaviour off the values, so seeding ``(0.0, 10.0)`` for an integer
+    column would put it back on decimal steps.
     """
+    cast = int if isinstance(lo, int) and isinstance(hi, int) else float
     key = _range_filter_key(col, prefix)
+
+    def _clamped(pair) -> tuple:
+        return (
+            cast(min(max(pair[0], lo), hi)),
+            cast(min(max(pair[1], lo), hi)),
+        )
+
     if key in st.session_state:
         stored = st.session_state[key]
         if isinstance(stored, (tuple, list)) and len(stored) == 2:
-            st.session_state[key] = (
-                float(min(max(stored[0], lo), hi)),
-                float(min(max(stored[1], lo), hi)),
-            )
+            st.session_state[key] = _clamped(stored)
             return
     mirror = st.session_state.get(f"{prefix}_trial_filters_raw", {})
     stored = mirror.get(key)
     if isinstance(stored, (tuple, list)) and len(stored) == 2:
-        st.session_state[key] = (
-            float(min(max(stored[0], lo), hi)),
-            float(min(max(stored[1], lo), hi)),
-        )
+        st.session_state[key] = _clamped(stored)
     else:
         st.session_state[key] = (lo, hi)
 

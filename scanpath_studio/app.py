@@ -136,9 +136,11 @@ from scanpath_studio.datasets import (
 from scanpath_studio.debug_log import (
     debug_enabled,
     install_log_capture,
+    log_state_change,
     render_debug_panel,
     render_debug_toggle,
     seed_debug_mode,
+    timed,
 )
 from scanpath_studio.easter_egg import render_easter_egg
 from scanpath_studio.experimental_setup import (
@@ -671,9 +673,10 @@ If you use the bundled demo data, also cite
     st.markdown(
         f"""
 Scanpath Studio was built with AI assistance. Cross-check results before
-publishing; verify the ground-truth trial by picking **🧪 Synthetic test trial**
-in the data-source picker, and note that EyeLink `IA_*` measures already in your
-export are passed through, not recomputed. If something looks wrong,
+publishing; verify the ground-truth trial by turning on **🐛 Debug mode** (under
+❓ Help) and picking **🧪 Synthetic test trial** in the data-source picker, and
+note that EyeLink `IA_*` measures already in your export are passed through, not
+recomputed. If something looks wrong,
 [open an issue]({CITATION["url"]}/issues) ↗ with your **💾 Save & restore** JSON.
 """
     )
@@ -1579,17 +1582,25 @@ def _normalize_pair_cached(
     raw frames) hits the cache and skips re-normalizing the whole corpus, while
     changing the kept columns correctly busts it.
     """
-    words_norm = (
-        normalize_words(_words_df, _word_schema, keep_columns=_keep_words)
-        if _word_schema is not None
-        else empty_words_frame()
-    )
-    fixations_norm = (
-        normalize_fixations(_fixations_df, _fix_schema, keep_columns=_keep_fix)
-        if _fix_schema is not None
-        else empty_fixations_frame()
-    )
-    return harmonize_frames(words_norm, fixations_norm)
+    # UX-37: logged because a cache *miss* is exactly what a "why was that slow?"
+    # question is about, and a hit is silent — the line only appears when the
+    # work actually ran.
+    with timed(
+        "normalize + harmonize (cache miss)",
+        word_rows=len(_words_df),
+        fixation_rows=len(_fixations_df),
+    ):
+        words_norm = (
+            normalize_words(_words_df, _word_schema, keep_columns=_keep_words)
+            if _word_schema is not None
+            else empty_words_frame()
+        )
+        fixations_norm = (
+            normalize_fixations(_fixations_df, _fix_schema, keep_columns=_keep_fix)
+            if _fix_schema is not None
+            else empty_fixations_frame()
+        )
+        return harmonize_frames(words_norm, fixations_norm)
 
 
 def _normalize_pair(
@@ -2044,13 +2055,19 @@ def render_sidebar_data_source() -> str:
         for label in PUBLIC_DATASET_REGISTRY:
             entries.append(label)
             kinds[label] = "🌐"
-    # UX-37: the ground-truth trial is a normal entry in the picker. It used to
-    # be offered only once something had already selected it — i.e. only via
-    # `?source=synthetic`, a URL the About note and the docs had to spell out.
-    # The AI-assistance note tells readers to verify the measures against it, so
-    # the route to it has to be one they can see.
-    entries.append(SYNTHETIC_CHOICE)
-    kinds[SYNTHETIC_CHOICE] = "🧪"
+    # UX-37: the ground-truth trial is offered **while debug mode is on** (the
+    # ❓ Help toggle), rather than only via `?source=synthetic` — a URL the About
+    # note and the docs had to spell out, which is the hidden-behind-a-param
+    # problem this item exists to remove. It is a six-word verification fixture,
+    # not a corpus, so it sits with the other developer affordances instead of
+    # in every user's source list. Still selectable when something already chose
+    # it, so a `?source=synthetic` link and the AppTests keep working.
+    if (
+        debug_enabled()
+        or st.session_state.get("data_source_choice") == SYNTHETIC_CHOICE
+    ):
+        entries.append(SYNTHETIC_CHOICE)
+        kinds[SYNTHETIC_CHOICE] = "🧪"
 
     # Migrate a legacy `PUBLIC_DATASETS_CHOICE` selection (old saved state / deep
     # link / the former category radio) to the concrete corpus token so it lands on
@@ -3445,6 +3462,18 @@ def main() -> None:
     # ignoring the current filters.
     words_all, fixations_all = words_df, fixations_df
 
+    # UX-37: the dataset is loaded and normalized — one line saying *what*, and
+    # only when it changes. A rerun re-executes all of this, so an unconditional
+    # log here would print on every widget touch anywhere in the app.
+    log_state_change(
+        "dataset",
+        (str(data_choice), len(words_all), len(fixations_all)),
+        "Dataset ready",
+        source=data_choice,
+        words=len(words_all),
+        fixations=len(fixations_all),
+    )
+
     # VAL-7: does one `trial_id` actually cover several readings? A Trial ID
     # mapping that under-specifies concatenates them, and the figure renders as
     # an ordinary scanpath with a lot of regressions — nothing looks wrong. Run
@@ -3643,6 +3672,19 @@ def main() -> None:
     # — the keyed nav widget persists the selection across reruns, so no JS hack
     # is needed (unlike st.tabs). render_single_trial_tab writes _share_selection
     # and fills the Save & restore slot when it's the active view.
+    # UX-37: the three things a log reader wants to correlate a slow rerun with
+    # — which view, which trial, how narrow the pool is. One line each, only on
+    # change (see `log_state_change`).
+    log_state_change("view", active_view, "View", view=active_view)
+    log_state_change(
+        "filters",
+        (len(words_filtered), len(fixations_filtered), len(combos)),
+        "Filters applied",
+        trials=len(combos),
+        words=len(words_filtered),
+        fixations=len(fixations_filtered),
+    )
+
     if active_view == _VIEW_CORPUS:
         # UX-25: Corpus Analysis has no "Filter by" row, so the picker gets its
         # own compact row at the top of the page — it stays reachable on every

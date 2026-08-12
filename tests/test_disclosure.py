@@ -65,12 +65,17 @@ class TestTheNoteIsOnEverySurface:
 
 @pytest.mark.timeout(90)
 class TestTheClaimsHold:
-    def test_the_ground_truth_trial_is_offered_in_the_picker(self):
-        """UX-37: the note tells the reader to pick **🧪 Synthetic test trial**,
-        so it has to actually be an option on a plain visit — not something you
-        can only reach once a URL param has already selected it."""
+    def test_the_ground_truth_trial_is_offered_once_debug_mode_is_on(self):
+        """UX-37: the note tells the reader to turn on 🐛 Debug mode and pick
+        **🧪 Synthetic test trial**, so that route has to work — it is a
+        six-word verification fixture, not a corpus, so it sits with the other
+        developer affordances rather than in every user's source list."""
         at = AppTest.from_file(APP_SCRIPT)
         at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert "Synthetic test trial" not in at.session_state["_data_source_entries"]
+
+        at.toggle(key="_debug_mode_on").set_value(True).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         entries = at.session_state["_data_source_entries"]
         assert "Synthetic test trial" in entries, entries

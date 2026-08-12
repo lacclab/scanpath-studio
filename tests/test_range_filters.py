@@ -125,6 +125,32 @@ class TestWhichColumnsGetASlider:
         fields = self._fields(words, _fixations(), ["comprehension_score"])
         assert "comprehension_score" not in fields
 
+    def test_a_whole_numbered_column_gets_integer_bounds(self):
+        """Streamlit reads int-vs-float slider behaviour off the bound *types*,
+        so a trial index has to arrive as ints or it steps in 0.01s."""
+        words = _words().assign(comprehension_score=[1, 1, 4, 4, 9, 9])
+        fields = self._fields(words, _fixations(), ["comprehension_score"])
+        _frame, lo, hi = fields["comprehension_score"]
+        assert (lo, hi) == (1, 9)
+        assert isinstance(lo, int) and isinstance(hi, int)
+
+    def test_a_whole_numbered_column_with_gaps_is_still_integer(self):
+        """An int column carrying a NaN is float64 in pandas; what matters is
+        that its values are whole, not the dtype it landed on."""
+        words = _words().assign(
+            comprehension_score=[1, 1, 4, 4, float("nan"), float("nan")]
+        )
+        _frame, lo, hi = self._fields(words, _fixations(), ["comprehension_score"])[
+            "comprehension_score"
+        ]
+        assert isinstance(lo, int) and isinstance(hi, int)
+
+    def test_a_fractional_column_stays_float(self):
+        _frame, lo, hi = self._fields(_words(), _fixations(), ["comprehension_score"])[
+            "comprehension_score"
+        ]
+        assert isinstance(lo, float) and isinstance(hi, float)
+
     def test_infinities_do_not_pin_the_bounds(self):
         words = _words().assign(
             comprehension_score=[0.2, 0.2, 0.9, 0.9, float("inf")] + [float("inf")]
@@ -186,6 +212,19 @@ class TestSeedingAcrossRunsWhereThePanelIsHidden:
     def test_no_stored_range_seeds_the_full_extent(self):
         controls._seed_range_widget("score", 0.0, 1.0)
         assert st.session_state["filter_score_range"] == (0.0, 1.0)
+
+    def test_integer_bounds_seed_an_integer_pair(self):
+        controls._seed_range_widget("idx", 1, 9)
+        seeded = st.session_state["filter_idx_range"]
+        assert seeded == (1, 9)
+        assert all(isinstance(v, int) for v in seeded)
+
+    def test_a_clamped_integer_range_stays_integer(self):
+        st.session_state["_trial_filters_raw"] = {"filter_idx_range": (2, 99)}
+        controls._seed_range_widget("idx", 1, 9)
+        seeded = st.session_state["filter_idx_range"]
+        assert seeded == (2, 9)
+        assert all(isinstance(v, int) for v in seeded)
 
 
 class TestTheMissingValueCaption:

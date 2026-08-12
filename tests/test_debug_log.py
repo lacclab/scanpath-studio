@@ -101,6 +101,66 @@ def test_the_handler_swallows_a_record_it_cannot_file():
     handler.emit(record)  # no session-state context here — must not raise
 
 
+class TestTheComputationLog:
+    """UX-37 follow-up: the panel is only worth opening if it says what the app
+    actually did. Stages log with their duration; interactions log on change."""
+
+    def test_timed_logs_the_duration_and_the_fields(self, caplog):
+        with caplog.at_level(logging.INFO, logger="scanpath_studio"):
+            with debug_log.timed("normalize", rows=42):
+                pass
+        (record,) = caplog.records
+        assert record.getMessage().startswith("normalize · ")
+        assert "ms" in record.getMessage()
+        assert "rows=42" in record.getMessage()
+
+    def test_a_failing_stage_still_logs_and_still_raises(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="scanpath_studio"):
+            with pytest.raises(ValueError):
+                with debug_log.timed("normalize"):
+                    raise ValueError("boom")
+        assert "normalize failed after" in caplog.records[0].getMessage()
+        assert "boom" in caplog.records[0].getMessage()
+
+    def test_a_state_change_logs_once_per_change(self, caplog):
+        import streamlit as st
+
+        st.session_state.clear()
+        with caplog.at_level(logging.INFO, logger="scanpath_studio"):
+            debug_log.log_state_change("view", "Scanpath", "View", view="Scanpath")
+            debug_log.log_state_change("view", "Scanpath", "View", view="Scanpath")
+            debug_log.log_state_change("view", "Corpus", "View", view="Corpus")
+        # Two lines, not three: a rerun re-executes everything, so an
+        # unconditional log would print on every widget touch anywhere.
+        assert [r.getMessage() for r in caplog.records] == [
+            "View · view=Scanpath",
+            "View · view=Corpus",
+        ]
+        st.session_state.clear()
+
+
+def test_the_run_logs_its_computations_and_selections():
+    """End to end: the lines reach the in-app buffer the panel renders.
+
+    The computation lines are logged *inside* the cached functions — on a miss
+    only, which is the case worth reading — so the caches have to be cold or
+    this asserts on lines an earlier test already warmed away. In-process
+    ``@st.cache_data`` is shared across the whole session.
+    """
+    import streamlit as st
+
+    st.cache_data.clear()
+    at = AppTest.from_file(APP_SCRIPT)
+    at.run(timeout=90)
+    assert not at.exception, at.exception
+    messages = [r["message"] for r in at.session_state["_debug_log_records"]]
+    assert any("normalize + harmonize" in m for m in messages), messages
+    assert any("build scanpath figure" in m for m in messages), messages
+    assert any(m.startswith("Dataset ready ·") for m in messages), messages
+    assert any(m.startswith("View ·") for m in messages), messages
+    assert any(m.startswith("Filters applied ·") for m in messages), messages
+
+
 def test_the_toggle_is_offered_without_any_url_param():
     """UX-37: the toggle *is* the way in, so a plain visit has to show it."""
     at = AppTest.from_file(APP_SCRIPT)

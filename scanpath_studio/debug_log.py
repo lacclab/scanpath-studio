@@ -20,7 +20,9 @@ from __future__ import annotations
 import json
 import logging
 from collections import deque
+from contextlib import contextmanager
 from datetime import datetime
+from time import perf_counter
 from typing import Any, Deque, Dict, List
 
 import streamlit as st
@@ -45,6 +47,73 @@ _LEVEL_COLOR = {
     "ERROR": "#dc2626",
     "CRITICAL": "#dc2626",
 }
+
+
+@contextmanager
+def timed(what: str, level: int = logging.INFO, **fields: Any):
+    """Log ``what`` with how long it took, and with any facts worth having.
+
+    The debug panel's whole value is answering "what did that click actually
+    do?", and a log line per *computation* is what makes it answerable — the
+    stages are otherwise invisible: Streamlit reruns the script top to bottom and
+    a cache hit looks exactly like a cache miss.
+
+    Cheap enough to leave on: one ``perf_counter`` pair and one formatted string
+    per stage, at stage granularity, not per row. An exception still logs (at
+    WARNING, marked ``failed``) and then propagates — a stage that blew up is
+    exactly the line you want in the report.
+
+        with timed("normalize", rows=len(df)):
+            ...
+    """
+    extra = " ".join(f"{k}={v}" for k, v in fields.items())
+    start = perf_counter()
+    try:
+        yield
+    except Exception as exc:  # noqa: BLE001 - re-raised below
+        logging.getLogger("scanpath_studio").warning(
+            "%s failed after %.0f ms%s: %s",
+            what,
+            (perf_counter() - start) * 1000,
+            f" · {extra}" if extra else "",
+            exc,
+        )
+        raise
+    logging.getLogger("scanpath_studio").log(
+        level,
+        "%s · %.0f ms%s",
+        what,
+        (perf_counter() - start) * 1000,
+        f" · {extra}" if extra else "",
+    )
+
+
+def log_event(what: str, **fields: Any) -> None:
+    """Log a user-driven state change (a pick, a toggle, a step).
+
+    Interactions are logged when they *change something* — the data source, the
+    trial, the view — not on every widget touch: Streamlit reruns the script for
+    each one, so a line per widget would be a line per rerun per widget and the
+    computation lines would drown in it.
+    """
+    extra = " ".join(f"{k}={v}" for k, v in fields.items())
+    logging.getLogger("scanpath_studio").info(
+        "%s%s", what, f" · {extra}" if extra else ""
+    )
+
+
+def log_state_change(state_key: str, value: Any, what: str, **fields: Any) -> None:
+    """:func:`log_event`, but only when ``value`` differs from the last run's.
+
+    A rerun re-executes everything, so logging a selection unconditionally would
+    print the same line on every interaction anywhere in the app. This keeps one
+    line per actual change, which is what makes the log readable.
+    """
+    marker = f"_logged_{state_key}"
+    if st.session_state.get(marker) == value:
+        return
+    st.session_state[marker] = value
+    log_event(what, **fields)
 
 
 def _buffer() -> Deque[Dict[str, Any]]:
@@ -194,7 +263,7 @@ def render_debug_panel(host=None) -> None:
             )
         with cols[1]:
             st.write("")
-            if st.button("Clear", key="_debug_clear", use_container_width=True):
+            if st.button("Clear", key="_debug_clear", width="stretch"):
                 _buffer().clear()
                 st.rerun()
 
@@ -230,7 +299,7 @@ def render_debug_panel(host=None) -> None:
         st.divider()
         st.caption("App / session state")
         snapshot = _state_snapshot()
-        st.dataframe(snapshot, hide_index=True, use_container_width=True)
+        st.dataframe(snapshot, hide_index=True, width="stretch")
 
         export = {
             "exported_at": datetime.now().isoformat(timespec="seconds"),
@@ -242,7 +311,7 @@ def render_debug_panel(host=None) -> None:
             data=json.dumps(export, indent=2, default=str),
             file_name="scanpath_studio_debug.json",
             mime="application/json",
-            use_container_width=True,
+            width="stretch",
             key="_debug_download",
         )
 

@@ -179,8 +179,9 @@ under its original license ([docs][onestop-docs]).
 
 Much of this code was written with AI assistance. Two things you can check: the
 reading measures are pinned to a ground-truth trial with expected values per
-measure (pick **🧪 Synthetic test trial** in the data-source picker), and EyeLink
-`IA_*` measures already in your export are passed through, not recomputed.
+measure (turn on **🐛 Debug mode** under ❓ Help, then pick **🧪 Synthetic test
+trial** in the data-source picker), and EyeLink `IA_*` measures already in your
+export are passed through, not recomputed.
 
 That is not the same as bug-free. **Cross-check anything you publish against your
 own pipeline.** If something looks wrong,

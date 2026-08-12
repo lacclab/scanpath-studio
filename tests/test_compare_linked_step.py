@@ -161,6 +161,45 @@ class TestTheLinkedStepEndToEnd:
         # index or a label would have named a different trial.
         assert self._compare_identity(at) == expected_b
 
+    def test_stepping_the_main_trial_does_not_skip_the_compared_one(self):
+        """The reported bug: B "suddenly skips to a different trial".
+
+        B's picker is keyed on a *label*, and the labels are rebuilt relative to
+        A (📄 same-text / 👤 same-participant markers are computed against the
+        selected trial). So the moment A moved to another text, B's stored label
+        matched nothing and the picker fell back to the first candidate. B is now
+        remembered by identity and its label re-resolved each run.
+        """
+        at = self._boot_compare()
+        before = self._compare_identity(at)
+        first_label = at.session_state["single_compare_trial"]
+        relabelled = False
+
+        # Walk A several trials — enough to cross a text boundary, which is what
+        # re-labels B's pool.
+        for _ in range(4):
+            at.button(key="single_next_trial").click().run(timeout=90)
+            assert not at.exception, at.exception
+            after = self._compare_identity(at)
+            if after != before:
+                raise AssertionError(
+                    f"the compared trial changed on its own: {before} → {after}"
+                )
+            relabelled |= at.session_state["single_compare_trial"] != first_label
+        # …and prove the walk actually exercised the failure mode: B kept the
+        # same trial while its *label* changed underneath it.
+        assert relabelled, "B's label never changed — the regression wasn't exercised"
+
+    def test_a_users_pick_wins_over_the_remembered_identity(self):
+        """The other half of the same fix: re-resolving must not undo a fresh
+        selection on the next run."""
+        at = self._boot_compare()
+        picker = at.selectbox(key="single_compare_trial")
+        other = next(o for o in picker.options if o != picker.value)
+        at = picker.set_value(other).run(timeout=90)
+        assert not at.exception, at.exception
+        assert at.session_state["single_compare_trial"] == other
+
     def test_the_link_works_from_the_compare_pickers_arrows_too(self):
         at = self._boot_compare()
         at.checkbox(key=utils.COMPARE_STEP_LINK_KEY).set_value(True).run(timeout=90)

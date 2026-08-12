@@ -96,6 +96,7 @@ from scanpath_studio.controls import (
     sidebar_controls,
 )
 from scanpath_studio.html_embed import embed_html_iframe
+from scanpath_studio.debug_log import timed
 from scanpath_studio.data import (
     compute_word_metrics,
     derive_trial_index,
@@ -934,9 +935,17 @@ def _cached_scanpath_figure(
     Frames and settings are passed un-hashed; ``fig_key`` (from
     ``_figure_input_key``) is the cache key, so a rerun with the same trial and
     settings reuses the figure instead of rebuilding all its traces/shapes."""
-    return make_scanpath_figure(
-        _words, _fixations, settings=_settings, raw_gaze=_raw_gaze
-    )
+    # UX-37: the single most expensive thing a rerun can do, and invisible from
+    # outside — a cache hit and a miss look identical on screen. The line only
+    # appears on a miss, which is what makes it worth reading.
+    with timed(
+        "build scanpath figure (cache miss)",
+        words=len(_words),
+        fixations=len(_fixations),
+    ):
+        return make_scanpath_figure(
+            _words, _fixations, settings=_settings, raw_gaze=_raw_gaze
+        )
 
 
 _CMP_SORT_DEFAULT = "Same text, then same participant"
@@ -968,6 +977,11 @@ def _order_compare_options(
     rank = {trial_id: idx for idx, trial_id in enumerate(ordered_ids)}
     return sorted(options, key=lambda option: rank.get(str(option[1]), len(rank)))
 
+
+#: CMP-13: scanpath B remembered as ``(participant_id, trial_id)``. The picker's
+#: own key holds a *label*, which is rebuilt relative to A every run, so it is
+#: not a stable name for a trial — see ``_render_compare_selector``.
+_COMPARE_IDENTITY_KEY = "_compare_selected_identity"
 
 #: Key prefix for scanpath B's own filter set (CMP-8 §5.2). Must be one of
 #: ``controls.FILTER_PREFIXES`` — that registry is what stops A's "Clear filters"
@@ -1239,6 +1253,7 @@ def _render_compare_selector(
 
     sel_key = "single_compare_trial"
     pos_key = "single_compare_pos"
+    identity_to_label = {(str(opt[0]), str(opt[1])): opt[2] for opt in options}
     # CMP-8 §7: a `?compare=<pid>:<trial>` deep link parked its ids in
     # `_apply_url_preset`; the labels only exist here, so this is where it lands.
     # Consumed once, and only when the pool can actually answer it — a request
@@ -1247,14 +1262,44 @@ def _render_compare_selector(
     pending = st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
     if isinstance(pending, dict):
         wanted = (str(pending.get("participant_id")), str(pending.get("trial_id")))
-        for label, pair in label_to_trial.items():
-            if (str(pair[0]), str(pair[1])) == wanted:
-                st.session_state[sel_key] = label
-                break
+        if wanted in identity_to_label:
+            st.session_state[sel_key] = identity_to_label[wanted]
+
+    # CMP-13 (the "B suddenly skips to a different trial" report): the widget key
+    # holds a *label*, and the labels are rebuilt relative to A — the 📄 same-text
+    # and 👤 same-participant markers are computed against the selected trial. So
+    # the moment A moves to a different text, B's stored label names nothing in
+    # the new list and the picker used to silently fall back to the first
+    # candidate. It happened on *any* A step, linked or not, which is why it read
+    # as "at some point, not clear why".
+    #
+    # The fix is to remember B by identity and re-resolve its label each run.
+    # Order matters: the user's live pick (a label that is still valid) wins over
+    # the remembered identity, or selecting a new B would be undone by the
+    # previous one on the very next run.
     current = st.session_state.get(sel_key)
+    lost_identity = None
     if current not in labels:
-        current = labels[0]
+        remembered = st.session_state.get(_COMPARE_IDENTITY_KEY)
+        if isinstance(remembered, tuple) and remembered in identity_to_label:
+            current = identity_to_label[remembered]
+        elif remembered is not None and current is not None:
+            # Genuinely gone from the pool — most often because A just moved
+            # *onto* it, and a trial is never a candidate to compare with
+            # itself. Say so rather than swapping the panel silently.
+            lost_identity = remembered
+            current = labels[0]
+        else:
+            current = labels[0]
         st.session_state[sel_key] = current
+    st.session_state[_COMPARE_IDENTITY_KEY] = tuple(
+        str(v) for v in label_to_trial[current]
+    )
+    if lost_identity is not None:
+        st.caption(
+            f"`{lost_identity[1]}` is no longer available to compare with — "
+            "it is the selected trial now. Showing the first candidate instead."
+        )
 
     # CMP-13: publish the candidates as rendered — label plus identity, because
     # the labels are rebuilt relative to A and only the identity survives A moving.

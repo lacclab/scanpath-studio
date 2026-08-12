@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 292,
+  "revision": 295,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -101,9 +101,9 @@
       "updated": "2026-08-12"
     },
     "CMP-13": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
-      "implementationBrief": "It works really nicely until at some point, not clear why or when, the compared to (B) slider suddenly skips to a different trial",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -457,10 +457,10 @@
       "updated": "2026-08-07"
     },
     "PRE-21": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "PRE-4": {
@@ -610,7 +610,7 @@
     "UX-37": {
       "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "Great. Is it possible to add more logs? maybe when pressing on something (or is that too much?) or at least when running  computations?\nAlso, can you make the synthetic trial show up only when debug mode is ON?",
+      "implementationBrief": "Great, better. Each log entry shows up identical like a hundred times. This is much too much logs.\nAlso add a (?) next to the App / session state.",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -678,9 +678,9 @@
       "updated": "2026-08-12"
     },
     "UX-49": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
-      "implementationBrief": "Great start, note that numeric can be float or int, if it is int then better that the slider matches that.",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-13"
     },

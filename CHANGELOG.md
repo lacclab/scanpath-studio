@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Core module ownership is one-way** (ENG-28)
 - **The visualization rail scrolls independently and packs controls more tightly** (UX-43, UX-44)
 - **The screen selector lines up with the trial picker** (UX-47)
+- **Figure & canvas is grouped instead of one long list** (UX-48)
 
 ### Details
 
@@ -61,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One figure-settings contract now powers every renderer** (ENG-28) — the UI, headless API, bulk export, static scanpath, animation, and comparison paths share `FigureSettings` instead of forwarding dozens of parallel arguments. Public `plot_scanpath` and `animate_scanpath` keywords remain unchanged.
 - **Core module ownership is one-way** (ENG-28) — MultiplEYE server loading belongs to `datasets.py`, while run materialization belongs to `measures.py`, removing the `data`/`datasets` and `measures`/`preprocessing` import cycles.
 - **The screen selector lines up with the trial picker** (UX-47) — on a multipart trial, the child-screen row now uses the same layout as the trial picker above it: the dropdown starts at the same left edge and width, a scrubbing slider sits beside it, and ◀ ▶ join the shared right-packed pill cluster instead of straddling the dropdown as full-width buttons. A single-screen trial shows the dropdown alone. Screen selection, stepping and deep links are unchanged.
+- **Figure & canvas is grouped instead of one long list** (UX-48) — the rail's **📐 Figure & canvas** section held roughly twenty-six controls in one flat run, separated only by two bold captions. It now has the same shape as every layer group: **Show full monitor** stays inline, and everything else opens in a named popover — **🖥️ Screen & geometry** (monitor pixels, physical size, viewing distance, DPI, px/degree), **🔤 Text & fonts** (scale-to-boxes, line spacing, font sizes and typeface, text colour, plot background), **📊 Axes & grid** (coordinate grid, colour bars, X/Y axis fields) and **🏷️ Title & labels** (Illustration label, figure title/caption). Five rows instead of twenty-six. The title/caption pattern boxes are now inline in their popover rather than behind a second one, and the same two canvas popovers appear in Corpus Analysis. No setting was added, removed or renamed, so share links, saved configs, the CLI and the Python API are unaffected. The upload wizard's *Recording setup* step stays flat — it is a form to read at a glance.
 
 ## [0.28.0] - 2026-08-08
 

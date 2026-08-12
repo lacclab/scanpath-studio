@@ -398,7 +398,11 @@ def get_app_css() -> str:
         height: 100%;
         max-height: 100%;
         overflow-y: auto;
-        overscroll-behavior-y: contain;
+        /* Chain to the page once the rail hits either end (UX-43 shipped this as
+           `contain`, which stopped the scroll dead there). Browsers latch a
+           gesture to the element it started in, so the hand-off lands on the
+           next wheel/flick rather than mid-gesture. */
+        overscroll-behavior-y: auto;
         scrollbar-gutter: stable;
         /* UX-29: lets the Quick-view rule below query the rail's own rendered
            width, not the viewport's — the wrap it reacts to comes from the

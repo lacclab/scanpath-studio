@@ -10090,7 +10090,7 @@ window.TRACKER = {
     "**What was done.** Split the screen into two matching 4:1 rows: plot + rail first,",
     "then plot-width subtabs + a blank right cell. The rail is removed from the first row's",
     "intrinsic height calculation and stretched through its right column, so the plot column",
-    "alone determines their shared height; the inner rail keeps `overflow-y: auto`, contained",
+    "alone determines their shared height; the inner rail keeps `overflow-y: auto`, chained",
     "overscroll, and a stable gutter. Open Annotations/Export/etc. now grow only the second",
     "row. Below 900px the positioning is reset and the rail returns to ordinary document",
     "flow. Contract tests pin the two-row structure and responsive CSS.",
@@ -10110,7 +10110,12 @@ window.TRACKER = {
     "and X position as the plot. Rail wheel input reached its independent 350px maximum while",
     "the main page stayed at 500px. At 880px the absolute positioning reset to static and",
     "overflow became visible as intended. Ruff/format pass; all 25 focused layout tests and",
-    "34 supported-runtime tour/AppTests pass."
+    "34 supported-runtime tour/AppTests pass. Follow-up (2026-08-12, approved on sight): the",
+    "rail shipped with `overscroll-behavior-y: contain`, which stopped a scroll dead at either",
+    "end of the rail — awkward now that ♻️ Reset settings sits at the foot (BUG-24). It is now",
+    "`auto`, so the scroll chains into the page; browsers latch a gesture to the element it",
+    "started in, so the hand-off lands on the next wheel/flick rather than mid-gesture. The",
+    "below-900px branch was already `auto`."
    ]
   },
   {

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import math
+import re
 from typing import Callable, Dict, List, Optional
 
 import numpy as np
@@ -54,6 +56,118 @@ from .export import (
 NONE_OPTION = "(none)"
 
 
+# --- UX-51: compact `label | field` rows --------------------------------------
+# Every control in the Scanpath rail used to stack its title ABOVE its field, so
+# one ⚙️ Style popover spent well over a screen's height on eight controls. The
+# title now sits in a column to the LEFT of the field: a row is one line instead
+# of two, and a section reads as a compact form rather than a long scroll.
+#
+# Built from per-row `st.columns`, not CSS on Streamlit's own widget-label DOM.
+# The split is then ordinary layout — it cannot leak outside the containers we
+# build it in, and it does not ride on internal test ids a Streamlit re-skin can
+# move. (Container-scoped CSS is the fallback if this reads badly when the rail
+# is tight, not the starting point.)
+#
+# ONE label width for the whole rail (`_LABEL_W`) rather than a width per row:
+# labels lining up down a section — and across sections — is most of what makes
+# the result read as a form. A label too long for the column truncates with an
+# ellipsis and shows in full on hover, instead of widening the column for every
+# other row in the section.
+#
+# The widget keeps its real `label` and `help`, and merely hides them
+# (`label_visibility="collapsed"`), so the accessible name, `AppTest` lookups and
+# the wire format are all untouched. What the user sees is the markdown twin in
+# the left column — and the `?` tooltip icon folds INTO it: the help text becomes
+# the label's own hover tooltip, which buys back the icon's width on every row.
+#
+# Controls whose label already sits beside the field — `st.checkbox`,
+# `st.toggle` — keep their native one-line shape; splitting those would only
+# indent them away from the section's other rows.
+
+#: The label column's share of a `label | field` row. Tuned for the ~28rem
+#: popover body (`styles.get_app_css` pins `stPopoverBody`), which is where these
+#: rows live: ~160px of label — about 23 characters at the rail's 0.92rem — while
+#: leaving the field wide enough for a multiselect's chips, or for a slider plus
+#: the UX-9 box you type an exact value into.
+_LABEL_W = 0.36
+
+#: Tighter than the 1rem default: these rows are dense and the width is scarce.
+_LABEL_GAP = "xsmall"
+
+#: Markdown emphasis, which a plain-text `title=` attribute would show as
+#: literal punctuation.
+_MD_MARKS = re.compile(r"\*\*|`")
+
+
+def _plain(text: str) -> str:
+    """``text`` with markdown emphasis stripped, for a plain-text tooltip."""
+    return _MD_MARKS.sub("", text).strip()
+
+
+def _row_label(host, label: str, help: Optional[str]) -> None:
+    """Render one row's title into its own (left) column — see the UX-51 note.
+
+    ``help`` folds into the title's own hover tooltip rather than getting a `?`
+    icon beside it, and the title text is repeated at the head of that tooltip so
+    a label the column had to truncate is still readable in full.
+    """
+    text = _plain(label)
+    tip = f"{text} — {_plain(help)}" if help else text
+    classes = "sps-flabel sps-flabel-help" if help else "sps-flabel"
+    host.markdown(
+        f'<span class="{classes}" title="{html.escape(tip, quote=True)}">'
+        f"{html.escape(text)}</span>",
+        unsafe_allow_html=True,
+    )
+
+
+def _labeled(
+    host,
+    kind: str,
+    label: str,
+    *,
+    display: Optional[str] = None,
+    help: Optional[str] = None,
+    **kwargs,
+):
+    """Render one control as a ``label | field`` row; return the widget's value.
+
+    ``kind`` names the Streamlit method to call (``"selectbox"``,
+    ``"multiselect"``, ``"color_picker"``, …) and every other argument is
+    forwarded untouched, so converting a call site is a matter of *naming* the
+    widget instead of calling it. The widget still receives the real ``label``
+    and ``help`` — only where they are drawn changes.
+
+    ``display`` overrides the *visible* text without touching the widget's own
+    label. Use it where the accessible name has to stay unique but would be far
+    too long for the column — the per-scanpath comparison styling, whose rows are
+    already captioned with the scanpath they belong to.
+    """
+    label_col, field_col = host.columns(
+        [_LABEL_W, 1.0 - _LABEL_W], gap=_LABEL_GAP, vertical_alignment="center"
+    )
+    _row_label(label_col, display if display is not None else label, help)
+    return getattr(field_col, kind)(
+        label, help=help, label_visibility="collapsed", **kwargs
+    )
+
+
+def _slider_row(host, n_boxes: int) -> list:
+    """Columns for a ``label | slider | box…`` row, label column first (UX-51).
+
+    The slider keeps its pre-UX-51 5 : 1.5 proportion against each typed box; the
+    label takes ``_LABEL_W`` off the top so the row lines up with the plain
+    ``label | field`` rows around it. ``vertical_alignment="center"`` is what puts
+    the label beside the slider's *track*: a slider prints its current value
+    above the track, so a top-aligned label would sit against that number instead
+    of against the control.
+    """
+    rest = 1.0 - _LABEL_W
+    total = 5.0 + 1.5 * n_boxes
+    weights = [_LABEL_W, rest * 5.0 / total, *([rest * 1.5 / total] * n_boxes)]
+    return host.columns(weights, gap=_LABEL_GAP, vertical_alignment="center")
+
+
 # --- UX-9: sliders you can also type an exact value into ----------------------
 # A slider is the right control for "sweep until it looks right", but it can't be
 # set to a precise value — awkward when a figure has to match a spec (marker size
@@ -101,6 +215,8 @@ def _numeric_slider(
     disabled: bool = False,
     on_change=None,
     persist_state: Optional[str] = None,
+    label_left: bool = False,
+    display: Optional[str] = None,
 ) -> None:
     """A single-value slider plus a number box bound to the same setting.
 
@@ -111,6 +227,11 @@ def _numeric_slider(
     ``disabled`` greys BOTH halves (VIZ-21) without touching the canonical key —
     a disabled Streamlit widget still owns and keeps its value, so a mode toggle
     never rewrites a deep-linked / restored setting.
+
+    ``label_left`` opts the row into the UX-51 ``label | slider | box`` shape.
+    It is opt-in rather than the default because the sliders in the rail's
+    ⚙️ Playback popover are laid out two-up in half-width columns, where a third
+    column would leave the slider unusable.
     """
     num_key = f"{key}__num"
     if key in st.session_state:
@@ -126,7 +247,11 @@ def _numeric_slider(
     # A narrow box on the same line as the slider: the box is for typing an
     # exact value, so it only needs room for the number itself (the CSS drops its
     # +/- steppers and caps its width), and the slider keeps most of the row.
-    slider_col, num_col = host.columns([5, 1.5], vertical_alignment="bottom")
+    if label_left:
+        label_col, slider_col, num_col = _slider_row(host, 1)
+        _row_label(label_col, display if display is not None else label, help)
+    else:
+        slider_col, num_col = host.columns([5, 1.5], vertical_alignment="bottom")
     slider_col.slider(
         label,
         min_value=min_value,
@@ -138,6 +263,7 @@ def _numeric_slider(
         disabled=disabled,
         on_change=on_change,
         persist_state=persist_state,
+        label_visibility="collapsed" if label_left else "visible",
     )
     num_col.number_input(
         label,
@@ -166,6 +292,8 @@ def _range_slider(
     disabled: bool = False,
     on_change=None,
     persist_state: Optional[str] = None,
+    label_left: bool = False,
+    display: Optional[str] = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
 
@@ -173,6 +301,8 @@ def _range_slider(
     the slider still gets most of the row. A min typed above the max is swapped
     rather than rejected. ``disabled`` greys all three without changing the
     stored range (VIZ-21).
+
+    ``label_left`` / ``display`` behave as in :func:`_numeric_slider` (UX-51).
     """
     lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
     current = st.session_state.get(key)
@@ -187,9 +317,13 @@ def _range_slider(
         if on_change is not None:
             on_change()
 
-    slider_col, lo_col, hi_col = host.columns(
-        [5, 1.5, 1.5], vertical_alignment="bottom"
-    )
+    if label_left:
+        label_col, slider_col, lo_col, hi_col = _slider_row(host, 2)
+        _row_label(label_col, display if display is not None else label, help)
+    else:
+        slider_col, lo_col, hi_col = host.columns(
+            [5, 1.5, 1.5], vertical_alignment="bottom"
+        )
     slider_col.slider(
         label,
         min_value=min_value,
@@ -201,6 +335,7 @@ def _range_slider(
         disabled=disabled,
         on_change=on_change,
         persist_state=persist_state,
+        label_visibility="collapsed" if label_left else "visible",
     )
     fmt = number_format if number_format is not None else slider_format
     for col, num_key, side in ((lo_col, lo_key, "min"), (hi_col, hi_key, "max")):
@@ -498,7 +633,9 @@ def _render_fixclass_category(
     ``_VIZ_WIDGET_DEFAULTS``). ``disabled``/``reason`` come from
     :func:`_mode_gate` — since VIZ-23 the flags reach the static figure *and* the
     animated replay, but no comparison builder takes them."""
-    mode = st.radio(
+    mode = _labeled(
+        st,
+        "radio",
         label,
         options=_FIXCLASS_MODES,
         horizontal=True,
@@ -513,7 +650,9 @@ def _render_fixclass_category(
         disabled=disabled,
     )
     if threshold_label is not None and mode != "Off":
-        st.number_input(
+        _labeled(
+            st,
+            "number_input",
             threshold_label,
             min_value=1,
             step=10,
@@ -522,7 +661,9 @@ def _render_fixclass_category(
             disabled=disabled,
         )
     if mode == "Highlight":
-        st.selectbox(
+        _labeled(
+            st,
+            "selectbox",
             "Marker",
             options=list(_OUT_OF_TEXT_MARKERS),
             format_func=lambda s: _OUT_OF_TEXT_MARKERS[s],
@@ -530,8 +671,12 @@ def _render_fixclass_category(
             persist_state="session",
             disabled=disabled,
         )
-        st.color_picker(
-            "Color", key=f"global_fixclass_{key_prefix}_color", disabled=disabled
+        _labeled(
+            st,
+            "color_picker",
+            "Color",
+            key=f"global_fixclass_{key_prefix}_color",
+            disabled=disabled,
         )
 
 
@@ -844,7 +989,7 @@ def _on_palette_change() -> None:
     apply_palette(name)
 
 
-def _popover_selectbox(label: str, options: list, state_key: str, **kwargs):
+def _popover_selectbox(label: str, options: list, state_key: str, host=None, **kwargs):
     """A selectbox inside a popover whose seeded session value actually shows.
 
     A *keyed* selectbox first painted inside a (closed-until-clicked) popover
@@ -854,10 +999,19 @@ def _popover_selectbox(label: str, options: list, state_key: str, **kwargs):
     the pick back by hand sidesteps it, which is what lets a VIZ-18 palette (or a
     deep link, or a restored config) set a non-first colorscale and have the
     picker agree with the figure.
+
+    Renders as a UX-51 ``label | field`` row like every other rail control.
     """
     current = st.session_state.get(state_key)
     index = options.index(current) if current in options else 0
-    picked = st.selectbox(label, options=options, index=index, **kwargs)
+    picked = _labeled(
+        host if host is not None else st,
+        "selectbox",
+        label,
+        options=options,
+        index=index,
+        **kwargs,
+    )
     st.session_state[state_key] = picked
     return picked
 
@@ -1622,6 +1776,7 @@ def render_pattern_input(
     *,
     help: Optional[str] = None,
     placeholder: Optional[str] = None,
+    label_left: bool = False,
 ) -> str:
     """A pattern text box with live validation and a rendered preview.
 
@@ -1638,10 +1793,25 @@ def render_pattern_input(
     Compare A/B labels qualify (empty → the auto ``participant · trial``); the
     figure title/caption do not (empty → no title at all), and a placeholder
     there would promise the opposite of what happens.
+
+    ``label_left`` opts into the UX-51 ``label | field`` row (the rail's
+    Title/Caption boxes). The error and the preview still span the full width
+    below the row — they are the box's *output*, not a second field.
     """
-    host.text_input(
-        label, key=key, persist_state="session", help=help, placeholder=placeholder
-    )
+    if label_left:
+        _labeled(
+            host,
+            "text_input",
+            label,
+            key=key,
+            persist_state="session",
+            help=help,
+            placeholder=placeholder,
+        )
+    else:
+        host.text_input(
+            label, key=key, persist_state="session", help=help, placeholder=placeholder
+        )
     value = st.session_state.get(key, "")
     if not value:
         return ""
@@ -1714,17 +1884,29 @@ def _seed_compare_styles() -> None:
 def _render_compare_fix_styles() -> None:
     """Per-scanpath *fixation* styling for the two-trial comparison — rendered
     inside the Fixation-style popover (when comparing), beside the single-trial
-    fixation controls."""
+    fixation controls.
+
+    UX-51: each scanpath's name is a caption over its own three rows rather than
+    a prefix on every label — "Scanpath 1 — marker size range" is far too long
+    for a label column that has to line up with "Opacity". The widgets keep the
+    prefixed label as their accessible name (it is what tells the six rows
+    apart); only the visible text is shortened."""
     st.caption("Per-scanpath (comparison)")
     for idx, name in _COMPARE_SCANPATHS:
-        st.color_picker(
+        st.caption(f"**{name}**")
+        _labeled(
+            st,
+            "color_picker",
             f"{name} — fixation color",
+            display="Fixation color",
             key=f"cmp{idx}_fix_color",
             persist_state="session",
         )
         _range_slider(
             st,
             f"{name} — marker size range",
+            display="Marker size range",
+            label_left=True,
             key=f"cmp{idx}_marker_size_range",
             persist_state="session",
             min_value=4,
@@ -1733,6 +1915,8 @@ def _render_compare_fix_styles() -> None:
         _numeric_slider(
             st,
             f"{name} — opacity",
+            display="Opacity",
+            label_left=True,
             key=f"cmp{idx}_opacity",
             persist_state="session",
             min_value=0.1,
@@ -1745,17 +1929,25 @@ def _render_compare_fix_styles() -> None:
 
 def _render_compare_saccade_styles() -> None:
     """Per-scanpath *saccade* styling for the two-trial comparison — rendered
-    inside the Saccade-style popover (when comparing)."""
+    inside the Saccade-style popover (when comparing). Laid out like
+    :func:`_render_compare_fix_styles` — see its note on the UX-51 captions."""
     st.caption("Per-scanpath (comparison)")
     style_labels = list(SACCADE_DASH_OPTIONS.keys())
     for idx, name in _COMPARE_SCANPATHS:
-        st.color_picker(
+        st.caption(f"**{name}**")
+        _labeled(
+            st,
+            "color_picker",
             f"{name} — saccade color",
+            display="Saccade color",
             key=f"cmp{idx}_saccade_color",
             persist_state="session",
         )
-        st.selectbox(
+        _labeled(
+            st,
+            "selectbox",
             f"{name} — line style",
+            display="Line style",
             options=style_labels,
             key=f"cmp{idx}_saccade_style",
             persist_state="session",
@@ -1763,6 +1955,8 @@ def _render_compare_saccade_styles() -> None:
         _numeric_slider(
             st,
             f"{name} — line width",
+            display="Line width",
+            label_left=True,
             key=f"cmp{idx}_saccade_width",
             persist_state="session",
             min_value=SACCADE_WIDTH_BOUNDS[0],
@@ -1916,6 +2110,7 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
     _range_slider(
         st,
         "Fixation index range",
+        label_left=True,
         key="single_fix_range",
         persist_state="session",
         min_value=1,
@@ -2609,7 +2804,9 @@ def sidebar_controls(
             metric_disabled, metric_reason = _mode_gate(
                 animating, comparing, in_animation=not comparing
             )
-            color_by = st.selectbox(
+            color_by = _labeled(
+                st,
+                "selectbox",
                 "Color fixations by",
                 options=color_fields,
                 key="global_color_by",
@@ -2630,7 +2827,9 @@ def sidebar_controls(
             # instead (see "Per-scanpath (comparison)" below), so grey it there.
             if color_by == UNIFORM_COLOR_FIELD:
                 _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-                st.color_picker(
+                _labeled(
+                    st,
+                    "color_picker",
                     "Fixation color",
                     key="global_fixation_color",
                     persist_state="session",
@@ -2645,7 +2844,9 @@ def sidebar_controls(
             # builder `fixation_symbol` too, so shape is now a true global: it is
             # the one marker property Compare does NOT override per scanpath
             # (colour / size / opacity / hollow still come from `cmp{idx}_*`).
-            st.selectbox(
+            _labeled(
+                st,
+                "selectbox",
                 "Marker shape",
                 options=list(FIXATION_SYMBOLS),
                 format_func=lambda s: FIXATION_SYMBOLS[s],
@@ -2669,7 +2870,9 @@ def sidebar_controls(
             # is set. The keys keep their defaults ("Off"), so nothing downstream
             # needs a second gate to render correctly.
             if drift_correction_enabled():
-                align_algo = st.selectbox(
+                align_algo = _labeled(
+                    st,
+                    "selectbox",
                     "Drift correction",
                     options=_ALIGN_OPTIONS,
                     key="global_align_algorithm",
@@ -2680,7 +2883,9 @@ def sidebar_controls(
                     "assignment subtab to compare all algorithms side by side.",
                 )
                 if align_algo != "Off":
-                    st.checkbox(
+                    _labeled(
+                        st,
+                        "checkbox",
                         "Show drift connectors",
                         key="global_align_connectors",
                         persist_state="session",
@@ -2723,6 +2928,7 @@ def sidebar_controls(
             _range_slider(
                 st,
                 "Size",
+                label_left=True,
                 key="global_marker_size_range",
                 persist_state="session",
                 min_value=4,
@@ -2733,6 +2939,7 @@ def sidebar_controls(
             _numeric_slider(
                 st,
                 "Opacity",
+                label_left=True,
                 key="global_fixation_opacity",
                 persist_state="session",
                 min_value=0.1,
@@ -2782,6 +2989,7 @@ def sidebar_controls(
                 _range_slider(
                     st,
                     "Fixation color range",
+                    label_left=True,
                     key="global_fixation_color_range",
                     persist_state="session",
                     min_value=cmin,
@@ -2798,7 +3006,9 @@ def sidebar_controls(
                 # In Compare (and in a dual animation) the index labels are tinted
                 # to each scanpath's own colour, so the global colour is inert.
                 _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-                st.color_picker(
+                _labeled(
+                    st,
+                    "color_picker",
                     "Index label color",
                     key="global_order_font_color",
                     persist_state="session",
@@ -2808,6 +3018,7 @@ def sidebar_controls(
                 _numeric_slider(
                     st,
                     "Index label size",
+                    label_left=True,
                     key="global_order_font_size",
                     persist_state="session",
                     min_value=6,
@@ -2817,7 +3028,9 @@ def sidebar_controls(
                     "smaller). Default 10.",
                 )
             _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
-            st.multiselect(
+            _labeled(
+                st,
+                "multiselect",
                 "Hover fields",
                 options=hover_field_options(trial_fixations),
                 key="global_fixation_hover_fields",
@@ -2879,7 +3092,9 @@ def sidebar_controls(
             class_disabled, class_reason = _mode_gate(
                 animating, comparing, **_static_only
             )
-            color_mode = st.radio(
+            color_mode = _labeled(
+                st,
+                "radio",
                 "Saccade color",
                 options=SACCADE_COLOR_MODES,
                 key="global_saccade_color_mode",
@@ -2929,7 +3144,9 @@ def sidebar_controls(
                 # figure and the animation; Compare paints each scanpath in its
                 # own colour instead (see "Per-scanpath (comparison)" below).
                 _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-                st.color_picker(
+                _labeled(
+                    st,
+                    "color_picker",
                     "Line color",
                     key="global_saccade_color",
                     persist_state="session",
@@ -2939,7 +3156,9 @@ def sidebar_controls(
                     ),
                 )
             _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-            st.segmented_control(
+            _labeled(
+                st,
+                "segmented_control",
                 "Saccade line style",
                 options=list(SACCADE_DASH_OPTIONS.keys()),
                 key="global_saccade_style",
@@ -2950,6 +3169,7 @@ def sidebar_controls(
             _numeric_slider(
                 st,
                 "Saccade line width",
+                label_left=True,
                 key="global_saccade_width",
                 persist_state="session",
                 min_value=SACCADE_WIDTH_BOUNDS[0],
@@ -2964,7 +3184,9 @@ def sidebar_controls(
             # control, "Snap fixations above words", lives under Fixations
             # (it moves fixations) in its own "Linear-reading schematic"
             # block — see UX-13. Arcs are a `make_scanpath_figure` feature.
-            st.segmented_control(
+            _labeled(
+                st,
+                "segmented_control",
                 "Line shape",
                 options=["Straight", "Arc"],
                 key="global_saccade_render_mode",
@@ -3000,7 +3222,9 @@ def sidebar_controls(
                 _cls_reason,
             ),
         ):
-            st.multiselect(
+            _labeled(
+                st,
+                "multiselect",
                 "Show saccade types",
                 options=SACCADE_CLASS_ORDER,
                 format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
@@ -3073,7 +3297,9 @@ def sidebar_controls(
             if span_on:
                 # Which column defines the span first, then how to mark it.
                 if highlight_options:
-                    st.selectbox(
+                    _labeled(
+                        st,
+                        "selectbox",
                         "Highlight words by",
                         options=highlight_options,
                         key="global_highlight_column",
@@ -3081,7 +3307,9 @@ def sidebar_controls(
                         help="Which per-word column to highlight on the text (words "
                         "where it is true). Defaults to the OneStop answer span.",
                     )
-                critical_span_style = st.radio(
+                critical_span_style = _labeled(
+                    st,
+                    "radio",
                     "Style",
                     options=["Mark text", "Mark border"],
                     horizontal=True,
@@ -3103,7 +3331,9 @@ def sidebar_controls(
                 critical_span_style = "None"
             st.session_state["global_critical_span_style"] = critical_span_style
             if critical_span_style == "Mark text":
-                st.color_picker(
+                _labeled(
+                    st,
+                    "color_picker",
                     "Highlighted text color",
                     key="global_highlight_text_color",
                     persist_state="session",
@@ -3111,7 +3341,9 @@ def sidebar_controls(
                     "'Mark text').",
                 )
             elif critical_span_style == "Mark border":
-                st.color_picker(
+                _labeled(
+                    st,
+                    "color_picker",
                     "Border color",
                     key="global_span_border_color",
                     persist_state="session",
@@ -3124,7 +3356,9 @@ def sidebar_controls(
 
             st.divider()
             _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
-            st.multiselect(
+            _labeled(
+                st,
+                "multiselect",
                 "Hover fields",
                 options=hover_field_options(words, words=True),
                 key="global_word_hover_fields",
@@ -3155,7 +3389,9 @@ def sidebar_controls(
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
-            st.radio(
+            _labeled(
+                st,
+                "radio",
                 "Heatmap style",
                 options=["Word boxes", "Interpolated", "Duration mass"],
                 horizontal=True,
@@ -3175,7 +3411,9 @@ def sidebar_controls(
                 ),
             )
             if st.session_state.get("global_heatmap_style") == "Duration mass":
-                st.number_input(
+                _labeled(
+                    st,
+                    "number_input",
                     "Duration-mass sigma (characters)",
                     min_value=0.25,
                     max_value=10.0,
@@ -3194,7 +3432,9 @@ def sidebar_controls(
                     "Colour palette for the density heatmap overlay.", heat_reason
                 ),
             )
-            st.radio(
+            _labeled(
+                st,
+                "radio",
                 "Color scaling",
                 options=["Linear", "Log"],
                 horizontal=True,
@@ -3208,7 +3448,9 @@ def sidebar_controls(
                     heat_reason,
                 ),
             )
-            heatmap_metric = st.selectbox(
+            heatmap_metric = _labeled(
+                st,
+                "selectbox",
                 "Heatmap metric",
                 options=["duration_ms", "counts"],
                 disabled=heat_disabled,
@@ -3241,6 +3483,7 @@ def sidebar_controls(
                 _range_slider(
                     st,
                     "Heatmap color range",
+                    label_left=True,
                     key="global_heatmap_color_range",
                     persist_state="session",
                     min_value=hmin,
@@ -3307,6 +3550,7 @@ def sidebar_controls(
             _numeric_slider(
                 st,
                 "Image opacity",
+                label_left=True,
                 key="global_stimulus_image_opacity",
                 persist_state="session",
                 min_value=0.1,
@@ -3321,15 +3565,22 @@ def sidebar_controls(
             # the image (X/Y px) and scale it to line it up with the word boxes and
             # fixations. Applies to dataset and uploaded images alike.
             st.caption("**Align to text** — nudge/scale the image to fit the boxes.")
-            off_cols = st.columns(2)
-            off_cols[0].number_input(
+            # UX-51: the two offsets used to share a `st.columns(2)` row purely to
+            # save a line. They are ordinary `label | field` rows now, which costs
+            # the same height (one line each instead of one two-line row) and lets
+            # them line up with the opacity and scale sliders around them.
+            _labeled(
+                st,
+                "number_input",
                 "Image X offset (px)",
                 step=5.0,
                 key="global_stimulus_image_offset_x",
                 persist_state="session",
                 help="Shift the image horizontally to line it up with the text.",
             )
-            off_cols[1].number_input(
+            _labeled(
+                st,
+                "number_input",
                 "Image Y offset (px)",
                 step=5.0,
                 key="global_stimulus_image_offset_y",
@@ -3339,6 +3590,7 @@ def sidebar_controls(
             _numeric_slider(
                 st,
                 "Image scale",
+                label_left=True,
                 key="global_stimulus_image_scale",
                 persist_state="session",
                 min_value=0.25,
@@ -3426,7 +3678,9 @@ def sidebar_controls(
             "Turn off to pin a reproducible pixel interval.",
         )
         if not automatic_grid:
-            axes.number_input(
+            _labeled(
+                axes,
+                "number_input",
                 "Major grid interval (px)",
                 min_value=10.0,
                 max_value=5000.0,
@@ -3448,7 +3702,9 @@ def sidebar_controls(
         cb_disabled, cb_reason = _mode_gate(
             animating, comparing, in_animation=not comparing
         )
-        axes.radio(
+        _labeled(
+            axes,
+            "radio",
             "Color bar orientation",
             options=["Vertical", "Horizontal"],
             horizontal=True,
@@ -3463,6 +3719,7 @@ def sidebar_controls(
         _numeric_slider(
             axes,
             "Tick label angle",
+            label_left=True,
             key="global_colorbar_tickangle",
             persist_state="session",
             min_value=-90,
@@ -3474,6 +3731,7 @@ def sidebar_controls(
         _numeric_slider(
             axes,
             "Tick label size",
+            label_left=True,
             key="global_colorbar_tickfont_size",
             persist_state="session",
             min_value=6,
@@ -3484,7 +3742,9 @@ def sidebar_controls(
     # The animation and the comparison figures always plot spatial x/y — only
     # `make_scanpath_figure` takes `x_field`/`y_field`.
     axis_disabled, axis_reason = _mode_gate(animating, comparing, **_static_only)
-    axes.selectbox(
+    _labeled(
+        axes,
+        "selectbox",
         "X axis field",
         options=numeric_fields,
         key="global_x_field",
@@ -3494,7 +3754,9 @@ def sidebar_controls(
             "Fixation column plotted on the X axis (default `x`).", axis_reason
         ),
     )
-    axes.selectbox(
+    _labeled(
+        axes,
+        "selectbox",
         "Y axis field",
         options=numeric_fields,
         key="global_y_field",
@@ -3524,7 +3786,9 @@ def sidebar_controls(
             if not st.session_state.get("global_caption_pattern"):
                 st.session_state["global_caption_pattern"] = DEFAULT_CAPTION_PATTERN
 
-    labels.selectbox(
+    _labeled(
+        labels,
+        "selectbox",
         "Illustration label",
         options=["Auto", "Show", "Hide"],
         key="global_illustration_label",
@@ -3567,6 +3831,7 @@ def sidebar_controls(
             # pre-filled with the defaults on the run the toggle is switched
             # on, so there is nothing an empty one needs to explain (UX-31).
             help="Leave empty for no title.",
+            label_left=True,
         )
         render_pattern_input(
             box,
@@ -3574,6 +3839,7 @@ def sidebar_controls(
             "global_caption_pattern",
             _title_caption_fields,
             help="Leave empty for no caption.",
+            label_left=True,
         )
         render_pattern_help(box, _title_caption_fields)
 
@@ -3707,7 +3973,7 @@ def _bool_metadata_filter(
     if len(options) < 2:
         return
     _seed_filter_widget(key, options, options)
-    host.multiselect(label, options=options, key=key, on_change=on_change)
+    _labeled(host, "multiselect", label, options=options, key=key, on_change=on_change)
 
 
 def _bool_filter_narrowing(
@@ -4513,7 +4779,9 @@ def render_trial_filters(
                 _seed_filter_widget(
                     f"{prefix}filter_{col}", values, values, prefix=prefix
                 )
-                host.multiselect(
+                _labeled(
+                    host,
+                    "multiselect",
                     label,
                     options=values,
                     key=f"{prefix}filter_{col}",
@@ -4533,14 +4801,18 @@ def render_trial_filters(
     tags = known_tags()
     if tags:
         _seed_filter_widget(f"{prefix}filter_req_tags", tags, [], prefix=prefix)
-        host.multiselect(
+        _labeled(
+            host,
+            "multiselect",
             "With any of these tags",
             options=tags,
             key=f"{prefix}filter_req_tags",
             on_change=_apply,
         )
         _seed_filter_widget(f"{prefix}filter_exc_tags", tags, [], prefix=prefix)
-        host.multiselect(
+        _labeled(
+            host,
+            "multiselect",
             "Excluding tags",
             options=tags,
             key=f"{prefix}filter_exc_tags",

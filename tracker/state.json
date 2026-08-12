@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 314,
+  "revision": 315,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -636,10 +636,10 @@
       "updated": "2026-08-13"
     },
     "UX-38": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "UX-39": {

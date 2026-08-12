@@ -1222,6 +1222,9 @@ def _render_compare_selector(
         sel_col = st
 
     sort_choice = _CMP_SORT_DEFAULT
+    # What the list is actually ordered by, which linking can override — see the
+    # note beside the popover below.
+    order_choice = sort_choice
     sort_desc = False
     if sort_col is not None:
         if st.session_state.get("single_compare_order") not in sort_options:
@@ -1240,9 +1243,27 @@ def _render_compare_selector(
                 key="single_compare_sort_desc",
                 disabled=sort_choice in {_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT},
             )
+            # CMP-13 (follow-up: "still jumps around"). The default order is
+            # computed *relative to A* — 📄 same-text candidates lead — so the
+            # moment A crosses into another text, B's whole pool re-ranks and its
+            # position readout leaps (10/23 → 22/23 in the report) even though
+            # the linked step landed on exactly the right trial. Walking two
+            # trials in lockstep only means anything against a track that holds
+            # still, so linking pins the order to Trial ID for as long as it is
+            # on. Resolved into a local, never written back to the widget key:
+            # the user's chosen sort must survive un-linking (the same
+            # don't-rewrite-a-gated-setting rule as `controls._mode_gate`).
+            if compare_step_linked() and sort_choice == _CMP_SORT_DEFAULT:
+                order_choice = TRIAL_SORT_DEFAULT
+                st.caption(
+                    "Sorted by **Trial ID** while *Step both trials together* is "
+                    "on, so B keeps its place in the list when A changes text."
+                )
+            else:
+                order_choice = sort_choice
         options = _order_compare_options(
             options,
-            sort_choice,
+            order_choice,
             sort_keys,
             descending=sort_desc,
         )
@@ -1330,8 +1351,8 @@ def _render_compare_selector(
         current_idx = labels.index(current)
 
     picker_label = "**Compare To**"
-    if sort_choice not in {_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT}:
-        picker_label += f"  ·  by {sort_choice} {'↓' if sort_desc else '↑'}"
+    if order_choice not in {_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT}:
+        picker_label += f"  ·  by {order_choice} {'↓' if sort_desc else '↑'}"
     selected_compare_label = sel_col.selectbox(
         picker_label,
         options=labels,

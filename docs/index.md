@@ -63,9 +63,7 @@ See the [feature guides](guides/index.md) for the controls, or
 
 !!! note "AI-assisted software"
     Scanpath Studio was built with AI assistance. Cross-check results before
-    publishing; verify the ground-truth trial by turning on **🐛 Debug mode**
-    (under ❓ Help) and picking **🧪 Synthetic test trial** in the data-source
-    picker. If something looks wrong,
+    publishing. If something looks wrong,
     [report it](https://github.com/lacclab/scanpath-studio/issues)
     with your **Save & restore** JSON.
 

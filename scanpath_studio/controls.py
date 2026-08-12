@@ -3638,6 +3638,12 @@ _DEFAULT_FILTER_FIELDS = [
     "difficulty_level",
     "repeated_reading_trial",
     "is_correct",
+    # UX-49: the offered set is otherwise all-categorical, which left the range
+    # slider invisible on every bundled and public corpus. Presentation order is
+    # the one numeric trial-level field that is both universal (EyeLink writes it
+    # on every export) and worth filtering on — it is how you exclude the start
+    # or the tail of a session when you suspect practice or fatigue effects.
+    "TRIAL_INDEX",
     # MultiplEYE facets (present only when that corpus is loaded).
     "genre",
     "session",

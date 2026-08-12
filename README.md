@@ -177,14 +177,9 @@ under its original license ([docs][onestop-docs]).
 
 ## Built with AI assistance
 
-Much of this code was written with AI assistance. Two things you can check: the
-reading measures are pinned to a ground-truth trial with expected values per
-measure (turn on **🐛 Debug mode** under ❓ Help, then pick **🧪 Synthetic test
-trial** in the data-source picker), and EyeLink `IA_*` measures already in your
-export are passed through, not recomputed.
-
-That is not the same as bug-free. **Cross-check anything you publish against your
-own pipeline.** If something looks wrong,
+Much of this code was written with AI assistance. That is not the same as
+bug-free. **Cross-check anything you publish against your own pipeline.** If
+something looks wrong,
 [open an issue](https://github.com/lacclab/scanpath-studio/issues) with the JSON
 from **💾 Save & restore** — it reproduces the exact view.
 

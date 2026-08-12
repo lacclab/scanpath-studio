@@ -238,3 +238,44 @@ class TestTheMissingValueCaption:
 def test_has_active_trial_filters_notices_a_range():
     st.session_state["_trial_filters"] = {"ranges": {"score": (0.3, 0.9)}}
     assert controls.has_active_trial_filters() is True
+
+
+class TestTheBundledDemoOffersOne:
+    """UX-49 shipped with an all-categorical offered field set, so the slider was
+    invisible on every bundled and public corpus — nothing to look at, and
+    nothing to catch a regression either. `TRIAL_INDEX` is the presentation
+    order: universal on EyeLink exports, genuinely worth filtering on (drop the
+    start or the tail of a session), and whole-numbered, so it also exercises the
+    integer-slider path end to end.
+    """
+
+    @staticmethod
+    def _demo_frames():
+        from scanpath_studio import data as sps_data
+
+        raw = sps_data.load_sample_data()
+        words = sps_data.normalize_words(raw[0], sps_data.infer_word_schema(raw[0]))
+        fixations = sps_data.normalize_fixations(
+            raw[1], sps_data.infer_fix_schema(raw[1])
+        )
+        return sps_data.harmonize_frames(words, fixations)
+
+    def test_it_is_offered(self):
+        assert "TRIAL_INDEX" in controls._DEFAULT_FILTER_FIELDS
+
+    def test_the_demo_actually_carries_it_as_a_trial_level_column(self):
+        """Offered is not the same as present: the field list is intersected
+        with the normalized frames, so a name that doesn't survive
+        normalization shows nothing (which is how `TRIAL_DWELL_TIME` was ruled
+        out — it is dropped as an unregistered passthrough)."""
+        words, fixations = self._demo_frames()
+        assert "TRIAL_INDEX" in words.columns
+        assert "TRIAL_INDEX" in controls._trial_level_columns(words, fixations)
+
+    def test_it_resolves_to_an_integer_slider(self):
+        words, _ = self._demo_frames()
+        bounds = controls._numeric_column_bounds(words, "TRIAL_INDEX", cache_key="demo")
+        assert bounds is not None
+        low, high, _ = bounds
+        assert isinstance(low, int) and isinstance(high, int)
+        assert low < high

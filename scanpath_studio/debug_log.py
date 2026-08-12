@@ -39,6 +39,10 @@ DEBUG_STATE_KEY = "_debug_mode_on"
 #: see :func:`seed_debug_mode`.
 DEBUG_URL_PARAM = "debug"
 
+#: The package's own logger. Everything the app logs is a child of this, which is
+#: what :class:`_AppRecordsOnly` keys on.
+_APP_LOGGER = "scanpath_studio"
+
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 _LEVEL_COLOR = {
     "DEBUG": "#888",
@@ -125,12 +129,42 @@ def _buffer() -> Deque[Dict[str, Any]]:
     return buf
 
 
+class _AppRecordsOnly(logging.Filter):
+    """Keep the app's own records, plus anything that went wrong anywhere.
+
+    The handler sits on the *root* logger, so without a filter the panel fills
+    with third-party chatter — tornado logs a line per websocket frame, watchdog
+    per filesystem event, urllib3 per connection. That is what made the panel
+    unreadable (UX-37 follow-up: "each log entry shows up identical like a
+    hundred times"), and none of it answers "what did the app just do?".
+
+    ``WARNING`` and above is kept whatever its source: a library that failed is
+    exactly what a bug report needs, and those arrive one at a time.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return (
+            record.name == _APP_LOGGER
+            or record.name.startswith(f"{_APP_LOGGER}.")
+            or record.levelno >= logging.WARNING
+        )
+
+
 class _SessionStateHandler(logging.Handler):
     """Append each emitted record to the session-state ring buffer.
 
-    The handler is attached to the root logger, so it captures every module's
-    ``logging`` output. It never raises into the logging machinery: a failure to
-    record a log line must not break the thing being logged.
+    Identical lines are **collapsed** rather than repeated: a match anywhere in
+    the buffer bumps that entry's ``count``, refreshes its timestamp and moves it
+    to the newest position. Streamlit reruns the whole script per interaction, so
+    anything logged outside a cache or a change-guard recurs verbatim — and 100
+    copies of one line push the other 99 events out of a 500-entry buffer. The
+    count keeps the "this happened a lot" signal without the noise.
+
+    The handler is attached to the root logger, so it can capture every module's
+    ``logging`` output; :class:`_AppRecordsOnly` narrows that to the app's own
+    records plus WARNING-and-above from anywhere. It never raises into the
+    logging machinery: a failure to record a log line must not break the thing
+    being logged.
 
     One instance serves the whole process (see ``install_log_capture``): the
     buffer it appends to is resolved through ``st.session_state`` at emit time,
@@ -143,14 +177,24 @@ class _SessionStateHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             buf = _buffer()
+            stamp = datetime.fromtimestamp(record.created).strftime("%H:%M:%S.%f")[:-3]
+            seen = (record.levelname, record.name, record.getMessage())
+            for index, entry in enumerate(buf):
+                if (entry["level"], entry["logger"], entry["message"]) == seen:
+                    entry["count"] += 1
+                    entry["time"] = stamp
+                    # Move to the newest position. Safe mid-iteration only
+                    # because this returns immediately.
+                    del buf[index]
+                    buf.append(entry)
+                    return
             buf.append(
                 {
-                    "time": datetime.fromtimestamp(record.created).strftime(
-                        "%H:%M:%S.%f"
-                    )[:-3],
+                    "time": stamp,
                     "level": record.levelname,
                     "logger": record.name,
                     "message": record.getMessage(),
+                    "count": 1,
                 }
             )
         except Exception:  # pragma: no cover - logging must never crash callers
@@ -168,15 +212,24 @@ def install_log_capture(level: int = logging.INFO) -> None:
     up for the process's lifetime (S10). One handler is enough: it resolves the
     buffer per script-run context, so each session still sees only its own
     records. Call this early in ``main()``.
+
+    The level is raised on the **app's** logger, not the root one. Raising root
+    to INFO switches on every library that hasn't set its own level — tornado,
+    watchdog, urllib3, PIL, streamlit's internals — and they, not the app, were
+    what flooded the panel. A record's level is tested where it is logged, and
+    propagation to an ancestor's *handlers* ignores the ancestor's level, so
+    scoping it here still delivers every ``scanpath_studio`` INFO line to both
+    this handler and the terminal.
     """
+    app_logger = logging.getLogger(_APP_LOGGER)
+    if app_logger.level == logging.NOTSET or app_logger.level > level:
+        app_logger.setLevel(level)
     root = logging.getLogger()
-    # Make sure records at INFO actually propagate to handlers.
-    if root.level > level:
-        root.setLevel(level)
     if any(isinstance(h, _SessionStateHandler) for h in root.handlers):
         return
     handler = _SessionStateHandler()
     handler.setLevel(logging.DEBUG)
+    handler.addFilter(_AppRecordsOnly())
     root.addHandler(handler)
 
 
@@ -274,12 +327,30 @@ def render_debug_panel(host=None) -> None:
             if r["level"] in _LEVELS and _LEVELS.index(r["level"]) >= threshold
         ]
 
-        st.caption(f"{len(shown)} / {len(records)} records")
+        # "lines", not "records": identical ones are collapsed, so the two
+        # numbers differ and saying which is which is the whole point.
+        events = sum(int(r.get("count", 1)) for r in records)
+        st.caption(
+            f"{len(shown)} / {len(records)} lines"
+            + (
+                f" · {events} events, identical lines collapsed"
+                if events > len(records)
+                else ""
+            )
+        )
 
         if shown:
             lines = []
             for r in reversed(shown):  # newest first
                 color = _LEVEL_COLOR.get(r["level"], "#888")
+                # Collapsed repeats carry their tally; a one-off shows nothing,
+                # so the common case reads exactly as it did before.
+                repeats = int(r.get("count", 1))
+                tally = (
+                    f' <span style="color:#888">× {repeats}</span>'
+                    if repeats > 1
+                    else ""
+                )
                 lines.append(
                     f'<div style="font-family:monospace;font-size:11px;'
                     f'line-height:1.5;white-space:pre-wrap;word-break:break-word">'
@@ -287,7 +358,7 @@ def render_debug_panel(host=None) -> None:
                     f'<span style="color:{color};font-weight:600">'
                     f"{r['level']:<7}</span> "
                     f'<span style="color:#888">{r["logger"]}</span> '
-                    f"{_escape(r['message'])}</div>"
+                    f"{_escape(r['message'])}{tally}</div>"
                 )
             st.markdown(
                 f'<div style="max-height:300px;overflow-y:auto">{"".join(lines)}</div>',
@@ -297,7 +368,15 @@ def render_debug_panel(host=None) -> None:
             st.caption("No log records at this level yet.")
 
         st.divider()
-        st.caption("App / session state")
+        st.caption(
+            "App / session state",
+            help="A snapshot of what this browser session currently holds: the "
+            "active view, the dataset it was loaded from, the size of every "
+            "table in memory (rows × columns), and how many session-state keys "
+            "exist. It is a read-out, not a control — nothing here changes the "
+            "app. Send it with a bug report: it says which data and which view "
+            "produced the log above.",
+        )
         snapshot = _state_snapshot()
         st.dataframe(snapshot, hide_index=True, width="stretch")
 

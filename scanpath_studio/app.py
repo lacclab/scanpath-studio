@@ -673,10 +673,7 @@ If you use the bundled demo data, also cite
     st.markdown(
         f"""
 Scanpath Studio was built with AI assistance. Cross-check results before
-publishing; verify the ground-truth trial by turning on **🐛 Debug mode** (under
-❓ Help) and picking **🧪 Synthetic test trial** in the data-source picker, and
-note that EyeLink `IA_*` measures already in your export are passed through, not
-recomputed. If something looks wrong,
+publishing. If something looks wrong,
 [open an issue]({CITATION["url"]}/issues) ↗ with your **💾 Save & restore** JSON.
 """
     )

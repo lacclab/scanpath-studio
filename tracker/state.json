@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 295,
+  "revision": 299,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -101,7 +101,7 @@
       "updated": "2026-08-12"
     },
     "CMP-13": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
@@ -610,7 +610,7 @@
     "UX-37": {
       "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "Great, better. Each log entry shows up identical like a hundred times. This is much too much logs.\nAlso add a (?) next to the App / session state.",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -678,7 +678,7 @@
       "updated": "2026-08-12"
     },
     "UX-49": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,

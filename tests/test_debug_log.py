@@ -59,8 +59,8 @@ def test_records_land_in_the_session_buffer():
     levels = {level for level, _, _ in seen}
     assert ("INFO", "scanpath_studio.test", "an info line") in seen
     assert ("WARNING", "scanpath_studio.test", "a warning line") in seen
-    # install_log_capture raises the root level to INFO, so DEBUG is filtered out
-    # before it reaches any handler.
+    # install_log_capture puts the app logger at INFO, so DEBUG is filtered out
+    # at the logger before it reaches any handler.
     assert "DEBUG" not in levels
 
 
@@ -86,6 +86,112 @@ def test_the_buffer_is_capped_so_a_chatty_run_cannot_grow_session_state():
     assert at.session_state["_len"] == debug_log._MAX_RECORDS
     # Oldest records are dropped, not newest — the tail is what you want to read.
     assert at.session_state["_first"] == "line 50"
+
+
+class TestOnlyTheAppsOwnRecordsAreKept:
+    """UX-37 follow-up ("much too much logs"). The handler sits on the *root*
+    logger, so without a filter the panel fills with third-party chatter."""
+
+    def test_a_third_party_info_line_is_dropped(self):
+        handler = debug_log._SessionStateHandler()
+        handler.addFilter(debug_log._AppRecordsOnly())
+        noisy = logging.LogRecord(
+            "tornado.access", logging.INFO, __file__, 1, "200 GET /", (), None
+        )
+        assert bool(handler.filter(noisy)) is False
+
+    def test_a_third_party_warning_is_kept(self):
+        """A library that failed is exactly what a bug report needs."""
+        handler = debug_log._SessionStateHandler()
+        handler.addFilter(debug_log._AppRecordsOnly())
+        broke = logging.LogRecord(
+            "urllib3.connectionpool", logging.WARNING, __file__, 1, "retrying", (), None
+        )
+        assert bool(handler.filter(broke)) is True
+
+    @pytest.mark.parametrize("name", ["scanpath_studio", "scanpath_studio.data"])
+    def test_the_apps_own_info_lines_are_kept(self, name):
+        handler = debug_log._SessionStateHandler()
+        handler.addFilter(debug_log._AppRecordsOnly())
+        mine = logging.LogRecord(
+            name, logging.INFO, __file__, 1, "did a thing", (), None
+        )
+        assert bool(handler.filter(mine)) is True
+
+    def test_a_lookalike_logger_name_is_not_treated_as_ours(self):
+        """`scanpath_studio_extras` is somebody else's package, not a child."""
+        handler = debug_log._SessionStateHandler()
+        handler.addFilter(debug_log._AppRecordsOnly())
+        theirs = logging.LogRecord(
+            "scanpath_studio_extras", logging.INFO, __file__, 1, "hi", (), None
+        )
+        assert bool(handler.filter(theirs)) is False
+
+    def test_install_does_not_raise_the_root_level(self):
+        """Raising root to INFO is what switched on every library in the process.
+
+        The app's own logger carries the level instead; propagation to an
+        ancestor's handlers ignores the ancestor's level, so our INFO lines still
+        arrive.
+        """
+        root = logging.getLogger()
+        before = root.level
+        try:
+            root.setLevel(logging.WARNING)
+            debug_log.install_log_capture()
+            assert root.level == logging.WARNING
+            assert logging.getLogger("scanpath_studio").isEnabledFor(logging.INFO)
+        finally:
+            root.setLevel(before)
+
+
+class TestIdenticalLinesCollapse:
+    """A rerun re-executes the script, so anything logged outside a cache or a
+    change-guard recurs verbatim — and 100 copies of one line push the other 99
+    events out of a 500-entry buffer."""
+
+    def _handler_and_buffer(self, monkeypatch):
+        from collections import deque
+
+        buf = deque(maxlen=debug_log._MAX_RECORDS)
+        monkeypatch.setattr(debug_log, "_buffer", lambda: buf)
+        return debug_log._SessionStateHandler(), buf
+
+    def _record(self, message: str, name: str = "scanpath_studio"):
+        return logging.LogRecord(name, logging.INFO, __file__, 1, message, (), None)
+
+    def test_a_repeat_bumps_the_count_instead_of_appending(self, monkeypatch):
+        handler, buf = self._handler_and_buffer(monkeypatch)
+        for _ in range(100):
+            handler.emit(self._record("Filters applied · trials=24"))
+        assert len(buf) == 1
+        assert buf[0]["count"] == 100
+
+    def test_a_repeat_moves_back_to_the_newest_position(self, monkeypatch):
+        """Interleaved is the shape a rerun actually produces (A, B, A, B …), so
+        collapsing only *consecutive* duplicates would not have helped."""
+        handler, buf = self._handler_and_buffer(monkeypatch)
+        for _ in range(50):
+            handler.emit(self._record("A"))
+            handler.emit(self._record("B"))
+        assert [(e["message"], e["count"]) for e in buf] == [("A", 50), ("B", 50)]
+
+    def test_distinct_lines_are_all_kept(self, monkeypatch):
+        handler, buf = self._handler_and_buffer(monkeypatch)
+        for index in range(10):
+            handler.emit(self._record(f"line {index}"))
+        assert len(buf) == 10
+        assert all(entry["count"] == 1 for entry in buf)
+
+    def test_same_text_at_a_different_level_is_a_different_line(self, monkeypatch):
+        handler, buf = self._handler_and_buffer(monkeypatch)
+        handler.emit(self._record("careful"))
+        handler.emit(
+            logging.LogRecord(
+                "scanpath_studio", logging.WARNING, __file__, 1, "careful", (), None
+            )
+        )
+        assert len(buf) == 2
 
 
 def test_the_handler_swallows_a_record_it_cannot_file():
@@ -201,6 +307,38 @@ def test_a_legacy_debug_url_param_still_arms_it():
     assert not at.exception, at.exception
     assert at.session_state[debug_log.DEBUG_STATE_KEY] is True
     assert [s for s in at.selectbox if s.key == "_debug_level"]
+
+
+@pytest.mark.timeout(90)
+class TestTheGroundTruthTrialIsDebugOnly:
+    """UX-37: the six-word verification fixture is a developer affordance, not a
+    corpus, so it sits behind the same toggle as the log panel rather than in
+    every user's data-source list. (It used to be advertised in the AI-assistance
+    note; that prose was cut, but the route it described still has to work.)"""
+
+    def test_it_is_absent_until_debug_mode_is_on(self):
+        at = AppTest.from_file(APP_SCRIPT)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert "Synthetic test trial" not in at.session_state["_data_source_entries"]
+
+        at.toggle(key=debug_log.DEBUG_STATE_KEY).set_value(True).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        entries = at.session_state["_data_source_entries"]
+        assert "Synthetic test trial" in entries, entries
+
+    def test_selecting_it_loads_the_ground_truth_trial(self):
+        """The old `?source=synthetic` link still resolves — the token stays in
+        the share-link wire format — so this drives it the same way. What
+        changed is that it is no longer the only route."""
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params["source"] = "synthetic"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        assert at.session_state["data_source_choice"] == "Synthetic test trial"
+        picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
+        assert list(picker.options) == ["synthetic_2line_demo"]
 
 
 def test_the_url_param_does_not_override_turning_it_off():

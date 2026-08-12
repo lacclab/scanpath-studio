@@ -1,10 +1,14 @@
-"""UX-20: the AI-assistance disclosure, and the claims it makes.
+"""UX-20: the AI-assistance disclosure, and the facts behind it.
 
-The note claims only what a reader can check for themselves, so both claims are
-pinned here: that the ground-truth trial really is reachable the way the note
-says, and that pre-computed EyeLink measures really do take precedence over
-derived ones. A disclosure whose "you can verify this yourself" turns out to be
-wrong is worse than no disclosure.
+The note is deliberately three lines — built with AI assistance, cross-check
+before publishing, here is where to report it. It used to also spell out two
+things a reader could verify (the ground-truth trial, EyeLink precedence); that
+prose was cut as clutter, but the *guarantees* it described are what let the note
+stay this short, so they keep their tests here. A disclosure resting on claims
+nobody checks is worse than no disclosure.
+
+The route to the ground-truth trial is UX-37 behaviour now, not a documented
+claim, and is covered in ``tests/test_debug_log.py``.
 """
 
 from __future__ import annotations
@@ -13,11 +17,6 @@ import pathlib
 
 import pandas as pd
 import pytest
-
-from tests.conftest import APP_SCRIPT
-
-streamlit_testing = pytest.importorskip("streamlit.testing.v1")
-AppTest = streamlit_testing.AppTest
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 
@@ -37,11 +36,10 @@ class TestTheNoteIsOnEverySurface:
         assert "AI assistance" in body, path
         # The actionable half — without it the note is unfalsifiable.
         assert "cross-check" in body.lower(), path
-        # UX-37: the note names the picker entry, not a URL param. A reader who
-        # has to hand-edit a URL doesn't verify anything. Scoped to the note
-        # itself, since app.py also *explains* the old param in a code comment.
+        # It must never send a reader off to hand-edit a URL: someone who has to
+        # do that verifies nothing. Scoped to the note itself, since app.py also
+        # *explains* the old param in a code comment.
         note = body[body.lower().find("ai assistance") :][:2000]
-        assert "Synthetic test" in note, path
         assert "?source=synthetic" not in note, path
 
     @pytest.mark.parametrize("path", ["README.md", "docs/index.md"])
@@ -64,41 +62,15 @@ class TestTheNoteIsOnEverySurface:
 
 
 @pytest.mark.timeout(90)
-class TestTheClaimsHold:
-    def test_the_ground_truth_trial_is_offered_once_debug_mode_is_on(self):
-        """UX-37: the note tells the reader to turn on 🐛 Debug mode and pick
-        **🧪 Synthetic test trial**, so that route has to work — it is a
-        six-word verification fixture, not a corpus, so it sits with the other
-        developer affordances rather than in every user's source list."""
-        at = AppTest.from_file(APP_SCRIPT)
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert "Synthetic test trial" not in at.session_state["_data_source_entries"]
-
-        at.toggle(key="_debug_mode_on").set_value(True).run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        entries = at.session_state["_data_source_entries"]
-        assert "Synthetic test trial" in entries, entries
-
-    def test_the_ground_truth_trial_is_reachable_the_way_the_note_says(self):
-        """Selecting it loads the ground-truth trial. The old `?source=synthetic`
-        link still resolves (the token stays in the share-link wire format), so
-        this drives it the same way — what changed is that it is no longer the
-        *only* route."""
-        at = AppTest.from_file(APP_SCRIPT)
-        at.query_params["source"] = "synthetic"
-        at.run(timeout=60)
-        assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        assert at.session_state["data_source_choice"] == "Synthetic test trial"
-        picker = next(s for s in at.selectbox if s.label.startswith("**Select Trial**"))
-        assert list(picker.options) == ["synthetic_2line_demo"]
+class TestTheGroundTruthFixtureIsReal:
+    """The reading measures are pinned to a hand-traced trial. Nothing in the UI
+    says so anymore, but it is the reason the note needs no hedging beyond
+    "cross-check"."""
 
     def test_the_expectations_cover_every_canonical_measure(self):
-        """ "Expected values per measure" has to be true of *every* measure, or
-        the note oversells what was checked. (The exhaustive value-by-value
-        assertions live in `tests/test_synthetic.py`; this pins the coverage
-        claim itself.)"""
+        """Expected values have to exist for *every* measure, or the fixture
+        only proves the easy ones. (The exhaustive value-by-value assertions
+        live in `tests/test_synthetic.py`; this pins the coverage.)"""
         from tests.synthetic_data import EXPECTED
 
         assert {
@@ -136,9 +108,10 @@ class TestTheClaimsHold:
 
 
 class TestEyeLinkMeasuresWin:
-    """The strongest sentence in the note: on a normal EyeLink export the
-    numbers are the vendor's, not ours. That is only true if the pre-computed
-    `IA_*` columns actually take precedence over the derived ones."""
+    """On a normal EyeLink export the numbers are the vendor's, not ours — the
+    architectural rule from AGENTS.md ("pre-computed IA values take precedence
+    over computed ones"), which is only true if the `IA_*` columns actually
+    survive both normalization and the end of the pipeline."""
 
     def test_a_precomputed_column_survives_normalization_unchanged(self):
         from scanpath_studio.data import infer_word_schema, normalize_words

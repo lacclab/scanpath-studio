@@ -209,3 +209,53 @@ class TestTheLinkedStepEndToEnd:
         at.button(key="single_compare_next").click().run(timeout=90)
         assert not at.exception, at.exception
         assert at.session_state["single_trial_id"] == expected_a
+
+    # -- CMP-13 follow-up: "still jumps around" ------------------------------
+    # Identity stepping was already correct — B landed on the right trial every
+    # time. What leapt (10/23 → 22/23 in the report) was its *position*: the
+    # default order ranks B's pool relative to A, 📄 same-text first, so A
+    # crossing into another text re-lays the whole track. Linking now pins the
+    # order to Trial ID, which is the only thing that makes "one notch along"
+    # mean anything.
+
+    @staticmethod
+    def _compare_position(at):
+        snapshot = at.session_state[utils.COMPARE_OPTIONS_SNAPSHOT_KEY]
+        labels = [row[0] for row in snapshot]
+        return labels.index(at.session_state[utils.COMPARE_TRIAL_KEY])
+
+    def test_linked_puts_the_pool_in_trial_id_order(self):
+        at = self._boot_compare()
+        at.checkbox(key=utils.COMPARE_STEP_LINK_KEY).set_value(True).run(timeout=90)
+        assert not at.exception, at.exception
+        ids = [row[2] for row in at.session_state[utils.COMPARE_OPTIONS_SNAPSHOT_KEY]]
+        assert ids == utils.sort_trial_options(ids, None)
+
+    def test_unlinked_the_relation_ranking_still_leads(self):
+        """The pin is scoped to linking — 📄-first is what makes B easy to
+        *pick*, and it stays the default the rest of the time."""
+        at = self._boot_compare()
+        first_label = at.session_state[utils.COMPARE_OPTIONS_SNAPSHOT_KEY][0][0]
+        assert first_label.startswith(utils.SAME_TEXT_MARKER), first_label
+
+    def test_the_pin_does_not_rewrite_the_users_chosen_sort(self):
+        """Same rule as a mode-gated control: resolve, never write back, or
+        un-linking would silently leave the user on a sort they never picked."""
+        at = self._boot_compare()
+        at.checkbox(key=utils.COMPARE_STEP_LINK_KEY).set_value(True).run(timeout=90)
+        from scanpath_studio.tabs import _CMP_SORT_DEFAULT
+
+        assert at.session_state["single_compare_order"] == _CMP_SORT_DEFAULT
+
+    def test_bs_position_holds_still_while_a_walks_across_texts(self):
+        at = self._boot_compare()
+        at.checkbox(key=utils.COMPARE_STEP_LINK_KEY).set_value(True).run(timeout=90)
+        before = self._compare_position(at)
+        for _ in range(4):
+            at.button(key="single_next_trial").click().run(timeout=90)
+            assert not at.exception, at.exception
+            after = self._compare_position(at)
+            # One notch for the linked step, at most one more for A leaving the
+            # pool and its predecessor rejoining it. The bug was a leap of 12.
+            assert abs(after - before) <= 2, f"B's position jumped {before} → {after}"
+            before = after

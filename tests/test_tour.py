@@ -468,7 +468,7 @@ class TestSpotlightSelectorsResolve:
         tab_source = inspect.getsource(render_single_trial_tab)
         control_source = inspect.getsource(controls.sidebar_controls)
 
-        assert 'rail_heading.markdown("## 🎛️ Plot controls")' in tab_source
+        assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert 'viz.caption("Quick views")' in control_source
@@ -489,48 +489,58 @@ class TestSpotlightSelectorsResolve:
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
 
-    def test_plot_rail_uses_contextual_style_filter_and_header_reset(self):
-        """UX-44: repeated labels stay terse and Reset no longer costs a row."""
+    def test_plot_rail_uses_contextual_style_filter_labels(self):
+        """UX-44: repeated per-layer labels stay terse."""
         import inspect
 
         from scanpath_studio import controls
-        from scanpath_studio.tabs import render_single_trial_tab
 
-        tab_source = inspect.getsource(render_single_trial_tab)
         control_source = inspect.getsource(controls.sidebar_controls)
 
-        assert "render_viz_reset(st, compact=True)" in tab_source
         assert 'popover("⚙️ Style"' in control_source
         assert 'f"🧹 Filter{' in control_source
         assert "Reset settings" not in control_source
 
-        from scanpath_studio.styles import get_app_css
+    def test_reset_closes_the_rail_below_every_control_it_resets(self):
+        """BUG-24: Reset is the last thing in the rail, at full width.
 
-        css = get_app_css()
-        assert ".st-key-railbtn_plot_reset button {" in css
-        assert "padding-right: 1.25rem !important;" in css
-        assert "@container sps-rail (max-width: 240px)" in css
+        It used to share the heading row as a compact pill. The rail is only
+        ~150px wide inside at ordinary desktop widths, which is not enough for
+        both, so a container query stacked the two below 240px — and that rule
+        flipped ``flex-direction`` without clearing Streamlit's
+        ``flex-wrap: wrap``, turning the header into a *column-wrapping* flex
+        container whose second track landed ~100px right of the rail, where its
+        own ``overflow`` clipped it. Reset was invisible unless the browser was
+        zoomed out far enough to reach the side-by-side branch.
 
-    def test_stacked_rail_header_cannot_wrap_reset_out_of_the_panel(self):
-        """BUG-24: the narrow-rail header must stack, not wrap sideways.
-
-        Streamlit ships every ``stHorizontalBlock`` with ``flex-wrap: wrap``.
-        Flipping only ``flex-direction`` to ``column`` therefore turns the
-        header into a *column-wrapping* flex container, and since the block has
-        a definite height the Reset column wraps into a second track to the
-        RIGHT — ~100px outside the rail, which clips it (``overflow-y: auto``
-        computes ``overflow-x`` to ``auto`` too). The rail is ~150px wide at
-        ordinary desktop widths, so this rule is the common case, not the
-        exception: Reset was invisible until the user zoomed out far enough for
-        the rail to clear 240px and the row layout to take over.
+        Two things keep that from coming back: the heading row holds a single
+        element, and the reset renders after ``sidebar_controls`` (creation
+        order is what puts it at the foot of the rail's scroll area).
         """
+        import inspect
+
+        from scanpath_studio import controls
         from scanpath_studio.styles import get_app_css
+        from scanpath_studio.tabs import render_single_trial_tab
+
+        tab_source = inspect.getsource(render_single_trial_tab)
+        assert 'st.markdown("## 🎛️ Plot controls")' in tab_source
+        assert 'with st.container(key="plot_reset_footer"):' in tab_source
+        assert "render_viz_reset(st)" in tab_source
+        # No second column in the heading row, and no reset above the controls.
+        assert "rail_heading, rail_reset = st.columns(" not in tab_source
+        assert tab_source.index("sidebar_controls(") < tab_source.index(
+            "render_viz_reset(st)"
+        )
+
+        # Full width, one label: the compact pill was for the shared row only.
+        reset_source = inspect.getsource(controls.render_viz_reset)
+        assert 'width="stretch"' in reset_source
+        assert "compact" not in reset_source.split('"""')[0]
 
         css = get_app_css()
-        block = css.split("@container sps-rail (max-width: 240px)", 1)[1]
-        block = block.split("@", 1)[0]
-        assert "flex-direction: column;" in block
-        assert "flex-wrap: nowrap;" in block
+        assert "@container sps-rail (max-width: 240px)" not in css
+        assert ".st-key-railbtn_plot_reset" not in css
 
 
 def test_spotlight_helpers_are_plain_functions_that_return_their_css():

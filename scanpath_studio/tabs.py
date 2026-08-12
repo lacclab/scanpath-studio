@@ -3395,16 +3395,13 @@ def render_single_trial_tab(
     # resolved Animate / Compare / viz settings; its right-side position is fixed
     # by the column split regardless of render order.
     with rail:
-        # UX-44: modes, presets, palette and layers are one control system. Keep
-        # one heading for the rail and put the scoped reset beside it instead of
-        # spending a full-width row at the foot of the scroll area.
+        # UX-44: modes, presets, palette and layers are one control system, under
+        # one heading. The scoped reset used to share this row as a compact pill;
+        # BUG-24 moved it to the foot of the rail (see the end of this block) —
+        # the rail is ~150px wide inside, which is not enough for a heading and a
+        # trigger side by side at any ordinary window size.
         with st.container(key="plot_controls_header"):
-            rail_heading, rail_reset = st.columns(
-                [1.6, 1], gap="small", vertical_alignment="center"
-            )
-            rail_heading.markdown("## 🎛️ Plot controls")
-            with rail_reset.container(key="railbtn_plot_reset"):
-                render_viz_reset(st, compact=True)
+            st.markdown("## 🎛️ Plot controls")
         with rail.container(key="tour_grp_view_modes"):
             # Animate styled like a layer: a toggle + a ⚙ popover for its config
             # (playback speed) — matching Compare and the visualization layers below.
@@ -3681,6 +3678,11 @@ def render_single_trial_tab(
             # frames + data source, since those are app-side concerns.
             canvas_renderer=canvas_renderer,
         )
+        # BUG-24: the scoped reset closes the rail, below every control it
+        # resets, rather than sharing the heading row. It is last in creation
+        # order, so it lands at the foot of the rail's own scroll area.
+        with st.container(key="plot_reset_footer"):
+            render_viz_reset(st)
 
     # Second-trial selector + layout/legend options, rendered above the chips in
     # the plot column (CMP-1). Filled after the rail so the per-scanpath compare

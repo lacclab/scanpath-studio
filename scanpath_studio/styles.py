@@ -323,13 +323,6 @@ def get_app_css() -> str:
         line-height: 1.55 !important;
         white-space: nowrap;
     }
-    /* A popover trigger also carries Streamlit's disclosure chevron on its
-       right edge. The shared pill padding above is deliberately tight for
-       ordinary buttons, but would leave that chevron sitting on the outline. */
-    .st-key-railbtn_plot_reset button {
-        padding-left: 0.35rem !important;
-        padding-right: 1.25rem !important;
-    }
     /* Right-pack every cluster, at one spacing. Each row ends in a trailing
        column that already stops at the container's right edge, but a Streamlit
        vertical block is a flex COLUMN of full-width children, so a content-width
@@ -498,28 +491,19 @@ def get_app_css() -> str:
         .st-key-viz_view_heatmap button p::before { content: "🔥"; }
         .st-key-viz_view_illustration button p::before { content: "✏️"; }
     }
-    /* Below ~240px the two header columns cannot hold a real heading and even a
-       compact popover trigger side by side, so stack them and keep the Reset
-       action right-aligned; wider rails remain a row. This is the COMMON case,
-       not an edge one — the rail is ~150px inside at ordinary desktop widths,
-       and only a zoomed-out browser clears 240px.
-
-       BUG-24: `flex-wrap: nowrap` is what makes the stack a stack. Streamlit
-       ships every `stHorizontalBlock` with `flex-wrap: wrap`, so flipping only
-       `flex-direction` turned this into a *column-wrapping* container: with a
-       definite height, the Reset column wrapped into a second track to the
-       RIGHT — ~100px outside the rail, and clipped, because the rail's
-       `overflow-y: auto` computes `overflow-x` to `auto` as well. Reset was
-       invisible at every width that triggers this rule. */
-    @container sps-rail (max-width: 240px) {
-        .st-key-plot_controls_header [data-testid="stHorizontalBlock"] {
-            flex-direction: column;
-            flex-wrap: nowrap;
-        }
-        .st-key-plot_controls_header [data-testid="stColumn"] {
-            width: 100% !important;
-        }
-    }
+    /* BUG-24: the rail's heading row holds nothing but the heading. UX-44 put a
+       compact Reset pill beside it in a second column, which did not fit — the
+       rail is ~150px wide inside at ordinary desktop widths — so a container
+       query stacked the two below 240px. That rule set `flex-direction: column`
+       without clearing Streamlit's `flex-wrap: wrap`, making the header a
+       column-WRAPPING flex container: the Reset column wrapped into a second
+       track ~100px to the RIGHT of the rail, which the rail's `overflow-y: auto`
+       (`overflow-x` computes to `auto` with it) then clipped. Reset was
+       invisible at every width but a zoomed-out one. It now sits at the foot of
+       the rail (`plot_reset_footer`), full width like every other trigger there,
+       so neither the two-column header nor the query that patched it remains.
+       Keep the heading a single element: a second column here is what broke. */
+    .st-key-plot_reset_footer { margin-top: 0.35rem; }
 
     /* ── Accessibility (WCAG AA) ──────────────────────────────────────────
        Streamlit renders captions as theme-text-color at opacity 0.6, which on

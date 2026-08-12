@@ -2217,12 +2217,16 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
-def render_viz_reset(host, *, compact: bool = False) -> None:
-    """Render the scoped visualization reset popover into ``host``."""
-    label = "↺ Reset" if compact else "♻️ Reset settings"
+def render_viz_reset(host) -> None:
+    """Render the scoped visualization reset popover into ``host``.
+
+    Full width, like every other trigger in the rail. UX-44's compact ``↺ Reset``
+    pill was for sharing the heading row; BUG-24 moved the control to the foot of
+    the rail, where it has a row of its own, so the compact form is gone.
+    """
     reset = host.popover(
-        label,
-        width="content" if compact else "stretch",
+        "♻️ Reset settings",
+        width="stretch",
         help="Reset visualization settings to their defaults.",
     )
     reset.caption(

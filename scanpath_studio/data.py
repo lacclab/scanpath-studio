@@ -1700,6 +1700,12 @@ WORD_OPTIONAL_FIELDS = [
     ("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
     ("stimulus_font_family", "stimulus_font_family", "passthrough", "meta"),
     ("genre", "genre", "string", "meta"),
+    # DATA-24 multipart screens: what a screen *is* (`reading` / `question` on
+    # MultiplEYE — a trial mixes both, and their fixations have different
+    # provenance), and which block of a question screen a word belongs to
+    # (`stem` / `target` / `distractor_a`… — a per-word facet).
+    ("screen_kind", "screen_kind", "passthrough", "meta"),
+    ("aoi_block", "aoi_block", "passthrough", "meta"),
 ]
 
 FIX_OPTIONAL_FIELDS = [
@@ -1754,6 +1760,8 @@ FIX_OPTIONAL_FIELDS = [
     ("pp_native_language", "pp_native_language", "string", "meta"),
     ("pp_years_education", "pp_years_education", "numeric", "meta"),
     ("pp_education_level", "pp_education_level", "string", "meta"),
+    # DATA-24: which kind of screen a fixation happened on (see the word table).
+    ("screen_kind", "screen_kind", "passthrough", "meta"),
 ]
 
 

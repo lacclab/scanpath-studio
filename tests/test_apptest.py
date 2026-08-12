@@ -2080,12 +2080,11 @@ class TestMultiplEYEUploadPreset:
         payload = at.session_state["_wizard_finalize_payload"]
         assert payload["composite_trial_columns"] == []
         assert payload["filter_fields"] == ["genre", "session", "is_practice"]
-        # Per-page trials, CamelCase stimulus (case-match worked), boxes joined.
+        # One trial per stimulus with its pages as screens (DATA-24), CamelCase
+        # stimulus (case-match worked), boxes joined.
         fixations = payload["fixations"]
-        assert set(fixations["trial_id"]) == {
-            "Lit_Demo_1__page_01",
-            "Lit_Demo_1__page_02",
-        }
+        assert set(fixations["trial_id"]) == {"Lit_Demo_1"}
+        assert set(fixations["screen_id"]) == {"page_1", "page_2"}
         assert not payload["words"].empty
         # The generic column-mapping widgets are NOT rendered in this format.
         sel_keys = {s.key for s in at.selectbox}

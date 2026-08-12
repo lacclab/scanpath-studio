@@ -1429,7 +1429,9 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     Skips the generic column-mapping steps: the user uploads the corpus's
     scanpath/fixation CSVs (+ optional word-AOI CSVs) and the recipe
     (``datasets.multipleye_frames_from_uploads``) parses participant / session /
-    trial / stimulus from the file names, makes each stimulus *page* a trial,
+    trial / stimulus from the file names, makes each *stimulus* a trial with its
+    pages (and, when the question AOI + answer-layout version files are uploaded
+    too, its comprehension-question screens) as ordered screens inside it,
     aggregates character AOIs into word boxes, and case-matches the (lowercase)
     AOI file names to the (CamelCase) stimuli. Produces the same normalized frames
     + ``_wizard_finalize_payload`` as a finished generic upload, so finalize /
@@ -1437,16 +1439,17 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     from scanpath_studio.datasets import (
         MULTIPLEYE_FIX_SCHEMA,
         MULTIPLEYE_MONITOR,
-        MULTIPLEYE_WORD_SCHEMA,
         multipleye_frames_from_uploads,
+        multipleye_word_schema,
     )
 
     if active:
         body.caption(
             "Upload the MultiplEYE **scanpath** (or fixation) CSVs and, for word "
             "boxes, the **AOI** CSVs — identity is read from the file names, each "
-            "stimulus page becomes a trial, and character AOIs are aggregated into "
-            "word boxes automatically."
+            "stimulus becomes a trial whose pages are screens you can step "
+            "through, and character AOIs are aggregated into word boxes "
+            "automatically."
         )
         # Seed the MultiplEYE presentation monitor (true-to-scale default).
         st.session_state.setdefault("global_canvas_width", MULTIPLEYE_MONITOR[0])
@@ -1471,7 +1474,12 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     aoi_df = app._read_uploaded_frame(
         uploader_label="Word AOI CSVs (optional)",
         upload_help="The per-stimulus *_aoi.csv files (character interest areas). "
-        "Optional — without them you get fixations and no word boxes.",
+        "Optional — without them you get fixations and no word boxes. To get the "
+        "comprehension-question screens too, add the *_aoi_questions.csv files "
+        "AND stimulus_order_versions_*.csv here (the version table says which "
+        "answer layout each reader saw; without it the question screens are "
+        "skipped), and upload the *_fixation.csv files — the scanpath export "
+        "does not contain those screens.",
         state_prefix="mpe_aoi",
         multi=True,
         container=body,
@@ -1530,7 +1538,8 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
         )
 
     has_words = not words_raw.empty
-    word_schema = dict(MULTIPLEYE_WORD_SCHEMA) if has_words else None
+    # Stimulus-level unless the recipe emitted per-reader boxes (question screens).
+    word_schema = multipleye_word_schema(words_raw) if has_words else None
     fix_schema = dict(
         MULTIPLEYE_FIX_SCHEMA,
         word_id="word_idx" if "word_idx" in fix_raw.columns else None,
@@ -1552,11 +1561,21 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
             "pp_native_language",
             "pp_years_education",
             "pp_education_level",
+            # DATA-24: a trial mixes reading pages (from the scanpath export) and
+            # question screens (from the fixation one), so the marker that tells
+            # them apart must survive the keep-set too.
+            "screen_kind",
         },
     )
     keep_words = (
         compute_keep_columns(
-            word_schema, keep_columns={"genre", "comprehension_questions"}
+            word_schema,
+            keep_columns={
+                "genre",
+                "comprehension_questions",
+                "screen_kind",
+                "aoi_block",
+            },
         )
         if has_words
         else None

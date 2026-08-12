@@ -263,6 +263,13 @@ def _render_parser() -> argparse.ArgumentParser:
         "per-session scanpaths/ subfolders). Defaults to $MULTIPLEYE_DATA_DIR "
         "for --source multipleye.",
     )
+    src.add_argument(
+        "--no-question-screens",
+        action="store_true",
+        help="--source multipleye: load the reading pages only, leaving out the "
+        "comprehension-question screens (they are included by default, as "
+        "screens of the same trial).",
+    )
 
     parser.add_argument(
         "-p", "--participant", help="Participant id (default: first available)."
@@ -938,6 +945,7 @@ def _load_multipleye_render(
     trial: Optional[str],
     *,
     list_only: bool = False,
+    include_question_screens: bool = True,
 ):
     """Native MultiplEYE load for `render --source multipleye`.
 
@@ -950,11 +958,14 @@ def _load_multipleye_render(
     ``participant`` is the session label, resolved case-insensitively (the review
     app passes it lowercased, e.g. ``001_zh_ch_1_et2``; export ids are uppercase).
 
-    ``trial`` selection (so a thumbnail matches the viewer's per-page view):
-      * a literal per-page trial id (``Lit_Alchemist_4__page_01``) is used as-is;
+    ``trial`` selection (DATA-24: a trial is one *reading of a stimulus*, and its
+    pages / question screens are screens inside it, picked with ``--screen``):
+      * a literal trial id — the stimulus, ``Lit_Alchemist_4`` — is used as-is;
       * an integer N (the review app's trial number) selects the stimulus whose
-        ``trial_num == N`` and renders its **first reading page** — the single
-        representative page a thumbnail shows.
+        ``trial_num == N``. With no ``--screen`` that renders its first screen,
+        i.e. reading page 1 — the single representative page a thumbnail shows.
+
+    ``include_question_screens`` mirrors the loader kwarg (``--no-question-screens``).
 
     Returns ``(words, fixations, participant_id, trial_id)`` — the resolved ids
     are passed straight to ``api.plot_scanpath``. With ``list_only`` the trial is
@@ -996,26 +1007,30 @@ def _load_multipleye_render(
         root,
         sessions=[session] if session else None,
         fixation_source="scanpaths",
+        include_question_screens=include_question_screens,
     )
     if list_only:
         return words, fixations, session, None
 
     pid = session
     tid = trial
-    if trial is not None and "__page_" not in str(trial):
-        # An integer trial number (the review app's id): map trial_num → stimulus
-        # → its first reading page (the page a single thumbnail represents).
+    known = set(fixations["trial_id"].astype(str)) if not fixations.empty else set()
+    if trial is not None and str(trial) not in known:
+        # An integer trial number (the review app's id): map trial_num → the
+        # stimulus trial it names. Its screens are selected with --screen /
+        # --all-screens; with neither, the first screen (reading page 1) renders,
+        # which is the single representative page a thumbnail shows.
         try:
             trial_num = int(str(trial))
         except (TypeError, ValueError):
             raise ValueError(
-                f"--trial {trial!r} is neither a per-page trial id "
-                "(e.g. Lit_Alchemist_4__page_01) nor an integer trial number."
+                f"--trial {trial!r} is neither a MultiplEYE trial id (the "
+                "stimulus, e.g. Lit_Alchemist_4) nor an integer trial number."
             )
         if "trial_num" not in fixations.columns:
             raise ValueError(
-                "MultiplEYE fixations carry no 'trial_num' column — pass a "
-                "per-page trial id to --trial instead."
+                "MultiplEYE fixations carry no 'trial_num' column — pass the "
+                "stimulus trial id to --trial instead."
             )
         match = fixations[fixations["trial_num"].astype("Int64") == trial_num]
         if match.empty:
@@ -1134,7 +1149,11 @@ def render(argv: List[str]) -> None:
 
         try:
             words, fixations, args.participant, args.trial = _load_multipleye_render(
-                args.export, args.participant, args.trial, list_only=args.list_trials
+                args.export,
+                args.participant,
+                args.trial,
+                list_only=args.list_trials,
+                include_question_screens=not args.no_question_screens,
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))

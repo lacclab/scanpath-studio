@@ -38,25 +38,37 @@ def _figures_dir() -> Path:
 
 
 OUT = _figures_dir() / "fig_multipleye.png"
-SESSION, TRIAL = "001_ZH_CH_1_ET1", "Lit_MagicMountain_6__page_04"
+# DATA-24: a MultiplEYE trial is one reading of a stimulus, and its pages are
+# SCREENS inside it — so the figure names the trial and the screen separately.
+SESSION, TRIAL, SCREEN = "001_ZH_CH_1_ET1", "Lit_MagicMountain_6", "page_4"
+
+
+def _on_screen(frame):
+    """The rows of one (session, trial, screen) in a normalized MultiplEYE frame."""
+    return frame[
+        (frame.participant_id == SESSION)
+        & (frame.trial_id == TRIAL)
+        & (frame.screen_id == SCREEN)
+    ]
 
 
 def main() -> None:
     words, fixations = sps.load_multipleye(ROOT, sessions=[SESSION])
-    tw = words[(words.participant_id == SESSION) & (words.trial_id == TRIAL)]
-    tf = fixations[
-        (fixations.participant_id == SESSION) & (fixations.trial_id == TRIAL)
-    ]
+    tw = _on_screen(words)
+    tf = _on_screen(fixations)
     img_path = tw["image_path"].dropna().iloc[0]
     origin = (float(tw["image_x"].iloc[0]), float(tw["image_y"].iloc[0]))
     size = Image.open(img_path).size
-    print(f"{TRIAL}: {len(tf)} fixations, image {img_path} at {origin}, {size}")
+    print(
+        f"{TRIAL}/{SCREEN}: {len(tf)} fixations, image {img_path} at {origin}, {size}"
+    )
 
     fig = sps.plot_scanpath(
         words,
         fixations,
         SESSION,
         TRIAL,
+        screen=SCREEN,
         canvas_size=(1920, 1080),
         background_image=str(img_path),
         background_image_size=size,

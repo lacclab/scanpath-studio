@@ -816,8 +816,8 @@ def test_load_onestop_normalized(onestop_offline, tmp_path):
 # ---------------------------------------------------------------------------
 
 # Two characters per "word", 20x30 boxes laid out side by side. Pages reuse the
-# SAME coordinates (the real corpus does), so per-page trials are what keep them
-# from overlapping.
+# SAME coordinates (the real corpus does), so the per-page SCREENS inside one
+# stimulus trial (DATA-24) are what keep them from overlapping.
 _AOI_COLS = [
     "char_idx",
     "char",
@@ -873,7 +873,8 @@ def multipleye_root(tmp_path):
 
     001_ZH_CH_1_ET1 reads Lit_Demo_1 (2 pages, reusing the same coords);
     014_ZH_CH_1_ET2 reads Arg_Other_2 (1 page). The raw fixations/ file carries a
-    non-reading ``question_*`` screen that must be filtered out."""
+    ``question_*`` screen; this tree ships neither a question-AOI file nor an
+    answer-layout version table, so it must be dropped rather than guessed."""
     aoi_dir = tmp_path / "stimuli_Demo" / "aoi_stimuli_demo"
     aoi_dir.mkdir(parents=True)
 
@@ -944,20 +945,22 @@ def test_load_multipleye(multipleye_root):
 
     # Reader key = full session; ET1/ET2 are distinct readers.
     assert set(fixations["participant_id"]) == {"001_ZH_CH_1_ET1", "014_ZH_CH_1_ET2"}
-    # One trial per (stimulus, page); the page is zero-padded so trials sort
-    # numerically (page_01 < page_02 < … < page_10).
-    assert set(words["trial_id"]) == {
-        "Lit_Demo_1__page_01",
-        "Lit_Demo_1__page_02",
-        "Arg_Other_2__page_01",
+    # One trial per reading of a stimulus, its pages as ordered screens inside it.
+    assert set(words["trial_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
+    assert set(zip(words["trial_id"], words["screen_id"])) == {
+        ("Lit_Demo_1", "page_1"),
+        ("Lit_Demo_1", "page_2"),
+        ("Arg_Other_2", "page_1"),
     }
+    assert set(words["screen_kind"]) == {"reading"}
     # text_id stays the stimulus (for stimulus-level merges/grouping).
     assert set(words["text_id"]) == {"Lit_Demo_1", "Arg_Other_2"}
 
     # Char AOIs aggregated to one box per (page, word_idx): AA spans x 80..120 in
     # image space, shifted to where the centered stimulus sat on the monitor.
     off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
-    aa = words[(words["trial_id"] == "Lit_Demo_1__page_01") & (words["word_id"] == 0)]
+    aa = words[(words["trial_id"] == "Lit_Demo_1") & (words["screen_id"] == "page_1")]
+    aa = aa[aa["word_id"] == 0]
     assert aa["text"].iloc[0] == "AA"
     assert aa["x"].iloc[0] == 80 + off_x and aa["width"].iloc[0] == 40
     assert aa["y"].iloc[0] == 50 + off_y and aa["height"].iloc[0] == 30
@@ -965,27 +968,27 @@ def test_load_multipleye(multipleye_root):
     # Fixations carry the word index (scanpaths source) and link to boxes.
     f1 = fixations[fixations["participant_id"] == "001_ZH_CH_1_ET1"]
     assert f1["word_id"].notna().all()
-    assert sorted(f1["trial_id"].unique()) == [
-        "Lit_Demo_1__page_01",
-        "Lit_Demo_1__page_02",
-    ]
+    assert sorted(f1["trial_id"].unique()) == ["Lit_Demo_1"]
+    assert sorted(f1["screen_id"].unique()) == ["page_1", "page_2"]
+    assert sorted(f1["screen_index"].unique()) == [1, 2]
 
     fig = sps.plot_scanpath(
         words,
         fixations,
         "001_ZH_CH_1_ET1",
-        "Lit_Demo_1__page_01",
+        "Lit_Demo_1",
+        screen="page_1",
         canvas_size=(1920, 1080),
     )
     assert len(fig.data) > 0
 
 
-def test_load_multipleye_pages_are_separate_non_overlapping_trials(multipleye_root):
-    # page_1 and page_2 reuse the SAME coordinates but are different trials with
-    # different text — proving the per-page split avoids the overlap.
+def test_load_multipleye_pages_are_separate_non_overlapping_screens(multipleye_root):
+    # page_1 and page_2 reuse the SAME coordinates but are different screens with
+    # different text — proving the per-screen split avoids the overlap.
     words, _ = datasets_module.load_multipleye(multipleye_root, stimuli=["Lit_Demo_1"])
-    p1 = words[words["trial_id"] == "Lit_Demo_1__page_01"]
-    p2 = words[words["trial_id"] == "Lit_Demo_1__page_02"]
+    p1 = words[words["screen_id"] == "page_1"]
+    p2 = words[words["screen_id"] == "page_2"]
     assert set(p1["text"]) == {"AA", "BB"}
     assert set(p2["text"]) == {"CC", "DD"}
     # Same box geometry on both pages.
@@ -993,15 +996,17 @@ def test_load_multipleye_pages_are_separate_non_overlapping_trials(multipleye_ro
 
 
 def test_load_multipleye_fixations_source_fallback(multipleye_root):
-    # The raw fixations/ files have no word index, and the question_* screen is
-    # dropped (3 rows in -> 2 reading-page fixations out).
+    # The raw fixations/ files have no word index, and the question_* screen has
+    # no question-AOI file / version table here, so it is dropped rather than
+    # guessed (3 rows in -> 2 reading-page fixations out).
     words, fixations = datasets_module.load_multipleye(
         multipleye_root, sessions=["001_ZH_CH_1_ET1"], fixation_source="fixations"
     )
     assert fixations["word_id"].isna().all()
     assert fixations["x"].notna().all()
     assert len(fixations) == 2
-    assert set(fixations["trial_id"]) == {"Lit_Demo_1__page_01", "Lit_Demo_1__page_02"}
+    assert set(fixations["trial_id"]) == {"Lit_Demo_1"}
+    assert set(fixations["screen_id"]) == {"page_1", "page_2"}
 
 
 def test_multipleye_centered_offset(multipleye_root):
@@ -1018,17 +1023,22 @@ def test_multipleye_centered_offset(multipleye_root):
     assert f0["x"] == 90 + off_x and f0["y"] == 65 + off_y  # _scan_row(…, 90, 65, …)
 
 
-def test_multipleye_trial_id_page_is_zero_padded_for_numeric_sort():
-    # The page is zero-padded in the trial id so the picker sorts numerically
-    # (page_2 before page_10), unlike the raw "page_2" / "page_10" strings.
-    assert datasets_module._multipleye_page_label("page_2") == "page_02"
-    assert datasets_module._multipleye_page_label("page_10") == "page_10"
-    assert (
-        datasets_module._multipleye_page_label("question_1") == "question_1"
-    )  # passthrough
-    pages = ["page_2", "page_10", "page_1"]
-    labels = sorted(datasets_module._multipleye_page_label(p) for p in pages)
-    assert labels == ["page_01", "page_02", "page_10"]  # lexicographic == numeric
+def test_multipleye_screen_kind_and_question_parsing():
+    # Screen kinds decide what is loaded at all: the rating / difficulty screens
+    # ship no AOI file, so they are neither "reading" nor "question".
+    assert datasets_module._multipleye_screen_kind("page_2") == "reading"
+    assert datasets_module._multipleye_screen_kind("question_4111") == "question"
+    assert datasets_module._multipleye_screen_kind("subject_difficulty_screen") == ""
+    assert datasets_module._multipleye_screen_kind("familiarity_rating_screen_1") == ""
+    assert datasets_module._multipleye_page_number("page_10") == 10
+    assert datasets_module._multipleye_page_number("question_4111") is None
+    # The AOI file zero-pads the stimulus id and the fixations do not, so the two
+    # only ever meet on int(question_id) — never on the string.
+    assert datasets_module._multipleye_question_parts("question_4111") == (4111, "stem")
+    assert datasets_module._multipleye_question_parts(
+        "Lit_Alchemist_4_question_04111_target"
+    ) == (4111, "target")
+    assert datasets_module._multipleye_question_parts("page_1") is None
 
 
 def test_load_multipleye_session_and_stimulus_filters(multipleye_root):
@@ -1054,12 +1064,18 @@ def test_multipleye_raw_frames_auto_detect_path(multipleye_root):
     assert word_schema["participant"] is None  # stimulus-level -> broadcast
     assert fix_schema["participant"] == "participant_id"  # the session string
 
+    # The screen columns auto-detect too ("page" is a SCREEN_ID candidate), so the
+    # app's public-dataset path gets the same multipart identity.
+    assert word_schema["screen_id"] == "page"
+    assert fix_schema["screen_id"] == "page"
+
     words = data_module.normalize_words(words_raw, word_schema)
     fixations = data_module.normalize_fixations(fix_raw, fix_schema)
     words, fixations = data_module.harmonize_frames(words, fixations)
     assert set(words["text_id"]) == {"Lit_Demo_1"}
     assert set(words["participant_id"]) == {"001_ZH_CH_1_ET1"}  # broadcast worked
-    assert set(words["trial_id"]) == {"Lit_Demo_1__page_01", "Lit_Demo_1__page_02"}
+    assert set(words["trial_id"]) == {"Lit_Demo_1"}
+    assert set(words["screen_id"]) == {"page_1", "page_2"}
 
 
 def test_multipleye_inventory(multipleye_root):
@@ -1093,14 +1109,29 @@ def test_load_multipleye_real_sample():
         _MULTIPLEYE_SAMPLE, stimuli=["Lit_Alchemist_4"]
     )
     assert not words.empty and not fixations.empty
-    # Per-page trials, all from the one stimulus.
+    # One trial per reading of the stimulus; its pages + question screens inside.
     assert set(words["text_id"]) == {"Lit_Alchemist_4"}
-    assert all(t.startswith("Lit_Alchemist_4__page_") for t in words["trial_id"])
-    # Pages are zero-padded → lexicographic order == numeric order (no page_10
-    # wedged between page_1 and page_2).
-    pages = sorted(words["trial_id"].unique())
-    nums = [int(t.rsplit("page_", 1)[1]) for t in pages]
-    assert nums == sorted(nums)
+    assert set(words["trial_id"]) == {"Lit_Alchemist_4"}
+    screens = (
+        words[words["participant_id"] == "001_ZH_CH_1_ET1"][
+            ["screen_index", "screen_id", "screen_kind"]
+        ]
+        .drop_duplicates()
+        .sort_values("screen_index")
+    )
+    assert list(screens["screen_index"]) == list(range(1, len(screens) + 1))
+    assert list(screens["screen_id"])[:5] == [f"page_{n}" for n in range(1, 6)]
+    # The question order is shuffled per reader, so it comes from the onsets:
+    # this reader saw question_4132 BEFORE question_4131.
+    assert list(screens["screen_id"])[5:] == [
+        "question_4111",
+        "question_4112",
+        "question_4121",
+        "question_4122",
+        "question_4132",
+        "question_4131",
+    ]
+    assert list(screens["screen_kind"]) == ["reading"] * 5 + ["question"] * 6
     # Coords + image sit at the centered on-screen position (true-to-scale on the
     # 1920x1080 monitor), and the image origin matches the coordinate offset.
     off_x, off_y = datasets_module._MULTIPLEYE_IMAGE_ORIGIN
@@ -1387,7 +1418,8 @@ def test_multipleye_uploads_fixations_only():
     words, fixations = datasets_module.load_multipleye_uploads(scan, None)
     assert words.empty and not fixations.empty
     assert fixations["x"].notna().all()
-    assert set(fixations["trial_id"]) == {"Arg_Other_2__page_01"}
+    assert set(fixations["trial_id"]) == {"Arg_Other_2"}
+    assert set(fixations["screen_id"]) == {"page_1"}
 
 
 def test_multipleye_uploads_unrecognized_filenames():
@@ -1457,7 +1489,10 @@ def test_multipleye_uploads_stimulus_without_aoi():
     words, fixations = datasets_module.load_multipleye_uploads(scan, aoi)
     assert "Lit_Demo_1" in set(words["text_id"])  # has boxes
     assert "Arg_Other_2" not in set(words["text_id"])  # no AOI → no boxes, no raise
-    assert {"Lit_Demo_1", "Arg_Other_2"} <= set(fixations["text_id"])
+    # DATA-24: screens are part of the identity now, and multipart forbids a
+    # screen present in one report and absent from the other — so a stimulus with
+    # no uploaded AOI loses its fixations (loudly) instead of crashing the load.
+    assert set(fixations["text_id"]) == {"Lit_Demo_1"}
 
 
 def test_multipleye_uploads_match_directory_loader(multipleye_root):
@@ -1709,7 +1744,13 @@ def test_multipleye_words_per_reader_merges_rm_by_page_word():
             "IA_FIRST_FIXATION_DURATION": [100, 110, 120],
         }
     )
-    fixations = pd.DataFrame({"participant_id": ["r1"], "stimulus": ["S"]})
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["r1", "r1"],
+            "stimulus": ["S", "S"],
+            "page": ["page_1", "page_2"],
+        }
+    )
     words = datasets_module._multipleye_words_per_reader(boxes, rm, fixations)
     assert set(words["participant_id"]) == {"r1"}
     # page_2 word 0 gets its own measure (not page_1 word 0's).

@@ -33,31 +33,64 @@ and stimulus are encoded only in the folder and file names.
   per trial named `{session}_trial_{n}_{Stim}_{id}_{kind}.csv`.
 - Word/AOI boxes live separately under `stimuli_.../aoi_stimuli_*/{stim}_{id}_aoi.csv`.
   They are **character-level**, **stimulus-level** (no participant), with columns
-  `top_left_x / top_left_y / width / height`.
+  `top_left_x / top_left_y / width / height`. The comprehension questions' AOIs are
+  in a sibling `{stim}_{id}_aoi_questions.csv`, one set of rows per **answer
+  layout version**.
 - Fixation coordinates are `location_x / location_y`; the timestamp is `onset`.
-- A stimulus spans `page_1..page_N` plus non-reading screens (`question_*`,
-  `familiarity_rating_screen`, `subject_difficulty_screen`) that must be filtered out.
+- A stimulus spans `page_1..page_N`, then the comprehension-question screens
+  (`question_<id>`), then `familiarity_rating_screen_*` and
+  `subject_difficulty_screen`.
 
 ## Modelling decisions
 
 These are the choices the loader makes to fit MultiplEYE into Scanpath Studio's
 canonical schema:
 
-- **One trial per `(stimulus, page)`.** `trial_id = "<stim>__page_0N"` (zero-padded
-  so the picker sorts pages numerically; displayed as `"<stim> · page N"`),
-  `participant_id` = the full session, `text_id` = the stimulus. Pages reuse the
-  same on-screen coordinate space, so per-page is the only non-overlapping way to
-  plot them.
+- **One trial per reading of a stimulus, with every screen inside it.**
+  `trial_id = text_id = "<stim>"`, `participant_id` = the full session, and the
+  screens the reader saw are `screen_id` values — `page_1 … page_N` and
+  `question_<id>` — each with its own coordinate space. Step through them with
+  the screen navigator beside the trial picker, `?screen=` on a share link,
+  `render --screen` / `--all-screens` / `--list-screens`, or
+  `plot_scanpath(..., screen=…)`. Pages reuse the same on-screen coordinates, so
+  screens (never a merged trial) are what keeps them from stacking.
+- **`screen_index` comes from the reader's own fixation onsets**, never from the
+  screen name. Reading pages are presented in page order, but the **question
+  order is shuffled per reader**, so a name-derived order would silently
+  reorder the trial.
+- **`screen_kind` is `reading` or `question`.** The rating and difficulty screens
+  are excluded: the corpus ships no AOI file for them, and Scanpath Studio
+  rejects a screen with no word boxes by design.
+- **Question fixations always come from `fixations/`**, whatever the *fixation
+  source* setting says — the `scanpaths/` export is pre-filtered to reading
+  pages, so it is the only place they survive. A trial therefore mixes two
+  provenances: reading pages from the source you picked (word-tagged when that is
+  `scanpaths`), question screens from the raw fixation export (no word linkage).
+  `screen_kind` is what tells them apart.
+- **Question word boxes are per reader.** Which answer layout a reader saw is
+  looked up in `stimuli_*/config/stimulus_order_versions_*.csv` by their bare
+  participant id, and that version selects both the AOI rows and the question
+  image. Within a screen the five blocks (question stem, target, three
+  distractors) each restart `word_idx` at 0, so the loader orders the blocks by
+  the geometry of their first character and runs one counter across them — the
+  word id is unique within the screen and in reading order, and the block name is
+  kept as a per-word `aoi_block` column.
 - **Character AOIs are aggregated into word boxes** — one bounding box per
-  `(page, word_idx)`. `word_idx` resets per page, so the word id is effectively
-  composite.
+  `(screen, word_idx)`. `word_idx` resets per screen, so word ids are unique
+  within a screen, not within a trial.
 - **Centered stimulus on a 1920×1080 monitor.** The stimulus image was shown
   centered on the real screen, so image-relative coordinates are shifted by
   `(monitor − image) / 2` onto their true screen position. This makes the plot
   true-to-scale on the full monitor and lets the page image be placed exactly
-  underneath the scanpath.
-- **Non-reading screens are dropped**; the pre-filtered `scanpath` file is
-  preferred as the fixation source when available.
+  underneath the scanpath. Question images are the same size, so they line up the
+  same way.
+- **A screen with no word boxes is dropped, not guessed** — a question screen
+  whose layout version is unknown, or a page missing from the AOI file. Likewise
+  a page a reader never fixated gets no boxes, so a partial session degrades
+  instead of failing to load.
+
+To load the reading pages alone, pass `include_question_screens=False` to
+`load_multipleye` / `multipleye_raw_frames`.
 
 ## Rich side data
 
@@ -72,7 +105,9 @@ the loaded frames so the app's existing panels render them:
   columns attached to **per-reader** word boxes (FFD, FPRT, RPD, TFT, skip,
   regression counts). The app prefers these pre-aggregated columns over recomputing.
 - **Stimulus page images** rendered as a background layer at exact coordinates —
-  this sidesteps CJK/RTL font rendering entirely for the text underlay.
+  this sidesteps CJK/RTL font rendering entirely for the text underlay. Question
+  screens get their own image from the reader's answer-layout version directory
+  (`question_images_*/question_images_version_<N>/`).
 - **Reading typeface** from the stimulus config (`config_*.py` — `FONT_SIZE` +
   `FONT`) stamped as `stimulus_font_px` / `stimulus_font_family`. On a dataset
   switch the app snaps its font controls to the exact size (e.g. 28 px) and CJK
@@ -94,6 +129,13 @@ the loaded frames so the app's existing panels render them:
   (Hebrew/Arabic) will additionally need text-direction handling. The stimulus
   page-image background is the reliable fallback for scripts the renderer can't
   lay out.
+- **Corpus Analysis aggregates a stimulus' word ids across its screens.** Word
+  ids are unique within a *screen*, so the per-text views pool page 1's word 0
+  with page 2's word 0 — and now with each question screen's first word too. Use
+  the Scanpath view (one screen at a time) for anything that depends on which
+  word a number belongs to. Making word ids stimulus-global would diverge from
+  the corpus's published `word_idx`, so it is deliberately left as its own piece
+  of work.
 - **Don't write into the dataset tree** — treat the corpus as read-only.
 
 ## Uploading via the browser
@@ -103,3 +145,18 @@ preset. Because browsers strip folder structure, identity is recovered from each
 row's `source_file`; the lowercase AOI filenames are case-matched to the
 CamelCase fixation stimuli. Reading measures and stimulus images require the full
 directory tree, so those surfaces are available only on a directory load.
+
+Reading pages become screens from the uploaded AOI + fixation files alone. The
+**question screens additionally need two files**, both dropped into the *Word AOI
+CSVs* box alongside the ordinary `*_aoi.csv` files:
+
+- the stimulus' `*_aoi_questions.csv`, and
+- `stimulus_order_versions_*.csv` — without it the reader's answer layout is
+  unknowable, and picking one at random would draw entirely plausible boxes in
+  the wrong places, so the question screens are skipped with a warning instead.
+
+Upload the `*_fixation.csv` files (not only the `*_scanpath.csv` ones) for the
+trials whose question screens you want: the scanpath export does not contain
+them. A stimulus whose `*_aoi.csv` you did not upload has no word boxes at all,
+so its fixations are dropped (with a warning) rather than left as screens the
+plot cannot draw.

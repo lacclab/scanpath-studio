@@ -448,7 +448,10 @@ Flags carry the API's option names: layers are `--no-words` / `--no-labels` /
 `--drift-correction ALGORITHM` (any of the ten names) and
 `--drift-connectors`. So are the public corpora — `--potec DIR`,
 `--onestop DIR` (+ `--onestop-regime` / `--onestop-part` /
-`--onestop-variant`), `--source multipleye --export DIR` — plus styling and
+`--onestop-variant`), `--source multipleye --export DIR`
+(+ `--no-question-screens`; a MultiplEYE trial is a whole stimulus, so pick a
+page or question screen inside it with `--screen` / `--all-screens` /
+`--list-parts`) — plus styling and
 output controls (`--fixation-symbol`, `--saccade-arcs`, `--snap-fixations`,
 `--saccade-color-by-type` / `-by-direction`, the `--stimulus-image*` family,
 `--width` / `--height` / `--scale`, `--anim-grid-step-ms` /

@@ -39,9 +39,11 @@ READER_A = "001_ZH_CH_1_ET1"  # reads Lit_Demo_1 (2 pages)
 READER_B = "014_ZH_CH_1_ET2"  # reads Lit_Demo_1 (2 pages) + Arg_Other_2 (1 page)
 LIT = "Lit_Demo_1"
 ARG = "Arg_Other_2"
-LIT_P1 = "Lit_Demo_1__page_01"
-LIT_P2 = "Lit_Demo_1__page_02"
-ARG_P1 = "Arg_Other_2__page_01"
+# DATA-24: a trial is one *reading of a stimulus*; its pages are screens inside
+# it. Each constant below is the (trial_id, screen_id) pair that names one page.
+LIT_P1 = (LIT, "page_1")
+LIT_P2 = (LIT, "page_2")
+ARG_P1 = (ARG, "page_1")
 
 # The stimulus image (1310x991) was shown centered on a 1920x1080 monitor, so the
 # loader shifts the image-relative AOI / fixation coordinates by (1920-1310)/2 and
@@ -306,15 +308,22 @@ def bare_tree(tmp_path) -> Path:
 # --- Assertion helpers -------------------------------------------------------
 
 
-def _word_row(words: pd.DataFrame, reader: str, trial: str, word_id: int) -> pd.Series:
-    """The single word row for ``(reader, trial, word_id)`` — a merge that
-    multiplied rows fails here rather than silently averaging later."""
-    rows = words[
-        (words["participant_id"] == reader)
-        & (words["trial_id"] == trial)
-        & (words["word_id"] == word_id)
+def _screen_rows(frame: pd.DataFrame, reader: str, screen: tuple) -> pd.DataFrame:
+    """Every row of one ``(reader, trial, screen)`` in a normalized frame."""
+    trial, screen_id = screen
+    return frame[
+        (frame["participant_id"] == reader)
+        & (frame["trial_id"] == trial)
+        & (frame["screen_id"] == screen_id)
     ]
-    assert len(rows) == 1, f"{reader}/{trial}/word {word_id}: {len(rows)} rows, want 1"
+
+
+def _word_row(words: pd.DataFrame, reader: str, screen: tuple, word_id: int):
+    """The single word row for ``(reader, screen, word_id)`` — a merge that
+    multiplied rows fails here rather than silently averaging later."""
+    rows = _screen_rows(words, reader, screen)
+    rows = rows[rows["word_id"] == word_id]
+    assert len(rows) == 1, f"{reader}/{screen}/word {word_id}: {len(rows)} rows, want 1"
     return rows.iloc[0]
 
 
@@ -331,7 +340,8 @@ def _assert_canonical_intact(words: pd.DataFrame, fixations: pd.DataFrame) -> No
     Word boxes: two 20px characters at image x=80..120, y=50..80, shifted by the
     centering offset. Fixations: reader A's page_1 pair and page_2 single.
     """
-    assert set(words["trial_id"]) == {LIT_P1, LIT_P2, ARG_P1}
+    assert set(words["trial_id"]) == {LIT, ARG}
+    assert set(zip(words["trial_id"], words["screen_id"])) == {LIT_P1, LIT_P2, ARG_P1}
     assert set(fixations["participant_id"]) == {READER_A, READER_B}
 
     aa = _word_row(words, READER_A, LIT_P1, 0)
@@ -340,23 +350,17 @@ def _assert_canonical_intact(words: pd.DataFrame, fixations: pd.DataFrame) -> No
     assert (aa["y"], aa["height"]) == (50 + OFF_Y, 30.0)
     bb = _word_row(words, READER_A, LIT_P1, 1)
     assert bb["text"] == "BB" and bb["x"] == 140 + OFF_X
-    # page_2 reuses page_1's coordinates but is its own trial with its own words.
+    # page_2 reuses page_1's coordinates but is its own screen with its own words.
     cc = _word_row(words, READER_A, LIT_P2, 0)
     assert cc["text"] == "CC" and cc["x"] == 80 + OFF_X
     # Reader B alone read Arg_Other_2 — reader A must not inherit its box.
     ee = _word_row(words, READER_B, ARG_P1, 0)
     assert ee["text"] == "EE"
-    assert (
-        words[(words["participant_id"] == READER_A)]["trial_id"]
-        .isin({LIT_P1, LIT_P2})
-        .all()
-    )
+    assert words[(words["participant_id"] == READER_A)]["trial_id"].eq(LIT).all()
 
     # 3 fixations per reader on Lit_Demo_1, plus reader B's single Arg fixation.
     assert len(fixations) == 7
-    first = fixations[
-        (fixations["participant_id"] == READER_A) & (fixations["trial_id"] == LIT_P1)
-    ].sort_values("timestamp_ms")
+    first = _screen_rows(fixations, READER_A, LIT_P1).sort_values("timestamp_ms")
     assert list(first["x"]) == [90 + OFF_X, 150 + OFF_X]
     assert list(first["y"]) == [65 + OFF_Y, 65 + OFF_Y]
     assert list(first["duration_ms"]) == [200, 180]
@@ -530,7 +534,10 @@ def test_reading_measures_attach_per_reader_page_and_word(full_tree):
     # 4 Lit boxes for reader A + 4 Lit and 1 Arg box for reader B. The stimulus
     # boxes are replicated per reader, not multiplied by the measures rows.
     assert len(words) == 9
-    assert words.groupby(["participant_id", "trial_id", "word_id"]).size().max() == 1
+    # word_id is unique within a SCREEN (it restarts on the next page), which is
+    # exactly the identity multipart.grouping_columns keys measures on.
+    key = ["participant_id", "trial_id", "screen_id", "word_id"]
+    assert words.groupby(key).size().max() == 1
 
     # FFD → IA_FIRST_FIXATION_DURATION → first_fixation_ms, per reader.
     assert _word_row(words, READER_A, LIT_P1, 0)["first_fixation_ms"] == 210
@@ -661,12 +668,13 @@ def test_stimulus_image_path_resolves_per_stimulus_and_page(full_tree):
     words, fixations = datasets.load_multipleye(full_tree)
     image_dir = full_tree / "stimuli_Demo" / "stimuli_images_zh_ch_1"
 
-    for trial, filename in (
+    for (trial, screen), filename in (
         (LIT_P1, "lit_demo_id1_page_1_zh.png"),
         (LIT_P2, "lit_demo_id1_page_2_zh.png"),
         (ARG_P1, "arg_other_id2_page_1_zh.png"),
     ):
-        paths = set(words[words["trial_id"] == trial]["image_path"])
+        rows = words[(words["trial_id"] == trial) & (words["screen_id"] == screen)]
+        paths = set(rows["image_path"])
         assert paths == {str(image_dir / filename)}
         assert os.path.exists(paths.pop())
 
@@ -682,10 +690,7 @@ def test_app_resolves_the_trial_image_from_the_loaded_frames(full_tree):
     from scanpath_studio.tabs import _first_str
 
     words, _ = datasets.load_multipleye(full_tree)
-    trial_words = words[
-        (words["participant_id"] == READER_A) & (words["trial_id"] == LIT_P2)
-    ]
-    path = _first_str(trial_words, "image_path")
+    path = _first_str(_screen_rows(words, READER_A, LIT_P2), "image_path")
 
     assert path is not None and path.endswith("lit_demo_id1_page_2_zh.png")
     assert _png_pixel_size(path) == (1, 1)
@@ -714,8 +719,7 @@ def test_image_path_for_a_page_with_no_file_draws_nothing(full_tree):
         / "arg_other_id2_page_1_zh.png"
     ).unlink()
     words, _ = datasets.load_multipleye(full_tree)
-    trial_words = words[words["trial_id"] == ARG_P1]
-    path = _first_str(trial_words, "image_path")
+    path = _first_str(_screen_rows(words, READER_B, ARG_P1), "image_path")
 
     assert path is not None and not os.path.exists(path)
     assert _image_to_data_uri(path) is None
@@ -728,7 +732,7 @@ def test_side_data_is_scoped_to_the_narrowed_load(full_tree):
     """A ``stimuli=`` narrowed load keeps that stimulus' side data and no other's."""
     words, fixations = datasets.load_multipleye(full_tree, stimuli=[ARG])
 
-    assert set(words["trial_id"]) == {ARG_P1}
+    assert set(zip(words["trial_id"], words["screen_id"])) == {ARG_P1}
     assert set(fixations["participant_id"]) == {READER_B}  # only B read Arg_Other_2
     assert len(fixations) == 1
     assert _word_row(words, READER_B, ARG_P1, 0)["text"] == "EE"

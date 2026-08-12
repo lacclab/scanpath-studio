@@ -597,10 +597,12 @@ def format_sort_value(value) -> str:
 def _trial_display_label(trial_id) -> str:
     """Human-readable label for a trial id in the pickers.
 
-    MultiplEYE per-page ids read cleanly — ``Lit_Alchemist_4__page_07`` →
+    A per-page trial id reads cleanly — ``Lit_Alchemist_4__page_07`` →
     ``Lit_Alchemist_4 · page 7`` (the id stays zero-padded so it sorts
     numerically; only the display drops the padding). Any other id passes
-    through unchanged, so this is a no-op for every other corpus."""
+    through unchanged, so this is a no-op for every other corpus. MultiplEYE
+    used to be the one producing those ids; since DATA-24 its pages are screens
+    inside one trial, so this is now generic dressing for whatever ships them."""
     text = str(trial_id)
     stim, sep, page = text.rpartition("__page_")
     if sep and page.isdigit():

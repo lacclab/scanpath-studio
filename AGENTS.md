@@ -34,7 +34,7 @@ scanpath_studio/
 ├─ controls.py       the Scanpath rail's plot controls (presets + palette, then collapsible 👁️ Fixations / ↗️ Saccades / 📄 Stimulus / 🔥 Overlays sections — each `toggle → ⚙️ style → 🧹 filter` — and merged 📐 Figure & canvas, itself grouped into 🖥️ Screen & geometry / 🔤 Text & fonts / 📊 Axes & grid / 🏷️ Title & labels) + column-mapping override UI + trial-filter panel
 ├─ data.py           schema inference, normalization, filtering (incl. condition/annotation trial filters), sample loaders
 ├─ multipart.py      ordered child-screen identity + validation, nested manifest assignment, per-screen extraction/catalogue/canvas helpers
-├─ datasets.py       public-corpus ownership (PoTeC, MultiplEYE, OneStop), including server-bundle discovery, feeding the app + headless API
+├─ datasets.py       public-corpus ownership (PoTeC, MultiplEYE, OneStop), including server-bundle discovery, feeding the app + headless API. MultiplEYE models one reading of a stimulus as one trial whose `screen_id`s are the reading pages **and** the comprehension-question screens (DATA-24)
 ├─ measures.py       canonical reading measures (FFD, FPRT, RPD, TFD, regressions), run materialization, and geometry helpers
 ├─ preprocessing.py  optional soft-exclusion/merge pipeline + pass, sentence, saccade, character, RTL, QA, and sensitivity tables
 ├─ authoring.py      deterministic text/word layout + stable hand-authored fixation reducers and versioned JSON round-trip

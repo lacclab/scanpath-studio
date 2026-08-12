@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 259,
+  "revision": 280,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -96,6 +96,13 @@
     "CMP-12": {
       "status": "Backlog",
       "priority": "Low",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
+    "CMP-13": {
+      "status": "Planned",
+      "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-12"
@@ -209,6 +216,13 @@
       "priority": "Normal",
       "implementationBrief": "1. I think in data inspection is fine\n2. Nope, just rename.\n3. dunno, I think the faster option?",
       "archived": true,
+      "updated": "2026-08-12"
+    },
+    "DATA-26": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
       "updated": "2026-08-12"
     },
     "ENG-19": {
@@ -442,6 +456,13 @@
       "archived": false,
       "updated": "2026-08-07"
     },
+    "PRE-21": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
     "PRE-4": {
       "status": "Closed",
       "priority": "Normal",
@@ -586,12 +607,19 @@
       "archived": true,
       "updated": "2026-08-08"
     },
-    "UX-38": {
-      "status": "Backlog",
+    "UX-37": {
+      "status": "Planned",
       "priority": "Normal",
-      "implementationBrief": "I feel like the settings there should not necesssarily be there, or better grouped.",
+      "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-07"
+      "updated": "2026-08-12"
+    },
+    "UX-38": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
     },
     "UX-39": {
       "status": "Closed",
@@ -601,9 +629,9 @@
       "updated": "2026-08-12"
     },
     "UX-40": {
-      "status": "In progress",
+      "status": "Planned",
       "priority": "Normal",
-      "implementationBrief": "Improve them. This is a good start but could be improved.",
+      "implementationBrief": "This is a good start. Should be updated based on other changes made throughout the app, and also generally improved and polished.",
       "archived": false,
       "updated": "2026-08-12"
     },
@@ -643,6 +671,20 @@
       "updated": "2026-08-12"
     },
     "UX-48": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-12"
+    },
+    "UX-49": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
+    "UX-50": {
       "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
@@ -690,6 +732,13 @@
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-11"
+    },
+    "VAL-7": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
     },
     "VIZ-14": {
       "status": "Closed",

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 299,
+  "revision": 300,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -101,7 +101,7 @@
       "updated": "2026-08-12"
     },
     "CMP-13": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
@@ -608,7 +608,7 @@
       "updated": "2026-08-08"
     },
     "UX-37": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
@@ -678,7 +678,7 @@
       "updated": "2026-08-12"
     },
     "UX-49": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,

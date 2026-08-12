@@ -21,9 +21,10 @@ from typing import Dict, NamedTuple, Optional, Tuple
 import pandas as pd
 import streamlit as st
 
-from . import app
+from . import app, wizard_shell
 from .constants import (
     DEMO_CHOICE,
+    FONT_FAMILY,
     ONESTOP_CHOICE,
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
@@ -44,11 +45,13 @@ from .data import (
     WORD_OPTIONAL_FIELDS,
     aggregate_char_boxes,
     categorize_columns,
+    compute_canvas_size,
     compute_keep_columns,
     dropped_columns,
     empty_fixations_frame,
     empty_words_frame,
     extract_columns_from_source_file,
+    frame_fingerprint,
     normalize_raw_gaze,
     pick_column,
     propose_fix_schema,
@@ -61,6 +64,14 @@ from .data import (
     validate_fix_schema,
     validate_raw_gaze_schema,
     validate_word_schema,
+)
+from .experimental_setup import (
+    SETUP_GROUP_LABELS,
+    SETUP_GROUPS,
+    Provenance,
+    SetupSnapshot,
+    font_pt_to_px,
+    pixels_per_degree,
 )
 from .persistence import is_loopback_url
 from .tabs import _collect_column_mapping
@@ -120,8 +131,25 @@ def _reset_wizard_widgets() -> None:
         "wizard_filename_regex",
         "wizard_filename_regex_lower",
         "wizard_aggregate_char_boxes",
+        # DATA-22 Recording-setup step. The *mode* radios always reset — decision
+        # (d): a second dataset from the same lab keeps the pre-filled values
+        # (`_wizard_setup_recall`, deliberately NOT cleared here) but the user
+        # still has to assert that the setup applies to this dataset too.
+        *(_SETUP_MODE_KEYS[g] for g in SETUP_GROUPS),
+        "wizard_setup_screen_w",
+        "wizard_setup_screen_h",
+        "wizard_setup_monitor_mm",
+        "wizard_setup_distance_mm",
+        "wizard_setup_font_pt",
+        "wizard_setup_font_family",
+        "_wizard_restored_setup",
+        "_wizard_setup_restored_applied",
+        "_wizard_problems_last",
     ):
         st.session_state.pop(key, None)
+    # Re-seed the accordion on the next entry instead of opening wherever the
+    # previous dataset was left.
+    wizard_shell.reset_accordion()
 
 
 def _default_dataset_name() -> str:
@@ -220,33 +248,14 @@ def _enter_add_data_wizard() -> None:
     _reset_wizard_widgets()
 
 
-def _keep_wizard_step_open(title: str) -> None:
-    """Widget callback: keep its mapping expander open across this rerun."""
-    st.session_state["_wizard_keep_open"] = title
-
-
-def _wizard_step_expanded(title: str, done: bool, flow: dict, state) -> bool:
-    """Resolve wizard auto-advance while preserving the step being edited.
-
-    A widget callback stamps ``_wizard_keep_open`` before Streamlit reruns. The
-    matching completed step consumes that one-shot marker and reopens, so picking
-    a second field does not make the expander disappear (DATA-19). Otherwise the
-    first unfinished step retains the historical auto-advance behaviour.
-    """
-    if state.get("_wizard_keep_open") == title:
-        state.pop("_wizard_keep_open", None)
-        return True
-    if done:
-        return False
-    expanded = not flow["claimed"]
-    if expanded:
-        flow["claimed"] = True
-    return expanded
-
-
-def _map_section(raw, specs, proposed, prefix, host, keys, *, step_title) -> Dict:
+def _map_section(raw, specs, proposed, prefix, host, keys) -> Dict:
     """Render a subset of a table's mapping fields (the wizard renders the core
-    fields in grouped, ordered steps). Returns the partial mapping for ``keys``."""
+    fields in grouped, ordered steps). Returns the partial mapping for ``keys``.
+
+    No ``on_change`` any more: the accordion's open state is owned by the keyed
+    expander and moved only by explicit navigation (``wizard_shell``), so a
+    mapping widget no longer has to defend the step it lives in against being
+    collapsed by its own edit (DATA-19's mechanism, deleted by DATA-22)."""
     if raw is None or getattr(raw, "empty", True):
         return {}
     return column_mapping_ui(
@@ -259,8 +268,6 @@ def _map_section(raw, specs, proposed, prefix, host, keys, *, step_title) -> Dic
         use_expander=False,
         only_keys=keys,
         header=False,
-        on_change=_keep_wizard_step_open,
-        on_change_args=(step_title,),
     )
 
 
@@ -305,6 +312,34 @@ def _default_trial_columns(proposed: Dict, present_cols) -> list:
     return list(dict.fromkeys(c for c in (passage,) if c))
 
 
+# -----------------------------------------------------------------------------
+# Cached per-rerun work (DATA-22 §5)
+#
+# Every one of these used to recompute on *every keystroke* with no spinner — a
+# `nunique` over the whole uploaded frame, a full column scan, a re-proposal of
+# the schema — while the user typed in a text box. They are now keyed on
+# `data.frame_fingerprint` plus the mapping, and each carries a labelled spinner
+# so the work is visible rather than felt. Frames pass un-hashed (underscore
+# args) per the house convention; the fingerprint is the real key.
+# -----------------------------------------------------------------------------
+
+
+def _mapping_key(mapping) -> tuple:
+    """A hashable cache key for a column mapping (str | list | None)."""
+    if mapping is None:
+        return ()
+    if isinstance(mapping, (list, tuple)):
+        return tuple(mapping)
+    return (mapping,)
+
+
+@st.cache_data(show_spinner="Counting trials…")
+def _trial_id_values_cached(
+    _raw, _mapping, fingerprint: tuple, key: tuple
+) -> frozenset:
+    return frozenset(trial_id_series(_raw, _mapping).unique())
+
+
 def _trial_id_values(raw, schema) -> Optional[set]:
     """Set of distinct trial-id strings for a raw frame + its trial mapping
     (composite mappings are joined, mirroring ``data.trial_id_series``). ``None``
@@ -314,7 +349,53 @@ def _trial_id_values(raw, schema) -> Optional[set]:
     cols = trial_mapping_columns(schema["trial"])
     if not cols or not all(c in raw.columns for c in cols):
         return None
-    return set(trial_id_series(raw, schema["trial"]).unique())
+    return set(
+        _trial_id_values_cached(
+            raw,
+            schema["trial"],
+            frame_fingerprint(raw),
+            _mapping_key(schema["trial"]),
+        )
+    )
+
+
+@st.cache_data(show_spinner="Detecting columns…")
+def _c_propose_word_schema(_raw, fingerprint: tuple) -> Dict:
+    return propose_word_schema(_raw)
+
+
+@st.cache_data(show_spinner="Detecting columns…")
+def _c_propose_fix_schema(_raw, fingerprint: tuple) -> Dict:
+    return propose_fix_schema(_raw)
+
+
+@st.cache_data(show_spinner="Detecting columns…")
+def _c_propose_raw_gaze_schema(_raw, fingerprint: tuple) -> Dict:
+    return propose_raw_gaze_schema(_raw)
+
+
+@st.cache_data(show_spinner="Scanning fields…")
+def _c_categorize_columns(_raw, _schema, _registry, fingerprint: tuple, key: tuple):
+    # Only ``fingerprint`` + ``key`` form the cache key; the frame, the mapping
+    # dict and the module-level registry table all ride un-hashed.
+    return categorize_columns(_raw, _schema, _registry)
+
+
+@st.cache_data(show_spinner="Aggregating character boxes…")
+def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
+    return aggregate_char_boxes(_raw, _schema)
+
+
+def _schema_key(schema: Optional[Dict]) -> tuple:
+    """A hashable, order-stable projection of a mapping dict for cache keys."""
+    if not schema:
+        return ()
+    return tuple(
+        sorted(
+            (k, tuple(v) if isinstance(v, (list, tuple)) else v)
+            for k, v in schema.items()
+        )
+    )
 
 
 def _render_unified_identifier(
@@ -331,7 +412,6 @@ def _render_unified_identifier(
     has_fix,
     common_cols: list,
     default_cols: list,
-    step_title: str,
 ) -> None:
     """Shared identifier picker for trial / participant / text.
 
@@ -372,8 +452,6 @@ def _render_unified_identifier(
             help="Most datasets name it the same way in every table, so one "
             "shared mapping is used. Turn this on only if Words and Fixations "
             "name it differently.",
-            on_change=_keep_wizard_step_open,
-            args=(step_title,),
         )
 
     if per_table:
@@ -390,8 +468,6 @@ def _render_unified_identifier(
                 key=fix_key,
                 help=help_text,
                 label_visibility="collapsed",
-                on_change=_keep_wizard_step_open,
-                args=(step_title,),
             )
             fix_schema[field_key] = _mapping(chosen_f)
         if has_words:
@@ -405,8 +481,6 @@ def _render_unified_identifier(
                 key=words_key,
                 help=help_text,
                 label_visibility="collapsed",
-                on_change=_keep_wizard_step_open,
-                args=(step_title,),
             )
             word_schema[field_key] = _mapping(chosen_w)
     else:
@@ -439,8 +513,6 @@ def _render_unified_identifier(
             options=common_cols,
             key=unified_key,
             help=help_text,
-            on_change=_keep_wizard_step_open,
-            args=(step_title,),
         )
         mapping = _mapping(chosen)
         if has_fix:
@@ -598,7 +670,6 @@ def _wizard_trial_step(
         has_fix,
         common_cols,
         default_trial,
-        "Trial identifier",
     )
 
     # Per-table trial-id sets. Equal → one clean count. Differing but overlapping
@@ -633,6 +704,11 @@ def _wizard_trial_step(
             )
 
 
+@st.cache_data(show_spinner="Counting…")
+def _distinct_id_count_cached(_raw, _mapping, fingerprint: tuple, key: tuple) -> int:
+    return int(trial_id_series(_raw, _mapping).nunique())
+
+
 def _distinct_id_count(raw, mapping) -> Optional[int]:
     """Distinct values of a single-column or composite identifier mapping."""
     if raw is None or getattr(raw, "empty", True) or not mapping:
@@ -640,7 +716,9 @@ def _distinct_id_count(raw, mapping) -> Optional[int]:
     cols = trial_mapping_columns(mapping)
     if not cols or not all(c in raw.columns for c in cols):
         return None
-    return int(trial_id_series(raw, mapping).nunique())
+    return _distinct_id_count_cached(
+        raw, mapping, frame_fingerprint(raw), _mapping_key(mapping)
+    )
 
 
 def _wizard_participant_text_step(
@@ -657,7 +735,6 @@ def _wizard_participant_text_step(
     fix_schema,
     has_words,
     has_fix,
-    step_title: str,
 ) -> None:
     """Optional participant- or text-identifier step, in the same shape as the
     Trial identifier (unified picker + per-table toggle + composite support),
@@ -681,7 +758,6 @@ def _wizard_participant_text_step(
         has_fix,
         common_cols,
         default_cols,
-        step_title,
     )
     pp, pp_schema = (raw_fix, fix_schema) if has_fix else (raw_words, word_schema)
     n = _distinct_id_count(pp, pp_schema.get(field_key))
@@ -727,7 +803,16 @@ def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> Tuple[dict,
     for raw, schema, registry, prefix in tables:
         if raw is None or raw.empty or schema is None:
             continue
-        cat_by_prefix[prefix] = categorize_columns(raw, schema, registry)
+        cat_by_prefix[prefix] = _c_categorize_columns(
+            raw,
+            schema,
+            registry,
+            frame_fingerprint(raw),
+            # `prefix` is in the key because `_registry` rides un-hashed and
+            # varies per table: two tables with the same fingerprint *and* the
+            # same schema key would otherwise share one result.
+            (prefix, _schema_key(schema)),
+        )
 
     # --- Filter trials by: trial-level condition (meta) fields, cross-table ---
     # dest field -> [(prefix, source), …] so the chosen field's source column is
@@ -837,6 +922,29 @@ def _wizard_restore_config(host) -> None:
             "data_source": config.get("data_source"),
             "exported_at": config.get("exported_at"),
         }
+        # DATA-22 decision (a): a restored setup file pre-answers the
+        # Recording-setup step. The section is optional — a file written before
+        # this existed simply leaves the step unanswered, which is the honest
+        # outcome rather than a silent default. Additive, so per ENG-11 the
+        # PLOT_CONFIG_SCHEMA stays where it is.
+        if isinstance(config.get("experimental_setup"), dict):
+            # The canvas is carried in a *sibling* section by the plot-config
+            # writer (`tabs._build_studio_config` puts it under `canvas_px`), so
+            # it has to be merged in here — see `_restored_setup_snapshot`, which
+            # would otherwise fall back to the 2560x1440 class default and, if
+            # the file's provenance said "measured", pre-answer the step with a
+            # measured monitor nobody ever measured.
+            restored = dict(config["experimental_setup"])
+            canvas = config.get("canvas_px")
+            if isinstance(canvas, dict):
+                for key, source in (
+                    ("canvas_width", "width"),
+                    ("canvas_height", "height"),
+                ):
+                    if canvas.get(source) is not None:
+                        restored.setdefault(key, canvas[source])
+            st.session_state["_wizard_restored_setup"] = restored
+            st.session_state.pop("_wizard_setup_restored_applied", None)
         st.toast("Restored the saved mapping — review it below.", icon="✅")
         st.rerun()
 
@@ -881,7 +989,23 @@ def _wizard_setup_config() -> dict:
         "data_source": (st.session_state.get("wizard_dataset_name") or "").strip()
         or None,
         "column_mapping": _collect_column_mapping(),
+        # DATA-22 §7 surface 3: the recording setup + its provenance, so a
+        # re-applied setup file carries "the monitor was assumed" rather than
+        # quietly re-deriving a number the recipient would read as measured.
+        "experimental_setup": current_setup_section(),
     }
+
+
+def current_setup_section() -> Optional[dict]:
+    """The ``experimental_setup`` section for a saved config, or ``None``.
+
+    Shared by ``_wizard_setup_config`` and ``tabs._build_studio_config`` so both
+    writers emit the same shape. Returns ``None`` when the wizard has not
+    resolved a snapshot yet — an absent section reads as "unknown", which is
+    what it is; an all-defaults one would read as an answer.
+    """
+    payload = st.session_state.get("_wizard_setup_snapshot")
+    return dict(payload) if isinstance(payload, dict) else None
 
 
 def _render_setup_download(host) -> None:
@@ -899,30 +1023,354 @@ def _render_setup_download(host) -> None:
     )
 
 
-def _render_wizard_progress(body) -> None:
-    """A native step indicator at the top of the active setup wizard.
+# -----------------------------------------------------------------------------
+# Step 4 · Recording setup (DATA-22 §3)
+#
+# The old wizard rendered this panel as step *2* — before the upload — and
+# silently seeded a 2560x1440 monitor, 597 mm, 800 mm and a 16 px font, with
+# nothing telling the user those were guesses. Estimating from the data was not
+# even possible there, because there was no data yet.
+#
+# Now it sits after the upload and asks, per group, *how do you know?* — with
+# `index=None` so nothing is preselected. The user either knows the values,
+# derives them from their own data, knowingly takes a named default, or (for
+# visual-angle units only) skips. The answer is recorded as a `Provenance` that
+# travels with the dataset, so a reader downstream can tell a measured screen
+# from an assumed one.
+#
+# The gate is deliberately hard: **Add dataset** stays disabled until all three
+# are answered. Nobody can be stranded by it — *Estimate from my data* always
+# exists for the screen group and always succeeds — but nobody gets a silent
+# default either.
+# -----------------------------------------------------------------------------
 
-    Read-only, driven by the *actual* wizard state (uploads present + whether
-    last run's column mapping validated) rather than an independent counter — so
-    the bar tracks real progression. ``_wizard_problems_last`` is written near the
-    end of ``_render_data_setup`` once this run's validation `problems` are known.
+_SETUP_MODE_KEYS = {g: f"wizard_setup_{g}_mode" for g in SETUP_GROUPS}
+
+_SCREEN_KNOW = "I know the resolution"
+_SCREEN_ESTIMATE = "Estimate from my data"
+_SCREEN_DEFAULT = "Use a common default (2560×1440)"
+
+_GEOM_KNOW = "I know them"
+_GEOM_DEFAULT = "Use typical lab values (597 mm / 800 mm)"
+_GEOM_SKIP = "Skip — I don't need visual-angle units"
+
+_TEXT_BOXES = "Scale to the word boxes"
+_TEXT_FONT = "I know the stimulus font"
+_TEXT_DEFAULT = "Use a default (16 px)"
+
+_SETUP_PROVENANCE = {
+    _SCREEN_KNOW: Provenance.MEASURED,
+    _SCREEN_ESTIMATE: Provenance.ESTIMATED,
+    _SCREEN_DEFAULT: Provenance.ASSUMED,
+    _GEOM_KNOW: Provenance.MEASURED,
+    _GEOM_DEFAULT: Provenance.ASSUMED,
+    _GEOM_SKIP: Provenance.SKIPPED,
+    _TEXT_BOXES: Provenance.MEASURED,
+    _TEXT_FONT: Provenance.MEASURED,
+    _TEXT_DEFAULT: Provenance.ASSUMED,
+}
+
+
+def _recalled(field: str, fallback):
+    """A value remembered from the previous dataset set up this session.
+
+    Decision (d): answers are recalled across datasets as *pre-filled values with
+    the radio reset* — fast for a second export from the same lab, but the user
+    still has to assert that the setup applies to this dataset too.
     """
-    name_done = bool(st.session_state.get("wizard_dataset_name"))
-    uploaded = bool(
-        st.session_state.get("col_map_fix_upload")
-        or st.session_state.get("col_map_words_upload")
-        or st.session_state.get("col_map_raw_gaze_upload")
+    return (st.session_state.get("_wizard_setup_recall") or {}).get(field, fallback)
+
+
+def _remember_setup(values: dict) -> None:
+    """Stash this dataset's answers as pre-fill for the next one (values only)."""
+    recall = dict(st.session_state.get("_wizard_setup_recall") or {})
+    recall.update(values)
+    st.session_state["_wizard_setup_recall"] = recall
+
+
+def _setup_mode(host, group: str, options: list, help_text: str):
+    """One group's ``st.radio(index=None)`` — nothing preselected, ever.
+
+    Returns the chosen label or ``None``. The mode keys are wizard-local UI state
+    and deliberately **not** wire format (same reasoning as ``share_identity_mode``
+    in ``url_state.py``): what travels is the resolved value plus its provenance,
+    not which radio button produced it.
+    """
+    return host.radio(
+        SETUP_GROUP_LABELS[group],
+        options,
+        index=None,
+        key=_SETUP_MODE_KEYS[group],
+        help=help_text,
     )
-    # No problems last run (and something uploaded) ⇒ the mapping validates.
-    # Default to "not yet" until a run has actually computed problems.
-    mapped = uploaded and not st.session_state.get("_wizard_problems_last", ["pending"])
-    steps = [("Name", name_done), ("Upload", uploaded), ("Map columns", mapped)]
-    done_n = sum(1 for _, ok in steps if ok)
-    body.progress(done_n / len(steps), text=f"Setup progress — {done_n} / {len(steps)}")
-    body.caption(
-        " · ".join(f"{'✅' if ok else '⬜'} {lbl}" for lbl, ok in steps)
-        + " · 🏁 Add dataset"
+
+
+def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapshot:
+    """Render the three Recording-setup groups and resolve them to a snapshot.
+
+    Writes the resolved values into the existing ``global_*`` wire-format keys
+    (unchanged — the *values* were always wire format; only the provenance is
+    new). Safe to write here because the wizard owns the page: ``app.main``
+    returns before the rail renders, so no widget on a ``global_*`` key exists
+    this run.
+    """
+    host.caption(
+        "These describe the screen the data was **recorded** on, not the screen "
+        "you are looking at now. Pick how you know each one — there is no default, "
+        "because a wrong guess here silently rescales every figure."
     )
+
+    # --- Screen -------------------------------------------------------------
+    screen_mode = _setup_mode(
+        host,
+        "screen",
+        [_SCREEN_KNOW, _SCREEN_ESTIMATE, _SCREEN_DEFAULT],
+        "The presentation monitor's resolution in pixels. Everything is drawn in "
+        "these coordinates.",
+    )
+    est_w, est_h = compute_canvas_size(words_raw, fix_raw)
+    canvas_w, canvas_h = (
+        _recalled("canvas_width", 2560),
+        _recalled("canvas_height", 1440),
+    )
+    if screen_mode == _SCREEN_KNOW:
+        cols = host.columns(2)
+        canvas_w = cols[0].number_input(
+            "Width (px)", 100, 10000, int(canvas_w), key="wizard_setup_screen_w"
+        )
+        canvas_h = cols[1].number_input(
+            "Height (px)", 100, 10000, int(canvas_h), key="wizard_setup_screen_h"
+        )
+    elif screen_mode == _SCREEN_ESTIMATE:
+        canvas_w, canvas_h = est_w, est_h
+        host.info(
+            f"Estimated **{est_w} × {est_h} px** from the extent of your word "
+            "boxes and fixations. This is a **lower bound** — text rarely fills "
+            "the whole screen, so the real monitor was probably larger."
+        )
+    elif screen_mode == _SCREEN_DEFAULT:
+        canvas_w, canvas_h = 2560, 1440
+        host.caption("Recorded as **assumed** — a common 1440p monitor.")
+
+    # --- Physical size & viewing distance -----------------------------------
+    geom_mode = _setup_mode(
+        host,
+        "geometry",
+        [_GEOM_KNOW, _GEOM_DEFAULT, _GEOM_SKIP],
+        "Needed only to express distances in degrees of visual angle. Skipping is "
+        "a real answer — the app then hides the numbers it cannot honestly derive.",
+    )
+    mon_mm = float(_recalled("monitor_width_mm", 597.0))
+    dist_mm = float(_recalled("viewing_distance_mm", 800.0))
+    if geom_mode == _GEOM_KNOW:
+        cols = host.columns(2)
+        mon_mm = cols[0].number_input(
+            "Monitor width (mm)", 50.0, 2000.0, mon_mm, key="wizard_setup_monitor_mm"
+        )
+        dist_mm = cols[1].number_input(
+            "Viewing distance (mm)",
+            50.0,
+            5000.0,
+            dist_mm,
+            key="wizard_setup_distance_mm",
+        )
+        if canvas_w and mon_mm > 0 and dist_mm > 0:
+            host.caption(
+                f"→ **{pixels_per_degree(dist_mm, canvas_w, mon_mm):.1f} px** per "
+                "degree of visual angle."
+            )
+    elif geom_mode == _GEOM_DEFAULT:
+        mon_mm, dist_mm = 597.0, 800.0
+        host.caption("Recorded as **assumed** — typical lab values.")
+    elif geom_mode == _GEOM_SKIP:
+        host.caption(
+            "Visual-angle units stay **hidden** for this dataset rather than being "
+            "computed from a default."
+        )
+
+    # --- Reading text size ---------------------------------------------------
+    text_options = [_TEXT_FONT, _TEXT_DEFAULT]
+    if has_boxes:
+        # Only offered when there are boxes to scale to — otherwise it is an
+        # option that silently does nothing.
+        text_options.insert(0, _TEXT_BOXES)
+    text_mode = _setup_mode(
+        host,
+        "text",
+        text_options,
+        "How big the reading text was drawn. Word labels are rendered at this size "
+        "so the figure matches what the participant saw.",
+    )
+    scale_to_boxes = True
+    base_font = int(_recalled("base_font_size", 16))
+    font_family = str(_recalled("font_family", FONT_FAMILY))
+    if text_mode == _TEXT_BOXES:
+        scale_to_boxes = True
+        host.caption("Label size is derived from each word box — the usual choice.")
+    elif text_mode == _TEXT_FONT:
+        scale_to_boxes = False
+        cols = host.columns(2)
+        font_pt = cols[0].number_input(
+            "Stimulus font (pt)",
+            4.0,
+            96.0,
+            float(_recalled("stimulus_font_pt", 12.0)),
+            key="wizard_setup_font_pt",
+        )
+        font_family = cols[1].text_input(
+            "Font family", value=font_family, key="wizard_setup_font_family"
+        )
+        # pt→px needs a DPI, which needs the physical width. Under a skipped
+        # geometry group there is no honest DPI, so the conversion is withheld
+        # and the point size falls back to being read as pixels.
+        if geom_mode == _GEOM_SKIP:
+            host.warning(
+                "Converting points to pixels needs the monitor's physical width, "
+                "which was skipped above. The size is being read as **pixels**; "
+                "answer *Physical size & viewing distance* for a true pt → px "
+                "conversion."
+            )
+            base_font = int(min(max(round(font_pt), 6), 72))
+        else:
+            dpi = float(canvas_w) / (float(mon_mm) / 25.4) if mon_mm > 0 else 96.0
+            base_font = int(min(max(round(font_pt_to_px(font_pt, dpi)), 6), 72))
+            host.caption(f"→ **{base_font} px** at {dpi:.0f} DPI.")
+    elif text_mode == _TEXT_DEFAULT:
+        scale_to_boxes = False
+        base_font = 16
+        host.caption("Recorded as **assumed** — a 16 px reading font.")
+
+    snapshot = SetupSnapshot(
+        canvas_width=int(canvas_w),
+        canvas_height=int(canvas_h),
+        monitor_width_mm=float(mon_mm),
+        viewing_distance_mm=float(dist_mm),
+        base_font_size=int(base_font),
+        font_family=font_family,
+        line_spacing=float(st.session_state.get("global_line_spacing", 3.0)),
+        scale_text_to_boxes=bool(scale_to_boxes),
+        screen_provenance=_SETUP_PROVENANCE.get(screen_mode),
+        geometry_provenance=_SETUP_PROVENANCE.get(geom_mode),
+        text_provenance=_SETUP_PROVENANCE.get(text_mode),
+    )
+
+    # Publish the snapshot for the save/restore + export writers. A partial one
+    # resolves to None, so `current_setup_section` writes nothing rather than an
+    # all-defaults section that would read as a real answer.
+    st.session_state["_wizard_setup_snapshot"] = (
+        snapshot.to_dict() if snapshot.is_answered() else None
+    )
+
+    # Publish each group's values as soon as *that* group is answered, into the
+    # wire-format `global_*` keys the rest of the app reads. The hard gate is on
+    # **Add dataset**, not on a setting taking effect — a user who has just told
+    # us the resolution should see the canvas change now, not after answering two
+    # unrelated questions. Only the values were ever wire format; the provenance
+    # beside them is what is new.
+    recall: dict = {}
+    if snapshot.screen_provenance is not None:
+        st.session_state["global_canvas_width"] = snapshot.canvas_width
+        st.session_state["global_canvas_height"] = snapshot.canvas_height
+        recall["canvas_width"] = snapshot.canvas_width
+        recall["canvas_height"] = snapshot.canvas_height
+    if snapshot.geometry_provenance not in (None, Provenance.SKIPPED):
+        st.session_state["global_monitor_width_mm"] = snapshot.monitor_width_mm
+        st.session_state["global_viewing_distance_mm"] = snapshot.viewing_distance_mm
+        recall["monitor_width_mm"] = snapshot.monitor_width_mm
+        recall["viewing_distance_mm"] = snapshot.viewing_distance_mm
+    if snapshot.text_provenance is not None:
+        st.session_state["global_base_font_size"] = snapshot.base_font_size
+        st.session_state["global_font_family"] = snapshot.font_family
+        st.session_state["global_scale_text_to_boxes"] = snapshot.scale_text_to_boxes
+        recall["base_font_size"] = snapshot.base_font_size
+        recall["font_family"] = snapshot.font_family
+    if recall:
+        _remember_setup(recall)
+
+    unanswered = [g for g, p in snapshot.provenance.items() if p is None]
+    if unanswered:
+        host.warning(
+            "Still to answer: "
+            + ", ".join(f"**{SETUP_GROUP_LABELS[g]}**" for g in unanswered)
+            + ". *Add dataset* stays disabled until each says how you know it."
+        )
+    return snapshot
+
+
+def _restored_setup_snapshot() -> Optional[SetupSnapshot]:
+    """The ``experimental_setup`` section of a restored setup JSON, if any.
+
+    Decision (a): a restored setup file **does** pre-answer step 4 — it recorded
+    a real choice once, and re-asking would be pedantry rather than rigour.
+
+    But only for what it actually recorded. A file that carries a *screen*
+    provenance without a canvas cannot pre-answer the screen: `from_dict` would
+    fill 2560x1440 from the class default, and a `measured` badge on top of it
+    would be the exact silent inheritance this whole step exists to prevent. In
+    that case the screen group is reset to unanswered and the user is asked.
+    """
+    payload = st.session_state.get("_wizard_restored_setup")
+    if not payload:
+        return None
+    return SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
+
+
+def _restored_setup_answerable_groups() -> set:
+    """Which groups a restored file may pre-answer — those it actually recorded.
+
+    A plot config written by `tabs._build_studio_config` carries the physical
+    geometry and typography but keeps the canvas in a sibling `canvas_px`
+    section; when that is absent too, the screen size in the snapshot is the
+    class default rather than anything the file stated, so the screen group is
+    left for the user to answer.
+    """
+    payload = st.session_state.get("_wizard_restored_setup") or {}
+    groups = set(SETUP_GROUPS)
+    if payload.get("canvas_width") is None or payload.get("canvas_height") is None:
+        groups.discard("screen")
+    return groups
+
+
+def _apply_restored_setup(snapshot: SetupSnapshot) -> None:
+    """Pre-answer the Recording-setup radios from a restored file (once)."""
+    if st.session_state.get("_wizard_setup_restored_applied"):
+        return
+    st.session_state["_wizard_setup_restored_applied"] = True
+    answerable = _restored_setup_answerable_groups()
+    by_prov = {
+        "screen": {
+            Provenance.MEASURED: _SCREEN_KNOW,
+            Provenance.ESTIMATED: _SCREEN_ESTIMATE,
+            Provenance.ASSUMED: _SCREEN_DEFAULT,
+        },
+        "geometry": {
+            Provenance.MEASURED: _GEOM_KNOW,
+            Provenance.ASSUMED: _GEOM_DEFAULT,
+            Provenance.SKIPPED: _GEOM_SKIP,
+        },
+        "text": {
+            Provenance.MEASURED: _TEXT_FONT,
+            Provenance.ASSUMED: _TEXT_DEFAULT,
+        },
+    }
+    for group, provenance in snapshot.provenance.items():
+        if group not in answerable:
+            continue
+        label = by_prov.get(group, {}).get(provenance)
+        if label is not None:
+            st.session_state[_SETUP_MODE_KEYS[group]] = label
+    remembered = {
+        "monitor_width_mm": snapshot.monitor_width_mm,
+        "viewing_distance_mm": snapshot.viewing_distance_mm,
+        "base_font_size": snapshot.base_font_size,
+        "font_family": snapshot.font_family,
+    }
+    # Only remember a canvas the file actually carried; otherwise this would
+    # write the class default into the live geometry as if it were the user's.
+    if "screen" in answerable:
+        remembered["canvas_width"] = snapshot.canvas_width
+        remembered["canvas_height"] = snapshot.canvas_height
+    _remember_setup(remembered)
 
 
 def _render_multipleye_upload(body, active: bool) -> _UploadResult:
@@ -1103,6 +1551,19 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
                 "fixations": dropped_columns(fix_raw, keep=keep_fix),
                 "raw_gaze": [],
             },
+            # CMP-8 §1: MultiplEYE needs no Recording-setup step — it *declares*
+            # its geometry. The corpus records a real 1920x1080 presentation
+            # monitor and stamps the stimulus font size + family from its own
+            # config onto the words, so both are `measured`. Only the physical
+            # size / viewing distance are unrecorded, and those stay honestly
+            # `assumed` rather than being invented as measured.
+            "setup": app.capture_setup_snapshot(
+                {
+                    "screen": Provenance.MEASURED,
+                    "geometry": Provenance.ASSUMED,
+                    "text": Provenance.MEASURED,
+                }
+            ).to_dict(),
         }
         body.button(
             "✅ Add dataset",
@@ -1116,23 +1577,179 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
-def _render_data_setup(active: bool) -> _UploadResult:
-    """Hybrid data-setup surface for the Upload source.
+def _wizard_statuses() -> Dict[str, wizard_shell.StepStatus]:
+    """Each step's badge, derived from session state alone.
 
-    On first load (``active``) it's a guided wizard: dataset name + display setup
-    at the top, a collapsible **Upload your data** subsection (one toggle per
-    table, each showing its row count), a **Column mapping** subsection (one
-    toggle per part — restore, trial id, participants, texts, fixations, text &
-    interest areas, more mappings), then filter/keep pickers and the **Add
-    dataset** button. Only the step you still need to fill stays open; finished /
-    auto-detected steps collapse (auto-advance). After finishing it becomes a
-    compact collapsed **Data & mapping** panel. Returns the normalized frames (or
-    empties + ``problems``)."""
+    Deliberately cheap and frame-free: it runs at the *top* of the wizard, before
+    any step body renders, because the accordion seeding and every step's badge
+    need it up front. The one thing not in session state is this run's validation
+    result, so `_wizard_problems_last` carries the previous run's — the same
+    one-run-behind contract the old progress bar had. Any widget interaction
+    reruns the script, so a badge is never stale for longer than that, and the
+    **gate** on *Add dataset* is computed from live values at the end, never from
+    this.
+    """
+    S = wizard_shell.StepStatus
+    ss = st.session_state
+    uploaded_core = bool(ss.get("col_map_fix_upload") or ss.get("col_map_words_upload"))
+    uploaded_any = uploaded_core or bool(ss.get("col_map_raw_gaze_upload"))
+    # Default to "pending" so the mapping step doesn't claim to be done before a
+    # single validation pass has run.
+    problems = ss.get("_wizard_problems_last", ["pending"])
+    trial_mapped = bool(
+        ss.get("col_map_trial_unified")
+        or ss.get("col_map_fix_trial")
+        or ss.get("col_map_words_trial")
+    )
+    setup_answered = all(ss.get(_SETUP_MODE_KEYS[g]) for g in SETUP_GROUPS)
+    fields_touched = bool(ss.get("wizard_keep_extra") or ss.get("wizard_filter_by"))
+
+    def required(done: bool) -> wizard_shell.StepStatus:
+        if done:
+            return S.DONE
+        # ACTION ("blocked on something specific") only once there is data to act
+        # on; before that the step is simply not started.
+        return S.ACTION if uploaded_any else S.TODO
+
+    statuses = {
+        "data": S.DONE if uploaded_any else S.TODO,
+        "identity": required(trial_mapped),
+        "geometry": required(uploaded_any and not problems),
+        "setup": required(setup_answered),
+        "fields": S.DONE if fields_touched else S.OPTIONAL,
+    }
+    statuses["review"] = (
+        S.DONE
+        if all(statuses[k] is S.DONE for k in ("data", "identity", "geometry", "setup"))
+        else S.TODO
+    )
+    return statuses
+
+
+def _render_autodetect_card(host, word_schema, fix_schema, has_words, has_fix) -> None:
+    """After the upload: what was detected, what is still missing, by name.
+
+    A *report*, deliberately not a shortcut. Detection matches column names, so a
+    complete-looking result can still be wrong in ways only the mapping steps
+    reveal — and a wrong mapping renders a perfectly plausible figure of the
+    wrong thing. The card tells the user what to confirm; steps 2-3 are where
+    they confirm it.
+    """
+    checks: list[tuple[str, Optional[str]]] = []
+    if has_fix:
+        checks += [
+            ("Trial id", _mapping_label(fix_schema.get("trial"))),
+            ("Fixation duration", _mapping_label(fix_schema.get("duration"))),
+            (
+                "Fixation position",
+                _mapping_label(fix_schema.get("x"))
+                or _mapping_label(fix_schema.get("word_id")),
+            ),
+        ]
+    if has_words:
+        checks += [
+            ("Word id", _mapping_label(word_schema.get("word_id"))),
+            (
+                "Word box",
+                _mapping_label(word_schema.get("left"))
+                or _mapping_label(word_schema.get("x")),
+            ),
+            ("Word text", _mapping_label(word_schema.get("text"))),
+        ]
+    if not checks:
+        return
+    found = [f"✓ **{name}** — `{col}`" for name, col in checks if col]
+    missing = [f"⚠️ **{name}** — not detected" for name, col in checks if not col]
+    host.markdown("\n\n".join(found + missing))
+    host.caption(
+        "Detected by column name — confirm each one in the next two steps."
+        if not missing
+        else "Map whatever is missing in the next two steps."
+    )
+
+
+def _mapping_label(mapping) -> Optional[str]:
+    """A human-readable column name for a mapping value (str | list | None)."""
+    if not mapping or mapping == NONE_OPTION:
+        return None
+    if isinstance(mapping, (list, tuple)):
+        return " + ".join(str(c) for c in mapping) or None
+    return str(mapping)
+
+
+def _render_review_table(host, snapshot: SetupSnapshot, readouts: list) -> None:
+    """Step 6's review table: every decision, its value, and its provenance.
+
+    The provenance column is the reason this table exists — it is where an
+    assumed monitor stops being invisible.
+    """
+    rows = [
+        {"Decision": label, "Value": value, "How we know": how}
+        for label, value, how in readouts
+    ]
+    for group in SETUP_GROUPS:
+        provenance = snapshot.provenance[group]
+        rows.append(
+            {
+                "Decision": SETUP_GROUP_LABELS[group],
+                "Value": _setup_group_value(snapshot, group),
+                "How we know": str(provenance) if provenance else "not answered",
+            }
+        )
+    host.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    if snapshot.geometry_provenance is Provenance.SKIPPED:
+        host.caption(
+            "Visual-angle units (px per degree) are hidden for this dataset — the "
+            "physical size was skipped, so there is nothing honest to derive them "
+            "from."
+        )
+    elif snapshot.px_per_degree is not None:
+        host.caption(
+            f"≈ **{snapshot.px_per_degree:.1f} px** per degree of visual angle."
+        )
+
+
+def _setup_group_value(snapshot: SetupSnapshot, group: str) -> str:
+    """The value column for one setup group in the review table."""
+    if group == "screen":
+        return f"{snapshot.canvas_width} × {snapshot.canvas_height} px"
+    if group == "geometry":
+        if snapshot.geometry_provenance is Provenance.SKIPPED:
+            return "—"
+        return (
+            f"{snapshot.monitor_width_mm:.0f} mm wide, "
+            f"{snapshot.viewing_distance_mm:.0f} mm away"
+        )
+    if snapshot.scale_text_to_boxes:
+        return "scaled to word boxes"
+    return f"{snapshot.base_font_size} px · {snapshot.font_family}"
+
+
+def _render_data_setup(active: bool) -> _UploadResult:
+    """The Add-dataset wizard: six steps in an accordion (DATA-22).
+
+    Replaces a single 620-line function that rendered 16 expanders across five
+    numbered subsections under a three-step progress bar matching neither. The
+    steps are now the unit of everything — the badge, the progress chip, the
+    guide's target, and the "go here to fix it" button on a blocker.
+
+    ``active`` is the guided wizard; ``active=False`` is the compact collapsed
+    *Data & mapping* review panel, where `wizard_shell.step_panel` degrades each
+    step to a plain heading (that panel is itself an expander, and Streamlit
+    forbids nesting one inside another).
+
+    **Every step body renders on every run, open or closed.** Streamlit drops a
+    widget's key at the end of any run in which the widget did not render, and
+    `controls.column_mapping_ui` builds its `col_map_*` widgets without
+    `persist_state` — so gating a body on its expander being open would silently
+    discard that step's mapping. Collapsed-but-rendered is the contract.
+    """
+    statuses = _wizard_statuses()
     if active:
         st.header("📂 Set up your dataset")
         st.caption(
-            "Name your dataset, upload your tables, then map a few columns — only "
-            "the step you still need to fill stays open."
+            "Work down the six steps in order, or jump straight to one with the "
+            "chips below. Your answers are kept as you move around."
         )
         st.caption(
             "First time? [Bring your own data ↗]"
@@ -1146,8 +1763,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         maybe_show_wizard_guide()
         render_spotlight_wizard_guide()
         render_wizard_guide_button(st)
+        # Must run before any expander instantiates — it writes the `wiz_open_*`
+        # widget keys.
+        wizard_shell.seed_open_step(statuses)
+        wizard_shell.render_progress(st.container(), statuses)
         body = st.container()
-        _render_wizard_progress(body)
     else:
         panel = st.expander("📋 Data & mapping", expanded=False)
         body = panel
@@ -1159,48 +1779,19 @@ def _render_data_setup(active: bool) -> _UploadResult:
             st.session_state["setup_complete"] = False
             st.rerun()
 
-    # Auto-advance: the first not-done step opens; finished + optional steps
-    # collapse. In the collapsed panel everything renders inline (Streamlit
-    # forbids nesting an expander inside the panel's own expander).
-    flow = {"claimed": False}
-
-    def toggle(title: str, *, done: bool = True, expanded: Optional[bool] = None):
-        if not active:
-            body.markdown(f"**{title}**")
-            return body
-        if expanded is None:
-            expanded = _wizard_step_expanded(title, done, flow, st.session_state)
-        return body.expander(title, expanded=expanded)
-
-    def subsection(title: str, number: Optional[int] = None) -> None:
-        # Numbered headings (1., 2., …) only in the active wizard, where they make
-        # the order to work through explicit. The collapsed review panel drops the
-        # numbers (its first two steps aren't re-rendered, so 3.,4.,5. would orphan).
-        if not active:
-            body.markdown(f"**{title}**")
-        elif number is not None:
-            body.markdown(f"#### {number}. {title}")
-        else:
-            body.markdown(f"#### {title}")
-
-    def mapped(prefix: str, field: str) -> bool:
-        """Best-effort 'this field is mapped' from last run's session state."""
-        v = st.session_state.get(f"{prefix}_{field}")
-        if isinstance(v, (list, tuple)):
-            return bool(v)
-        return bool(v) and v != NONE_OPTION
-
-    # === 1. Dataset name + format ===
-    if active:
-        subsection("Dataset name", number=1)
-        st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
-        body.text_input(
-            "Dataset name",
-            key="wizard_dataset_name",
-            label_visibility="collapsed",
-            help="Shown in the Data source list so you can switch back to it.",
+    def step_of(step_id: str):
+        step = wizard_shell.STEPS_BY_ID[step_id]
+        return step, wizard_shell.step_panel(
+            body,
+            step,
+            statuses.get(step_id, wizard_shell.StepStatus.TODO),
+            active=active,
         )
-        body.segmented_control(
+
+    # === 1 · Your data =======================================================
+    data_step, s1 = step_of("data")
+    if active:
+        s1.segmented_control(
             "Dataset format",
             ["Generic", "MultiplEYE"],
             key="wizard_dataset_format",
@@ -1210,61 +1801,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "from the file names (no column mapping needed).",
         )
 
-    # A dedicated dataset format (e.g. MultiplEYE) runs its own tailored flow and
-    # bypasses the generic mapping steps below. Read from state so the collapsed
-    # review panel (active=False) branches the same way.
+    # A dedicated dataset format runs its own tailored flow and bypasses the
+    # generic mapping steps. It renders into `body`, NOT into a step panel:
+    # `_render_multipleye_upload` opens its own canvas expander, and
+    # expander-in-expander is forbidden. Read from state so the collapsed review
+    # panel branches the same way.
     if st.session_state.get("wizard_dataset_format", "Generic") == "MultiplEYE":
         return _render_multipleye_upload(body, active)
 
-    # === 2. Experimental setup ===
-    if active:
-        subsection("Experimental setup", number=2)
-        body.caption(
-            "Match the screen the data was recorded on so word boxes and "
-            "fixations stay true to scale — open the panel to set monitor size, "
-            "font, and text scaling."
-        )
-        # app.render_sidebar_canvas_controls renders its own collapsible panel — that
-        # IS the display-setup toggle. Seed it on empty frames up front (uploads
-        # default to a 2560x1440 monitor; tweak it any time).
-        app.render_sidebar_canvas_controls(
-            empty_words_frame(),
-            empty_fixations_frame(),
-            data_choice=None,
-            slot=body,
-            expanded=False,
-            title="Monitor, font & text scaling",
-        )
-
-    # === 3. Upload your data — one toggle per table, with row counts ===
-    subsection("Upload your data", number=3)
-    core_uploaded = bool(
-        st.session_state.get("col_map_fix_upload")
-        or st.session_state.get("col_map_words_upload")
-    )
-    # Getting-started guidance at the top of the step, shown only before anything
-    # is uploaded (and only in the active wizard): the call to action plus a tip
-    # to run locally for large datasets, which is faster and keeps data private.
-    already_uploaded = core_uploaded or bool(
-        st.session_state.get("col_map_raw_gaze_upload")
-    )
-    # Render the guidance into a container that is ALWAYS created (even when it
-    # ends up empty) so the upload boxes below keep a fixed position in the
-    # element tree. Otherwise the guidance vanishing the moment a file is added
-    # shifts every following element up by two delta-paths — and because reading
-    # a large upload blocks the rerun (the "Reading uploaded data…" cache spinner),
-    # Streamlit freezes the half-reconciled DOM and leaves the pre-shift copy of
-    # the whole upload group on screen as a greyed-out ghost (BUG-2).
-    intro = body.container()
-    # Say where an upload goes *before* the uploader, not after — a researcher
-    # with participant data needs it stated, not inferred. Rendered
-    # unconditionally: `intro` is always created, and adding a *conditional*
-    # child here is exactly the element-tree shift the comment above describes.
+    # Privacy caption + run-locally tip keep their always-created container:
+    # a *conditional* child here shifts the element tree mid-parse and Streamlit
+    # leaves a greyed-out ghost of the whole upload group on screen (BUG-2).
+    intro = s1.container()
     intro.caption(
         "🔒 Your file is parsed on the machine running this app and never sent "
         "elsewhere. Local/desktop installs keep a private recovery cache after "
         "you add the dataset; the hosted demo remains memory-only. "
         "[Where your data goes ↗](https://lacclab.github.io/scanpath-studio/privacy/)"
+    )
+    core_uploaded = bool(
+        st.session_state.get("col_map_fix_upload")
+        or st.session_state.get("col_map_words_upload")
+    )
+    already_uploaded = core_uploaded or bool(
+        st.session_state.get("col_map_raw_gaze_upload")
     )
     if active and not already_uploaded:
         intro.info("⬆️ Upload a **Fixations** and/or **Words/IA** table to begin.")
@@ -1276,63 +1836,56 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "```bash\npip install scanpath-studio\nscanpath-studio\n```"
             )
 
-    def upload_box(title, *, label, help_text, prefix, multi, noun, expanded):
-        # Keep a table's box open once it has an upload, so its row count and
-        # head preview stay visible instead of collapsing out of sight.
-        has_upload = bool(st.session_state.get(f"{prefix}_upload"))
-        box = toggle(title, expanded=expanded or has_upload)
-        col = box.columns([0.7, 0.3])[0] if active else box
+    def upload_box(host, *, label, help_text, prefix, multi, noun):
         frame = app._read_uploaded_frame(
             uploader_label=label,
             upload_help=help_text,
             state_prefix=prefix,
             multi=multi,
-            container=col,
+            container=host,
         )
         if not frame.empty:
-            box.success(
-                f"✓ **{len(frame):,}** {noun} detected — make sure this is the "
-                "number you expect to see."
+            host.success(
+                f"✓ **{len(frame):,}** {noun} · **{len(frame.columns)}** columns "
+                "— make sure this is the number you expect to see."
             )
             if active:
-                # Show the first rows so the user can eyeball the columns before
-                # mapping them (a quick is-this-the-right-table sanity check).
-                box.caption("Preview — first rows:")
-                box.dataframe(frame.head(), width="stretch", hide_index=True)
+                host.caption("Preview — first rows:")
+                host.dataframe(frame.head(), width="stretch", hide_index=True)
         return frame
 
-    # Order: raw gaze, then fixations, then words. Raw gaze is optional → starts
-    # collapsed (auto-opens once it has a file); the core tables stay open so
-    # their counts + previews remain visible after uploading.
-    raw_gaze = upload_box(
-        "Raw gaze (optional)",
-        label="Raw gaze table",
-        help_text="Optional millisecond-level gaze overlay (one file).",
-        prefix="col_map_raw_gaze",
-        multi=False,
-        noun="gaze points",
-        expanded=False,
-    )
     raw_fix = upload_box(
-        "Fixations",
+        s1,
         label="Fixations table(s)",
         help_text="One or more files (e.g. one per participant); concatenated.",
         prefix="col_map_fix",
         multi=True,
         noun="fixations",
-        expanded=True,
     )
     raw_words = upload_box(
-        "Words / Interest Areas",
+        s1,
         label="Words / IA table(s)",
         help_text="One or more files (e.g. one per text); concatenated.",
         prefix="col_map_words",
         multi=True,
         noun="words",
-        expanded=True,
     )
+    # Sub-blocks are popovers, not expanders: Streamlit forbids
+    # expander-in-expander but allows popover-in-expander — the same constraint
+    # that shapes `controls.py`.
+    raw_gaze = upload_box(
+        s1.popover("➕ Raw gaze overlay (optional)"),
+        label="Raw gaze table",
+        help_text="Optional millisecond-level gaze overlay (one file).",
+        prefix="col_map_raw_gaze",
+        multi=False,
+        noun="gaze points",
+    )
+    restore_box = s1.popover("↩️ Restore a saved setup (optional)")
+    _wizard_restore_config(restore_box)
+    _render_restored_config_caption(restore_box)
+
     if raw_words.empty and raw_fix.empty and raw_gaze.empty:
-        # The "upload to begin" prompt now lives at the top of this subsection.
         return _UploadResult(
             empty_words_frame(),
             empty_fixations_frame(),
@@ -1342,41 +1895,42 @@ def _render_data_setup(active: bool) -> _UploadResult:
             [],
         )
 
-    prop_w = propose_word_schema(raw_words) if not raw_words.empty else {}
-    prop_f = propose_fix_schema(raw_fix) if not raw_fix.empty else {}
-    prop_g = propose_raw_gaze_schema(raw_gaze) if not raw_gaze.empty else {}
+    prop_w = (
+        _c_propose_word_schema(raw_words, frame_fingerprint(raw_words))
+        if not raw_words.empty
+        else {}
+    )
+    prop_f = (
+        _c_propose_fix_schema(raw_fix, frame_fingerprint(raw_fix))
+        if not raw_fix.empty
+        else {}
+    )
+    prop_g = (
+        _c_propose_raw_gaze_schema(raw_gaze, frame_fingerprint(raw_gaze))
+        if not raw_gaze.empty
+        else {}
+    )
     word_schema: Dict = {}
     fix_schema: Dict = {}
     has_words, has_fix = not raw_words.empty, not raw_fix.empty
 
-    # === 4. Column mapping ===
-    subsection("Column mapping", number=4)
-
-    # Restore a saved setup (optional, collapsed).
-    restore_box = toggle("Restore a saved setup (optional)", done=True)
-    _wizard_restore_config(restore_box)
-    _render_restored_config_caption(restore_box)
-
-    # Derive ids from the filename (optional) — must run *before* the trial /
-    # participant pickers so the split-out file_part_N columns are mappable.
+    # === 2 · Trials & readers ================================================
+    identity_step, s2 = step_of("identity")
+    # Filename derivation must run *before* the identifier pickers so the
+    # derived columns are mappable below.
     if (has_words or has_fix) and any(
         SOURCE_FILE_COLUMN in fr.columns for fr in (raw_fix, raw_words) if not fr.empty
     ):
-        derive_box = toggle("Derive ids from filename (optional)", done=True)
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
-            derive_box, raw_words, raw_fix, raw_gaze
+            s2.popover("⚙️ Advanced — derive ids from the filename"),
+            raw_words,
+            raw_fix,
+            raw_gaze,
         )
 
-    # Trial identifier (required → opens first if not yet mapped).
     if has_words or has_fix:
-        trial_done = bool(
-            st.session_state.get("col_map_trial_unified")
-            or st.session_state.get("col_map_fix_trial")
-            or st.session_state.get("col_map_words_trial")
-        )
-        tbox = toggle("Trial identifier", done=trial_done)
         _wizard_trial_step(
-            tbox,
+            s2,
             raw_words,
             raw_fix,
             prop_w,
@@ -1385,22 +1939,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-        )
-
-    # Participants (optional, same shape as the trial id).
-    if has_words or has_fix:
-        pbox = toggle("Participants (optional)", done=True)
-        pbox.caption(
-            "Which column(s) identify the reader? Leave blank for a single "
-            "anonymous reader."
         )
         _wizard_participant_text_step(
             "participant",
             "Participant ID",
-            "participants",
+            "readers",
             "Pick the reader column — or several to compose an id. Leave empty "
             "for a single anonymous reader.",
-            pbox,
+            s2,
             raw_words,
             raw_fix,
             prop_w,
@@ -1409,14 +1955,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            "Participants (optional)",
-        )
-
-    # Texts (optional).
-    if has_words or has_fix:
-        txbox = toggle("Texts (optional)", done=True)
-        txbox.caption(
-            "Which column(s) identify the text/passage? Leave blank for a single text."
         )
         _wizard_participant_text_step(
             "text_id",
@@ -1424,7 +1962,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "texts",
             "Pick the text column — or several to compose an id. Leave empty to "
             "fall back to the trial id.",
-            txbox,
+            s2,
             raw_words,
             raw_fix,
             prop_w,
@@ -1433,40 +1971,34 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            "Texts (optional)",
         )
-
-    # DATA-21: optional child-screen identity lives beside (not inside) the
-    # logical trial id. Keep both reports explicit so a page/screen column can
-    # never be guessed in one table while silently absent from the other.
-    if has_words or has_fix:
-        sbox = toggle("Multipart screens (optional)", done=True)
-        sbox.caption(
+        # DATA-21 multipart screens: beside, not inside, the logical trial id.
+        screens = s2.popover("⚙️ Advanced — multipart screens")
+        screens.caption(
             "Map these only when one logical trial contains ordered screens. "
             "Screen ID must be mapped in both reports; screen order is 1-based."
         )
         if has_words:
-            sbox.markdown("**Words / Interest Areas**")
+            screens.markdown("**Words / Interest Areas**")
             word_schema.update(
                 _map_section(
                     raw_words,
                     WORD_FIELD_SPECS,
                     prop_w,
                     "col_map_words",
-                    sbox,
+                    screens,
                     ["screen_id", "screen_index", "canvas_width", "canvas_height"],
-                    step_title="Multipart screens (optional)",
                 )
             )
         if has_fix:
-            sbox.markdown("**Fixations**")
+            screens.markdown("**Fixations**")
             fix_schema.update(
                 _map_section(
                     raw_fix,
                     FIX_FIELD_SPECS,
                     prop_f,
                     "col_map_fix",
-                    sbox,
+                    screens,
                     [
                         "screen_id",
                         "screen_index",
@@ -1475,108 +2007,90 @@ def _render_data_setup(active: bool) -> _UploadResult:
                         "canvas_width",
                         "canvas_height",
                     ],
-                    step_title="Multipart screens (optional)",
                 )
             )
 
-    # Column mapping: Fixations — required fields (coordinates + duration) plus
-    # the fixation id.
+    # === 3 · Fixations & text ================================================
+    geometry_step, s3 = step_of("geometry")
     if has_fix:
-        fix_done = mapped("col_map_fix", "duration") and (
-            mapped("col_map_fix", "x") or mapped("col_map_fix", "word_id")
-        )
-        fbox = toggle("Fixations", done=fix_done)
+        s3.markdown("**Fixations** — where the eyes landed")
         fix_schema.update(
             _map_section(
                 raw_fix,
                 FIX_FIELD_SPECS,
                 prop_f,
                 "col_map_fix",
-                fbox,
+                s3,
                 ["x", "y", "duration", "fixation_id"],
-                step_title="Fixations",
             )
         )
-        fbox.caption(
+        s3.caption(
             "Leave X/Y blank for AOI-only data and map the Word/IA ID under "
-            "*More fixation mappings* instead."
+            "*Advanced* instead."
         )
+        fix_schema.update(
+            _map_section(
+                raw_fix,
+                FIX_FIELD_SPECS,
+                prop_f,
+                "col_map_fix",
+                s3.popover("⚙️ Advanced — more fixation mappings"),
+                ["word_id", "timestamp"],
+            )
+        )
+        # Validation problems render against their own sub-block rather than as
+        # one lumped warning above the Add button.
+        for problem in validate_fix_schema(fix_schema):
+            s3.warning(f"Fixations — {problem}")
 
-    # Column mapping: Text & Interest Areas — required word fields.
     if has_words:
-        words_done = mapped("col_map_words", "word_id") and (
-            mapped("col_map_words", "left") or mapped("col_map_words", "x")
-        )
-        wbox = toggle("Text & Interest Areas", done=words_done)
+        s3.markdown("**Words / Interest Areas** — where the words are")
         word_schema.update(
             _map_section(
                 raw_words,
                 WORD_FIELD_SPECS,
                 prop_w,
                 "col_map_words",
-                wbox,
+                s3,
                 ["word_id", "text", "box"],
-                step_title="Text & Interest Areas",
             )
         )
-        wbox.toggle(
+        words_advanced = s3.popover("⚙️ Advanced — more text mappings")
+        word_schema.update(
+            _map_section(
+                raw_words,
+                WORD_FIELD_SPECS,
+                prop_w,
+                "col_map_words",
+                words_advanced,
+                ["line"],
+            )
+        )
+        words_advanced.caption(
+            "Line index enables colouring fixations/words by reading line."
+        )
+        words_advanced.toggle(
             "Aggregate character AOIs into word boxes",
             key="wizard_aggregate_char_boxes",
             help="For interest-area tables with one row per *character* (e.g. CJK "
             "corpora): collapse the characters of each word (grouped by the Trial "
             "+ Word/IA id above) into one bounding box.",
         )
+        for problem in validate_word_schema(word_schema):
+            s3.warning(f"Words/IA — {problem}")
 
-    # More text mappings (line index) — optional.
-    if has_words:
-        mtbox = toggle("More text mappings (optional)", done=True)
-        word_schema.update(
-            _map_section(
-                raw_words,
-                WORD_FIELD_SPECS,
-                prop_w,
-                "col_map_words",
-                mtbox,
-                ["line"],
-                step_title="More text mappings (optional)",
-            )
-        )
-        mtbox.caption("Line index enables colouring fixations/words by reading line.")
-
-    # More fixation mappings (word id, timestamp) — optional.
-    if has_fix:
-        mfbox = toggle("More fixation mappings (optional)", done=True)
-        fix_schema.update(
-            _map_section(
-                raw_fix,
-                FIX_FIELD_SPECS,
-                prop_f,
-                "col_map_fix",
-                mfbox,
-                ["word_id", "timestamp"],
-                step_title="More fixation mappings (optional)",
-            )
-        )
-
-    # Raw gaze overlay mapping (its own table); required only for a raw-gaze-only
-    # upload, else an optional overlay.
     if not raw_gaze.empty:
         rg_required = not has_words and not has_fix
-        rg_done = not rg_required or (
-            mapped("col_map_raw_gaze", "trial")
-            and mapped("col_map_raw_gaze", "x")
-            and mapped("col_map_raw_gaze", "y")
+        rg_host = (
+            s3 if rg_required else s3.popover("⚙️ Advanced — raw gaze overlay mapping")
         )
-        rgbox = toggle(
-            "Raw gaze overlay" if rg_required else "Raw gaze overlay (optional)",
-            done=rg_done,
-        )
+        rg_host.markdown("**Raw gaze overlay**")
         raw_gaze_schema = _map_section(
             raw_gaze,
             RAW_GAZE_FIELD_SPECS,
             prop_g,
             "col_map_raw_gaze",
-            rgbox,
+            rg_host,
             [
                 "participant",
                 "trial",
@@ -1587,9 +2101,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "timestamp",
                 "text",
             ],
-            step_title=(
-                "Raw gaze overlay" if rg_required else "Raw gaze overlay (optional)"
-            ),
         )
     else:
         raw_gaze_schema = {}
@@ -1608,11 +2119,35 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # blocking a usable dataset — fold it into `problems` so finalize is gated.
     if not has_words and not has_fix and raw_gaze_problems:
         problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
-    # Feed the wizard step indicator (read at the top of the next run).
     st.session_state["_wizard_problems_last"] = list(problems)
 
-    # === 5. Filter & keep — one cross-table picker each (not per table) ===
-    subsection("Filter & keep (optional)", number=5)
+    # The auto-detect summary sits in step 1, but it needs the resolved schemas,
+    # so it renders into a container reserved there. Streamlit lays containers
+    # out in creation order, so it appears where it was reserved.
+    # DATA-22 review: the card reports what was detected; it does **not** offer to
+    # skip steps 2-3 on the strength of it. Auto-detection matches column *names*,
+    # so it is confident and occasionally wrong — a `trial_id` that is really a
+    # per-participant counter, an `x` that is the word's centre rather than its
+    # left edge. Those produce a plausible figure of the wrong thing, and the only
+    # place they are catchable is the mapping steps. Confirming a correct guess
+    # costs two clicks; skipping a wrong one costs the whole dataset.
+    _render_autodetect_card(s1.container(), word_schema, fix_schema, has_words, has_fix)
+
+    # === 4 · Recording setup =================================================
+    setup_step, s4 = step_of("setup")
+    restored_setup = _restored_setup_snapshot()
+    if restored_setup is not None:
+        _apply_restored_setup(restored_setup)
+        s4.caption("✓ Pre-answered from the restored setup file — review it below.")
+    setup_snapshot = _wizard_setup_step(s4, raw_words, raw_fix, has_boxes=has_words)
+
+    # === 5 · Extra fields ====================================================
+    fields_step, s5 = step_of("fields")
+    s5.caption(
+        "*Filter trials by* becomes a value picker in the Narrow-by panel; "
+        "*Additional fields to keep* are the columns you can colour, sort and "
+        "analyse by later. Fewer columns is faster."
+    )
     keep_tables: list = []
     if has_words:
         keep_tables.append(
@@ -1620,21 +2155,62 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
     if has_fix:
         keep_tables.append((raw_fix, fix_schema, FIX_OPTIONAL_FIELDS, "col_map_fix"))
-    filter_box = toggle("Filter trials by (optional)", done=True)
-    keep_box = toggle("Additional fields to keep (optional)", done=True)
-    keep_by_prefix, filter_fields = _wizard_keep_and_filter(
-        keep_tables, filter_box, keep_box
-    )
+    keep_by_prefix, filter_fields = _wizard_keep_and_filter(keep_tables, s5, s5)
     st.session_state["wizard_filter_fields"] = list(filter_fields)
+
+    # === 6 · Name & add ======================================================
+    review_step, s6 = step_of("review")
+    if active:
+        st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
+        s6.text_input(
+            "Dataset name",
+            key="wizard_dataset_name",
+            help="Shown in the Data source list so you can switch back to it.",
+        )
+
+    setup_blockers = [
+        SETUP_GROUP_LABELS[g] for g, p in setup_snapshot.provenance.items() if p is None
+    ]
+    blocked = bool(problems) or bool(setup_blockers)
+
+    if active:
+        readouts: list = []
+        if has_fix:
+            readouts.append(("Fixations", f"{len(raw_fix):,} rows", "uploaded"))
+        if has_words:
+            readouts.append(("Words / IA", f"{len(raw_words):,} rows", "uploaded"))
+        trial_label = _mapping_label(
+            (fix_schema if has_fix else word_schema).get("trial")
+        )
+        if trial_label:
+            readouts.append(("Trial id", trial_label, "mapped"))
+        _render_review_table(s6, setup_snapshot, readouts)
+
+        if blocked:
+            s6.markdown("**Still to do**")
+            reasons: Dict[str, list] = {}
+            if problems:
+                reasons["geometry"] = list(problems)
+            if setup_blockers:
+                reasons["setup"] = [
+                    f"{name} — say how you know it" for name in setup_blockers
+                ]
+            for step, why in wizard_shell.blockers(_wizard_statuses(), reasons):
+                if step.id not in reasons:
+                    continue
+                for line in reasons[step.id]:
+                    s6.warning(line)
+                s6.button(
+                    f"Go to {step.number}. {step.title} →",
+                    key=f"wiz_goto_{step.id}",
+                    on_click=wizard_shell.go_to_step,
+                    args=(step.id,),
+                )
 
     if problems:
         if active:
-            _render_setup_download(body)
-            body.button("✅ Add dataset", disabled=True, key="wizard_finalize")
-            body.warning(
-                "Map the required field(s) above (marked \\*) to continue:\n\n"
-                + "\n".join(f"- {p}" for p in problems)
-            )
+            _render_setup_download(s6)
+            s6.button("✅ Add dataset", disabled=True, key="wizard_finalize")
         st.session_state["_composite_trial_columns"] = None
         return _UploadResult(
             empty_words_frame(),
@@ -1655,12 +2231,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     for table, schema in wizard_schemas.items():
         app._stash_active_mapping(table, schema)
 
-    # Char→word aggregation (optional generic power): collapse character-level
-    # AOIs to one box per word using the final word mapping, before normalization
-    # (which expects one row per word box). Only fires when the user toggled it on
-    # in the Text & Interest Areas step and the words mapping is complete.
+    # Char→word aggregation: collapse character-level AOIs to one box per word
+    # using the final word mapping, before normalization (which expects one row
+    # per word box).
     if has_words and st.session_state.get("wizard_aggregate_char_boxes"):
-        raw_words = aggregate_char_boxes(raw_words, word_schema)
+        raw_words = _c_aggregate_char_boxes(
+            raw_words,
+            word_schema,
+            frame_fingerprint(raw_words),
+            _schema_key(word_schema),
+        )
 
     keep_words = (
         compute_keep_columns(
@@ -1701,7 +2281,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     raw_gaze_norm = pd.DataFrame()
     if not raw_gaze.empty:
         if raw_gaze_problems:
-            body.warning("Raw gaze ignored — " + "; ".join(raw_gaze_problems))
+            s3.warning("Raw gaze ignored — " + "; ".join(raw_gaze_problems))
         else:
             raw_gaze_norm = normalize_raw_gaze(raw_gaze, raw_gaze_schema)
 
@@ -1738,13 +2318,24 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 if not raw_gaze.empty
                 else [],
             },
+            # CMP-8 §1 / DATA-22 §7: the geometry this dataset was set up with,
+            # plus how each group came to be known. A stored upload recorded no
+            # geometry at all before this, which is why switching to one left the
+            # canvas on the previous source's monitor.
+            "setup": setup_snapshot.to_dict(),
         }
-        _render_setup_download(body)
-        body.button(
+        _render_setup_download(s6)
+        s6.button(
             "✅ Add dataset",
             type="primary",
             key="wizard_finalize",
+            disabled=blocked,
             on_click=_finalize_wizard_dataset,
+            help=(
+                "Answer the Recording setup step first: " + ", ".join(setup_blockers)
+                if setup_blockers
+                else "Store this dataset and switch to it."
+            ),
         )
 
     return _UploadResult(

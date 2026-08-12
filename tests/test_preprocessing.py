@@ -413,3 +413,38 @@ def test_a_right_to_left_word_counts_letters_from_its_right_edge():
     # 5 px from the LEFT edge is 45 px from the right → character 5.5.
     assert row["launch_letter"] == 5.5
     assert row["landing_letter"] == 3.5
+
+
+def test_text_direction_is_detected_once_per_trial_not_once_per_row():
+    """PRE-6's direction scan must not be quadratic in trial length.
+
+    It used to build the trial's whole joined text on *every row* and then scan
+    that string per row, so a W-word trial scanned ~W times more characters than
+    it needed to. On an ordinary upload that was the slowest step of the entire
+    load — and all of it happened *after* the wizard had said "Dataset added",
+    so it read as the app hanging. Counting calls is the honest assertion: a
+    timing threshold would be flaky, and the call count is the actual defect.
+    """
+    from unittest.mock import patch
+
+    import pandas as pd
+
+    from scanpath_studio import preprocessing
+
+    n_words = 40
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1"] * n_words + ["p2"] * n_words,
+            "trial_id": ["t1"] * n_words + ["t1"] * n_words,
+            "text": ["word"] * (2 * n_words),
+        }
+    )
+    real = preprocessing.detect_right_to_left
+    with patch.object(preprocessing, "detect_right_to_left", side_effect=real) as spy:
+        out = preprocessing.add_text_direction(words)
+
+    # Two trials → two scans, not 80.
+    assert spy.call_count == 2, (
+        f"scanned {spy.call_count}x for 2 trials — the per-row form is back"
+    )
+    assert list(out["right_to_left"]) == [False] * (2 * n_words)

@@ -153,3 +153,28 @@ def open_subtab(at, label: str):
     """Select a per-trial subtab and rerun, so its body renders (PERF-3)."""
     at.session_state[SUBTAB_KEY] = label
     return at.run()
+
+
+def answer_setup_step(at, *, screen=None, geometry=None, text=None):
+    """Answer the wizard's Recording-setup step (DATA-22 step 4).
+
+    ``Add dataset`` is gated on all three groups being answered — deliberately,
+    so an uploaded dataset can never inherit a silent 2560x1440 / 597 mm / 16 px
+    guess. Every AppTest that finalizes an upload therefore has to say how it
+    knows its setup, exactly as a user does. The defaults here take the named
+    defaults (provenance ``assumed``), which is the cheapest honest answer.
+
+    Does **not** rerun — set the keys, then run, so a caller can batch this with
+    its own session-state writes on the same pass.
+    """
+    from scanpath_studio.wizard import (
+        _GEOM_DEFAULT,
+        _SCREEN_DEFAULT,
+        _SETUP_MODE_KEYS,
+        _TEXT_DEFAULT,
+    )
+
+    at.session_state[_SETUP_MODE_KEYS["screen"]] = screen or _SCREEN_DEFAULT
+    at.session_state[_SETUP_MODE_KEYS["geometry"]] = geometry or _GEOM_DEFAULT
+    at.session_state[_SETUP_MODE_KEYS["text"]] = text or _TEXT_DEFAULT
+    return at

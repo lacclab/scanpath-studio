@@ -679,7 +679,29 @@ def _plot_config_dict(
             "scale_text_to_boxes": settings.get("scale_text_to_boxes", True),
             "line_spacing": settings.get("line_spacing", DEFAULT_LINE_SPACING),
         },
+        # DATA-22 §7 surface 4: the recording setup + how each group is known, so
+        # an exported figure set records that (say) its monitor size was assumed.
+        # Sits beside `coloring.drift_correction`, which makes the same kind of
+        # "what produced these files" statement. Omitted when the source declared
+        # no setup — an absent key means unknown, which is the truth.
+        **({"experimental_setup": setup} if (setup := _setup_section()) else {}),
     }
+
+
+def _setup_section() -> Optional[dict]:
+    """The active source's `SetupSnapshot` as a dict, or ``None``.
+
+    Imported lazily and defensively: `bulk_export` also runs headlessly (the CLI
+    and `api.py`), where there is no session to read a snapshot from, and an
+    export must never fail because it could not describe its own geometry.
+    """
+    try:
+        from scanpath_studio.app import active_setup_snapshot
+
+        snapshot = active_setup_snapshot()
+    except Exception:  # pragma: no cover - headless / no session
+        return None
+    return snapshot.to_dict() if snapshot is not None else None
 
 
 def _render_scope_picker(
@@ -1042,6 +1064,165 @@ def _apply_scope(combos: pd.DataFrame, options: ExportOptions) -> pd.DataFrame:
         options.scope_trial,
         options.scope_text,
     )
+
+
+@dataclass(frozen=True)
+class ComparisonSide:
+    """One half of an exported comparison pair (CMP-8 §6).
+
+    ``dataset`` is the corpus label — ``None`` for the active dataset, which is
+    what every same-dataset comparison passes. ``participant`` / ``trial`` are
+    the **real** ids, as the corpus spells them: the ``dataset · pid`` namespace
+    exists only inside the figure's throwaway frames, and an exported table that
+    used it would not match its own corpus.
+    """
+
+    participant: str
+    trial: str
+    words: pd.DataFrame
+    fixations: pd.DataFrame
+    dataset: Optional[str] = None
+    setup: Optional[dict] = None
+
+    @property
+    def slug(self) -> str:
+        return f"{_safe_id(self.participant)}__{_safe_id(self.trial)}"
+
+    def stamped(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Both frames with a ``dataset`` column, so the pair's tables are readable.
+
+        Two corpora can hold the same ``(participant_id, trial_id)``; without
+        this column the rows in ``fixations.csv`` would be indistinguishable.
+        """
+        label = self.dataset or "(this dataset)"
+        out = []
+        for frame in (self.words, self.fixations):
+            if frame is None or frame.empty:
+                out.append(frame)
+                continue
+            stamped = frame.copy()
+            stamped["dataset"] = label
+            out.append(stamped)
+        return out[0], out[1]
+
+    def manifest(self) -> dict:
+        return {
+            "source": self.dataset,
+            "participant": str(self.participant),
+            "trial": str(self.trial),
+            "setup": self.setup,
+        }
+
+
+def pair_export(
+    fig,
+    side_a: ComparisonSide,
+    side_b: ComparisonSide,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    x_field: str,
+    y_field: str,
+    settings: dict,
+    options: ExportOptions,
+    status_callback: Optional[StatusCallback] = None,
+) -> bytes:
+    """Zip one comparison **pair** — figure, manifest, and both scanpaths' tables.
+
+    CMP-8 §6. An exported cross-dataset figure is unreproducible on its own:
+    nothing in the image records where B came from. The bundle writes the bulk
+    exporter's per-trial shape for the pair instead of for one trial, and the
+    ``datasets`` block in ``plot_config.json`` is what makes it reproducible —
+    it names both sources, both trials, and both recording setups::
+
+        <A>__vs__<B>/
+        ├─ figure.<fmt>
+        ├─ plot_config.json
+        ├─ fixations.csv
+        └─ measures.csv
+
+    ``options`` is the ordinary `ExportOptions` — the pair is one more "trial
+    folder" as far as the writer is concerned, so the formats, table format and
+    figure toggles all mean what they already mean. Deliberately unchanged from
+    bulk export: the tables stay **uncorrected** by drift correction (EXP-4 /
+    VIZ-24), which the manifest records.
+    """
+    folder = f"{side_a.slug}__vs__{side_b.slug}"
+    buffer = io.BytesIO()
+    started = perf_counter()
+    emit_status(
+        status_callback,
+        ExportStage.PREPARING,
+        "Preparing the comparison pair…",
+        started_at=started,
+    )
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fmt in options.figure_formats():
+            if fig is None:
+                break
+            width = int(getattr(fig.layout, "width", None) or canvas_width)
+            height = int(getattr(fig.layout, "height", None) or canvas_height)
+            if fmt == "html":
+                data = fig.to_html(include_plotlyjs="cdn", full_html=True).encode(
+                    "utf-8"
+                )
+            else:
+                data = render_static_figure_bytes(
+                    fig,
+                    fmt=fmt,
+                    width=width,
+                    height=height,
+                    scale=3 if fmt == "png" else 1,
+                    status_callback=status_callback,
+                )
+            zf.writestr(f"{folder}/figure.{fmt}", data)
+
+        words_a, fix_a = side_a.stamped()
+        words_b, fix_b = side_b.stamped()
+        for fmt in options.table_formats():
+            if options.include_fixations:
+                _write_table(
+                    zf,
+                    f"{folder}/fixations.{fmt}",
+                    pd.concat([fix_a, fix_b], ignore_index=True),
+                    fmt,
+                )
+            if options.include_measures:
+                measures = [
+                    compute_word_metrics(words, fixations)
+                    for words, fixations in ((words_a, fix_a), (words_b, fix_b))
+                    if words is not None and not words.empty
+                ]
+                if measures:
+                    _write_table(
+                        zf,
+                        f"{folder}/measures.{fmt}",
+                        pd.concat(measures, ignore_index=True),
+                        fmt,
+                    )
+
+        config = _plot_config_dict(
+            side_a.participant,
+            side_a.trial,
+            canvas_width,
+            canvas_height,
+            x_field,
+            y_field,
+            settings,
+        )
+        # The block that makes the pair reproducible — without it the figure
+        # names two readers and no way to find either of them again.
+        config["datasets"] = {"a": side_a.manifest(), "b": side_b.manifest()}
+        zf.writestr(
+            f"{folder}/plot_config.json", json.dumps(config, indent=2).encode("utf-8")
+        )
+    emit_status(
+        status_callback,
+        ExportStage.READY,
+        "Comparison pair ready.",
+        started_at=started,
+    )
+    return buffer.getvalue()
 
 
 def bulk_export(

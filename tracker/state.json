@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 233,
+  "revision": 240,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -79,6 +79,13 @@
       "archived": false,
       "updated": "2026-08-04"
     },
+    "CMP-11": {
+      "status": "Backlog",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
     "CMP-5": {
       "status": "Closed",
       "priority": "Normal",
@@ -101,7 +108,7 @@
     },
     "CMP-8": {
       "status": "Planned",
-      "priority": "Normal",
+      "priority": "High",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-12"
@@ -157,14 +164,14 @@
     },
     "DATA-21": {
       "status": "Review",
-      "priority": "Normal",
+      "priority": "High",
       "implementationBrief": "1. one with navigation\n2. good question, I don't know, should think of arbitrary datasets.\n3. support both. \n4. I think let user decide",
       "archived": false,
-      "updated": "2026-08-11"
+      "updated": "2026-08-12"
     },
     "DATA-22": {
       "status": "Planned",
-      "priority": "Normal",
+      "priority": "High",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-12"
@@ -587,8 +594,8 @@
       "updated": "2026-08-11"
     },
     "UX-47": {
-      "status": "Backlog",
-      "priority": "Normal",
+      "status": "Planned",
+      "priority": "High",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-12"

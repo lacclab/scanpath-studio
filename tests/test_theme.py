@@ -84,3 +84,45 @@ def test_launch_app_respects_user_theme_override(monkeypatch):
     # When the caller sets their own theme, the branded flags are NOT injected.
     assert "--theme.primaryColor=#1f77b4" not in argv
     assert "--theme.primaryColor=#ff0000" in argv
+
+
+# --- The upload cap travels with the launch, like the theme -------------------
+# Same failure mode, different setting: `.streamlit/config.toml` is resolved
+# against the launch directory, so a pip-installed `scanpath-studio` started
+# from anywhere else fell back to Streamlit's 200 MB default and rejected any
+# table over it — a normal size for a real fixation report.
+
+
+def test_config_toml_matches_the_upload_cap_constant():
+    from scanpath_studio.constants import UPLOAD_MAX_SIZE_MB
+
+    server = tomllib.loads(_CONFIG_TOML.read_text())["server"]
+    assert server["maxUploadSize"] == UPLOAD_MAX_SIZE_MB
+
+
+def test_the_cap_is_well_above_streamlits_default():
+    """The point of the setting: 200 MB is Streamlit's default, not a choice."""
+    from scanpath_studio.constants import UPLOAD_MAX_SIZE_MB
+
+    assert UPLOAD_MAX_SIZE_MB >= 1000, "an eye-tracking export routinely exceeds 1 GB"
+
+
+def test_max_upload_flag_is_a_valid_config_option():
+    st_config.get_config_options()
+    valid = set(st_config._config_options_template)
+    for flag in cli._max_upload_cli_flags([]):
+        name = flag[len("--") :].split("=", 1)[0]
+        assert name in valid, f"{name} is not a Streamlit config option"
+
+
+def test_launch_app_injects_the_upload_cap(monkeypatch):
+    from scanpath_studio.constants import UPLOAD_MAX_SIZE_MB
+
+    argv = _run_launch(monkeypatch, [])
+    assert f"--server.maxUploadSize={UPLOAD_MAX_SIZE_MB}" in argv
+
+
+def test_launch_app_respects_a_user_upload_cap_override(monkeypatch):
+    argv = _run_launch(monkeypatch, ["--server.maxUploadSize=300"])
+    assert "--server.maxUploadSize=5000" not in argv
+    assert "--server.maxUploadSize=300" in argv

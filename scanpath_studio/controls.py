@@ -1154,8 +1154,6 @@ def column_mapping_ui(
     only_keys: Optional[List[str]] = None,
     header: bool = True,
     detected_label: str = "auto-detected",
-    on_change=None,
-    on_change_args=(),
 ) -> Dict[str, Optional[str]]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -1183,8 +1181,6 @@ def column_mapping_ui(
             index=index,
             key=f"{state_key_prefix}_{field_key}",
             help=help_text,
-            on_change=on_change,
-            args=on_change_args,
         )
         # Surface what auto-detection found for this field (ENG-9) — and flag when
         # the user has overridden it — so the mapping isn't silently inferred.
@@ -1242,8 +1238,6 @@ def column_mapping_ui(
                     key=fmt_key,
                     horizontal=True,
                     label_visibility="collapsed",
-                    on_change=on_change,
-                    args=on_change_args,
                 )
                 # Always emit all eight box keys; only the active format's four
                 # get a column, the rest stay None.
@@ -1273,8 +1267,6 @@ def column_mapping_ui(
                     options=list(df.columns),
                     key=state_key,
                     help=spec.get("help"),
-                    on_change=on_change,
-                    args=on_change_args,
                 )
                 if default and default in df.columns:
                     st.caption(f"✨ {detected_label} `{default}`")
@@ -3570,8 +3562,22 @@ _EMPTY_TRIAL_FILTERS: Dict = {
 }
 
 
-def read_trial_filters() -> Dict:
+#: Every filter-layer namespace in the app. ``""`` is the main trial pool;
+#: ``"cmp"`` is compare mode's scanpath B (CMP-8 §5.2). The empty prefix's
+#: clear-sweep uses this to know which keys are *not* its own — without it,
+#: "Clear all filters" on A would wipe B too, since ``"filter_"`` is a prefix of
+#: ``"cmpfilter_"``. Register a new instance here, not just at its call site.
+FILTER_PREFIXES: tuple = ("", "cmp")
+
+
+def read_trial_filters(prefix: str = "") -> Dict:
     """The trial-filter selections to apply this run.
+
+    ``prefix`` scopes the whole filter layer to one instance (CMP-8 §5.2). The
+    default ``""`` is the main pool and leaves every existing call site
+    byte-identical; compare mode's scanpath **B** renders with ``prefix="cmp"``
+    so it can be narrowed on *its own* dataset's columns, which A's filters may
+    not even have.
 
     Computed last run by ``render_trial_filters`` and stashed in a *plain*
     session_state value (not a widget key), so it survives runs where the filter
@@ -3579,10 +3585,10 @@ def read_trial_filters() -> Dict:
     the sidebar nav. ``main()`` reads this *before* the tab renders, so filtering
     stays global even though the controls now live in the Trial Selection panel.
     """
-    return dict(st.session_state.get("_trial_filters", _EMPTY_TRIAL_FILTERS))
+    return dict(st.session_state.get(f"{prefix}_trial_filters", _EMPTY_TRIAL_FILTERS))
 
 
-def clear_trial_filters() -> None:
+def clear_trial_filters(prefix: str = "") -> None:
     """Reset every trial filter to "no constraint" (UX-7's one-click escape).
 
     All of them — the Narrow-by multiselects, the More-popover condition filters,
@@ -3596,10 +3602,28 @@ def clear_trial_filters() -> None:
     instantiates the widgets, so removing their keys doesn't trip Streamlit's
     "set after instantiation" guard.
     """
-    for key in [k for k in st.session_state if str(k).startswith("filter_")]:
+    for key in _own_filter_keys(prefix):
         del st.session_state[key]
-    st.session_state.pop("_trial_filters", None)
-    st.session_state.pop("_trial_filters_raw", None)
+    st.session_state.pop(f"{prefix}_trial_filters", None)
+    st.session_state.pop(f"{prefix}_trial_filters_raw", None)
+
+
+def _own_filter_keys(prefix: str) -> list:
+    """Filter widget keys belonging to ``prefix`` and to no *longer* prefix.
+
+    The sweep used to be prefix-blind, which is fine while there is one filter
+    set and wrong the moment there are two: ``"filter_"`` is a prefix of
+    ``"cmpfilter_"``, so clearing A's filters would silently wipe B's as well.
+    Matching forwards is not enough — the empty prefix has to explicitly skip
+    keys carrying a known namespace.
+    """
+    own = f"{prefix}filter_"
+    foreign = tuple(f"{p}filter_" for p in FILTER_PREFIXES if p and p != prefix)
+    return [
+        k
+        for k in list(st.session_state)
+        if str(k).startswith(own) and not (prefix == "" and str(k).startswith(foreign))
+    ]
 
 
 def reset_viz_settings() -> None:
@@ -3646,7 +3670,7 @@ def reset_viz_settings() -> None:
         st.query_params.pop(param, None)
 
 
-def clear_trial_filter(*keys: str) -> None:
+def clear_trial_filter(*keys: str, prefix: str = "") -> None:
     """Reset *one* trial filter (UX-7) — the same mechanism as the reset-all.
 
     Deleting the widget's key is the correct reset for every filter shape here,
@@ -3657,13 +3681,13 @@ def clear_trial_filter(*keys: str) -> None:
     """
     for key in keys:
         st.session_state.pop(key, None)
-    st.session_state.pop("_trial_filters", None)
-    st.session_state.pop("_trial_filters_raw", None)
+    st.session_state.pop(f"{prefix}_trial_filters", None)
+    st.session_state.pop(f"{prefix}_trial_filters_raw", None)
 
 
-def has_active_trial_filters() -> bool:
+def has_active_trial_filters(prefix: str = "") -> bool:
     """Whether any trial filter is currently narrowing the pool."""
-    f = read_trial_filters()
+    f = read_trial_filters(prefix)
     return bool(
         f.get("participants")
         or f.get("metadata")
@@ -3893,7 +3917,9 @@ def render_trial_chip_picker(
         st.session_state["trial_chip_colors"] = colors
 
 
-def _seed_filter_widget(key: str, options: list, default: list) -> None:
+def _seed_filter_widget(
+    key: str, options: list, default: list, *, prefix: str = ""
+) -> None:
     """Pre-seed a filter widget's state from the persistent mirror.
 
     Filter controls live in the Scanpath tab body, which doesn't render on every
@@ -3904,7 +3930,7 @@ def _seed_filter_widget(key: str, options: list, default: list) -> None:
     default-plus-session-state warning."""
     if key in st.session_state:
         return
-    mirror = st.session_state.get("_trial_filters_raw", {})
+    mirror = st.session_state.get(f"{prefix}_trial_filters_raw", {})
     if key in mirror:
         kept = [v for v in mirror[key] if v in options]
         st.session_state[key] = kept if kept else list(default)
@@ -3925,7 +3951,9 @@ def _filter_fields_for(words: pd.DataFrame, fixations: pd.DataFrame) -> list:
     return filter_fields
 
 
-def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict:
+def _compute_trial_filters(
+    words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
+) -> Dict:
     """Derive the narrowing filter result from the live filter-widget values.
 
     Reads the widget keys (filter_participants / filter_<col> / filter_favorites /
@@ -3953,7 +3981,7 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
         cache_key=(frame_fingerprint(words), frame_fingerprint(fixations)),
     )
     if len(parts) > 1:
-        sel = st.session_state.get("filter_participants")
+        sel = st.session_state.get(f"{prefix}filter_participants")
         if sel and len(sel) < len(parts):
             result["participants"] = list(sel)
     # Text narrowing (the "Narrow by → Text" multiselect). Like a categorical
@@ -3965,10 +3993,12 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
             text_field,
             cache_key=(frame_fingerprint(text_frame), text_field),
         )
-        sel = st.session_state.get("filter_text_id")
+        sel = st.session_state.get(f"{prefix}filter_text_id")
         if sel and len(text_vals) > 1 and len(sel) < len(text_vals):
             result["metadata"][text_field] = set(sel)
-            result["metadata_keys"][text_field] = "filter_text_id"
+            # UX-7's per-filter clear pops exactly this key, so it must be
+            # emitted already-prefixed or clearing one of B's filters no-ops.
+            result["metadata_keys"][text_field] = f"{prefix}filter_text_id"
     for col in _filter_fields_for(words, fixations):
         frame = words if col in words.columns else fixations
         if col not in frame.columns:
@@ -3980,22 +4010,28 @@ def _compute_trial_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict
                 frame,
                 spec.get("true", "Yes"),
                 spec.get("false", "No"),
-                f"filter_{col}",
+                f"{prefix}filter_{col}",
             )
             if vals is not None:
                 result["metadata"][col] = vals
-                result["metadata_keys"][col] = f"filter_{col}"
+                result["metadata_keys"][col] = f"{prefix}filter_{col}"
         else:
             values = _column_unique_strs(
                 frame, col, cache_key=(frame_fingerprint(frame), col)
             )
-            sel = st.session_state.get(f"filter_{col}")
+            sel = st.session_state.get(f"{prefix}filter_{col}")
             if sel and len(values) > 1 and len(sel) < len(values):
                 result["metadata"][col] = set(sel)
-                result["metadata_keys"][col] = f"filter_{col}"
-    result["favorites_only"] = bool(st.session_state.get("filter_favorites", False))
-    result["required_tags"] = list(st.session_state.get("filter_req_tags") or [])
-    result["excluded_tags"] = list(st.session_state.get("filter_exc_tags") or [])
+                result["metadata_keys"][col] = f"{prefix}filter_{col}"
+    result["favorites_only"] = bool(
+        st.session_state.get(f"{prefix}filter_favorites", False)
+    )
+    result["required_tags"] = list(
+        st.session_state.get(f"{prefix}filter_req_tags") or []
+    )
+    result["excluded_tags"] = list(
+        st.session_state.get(f"{prefix}filter_exc_tags") or []
+    )
     return result
 
 
@@ -4011,7 +4047,12 @@ def _text_field_and_frame(words: pd.DataFrame, fixations: pd.DataFrame):
 
 
 def render_narrow_by(
-    words: pd.DataFrame, fixations: pd.DataFrame, *, text_host=None, part_host=None
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    prefix: str = "",
+    text_host=None,
+    part_host=None,
 ) -> None:
     """Inline **Narrow by** multiselects — Text + Participant — that narrow the
     trial pool feeding the picker (the former Browse-by Text/Participant modes, now
@@ -4020,7 +4061,9 @@ def render_narrow_by(
     Start empty = no narrowing; pick values to narrow."""
 
     def _apply() -> None:
-        st.session_state["_trial_filters"] = _compute_trial_filters(words, fixations)
+        st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
+            words, fixations, prefix=prefix
+        )
 
     th = text_host if text_host is not None else st
     ph = part_host if part_host is not None else st
@@ -4033,11 +4076,11 @@ def render_narrow_by(
             cache_key=(frame_fingerprint(text_frame), text_field),
         )
         if len(text_vals) > 1:
-            _seed_filter_widget("filter_text_id", text_vals, [])
+            _seed_filter_widget(f"{prefix}filter_text_id", text_vals, [], prefix=prefix)
             th.multiselect(
                 "Text",
                 options=text_vals,
-                key="filter_text_id",
+                key=f"{prefix}filter_text_id",
                 on_change=_apply,
                 placeholder="All texts",
                 label_visibility="collapsed",
@@ -4049,11 +4092,11 @@ def render_narrow_by(
         cache_key=(frame_fingerprint(words), frame_fingerprint(fixations)),
     )
     if len(parts) > 1:
-        _seed_filter_widget("filter_participants", parts, [])
+        _seed_filter_widget(f"{prefix}filter_participants", parts, [], prefix=prefix)
         ph.multiselect(
             "Participant",
             options=parts,
-            key="filter_participants",
+            key=f"{prefix}filter_participants",
             on_change=_apply,
             placeholder="All participants",
             label_visibility="collapsed",
@@ -4061,7 +4104,7 @@ def render_narrow_by(
 
 
 def render_trial_filters(
-    words: pd.DataFrame, fixations: pd.DataFrame, *, host=None
+    words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = "", host=None
 ) -> Dict:
     """Render the trial-filter controls into ``host`` and persist the selections.
 
@@ -4079,7 +4122,9 @@ def render_trial_filters(
         host = st.sidebar
 
     def _apply() -> None:
-        st.session_state["_trial_filters"] = _compute_trial_filters(words, fixations)
+        st.session_state[f"{prefix}_trial_filters"] = _compute_trial_filters(
+            words, fixations, prefix=prefix
+        )
 
     # Text + Participant narrowing now lives in the inline "Narrow by" row
     # (``render_narrow_by``); this popover keeps the condition + annotation filters.
@@ -4096,7 +4141,7 @@ def render_trial_filters(
                 frame,
                 spec.get("true", "Yes"),
                 spec.get("false", "No"),
-                f"filter_{col}",
+                f"{prefix}filter_{col}",
                 host,
                 on_change=_apply,
             )
@@ -4105,33 +4150,40 @@ def render_trial_filters(
                 frame, col, cache_key=(frame_fingerprint(frame), col)
             )
             if len(values) > 1:
-                _seed_filter_widget(f"filter_{col}", values, values)
+                _seed_filter_widget(
+                    f"{prefix}filter_{col}", values, values, prefix=prefix
+                )
                 host.multiselect(
-                    label, options=values, key=f"filter_{col}", on_change=_apply
+                    label,
+                    options=values,
+                    key=f"{prefix}filter_{col}",
+                    on_change=_apply,
                 )
 
     host.markdown("**By annotation**")
-    if "filter_favorites" not in st.session_state:
-        st.session_state["filter_favorites"] = bool(
-            st.session_state.get("_trial_filters_raw", {}).get(
-                "filter_favorites", False
+    if f"{prefix}filter_favorites" not in st.session_state:
+        st.session_state[f"{prefix}filter_favorites"] = bool(
+            st.session_state.get(f"{prefix}_trial_filters_raw", {}).get(
+                f"{prefix}filter_favorites", False
             )
         )
-    host.checkbox("⭐ Favorites only", key="filter_favorites", on_change=_apply)
+    host.checkbox(
+        "⭐ Favorites only", key=f"{prefix}filter_favorites", on_change=_apply
+    )
     tags = known_tags()
     if tags:
-        _seed_filter_widget("filter_req_tags", tags, [])
+        _seed_filter_widget(f"{prefix}filter_req_tags", tags, [], prefix=prefix)
         host.multiselect(
             "With any of these tags",
             options=tags,
-            key="filter_req_tags",
+            key=f"{prefix}filter_req_tags",
             on_change=_apply,
         )
-        _seed_filter_widget("filter_exc_tags", tags, [])
+        _seed_filter_widget(f"{prefix}filter_exc_tags", tags, [], prefix=prefix)
         host.multiselect(
             "Excluding tags",
             options=tags,
-            key="filter_exc_tags",
+            key=f"{prefix}filter_exc_tags",
             on_change=_apply,
             help="e.g. hide everything tagged 'To exclude'.",
         )
@@ -4143,8 +4195,9 @@ def render_trial_filters(
     host.divider()
     host.button(
         "✕ Clear all filters",
-        key="clear_all_filters_panel",
+        key=f"{prefix}clear_all_filters_panel",
         on_click=clear_trial_filters,
+        args=(prefix,),
         width="stretch",
         help="Reset every Narrow-by, condition and annotation filter.",
     )
@@ -4153,14 +4206,14 @@ def render_trial_filters(
     # a run where this panel isn't shown (the keys get cleared); then publish the
     # derived result for read_trial_filters (covers no-change runs).
     keys = [
-        "filter_participants",
-        "filter_text_id",
-        "filter_req_tags",
-        "filter_exc_tags",
-    ] + [f"filter_{c}" for c in _filter_fields_for(words, fixations)]
-    st.session_state["_trial_filters_raw"] = {
+        f"{prefix}filter_participants",
+        f"{prefix}filter_text_id",
+        f"{prefix}filter_req_tags",
+        f"{prefix}filter_exc_tags",
+    ] + [f"{prefix}filter_{c}" for c in _filter_fields_for(words, fixations)]
+    st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state
     }
-    result = _compute_trial_filters(words, fixations)
-    st.session_state["_trial_filters"] = result
+    result = _compute_trial_filters(words, fixations, prefix=prefix)
+    st.session_state[f"{prefix}_trial_filters"] = result
     return result

@@ -65,9 +65,44 @@ computation.
 
 - **Animate** replays the selected trial. **⚙ Playback** controls speed,
   autoplay, and frame quality.
-- **Compare** adds a second reading on the same text and shared canvas.
+- **Compare** adds a second reading beside the selected one.
 - **Comparisons** ranks other same-text scanpaths using the selected grouping
   and similarity settings.
+
+### Comparing across datasets
+
+**Compare with** (above the *Compare To* picker) chooses which dataset scanpath
+B comes from. It defaults to *This dataset*; pick another and the candidate list,
+the **Filter B by** controls beside it, and the trial's screen geometry all come
+from that dataset instead.
+
+Any loaded upload, the bundled demo and the synthetic trial are always
+available. A public corpus is offered too, but only loads when its files are
+already where you last pointed the app — otherwise it shows *(needs setup)* and
+tells you to open that corpus as the main dataset once, because the compare
+picker deliberately cannot draw the download and folder controls that would
+normally set that up.
+
+Three things behave differently across datasets, each on purpose:
+
+| | Why |
+| --- | --- |
+| **Overlay is unavailable** | Overlay pools both readings into one coordinate space; two datasets don't share one. Side by side and Stacked are used instead, and your Overlay choice is remembered for same-dataset pairs. |
+| **Each panel is drawn to its own screen** | A caption under the figure names both monitors. Box and text sizes are true-to-scale *within* a panel and **not** comparable across panels. |
+| **Only shared metrics can colour it** | A measure one corpus ships and the other doesn't would colour one panel and blank the other, so it falls back with a note. |
+
+B carries its own filters (they never touch the main pool) and never shows 👤
+markers — two corpora don't share readers. 📄 still appears when a text id
+matches across them.
+
+**⚖️ Download this comparison as a bundle** (Export → *This trial*) writes the
+figure plus both scanpaths' tables and a manifest naming each side's dataset,
+trial and recording setup. The image alone can't be reproduced; the bundle can.
+
+A share link carries the comparison as `?compare=<participant>:<trial>` plus
+`&cmp_source=<dataset>`. An uploaded dataset lives only in your session, so a
+link can't rebuild it — the Share panel says so rather than sending half a
+comparison.
 
 ## Correct vertical drift
 

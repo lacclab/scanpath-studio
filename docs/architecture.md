@@ -29,6 +29,7 @@ the repo root (kept current as the code changes); this is the short version.
 | `persistence.py` | On-device recovery cache for a local/desktop session (datasets, mappings, settings, annotations), inspected and cleared from the sidebar panel, `scanpath-studio cache`, and `api.cache_status`. |
 | `alignment.py` | Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. |
 | `datasets.py` | Ready-made loaders for public corpora (OneStop, PoTeC, MultiplEYE). |
+| `compare_source.py` | The second dataset compare mode can draw scanpath B from: a widget-free readiness gate + loader, so a comparison can cross corpora without the picker having to render a corpus' folder/download controls. |
 
 The standalone desktop build (launcher, PyInstaller spec, smoke test, CI
 matrix) lives outside the package in

@@ -28,17 +28,57 @@ for canonical fields.
 
 ## Use the setup wizard
 
-1. Enter a dataset name, monitor resolution, and stimulus font details.
-2. Add the word/IA and fixation files; several files per table are allowed.
-3. Check the automatically proposed participant, trial, text, geometry, and
-   timing columns.
-4. Build a composite ID when one column is not unique enough.
-5. Keep any extra condition or analysis fields you will need later.
-6. Select **Add dataset**.
+The wizard is six steps. Work down them in order, or jump straight to one with
+the progress chips at the top; your answers are kept as you move around.
 
-The distinct-value counts shown beside ID mappings are the fastest sanity check.
+1. **Your data** — add the word/IA and fixation files; several files per table are
+   allowed. A summary card names the columns that were auto-detected and the ones
+   still missing — it is a report, not a shortcut: detection matches column
+   *names*, so steps 2 and 3 are where you confirm it actually picked the right
+   ones. Raw gaze and *Restore a saved setup* live behind the two popovers.
+2. **Trials & readers** — check the proposed trial ID, and the optional
+   participant and text IDs. Pick several columns to build a composite ID when one
+   is not unique enough. The readout below the pickers is the fastest sanity
+   check: *N trials · N readers · N texts*.
+3. **Fixations & text** — fixation x/y/duration and the word ID/text/box. Anything
+   unusual (word ID on fixations, timestamps, line index, character-AOI
+   aggregation) is behind **⚙️ Advanced**.
+4. **Recording setup** — see below.
+5. **Extra fields** — keep any condition or analysis fields you will need later,
+   and choose which become trial filters.
+6. **Name & add** — review every decision in one table, then **Add dataset**.
+
 After loading, open **Data Inspection** and confirm that both tables share the
 expected trials and coordinate range.
+
+### The recording setup asks how you know
+
+Step 4 describes the screen the data was **recorded** on — not the screen you are
+reading this on. It has **no defaults**: a wrong monitor size silently rescales
+every figure, so the app will not guess one for you. Each of the three groups asks
+how you know the value:
+
+| Choice | Recorded as | Use when |
+| --- | --- | --- |
+| *I know these* | `measured` | You have the real numbers. |
+| *Estimate from my data* | `estimated` | You don't. Derived from the extent of your word boxes and fixations — always available, always succeeds, and reported as a **lower bound**, since text rarely fills the whole screen. |
+| *Use a named default* | `assumed` | A typical lab value is good enough for what you are doing. |
+| *Skip* | `skipped` | Only on **physical size & viewing distance**, when you don't need visual-angle units. |
+
+**Add dataset** stays disabled until all three are answered. Nothing derived from
+a skipped group is shown: with no physical width there is no honest pixels-per-
+degree or point-to-pixel conversion, so those are hidden rather than computed from
+a default.
+
+The answer travels with the dataset. It appears in the step-6 review table and
+under **Data Inspection → Recording setup**, rides a share link as `setup_prov`,
+and is written into the saved-setup JSON and into `plot_config.json` in a bulk
+export — so a figure set records that its monitor size was assumed, and whoever
+opens your link can tell your measurements from the app's guesses.
+
+Answers are remembered across datasets in a session as **pre-filled values with
+the choice reset**: quick for a second export from the same lab, while still
+making you assert that the setup applies to this dataset too.
 
 ## Derived and preserved fields
 

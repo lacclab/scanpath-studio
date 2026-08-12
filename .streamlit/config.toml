@@ -19,6 +19,10 @@ textColor = "#e8eaed"
 
 [server]
 runOnSave = true
+# Streamlit's default is 200 MB, which a real fixation report clears easily.
+# Kept in sync with `constants.UPLOAD_MAX_SIZE_MB` (pinned by tests/test_theme.py)
+# — the CLI passes it explicitly, because this file is only read when the app is
+# launched from this directory.
 maxUploadSize = 5000
 
 [browser]

@@ -671,3 +671,80 @@ class TestAuthoringEditorFlow:
             "an undrawable row was dropped without saying so"
         )
         assert "Row 2" in warnings
+
+
+@pytest.mark.timeout(180)
+class TestCrossDatasetCompareFlow:
+    """CMP-8 — pick scanpath B out of a *different* dataset and render it.
+
+    Driven through the real widgets: turn Compare on, pick the second dataset,
+    and assert the figure builds without an error and the two panels describe
+    two different corpora.
+    """
+
+    def test_comparing_against_another_dataset_renders(self):
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        at = _boot()
+        assert not at.exception, at.exception
+
+        at.session_state["single_compare_toggle"] = True
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+
+        # The picker offers the other built-in sources; the active one is not
+        # offered (that is what "This dataset" already means).
+        picker = at.selectbox(key=COMPARE_SOURCE_KEY)
+        assert "This dataset" in picker.options
+        assert SYNTHETIC_SOURCE in picker.options
+        assert "Bundled Demo" not in picker.options
+
+        picker.set_value(SYNTHETIC_SOURCE)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert [e.value for e in at.error] == []
+
+        # B now comes out of the synthetic corpus, whose single trial is `t1`.
+        compare = at.selectbox(key="single_compare_trial")
+        assert compare.value is not None
+        assert at.session_state["_share_selection"]["compare"]["source"] == (
+            SYNTHETIC_SOURCE
+        )
+
+    def test_overlay_resolves_to_a_split_layout_without_losing_the_choice(self):
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        at = _boot()
+        at.session_state["single_compare_toggle"] = True
+        at.session_state["single_compare_layout"] = "Overlay"
+        at.session_state[COMPARE_SOURCE_KEY] = SYNTHETIC_SOURCE
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert [e.value for e in at.error] == []
+        # §5.3: resolved for this render, but the user's stored choice stands so
+        # a same-dataset pair gets Overlay straight back.
+        assert at.session_state["single_compare_layout"] == "Overlay"
+
+    def test_bs_filters_do_not_disturb_the_main_pool(self):
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        at = _boot()
+        at.session_state["single_compare_toggle"] = True
+        at.session_state[COMPARE_SOURCE_KEY] = SYNTHETIC_SOURCE
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+
+        before = _trial_ids(at)
+        # B's filter set lives under the `cmp` prefix; writing one must not
+        # touch `_trial_filters`, which scopes the whole app's pool.
+        at.session_state["cmpfilter_participants"] = ["nobody"]
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert _trial_ids(at) == before
+        # `at.session_state` has no `.get` — membership first (conftest note).
+        main_filters = (
+            at.session_state["_trial_filters"]
+            if "_trial_filters" in at.session_state
+            else {}
+        )
+        assert main_filters.get("participants") is None

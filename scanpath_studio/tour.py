@@ -466,7 +466,8 @@ _SPOTLIGHT_STEPS = [
         "in_sidebar": False,
         "title": "🎬 Animate & compare",
         "body": "**Animate** replays the trial fixation by fixation, and "
-        "**Compare** overlays a second scanpath. Each has a ⚙ popover for its "
+        "**Compare** adds a second scanpath beside it — from this dataset or, "
+        "via **Compare with**, from another one. Each has a ⚙ popover for its "
         "settings.",
     },
     {
@@ -646,6 +647,93 @@ def _dismiss_listener_script(
     </script>"""
 
 
+def _highlight_css(selector: str, accent: str) -> str:
+    """The pulsing outline drawn around a tour/guide target.
+
+    Factored out of `render_spotlight_tour` (DATA-22 §4) so the setup guide can
+    highlight wizard steps with exactly the same treatment the welcome tour uses
+    — the guide documented its own gap ("the steps are descriptive, not anchored
+    to specific controls") while this machinery sat 800 lines above it.
+    """
+    if not selector:
+        return ""
+    return f"""
+{selector} {{
+    outline: 3px solid {accent};
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+    animation: tour-pulse 1.6s ease-in-out infinite;
+}}
+@keyframes tour-pulse {{
+    0%, 100% {{ box-shadow: 0 0 0 0 color-mix(in srgb, {accent} 50%, transparent); }}
+    50% {{ box-shadow: 0 0 14px 7px color-mix(in srgb, {accent} 25%, transparent); }}
+}}
+"""
+
+
+def _scroll_into_view_script(selector: str, *, in_sidebar: bool) -> str:
+    """Centre `selector`'s first *visible* match within its own scroller.
+
+    Every subtlety here was observed live; see the call site in
+    `render_spotlight_tour` for the full list. The short version: match the first
+    visible element (inactive tab panels hold invisible duplicates), gate sidebar
+    targets on `aria-expanded` rather than on visibility (a collapsed sidebar
+    keeps nonzero layout rects), and scroll the nearest scrollable ancestor
+    instead of calling `scrollIntoView` (which moves the document).
+    """
+    return f"""<script>
+                (function () {{
+                    const doc = window.parent.document;
+                    const win = doc.defaultView;
+                    const findVisible = () =>
+                        [...doc.querySelectorAll({selector!r})].find((e) => {{
+                            const r = e.getBoundingClientRect();
+                            if (r.width === 0 || r.height === 0) return false;
+                            const cs = win.getComputedStyle(e);
+                            return cs.visibility !== "hidden" && cs.display !== "none";
+                        }});
+                    let tries = 0;
+                    (function attempt() {{
+                        if ({str(in_sidebar).lower()}) {{
+                            // The collapsed sidebar keeps its layout (nonzero
+                            // rects), so gate on aria-expanded, not on
+                            // findVisible(). Retries ride out hydration.
+                            const sb = doc.querySelector(
+                                'section[data-testid="stSidebar"]');
+                            if (sb && sb.getAttribute("aria-expanded") !== "true") {{
+                                doc.querySelector(
+                                    'button[data-testid="stExpandSidebarButton"]'
+                                )?.click();
+                                if (++tries < 20) setTimeout(attempt, 150);
+                                return;
+                            }}
+                        }}
+                        const el = findVisible();
+                        if (!el) {{
+                            if (++tries < 20) setTimeout(attempt, 150);
+                            return;
+                        }}
+                        for (let box = el.parentElement; box; box = box.parentElement) {{
+                            const cs = win.getComputedStyle(box);
+                            if (/(auto|scroll|overlay)/.test(cs.overflowY)
+                                    && box.scrollHeight > box.clientHeight + 4) {{
+                                const r = el.getBoundingClientRect();
+                                const b = box.getBoundingClientRect();
+                                const slack = 8;
+                                if (r.top >= b.top - slack
+                                        && r.bottom <= b.top + box.clientHeight + slack) {{
+                                    return;  // already visible within its scroller
+                                }}
+                                box.scrollTop += r.top - b.top
+                                    - Math.max(0, (box.clientHeight - r.height) / 2);
+                                return;
+                            }}
+                        }}
+                    }})();
+                }})();
+                </script>"""
+
+
 @st.fragment
 def render_spotlight_tour() -> None:
     """Floating tour card + pulsing highlight for the current spotlight step.
@@ -676,20 +764,7 @@ def render_spotlight_tour() -> None:
     is_dark = getattr(theme, "type", "light") == "dark"
     bg, border = ("#262730", "#41434e") if is_dark else ("#ffffff", "#d5d6d9")
 
-    highlight = ""
-    if step["selector"]:
-        highlight = f"""
-{step["selector"]} {{
-    outline: 3px solid {accent};
-    outline-offset: 3px;
-    border-radius: 0.5rem;
-    animation: tour-pulse 1.6s ease-in-out infinite;
-}}
-@keyframes tour-pulse {{
-    0%, 100% {{ box-shadow: 0 0 0 0 color-mix(in srgb, {accent} 50%, transparent); }}
-    50% {{ box-shadow: 0 0 14px 7px color-mix(in srgb, {accent} 25%, transparent); }}
-}}
-"""
+    highlight = _highlight_css(step["selector"], accent)
     st.markdown(
         "<style>"
         + _CARD_CSS
@@ -786,57 +861,7 @@ def render_spotlight_tour() -> None:
                 and step["selector"].startswith(".st-key-tour_grp_"),
             )
             embed_html_iframe(
-                f"""<script>
-                (function () {{
-                    const doc = window.parent.document;
-                    const win = doc.defaultView;
-                    const findVisible = () =>
-                        [...doc.querySelectorAll({step["selector"]!r})].find((e) => {{
-                            const r = e.getBoundingClientRect();
-                            if (r.width === 0 || r.height === 0) return false;
-                            const cs = win.getComputedStyle(e);
-                            return cs.visibility !== "hidden" && cs.display !== "none";
-                        }});
-                    let tries = 0;
-                    (function attempt() {{
-                        if ({str(in_sidebar).lower()}) {{
-                            // The collapsed sidebar keeps its layout (nonzero
-                            // rects), so gate on aria-expanded, not on
-                            // findVisible(). Retries ride out hydration.
-                            const sb = doc.querySelector(
-                                'section[data-testid="stSidebar"]');
-                            if (sb && sb.getAttribute("aria-expanded") !== "true") {{
-                                doc.querySelector(
-                                    'button[data-testid="stExpandSidebarButton"]'
-                                )?.click();
-                                if (++tries < 20) setTimeout(attempt, 150);
-                                return;
-                            }}
-                        }}
-                        const el = findVisible();
-                        if (!el) {{
-                            if (++tries < 20) setTimeout(attempt, 150);
-                            return;
-                        }}
-                        for (let box = el.parentElement; box; box = box.parentElement) {{
-                            const cs = win.getComputedStyle(box);
-                            if (/(auto|scroll|overlay)/.test(cs.overflowY)
-                                    && box.scrollHeight > box.clientHeight + 4) {{
-                                const r = el.getBoundingClientRect();
-                                const b = box.getBoundingClientRect();
-                                const slack = 8;
-                                if (r.top >= b.top - slack
-                                        && r.bottom <= b.top + box.clientHeight + slack) {{
-                                    return;  // already visible within its scroller
-                                }}
-                                box.scrollTop += r.top - b.top
-                                    - Math.max(0, (box.clientHeight - r.height) / 2);
-                                return;
-                            }}
-                        }}
-                    }})();
-                }})();
-                </script>""",
+                _scroll_into_view_script(step["selector"], in_sidebar=in_sidebar),
                 height=0,
             )
         else:
@@ -1462,53 +1487,112 @@ def render_faq_button() -> None:
 # -----------------------------------------------------------------------------
 
 # (title, markdown body) per step — one per part of the wizard, in order.
+# DATA-22 §4: the guide is now *anchored*. Each step names the wizard step it
+# talks about (so Next drives the accordion instead of narrating beside it) and a
+# CSS selector to highlight + scroll to. Keyed expanders give every step a
+# `.st-key-wiz_open_<id>` selector for free, so no new wrapper containers were
+# needed; finer targets reuse existing widget keys.
 _WIZARD_GUIDE_STEPS = [
-    (
-        "📂 Set up your dataset",
-        "Turn your eye-tracking tables into an interactive dataset. The wizard "
-        "**auto-advances** — only the step you still need stays open. Follow along "
-        "with **Next**, or **Skip** to dive in.",
-    ),
-    (
-        "1 · Name it",
-        "Pick a name you'll recognise — it appears in **Data source** so you can "
-        "switch back later without re-uploading.",
-    ),
-    (
-        "2 · Experimental setup",
-        "Set the recording **monitor resolution** (and font) so word boxes and "
-        "fixations stay **true-to-scale**. Defaults to 1440p; tune it anytime.",
-    ),
-    (
-        "3 · Upload",
-        "Add your **Fixations** and/or **Words / IA** tables (CSV / TSV / Parquet; "
-        "several files or either alone). Each upload previews its first rows.\n\n"
-        "> 💡 Large dataset? Run locally: `pip install scanpath-studio`.",
-    ),
-    (
-        "4 · Map columns",
-        "Columns auto-detect — confirm or override the **trial id**, optional "
-        "participant / text ids, and the required fixation/word columns. "
-        "**Restore a saved setup** re-applies an earlier mapping.",
-    ),
-    (
-        "5 · Keep & finish",
-        "Optionally keep extra columns or filter fields. **⬇️ Download setup** "
-        "saves the mapping; **✅ Add dataset** stores it and switches to it. 👀",
-    ),
+    {
+        "title": "📂 Set up your dataset",
+        "body": (
+            "Turn your eye-tracking tables into an interactive dataset in six "
+            "steps: upload, tell us which columns mean what, say how the "
+            "recording was set up, name it. Follow along with **Next** — the "
+            "wizard opens each step as you go — or **Skip** to dive in."
+        ),
+        "selector": "",
+        "step_id": None,
+    },
+    {
+        "title": "1 · Your data",
+        "body": (
+            "Add your **Fixations** and/or **Words / IA** tables (CSV / TSV / "
+            "Parquet; several files or either alone). Each upload previews its "
+            "first rows, and a summary card names the columns that were "
+            "auto-detected.\n\n"
+            "> 💡 Large dataset? Run locally: `pip install scanpath-studio`."
+        ),
+        "selector": ".st-key-wiz_open_data",
+        "step_id": "data",
+    },
+    {
+        "title": "2 · Trials & readers",
+        "body": (
+            "Confirm the **trial id** — the columns that identify one reading of "
+            "one text — plus the optional participant and text ids. Pick several "
+            "columns to compose an id. The readout below tells you how many "
+            "trials, readers and texts that produced."
+        ),
+        "selector": ".st-key-wiz_open_identity",
+        "step_id": "identity",
+    },
+    {
+        "title": "3 · Fixations & text",
+        "body": (
+            "Where the eyes landed and where the words are: fixation **x / y / "
+            "duration**, and the word **id / text / box**. Anything unusual lives "
+            "behind **⚙️ Advanced**."
+        ),
+        "selector": ".st-key-wiz_open_geometry",
+        "step_id": "geometry",
+    },
+    {
+        "title": "4 · Recording setup",
+        "body": (
+            "The screen the data was **recorded** on. Nothing is preselected — say "
+            "whether you know each value, want it **estimated from your data**, are "
+            "taking a **named default**, or are **skipping** it. Your answer is "
+            "stored beside the number, so a default is never read as a measurement."
+        ),
+        "selector": ".st-key-wiz_open_setup",
+        "step_id": "setup",
+    },
+    {
+        "title": "5 · Extra fields",
+        "body": (
+            "Optionally keep extra columns to colour and analyse by, and choose "
+            "which trial-level conditions become filters. Fewer columns is faster."
+        ),
+        "selector": ".st-key-wiz_open_fields",
+        "step_id": "fields",
+    },
+    {
+        "title": "6 · Name & add",
+        "body": (
+            "Check the review table — every decision, its value, and how it is "
+            "known. **⬇️ Download setup** saves the mapping for next time; "
+            "**✅ Add dataset** stores it and switches to it. 👀"
+        ),
+        "selector": ".st-key-wiz_open_review",
+        "step_id": "review",
+    },
 ]
 
 
+def _wizard_guide_go(step_idx: int) -> None:
+    """Move the guide to ``step_idx`` and open the wizard step it describes.
+
+    This is what makes the card *drive* the wizard rather than narrate beside it.
+    ``go_to_step`` is safe here because a guide button is an ``on_click``
+    callback: it runs before the script re-executes, so the ``wiz_open_*`` writes
+    land before the expanders instantiate.
+    """
+    from . import wizard_shell
+
+    step_idx = max(0, min(step_idx, len(_WIZARD_GUIDE_STEPS) - 1))
+    st.session_state["wizard_guide_step"] = step_idx
+    target = _WIZARD_GUIDE_STEPS[step_idx].get("step_id")
+    if target:
+        wizard_shell.go_to_step(target)
+
+
 def _wizard_guide_back() -> None:
-    st.session_state["wizard_guide_step"] = max(
-        0, st.session_state.get("wizard_guide_step", 0) - 1
-    )
+    _wizard_guide_go(st.session_state.get("wizard_guide_step", 0) - 1)
 
 
 def _wizard_guide_next() -> None:
-    st.session_state["wizard_guide_step"] = (
-        st.session_state.get("wizard_guide_step", 0) + 1
-    )
+    _wizard_guide_go(st.session_state.get("wizard_guide_step", 0) + 1)
 
 
 def _exit_wizard_guide() -> None:
@@ -1534,8 +1618,10 @@ def render_spotlight_wizard_guide() -> None:
         return
     n = len(_WIZARD_GUIDE_STEPS)
     step_idx = min(st.session_state.get("wizard_guide_step", 0), n - 1)
-    title, body = _WIZARD_GUIDE_STEPS[step_idx]
+    step = _WIZARD_GUIDE_STEPS[step_idx]
+    title, body, selector = step["title"], step["body"], step["selector"]
 
+    accent = st.get_option("theme.primaryColor") or "#1f77b4"
     theme = getattr(getattr(st, "context", None), "theme", None)
     is_dark = getattr(theme, "type", "light") == "dark"
     bg, border = ("#262730", "#41434e") if is_dark else ("#ffffff", "#d5d6d9")
@@ -1543,9 +1629,15 @@ def render_spotlight_wizard_guide() -> None:
         "<style>"
         + _CARD_CSS
         + f".st-key-tour_card {{ background: {bg}; border: 1px solid {border}; }}"
+        + _highlight_css(selector, accent)
         + "</style>",
         unsafe_allow_html=True,
     )
+    if selector:
+        # The wizard is a main-area flow, so never the sidebar branch.
+        embed_html_iframe(
+            _scroll_into_view_script(selector, in_sidebar=False), height=0
+        )
 
     with st.container(key="tour_card"):
         # <h2> for a valid heading outline; sized down via `.st-key-tour_card h2`.

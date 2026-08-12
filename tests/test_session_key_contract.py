@@ -258,6 +258,12 @@ def test_deep_link_seeds_frozen_state_keys():
         sk.PARAM_ONESTOP_VARIANT: list(ONESTOP_VARIANT_LABELS)[0],
         sk.PARAM_ONESTOP_REGIME: list(ONESTOP_REGIME_LABELS)[0],
         sk.PARAM_ONESTOP_PARTS: ",".join(list(ONESTOP_PART_LABELS)[:2]),
+        # CMP-8 §7. Both halves are needed: the reader requires `<pid>:<trial>`,
+        # and without them the two keys they seed (`single_compare_toggle`,
+        # `cmp_dataset`) would never appear here — leaving the frozen-key
+        # assertion below vacuous for exactly the newest additions.
+        sk.COMPARE_PARAM: "p2:t2",
+        sk.COMPARE_SOURCE_PARAM: "synthetic",
     }
     # Plausible values per encoding — a bad one would be dropped with a warning
     # (asserted empty below), which would hide a missing key. A param whose
@@ -357,15 +363,20 @@ def test_share_link_emits_frozen_params():
     assert at.session_state["_caveats"] == []
 
     emitted = set(parse_qs(at.session_state["_query"]))
+    # `URL_OPTIONAL_PARAMS` are emitted only when there is something to say —
+    # `setup_prov` is absent for a shareable source that declares no monitor
+    # (Authoring, Synthetic) — so they are compared separately from the set every
+    # fully-populated session emits.
     _assert_frozen(
-        emitted,
+        emitted - sk.URL_OPTIONAL_PARAMS,
         sk.SHARE_QUERY_PARAMS,
         what="params the Share link emits",
         where="url_state._build_share_query()",
     )
-    assert emitted <= sk.URL_PRESET_PARAMS | sk.URL_SELECTION_PARAMS, (
+    accepted = sk.URL_PRESET_PARAMS | sk.URL_SELECTION_PARAMS | sk.URL_OPTIONAL_PARAMS
+    assert emitted <= accepted, (
         "the Share link emits a param the deep-link reader doesn't parse: "
-        f"{sorted(emitted - (sk.URL_PRESET_PARAMS | sk.URL_SELECTION_PARAMS))}"
+        f"{sorted(emitted - accepted)}"
     )
 
 
@@ -533,3 +544,126 @@ def test_saved_config_from_older_schema_still_restores():
     assert not at.exception, at.exception
     assert at.session_state["_skipped"] == []
     assert sk.PLOT_CONFIG_STATE_KEYS <= set(at.session_state["_written"])
+
+
+def _setup_prov_round_trip_app():
+    """Emit `setup_prov` for a corpus that declares a monitor, then read it back."""
+    from urllib.parse import parse_qs as _parse_qs
+
+    import streamlit as st
+
+    from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
+    from scanpath_studio.url_state import _apply_url_preset, _build_share_query
+
+    st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
+    query, _ = _build_share_query(ONESTOP_PUBLIC_CHOICE)
+    st.session_state["_query"] = query
+
+    # Feed the emitted params straight back through the reader.
+    st.query_params.clear()
+    for key, values in _parse_qs(query).items():
+        st.query_params[key] = values[0]
+    _apply_url_preset()
+
+
+def test_setup_provenance_round_trips_through_the_share_link():
+    """DATA-22 §7 surface 2: a link carries the recording setup's *values*
+    already; without the badge the recipient cannot tell a monitor the sender
+    measured from one the app assumed on their behalf."""
+    at = AppTest.from_function(_setup_prov_round_trip_app)
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+
+    emitted = parse_qs(at.session_state["_query"])
+    assert emitted[sk.SETUP_PROVENANCE_PARAM] == [
+        "screen:measured,geom:assumed,text:measured"
+    ]
+    # The reader parks the parsed badge for the UI.
+    assert at.session_state[sk.SETUP_PROVENANCE_STATE_KEY] == {
+        "screen": "measured",
+        "geometry": "assumed",
+        "text": "measured",
+    }
+
+
+def _compare_share_round_trip_app():
+    """CMP-8 §7: emit the comparison selection, then read it back."""
+    from urllib.parse import parse_qs as _parse_qs
+
+    import streamlit as st
+
+    from scanpath_studio.constants import DEMO_CHOICE, SYNTHETIC_CHOICE
+    from scanpath_studio.url_state import _apply_url_preset, _build_share_query
+
+    st.session_state["_share_selection"] = {
+        "participant_id": "p1",
+        "trial_id": "t1",
+        "compare": {
+            "participant_id": "p2",
+            "trial_id": "t2",
+            "source": SYNTHETIC_CHOICE,
+        },
+    }
+    query, caveats = _build_share_query(DEMO_CHOICE)
+    st.session_state["_query"] = query
+    st.session_state["_caveats"] = caveats
+
+    st.query_params.clear()
+    for key, values in _parse_qs(query).items():
+        st.query_params[key] = values[0]
+    _apply_url_preset()
+
+
+def test_compare_selection_round_trips_through_the_share_link():
+    """Compare mode had no link representation at all before CMP-8 — a
+    `cmp_source` naming B's corpus without naming B's trial would restore
+    nothing, so the pair travels together."""
+    at = AppTest.from_function(_compare_share_round_trip_app)
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+
+    emitted = parse_qs(at.session_state["_query"])
+    assert emitted[sk.COMPARE_PARAM] == ["p2:t2"]
+    assert emitted[sk.COMPARE_SOURCE_PARAM] == ["synthetic"]
+    # The reader turns Compare on and parks B for the picker, which is the only
+    # place the candidate *labels* exist.
+    assert at.session_state["single_compare_toggle"] is True
+    assert at.session_state[sk.PENDING_COMPARE_STATE_KEY] == {
+        "participant_id": "p2",
+        "trial_id": "t2",
+    }
+    assert at.session_state[sk.COMPARE_SOURCE_STATE_KEY] == "Synthetic test trial"
+
+
+def _compare_share_unshareable_app():
+    """A stored upload as B can't travel — the link must say so, not drop it."""
+    import streamlit as st
+
+    from scanpath_studio.constants import DEMO_CHOICE
+    from scanpath_studio.url_state import _build_share_query
+
+    st.session_state["_share_selection"] = {
+        "participant_id": "p1",
+        "trial_id": "t1",
+        "compare": {
+            "participant_id": "p2",
+            "trial_id": "t2",
+            "source": "My upload",
+        },
+    }
+    query, caveats = _build_share_query(DEMO_CHOICE)
+    st.session_state["_query"] = query
+    st.session_state["_caveats"] = caveats
+
+
+def test_an_unshareable_compare_source_is_declared_not_dropped():
+    at = AppTest.from_function(_compare_share_unshareable_app)
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+
+    emitted = parse_qs(at.session_state["_query"])
+    # Neither half is emitted — a `compare=` without its `cmp_source` would land
+    # the recipient on a trial id looked up in the *wrong* corpus.
+    assert sk.COMPARE_PARAM not in emitted
+    assert sk.COMPARE_SOURCE_PARAM not in emitted
+    assert any("My upload" in caveat for caveat in at.session_state["_caveats"])

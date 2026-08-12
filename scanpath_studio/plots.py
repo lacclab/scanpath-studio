@@ -145,6 +145,16 @@ class FigureSettings:
     layout: str = "overlay"
     style_a: Optional[dict] = None
     style_b: Optional[dict] = None
+    # CMP-8 §4 — scanpath B's own screen, honoured *only* by
+    # `_make_split_comparison_figure` (side-by-side / stacked). `None` means "the
+    # same screen as A", which is every same-dataset comparison and so leaves
+    # every existing figure byte-identical. Overlay never sees these: a
+    # cross-dataset pair can't be overlaid at all (§5.3), because pooling two
+    # coordinate spaces into one axis range is meaningless.
+    canvas_b: Optional[Tuple[int, int]] = None
+    background_image_b: Optional[str] = None
+    background_image_size_b: Optional[Tuple[float, float]] = None
+    background_image_origin_b: Optional[Tuple[float, float]] = None
 
     @classmethod
     def from_mapping(
@@ -4541,8 +4551,19 @@ def _make_split_comparison_figure(
 ) -> go.Figure:
     """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
 
-    The stimulus-image background (VIZ-4) is added to **both** panels — the two
-    readings are of the same text, so the same page sits under each.
+    Each panel computes its **own** axis ranges from its trial's words +
+    fixations, which is what lets the two panels sit in different coordinate
+    spaces at all (CMP-8).
+
+    The stimulus-image background (VIZ-4) is added to both panels. It used to be
+    the *same* image on the grounds that "the two readings are of the same
+    text" — no longer true once B may come from another corpus, so B's panel
+    takes ``background_image_b`` (and its size/origin) when given and falls back
+    to A's otherwise, which is every same-dataset comparison.
+
+    Likewise ``canvas_b``: B's screen, defaulting to A's. It feeds B's axis
+    ranges *and* its label-fitting pair, so B's reading text stays true-to-scale
+    on **B's** monitor rather than being sized against A's.
     """
     from plotly.subplots import make_subplots
 
@@ -4594,9 +4615,33 @@ def _make_split_comparison_figure(
         tickfont_size=colorbar_tickfont_size,
     )
     is_stacked = orientation == "stacked"
+    # Per-panel canvas: B falls back to A's, so a same-dataset comparison is
+    # byte-identical to the pre-CMP-8 figure.
+    canvas_b = settings.canvas_b or (canvas_width, canvas_height)
+    panel_canvas = [(canvas_width, canvas_height), (int(canvas_b[0]), int(canvas_b[1]))]
     # Per-panel pixel size (approx; subplot spacing/titles shave a little) used to
-    # size word labels true-to-scale within each panel.
-    per_panel_w = canvas_width if is_stacked else canvas_width // 2
+    # size word labels true-to-scale within each panel. Per-panel rather than one
+    # value, since the two panels may be on different-sized screens.
+    panel_widths = [w if is_stacked else w // 2 for w, _ in panel_canvas]
+    # B's stimulus page. Inheriting A's is right for a same-dataset pair (two
+    # readings of the same text) and *wrong* across datasets — a PoTeC panel with
+    # a OneStop page under it is a picture of two different things. So when B has
+    # its own screen (`canvas_b`, i.e. a cross-dataset pair) B's panel draws only
+    # an image explicitly given for it, and otherwise draws none.
+    if settings.background_image_b is not None:
+        image_b = (
+            settings.background_image_b,
+            settings.background_image_size_b,
+            settings.background_image_origin_b,
+        )
+    elif settings.canvas_b is None:
+        image_b = (background_image, background_image_size, background_image_origin)
+    else:
+        image_b = (None, None, None)
+    panel_images = [
+        (background_image, background_image_size, background_image_origin),
+        image_b,
+    ]
 
     # Shared metric colour range across both panels (when colouring by a metric
     # and no explicit range), so the two scanpaths use one comparable scale.
@@ -4682,6 +4727,7 @@ def _make_split_comparison_figure(
         )
 
     all_shapes: list = []
+    panel_fits: list = []
     for idx, spec in enumerate(trial_specs):
         if is_stacked:
             row, col = idx + 1, 1
@@ -4693,22 +4739,26 @@ def _make_split_comparison_figure(
         yref = f"y{axis_suffix}"
         trial_words = spec["trial_words"]
         trial_fix = spec["trial_fix"]
+        panel_cw, panel_ch = panel_canvas[idx]
+        panel_fit_w = panel_widths[idx]
 
         x_range, y_range, *_ = _compute_axis_ranges(
-            canvas_width,
-            canvas_height,
+            panel_cw,
+            panel_ch,
             (trial_fix, "x", "y"),
             word_frames=[trial_words] if not trial_words.empty else [],
             fit_to_monitor=fit_to_monitor,
         )
 
         # Stimulus-page background image (VIZ-4/23), one per panel, UNDER every
-        # trace — `row`/`col` bind it to this panel's axes.
+        # trace — `row`/`col` bind it to this panel's axes. B may carry its own
+        # (CMP-8); it falls back to A's when it doesn't.
+        panel_image, panel_image_size, panel_image_origin = panel_images[idx]
         _add_background_image(
             fig,
-            background_image,
-            background_image_size,
-            background_image_origin,
+            panel_image,
+            panel_image_size,
+            panel_image_origin,
             background_image_opacity,
             row=row,
             col=col,
@@ -4771,10 +4821,13 @@ def _make_split_comparison_figure(
             col=col,
         )
 
-        if show_word_labels:
-            pf_w, pf_h = _fit_display_size(
-                per_panel_w, canvas_height, x_range, y_range, spatial_axes=True
+        panel_fits.append(
+            _fit_display_size(
+                panel_fit_w, panel_ch, x_range, y_range, spatial_axes=True
             )
+        )
+        if show_word_labels:
+            pf_w, pf_h = panel_fits[idx]
             panel_scale = _display_scale(x_range, y_range, pf_w, pf_h)
             _add_word_label_trace(
                 fig,
@@ -4821,8 +4874,8 @@ def _make_split_comparison_figure(
             spacing=coordinate_grid_spacing,
             x_range=x_range,
             y_range=y_range,
-            rendered_width=per_panel_w,
-            rendered_height=canvas_height,
+            rendered_width=panel_fit_w,
+            rendered_height=panel_ch,
         )
         fig.update_layout(**{xaxis_key: xaxis, yaxis_key: yaxis})
 
@@ -4841,10 +4894,18 @@ def _make_split_comparison_figure(
     # Fit the figure to the data aspect just like the single-trial plot.
     # `x_range` / `y_range` from the inner loop are per-trial; the two trials
     # being compared usually share the paragraph (same canvas), so re-using
-    # the last loop iteration's range is fine. `per_panel_w` was set above.
-    panel_w, panel_h = _fit_display_size(
-        per_panel_w, canvas_height, x_range, y_range, spatial_axes=True
-    )
+    # the last loop iteration's fit is fine — and keeps every same-dataset
+    # figure byte-identical to the pre-CMP-8 one.
+    #
+    # Two *different* screens can't be reconciled that way: the panels then get
+    # the widest / tallest fit of the pair, so neither is clipped. (Which is also
+    # why the caption in `tabs._render_comparison_figure` says sizes are not
+    # comparable across panels — each panel is true-to-scale on its own monitor.)
+    if settings.canvas_b is None:
+        panel_w, panel_h = panel_fits[-1]
+    else:
+        panel_w = max(fit[0] for fit in panel_fits)
+        panel_h = max(fit[1] for fit in panel_fits)
     if is_stacked:
         total_width = panel_w
         total_height = panel_h * 2 + 40
@@ -6397,6 +6458,11 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "layout",
         "style_a",
         "style_b",
+        # CMP-8 §4 — B-side geometry, read only by the split comparison layouts.
+        "canvas_b",
+        "background_image_b",
+        "background_image_size_b",
+        "background_image_origin_b",
     }
 )
 ANIMATION_FIGURE_OPTIONS = _setting_names(
@@ -6429,6 +6495,11 @@ ANIMATION_FIGURE_OPTIONS = _setting_names(
         "layout",
         "style_a",
         "style_b",
+        # CMP-8 §4 — B-side geometry, read only by the split comparison layouts.
+        "canvas_b",
+        "background_image_b",
+        "background_image_size_b",
+        "background_image_origin_b",
     }
 )
 

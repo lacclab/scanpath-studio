@@ -6,10 +6,12 @@ of through the heavy AppTest path.
 
 from __future__ import annotations
 
+import pathlib
+
 import pandas as pd
 import pytest
 
-from scanpath_studio import app, wizard
+from scanpath_studio import app, wizard, wizard_shell
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = streamlit_testing.AppTest
@@ -116,19 +118,137 @@ class TestSafeDatasetName:
         assert wizard._safe_dataset_name("  My data  ") == "My data"
 
 
-class TestWizardStepExpansion:
-    def test_mapping_change_keeps_completed_step_open_once(self):
-        state = {"_wizard_keep_open": "Fixations"}
-        flow = {"claimed": False}
-        assert wizard._wizard_step_expanded("Fixations", True, flow, state)
-        assert "_wizard_keep_open" not in state
-        assert not wizard._wizard_step_expanded("Fixations", True, flow, state)
+class TestWizardAccordion:
+    """DATA-22 replaced DATA-19's one-shot ``_wizard_keep_open`` marker with a
+    shell that owns the open flag outright. These cover the shell's contract;
+    the "an edit inside a step doesn't collapse it" half is a *frontend*
+    property (AppTest never echoes an expander's open state back — a programmatic
+    write reverts on the very next bare rerun regardless of app code), so it is
+    verified in a real browser instead of here."""
 
-    def test_first_unfinished_step_claims_auto_advance(self):
-        state = {}
-        flow = {"claimed": False}
-        assert wizard._wizard_step_expanded("Trial identifier", False, flow, state)
-        assert not wizard._wizard_step_expanded("Fixations", False, flow, state)
+    def test_go_to_step_opens_exactly_one(self):
+        import streamlit as st
+
+        wizard_shell.go_to_step("geometry")
+        opened = {
+            s.id: st.session_state[wizard_shell.open_key(s.id)]
+            for s in wizard_shell.STEPS
+        }
+        assert opened["geometry"] is True
+        assert not any(v for k, v in opened.items() if k != "geometry")
+
+    def test_seed_opens_first_incomplete_then_never_again(self):
+        import streamlit as st
+
+        wizard_shell.reset_accordion()
+        statuses = {s.id: wizard_shell.StepStatus.DONE for s in wizard_shell.STEPS}
+        statuses["setup"] = wizard_shell.StepStatus.TODO
+        wizard_shell.seed_open_step(statuses)
+        assert st.session_state[wizard_shell.open_key("setup")] is True
+
+        # A second call must NOT move the accordion — re-seeding on every run is
+        # exactly the auto-advance-under-the-cursor behaviour being removed.
+        wizard_shell.go_to_step("identity")
+        wizard_shell.seed_open_step(statuses)
+        assert st.session_state[wizard_shell.open_key("identity")] is True
+        assert st.session_state[wizard_shell.open_key("setup")] is False
+
+    def test_optional_step_does_not_hold_up_seeding(self):
+        statuses = {s.id: wizard_shell.StepStatus.DONE for s in wizard_shell.STEPS}
+        statuses["fields"] = wizard_shell.StepStatus.OPTIONAL
+        assert wizard_shell.first_incomplete(statuses) is None
+
+    def test_open_keys_stay_clear_of_the_column_mapping_sweep(self):
+        # tabs._collect_column_mapping sweeps every `col_map_*` key into the
+        # saved config; an accordion flag must never land in a user's config.
+        assert all(
+            not wizard_shell.open_key(s.id).startswith("col_map_")
+            for s in wizard_shell.STEPS
+        )
+
+    def test_a_changing_header_would_collapse_a_keyed_expander(self):
+        """Why the status badge is not on the step header.
+
+        Streamlit remounts a keyed expander at its default — collapsed — on the
+        next run after its **label or icon** changes, whatever its key holds.
+        With the badge passed as ``icon=``, an upload flipped step 1 from
+        *action* to *done* and the step slammed shut the instant the file
+        finished parsing: the DATA-19 symptom arriving through a new door,
+        invisible to every test that only checked who *writes* the flag.
+
+        The control case (a stable header) is what makes this a real finding
+        rather than the known AppTest blind spot: it survives the run the
+        varying one dies on. It still flips a run later, because AppTest has no
+        frontend to echo the open state back — see the class docstring.
+        """
+        varying = AppTest.from_function(_varying_header_expander_app)
+        stable = AppTest.from_function(_stable_header_expander_app)
+        seen = {"varying": [], "stable": []}
+        for name, at in (("varying", varying), ("stable", stable)):
+            for _ in range(2):
+                at.run()
+                assert not at.exception, at.exception
+                seen[name].append(at.session_state["wiz_open_probe"])
+
+        assert seen["varying"] == [True, False], seen
+        # Same two runs, header untouched → still open. The difference between
+        # the two lists IS the bug.
+        assert seen["stable"] == [True, True], seen
+
+    def test_the_active_step_header_never_carries_the_status(self):
+        """Structural guard for the above: `step_panel`'s expander call must not
+        pass a status-derived ``icon=`` or interpolate the badge into its label."""
+        source = pathlib.Path(wizard_shell.__file__).read_text()
+        body = source.split("def step_panel(", 1)[1].split("\ndef ", 1)[0]
+        call = body.split("host.expander(", 1)[1]
+        assert "icon=" not in call, "a changing icon remounts the expander closed"
+        assert "badge(" not in call, "a changing label remounts the expander closed"
+
+    def test_no_step_body_writes_an_open_flag(self):
+        """The single rule the fix rests on: only the shell moves the accordion.
+
+        A step body that wrote ``wiz_open_*`` would reintroduce exactly the
+        DATA-19 bug (a step collapsing in response to its own edit), so this is
+        asserted structurally rather than left to review.
+        """
+        source = pathlib.Path(wizard.__file__).read_text()
+        offenders = [
+            stripped
+            for line in source.splitlines()
+            for stripped in [line.strip()]
+            # Comments may name the key; only real code is an offender.
+            if wizard_shell.OPEN_KEY_PREFIX in stripped
+            and not stripped.startswith("#")
+            and "wizard_shell." not in stripped
+        ]
+        assert not offenders, f"wizard.py writes accordion keys directly: {offenders}"
+
+
+def _varying_header_expander_app():
+    """A keyed expander whose icon changes on run 2 — the shipped-then-fixed bug."""
+    import streamlit as st
+
+    n = st.session_state.get("_n", 0) + 1
+    st.session_state["_n"] = n
+    if n == 1:
+        st.session_state["wiz_open_probe"] = True
+    st.expander(
+        "1. Your data",
+        key="wiz_open_probe",
+        icon="🔵" if n == 1 else "✅",
+        on_change="rerun",
+    )
+
+
+def _stable_header_expander_app():
+    """The control: identical, but the header never changes."""
+    import streamlit as st
+
+    n = st.session_state.get("_n", 0) + 1
+    st.session_state["_n"] = n
+    if n == 1:
+        st.session_state["wiz_open_probe"] = True
+    st.expander("1. Your data", key="wiz_open_probe", on_change="rerun")
 
 
 def _seed_overwrite_app():

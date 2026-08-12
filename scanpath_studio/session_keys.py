@@ -157,6 +157,9 @@ SINGLE_TRIAL_ID = "single_trial_id"
 SINGLE_PARTICIPANT = "single_participant"
 SINGLE_SLIDER = "single_slider"
 SINGLE_ANIMATE = "single_animate"
+#: Turned on by a `?compare=` deep link, exactly as `?tab=animation` turns on
+#: `single_animate` (CMP-8 §7).
+SINGLE_COMPARE_TOGGLE = "single_compare_toggle"
 
 # --- Public-OneStop source options that ride the deep link (DATA-3) ---------
 ONESTOP_VARIANT = "onestop_variant"
@@ -199,6 +202,37 @@ PARAM_ONESTOP_REGIME = "onestop_regime"
 PARAM_ONESTOP_PARTS = "onestop_parts"
 # Legacy inverse of `show_order`, still parsed so pre-Share links keep working.
 PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
+
+# DATA-22 §7 surface 2: how the recording setup's three groups came to be known,
+# as `screen:assumed,geom:skipped,text:measured`. Metadata *about* the settings a
+# link already carries — it takes no input and changes no figure, so it stops at
+# the UI / link / saved-config / export surfaces and deliberately never becomes a
+# `render` flag or a builder argument.
+SETUP_PROVENANCE_PARAM = "setup_prov"
+# Where the arriving badge is parked for the UI to read. Not itself a *setting*,
+# so it is not in PLOT_CONFIG_STATE_KEYS — it describes the values beside it.
+SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
+
+# CMP-8 §7: the comparison's *second* scanpath.
+#
+# `compare` is `<participant>:<trial>` — B's real ids, never the `dataset · pid`
+# form the compare frames use internally. It is new to the wire format because
+# compare mode had **no** link representation at all before CMP-8 (Animate had
+# `?tab=animation`; Compare had nothing), and a `cmp_source` that named B's
+# corpus without naming B's trial would restore nothing.
+#
+# `cmp_source` is the corpus B came from, using the same vocabulary as `source`
+# — emitted only when that corpus is in `url_state._SHAREABLE_SOURCES`, since an
+# uploaded dataset lives in session state and cannot travel. Absent means "B is
+# in the same dataset as A", which is every pre-CMP-8 comparison.
+COMPARE_PARAM = "compare"
+COMPARE_SOURCE_PARAM = "cmp_source"
+#: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
+COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
+#: Where an arriving `compare=` selection waits until the candidate list exists.
+#: The picker's own key holds a *label* built at render time, so a link can't
+#: seed it directly — the same problem `PENDING_TRIAL_KEY` solves for A.
+PENDING_COMPARE_STATE_KEY = "_pending_compare"
 
 # ---------------------------------------------------------------------------
 # Frozen groupings — `url_key -> session_state key`, one mapping per encoding.
@@ -359,7 +393,18 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_VARIANT,
         PARAM_ONESTOP_REGIME,
         PARAM_ONESTOP_PARTS,
+        COMPARE_PARAM,
+        COMPARE_SOURCE_PARAM,
     }
+)
+
+# Params the reader accepts and the writer emits only *when there is something to
+# say* — as opposed to `SHARE_QUERY_PARAMS`, which every fully-populated session
+# emits. `setup_prov` is absent for a corpus that never declared a recording
+# setup, and an absent badge is the honest outcome there: emitting
+# "assumed,assumed,assumed" would manufacture a claim the sender never made.
+URL_OPTIONAL_PARAMS = frozenset(
+    {SETUP_PROVENANCE_PARAM, COMPARE_PARAM, COMPARE_SOURCE_PARAM}
 )
 
 # The exact key set of `url_state._URL_PRESETS` — every param a deep link can
@@ -369,7 +414,9 @@ URL_PRESET_PARAMS = frozenset(SHARE_PARAMS) | {PARAM_HIDE_FIXATION_NUMBERS}
 # The exact param set `_build_share_query` emits for a fully-populated session
 # on a shareable source. `trial` is absent on purpose: Share writes the
 # canonical `trial_id` instead of a slider index.
-SHARE_QUERY_PARAMS = frozenset(SHARE_PARAMS) | (URL_SELECTION_PARAMS - {PARAM_TRIAL})
+SHARE_QUERY_PARAMS = (
+    frozenset(SHARE_PARAMS) | (URL_SELECTION_PARAMS - {PARAM_TRIAL})
+) - URL_OPTIONAL_PARAMS
 
 # Session keys `_URL_BOUNDED` clamps on the way in (a hand-crafted link with an
 # out-of-range value would otherwise crash the widget on render).
@@ -403,6 +450,12 @@ URL_SEEDED_STATE_KEYS = frozenset(
         SINGLE_PARTICIPANT,
         SINGLE_SLIDER,
         SINGLE_ANIMATE,
+        SINGLE_COMPARE_TOGGLE,
+        COMPARE_SOURCE_STATE_KEY,
+        # Not a widget key — a one-shot handoff the compare picker consumes once
+        # its candidate labels exist. Pinned because a deep link writes it, so a
+        # rename here silently breaks `?compare=`.
+        PENDING_COMPARE_STATE_KEY,
         ONESTOP_VARIANT,
         ONESTOP_REGIME,
         ONESTOP_PARTS,

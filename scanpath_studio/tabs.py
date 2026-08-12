@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import os
+from dataclasses import replace
 from typing import Any, Callable, Optional
 
 import numpy as np
@@ -50,6 +51,13 @@ from scanpath_studio.animation_export import (
     mime_for,
 )
 from scanpath_studio.annotations import render_trial_annotations
+from scanpath_studio.compare_source import (
+    COMPARE_SOURCE_KEY,
+    THIS_DATASET,
+    SecondaryDataset,
+    load_secondary_dataset,
+    secondary_dataset_options,
+)
 from scanpath_studio.constants import (
     DEFAULT_FIXATION_COLOR,
     DEFAULT_FIXATION_SYMBOL,
@@ -88,6 +96,7 @@ from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.data import (
     compute_word_metrics,
     derive_trial_index,
+    filter_trials,
     frame_fingerprint,
     has_explicit_trial_index,
     remap_normalized_frame,
@@ -97,8 +106,11 @@ from scanpath_studio.data import (
     validate_word_schema,
 )
 from scanpath_studio.export import (
+    ComparisonSide,
+    ExportOptions,
     annotate_figure,
     bulk_export,
+    pair_export,
     pattern_fields,
     render_export_options,
     render_pattern,
@@ -144,6 +156,11 @@ from scanpath_studio.plots import (
     make_word_profile_figure,
     make_word_rate_figure,
 )
+from scanpath_studio.session_keys import (
+    PENDING_COMPARE_STATE_KEY,
+    SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_COMPARE_TOGGLE,
+)
 from scanpath_studio.similarity import (
     METRICS,
     compute_similarity_table,
@@ -152,6 +169,7 @@ from scanpath_studio.similarity import (
 )
 from scanpath_studio.utils import (
     TRIAL_SORT_DEFAULT,
+    build_combo_options_for,
     build_comparison_options,
     compute_trial_stats,
     extract_trial,
@@ -878,6 +896,114 @@ def _order_compare_options(
     return sorted(options, key=lambda option: rank.get(str(option[1]), len(rank)))
 
 
+#: Key prefix for scanpath B's own filter set (CMP-8 §5.2). Must be one of
+#: ``controls.FILTER_PREFIXES`` — that registry is what stops A's "Clear filters"
+#: sweeping B's keys along with its own.
+_COMPARE_FILTER_PREFIX = "cmp"
+
+
+def _compare_source_name() -> Optional[str]:
+    """The picked comparison dataset, or ``None`` for "This dataset".
+
+    Read straight from the widget key rather than from a loaded source, because
+    the rail's ⚙️ Compare options popover renders *before* the picker runs and
+    still has to gate the Overlay layout (§5.3).
+    """
+    chosen = st.session_state.get(COMPARE_SOURCE_KEY)
+    return None if not chosen or chosen == THIS_DATASET else str(chosen)
+
+
+def _render_compare_dataset_picker() -> Optional[SecondaryDataset]:
+    """The **CMP-8 §5.1** dataset picker for scanpath B, plus B's own filters.
+
+    Returns the chosen source already narrowed by its own ``cmp``-prefixed filter
+    set (§5.2), or ``None`` for "This dataset" — the pre-CMP-8 behaviour, where B
+    comes out of A's pool. A source that is offered but not loadable (a public
+    corpus whose location has never been set) also returns ``None``, after
+    saying why: silently falling back would look like the picker was ignored.
+    """
+    options = secondary_dataset_options(
+        exclude=st.session_state.get("data_source_choice")
+    )
+    ready_by_name = {name: ready for name, ready, _ in options}
+    reason_by_name = {name: why for name, _, why in options}
+    names = [THIS_DATASET, *(name for name, _, _ in options)]
+    if st.session_state.get(COMPARE_SOURCE_KEY) not in names:
+        st.session_state[COMPARE_SOURCE_KEY] = THIS_DATASET
+    ds_col, filter_col = st.columns([3, 6.9], vertical_alignment="bottom")
+    chosen = ds_col.selectbox(
+        "**Compare with**",
+        options=names,
+        key=COMPARE_SOURCE_KEY,
+        # ENG-36: this widget renders only in Compare mode on the Scanpath view,
+        # and its key is deep-link-seeded (`?cmp_source=`). Without this, one
+        # trip through Corpus Analysis prunes the key and the link's choice is
+        # silently lost.
+        persist_state="session",
+        # Streamlit has no per-option disabling, so an unready corpus is marked
+        # in the label and explains itself below once picked — offered but
+        # honest, rather than absent and mysterious.
+        format_func=lambda name: (
+            name if ready_by_name.get(name, True) else f"{name} (needs setup)"
+        ),
+        help="Which dataset scanpath B comes from. Other datasets keep their own "
+        "screen geometry, so each panel is drawn to its own monitor.",
+    )
+    if chosen == THIS_DATASET:
+        return None
+    if not ready_by_name.get(chosen, False):
+        st.caption(f"⚠️ {reason_by_name.get(chosen, '')}")
+        return None
+    source = load_secondary_dataset(chosen)
+    if source is None:
+        st.caption(f"⚠️ Couldn't load **{chosen}** as a comparison dataset.")
+        return None
+    # §5.2: B's own Narrow-by pair + More popover, on B's columns. Mirrors A's
+    # row above the chips; the `cmp` prefix is what keeps the two independent.
+    box = filter_col.container(key="cmp_narrow_by")
+    nb_label, nb_text, nb_part, more_col = box.columns(
+        [1.1, 2.2, 2.2, 1.1], vertical_alignment="center"
+    )
+    nb_label.markdown("**Filter B by**")
+    render_narrow_by(
+        source.words,
+        source.fixations,
+        prefix=_COMPARE_FILTER_PREFIX,
+        text_host=nb_text,
+        part_host=nb_part,
+    )
+    with more_col:
+        more_pop = st.container(key="railbtn_cmp_more").popover("More", width="content")
+        more_pop.caption(f"Narrow **{chosen}** — conditions.")
+        filters = render_trial_filters(
+            source.words,
+            source.fixations,
+            prefix=_COMPARE_FILTER_PREFIX,
+            host=more_pop,
+        )
+    return _narrow_secondary(source, filters)
+
+
+def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDataset:
+    """Apply B's own (``cmp``-prefixed) trial filters to a comparison source.
+
+    The annotation half of ``filters`` is deliberately *not* applied:
+    favorites/tags are keyed on ``(participant_id, trial_id)`` in the active
+    session, which describes **A's** dataset — starring a trial in one corpus
+    must not silently narrow another's pool to the same ids.
+    """
+    words, fixations = filter_trials(
+        source.words,
+        source.fixations,
+        participants=filters["participants"],
+        metadata=filters["metadata"],
+    )
+    if fixations is source.fixations and words is source.words:
+        return source
+    combos, _, _ = build_combo_options_for(fixations, source.composite_trial_columns)
+    return replace(source, words=words, fixations=fixations, combos=combos)
+
+
 def _render_compare_selector(
     combos: pd.DataFrame,
     selection_mode: str,
@@ -888,7 +1014,7 @@ def _render_compare_selector(
     fixations_filtered: Optional[pd.DataFrame] = None,
     trial_words: Optional[pd.DataFrame] = None,
     words_filtered: Optional[pd.DataFrame] = None,
-) -> tuple[Optional[str], Optional[str]]:
+) -> tuple[Optional[str], Optional[str], Optional[SecondaryDataset]]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
     Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ 📄/👤
@@ -897,10 +1023,33 @@ def _render_compare_selector(
     the main trial picker's generated choices; only its default differs, keeping
     same-text trials first, then same-participant trials, then the rest. The
     overlay layout + A/B-legend config live in the rail's **⚙️ Compare** popover
-    (under the Compare toggle). Returns ``(participant, trial)``."""
-    options = build_comparison_options(
-        combos, selection_mode, selected_participant, selected_trial, selected_text
-    )
+    (under the Compare toggle).
+
+    **CMP-8 §5.1** put a *dataset* picker above it: B may come from a different
+    corpus entirely, in which case the candidate pool, the narrow-by filters and
+    the screen geometry are all that dataset's own. Returns
+    ``(participant, trial, source)`` — ``source`` is ``None`` for the
+    same-dataset case, i.e. everything that existed before CMP-8."""
+    source = _render_compare_dataset_picker()
+    if source is not None:
+        # B's pool is its own dataset, narrowed by its own filters (§5.2), and
+        # nothing about A applies to it — including the multipart screen scoping
+        # below, which asks whether *this* corpus' trials share A's screen id.
+        options = build_comparison_options(
+            source.combos,
+            selection_mode,
+            selected_participant,
+            selected_trial,
+            selected_text,
+            cross_dataset=True,
+        )
+        words_filtered, fixations_filtered = source.words, source.fixations
+        combos = source.combos
+        trial_words = None
+    else:
+        options = build_comparison_options(
+            combos, selection_mode, selected_participant, selected_trial, selected_text
+        )
     active_screen = None
     if (
         trial_words is not None
@@ -947,12 +1096,15 @@ def _render_compare_selector(
                     fixations_filtered[SCREEN_ID].astype(str) == active_screen
                 ]
     if not options:
-        st.info(
-            "No other trials contain this screen."
-            if active_screen
-            else "No other trials available for comparison."
-        )
-        return None, None
+        if source is not None:
+            st.info(f"No trials in **{source.name}** match the filters above.")
+        else:
+            st.info(
+                "No other trials contain this screen."
+                if active_screen
+                else "No other trials available for comparison."
+            )
+        return None, None, None
 
     # CMP-6: candidate sorting is visually LAST in the picker row, after the
     # step buttons. It still executes before the selectbox/slider below, so a
@@ -1013,6 +1165,18 @@ def _render_compare_selector(
 
     sel_key = "single_compare_trial"
     pos_key = "single_compare_pos"
+    # CMP-8 §7: a `?compare=<pid>:<trial>` deep link parked its ids in
+    # `_apply_url_preset`; the labels only exist here, so this is where it lands.
+    # Consumed once, and only when the pool can actually answer it — a request
+    # for a trial the current filters exclude is dropped rather than left to
+    # re-point the picker after some later filter change (the ENG-36 rule).
+    pending = st.session_state.pop(PENDING_COMPARE_STATE_KEY, None)
+    if isinstance(pending, dict):
+        wanted = (str(pending.get("participant_id")), str(pending.get("trial_id")))
+        for label, pair in label_to_trial.items():
+            if (str(pair[0]), str(pair[1])) == wanted:
+                st.session_state[sel_key] = label
+                break
     current = st.session_state.get(sel_key)
     if current not in labels:
         current = labels[0]
@@ -1077,8 +1241,8 @@ def _render_compare_selector(
         )
 
     if selected_compare_label:
-        return label_to_trial[selected_compare_label]
-    return None, None
+        return (*label_to_trial[selected_compare_label], source)
+    return None, None, None
 
 
 _CRITICAL_SPAN_BG = "#FCE7F3"  # light pink — critical-span words
@@ -1746,6 +1910,16 @@ def _build_studio_config(
     # bump it (+ register a migration) in url_state when this layout changes.
     from scanpath_studio.url_state import PLOT_CONFIG_SCHEMA
 
+    def _setup_provenance_section() -> dict:
+        # Lazy import: `wizard` imports `tabs._collect_column_mapping`, so a
+        # module-level import here would close the cycle.
+        from scanpath_studio.app import active_setup_snapshot
+
+        snapshot = active_setup_snapshot()
+        if snapshot is None:
+            return {}
+        return {"provenance": {g: str(p) for g, p in snapshot.provenance.items()}}
+
     return {
         # schema 2 = config + annotations + text/highlighting + provenance;
         # schema 1 (plot config only) still restores via the same reader.
@@ -1780,6 +1954,12 @@ def _build_studio_config(
             "use_stimulus_font_pt": bool(
                 st.session_state.get("global_use_stimulus_font_pt", False)
             ),
+            # DATA-22 §7 surface 3: how each group came to be known. Additive, so
+            # per ENG-11 this is a documented no-op migration and
+            # PLOT_CONFIG_SCHEMA stays put. Absent when the active source never
+            # declared a setup — an omitted key reads as "unknown", which is
+            # true; writing "assumed" there would invent a claim.
+            **_setup_provenance_section(),
         },
         "axes": {
             "x_field": x_field,
@@ -2124,6 +2304,86 @@ def _render_save_restore_expander(
             )
 
 
+#: Separator between a dataset name and a participant id in the *throwaway*
+#: compare frames (CMP-8 §3). Chosen to be visible in a label and absent from
+#: real ids; it never reaches an annotation key, an export slug or a deep link.
+_COMPARE_DATASET_SEP = " · "
+
+#: Metric names that are safe across any two corpora (CMP-8 §5.4): canonical
+#: fixation columns every normalized frame carries, plus the two synthetic
+#: choices that are not columns at all.
+_CROSS_DATASET_SAFE_METRICS = frozenset(
+    {"line", "counts", "duration_ms", "order_in_trial", "timestamp_ms"}
+)
+
+
+def _qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
+    """A copy of ``frame`` whose ``participant_id`` is namespaced by ``dataset``.
+
+    Two corpora can hold the same ``(participant_id, trial_id)``, and
+    `make_comparison_figure` slices its frame by exactly that pair — so an
+    unqualified merge would silently render *the wrong scanpath*, or two.
+
+    Only ever applied to the single-trial frames that feed the comparison
+    builder. Nothing the annotations, the export slug, the deep link or Corpus
+    Analysis reads goes through here: those key on the real ids, and must.
+    """
+    if frame.empty:
+        return frame
+    out = frame.copy()
+    out["dataset"] = dataset
+    out["participant_id"] = (
+        dataset + _COMPARE_DATASET_SEP + out["participant_id"].astype(str)
+    )
+    return out
+
+
+def _qualified_participant(dataset: str, participant: str) -> str:
+    """The id `_qualify_for_compare` gives ``participant`` inside ``dataset``."""
+    return f"{dataset}{_COMPARE_DATASET_SEP}{participant}"
+
+
+def _unqualify_for_export(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
+    """Undo `_qualify_for_compare`'s rename, restoring the corpus' own id.
+
+    The namespace exists so `make_comparison_figure` can slice two colliding
+    ``(participant, trial)`` pairs apart. An exported table must carry the id the
+    corpus actually uses, or it won't join back to anything (CMP-8 §6). The
+    stamped ``dataset`` column is kept — that is what disambiguates the rows.
+    """
+    if frame is None or frame.empty or "dataset" not in frame.columns:
+        return frame
+    out = frame.copy()
+    out["participant_id"] = str(participant)
+    return out
+
+
+def _align_compare_columns(
+    a: pd.DataFrame, b: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame, frozenset[str]]:
+    """Reindex two frames onto their column **union**, and report shared numerics.
+
+    A bare ``pd.concat`` of frames with disjoint columns warns and churns dtypes
+    (int columns become float once the other frame's rows fill in as NaN), which
+    matters here because two corpora rarely ship the same measure set. Aligning
+    first keeps the concat quiet and the dtypes stable.
+
+    The third element is the intersection of *numeric* columns — the metrics a
+    cross-dataset figure may legitimately colour by (§5.4). A metric present in
+    only one corpus would colour one panel and blank the other.
+    """
+    union = list(dict.fromkeys([*a.columns, *b.columns]))
+    a_aligned = a.reindex(columns=union) if list(a.columns) != union else a
+    b_aligned = b.reindex(columns=union) if list(b.columns) != union else b
+    shared = frozenset(
+        col
+        for col in set(a.columns) & set(b.columns)
+        if pd.api.types.is_numeric_dtype(a[col])
+        and pd.api.types.is_numeric_dtype(b[col])
+    )
+    return a_aligned, b_aligned, shared
+
+
 def _build_compare_meta(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -2132,11 +2392,25 @@ def _build_compare_meta(
     compare_participant: Optional[str],
     compare_trial: Optional[str],
     selected_screen: Optional[str] = None,
+    source: Optional[SecondaryDataset] = None,
 ) -> Optional[dict]:
     """Build the second trial's words/fixations + column labels for the
-    side-by-side metadata table, or None when no comparison is active."""
+    side-by-side metadata table, or None when no comparison is active.
+
+    ``source`` (CMP-8 §3) makes B come out of a *different* dataset: the trial is
+    extracted from that source's frames, namespaced by `_qualify_for_compare`,
+    and the returned dict carries the qualified participant plus B's own
+    ``dataset`` / ``text_id`` / ``setup`` — the last three because everything
+    downstream would otherwise look them up in **A's** combos and geometry.
+    """
     if compare_participant is None or compare_trial is None:
         return None
+    if source is not None:
+        # The multipart screen scoping below asks whether B contains *A's*
+        # screen id, which is meaningless across corpora — a foreign dataset's
+        # trial is compared whole.
+        selected_screen = None
+        words_filtered, fixations_filtered = source.words, source.fixations
     compare_words = extract_trial(words_filtered, compare_participant, compare_trial)
     compare_fix = extract_trial(fixations_filtered, compare_participant, compare_trial)
     if selected_screen is not None:
@@ -2156,21 +2430,47 @@ def _build_compare_meta(
             return None
     # Short, distinct column headers: participant ids when comparing different
     # participants (the common same-text case), else the trial ids — the long
-    # ids otherwise overflow the narrow panel.
-    if str(selected_participant) != str(compare_participant):
+    # ids otherwise overflow the narrow panel. Across datasets the two readers
+    # are never the same person, so the dataset name is the distinguishing half.
+    if source is not None:
+        label_primary = str(selected_participant)
+        label_compare = f"{source.name}{_COMPARE_DATASET_SEP}{compare_participant}"
+    elif str(selected_participant) != str(compare_participant):
         label_primary = str(selected_participant)
         label_compare = str(compare_participant)
     else:
         label_primary = str(selected_trial)
         label_compare = str(compare_trial)
+    figure_participant = compare_participant
+    if source is not None:
+        compare_words = _qualify_for_compare(compare_words, source.name)
+        compare_fix = _qualify_for_compare(compare_fix, source.name)
+        figure_participant = _qualified_participant(source.name, compare_participant)
     return {
         "words": compare_words,
         "fixations": compare_fix,
         "label_primary": label_primary,
         "label_compare": label_compare,
-        "participant": compare_participant,
+        # The id to slice the *merged* compare frames by — namespaced when B is
+        # foreign. `raw_participant` is the real one, for export slugs, share
+        # links and anything else that must name the reader as the corpus does.
+        "participant": figure_participant,
+        "raw_participant": compare_participant,
         "trial": compare_trial,
+        "dataset": source.name if source is not None else None,
+        "setup": source.setup if source is not None else None,
+        "text_id": _first_text_id(compare_words) if source is not None else None,
     }
+
+
+def _first_text_id(words: pd.DataFrame) -> Optional[str]:
+    """The text id of a single-trial frame, for a trial A's combos can't answer for."""
+    for col in ("unique_text_id", "text_id"):
+        if col in words.columns and not words.empty:
+            value = words[col].iloc[0]
+            if pd.notna(value):
+                return str(value)
+    return None
 
 
 # Playback-speed options shared by the animation control.
@@ -2486,6 +2786,82 @@ def _build_and_render_animation(
     return fig, playback_ms, save_slug, file_stem
 
 
+def _render_pair_export(
+    fig,
+    sides: tuple,
+    *,
+    canvas_width: int,
+    canvas_height: int,
+    viz_settings: dict,
+    line_spacing: float,
+    scale_text_to_boxes: bool,
+) -> None:
+    """The **CMP-8 §6** pair bundle, beside the plain figure download.
+
+    The figure alone is unreproducible — it names two readers and no way to find
+    either again. This writes the pair as one trial folder: the figure, both
+    scanpaths' tables with a ``dataset`` column, and a ``plot_config.json``
+    whose ``datasets`` block records both sources and both recording setups.
+    """
+    side_a, side_b = sides
+    with st.expander("⚖️ Download this comparison as a bundle", expanded=False):
+        st.caption(
+            "The figure plus both scanpaths' data and a manifest naming each "
+            "side's dataset, trial and recording setup — so the comparison can "
+            "be reproduced, which the image alone can't be."
+        )
+        fmt = st.selectbox(
+            "Figure format",
+            options=["png", "svg", "pdf", "html"],
+            key="cmp_pair_export_format",
+            help="PNG/SVG/PDF need a Chrome/Chromium browser (Kaleido); HTML "
+            "needs none.",
+        )
+        table_fmt = st.selectbox(
+            "Table format",
+            options=["csv", "parquet"],
+            key="cmp_pair_export_table_format",
+        )
+        if not st.button("Build bundle", key="cmp_pair_export_build"):
+            return
+        options = ExportOptions(
+            include_png=fmt == "png",
+            include_svg=fmt == "svg",
+            include_pdf=fmt == "pdf",
+            include_html=fmt == "html",
+            include_fixations=True,
+            include_measures=True,
+            table_format=table_fmt,
+        )
+        settings = _build_figure_settings(viz_settings, False)
+        settings["line_spacing"] = line_spacing
+        settings["scale_text_to_boxes"] = scale_text_to_boxes
+        settings["align_algorithm"] = viz_settings.get("align_algorithm", "Off")
+        try:
+            with st.spinner("Building the comparison bundle…"):
+                data = pair_export(
+                    fig,
+                    side_a,
+                    side_b,
+                    canvas_width=canvas_width,
+                    canvas_height=canvas_height,
+                    x_field=viz_settings.get("x_field", "x"),
+                    y_field=viz_settings.get("y_field", "y"),
+                    settings=settings,
+                    options=options,
+                )
+        except (RuntimeError, ValueError) as exc:
+            st.error(f"Couldn't build the bundle: {exc}")
+            return
+        st.download_button(
+            "⬇ Download bundle (zip)",
+            data=data,
+            file_name=f"comparison_{side_a.slug}__vs__{side_b.slug}.zip",
+            mime="application/zip",
+            key="cmp_pair_export_download",
+        )
+
+
 def _render_export_panel(
     displayed_fig,
     *,
@@ -2507,6 +2883,7 @@ def _render_export_panel(
     viz_settings: dict,
     line_spacing: float,
     scale_text_to_boxes: bool,
+    compare_export: Optional[tuple] = None,
 ) -> None:
     """Consolidated Export subtab: the currently-viewed figure on top, then a
     bulk multi-trial export below.
@@ -2533,6 +2910,16 @@ def _render_export_panel(
             slug=save_slug,
             key_prefix="single",
         )
+        if compare_export is not None:
+            _render_pair_export(
+                displayed_fig,
+                compare_export,
+                canvas_width=int(canvas_width),
+                canvas_height=int(canvas_height),
+                viz_settings=viz_settings,
+                line_spacing=line_spacing,
+                scale_text_to_boxes=scale_text_to_boxes,
+            )
 
     st.divider()
     st.markdown("## Multiple trials")
@@ -3123,10 +3510,13 @@ def render_single_trial_tab(
             # Compare is a view mode (toggle here); the second-trial selector renders
             # above the chips in the plot column (compare_slot below), mirroring the
             # main trial picker (CMP-1).
+            # CMP-8 §7 made this key wire format (`?compare=` turns it on), so it
+            # is seeded rather than given a `value=`: an explicit default fights
+            # the deep link the same way it would fight a restored config.
+            st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
             compare_enabled = st.toggle(
                 "⚖️ **Compare**",
-                value=False,
-                key="single_compare_toggle",
+                key=SINGLE_COMPARE_TOGGLE,
                 persist_state="session",
                 help=(
                     "Co-animate a second reading on one clock."
@@ -3166,6 +3556,22 @@ def render_single_trial_tab(
                             persist_state="session",
                             help="Stacked = trials shown one above the other.",
                         )
+                        # CMP-8 §5.3: overlay pools both trials into one axis
+                        # range, which is meaningless across two monitors. Say so
+                        # here and resolve to a split layout below — *without*
+                        # rewriting the key, so going back to a same-dataset pair
+                        # restores the user's choice. (Streamlit has no per-option
+                        # disable on a segmented control, so this is the gate.)
+                        if (
+                            _compare_source_name() is not None
+                            and st.session_state.get("single_compare_layout")
+                            == "Overlay"
+                        ):
+                            st.caption(
+                                "⚠️ Overlay needs one coordinate space — these "
+                                "trials come from different datasets. Showing "
+                                "**Side by side**."
+                            )
                     show_legend_now = st.checkbox(
                         "Show A/B legend",
                         key="global_show_compare_legend",
@@ -3221,6 +3627,7 @@ def render_single_trial_tab(
     # styles (cmp*_ keys) are already seeded — the A/B swatches then match the
     # figure exactly (CMP-3). Only shown when Compare is on.
     compare_participant, compare_trial = None, None
+    compare_source: Optional[SecondaryDataset] = None
     # Layout comes from the rail's Compare-config popover via session_state; an
     # animated comparison always co-animates on one clock, so force overlay then.
     if animate:
@@ -3231,20 +3638,26 @@ def render_single_trial_tab(
             "Side by side": "side_by_side",
             "Stacked": "stacked",
         }.get(st.session_state.get("single_compare_layout"), "overlay")
+        # CMP-8 §5.3 — resolve, don't rewrite: the stored choice is left alone so
+        # a same-dataset pair gets the user's Overlay back.
+        if compare_layout == "overlay" and _compare_source_name() is not None:
+            compare_layout = "side_by_side"
     if compare_enabled:
         with compare_slot:
-            compare_participant, compare_trial = _render_compare_selector(
-                combos,
-                selection_mode,
-                selected_participant,
-                selected_trial,
-                selected_text,
-                animate=animate,
-                # CMP-6: lets the selector order candidates by similarity to the
-                # selected trial (NLD), fixation count, or reading time.
-                fixations_filtered=fixations_filtered,
-                trial_words=trial_words,
-                words_filtered=words_filtered,
+            compare_participant, compare_trial, compare_source = (
+                _render_compare_selector(
+                    combos,
+                    selection_mode,
+                    selected_participant,
+                    selected_trial,
+                    selected_text,
+                    animate=animate,
+                    # CMP-6: lets the selector order candidates by similarity to
+                    # the selected trial (NLD), fixation count, or reading time.
+                    fixations_filtered=fixations_filtered,
+                    trial_words=trial_words,
+                    words_filtered=words_filtered,
+                )
             )
 
     global_raw_toggle = bool(viz_settings.get("show_raw_gaze"))
@@ -3311,8 +3724,28 @@ def render_single_trial_tab(
         compare_participant,
         compare_trial,
         selected_screen,
+        source=compare_source,
     )
     comparing = compare_meta is not None
+    # CMP-8 §7: publish B for the Share link, alongside A above. Always the
+    # *real* ids, never the namespaced ones — a link names readers as their own
+    # corpus does. `source` is None for a same-dataset comparison.
+    share_selection = st.session_state.get("_share_selection")
+    if isinstance(share_selection, dict):
+        if comparing and compare_meta is not None:
+            share_selection["compare"] = {
+                "participant_id": compare_meta["raw_participant"],
+                "trial_id": compare_meta["trial"],
+                "source": compare_meta.get("dataset"),
+            }
+        else:
+            share_selection.pop("compare", None)
+    # CMP-8: from here on, B's *figure* id is the namespaced one — the merged
+    # frames below carry it, and `make_comparison_figure` slices by exactly that.
+    figure_compare_participant = (
+        compare_meta["participant"] if compare_meta else compare_participant
+    )
+    cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
 
     # Fixation-index window (VIZ-7): the frames that feed the figure / animation
@@ -3380,14 +3813,22 @@ def render_single_trial_tab(
     # frame it is handed (its shared colour range included), so a frame holding
     # just those two corrected scanpaths is equivalent to patching the whole
     # filtered corpus — and far cheaper. Untouched when correction is off.
-    cmp_words = (
-        pd.concat([trial_words, compare_meta["words"]])
-        if comparing and compare_meta is not None
-        else trial_words
-    )
-    cmp_fixations = (
-        pd.concat([plot_fixations, plot_compare_fix]) if comparing else plot_fixations
-    )
+    # CMP-8 §3: two corpora rarely ship the same columns, and a bare concat of
+    # disjoint frames warns and churns dtypes — align onto the union first. The
+    # shared numeric set feeds the §5.4 metric gate below.
+    shared_numeric: Optional[frozenset[str]] = None
+    if comparing and compare_meta is not None:
+        words_a, words_b, _ = _align_compare_columns(trial_words, compare_meta["words"])
+        fix_a, fix_b, shared_fix = _align_compare_columns(
+            plot_fixations, plot_compare_fix
+        )
+        cmp_words = pd.concat([words_a, words_b])
+        cmp_fixations = pd.concat([fix_a, fix_b])
+        if cross_dataset:
+            shared_numeric = shared_fix
+    else:
+        cmp_words = trial_words
+        cmp_fixations = plot_fixations
 
     # Condition chips above the plot — configurable via the sidebar picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
@@ -3453,13 +3894,58 @@ def render_single_trial_tab(
         # compared trial's chips stay inline beside its own label.
         _render_trial_details_popover(summary, details_box)
 
+    # CMP-8 §6: the two halves of the pair bundle, built from the *unqualified*
+    # frames and real ids — the `dataset · pid` namespace is a figure-internal
+    # device and must never reach an exported table. `None` unless comparing.
+    compare_export_sides = None
+    if comparing and compare_meta is not None:
+        # Lazy: `app` imports `tabs`, so a module-level import closes the cycle.
+        from scanpath_studio.app import active_setup_snapshot
+
+        compare_export_sides = (
+            ComparisonSide(
+                participant=str(selected_participant),
+                trial=str(selected_trial),
+                words=trial_words,
+                fixations=trial_fixations,
+                dataset=None,
+                setup=(
+                    snapshot.to_dict()
+                    if (snapshot := active_setup_snapshot()) is not None
+                    else None
+                ),
+            ),
+            ComparisonSide(
+                participant=str(compare_meta["raw_participant"]),
+                trial=str(compare_meta["trial"]),
+                # Strip the namespacing back off: `_qualify_for_compare` rewrote
+                # `participant_id` for the figure's benefit only.
+                words=_unqualify_for_export(
+                    compare_meta["words"], compare_meta["raw_participant"]
+                ),
+                fixations=_unqualify_for_export(
+                    compare_meta["fixations"], compare_meta["raw_participant"]
+                ),
+                dataset=compare_meta.get("dataset"),
+                setup=(
+                    compare_meta["setup"].to_dict()
+                    if compare_meta.get("setup") is not None
+                    else None
+                ),
+            ),
+        )
+
     displayed_fig = None
     save_slug = f"{selected_participant}__{selected_trial}"
     anim_playback_ms = None
     anim_file_stem = None
     # Use the windowed second scanpath: a window that empties B falls back to a
-    # single-trial animation (and info box).
-    dual_anim = animate and comparing and not fig_compare_fix.empty
+    # single-trial animation (and info box). CMP-8 §5.3: a co-animation is an
+    # overlay on one clock, so it needs one coordinate space — a cross-dataset
+    # pair replays A alone rather than drawing two monitors on top of each other.
+    dual_anim = (
+        animate and comparing and not fig_compare_fix.empty and not cross_dataset
+    )
 
     # Animation info box, in its slot inside the rail's Playback popover.
     if animate and not fig_fixations.empty and anim_info_slot is not None:
@@ -3523,7 +4009,14 @@ def render_single_trial_tab(
                         drift_corrected=drift_corrected_primary,
                     )
                 )
-            if comparing and compare_fix.empty:
+            if comparing and cross_dataset:
+                st.warning(
+                    "An animated comparison replays both scanpaths on one clock "
+                    "in one coordinate space, which two datasets don't share — "
+                    "showing only the first scanpath.",
+                    icon="⚠️",
+                )
+            elif comparing and compare_fix.empty:
                 st.warning(
                     "The selected second scanpath has no fixations after "
                     "filtering — showing only the first scanpath."
@@ -3536,12 +4029,14 @@ def render_single_trial_tab(
                 selected_participant,
                 selected_trial,
                 selected_text,
-                compare_participant,
+                figure_compare_participant,
                 compare_trial,
                 render_settings,
                 viz_settings,
                 layout=compare_layout,
                 fix_index_range=fix_range,
+                compare_meta=compare_meta,
+                shared_numeric=shared_numeric,
             )
             save_slug = (
                 f"{selected_participant}__{selected_trial}__vs__"
@@ -3713,6 +4208,7 @@ def render_single_trial_tab(
                     viz_settings=viz_settings,
                     line_spacing=line_spacing,
                     scale_text_to_boxes=scale_text_to_boxes,
+                    compare_export=compare_export_sides,
                 )
 
     with tab_inspect:
@@ -3890,6 +4386,8 @@ def _render_comparison_figure(
     viz_settings: dict,
     layout: str = "overlay",
     fix_index_range=None,
+    compare_meta: Optional[dict] = None,
+    shared_numeric: Optional[frozenset[str]] = None,
 ):
     """Render comparison figure for two trials.
 
@@ -3898,8 +4396,17 @@ def _render_comparison_figure(
     choices, canvas geometry, and the stimulus image arrive in ``settings``.
 
     ``fixations_filtered`` may already carry PRE-3 drift-corrected ``y`` values —
-    correction happens once, upstream of the render-mode split."""
+    correction happens once, upstream of the render-mode split.
+
+    **CMP-8**: when ``compare_meta`` names a ``dataset``, B came from a different
+    corpus. Its text id then comes from ``compare_meta`` rather than a lookup in
+    A's ``combos`` (which cannot know a foreign trial), B's panel is drawn to B's
+    own monitor (``canvas_b``), and a caption below the figure says so —
+    panel sizes are not comparable when the two screens differ. ``shared_numeric``
+    is §5.4's metric intersection; a ``color_by`` absent from one side would
+    colour one panel and blank the other, so it is dropped with a note."""
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
+    cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
     # Window both compared trials to the chosen fixation-index range. Slicing the
     # whole frame is fine — make_comparison_figure only extracts the two trials.
     fixations_filtered = _slice_fix_range(fixations_filtered, fix_index_range)
@@ -3917,7 +4424,11 @@ def _render_comparison_figure(
     primary_text_id = selected_text or _lookup_text_id(
         selected_participant, selected_trial
     )
-    compare_text_id = _lookup_text_id(compare_participant, compare_trial)
+    compare_text_id = (
+        compare_meta.get("text_id")
+        if cross_dataset
+        else _lookup_text_id(compare_participant, compare_trial)
+    )
     primary_label = friendly_trial_label(
         selected_participant, selected_trial, primary_text_id, label_pool
     )
@@ -3942,7 +4453,7 @@ def _render_comparison_figure(
             extract_trial(fixations_filtered, compare_participant, compare_trial),
         )
 
-    comparison_settings = settings.with_overrides(
+    overrides: dict = dict(
         trial_labels=(primary_label, compare_label),
         layout=layout,
         style_a=viz_settings.get("compare_style_a"),
@@ -3953,6 +4464,33 @@ def _render_comparison_figure(
         heatmap_metric=viz_settings.get("heatmap_metric", "duration_ms"),
         highlight_column=_marked_text_column(viz_settings),
     )
+    dropped_metric = None
+    if cross_dataset:
+        # §4: B's panel is drawn to B's own monitor. Only the split layouts read
+        # this; overlay never gets here (§5.3 resolves it away).
+        setup_b = compare_meta.get("setup")
+        if setup_b is not None:
+            overrides["canvas_b"] = setup_b.canvas
+
+        # §5.4: a metric only one corpus ships would colour one panel and blank
+        # the other. Fall back for *this render* — the stored choice is left
+        # alone, so a same-dataset pair gets it straight back — and name what
+        # was dropped rather than showing half a figure.
+        def _unshared(value) -> bool:
+            return (
+                shared_numeric is not None
+                and isinstance(value, str)
+                and value not in _CROSS_DATASET_SAFE_METRICS
+                and value not in shared_numeric
+            )
+
+        if _unshared(settings.color_by):
+            dropped_metric = str(settings.color_by)
+            overrides["color_by"] = None
+        if _unshared(overrides["heatmap_metric"]):
+            dropped_metric = str(overrides["heatmap_metric"])
+            overrides["heatmap_metric"] = "duration_ms"
+    comparison_settings = settings.with_overrides(**overrides)
     fig_compare = make_comparison_figure(
         words_filtered,
         fixations_filtered,
@@ -3978,6 +4516,33 @@ def _render_comparison_figure(
         ),
     )
     _render_true_scale_chart(fig_compare, key="compare")
+    if cross_dataset:
+        # §5.3: the one thing a cross-dataset figure must never be is silent
+        # about its own geometry. Each panel is true-to-scale on its *own*
+        # monitor, so a box twice the size of the one beside it may be the same
+        # physical size — naming both screens is what keeps that readable.
+        active = st.session_state.get("data_source_choice") or "this dataset"
+        setup_b = compare_meta.get("setup")
+        canvas_a = (settings.canvas_width, settings.canvas_height)
+        canvas_b = setup_b.canvas if setup_b is not None else canvas_a
+        if tuple(canvas_a) != tuple(canvas_b):
+            st.caption(
+                "Panels are drawn to each dataset's own screen — "
+                f"{active} {canvas_a[0]}×{canvas_a[1]}, "
+                f"{compare_meta['dataset']} {canvas_b[0]}×{canvas_b[1]}. "
+                "Sizes are not comparable across panels."
+            )
+        else:
+            st.caption(
+                f"Comparing across datasets — {active} and "
+                f"{compare_meta['dataset']} — which happen to share a "
+                f"{canvas_a[0]}×{canvas_a[1]} screen."
+            )
+    if dropped_metric:
+        st.caption(
+            f"⚠️ **{dropped_metric}** isn't in both datasets, so it can't colour "
+            "this comparison. Your choice is kept for same-dataset comparisons."
+        )
     return fig_compare
 
 
@@ -6813,6 +7378,7 @@ def _render_column_mapping_section() -> None:
     active = _active_stored_dataset()
     if active is not None:
         _render_remap_editor(*active)
+        _render_setup_provenance_note()
         return
     st.subheader("Column mapping")
     mapping = st.session_state.get("_active_column_mapping") or {}
@@ -6826,6 +7392,94 @@ def _render_column_mapping_section() -> None:
         width="stretch",
     )
     st.caption("How each source column maps to the app's canonical fields.")
+    _render_setup_provenance_note()
+
+
+def _render_setup_provenance_note() -> None:
+    """DATA-22 §7 surface 1: how this dataset's recording setup is known.
+
+    Data Inspection is where someone checks what the app did with their data, so
+    it is where an *assumed* monitor has to be visible rather than inferred from
+    a plausible-looking number elsewhere in the UI.
+    """
+    from scanpath_studio.app import active_setup_snapshot
+    from scanpath_studio.experimental_setup import (
+        SETUP_GROUP_LABELS,
+        SETUP_GROUPS,
+        Provenance,
+    )
+
+    snapshot = active_setup_snapshot()
+    if snapshot is None:
+        return
+    st.subheader("Recording setup")
+    values = {
+        "screen": f"{snapshot.canvas_width} × {snapshot.canvas_height} px",
+        "geometry": (
+            "—"
+            if snapshot.geometry_provenance is Provenance.SKIPPED
+            else f"{snapshot.monitor_width_mm:.0f} mm wide, "
+            f"{snapshot.viewing_distance_mm:.0f} mm away"
+        ),
+        "text": (
+            "scaled to word boxes"
+            if snapshot.scale_text_to_boxes
+            else f"{snapshot.base_font_size} px · {snapshot.font_family}"
+        ),
+    }
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Group": SETUP_GROUP_LABELS[group],
+                    "Value": values[group],
+                    "How we know": str(snapshot.provenance[group] or "not answered"),
+                }
+                for group in SETUP_GROUPS
+            ]
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    if snapshot.geometry_provenance is Provenance.SKIPPED:
+        st.caption(
+            "Visual-angle units are hidden for this dataset — the physical size "
+            "was skipped, so there is nothing honest to derive them from."
+        )
+    elif snapshot.px_per_degree is not None:
+        st.caption(f"≈ **{snapshot.px_per_degree:.1f} px** per degree of visual angle.")
+    _render_arrived_provenance_note(snapshot)
+
+
+def _render_arrived_provenance_note(snapshot) -> None:
+    """What the *sender* of a deep link said about their own setup.
+
+    The `setup_prov` badge exists because a link carries the setup's **values**
+    already: without it a recipient cannot tell a monitor the sender measured
+    from one the app assumed on their behalf. That only works if it is *shown* —
+    the table above is derived from the recipient's own source, so on its own the
+    arriving badge was parsed, parked, and never read by anything.
+
+    Shown only where it disagrees with what this session resolved; when the two
+    agree it is noise.
+    """
+    from scanpath_studio.experimental_setup import SETUP_GROUP_LABELS, SETUP_GROUPS
+
+    arrived = st.session_state.get(SETUP_PROVENANCE_STATE_KEY)
+    if not isinstance(arrived, dict) or not arrived:
+        return
+    differing = [
+        f"{SETUP_GROUP_LABELS[group]}: **{arrived[group]}**"
+        for group in SETUP_GROUPS
+        if group in arrived and arrived[group] != str(snapshot.provenance[group])
+    ]
+    if not differing:
+        return
+    st.caption(
+        "The link you opened was shared from a setup recorded differently — "
+        + " · ".join(differing)
+        + ". The table above describes *this* session's data source."
+    )
 
 
 @st.cache_data(show_spinner="Building the derived analysis tables…")

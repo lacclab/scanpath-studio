@@ -54,6 +54,20 @@ def build_combo_options(
     the un-cached wrapper, and is threaded into the cached core as an argument.
     """
     composite_cols = tuple(st.session_state.get("_composite_trial_columns") or [])
+    return build_combo_options_for(fixations, composite_cols)
+
+
+def build_combo_options_for(
+    fixations: pd.DataFrame,
+    composite_cols: Tuple[str, ...] = (),
+) -> Tuple[pd.DataFrame, list[str], Dict[str, Tuple[str, str]]]:
+    """`build_combo_options` for a frame that is **not** the active dataset.
+
+    CMP-8 §2: a comparison source has its own composite-trial columns, so the
+    session-state read in `build_combo_options` would answer for the wrong
+    dataset. Everything else — the cache key, the cached core — is shared.
+    """
+    composite_cols = tuple(composite_cols or ())
     return _build_combo_options_cached(
         fixations,
         composite_cols,
@@ -1160,6 +1174,8 @@ def build_comparison_options(
     primary_participant: str,
     primary_trial: str,
     primary_text: Optional[str],
+    *,
+    cross_dataset: bool = False,
 ) -> list[Tuple[str, str, str, str]]:
     """Build a prioritized list of comparison-trial options.
 
@@ -1170,21 +1186,39 @@ def build_comparison_options(
     ``"<markers> <trial_id>"``. Ordered: same-text (📄) first, then same-participant
     (👤), then the rest. A trial that is BOTH same-text and same-participant sorts
     with the 📄 group (text-matches lead) and shows both markers.
+
+    ``cross_dataset`` (CMP-8 §5.1) says ``combos`` describes a *different*
+    dataset, and degrades the three id-based signals that would otherwise lie:
+    two corpora do not share readers, so 👤 never fires; the annotation store is
+    keyed on the **active** dataset's ids, so a foreign trial must not inherit
+    another reader's ★; and the primary trial is not in this pool, so a
+    coincidentally identical ``(participant, trial)`` is a real candidate rather
+    than the trial being compared. 📄 survives — a text id that matches across
+    corpora is exactly the pairing this feature exists for.
     """
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     uniq = combos.drop_duplicates(subset=["participant_id", "trial_id"])
 
     rows: list[dict] = []
     for row in uniq.itertuples():
-        if (row.participant_id, row.trial_id) == (primary_participant, primary_trial):
+        if not cross_dataset and (row.participant_id, row.trial_id) == (
+            primary_participant,
+            primary_trial,
+        ):
             continue
         text_id = getattr(row, text_field, "")
         same_text = bool(primary_text and str(text_id) == str(primary_text))
-        same_participant = bool(str(row.participant_id) == str(primary_participant))
+        same_participant = not cross_dataset and bool(
+            str(row.participant_id) == str(primary_participant)
+        )
         markers = (
             (SAME_TEXT_MARKER if same_text else "")
             + (SAME_PARTICIPANT_MARKER if same_participant else "")
-            + annotation_markers(row.participant_id, row.trial_id)
+            + (
+                ""
+                if cross_dataset
+                else annotation_markers(row.participant_id, row.trial_id)
+            )
         )
         rows.append(
             {

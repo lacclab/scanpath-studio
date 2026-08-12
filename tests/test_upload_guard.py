@@ -44,3 +44,32 @@ def test_onestop_repeated_export_would_trip_guard():
     # (fixations) and ~29 MB (IA) zipped tables — each over the guard.
     assert upload_exceeds_limit(_FakeUpload(36_529_375))
     assert upload_exceeds_limit(_FakeUpload(28_875_283))
+
+
+# --- DATA-22 review · the guard is a *hosted-demo* guard ----------------------
+# It exists because the ~1 GB demo OOM-kills without a traceback. Running
+# locally there is no such ceiling, so the warning was noise and the "Load it
+# anyway" tick was a step between the user and their own data on their own
+# machine. Same loopback test the wizard's "run locally" tip uses.
+
+
+def test_the_size_warning_is_skipped_on_a_local_run():
+    """A local run must not be asked to confirm its own file size.
+
+    Asserted at the source rather than through the UI: the warning lives inside
+    `_read_uploaded_frame`, whose whole reason for existing is that
+    `st.file_uploader` cannot be driven from `AppTest` — so there is no headless
+    path that renders it. What this pins is that the gate stays welded to the
+    size check; a separate `if` elsewhere would not stop the warning rendering.
+    """
+    import inspect
+
+    from scanpath_studio import app as app_module
+
+    source = inspect.getsource(app_module._read_uploaded_frame)
+    # The gate must be *on the same condition* as the size check — a separate
+    # `if` elsewhere would not stop the warning rendering.
+    assert "upload_exceeds_limit(uploaded) and not is_loopback_url(" in source, (
+        "the large-upload warning is no longer gated on being hosted"
+    )
+    assert "Load it anyway" in source  # still there for the hosted demo

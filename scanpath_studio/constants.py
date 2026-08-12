@@ -329,6 +329,18 @@ APP_THEME_DARK = {
     "textColor": "#e8eaed",
 }
 
+#: Per-file upload ceiling, in MB. Streamlit's own default is **200 MB**, which
+#: is far under a real eye-tracking export — a single zipped fixation report for
+#: one OneStop regime already runs to tens of MB, and a full corpus is orders
+#: above that. Kept in sync with ``.streamlit/config.toml``'s
+#: ``server.maxUploadSize``; `cli._max_upload_cli_flags` passes it explicitly
+#: because that config file is resolved against the *launch* directory, so a
+#: pip-installed console script started from anywhere else silently fell back to
+#: the 200 MB default. This is the transport limit only — what a machine can
+#: actually parse is a separate question, which `data.UPLOAD_SIZE_WARN_BYTES`
+#: answers for the memory-capped hosted demo.
+UPLOAD_MAX_SIZE_MB = 5000
+
 CITATION = {
     "authors": (
         "Omer Shubi, Keren Gruteke Klein, Ella Lion, Deborah N. Jakobi, "

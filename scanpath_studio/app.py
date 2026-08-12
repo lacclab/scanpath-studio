@@ -32,7 +32,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Mapping, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -132,7 +132,12 @@ from scanpath_studio.datasets import (
     multipleye_bundle_dir,
 )
 from scanpath_studio.debug_log import install_log_capture, render_debug_panel
-from scanpath_studio.experimental_setup import font_pt_to_px, pixels_per_degree
+from scanpath_studio.experimental_setup import (
+    Provenance,
+    SetupSnapshot,
+    font_pt_to_px,
+    pixels_per_degree,
+)
 from scanpath_studio.multipart import SCREEN_ID, extract_part
 from scanpath_studio.persistence import (
     PERSIST_ENV_VAR,
@@ -140,6 +145,7 @@ from scanpath_studio.persistence import (
     cache_status,
     clear_local_state,
     human_size,
+    is_loopback_url,
     persistence_paused,
     restore_local_state,
     restored_from_cache,
@@ -1797,8 +1803,15 @@ def _read_uploaded_frame(
         return pd.DataFrame()
     # BUG-5: a large upload parses/normalizes into several in-memory copies that
     # can OOM-kill the ~1 GB hosted demo (no traceback). Warn and require an
-    # explicit opt-in before parsing; local installs confirm in one click.
-    if upload_exceeds_limit(uploaded):
+    # explicit opt-in before parsing.
+    #
+    # DATA-22 review: only on the *hosted* demo. Running locally there is no such
+    # ceiling — the warning was pure noise, and the "Load it anyway" tick was a
+    # step between the user and their own data on their own machine. Same
+    # loopback test the wizard's "run locally" tip uses.
+    if upload_exceeds_limit(uploaded) and not is_loopback_url(
+        str(getattr(st.context, "url", "") or "")
+    ):
         mb = uploaded_files_total_bytes(uploaded) / (1024 * 1024)
         host.warning(
             f"This upload is **{mb:.0f} MB**. On the hosted demo (~1 GB RAM), "
@@ -2116,6 +2129,137 @@ def render_data_source_picker(host=None) -> None:
     )
 
 
+def resolve_source_monitor(
+    data_choice: Optional[str],
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+) -> Tuple[int, int, bool]:
+    """The presentation monitor for a data source: ``(width, height, authoritative)``.
+
+    Lifted out of `seed_canvas_state` by **CMP-8 §1** so there is *one* source →
+    monitor table rather than two. `authoritative` keeps its meaning: the source
+    declares a real presentation monitor, so the canvas should snap to it rather
+    than to data-derived extents (which undershoot, because text rarely fills the
+    screen).
+
+    A **stored upload** now answers for itself when it recorded a setup snapshot
+    — before CMP-8 it declared nothing, so switching to one silently left the
+    canvas on the *previous* source's monitor.
+    """
+    # OneStop server bundle + bundled demo share the same experimental setup
+    # (Dell U2715H, 2560x1440).
+    if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
+        return 2560, 1440, True
+    if (monitor := _public_dataset_monitor(data_choice)) is not None:
+        return monitor[0], monitor[1], True
+    if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
+        # MultiplEYE server bundle = the same native MultiplEYE export as the
+        # public source; coordinates are offset onto the centered stimulus on
+        # the real 1920x1080 monitor, so snap the canvas to it (true-to-scale),
+        # exactly like the public MultiplEYE registry entry's monitor.
+        from scanpath_studio.datasets import MULTIPLEYE_MONITOR
+
+        return MULTIPLEYE_MONITOR[0], MULTIPLEYE_MONITOR[1], True
+    stored = (st.session_state.get("_datasets") or {}).get(data_choice)
+    if isinstance(stored, dict) and isinstance(stored.get("setup"), dict):
+        snapshot = SetupSnapshot.from_dict(stored["setup"], fallback=SetupSnapshot())
+        # Authoritative only when the screen was actually *known*: an assumed or
+        # estimated canvas must not snap over a canvas the user has since tuned.
+        return (
+            snapshot.canvas_width,
+            snapshot.canvas_height,
+            snapshot.screen_provenance is Provenance.MEASURED,
+        )
+    if data_choice is None or data_choice == UPLOAD_CHOICE:
+        # Uploaded data (the setup wizard passes data_choice=None) defaults to a
+        # common 1440p monitor until the Recording-setup step says otherwise.
+        return DEFAULT_FIGURE_SIZE[0], DEFAULT_FIGURE_SIZE[1], False
+    derived_w, derived_h = compute_canvas_size(words, fixations)
+    return derived_w, derived_h, False
+
+
+def capture_setup_snapshot(
+    provenance: Optional[Mapping[str, Provenance]] = None,
+) -> SetupSnapshot:
+    """The resolved ``global_*`` geometry as a `SetupSnapshot` (CMP-8 §1).
+
+    Reads the same keys `seed_canvas_state` resolves, so there is no second list
+    of key names to keep in sync. ``provenance`` overrides the per-group
+    provenance — the wizard passes what the user answered; a built-in corpus that
+    declares its own monitor passes ``MEASURED``.
+    """
+    ss = st.session_state
+    base = SetupSnapshot()
+    groups = dict(base.provenance)
+    groups.update(provenance or {})
+    return SetupSnapshot(
+        canvas_width=int(ss.get("global_canvas_width", base.canvas_width)),
+        canvas_height=int(ss.get("global_canvas_height", base.canvas_height)),
+        monitor_width_mm=float(
+            ss.get("global_monitor_width_mm", base.monitor_width_mm)
+        ),
+        viewing_distance_mm=float(
+            ss.get("global_viewing_distance_mm", base.viewing_distance_mm)
+        ),
+        base_font_size=int(ss.get("global_base_font_size", base.base_font_size)),
+        font_family=str(ss.get("global_font_family", base.font_family)),
+        line_spacing=float(ss.get("global_line_spacing", base.line_spacing)),
+        scale_text_to_boxes=bool(
+            ss.get("global_scale_text_to_boxes", base.scale_text_to_boxes)
+        ),
+        screen_provenance=groups["screen"],
+        geometry_provenance=groups["geometry"],
+        text_provenance=groups["text"],
+    )
+
+
+def active_setup_snapshot(
+    data_choice: Optional[str] = None,
+) -> Optional[SetupSnapshot]:
+    """A source's recorded setup, or ``None`` when it has none.
+
+    A stored upload carries the snapshot the wizard captured; a built-in corpus
+    that declares a monitor reports it as ``MEASURED``; anything else has nothing
+    to say, and saying nothing is the honest answer (a caller must not print
+    "assumed 2560x1440" for a corpus that never claimed one).
+
+    ``data_choice`` defaults to the active source, but callers that already know
+    which source they are describing — `_build_share_query` is handed one —
+    should pass it rather than re-reading session state.
+    """
+    choice = (
+        data_choice
+        if data_choice is not None
+        else st.session_state.get("data_source_choice")
+    )
+    stored = (st.session_state.get("_datasets") or {}).get(choice)
+    if isinstance(stored, dict) and isinstance(stored.get("setup"), dict):
+        return SetupSnapshot.from_dict(stored["setup"], fallback=SetupSnapshot())
+    declared = (
+        choice in (ONESTOP_CHOICE, DEMO_CHOICE, MULTIPLEYE_BUNDLE_CHOICE)
+        or _public_dataset_monitor(choice) is not None
+        # A public corpus reached by its own label (the DATA-3 OneStop source)
+        # rather than through the `Public datasets` picker still declares a
+        # monitor in the registry.
+        or bool((PUBLIC_DATASET_REGISTRY.get(choice) or {}).get("monitor"))
+    )
+    if declared:
+        return capture_setup_snapshot(
+            {
+                # The corpus declares its presentation monitor, so the screen is
+                # measured. The physical size / viewing distance are *not* — no
+                # registry entry records them, so they stay honestly "assumed".
+                "screen": Provenance.MEASURED,
+                "geometry": Provenance.ASSUMED,
+                "text": Provenance.MEASURED,
+            }
+        )
+    payload = st.session_state.get("_wizard_setup_snapshot")
+    if isinstance(payload, dict):
+        return SetupSnapshot.from_dict(payload, fallback=SetupSnapshot())
+    return None
+
+
 def seed_canvas_state(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -2147,31 +2291,9 @@ def seed_canvas_state(
     # ``monitor_is_authoritative`` = the source declares a real presentation
     # monitor (OneStop/demo or a public-dataset registry entry), so the canvas
     # should snap to it rather than to data-derived extents.
-    monitor_is_authoritative = False
-    if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
-        default_canvas_w, default_canvas_h = 2560, 1440
-        monitor_is_authoritative = True
-    elif (monitor := _public_dataset_monitor(data_choice)) is not None:
-        default_canvas_w, default_canvas_h = monitor
-        monitor_is_authoritative = True
-    elif data_choice == MULTIPLEYE_BUNDLE_CHOICE:
-        # MultiplEYE server bundle = the same native MultiplEYE export as the
-        # public source; coordinates are offset onto the centered stimulus on
-        # the real 1920x1080 monitor, so snap the canvas to it (true-to-scale),
-        # exactly like the public MultiplEYE registry entry's monitor.
-        from scanpath_studio.datasets import MULTIPLEYE_MONITOR
-
-        default_canvas_w, default_canvas_h = MULTIPLEYE_MONITOR
-        monitor_is_authoritative = True
-    elif data_choice is None or data_choice == UPLOAD_CHOICE:
-        # Uploaded data (the setup wizard passes data_choice=None) defaults to a
-        # common 1440p monitor — data-derived extents undershoot the real screen,
-        # and the user can fine-tune it right here.
-        default_canvas_w, default_canvas_h = DEFAULT_FIGURE_SIZE
-    else:
-        default_canvas_w, default_canvas_h = compute_canvas_size(
-            words_filtered, fixations_filtered
-        )
+    default_canvas_w, default_canvas_h, monitor_is_authoritative = (
+        resolve_source_monitor(data_choice, words_filtered, fixations_filtered)
+    )
     canvas_width = min(max(default_canvas_w, 100), 10000)
     canvas_height = min(max(default_canvas_h, 100), 10000)
     # Seed the data-derived defaults so the inputs render without a `value=`

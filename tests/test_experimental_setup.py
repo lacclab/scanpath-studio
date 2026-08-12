@@ -15,8 +15,12 @@ import math
 import pytest
 
 from scanpath_studio.experimental_setup import (
+    Provenance,
+    SetupSnapshot,
     dpi_from_width,
     font_pt_to_px,
+    format_provenance_param,
+    parse_provenance_param,
     pixels_per_degree,
 )
 
@@ -62,3 +66,101 @@ def test_nonsense_geometry_raises_instead_of_returning_infinity(func, args):
     """A zero here would otherwise divide to ``inf`` and poison every measure."""
     with pytest.raises(ValueError):
         func(*args)
+
+
+# -----------------------------------------------------------------------------
+# DATA-22 / CMP-8 — the per-dataset SetupSnapshot and its provenance
+# -----------------------------------------------------------------------------
+
+
+class TestSetupSnapshot:
+    """The snapshot is what stops an uploaded corpus silently inheriting a
+    2560x1440 / 597 mm / 16 px guess. Its contract is: every value is resolved,
+    and every value says how it is known."""
+
+    def test_round_trips_through_a_dict(self):
+        snapshot = SetupSnapshot(
+            canvas_width=1680,
+            canvas_height=1050,
+            monitor_width_mm=474.0,
+            viewing_distance_mm=650.0,
+            base_font_size=21,
+            font_family="serif",
+            line_spacing=2.0,
+            scale_text_to_boxes=False,
+            screen_provenance=Provenance.MEASURED,
+            geometry_provenance=Provenance.ESTIMATED,
+            text_provenance=Provenance.ASSUMED,
+        )
+        assert SetupSnapshot.from_dict(snapshot.to_dict()) == snapshot
+
+    def test_derived_values_match_the_bare_conversions(self):
+        snapshot = SetupSnapshot(
+            canvas_width=1920,
+            monitor_width_mm=508.0,
+            viewing_distance_mm=800.0,
+            geometry_provenance=Provenance.MEASURED,
+        )
+        assert snapshot.dpi == pytest.approx(96.0)
+        assert snapshot.px_per_degree == pytest.approx(
+            pixels_per_degree(800.0, 1920, 508.0)
+        )
+        assert snapshot.stimulus_font_px(12.0) == pytest.approx(16.0)
+
+    def test_a_skipped_geometry_hides_what_it_cannot_derive(self):
+        """The whole point of SKIPPED: no number is better than an invented one.
+
+        px/degree and pt→px both need the physical width. Under a skipped
+        geometry group they must be unavailable, not computed from the default
+        597 mm that happens to be sitting in the dataclass.
+        """
+        snapshot = SetupSnapshot(geometry_provenance=Provenance.SKIPPED)
+        assert snapshot.dpi is None
+        assert snapshot.px_per_degree is None
+        assert snapshot.stimulus_font_px(12.0) is None
+        # The canvas is structural and survives — it is not derived from mm.
+        assert snapshot.canvas == (2560, 1440)
+
+    def test_from_dict_falls_back_rather_than_raising(self):
+        """A stored dataset or recovery cache written before the `setup` key
+        existed has no snapshot, and a corpus that cannot state its geometry must
+        still open."""
+        fallback = SetupSnapshot(
+            canvas_width=1234, screen_provenance=Provenance.MEASURED
+        )
+        assert SetupSnapshot.from_dict(None, fallback=fallback) == fallback
+        assert SetupSnapshot.from_dict({}, fallback=fallback) == fallback
+        # One unparseable field must not discard the rest of a valid setup.
+        degraded = SetupSnapshot.from_dict(
+            {"canvas_width": "not-a-number", "canvas_height": 900},
+            fallback=fallback,
+        )
+        assert degraded.canvas_width == 1234
+        assert degraded.canvas_height == 900
+
+    def test_is_answered_is_the_add_dataset_gate(self):
+        assert not SetupSnapshot(screen_provenance=None).is_answered()
+        assert SetupSnapshot().is_answered()
+
+
+class TestProvenanceParam:
+    """The compact `setup_prov` share value (DATA-22 §7 surface 2)."""
+
+    def test_round_trips(self):
+        snapshot = SetupSnapshot(
+            screen_provenance=Provenance.MEASURED,
+            geometry_provenance=Provenance.SKIPPED,
+            text_provenance=Provenance.ASSUMED,
+        )
+        param = format_provenance_param(snapshot)
+        assert param == "screen:measured,geom:skipped,text:assumed"
+        assert parse_provenance_param(param) == snapshot.provenance
+
+    def test_parsing_a_mangled_link_costs_badges_not_the_link(self):
+        """It reads a URL a stranger may have hand-edited, so unknown groups and
+        unknown provenance words are dropped rather than raised on."""
+        parsed = parse_provenance_param("screen:invented,nosuch:measured,geom:measured")
+        assert parsed == {"geometry": Provenance.MEASURED}
+        assert parse_provenance_param("") == {}
+        assert parse_provenance_param(None) == {}
+        assert parse_provenance_param("garbage") == {}

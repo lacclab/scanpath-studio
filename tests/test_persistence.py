@@ -280,3 +280,43 @@ def test_upgrade_from_a_manifest_without_row_counts(tmp_path):
     assert healed["datasets"][0]["rows"] == {"words": 1, "fixations": 1, "raw_gaze": 0}
     # The backfill must not have rewritten the frames — it only counts them.
     assert (tmp_path / "datasets").is_dir()
+
+
+def test_setup_snapshot_survives_a_cache_round_trip(tmp_path):
+    """CMP-8 §1: the per-dataset `setup` key must ride the recovery cache.
+
+    Without it a restored session would reopen an uploaded corpus with no
+    geometry — the exact hole the snapshot exists to close — and the compare
+    figure would have nothing to draw B's panel to scale with.
+    """
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
+
+    snapshot = SetupSnapshot(
+        canvas_width=1680,
+        canvas_height=1050,
+        monitor_width_mm=474.0,
+        screen_provenance=Provenance.MEASURED,
+        geometry_provenance=Provenance.SKIPPED,
+        text_provenance=Provenance.ASSUMED,
+    )
+    payload = _dataset()
+    payload["setup"] = snapshot.to_dict()
+    assert save_state({"_datasets": {"Corpus": payload}}, tmp_path)
+
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    stored = restored["_datasets"]["Corpus"]["setup"]
+    assert SetupSnapshot.from_dict(stored) == snapshot
+
+
+def test_a_cache_written_before_the_setup_key_still_restores(tmp_path):
+    """An older cache has no `setup` at all; it must degrade, not raise."""
+    from scanpath_studio.experimental_setup import SetupSnapshot
+
+    assert save_state({"_datasets": {"Corpus": _dataset()}}, tmp_path)
+    restored = {}
+    assert restore_state(restored, tmp_path)
+    entry = restored["_datasets"]["Corpus"]
+    assert "setup" not in entry
+    fallback = SetupSnapshot(canvas_width=999)
+    assert SetupSnapshot.from_dict(entry.get("setup"), fallback=fallback) == fallback

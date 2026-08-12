@@ -74,6 +74,23 @@ def _theme_cli_flags() -> List[str]:
     return flags
 
 
+def _max_upload_cli_flags(extra_args) -> List[str]:
+    """Raise the per-file upload cap past Streamlit's 200 MB default.
+
+    Same reason as the theme above: ``.streamlit/config.toml`` is resolved
+    against the *launch* directory, so a pip-installed ``scanpath-studio`` run
+    from anywhere but the repo root never saw the bundled
+    ``server.maxUploadSize`` and rejected any table over 200 MB — which is a
+    normal size for a real fixation report. An explicit ``--server.*`` flag from
+    the caller still wins.
+    """
+    from .constants import UPLOAD_MAX_SIZE_MB
+
+    if any(str(arg).startswith("--server.maxUploadSize") for arg in extra_args):
+        return []
+    return [f"--server.maxUploadSize={UPLOAD_MAX_SIZE_MB}"]
+
+
 def launch_app(extra_args: List[str]) -> None:
     """Launch the Streamlit app via ``streamlit run``, forwarding extra args."""
     from streamlit.web import cli as stcli
@@ -113,6 +130,7 @@ def launch_app(extra_args: List[str]) -> None:
             str(app_path),
             *theme_args,
             *stats_args,
+            *_max_upload_cli_flags(extra_args),
             *extra_args,
         ]
         sys.exit(stcli.main())

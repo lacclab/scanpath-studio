@@ -21,6 +21,16 @@ import streamlit as st
 from scanpath_studio.html_embed import embed_html_iframe
 
 from .annotations import restore_records
+from .experimental_setup import format_provenance_param, parse_provenance_param
+from .session_keys import (
+    COMPARE_PARAM,
+    COMPARE_SOURCE_PARAM,
+    COMPARE_SOURCE_STATE_KEY,
+    PENDING_COMPARE_STATE_KEY,
+    SETUP_PROVENANCE_PARAM,
+    SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_COMPARE_TOGGLE,
+)
 from .constants import (
     _VIEW_CORPUS,
     _VIEW_SCANPATH,
@@ -361,6 +371,23 @@ _SHAREABLE_SOURCES = {
 }
 
 
+def _source_choice_for_param(value) -> Optional[str]:
+    """Invert `_SHAREABLE_SOURCES`: a ``?source=``-style token → the data choice.
+
+    Used by CMP-8's `cmp_source`, which names scanpath **B's** corpus in the
+    same vocabulary. An unknown token returns ``None`` — the link then simply
+    doesn't move the comparison dataset, which is a safe degrade rather than a
+    wedged picker.
+    """
+    if not value:
+        return None
+    token = str(value).lower()
+    for choice, param in _SHAREABLE_SOURCES.items():
+        if param == token:
+            return choice
+    return None
+
+
 def _apply_url_palette(qp) -> None:
     """Expand a ``?palette=<name>`` deep link into its colour session keys (VIZ-18).
 
@@ -453,6 +480,18 @@ def _apply_url_preset() -> Optional[str]:
         value = _clamp_url_value(state_key, value)
         st.session_state.setdefault(state_key, value)
 
+    # DATA-22 §7 surface 2 (read side): badge the values this link is carrying
+    # with how the *sender* knew them, so an assumed monitor arrives labelled as
+    # assumed instead of looking measured. Parsing is deliberately forgiving —
+    # unknown groups and unknown provenance words are dropped, never raised on —
+    # because a mangled param should cost the recipient badges, not the link.
+    if SETUP_PROVENANCE_PARAM in qp:
+        arrived = parse_provenance_param(str(qp[SETUP_PROVENANCE_PARAM]))
+        if arrived:
+            st.session_state.setdefault(
+                SETUP_PROVENANCE_STATE_KEY, {g: str(p) for g, p in arrived.items()}
+            )
+
     # Heatmap / fixation colorscale only render under the Advanced expander —
     # auto-open it so the URL value is exposed in the sidebar.
     if "heatmap_colorscale" in qp or "fixation_colorscale" in qp:
@@ -464,6 +503,25 @@ def _apply_url_preset() -> Optional[str]:
         st.session_state.setdefault("single_animate", True)
     if qp.get("screen") not in (None, ""):
         st.session_state.setdefault("single_screen_id", str(qp["screen"]))
+
+    # CMP-8 §7: `?compare=<participant>:<trial>` turns Compare on and parks B's
+    # ids for the picker to consume once its candidate list exists (the picker's
+    # own key holds a render-time *label*, so a link can't seed it directly —
+    # the same reason ENG-36's trial jump parks a request). `cmp_source` names
+    # B's corpus; an unknown name is dropped rather than honoured, which falls
+    # back to "B is in this dataset" instead of wedging the picker.
+    compare_raw = str(qp.get(COMPARE_PARAM) or "")
+    if ":" in compare_raw:
+        participant_b, _, trial_b = compare_raw.partition(":")
+        if participant_b and trial_b:
+            st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, True)
+            st.session_state.setdefault(
+                PENDING_COMPARE_STATE_KEY,
+                {"participant_id": participant_b, "trial_id": trial_b},
+            )
+            source_b = _source_choice_for_param(qp.get(COMPARE_SOURCE_PARAM))
+            if source_b is not None:
+                st.session_state.setdefault(COMPARE_SOURCE_STATE_KEY, source_b)
 
     # DATA-3: the public OneStop source options (variant / regime / parts) ride
     # the deep link too, seeded before the loader's widgets render. Validate each
@@ -1226,9 +1284,21 @@ def _restore_plot_config(
     # DATA-2: write all five keys even for a pre-experimental-setup config. This
     # keeps schema-1/2 restores deterministic and makes the saved-state contract
     # explicit (rather than hiding the key names behind a dynamic loop).
-    setup_context = isinstance(config.get("experimental_setup"), dict) or isinstance(
-        config.get("canvas_px"), dict
-    )
+    #
+    # DATA-22 review: "all five" means all five of *this* section's keys, and
+    # only for a full plot config. The wizard's setup file now also carries an
+    # `experimental_setup` — a `SetupSnapshot`, which has no `display_dpi` /
+    # `stimulus_font_pt` / `use_stimulus_font_pt` — and loading one through the
+    # main 💾 Save & restore uploader used to flip this branch on and overwrite
+    # those three with the reader's own fallbacks. A section that never mentions
+    # a setting must not restate it.
+    full_config = isinstance(config.get("canvas_px"), dict)
+    setup_context = isinstance(config.get("experimental_setup"), dict) or full_config
+
+    def _stated(key: str) -> bool:
+        """Whether this config is entitled to write ``key``'s session state."""
+        return full_config or key in setup
+
     if setup_context:
         monitor_width = number(setup.get("monitor_width_mm", 597.0))
         put_valid(
@@ -1248,28 +1318,31 @@ def _restore_plot_config(
             else 800.0,
             "viewing distance",
         )
-        display_dpi = number(setup.get("display_dpi", 96.0))
-        put_valid(
-            display_dpi is not None,
-            "global_display_dpi",
-            max(20.0, min(float(display_dpi), 1000.0))
-            if display_dpi is not None
-            else 96.0,
-            "display DPI",
-        )
-        stimulus_font = number(setup.get("stimulus_font_pt", 12.0))
-        put_valid(
-            stimulus_font is not None,
-            "global_stimulus_font_pt",
-            max(4.0, min(float(stimulus_font), 144.0))
-            if stimulus_font is not None
-            else 12.0,
-            "stimulus font",
-        )
-        put(
-            "global_use_stimulus_font_pt",
-            bool(setup.get("use_stimulus_font_pt", False)),
-        )
+        if _stated("display_dpi"):
+            display_dpi = number(setup.get("display_dpi", 96.0))
+            put_valid(
+                display_dpi is not None,
+                "global_display_dpi",
+                max(20.0, min(float(display_dpi), 1000.0))
+                if display_dpi is not None
+                else 96.0,
+                "display DPI",
+            )
+        if _stated("stimulus_font_pt"):
+            stimulus_font = number(setup.get("stimulus_font_pt", 12.0))
+            put_valid(
+                stimulus_font is not None,
+                "global_stimulus_font_pt",
+                max(4.0, min(float(stimulus_font), 144.0))
+                if stimulus_font is not None
+                else 12.0,
+                "stimulus font",
+            )
+        if _stated("use_stimulus_font_pt"):
+            put(
+                "global_use_stimulus_font_pt",
+                bool(setup.get("use_stimulus_font_pt", False)),
+            )
 
     axes = section("axes")
     numeric = numeric_field_options(fixations)
@@ -1580,6 +1653,39 @@ def _build_share_query(
     if include_trial and screen_id not in (None, ""):
         params["screen"] = str(screen_id)
 
+    # CMP-8 §7: the second scanpath. Gated on `include_trial` for the same reason
+    # A's trial is — the DATA-16/S3 identity picker governs *both* readers a link
+    # names, not just the first. B's source rides along only when it is one a URL
+    # can rebuild; an uploaded dataset lives in session state, so the link says so
+    # rather than silently dropping half the comparison.
+    compare = selection.get("compare") if include_trial else None
+    if isinstance(compare, dict) and compare.get("trial_id") not in (None, ""):
+        participant_b = compare.get("participant_id")
+        if include_participant and participant_b not in (None, ""):
+            params[COMPARE_PARAM] = f"{participant_b}:{compare['trial_id']}"
+        else:
+            # `compare=` has no trial-only spelling — it is `<pid>:<trial>`, and
+            # a trial id alone is ambiguous across readers in B's corpus. Under
+            # an identity mode that drops participants the comparison therefore
+            # cannot travel, and the link must say so rather than arrive as a
+            # single scanpath the recipient has no way to know was a pair.
+            caveats.append(
+                "The compared scanpath names a second reader, so it isn't "
+                "included at this privacy setting — the link opens the first "
+                "scanpath only."
+            )
+        source_b = compare.get("source")
+        if source_b:
+            token = _SHAREABLE_SOURCES.get(source_b)
+            if token and COMPARE_PARAM in params:
+                params[COMPARE_SOURCE_PARAM] = token
+            elif COMPARE_PARAM in params:
+                params.pop(COMPARE_PARAM)
+                caveats.append(
+                    f"The compared scanpath comes from **{source_b}**, which "
+                    "can't be rebuilt from a link — it isn't included."
+                )
+
     # Visualization toggles — emit an explicit 0/1 so a layer the user turned
     # *off* is shared as off (the URL coercion reads "0" as False).
     for url_key, state_key in _SHARE_TOGGLE_PARAMS.items():
@@ -1608,6 +1714,18 @@ def _build_share_query(
             params[url_key] = f"{value[0]},{value[1]}"
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
+
+    # DATA-22 §7 surface 2: a compact provenance badge for the recording setup.
+    # A link carries the *values* (canvas, mm, font) already; without this the
+    # recipient cannot tell a monitor the sender measured from one the app
+    # assumed on their behalf. Metadata about settings, not a setting — it takes
+    # no input and changes no figure, which is why it stops here and never
+    # becomes a `render` flag or a builder argument.
+    from scanpath_studio.app import active_setup_snapshot
+
+    snapshot = active_setup_snapshot(data_choice)
+    if snapshot is not None:
+        params[SETUP_PROVENANCE_PARAM] = format_provenance_param(snapshot)
 
     return urlencode(params), caveats
 

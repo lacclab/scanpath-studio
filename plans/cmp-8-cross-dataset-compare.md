@@ -1,10 +1,32 @@
 # CMP-8 · Compare scanpaths across datasets
 
-> **Status: planned 2026-08-12** — design doc for the
+> **Status: implemented 2026-08-12** — design doc for the
 > [improvements tracker](../tracker/index.html) → **CMP-8** ("Compare scanpaths
-> across datasets"). Not started. All six scoping calls are settled (three on
-> 2026-08-12 in chat, three from the item's *Instructions for implementation*);
-> nothing is waiting on the user.
+> across datasets"), now in *Review*. All six scoping calls were settled before
+> implementation (three on 2026-08-12 in chat, three from the item's
+> *Instructions for implementation*).
+>
+> **Three things the implementation had to decide differently**, recorded here so
+> the doc doesn't contradict the code:
+>
+> 1. **§7 was bigger than stated.** This doc says "the share link already names
+>    B's exact (participant, trial)". It does not — compare mode had *no* link
+>    representation at all (Animate has `?tab=animation`; Compare had nothing).
+>    A `cmp_source` on its own would have pinned a wire-format param that
+>    restores nothing, so `compare=<participant>:<trial>` ships with it. That
+>    makes same-dataset compare shareable for the first time as a side effect.
+> 2. **Overlay is gated with a caption, not a disabled option.** Streamlit's
+>    `st.segmented_control` has no per-option disable, so all three options stay
+>    and the resolve explains itself inline. The rule the doc actually cares
+>    about — resolve without rewriting `single_compare_layout` — holds.
+> 3. **Animate + Compare is gated too**, which §5.3 doesn't mention: a dual
+>    animation co-animates both scanpaths on one clock, i.e. an overlay, so it
+>    hits the same one-coordinate-space problem. It replays A alone with a
+>    warning.
+>
+> §10's live cross-corpus check (demo vs. PoTeC) is **not** done — PoTeC isn't
+> present in this checkout and the preview harness can't launch the app. Covered
+> by `tests/test_compare_cross_dataset.py` plus a demo-vs-synthetic AppTest flow.
 
 ## Context
 

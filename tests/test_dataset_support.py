@@ -1829,3 +1829,125 @@ def test_categorize_columns_splits_mapped_detected_unclaimed():
     assert "participant_id" in cats["mapped"]
     assert any(d["source"] == "gpt2_surprisal" for d in cats["detected_optional"])
     assert "my_custom_col" in cats["unclaimed"]
+
+
+# --- CMP-8 §2 · the comparison-dataset readiness gate ------------------------
+# The one hard constraint on the secondary loader is that it must not RENDER —
+# the app's public-corpus loaders draw directory inputs and ⬇ Download buttons,
+# none of which can appear inside the compare picker. So a corpus whose files
+# aren't already where the main picker last looked is offered *disabled*, and is
+# never loaded blind (which would fall back to the demo, silently comparing
+# against the wrong data).
+
+
+def _secondary_options_app():
+    import streamlit as st
+
+    from scanpath_studio.compare_source import (
+        load_secondary_dataset,
+        secondary_dataset_options,
+    )
+
+    st.session_state["potec_dir"] = "/nonexistent/potec"
+    st.session_state["_datasets"] = {"My upload": {"words": None, "fixations": None}}
+    options = secondary_dataset_options()
+    st.session_state["_options"] = options
+    # A corpus that isn't present must come back as None rather than loading
+    # something else in its place.
+    st.session_state["_loaded_absent"] = load_secondary_dataset(
+        next(name for name, ready, _ in options if not ready and "PoTeC" in name)
+    )
+
+
+def test_a_missing_public_corpus_is_offered_but_disabled_never_loaded():
+    apptest = pytest.importorskip("streamlit.testing.v1")
+    at = apptest.AppTest.from_function(_secondary_options_app)
+    at.run(timeout=30)
+    assert not at.exception, at.exception
+
+    options = dict(
+        (name, (ready, why)) for name, ready, why in at.session_state["_options"]
+    )
+    potec = next(name for name in options if "PoTeC" in name)
+    ready, why = options[potec]
+    assert ready is False
+    assert "as the main dataset" in why  # names the fix, not just the failure
+    assert at.session_state["_loaded_absent"] is None
+    # The always-available sources are offered ready.
+    assert options["Bundled Demo"][0] is True
+    assert options["Synthetic test trial"][0] is True
+    assert options["My upload"][0] is True
+
+
+def test_this_dataset_and_unknown_names_load_to_none():
+    from scanpath_studio.compare_source import THIS_DATASET, load_secondary_dataset
+
+    assert load_secondary_dataset(None) is None
+    assert load_secondary_dataset(THIS_DATASET) is None
+
+
+def _secondary_load_app():
+    """Load the bundled demo as a comparison source and inspect what came back."""
+    import streamlit as st
+
+    from scanpath_studio.compare_source import load_secondary_dataset
+
+    source = load_secondary_dataset("Bundled Demo")
+    st.session_state["_name"] = source.name
+    st.session_state["_rows"] = len(source.fixations)
+    st.session_state["_trials"] = len(source.combos)
+    st.session_state["_canvas"] = source.setup.canvas
+    st.session_state["_screen_prov"] = str(source.setup.screen_provenance)
+
+
+def test_a_built_in_source_loads_with_its_own_combos_and_screen():
+    """The loader must answer for *B's* geometry, never the live `global_*` keys
+    (which describe A) — the demo declares a 2560x1440 monitor, so that is what
+    comes back regardless of what the session's canvas is set to."""
+    apptest = pytest.importorskip("streamlit.testing.v1")
+    at = apptest.AppTest.from_function(_secondary_load_app)
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+
+    assert at.session_state["_name"] == "Bundled Demo"
+    assert at.session_state["_rows"] > 0
+    assert at.session_state["_trials"] > 0
+    assert at.session_state["_canvas"] == (2560, 1440)
+    assert at.session_state["_screen_prov"] == "measured"
+
+
+def _secondary_stored_upload_app():
+    """A stored upload carries the snapshot its wizard captured."""
+    import streamlit as st
+
+    from scanpath_studio.compare_source import load_secondary_dataset
+    from scanpath_studio.data import load_sample_data
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
+    from scanpath_studio import api
+
+    words, fixations = api.load_scanpath_data(*load_sample_data())
+    st.session_state["_datasets"] = {
+        "My upload": {
+            "words": words,
+            "fixations": fixations,
+            "raw_gaze": None,
+            "composite_trial_columns": [],
+            "setup": SetupSnapshot(
+                canvas_width=1280,
+                canvas_height=1024,
+                screen_provenance=Provenance.ESTIMATED,
+            ).to_dict(),
+        }
+    }
+    source = load_secondary_dataset("My upload")
+    st.session_state["_canvas"] = source.setup.canvas
+    st.session_state["_prov"] = str(source.setup.screen_provenance)
+
+
+def test_a_stored_upload_reports_the_setup_its_wizard_captured():
+    apptest = pytest.importorskip("streamlit.testing.v1")
+    at = apptest.AppTest.from_function(_secondary_stored_upload_app)
+    at.run(timeout=60)
+    assert not at.exception, at.exception
+    assert at.session_state["_canvas"] == (1280, 1024)
+    assert at.session_state["_prov"] == "estimated"

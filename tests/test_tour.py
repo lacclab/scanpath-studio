@@ -143,8 +143,8 @@ def test_welcome_tour_text_is_concise():
         assert len(body) <= 240, f"welcome dialog step too long: {body!r}"
     for step in _SPOTLIGHT_STEPS:
         assert len(step["body"]) <= 240, f"spotlight step too long: {step['body']!r}"
-    for _title, body in _WIZARD_GUIDE_STEPS:
-        assert len(body) <= 280, f"wizard guide step too long: {body!r}"
+    for step in _WIZARD_GUIDE_STEPS:
+        assert len(step["body"]) <= 280, f"wizard guide step too long: {step['body']!r}"
 
 
 # -----------------------------------------------------------------------------
@@ -510,3 +510,48 @@ class TestSpotlightSelectorsResolve:
         assert ".st-key-railbtn_plot_reset button {" in css
         assert "padding-right: 1.25rem !important;" in css
         assert "@container sps-rail (max-width: 240px)" in css
+
+
+def test_spotlight_helpers_are_plain_functions_that_return_their_css():
+    """Regression: the DATA-22 factoring must not steal `render_spotlight_tour`'s
+    `@st.fragment`.
+
+    Inserting `_highlight_css` / `_scroll_into_view_script` directly above the
+    decorated function once left the decorator attached to the *helper* — which
+    made it return `None` (a fragment has no return value), silently dropping the
+    highlight outline from both the welcome tour and the setup guide, and cost
+    the tour its fragment so every Back/Next waited on a full app rerun.
+    """
+    import inspect
+
+    from scanpath_studio import tour
+
+    for helper in (tour._highlight_css, tour._scroll_into_view_script):
+        assert not inspect.getsource(helper).lstrip().startswith("@"), (
+            f"{helper.__name__} must stay an undecorated pure helper"
+        )
+
+    css = tour._highlight_css(".st-key-wiz_open_setup", "#1f77b4")
+    assert "tour-pulse" in css and "outline: 3px solid #1f77b4" in css
+    assert tour._highlight_css("", "#1f77b4") == ""
+
+    # Both spotlight renderers must still be fragments (see the module docstring:
+    # navigation must never wait for the ~10 s full-app rerun).
+    for fn in (tour.render_spotlight_tour, tour.render_spotlight_wizard_guide):
+        assert hasattr(fn, "__wrapped__"), f"{fn.__name__} lost its @st.fragment"
+
+
+def test_wizard_guide_steps_are_anchored_to_real_wizard_steps():
+    """DATA-22 §4: the guide drives the wizard instead of narrating beside it."""
+    from scanpath_studio import wizard_shell
+    from scanpath_studio.tour import _WIZARD_GUIDE_STEPS
+
+    known = {s.id for s in wizard_shell.STEPS}
+    anchored = [s for s in _WIZARD_GUIDE_STEPS if s["step_id"]]
+    assert len(anchored) == len(wizard_shell.STEPS), (
+        "every wizard step should have a guide step pointing at it"
+    )
+    for step in anchored:
+        assert step["step_id"] in known
+        # Keyed expanders supply this selector for free.
+        assert step["selector"] == f".st-key-{wizard_shell.open_key(step['step_id'])}"

@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from scanpath_studio import controls
+from scanpath_studio.wizard import _SCREEN_KNOW, _SETUP_MODE_KEYS
 from tests.conftest import (
     APP_SCRIPT,
     SUBTAB_COMPARISONS,
@@ -20,6 +21,7 @@ from tests.conftest import (
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     SUBTAB_LINE_ASSIGNMENT,
+    answer_setup_step,
 )
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -1192,6 +1194,7 @@ class TestSetupWizard:
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Wizard is active: the finalize button is shown and tabs are not yet up.
@@ -1209,6 +1212,7 @@ class TestSetupWizard:
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Finalize with defaults (keep detected optional fields, drop unclaimed),
@@ -1232,6 +1236,7 @@ class TestSetupWizard:
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         [b for b in at.button if b.key == "wizard_finalize"][0].click()
@@ -1285,8 +1290,12 @@ class TestSetupWizard:
         assert "col_map_words_trial" not in ms_keys
         # Per-table override toggle is offered (both tables present).
         assert any(t.key == "wizard_trial_per_table" for t in at.toggle)
-        # Display calibration moved into the loading flow.
-        assert any(n.key == "global_canvas_width" for n in at.number_input)
+        # DATA-22: the recording setup is now step 4, *after* the upload, and
+        # asks how each group is known instead of seeding a monitor. Nothing is
+        # preselected — a wrong guess here silently rescales every figure.
+        modes = {r.key: r.value for r in at.radio}
+        assert set(_SETUP_MODE_KEYS.values()) <= set(modes)
+        assert all(modes[k] is None for k in _SETUP_MODE_KEYS.values())
 
     def test_per_table_trial_toggle_reveals_per_table_pickers(self, monkeypatch):
         app = self._inject(monkeypatch)
@@ -1305,6 +1314,7 @@ class TestSetupWizard:
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         finalize = [b for b in at.button if b.key == "wizard_finalize"]
@@ -1331,6 +1341,7 @@ class TestSetupWizard:
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Dataset name moved to the top.
@@ -1363,6 +1374,10 @@ class TestSetupWizard:
         # Real flow: enter the wizard via the button (picker already rendered).
         [b for b in at.button if b.key == "add_data_btn"][0].click()
         at.run(timeout=60)
+        # Entering the wizard resets its widgets, so the setup step must be
+        # answered *after* that click, not before it.
+        answer_setup_step(at)
+        at.run(timeout=60)
         [b for b in at.button if b.key == "wizard_finalize"][0].click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -1385,6 +1400,7 @@ class TestSetupWizard:
         # First finalize a dataset to capture its persisted store entry.
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         [b for b in at.button if b.key == "wizard_finalize"][0].click()
         at.run(timeout=60)
@@ -1514,6 +1530,7 @@ class TestSetupWizard:
         )
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Finalize is shown but disabled; the blocking problem mentions raw gaze.
@@ -1568,6 +1585,7 @@ class TestSetupWizard:
         )
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert set(at.session_state["_composite_trial_columns"]) == {
@@ -1597,18 +1615,26 @@ class TestSetupWizard:
         keys = {w.key for w in at2.selectbox if w.key}
         assert any(k.startswith("single_composite_") for k in keys), keys
 
-    def test_experimental_setup_control_writes_shared_global_key(self, monkeypatch):
-        """Group A: the Display & experiment setup controls live inside the wizard
-        and write the shared global_* keys the sidebar later reads."""
+    def test_recording_setup_writes_shared_global_key(self, monkeypatch):
+        """DATA-22: the Recording-setup step still feeds the shared ``global_*``
+        keys the rest of the app reads — but only once the user has said *how*
+        they know the screen. Answering "I know the resolution" reveals the
+        width/height inputs, and the value they hold is published."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        width = [n for n in at.number_input if n.key == "global_canvas_width"]
-        assert width, "Experimental Setup monitor-width control not in the wizard"
+        # Before answering, the wizard publishes no canvas at all.
+        assert not [n for n in at.number_input if n.key == "wizard_setup_screen_w"]
+
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
+        at.run(timeout=60)
+        width = [n for n in at.number_input if n.key == "wizard_setup_screen_w"]
+        assert width, "'I know the resolution' did not reveal the width input"
         width[0].set_value(1999)
         at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["global_canvas_width"] == 1999
 
 
@@ -1935,6 +1961,7 @@ class TestMultiplEYEUploadPreset:
         )
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
         at.session_state["wizard_dataset_format"] = "MultiplEYE"
@@ -2036,6 +2063,7 @@ class TestGenericFilenamePowers:
         )
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
         at.session_state["_show_upload_wizard"] = True
         at.session_state["setup_complete"] = False
         at.session_state["wizard_dataset_format"] = "Generic"
@@ -2374,3 +2402,85 @@ class TestPendingTrialRequestDoesNotLinger:
         at.run(timeout=30)
         assert not at.exception, at.exception
         assert PENDING_TRIAL_KEY not in at.session_state
+
+
+@pytest.mark.timeout(180)
+class TestRecordingSetupGate(TestSetupWizard):
+    """DATA-22 §3: **Add dataset** is blocked until all three setup groups say
+    how they are known.
+
+    The gate is deliberately hard — there is no "decide later" escape — but it
+    can never strand anyone: *Estimate from my data* always exists for the screen
+    group and always succeeds. What it buys is that no uploaded dataset can
+    silently inherit a monitor, viewing distance or font nobody chose.
+    """
+
+    def test_finalize_is_disabled_until_every_group_is_answered(self, monkeypatch):
+        app = self._inject(monkeypatch)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        finalize = [b for b in at.button if b.key == "wizard_finalize"]
+        assert finalize, "the finalize button should render (disabled), not vanish"
+        assert finalize[0].disabled, "Add dataset must be gated on the setup step"
+
+        # Answering two of three is still not enough.
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
+        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
+        at.run(timeout=60)
+        assert [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+
+        answer_setup_step(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+
+    def test_the_answers_ride_into_the_stored_dataset(self, monkeypatch):
+        """The provenance travels with the dataset, not just the wizard — that is
+        what lets a reader downstream tell an assumed monitor from a measured
+        one."""
+        app = self._inject(monkeypatch)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        answer_setup_step(at)
+        at.run(timeout=60)
+        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        entry = at.session_state["_datasets"][at.session_state["data_source_choice"]]
+        setup = entry["setup"]
+        assert setup["provenance"] == {
+            "screen": "assumed",
+            "geometry": "assumed",
+            "text": "assumed",
+        }
+        # A stored upload now records geometry at all — it recorded none before
+        # CMP-8 §1, which is why switching to one left the canvas on the previous
+        # source's monitor.
+        assert setup["canvas_width"] == 2560
+
+    def test_estimate_from_my_data_is_always_available_and_succeeds(self, monkeypatch):
+        """The escape hatch that keeps the hard gate humane."""
+        app = self._inject(monkeypatch)
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state[_SETUP_MODE_KEYS["screen"]] = "Estimate from my data"
+        at.session_state[_SETUP_MODE_KEYS["geometry"]] = (
+            "Skip — I don't need visual-angle units"
+        )
+        at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+
+        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        at.run(timeout=60)
+        entry = at.session_state["_datasets"][at.session_state["data_source_choice"]]
+        assert entry["setup"]["provenance"]["screen"] == "estimated"
+        assert entry["setup"]["provenance"]["geometry"] == "skipped"
+        # A skipped geometry group must not leave a derived number behind.
+        from scanpath_studio.experimental_setup import SetupSnapshot
+
+        assert SetupSnapshot.from_dict(entry["setup"]).px_per_degree is None

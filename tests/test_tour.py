@@ -511,6 +511,27 @@ class TestSpotlightSelectorsResolve:
         assert "padding-right: 1.25rem !important;" in css
         assert "@container sps-rail (max-width: 240px)" in css
 
+    def test_stacked_rail_header_cannot_wrap_reset_out_of_the_panel(self):
+        """BUG-24: the narrow-rail header must stack, not wrap sideways.
+
+        Streamlit ships every ``stHorizontalBlock`` with ``flex-wrap: wrap``.
+        Flipping only ``flex-direction`` to ``column`` therefore turns the
+        header into a *column-wrapping* flex container, and since the block has
+        a definite height the Reset column wraps into a second track to the
+        RIGHT — ~100px outside the rail, which clips it (``overflow-y: auto``
+        computes ``overflow-x`` to ``auto`` too). The rail is ~150px wide at
+        ordinary desktop widths, so this rule is the common case, not the
+        exception: Reset was invisible until the user zoomed out far enough for
+        the rail to clear 240px and the row layout to take over.
+        """
+        from scanpath_studio.styles import get_app_css
+
+        css = get_app_css()
+        block = css.split("@container sps-rail (max-width: 240px)", 1)[1]
+        block = block.split("@", 1)[0]
+        assert "flex-direction: column;" in block
+        assert "flex-wrap: nowrap;" in block
+
 
 def test_spotlight_helpers_are_plain_functions_that_return_their_css():
     """Regression: the DATA-22 factoring must not steal `render_spotlight_tour`'s

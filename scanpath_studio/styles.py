@@ -498,12 +498,23 @@ def get_app_css() -> str:
         .st-key-viz_view_heatmap button p::before { content: "🔥"; }
         .st-key-viz_view_illustration button p::before { content: "✏️"; }
     }
-    /* At an exceptionally narrow rail, two header columns cannot hold a real
-       heading and even a compact popover trigger. Stack just this header and
-       keep the Reset action right-aligned; ordinary rail widths remain a row. */
+    /* Below ~240px the two header columns cannot hold a real heading and even a
+       compact popover trigger side by side, so stack them and keep the Reset
+       action right-aligned; wider rails remain a row. This is the COMMON case,
+       not an edge one — the rail is ~150px inside at ordinary desktop widths,
+       and only a zoomed-out browser clears 240px.
+
+       BUG-24: `flex-wrap: nowrap` is what makes the stack a stack. Streamlit
+       ships every `stHorizontalBlock` with `flex-wrap: wrap`, so flipping only
+       `flex-direction` turned this into a *column-wrapping* container: with a
+       definite height, the Reset column wrapped into a second track to the
+       RIGHT — ~100px outside the rail, and clipped, because the rail's
+       `overflow-y: auto` computes `overflow-x` to `auto` as well. Reset was
+       invisible at every width that triggers this rule. */
     @container sps-rail (max-width: 240px) {
         .st-key-plot_controls_header [data-testid="stHorizontalBlock"] {
             flex-direction: column;
+            flex-wrap: nowrap;
         }
         .st-key-plot_controls_header [data-testid="stColumn"] {
             width: 100% !important;

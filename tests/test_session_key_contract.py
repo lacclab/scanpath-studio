@@ -273,6 +273,12 @@ def test_deep_link_seeds_frozen_state_keys():
         # VIZ-31: the reading-class filter parses against a closed set of class
         # names, so a placeholder would be rejected with a warning.
         "saccade_classes": "forward,regression",
+        # CMP-11: both are `st.segmented_control` options, so both readers
+        # validate against the control's exact spellings. The layout is given in
+        # its hyphenated CLI form on purpose — the parser accepts both, and a
+        # link built from a `--compare-layout` value must survive the round trip.
+        sk.COMPARE_LAYOUT_PARAM: "side-by-side",
+        sk.COMPARE_STIMULUS_PARAM: "B",
     }
     for param in sk.SHARE_TOGGLE_PARAMS:
         query[param] = "1"
@@ -339,7 +345,16 @@ def _share_query_app():
         st.session_state[key] = 1.0
     for key in (*SHARE_INT_RANGE_PARAMS.values(), *SHARE_FLOAT_RANGE_PARAMS.values()):
         st.session_state[key] = (5, 10)
-    st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
+    # CMP-11: `cmp_layout` / `cmp_stimulus` describe a comparison, so they are
+    # emitted only when one is being shared. Without a `compare` entry here the
+    # frozen-param assertion below would report them as "gone from
+    # `_build_share_query`" — and, worse, a future genuine removal would be
+    # indistinguishable from this harness simply not comparing anything.
+    st.session_state["_share_selection"] = {
+        "participant_id": "p1",
+        "trial_id": "t1",
+        "compare": {"participant_id": "p2", "trial_id": "t2"},
+    }
     st.session_state[SINGLE_ANIMATE] = True
     st.session_state[ONESTOP_VARIANT] = list(ONESTOP_VARIANT_LABELS)[0]
     st.session_state[ONESTOP_REGIME] = list(ONESTOP_REGIME_LABELS)[0]
@@ -482,6 +497,10 @@ def _restore_config_app():
             "caption_pattern": "{text_id} · {n_fixations} fixations",
         },
         "compare": [compare_entry, dict(compare_entry)],
+        # CMP-11 — the compare *view*, distinct from the per-scanpath styling
+        # list above. Both fields are validated against the segmented controls'
+        # options, so placeholders would be skipped rather than written.
+        "compare_view": {"layout": "Stacked", "stimulus": "A"},
         "selection": {"participant_id": "p1", "trial_id": "t1"},
         "annotations": [],
     }

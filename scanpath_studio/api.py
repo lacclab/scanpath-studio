@@ -59,6 +59,7 @@ from .constants import (  # noqa: E402
     UNIFORM_COLOR_FIELD,
     palette_settings,
 )
+from .experimental_setup import Provenance, SetupSnapshot  # noqa: E402
 from .export import annotate_figure  # noqa: E402
 from .multipart import (  # noqa: E402
     SCREEN_ID,
@@ -69,8 +70,10 @@ from .multipart import (  # noqa: E402
 )
 from .plots import (  # noqa: E402
     ANIMATION_FIGURE_OPTIONS,
+    COMPARISON_FIGURE_OPTIONS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
+    make_comparison_figure,
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
     make_difference_profile_figure,
@@ -135,6 +138,11 @@ _FIGURE_CONTEXT_FIELDS = frozenset(
     {"canvas_width", "canvas_height", "base_font_size", "font_family"}
 )
 _STATIC_FIGURE_PARAMS = frozenset(STATIC_FIGURE_OPTIONS) - _FIGURE_CONTEXT_FIELDS
+#: CMP-9. `layout`, `compare_stimulus`, `trial_labels` and `canvas_b` are named
+#: parameters of `compare_scanpaths`, so they are not also loose keywords.
+_COMPARISON_FIGURE_PARAMS = frozenset(COMPARISON_FIGURE_OPTIONS) - (
+    _FIGURE_CONTEXT_FIELDS | {"layout", "compare_stimulus", "trial_labels", "canvas_b"}
+)
 _ANIMATION_FIGURE_PARAMS = (
     frozenset(ANIMATION_FIGURE_OPTIONS)
     - _FIGURE_CONTEXT_FIELDS
@@ -1060,7 +1068,8 @@ def figure_options(kind: str = "static") -> dict:
     """Every figure keyword a builder accepts → the default it renders with.
 
     ``kind="static"`` covers :func:`plot_scanpath`, ``kind="animation"``
-    :func:`animate_scanpath` (whose builder supports a subset). The values are
+    :func:`animate_scanpath` (whose builder supports a subset), and
+    ``kind="comparison"`` :func:`compare_scanpaths`. The values are
     the *effective* defaults — :data:`CANONICAL_FIGURE_DEFAULTS` where it sets
     one, the builder's own signature default otherwise — so a scripted caller
     can diff its intended settings against what it would get::
@@ -1073,8 +1082,19 @@ def figure_options(kind: str = "static") -> dict:
     elif kind == "animation":
         params = _ANIMATION_FIGURE_PARAMS
         defaults = FigureSettings.defaults(params) | _animation_defaults()
+    elif kind == "comparison":
+        # CMP-9: `compare_scanpaths` validates against this set, and its TypeError
+        # points the caller here — so it has to be answerable.
+        params = _COMPARISON_FIGURE_PARAMS
+        defaults = FigureSettings.defaults(params) | {
+            key: value
+            for key, value in CANONICAL_FIGURE_DEFAULTS.items()
+            if key in _COMPARISON_FIGURE_PARAMS
+        }
     else:
-        raise ValueError(f"Unknown kind {kind!r}; use 'static' or 'animation'.")
+        raise ValueError(
+            f"Unknown kind {kind!r}; use 'static', 'animation' or 'comparison'."
+        )
     options = {}
     for name in sorted(params):
         if name in defaults:
@@ -1438,6 +1458,217 @@ def render_parent_trial(
         )
         rendered[screen_id] = fig
     return rendered
+
+
+#: Layout names `compare_scanpaths` accepts, mapped to the builder's spelling.
+#: Hyphens are accepted so `cli.render --compare-layout side-by-side`, the share
+#: link's `cmp_layout`, and this function all name the layout the same way.
+_COMPARE_LAYOUTS = {
+    "overlay": "overlay",
+    "side_by_side": "side_by_side",
+    "side-by-side": "side_by_side",
+    "stacked": "stacked",
+}
+
+
+def _compare_setup(
+    setup: Optional[SetupSnapshot],
+    canvas_size: Optional[Tuple[int, int]],
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    *,
+    side: str,
+) -> SetupSnapshot:
+    """One side's `SetupSnapshot`, from an explicit one, a canvas, or the data.
+
+    The provenance is the point, because the overlay gate reads it: a canvas the
+    caller *stated* is ``MEASURED``, one inferred from the data extents is
+    ``ESTIMATED``. Both count as knowing the screen; neither claims a physical
+    display, which a comparison never uses.
+    """
+    if setup is not None:
+        if not isinstance(setup, SetupSnapshot):
+            raise TypeError(
+                f"{side} must be an experimental_setup.SetupSnapshot, got "
+                f"{type(setup).__name__}."
+            )
+        return setup
+    provenance = Provenance.MEASURED
+    if canvas_size is None:
+        provenance = Provenance.ESTIMATED
+        canvas_size = screen_canvas_size(words) or screen_canvas_size(fixations)
+        if canvas_size is None:
+            canvas_size = _data.compute_canvas_size(words, fixations)
+    return SetupSnapshot(
+        canvas_width=int(canvas_size[0]),
+        canvas_height=int(canvas_size[1]),
+        screen_provenance=provenance,
+    )
+
+
+def compare_scanpaths(
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    trial_a: Tuple[str, str],
+    trial_b: Tuple[str, str],
+    *,
+    words_b: Optional[pd.DataFrame] = None,
+    fixations_b: Optional[pd.DataFrame] = None,
+    dataset_b: str = "Dataset B",
+    layout: str = "overlay",
+    compare_stimulus: str = "both",
+    setup: Optional[SetupSnapshot] = None,
+    setup_b: Optional[SetupSnapshot] = None,
+    canvas_size: Optional[Tuple[int, int]] = None,
+    labels: Optional[Tuple[str, str]] = None,
+    style_a: Optional[dict] = None,
+    style_b: Optional[dict] = None,
+    base_font_size: int = 16,
+    font_family: str = FONT_FAMILY,
+    fix_index_range: Optional[Tuple[int, int]] = None,
+    drift_correction: Optional[str] = None,
+    title: str = "",
+    caption: str = "",
+    **figure_overrides,
+) -> go.Figure:
+    """Build a two-scanpath comparison figure (CMP-9).
+
+    The headless form of the app's **Compare** mode. ``trial_a`` / ``trial_b``
+    are ``(participant, trial)`` pairs; ``layout`` is ``"overlay"``,
+    ``"side_by_side"`` (``"side-by-side"`` also accepted) or ``"stacked"``.
+
+    **Two datasets.** Pass ``words_b`` / ``fixations_b`` to draw B from a
+    *different* corpus. Two corpora can hold the same ``(participant_id,
+    trial_id)`` and the builder slices by exactly that pair, so B's participant
+    ids are namespaced with ``dataset_b`` inside the throwaway merged frames —
+    without it one reading would silently render as two. The frames you pass in
+    are never modified, and nothing in the returned figure's data depends on the
+    namespace beyond the trace labels.
+
+    **The overlay gate.** Overlaying pools both readings into one axis range, so
+    across datasets it is allowed only when both were recorded on the same known
+    screen (`experimental_setup.setups_comparable`). Unlike the app — which
+    resolves an incomparable overlay to side-by-side, because a user can see
+    what they got — this **raises** ``ValueError``: silently returning a
+    differently-shaped figure than the one a script asked for is the wrong
+    failure mode headlessly. Ask for ``layout="side_by_side"`` to get the app's
+    fallback. Nothing is ever rescaled or reprojected.
+
+    ``setup`` / ``setup_b`` are :class:`experimental_setup.SetupSnapshot`
+    values — what the gate reads. ``canvas_size`` covers A when you only have a
+    resolution; omit both and the canvas is read off the data.
+
+    ``compare_stimulus`` picks whose word boxes and text an **overlay** draws —
+    ``"both"`` (default), ``"a"`` or ``"b"``. Two datasets' AOIs coincide only
+    when the text is identical. Split layouts ignore it; each panel owns its own
+    stimulus.
+
+    Remaining keywords are forwarded to :func:`plots.make_comparison_figure`
+    (e.g. ``show_words=False``, ``color_by="duration_ms"``); an unknown one
+    raises ``TypeError`` naming the closest valid options. Which settings a
+    comparison figure actually honours is the table in
+    ``scanpath_studio/CLAUDE.md`` → *Which viz settings apply in which render
+    path*.
+    """
+    from .experimental_setup import setups_comparable
+    from .utils import align_compare_columns, extract_trial, qualify_for_compare
+
+    resolved_layout = _COMPARE_LAYOUTS.get(str(layout).strip().lower())
+    if resolved_layout is None:
+        raise ValueError(
+            f"Unknown compare layout {layout!r}; choose one of "
+            f"{', '.join(sorted(set(_COMPARE_LAYOUTS.values())))}."
+        )
+    _reject_unknown_options(
+        figure_overrides,
+        _COMPARISON_FIGURE_PARAMS | {"palette"},
+        "compare_scanpaths",
+    )
+
+    cross_dataset = words_b is not None or fixations_b is not None
+    words_b = words if words_b is None else words_b
+    fixations_b = fixations if fixations_b is None else fixations_b
+
+    pid_a, tid_a = str(trial_a[0]), str(trial_a[1])
+    pid_b, tid_b = str(trial_b[0]), str(trial_b[1])
+    trial_words_a = extract_trial(words, pid_a, tid_a)
+    trial_fix_a = extract_trial(fixations, pid_a, tid_a)
+    trial_words_b = extract_trial(words_b, pid_b, tid_b)
+    trial_fix_b = extract_trial(fixations_b, pid_b, tid_b)
+    for frame, (pid, tid) in ((trial_fix_a, trial_a), (trial_fix_b, trial_b)):
+        if frame.empty:
+            raise ValueError(
+                f"No fixations for participant={pid!r}, trial={tid!r}. "
+                f"list_trials() shows what the frames contain."
+            )
+
+    setup_a = _compare_setup(
+        setup, canvas_size, trial_words_a, trial_fix_a, side="setup"
+    )
+    resolved_setup_b = _compare_setup(
+        setup_b, None, trial_words_b, trial_fix_b, side="setup_b"
+    )
+    if resolved_layout == "overlay" and cross_dataset:
+        comparable, note = setups_comparable(setup_a, resolved_setup_b)
+        if not comparable:
+            raise ValueError(
+                f"{note} Pass layout='side_by_side' (or 'stacked') to compare "
+                f"them anyway, each panel drawn to its own screen."
+            )
+        if note:
+            # The canvases match but at least one corpus never recorded a screen,
+            # so the overlay is drawn with a caveat rather than refused. A script
+            # has no caption to read it in, so it goes to the logger — loud enough
+            # to appear in a pipeline's output, quiet enough not to be an error.
+            logging.getLogger(__name__).warning("compare_scanpaths: %s", note)
+
+    figure_pid_b = pid_b
+    if cross_dataset:
+        trial_words_b = qualify_for_compare(trial_words_b, dataset_b)
+        trial_fix_b = qualify_for_compare(trial_fix_b, dataset_b)
+        figure_pid_b = (
+            str(trial_fix_b["participant_id"].iloc[0])
+            if not trial_fix_b.empty
+            else pid_b
+        )
+    trial_fix_a = _apply_fix_index_range(trial_fix_a, fix_index_range, pid_a, tid_a)
+    trial_fix_b = _apply_fix_index_range(trial_fix_b, fix_index_range, pid_b, tid_b)
+    if drift_correction:
+        from .alignment import correct
+
+        trial_fix_a, _ = correct(trial_fix_a, trial_words_a, drift_correction)
+        trial_fix_b, _ = correct(trial_fix_b, trial_words_b, drift_correction)
+
+    merged_words, merged_words_b, _ = align_compare_columns(
+        trial_words_a, trial_words_b
+    )
+    merged_fix, merged_fix_b, _ = align_compare_columns(trial_fix_a, trial_fix_b)
+    settings = _figure_kwargs(figure_overrides)
+    settings.pop("illustration_reasons", None)
+    render_settings = FigureSettings.from_mapping(
+        {k: v for k, v in settings.items() if k in _COMPARISON_FIGURE_PARAMS},
+        canvas_width=int(setup_a.canvas_width),
+        canvas_height=int(setup_a.canvas_height),
+        base_font_size=int(base_font_size),
+        font_family=font_family,
+        layout=resolved_layout,
+        compare_stimulus=str(compare_stimulus),
+        trial_labels=tuple(labels) if labels else None,
+        style_a=style_a,
+        style_b=style_b,
+        # Only the split layouts read this; an overlay that got here has two
+        # equal canvases anyway, so it is the same value either way.
+        canvas_b=resolved_setup_b.canvas,
+    )
+    fig = make_comparison_figure(
+        pd.concat([merged_words, merged_words_b], ignore_index=True),
+        pd.concat([merged_fix, merged_fix_b], ignore_index=True),
+        (pid_a, tid_a),
+        (figure_pid_b, tid_b),
+        settings=render_settings,
+    )
+    annotate_figure(fig, title=title, caption=caption)
+    return fig
 
 
 def save_figure(

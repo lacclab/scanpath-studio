@@ -54,6 +54,8 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.animate_scanpath
 
+::: scanpath_studio.api.compare_scanpaths
+
 ::: scanpath_studio.api.render_parent_trial
 
 ::: scanpath_studio.api.plot_corpus_figure

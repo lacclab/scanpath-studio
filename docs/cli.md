@@ -42,6 +42,76 @@ scanpath-studio render --words ia.csv --fixations fix.csv \
 HTML is interactive and browser-free. PNG, SVG, and PDF require
 Chrome/Chromium (`plotly_get_chrome -y`).
 
+## Compare two scanpaths
+
+`--compare-with PARTICIPANT:TRIAL` draws a second reading beside or over the
+first — the headless form of the app's **Compare** mode.
+
+```bash
+# Two readings from the same dataset
+scanpath-studio render --sample -p p1 -t t1 \
+  --compare-with p2:t5 -o compare.html
+
+# Side by side, showing only B's word boxes and text
+scanpath-studio render --sample -p p1 -t t1 \
+  --compare-with p2:t5 \
+  --compare-layout side-by-side --compare-stimulus b -o compare.svg
+
+# B from a second dataset
+scanpath-studio render --potec ./potec -p 12 -t b0 \
+  --compare-with p1:t1 \
+  --compare-words other/ia.csv --compare-fixations other/fix.csv \
+  --compare-dataset-name "Our lab" \
+  --canvas 1680x1050 --compare-canvas 1680x1050 \
+  -o cross.html
+```
+
+| Goal | Option |
+| --- | --- |
+| pick B | `--compare-with PARTICIPANT:TRIAL` |
+| arrange the panels | `--compare-layout {overlay,side-by-side,stacked}` (default `overlay`) |
+| whose stimulus an overlay draws | `--compare-stimulus {both,a,b}` (default `both`) |
+| B from another dataset | `--compare-words PATH… --compare-fixations PATH…` |
+| name that dataset | `--compare-dataset-name NAME` |
+| declare the screens | `--canvas WxH`, `--compare-canvas WxH` |
+| co-animate both readings | add `--animate` (HTML output) |
+
+`--animate --compare-with` replays **both** readings on one clock, the same dual
+co-animation the app renders with Animate and Compare both on. That is an
+overlay, so it needs one shared screen on the same terms as `--compare-layout
+overlay`. `--compare-with` cannot be combined with `--all-screens`: a comparison
+is a single figure of two readings, so render one screen at a time with
+`--screen`.
+
+**Overlay across two datasets requires matching canvases.** Overlaying pools both
+readings into one set of pixel coordinates, so `--compare-layout overlay` on two
+different screens **fails** rather than quietly falling back:
+
+```console
+$ scanpath-studio render … --canvas 2560x1440 --compare-canvas 1680x1050
+These readings were recorded on different screens — 2560x1440 and 1680x1050. …
+Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel
+drawn to its own screen.
+```
+
+The app resolves that case to Side by side because a user can see what they got;
+a script cannot, so the CLI refuses instead of returning a differently-shaped
+figure. Nothing is ever rescaled to force an overlay.
+
+Matching canvases that neither dataset actually *recorded* (most public corpora
+report a default) still overlay — you get a warning on stderr rather than an
+error, since the app can't prove the two displays matched but you usually can.
+
+A second dataset is loaded from **files only**. Any corpus reachable from Python
+can still be scanpath B via
+[`compare_scanpaths`](api.md#scanpath_studio.api.compare_scanpaths), which takes
+B's frames directly.
+
+`--monitor-mm` / `--viewing-distance` (and their `--compare-*` twins) record
+physical display geometry on each side's setup. Nothing in the comparison reads
+them today — the overlay rule is about pixels, not degrees — but they complete
+the recorded setup.
+
 ## Common options
 
 | Goal | Option |

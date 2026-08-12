@@ -208,33 +208,214 @@ class TestSecondaryDatasetShape:
 
 
 def _overlay_gate_app():
-    """A cross-dataset pair must resolve to a split layout, key untouched."""
+    """Drive the REAL gate (`tabs._compare_setups`) over three pairs.
+
+    Deliberately not a re-implementation of the resolve: an inline copy of the
+    rule passes even when the shipped code stops agreeing with it, which is
+    exactly what the pre-CMP-11 version of this harness had become.
+    """
+    import pandas as pd
     import streamlit as st
 
     from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
-    from scanpath_studio.tabs import _compare_source_name
+    from scanpath_studio.experimental_setup import Provenance, SetupSnapshot
+    from scanpath_studio.tabs import _compare_setups
 
     st.session_state["single_compare_layout"] = "Overlay"
     st.session_state[COMPARE_SOURCE_KEY] = "PoTeC"
-    layout = {
-        "Overlay": "overlay",
-        "Side by side": "side_by_side",
-        "Stacked": "stacked",
-    }.get(st.session_state.get("single_compare_layout"), "overlay")
-    if layout == "overlay" and _compare_source_name() is not None:
-        layout = "side_by_side"
-    st.session_state["_resolved_layout"] = layout
+
+    # `AppTest.from_function` re-executes this body in a fresh module, so the
+    # file-level `_words` / `_fixations` helpers are not in scope here.
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1"] * 3,
+            "trial_id": ["t1"] * 3,
+            "word_id": [0, 1, 2],
+            "text": ["the", "quick", "fox"],
+            "x": [100.0, 200.0, 300.0],
+            "y": [50.0, 50.0, 50.0],
+            "width": [90.0, 90.0, 90.0],
+            "height": [40.0, 40.0, 40.0],
+        }
+    )
+    fixations = pd.DataFrame(
+        {
+            "participant_id": ["p1"] * 3,
+            "trial_id": ["t1"] * 3,
+            "x": [120.0, 220.0, 320.0],
+            "y": [70.0, 70.0, 70.0],
+            "duration_ms": [200.0, 250.0, 180.0],
+            "timestamp_ms": [0.0, 200.0, 450.0],
+            "order_in_trial": [1, 2, 3],
+        }
+    )
+    cases = {
+        # Same dataset — one corpus is one screen; must stay as it always was.
+        "same_dataset": None,
+        "same_screen": SetupSnapshot(
+            canvas_width=1920,
+            canvas_height=1080,
+            screen_provenance=Provenance.MEASURED,
+        ),
+        "other_screen": SetupSnapshot(
+            canvas_width=1680,
+            canvas_height=1050,
+            screen_provenance=Provenance.MEASURED,
+        ),
+        "unknown_screen": SetupSnapshot(
+            canvas_width=1920,
+            canvas_height=1080,
+            screen_provenance=Provenance.ASSUMED,
+        ),
+    }
+    for name, setup_b in cases.items():
+        meta = (
+            None
+            if setup_b is None
+            else {"dataset": "PoTeC", "setup": setup_b, "words": words}
+        )
+        comparable, reason = _compare_setups(meta, words, fixations, 1920, 1080)
+        layout = "overlay" if comparable else "side_by_side"
+        st.session_state[f"_gate_{name}"] = (comparable, reason, layout)
 
 
 class TestOverlayGate:
-    def test_cross_dataset_resolves_to_split_without_rewriting_the_key(self):
+    """CMP-11 — overlay across datasets iff they share a known screen."""
+
+    @staticmethod
+    def _run():
         at = AppTest.from_function(_overlay_gate_app)
         at.run()
         assert not at.exception, at.exception
-        assert at.session_state["_resolved_layout"] == "side_by_side"
+        return at
+
+    def test_same_dataset_is_always_comparable(self):
+        comparable, reason, layout = self._run().session_state["_gate_same_dataset"]
+        assert comparable is True
+        assert reason == ""
+        assert layout == "overlay"
+
+    def test_same_screen_cross_dataset_now_overlays_silently(self):
+        """The case CMP-8's blanket block was too coarse for.
+
+        Silent on purpose: it is the control for the cautioned case below.
+        """
+        comparable, note, layout = self._run().session_state["_gate_same_screen"]
+        assert comparable is True
+        assert note == ""
+        assert layout == "overlay"
+
+    def test_differing_screens_still_resolve_to_a_split_layout(self):
+        at = self._run()
+        comparable, reason, layout = at.session_state["_gate_other_screen"]
+        assert comparable is False
+        assert "1680" in reason and "1050" in reason
+        assert layout == "side_by_side"
         # Resolve, don't rewrite: switching back to a same-dataset pair has to
         # restore the user's Overlay choice.
         assert at.session_state["single_compare_layout"] == "Overlay"
+
+    def test_a_matching_canvas_the_corpus_never_recorded_still_overlays(self):
+        """Allowed with a caveat, not refused (2026-08-12).
+
+        The motivating case is two OneStop regimes: same 2560x1440, both
+        ASSUMED because the corpus records no screen. Refusing there blocked
+        exactly the comparison the feature exists for.
+        """
+        comparable, note, layout = self._run().session_state["_gate_unknown_screen"]
+        assert comparable is True
+        assert layout == "overlay"
+        assert note, "an unrecorded screen must still be disclosed"
+
+
+class TestCompareStimulusSource:
+    """CMP-11: whose word boxes an overlay draws.
+
+    Two datasets' AOIs only coincide if the text is identical, so an overlay
+    across corpora can end up with two offset sets of rectangles under two
+    traces. The picker is the user's call; what is pinned here is that choosing
+    a side drops only the *stimulus* layer, never that side's scanpath.
+    """
+
+    @staticmethod
+    def _figure(compare_stimulus: str):
+        words = pd.concat(
+            [_words("p1", "t1", x0=100.0), _words("p2", "t2", x0=400.0)],
+            ignore_index=True,
+        )
+        fixations = pd.concat(
+            [_fixations("p1", "t1", y=70.0), _fixations("p2", "t2", y=90.0)],
+            ignore_index=True,
+        )
+        return make_comparison_figure(
+            words,
+            fixations,
+            ("p1", "t1"),
+            ("p2", "t2"),
+            settings=FigureSettings(
+                canvas_width=1920,
+                canvas_height=1080,
+                base_font_size=16,
+                layout="overlay",
+                show_words=True,
+                show_word_labels=True,
+                compare_stimulus=compare_stimulus,
+            ),
+        )
+
+    @staticmethod
+    def _box_lefts(fig) -> set:
+        """x0 of every word-box shape, rounded — identifies which side drew it."""
+        return {
+            round(float(shape.x0))
+            for shape in fig.layout.shapes
+            if (shape.name or "").startswith("__sps_layer:word_boxes")
+        }
+
+    @staticmethod
+    def _label_traces(fig) -> int:
+        return sum(1 for trace in fig.data if trace.name == "words")
+
+    def test_both_draws_each_side(self):
+        fig = self._figure("both")
+        lefts = self._box_lefts(fig)
+        assert 100 in lefts and 400 in lefts
+        assert self._label_traces(fig) == 2
+
+    def test_a_only_drops_bs_boxes_and_labels(self):
+        fig = self._figure("a")
+        lefts = self._box_lefts(fig)
+        assert 100 in lefts
+        assert 400 not in lefts
+        assert self._label_traces(fig) == 1
+
+    def test_b_only_is_the_mirror(self):
+        fig = self._figure("b")
+        lefts = self._box_lefts(fig)
+        assert 400 in lefts
+        assert 100 not in lefts
+        assert self._label_traces(fig) == 1
+
+    def test_choosing_a_side_keeps_both_scanpaths(self):
+        """The stimulus layer is what gets dropped — never a reading."""
+        for mode in ("both", "a", "b"):
+            fig = self._figure(mode)
+            ys = {
+                round(float(y))
+                for trace in fig.data
+                for y in (trace.y if trace.y is not None else ())
+                if y is not None
+            }
+            assert 70 in ys, f"scanpath A vanished under compare_stimulus={mode!r}"
+            assert 90 in ys, f"scanpath B vanished under compare_stimulus={mode!r}"
+
+    def test_default_is_both_so_existing_figures_are_unchanged(self):
+        assert (
+            FigureSettings(
+                canvas_width=1920, canvas_height=1080, base_font_size=16
+            ).compare_stimulus
+            == "both"
+        )
 
 
 class TestPairExportBundle:
@@ -392,3 +573,59 @@ class TestArrivedProvenanceIsShown:
         at.run()
         assert not at.exception, at.exception
         assert [c.value for c in at.caption] == []
+
+
+def _orphan_compare_params_app():
+    """Build a Share link with the compare-view keys set but no comparison."""
+    import streamlit as st
+
+    from scanpath_studio.url_state import _build_share_query
+
+    # Both widgets carry `persist_state="session"`, so these survive long after
+    # Compare was switched off — which is precisely the situation under test.
+    st.session_state["single_compare_layout"] = "Stacked"
+    st.session_state["single_compare_stimulus"] = "B"
+    selection = {"participant_id": "p1", "trial_id": "t1"}
+    if st.session_state.get("_with_comparison"):
+        selection["compare"] = {"participant_id": "p2", "trial_id": "t2"}
+    st.session_state["_share_selection"] = selection
+    from urllib.parse import parse_qs
+
+    query, _ = _build_share_query("Bundled demo")
+    st.session_state["_params"] = parse_qs(query)
+
+
+class TestCompareParamsOnlyTravelWithAComparison:
+    """CMP-11: `cmp_layout`/`cmp_stimulus` describe a comparison, so they need one.
+
+    They ride the generic `_SHARE_VALUE_PARAMS` sweep, which reads session state
+    directly — and both keys persist. Without the gate every later link carried
+    an orphan `cmp_layout=…&cmp_stimulus=…` that restores nothing, including
+    links where `compare=` was deliberately withheld by the identity picker.
+    """
+
+    @staticmethod
+    def _params(*, with_comparison: bool):
+        at = AppTest.from_function(_orphan_compare_params_app)
+        at.session_state["_with_comparison"] = with_comparison
+        at.run()
+        assert not at.exception, at.exception
+        return at.session_state["_params"]
+
+    def test_a_real_comparison_still_carries_both(self):
+        """The control case: without this, the assertion below is vacuous."""
+        params = self._params(with_comparison=True)
+        assert params.get("compare") == ["p2:t2"]
+        assert params.get("cmp_layout") == ["Stacked"]
+        assert params.get("cmp_stimulus") == ["B"]
+
+    def test_no_comparison_means_no_compare_params(self):
+        at = AppTest.from_function(_orphan_compare_params_app)
+        at.run()
+        assert not at.exception, at.exception
+        params = at.session_state["_params"]
+        assert "compare" not in params
+        assert "cmp_layout" not in params
+        assert "cmp_stimulus" not in params
+        # The rest of the settings half of the link is unaffected.
+        assert params

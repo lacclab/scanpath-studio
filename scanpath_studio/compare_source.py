@@ -249,10 +249,10 @@ def _load_builtin_frames(name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     return api.load_scanpath_data(raw[0], raw[1])
 
 
-def _snapshot_for(
+def snapshot_for(
     name: str, words: pd.DataFrame, fixations: pd.DataFrame
 ) -> SetupSnapshot:
-    """B's own screen — never the live ``global_*`` keys, which describe **A**.
+    """One named source's own screen — never the live ``global_*`` keys.
 
     A stored upload carries the snapshot its wizard captured. Anything else goes
     through the one source→monitor table (`app.resolve_source_monitor`): a corpus
@@ -260,6 +260,14 @@ def _snapshot_for(
     canvas is inferred from data extents reports ``ESTIMATED``. Physical size,
     viewing distance and typography stay at their defaults, marked ``ASSUMED`` —
     no registry entry records them, and B's panel does not use them.
+
+    **Name-driven, not B-specific** (CMP-11). The `global_*` keys describe
+    whichever dataset is *active*, so resolving B through here and A through
+    `app.active_setup_snapshot` would report different provenance for the same
+    corpus depending on which side of a comparison it landed on — and
+    `experimental_setup.setups_comparable` gates on provenance, so that
+    asymmetry would make the overlay legal one way round and illegal the other.
+    Both sides go through this function.
     """
     from scanpath_studio import app
 
@@ -276,6 +284,10 @@ def _snapshot_for(
         geometry_provenance=Provenance.ASSUMED,
         text_provenance=Provenance.ASSUMED,
     )
+
+
+#: Pre-CMP-11 private name, kept so existing call sites and tests resolve.
+_snapshot_for = snapshot_for
 
 
 def load_secondary_dataset(name: Optional[str]) -> Optional[SecondaryDataset]:
@@ -318,6 +330,6 @@ def load_secondary_dataset(name: Optional[str]) -> Optional[SecondaryDataset]:
         words=words,
         fixations=fixations,
         combos=combos,
-        setup=_snapshot_for(name, words, fixations),
+        setup=snapshot_for(name, words, fixations),
         composite_trial_columns=composite,
     )

@@ -742,3 +742,310 @@ def test_python_dash_m_reaches_the_cli(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert __version__ in (result.stdout + result.stderr)
+
+
+# --- CMP-9: compare mode on the CLI -----------------------------------------
+# Compare existed only in the app and the share link; these pin the headless
+# spelling. `_SAMPLE_TRIAL_*` are two real trials of the bundled demo — a
+# renamed sample would break these loudly rather than silently comparing a
+# trial against itself.
+_SAMPLE_PARTICIPANT = "l37_1129"
+_SAMPLE_TRIAL_A = "l37_1129_2_1_1_Ele_r0"
+_SAMPLE_TRIAL_B = "l37_1129_2_1_3_Adv_r0"
+
+
+def test_render_compare_with_writes_a_figure(tmp_path):
+    out = tmp_path / "cmp.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "-o",
+            str(out),
+        ]
+    )
+    assert out.exists() and out.stat().st_size > 0
+
+
+@pytest.mark.parametrize("layout", ["overlay", "side-by-side", "stacked"])
+def test_render_compare_layouts(tmp_path, layout):
+    out = tmp_path / f"cmp_{layout}.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--compare-layout",
+            layout,
+            "-o",
+            str(out),
+        ]
+    )
+    assert out.exists()
+
+
+def test_render_compare_forwards_layout_and_stimulus(tmp_path, monkeypatch):
+    """The flags must reach `api.compare_scanpaths`, not just parse."""
+    from scanpath_studio import api
+
+    seen = {}
+    real = api.compare_scanpaths
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "compare_scanpaths", spy)
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--compare-layout",
+            "stacked",
+            "--compare-stimulus",
+            "b",
+            "-o",
+            str(tmp_path / "cmp.html"),
+        ]
+    )
+    assert seen["layout"] == "stacked"
+    assert seen["compare_stimulus"] == "b"
+
+
+@pytest.mark.parametrize("bad", ["nocolon", ":t1", "p1:", ""])
+def test_render_compare_with_rejects_a_malformed_pair(tmp_path, bad):
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "--compare-with",
+                bad,
+                "-o",
+                str(tmp_path / "cmp.html"),
+            ]
+        )
+    assert "PARTICIPANT:TRIAL" in str(excinfo.value)
+
+
+def test_render_compare_with_splits_on_the_last_colon():
+    assert cli._parse_compare_with("p01:t03") == ("p01", "t03")
+    # A participant id containing a colon still resolves — the trial is the tail.
+    assert cli._parse_compare_with("lab:p01:t03") == ("lab:p01", "t03")
+
+
+def test_render_compare_across_two_datasets(tmp_path):
+    """B from a second pair of tables — the cross-dataset half of CMP-9."""
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data()
+    words_path = tmp_path / "words_b.csv"
+    fix_path = tmp_path / "fix_b.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fix_path, index=False)
+
+    out = tmp_path / "cross.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--compare-words",
+            str(words_path),
+            "--compare-fixations",
+            str(fix_path),
+            "--compare-canvas",
+            "2560x1440",
+            "--canvas",
+            "2560x1440",
+            "--compare-dataset-name",
+            "Second corpus",
+            "-o",
+            str(out),
+        ]
+    )
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_compare_overlay_refuses_two_different_screens(tmp_path):
+    """Headless refuses rather than silently handing back a split layout."""
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data()
+    words_path = tmp_path / "words_b.csv"
+    fix_path = tmp_path / "fix_b.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fix_path, index=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "-p",
+                _SAMPLE_PARTICIPANT,
+                "-t",
+                _SAMPLE_TRIAL_A,
+                "--compare-with",
+                f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+                "--compare-words",
+                str(words_path),
+                "--compare-fixations",
+                str(fix_path),
+                "--canvas",
+                "2560x1440",
+                "--compare-canvas",
+                "1680x1050",
+                "--compare-layout",
+                "overlay",
+                "-o",
+                str(tmp_path / "cross.html"),
+            ]
+        )
+    message = str(excinfo.value)
+    assert "1680" in message and "side_by_side" in message
+
+
+def test_compare_setup_snapshot_without_a_canvas_is_not_a_known_screen():
+    """`--monitor-mm` alone must not report a *known* screen.
+
+    `_compare_setup_snapshot` returns a snapshot as soon as *any* geometry flag
+    is set, and `api._compare_setup` then trusts it without consulting the data —
+    so the canvas it carries is the bare default. Marking that ESTIMATED claimed
+    a screen the caller never stated. It is ASSUMED, which since 2026-08-12 means
+    the overlay is drawn *with a caution* rather than refused.
+    """
+    from scanpath_studio.experimental_setup import (
+        Provenance,
+        SetupSnapshot,
+        setups_comparable,
+    )
+
+    snapshot = cli._compare_setup_snapshot(None, 520.0, None)
+    assert snapshot.screen_provenance is Provenance.ASSUMED
+    real = SetupSnapshot(
+        canvas_width=snapshot.canvas_width,
+        canvas_height=snapshot.canvas_height,
+        screen_provenance=Provenance.MEASURED,
+    )
+    allowed, note = setups_comparable(snapshot, real)
+    assert allowed is True
+    assert note, "a default canvas passed the gate with nothing said about it"
+
+    # A stated canvas is a known screen, and says nothing.
+    stated = cli._compare_setup_snapshot((1680, 1050), None, None)
+    assert stated.screen_provenance is Provenance.MEASURED
+    assert setups_comparable(stated, stated) == (True, "")
+
+
+def test_render_compare_with_rejects_all_screens(tmp_path):
+    """Regression: this combination used to die on an UnboundLocalError."""
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "--compare-with",
+                f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+                "--all-screens",
+                "-o",
+                str(tmp_path / "cmp.html"),
+            ]
+        )
+    assert "--all-screens" in str(excinfo.value)
+
+
+def test_render_animate_with_compare_co_animates(tmp_path, monkeypatch):
+    """Regression: `--animate --compare-with` silently dropped the comparison.
+
+    The app renders a dual co-animation when both modes are on, so the CLI was
+    the only surface that could not produce one — and it said nothing.
+    """
+    from scanpath_studio import api
+
+    seen = {}
+    real = api.animate_scanpath
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "animate_scanpath", spy)
+    out = tmp_path / "dual.html"
+    cli.main(
+        [
+            "render",
+            "--sample",
+            "-p",
+            _SAMPLE_PARTICIPANT,
+            "-t",
+            _SAMPLE_TRIAL_A,
+            "--compare-with",
+            f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+            "--animate",
+            "-o",
+            str(out),
+        ]
+    )
+    assert out.exists()
+    assert seen.get("fixations_b") is not None and not seen["fixations_b"].empty
+    assert seen.get("words_b") is not None
+
+
+def test_render_animate_compare_rejects_two_screens(tmp_path):
+    """A co-animation is an overlay on one clock, so it needs one screen."""
+    from scanpath_studio import api
+
+    words, fixations = api.load_sample_data()
+    words_path = tmp_path / "words_b.csv"
+    fix_path = tmp_path / "fix_b.csv"
+    words.to_csv(words_path, index=False)
+    fixations.to_csv(fix_path, index=False)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "render",
+                "--sample",
+                "-p",
+                _SAMPLE_PARTICIPANT,
+                "-t",
+                _SAMPLE_TRIAL_A,
+                "--compare-with",
+                f"{_SAMPLE_PARTICIPANT}:{_SAMPLE_TRIAL_B}",
+                "--compare-words",
+                str(words_path),
+                "--compare-fixations",
+                str(fix_path),
+                "--canvas",
+                "2560x1440",
+                "--compare-canvas",
+                "1680x1050",
+                "--animate",
+                "-o",
+                str(tmp_path / "dual.html"),
+            ]
+        )
+    assert "1680" in str(excinfo.value)

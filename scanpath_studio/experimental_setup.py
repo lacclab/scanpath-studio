@@ -288,6 +288,83 @@ def _coerce_provenance(value: Any) -> Optional[Provenance]:
         return None
 
 
+#: Provenance values that mean "we know what screen this was" — the corpus said
+#: so, or it was inferred from the data. `ASSUMED` is excluded on purpose: it
+#: means a named default was taken, and two datasets that both defaulted are two
+#: unknowns rather than a known-equal.
+_REAL_SCREEN_PROVENANCE = frozenset({Provenance.MEASURED, Provenance.ESTIMATED})
+
+
+def setups_comparable(a: SetupSnapshot, b: SetupSnapshot) -> tuple[bool, str]:
+    """Whether two datasets' readings can share one set of pixel coordinates (CMP-11).
+
+    Compare mode's **overlay** layout pools both trials into one axis range, so
+    it is only meaningful when a pixel means the same thing on both sides. CMP-8
+    handled that by refusing every cross-dataset pair; this is the finer question
+    it was standing in for.
+
+    Returns ``(allowed, note)``:
+
+    * ``(False, reason)`` — the canvases differ. The overlay is refused, and
+      ``reason`` says why.
+    * ``(True, caution)`` — the canvases match, but at least one side never
+      *recorded* its screen (`screen_provenance` outside
+      ``_REAL_SCREEN_PROVENANCE``), so the match may be a coincidence of
+      defaults. The overlay is drawn and ``caution`` is surfaced beside it.
+    * ``(True, "")`` — the canvases match and both sides know their screen.
+
+    ``note`` is a complete user-facing sentence in both non-empty cases. The app,
+    the CLI and :func:`api.compare_scanpaths` print it verbatim rather than
+    composing their own wording, so the explanation cannot drift across surfaces.
+
+    **Only the canvas is a hard gate.** An unrecorded screen warns rather than
+    refuses — settled 2026-08-12 on the case that motivated it: two OneStop
+    regimes, both 2560x1440, both reporting ``ASSUMED`` because the corpus does
+    not record a screen. Refusing there blocked precisely the comparison the
+    feature exists for. A caution is the honest middle: the app cannot *prove*
+    the two displays matched, but the user usually can, and a matching canvas is
+    real evidence rather than none.
+
+    **Physical geometry is deliberately not consulted.** Nothing in the overlay
+    path converts to degrees — CMP-11 shipped as a gate, not a rescaling — so
+    ``monitor_width_mm`` and ``viewing_distance_mm`` are never read, and
+    requiring them to match would gate the feature on quantities it does not use.
+    It would also make it inert: every built-in corpus hard-codes
+    ``geometry: ASSUMED``, and only the wizard's "I know my monitor" branch ever
+    reaches ``MEASURED``.
+
+    The residual cost is real and is disclosed rather than hidden: two corpora at
+    1920x1080 on a 24-inch and a 32-inch monitor compare equal here, with only
+    the caution to say so. The figure claims nothing but pixel positions, and its
+    caption names both screens.
+    """
+    if a.canvas != b.canvas:
+        return False, (
+            f"These readings were recorded on different screens — "
+            f"{a.canvas_width}x{a.canvas_height} and "
+            f"{b.canvas_width}x{b.canvas_height}. Overlaying them would pool two "
+            f"unrelated pixel spaces, so they are shown side by side instead."
+        )
+    unknown = [
+        name
+        for name, snapshot in (("first", a), ("second", b))
+        if snapshot.screen_provenance not in _REAL_SCREEN_PROVENANCE
+    ]
+    if unknown:
+        subject = (
+            "Neither dataset records"
+            if len(unknown) == 2
+            else f"The {unknown[0]} dataset does not record"
+        )
+        return True, (
+            f"{subject} its screen, so the matching "
+            f"{a.canvas_width}x{a.canvas_height} canvas is a shared default "
+            f"rather than proof the two were shown on the same display. Check "
+            f"they were before reading positions across the overlay."
+        )
+    return True, ""
+
+
 def format_provenance_param(snapshot: SetupSnapshot) -> str:
     """The compact ``setup_prov`` share value, e.g.
     ``screen:assumed,geom:skipped,text:measured``.

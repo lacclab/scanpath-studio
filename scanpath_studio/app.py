@@ -2152,6 +2152,18 @@ def resolve_source_monitor(
         return 2560, 1440, True
     if (monitor := _public_dataset_monitor(data_choice)) is not None:
         return monitor[0], monitor[1], True
+    # A public corpus reached by its own registry *label* rather than through the
+    # `Public datasets` picker still declares a monitor — `_public_dataset_monitor`
+    # only answers for `PUBLIC_DATASETS_CHOICE`, but `data_source_choice` holds the
+    # label (DATA-9's flat picker) and `compare_source` names B by label too.
+    # `active_setup_snapshot` already compensates; without the same fallback here a
+    # public corpus fell through to `compute_canvas_size` and reported its rounded
+    # data extents as an ESTIMATED canvas. Cosmetic before CMP-11 (only the split
+    # panels' `canvas_b` read it); load-bearing now that `setups_comparable` gates
+    # the overlay on the canvas, since it refused the very pairs CMP-11 exists to
+    # allow — and it also made A's resolution scan the whole corpus per rerun.
+    if declared := (PUBLIC_DATASET_REGISTRY.get(data_choice) or {}).get("monitor"):
+        return int(declared[0]), int(declared[1]), True
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
         # MultiplEYE server bundle = the same native MultiplEYE export as the
         # public source; coordinates are offset onto the centered stimulus on

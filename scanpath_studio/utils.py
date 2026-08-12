@@ -876,11 +876,17 @@ def _select_trial_composite_mode(
     ``a_b_c`` dropdown. Selectors render into ``picker_host`` (the column between
     Browse-by and Filter), defaulting to the current container.
 
-    ``component_cols`` is already pruned (in ``select_trial``) to the canonical
-    identity components — dataset-specific condition columns (e.g.
-    ``repeated_reading_trial``) are dropped so the trial selectors stay the same
-    across datasets; those narrow via the **More** filters instead (UX-5). Any
-    residual ambiguity falls to the "Reading" selector below."""
+    ``component_cols`` is *every* component the user mapped into the trial id.
+    UX-5 used to drop the ones that were also **More**-popover filter columns, so
+    the picker showed the same canonical Participant / Text selectors on every
+    dataset; BUG-16 undid that. Mapping a column into the trial id is a statement
+    that it is part of trial identity, and pruning it left the cascade unable to
+    reach a single trial whenever the *text* identity itself spans several
+    columns (OneStop: paragraph + article + batch + difficulty, all of them
+    registered ``meta`` and so all of them pruned) — which dumped the user into
+    the "Reading" fallback below on an id it could otherwise resolve exactly.
+    Narrowing by those columns under **More** still works; it is just no longer
+    the only way to reach them."""
     host = picker_host if picker_host is not None else st
     host.caption("Composite trial id — pick each part to narrow to a trial.")
     filtered = combos
@@ -945,7 +951,6 @@ def select_trial(
     combos: pd.DataFrame,
     key_prefix: str = "",
     picker_host=None,
-    filter_cols: Optional[Iterable[str]] = None,
     *,
     words: Optional[pd.DataFrame] = None,
     fixations: Optional[pd.DataFrame] = None,
@@ -985,14 +990,9 @@ def select_trial(
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
 
     composite_cols = _composite_columns_for(combos)
-    # Drop condition-filter components (e.g. repeated_reading_trial) — they narrow
-    # via the More popover, not a dedicated trial selector, so the picker is the
-    # same across datasets (UX-5). What's left is the canonical identity cascade.
-    filter_set = set(filter_cols or [])
-    display_cols = [c for c in composite_cols if c not in filter_set]
-    if len(display_cols) >= 2:
+    if len(composite_cols) >= 2:
         participant, trial, text = _select_trial_composite_mode(
-            combos, display_cols, text_field, key_prefix, picker_host=picker_host
+            combos, composite_cols, text_field, key_prefix, picker_host=picker_host
         )
     else:
         participant, trial, text = _select_trial_none_mode(
@@ -1245,3 +1245,84 @@ def build_comparison_options(
         )
         options.append((r["participant_id"], r["trial_id"], label, r["markers"]))
     return options
+
+
+# -----------------------------------------------------------------------------
+# Cross-dataset comparison frames (CMP-8 · promoted from tabs.py for CMP-9)
+# -----------------------------------------------------------------------------
+# These live here, not in tabs.py, because three surfaces now build a
+# cross-dataset comparison — the app, `api.compare_scanpaths` and
+# `cli.render --compare-*` — and the namespacing rule below is the one piece of
+# it that must not be re-derived per surface. `tests/test_compare_cross_dataset.py`
+# exists because getting it wrong renders a *plausible-looking wrong figure*
+# rather than an error.
+
+#: Separator between a dataset name and a participant id in a qualified id.
+COMPARE_DATASET_SEP = " · "
+
+
+def qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
+    """A copy of ``frame`` whose ``participant_id`` is namespaced by ``dataset``.
+
+    Two corpora can hold the same ``(participant_id, trial_id)``, and
+    `plots.make_comparison_figure` slices its frame by exactly that pair — so an
+    unqualified merge would silently render *the wrong scanpath*, or two.
+
+    Only ever applied to the single-trial frames that feed the comparison
+    builder. Nothing the annotations, the export slug, the deep link or Corpus
+    Analysis reads goes through here: those key on the real ids, and must.
+    """
+    if frame.empty:
+        return frame
+    out = frame.copy()
+    out["dataset"] = dataset
+    out["participant_id"] = (
+        dataset + COMPARE_DATASET_SEP + out["participant_id"].astype(str)
+    )
+    return out
+
+
+def qualified_participant(dataset: str, participant: str) -> str:
+    """The id `qualify_for_compare` gives ``participant`` inside ``dataset``."""
+    return f"{dataset}{COMPARE_DATASET_SEP}{participant}"
+
+
+def unqualify_for_export(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
+    """Undo `qualify_for_compare`'s rename, restoring the corpus' own id.
+
+    The namespace exists so `make_comparison_figure` can slice two colliding
+    ``(participant, trial)`` pairs apart. An exported table must carry the id the
+    corpus actually uses, or it won't join back to anything (CMP-8 §6). The
+    stamped ``dataset`` column is kept — that is what disambiguates the rows.
+    """
+    if frame is None or frame.empty or "dataset" not in frame.columns:
+        return frame
+    out = frame.copy()
+    out["participant_id"] = str(participant)
+    return out
+
+
+def align_compare_columns(
+    a: pd.DataFrame, b: pd.DataFrame
+) -> Tuple[pd.DataFrame, pd.DataFrame, frozenset]:
+    """Reindex two frames onto their column **union**, and report shared numerics.
+
+    A bare ``pd.concat`` of frames with disjoint columns warns and churns dtypes
+    (int columns become float once the other frame's rows fill in as NaN), which
+    matters here because two corpora rarely ship the same measure set. Aligning
+    first keeps the concat quiet and the dtypes stable.
+
+    The third element is the intersection of *numeric* columns — the metrics a
+    cross-dataset figure may legitimately colour by (CMP-8 §5.4). A metric present
+    in only one corpus would colour one panel and blank the other.
+    """
+    union = list(dict.fromkeys([*a.columns, *b.columns]))
+    a_aligned = a.reindex(columns=union) if list(a.columns) != union else a
+    b_aligned = b.reindex(columns=union) if list(b.columns) != union else b
+    shared = frozenset(
+        col
+        for col in set(a.columns) & set(b.columns)
+        if pd.api.types.is_numeric_dtype(a[col])
+        and pd.api.types.is_numeric_dtype(b[col])
+    )
+    return a_aligned, b_aligned, shared

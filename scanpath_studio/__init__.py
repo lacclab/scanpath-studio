@@ -20,6 +20,7 @@ __all__ = [
     "load_authored_scanpath",
     "plot_scanpath",
     "animate_scanpath",
+    "compare_scanpaths",
     "render_parent_trial",
     "save_figure",
     "save_figure_layers",

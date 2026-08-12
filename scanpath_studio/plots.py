@@ -148,13 +148,20 @@ class FigureSettings:
     # CMP-8 §4 — scanpath B's own screen, honoured *only* by
     # `_make_split_comparison_figure` (side-by-side / stacked). `None` means "the
     # same screen as A", which is every same-dataset comparison and so leaves
-    # every existing figure byte-identical. Overlay never sees these: a
-    # cross-dataset pair can't be overlaid at all (§5.3), because pooling two
-    # coordinate spaces into one axis range is meaningless.
+    # every existing figure byte-identical. Overlay never needs these: CMP-11
+    # lets a cross-dataset pair overlay only when both screens are equal, so
+    # there is no second canvas for it to reconcile.
     canvas_b: Optional[Tuple[int, int]] = None
     background_image_b: Optional[str] = None
     background_image_size_b: Optional[Tuple[float, float]] = None
     background_image_origin_b: Optional[Tuple[float, float]] = None
+    # CMP-11 — which reading supplies the stimulus layer (word boxes + labels)
+    # on an OVERLAY: "both" (the default, and byte-identical to pre-CMP-11),
+    # "a", or "b". Two datasets' AOIs coincide only when the text is identical,
+    # so an overlay across corpora can otherwise stack two offset sets of
+    # rectangles. Split layouts ignore it — each panel owns its own stimulus,
+    # and hiding one panel's boxes would just leave a blank half.
+    compare_stimulus: str = "both"
 
     @classmethod
     def from_mapping(
@@ -3537,11 +3544,27 @@ def _render_scanpath_animation(
         scale_text_to_boxes=scale_text_to_boxes,
     )
 
-    shapes = build_word_boxes(words) if show_words and not words.empty else []
-    if show_word_labels and not words.empty:
+    # CMP-11: which reading's stimulus the replay draws. The replay has only ever
+    # had ONE stimulus layer, so "both" keeps meaning A's here rather than
+    # stacking a second identical set of rectangles onto every existing
+    # same-dataset co-animation. "b" is the one that matters: a cross-dataset
+    # co-animation would otherwise run B's trace over A's text.
+    stimulus_words = words
+    if (
+        _compare_stimulus_sides(settings.compare_stimulus) == (False, True)
+        and words_b is not None
+        and not words_b.empty
+    ):
+        stimulus_words = words_b
+    shapes = (
+        build_word_boxes(stimulus_words)
+        if show_words and not stimulus_words.empty
+        else []
+    )
+    if show_word_labels and not stimulus_words.empty:
         _add_word_label_trace(
             fig,
-            words,
+            stimulus_words,
             label_font_px,
             font_settings["family"],
             highlight_column=highlight_column,
@@ -4946,6 +4969,21 @@ def _make_split_comparison_figure(
     return fig
 
 
+def _compare_stimulus_sides(value: Optional[str]) -> Tuple[bool, bool]:
+    """``compare_stimulus`` → ``(draw A's stimulus, draw B's)`` (CMP-11).
+
+    Tolerant of an unrecognised value on purpose: this reads a share-link param
+    and a saved config, and drawing both sets of boxes is the honest fallback —
+    it shows what is there rather than silently hiding one reading's AOIs.
+    """
+    normalized = str(value or "both").strip().lower()
+    if normalized == "a":
+        return True, False
+    if normalized == "b":
+        return False, True
+    return True, True
+
+
 def _render_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
@@ -5143,6 +5181,7 @@ def _render_comparison_figure(
     )
     overlay_scale = _display_scale(x_range, y_range, fitted_w, fitted_h)
 
+    draws_stimulus = _compare_stimulus_sides(settings.compare_stimulus)
     for _idx, spec in enumerate(trial_specs):
         _add_comparison_fixation_trace(
             fig,
@@ -5164,13 +5203,13 @@ def _render_comparison_figure(
             colorbar_style=cb_style,
             fixation_symbol=fixation_symbol,
         )
-        if show_words:
+        if show_words and draws_stimulus[_idx]:
             existing = list(fig.layout.shapes) if fig.layout.shapes else []
             fig.update_layout(
                 shapes=existing
                 + build_word_boxes(spec["trial_words"], color=spec["color"])
             )
-        if show_word_labels:
+        if show_word_labels and draws_stimulus[_idx]:
             _add_word_label_trace(
                 fig,
                 spec["trial_words"],
@@ -6463,6 +6502,25 @@ STATIC_FIGURE_OPTIONS = _setting_names(
         "background_image_b",
         "background_image_size_b",
         "background_image_origin_b",
+        # CMP-11 — the static builder draws one trial, so it has no "whose
+        # stimulus?" question to answer. The *animation* builder does read it (a
+        # dual co-animation takes `words_b`), so it is NOT excluded there.
+        "compare_stimulus",
+    }
+)
+#: What `make_comparison_figure` accepts (CMP-9). Only the animation-only fields
+#: are excluded — this is a typo-catcher for `api.compare_scanpaths`, not a
+#: semantic filter, so it still admits settings the comparison builders ignore.
+#: Which settings actually reach a comparison figure is the table in
+#: `scanpath_studio/CLAUDE.md` → *Which viz settings apply in which render path*.
+COMPARISON_FIGURE_OPTIONS = _setting_names(
+    {
+        "playback_speed",
+        "label_a",
+        "label_b",
+        "autoplay",
+        "anim_grid_step_ms",
+        "anim_max_frames",
     }
 )
 ANIMATION_FIGURE_OPTIONS = _setting_names(

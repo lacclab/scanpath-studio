@@ -57,6 +57,7 @@ from scanpath_studio.compare_source import (
     SecondaryDataset,
     load_secondary_dataset,
     secondary_dataset_options,
+    snapshot_for,
 )
 from scanpath_studio.constants import (
     DEFAULT_FIXATION_COLOR,
@@ -159,6 +160,8 @@ from scanpath_studio.plots import (
 from scanpath_studio.session_keys import (
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_COMPARE_LAYOUT,
+    SINGLE_COMPARE_STIMULUS,
     SINGLE_COMPARE_TOGGLE,
 )
 from scanpath_studio.similarity import (
@@ -168,16 +171,21 @@ from scanpath_studio.similarity import (
     nld_by_time,
 )
 from scanpath_studio.utils import (
+    COMPARE_DATASET_SEP,
     TRIAL_SORT_DEFAULT,
+    align_compare_columns,
     build_combo_options_for,
     build_comparison_options,
     compute_trial_stats,
     extract_trial,
     friendly_trial_label,
+    qualified_participant,
+    qualify_for_compare,
     safe_summary,
     select_trial,
     sort_trial_options,
     trial_sort_keys,
+    unqualify_for_export,
 )
 
 # -----------------------------------------------------------------------------
@@ -2181,6 +2189,13 @@ def _build_studio_config(
         # Per-scanpath styling for the two-trial comparison (None when the caller
         # didn't collect it). Each entry holds raw widget values so it restores 1:1.
         "compare": compare_styles,
+        # CMP-11 — how the two scanpaths are arranged, and whose stimulus an
+        # overlay draws. Separate from `compare` above, which is a two-entry list
+        # of per-scanpath *styling*; these describe the view itself.
+        "compare_view": {
+            "layout": st.session_state.get(SINGLE_COMPARE_LAYOUT, "Overlay"),
+            "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
+        },
         "annotations": annotation_records,
     }
 
@@ -2352,7 +2367,8 @@ def _render_save_restore_expander(
 #: Separator between a dataset name and a participant id in the *throwaway*
 #: compare frames (CMP-8 §3). Chosen to be visible in a label and absent from
 #: real ids; it never reaches an annotation key, an export slug or a deep link.
-_COMPARE_DATASET_SEP = " · "
+#: Defined in `utils.py` since CMP-9; aliased here for the existing call sites.
+_COMPARE_DATASET_SEP = COMPARE_DATASET_SEP
 
 #: Metric names that are safe across any two corpora (CMP-8 §5.4): canonical
 #: fixation columns every normalized frame carries, plus the two synthetic
@@ -2362,71 +2378,58 @@ _CROSS_DATASET_SAFE_METRICS = frozenset(
 )
 
 
-def _qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
-    """A copy of ``frame`` whose ``participant_id`` is namespaced by ``dataset``.
+def _compare_setups(
+    compare_meta: Optional[dict],
+    words: pd.DataFrame,
+    fixations: pd.DataFrame,
+    canvas_width: int,
+    canvas_height: int,
+) -> tuple[bool, str]:
+    """CMP-11: may A and B be drawn in one coordinate space? Plus the reason.
 
-    Two corpora can hold the same ``(participant_id, trial_id)``, and
-    `make_comparison_figure` slices its frame by exactly that pair — so an
-    unqualified merge would silently render *the wrong scanpath*, or two.
+    ``(True, "")`` for every *same-dataset* pair — one corpus is one screen, and
+    that case must stay exactly as it was before CMP-11.
 
-    Only ever applied to the single-trial frames that feed the comparison
-    builder. Nothing the annotations, the export slug, the deep link or Corpus
-    Analysis reads goes through here: those key on the real ids, and must.
+    For a cross-dataset pair both snapshots go through
+    `compare_source.snapshot_for`, deliberately: A's live ``global_*`` canvas
+    keys describe whichever dataset is active, so resolving A one way and B
+    another would report different provenance for the *same* corpus depending on
+    which side of the comparison it landed on — and the predicate gates on
+    provenance, so the overlay would be legal one way round and illegal the
+    other.
+
+    A's canvas is then overridden with the one actually being rendered: the
+    rail's 🖥️ Screen & geometry panel can override it, and the gate has to test
+    the figure that is drawn, not the one the corpus declares.
     """
-    if frame.empty:
-        return frame
-    out = frame.copy()
-    out["dataset"] = dataset
-    out["participant_id"] = (
-        dataset + _COMPARE_DATASET_SEP + out["participant_id"].astype(str)
+    from scanpath_studio.experimental_setup import setups_comparable
+
+    if not compare_meta or not compare_meta.get("dataset"):
+        return True, ""
+    setup_b = compare_meta.get("setup")
+    if setup_b is None:
+        return False, (
+            "The comparison dataset does not report a screen, so there is no way "
+            "to tell whether these readings share one coordinate space. They are "
+            "shown side by side instead."
+        )
+    active = str(st.session_state.get("data_source_choice") or "")
+    setup_a = replace(
+        snapshot_for(active, words, fixations),
+        canvas_width=int(canvas_width),
+        canvas_height=int(canvas_height),
     )
-    return out
+    return setups_comparable(setup_a, setup_b)
 
 
-def _qualified_participant(dataset: str, participant: str) -> str:
-    """The id `_qualify_for_compare` gives ``participant`` inside ``dataset``."""
-    return f"{dataset}{_COMPARE_DATASET_SEP}{participant}"
-
-
-def _unqualify_for_export(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
-    """Undo `_qualify_for_compare`'s rename, restoring the corpus' own id.
-
-    The namespace exists so `make_comparison_figure` can slice two colliding
-    ``(participant, trial)`` pairs apart. An exported table must carry the id the
-    corpus actually uses, or it won't join back to anything (CMP-8 §6). The
-    stamped ``dataset`` column is kept — that is what disambiguates the rows.
-    """
-    if frame is None or frame.empty or "dataset" not in frame.columns:
-        return frame
-    out = frame.copy()
-    out["participant_id"] = str(participant)
-    return out
-
-
-def _align_compare_columns(
-    a: pd.DataFrame, b: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame, frozenset[str]]:
-    """Reindex two frames onto their column **union**, and report shared numerics.
-
-    A bare ``pd.concat`` of frames with disjoint columns warns and churns dtypes
-    (int columns become float once the other frame's rows fill in as NaN), which
-    matters here because two corpora rarely ship the same measure set. Aligning
-    first keeps the concat quiet and the dtypes stable.
-
-    The third element is the intersection of *numeric* columns — the metrics a
-    cross-dataset figure may legitimately colour by (§5.4). A metric present in
-    only one corpus would colour one panel and blank the other.
-    """
-    union = list(dict.fromkeys([*a.columns, *b.columns]))
-    a_aligned = a.reindex(columns=union) if list(a.columns) != union else a
-    b_aligned = b.reindex(columns=union) if list(b.columns) != union else b
-    shared = frozenset(
-        col
-        for col in set(a.columns) & set(b.columns)
-        if pd.api.types.is_numeric_dtype(a[col])
-        and pd.api.types.is_numeric_dtype(b[col])
-    )
-    return a_aligned, b_aligned, shared
+# CMP-9 promoted these four to `utils.py`: the app, `api.compare_scanpaths` and
+# `cli.render --compare-*` all build cross-dataset comparison frames now, and the
+# participant-namespacing rule must have exactly one definition. The private
+# names stay as aliases so existing call sites and tests resolve unchanged.
+_qualify_for_compare = qualify_for_compare
+_qualified_participant = qualified_participant
+_unqualify_for_export = unqualify_for_export
+_align_compare_columns = align_compare_columns
 
 
 def _build_compare_meta(
@@ -3593,29 +3596,46 @@ def render_single_trial_tab(
                     if not animate:
                         # Seed so the control shows "Overlay" selected by default
                         # (the body reads this key to resolve compare_layout).
-                        st.session_state.setdefault("single_compare_layout", "Overlay")
+                        st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
                         st.segmented_control(
                             "View",
                             options=["Overlay", "Side by side", "Stacked"],
-                            key="single_compare_layout",
+                            key=SINGLE_COMPARE_LAYOUT,
                             persist_state="session",
                             help="Stacked = trials shown one above the other.",
                         )
-                        # CMP-8 §5.3: overlay pools both trials into one axis
-                        # range, which is meaningless across two monitors. Say so
-                        # here and resolve to a split layout below — *without*
-                        # rewriting the key, so going back to a same-dataset pair
-                        # restores the user's choice. (Streamlit has no per-option
-                        # disable on a segmented control, so this is the gate.)
+                        # CMP-8 §5.3 / CMP-11: overlay pools both trials into one
+                        # axis range, so across datasets it is allowed only when
+                        # both were recorded on the same known screen. This note
+                        # stays generic — the popover renders before B is loaded,
+                        # so it cannot see B's screen. The caption under the
+                        # figure has the specific answer, and the resolve happens
+                        # there too, *without* rewriting the key, so a
+                        # same-dataset pair gets the user's Overlay back.
                         if (
                             _compare_source_name() is not None
-                            and st.session_state.get("single_compare_layout")
-                            == "Overlay"
+                            and st.session_state.get(SINGLE_COMPARE_LAYOUT) == "Overlay"
                         ):
                             st.caption(
-                                "⚠️ Overlay needs one coordinate space — these "
-                                "trials come from different datasets. Showing "
-                                "**Side by side**."
+                                "Overlay needs one coordinate space, so across "
+                                "datasets it applies only when both were recorded "
+                                "on the same screen. The caption under the plot "
+                                "says which you got."
+                            )
+                        # CMP-11: two datasets' AOIs coincide only when the text
+                        # is identical, so an overlay can otherwise stack two
+                        # offset sets of rectangles. Overlay-only — each panel of
+                        # a split layout owns its own stimulus, and dropping one
+                        # would just blank half the figure.
+                        if st.session_state.get(SINGLE_COMPARE_LAYOUT) == "Overlay":
+                            st.session_state.setdefault(SINGLE_COMPARE_STIMULUS, "Both")
+                            st.segmented_control(
+                                "Stimulus from",
+                                options=["Both", "A", "B"],
+                                key=SINGLE_COMPARE_STIMULUS,
+                                persist_state="session",
+                                help="Which reading supplies the word boxes and "
+                                "text. Across datasets the two rarely line up.",
                             )
                     show_legend_now = st.checkbox(
                         "Show A/B legend",
@@ -3675,18 +3695,18 @@ def render_single_trial_tab(
     compare_source: Optional[SecondaryDataset] = None
     # Layout comes from the rail's Compare-config popover via session_state; an
     # animated comparison always co-animates on one clock, so force overlay then.
+    # CMP-11: the cross-dataset *resolve* is NOT done here. It needs B's screen,
+    # which only exists once `_build_compare_meta` has loaded B — see
+    # `_resolve_compare_layout` further down. Nothing between here and there
+    # reads `compare_layout`.
     if animate:
-        compare_layout = "overlay"
+        requested_layout = "overlay"
     else:
-        compare_layout = {
+        requested_layout = {
             "Overlay": "overlay",
             "Side by side": "side_by_side",
             "Stacked": "stacked",
-        }.get(st.session_state.get("single_compare_layout"), "overlay")
-        # CMP-8 §5.3 — resolve, don't rewrite: the stored choice is left alone so
-        # a same-dataset pair gets the user's Overlay back.
-        if compare_layout == "overlay" and _compare_source_name() is not None:
-            compare_layout = "side_by_side"
+        }.get(st.session_state.get(SINGLE_COMPARE_LAYOUT), "overlay")
     if compare_enabled:
         with compare_slot:
             compare_participant, compare_trial, compare_source = (
@@ -3792,6 +3812,26 @@ def render_single_trial_tab(
     )
     cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
     compare_fix = compare_meta["fixations"] if compare_meta else pd.DataFrame()
+    # CMP-11: the one predicate both gates below consult. Computed here because
+    # this is the first point B's screen is known.
+    # The *trial's* frames, not the filtered corpus: A's canvas is overwritten with
+    # the rendered one on the next line anyway, so the only thing that survives is
+    # the provenance — which comes from the source→monitor table, not the data. The
+    # fallback branch of `resolve_source_monitor` scans every row of whatever it is
+    # given, which on a full corpus is tens of milliseconds per rerun for a value
+    # that is then discarded.
+    compare_comparable, compare_setup_note = _compare_setups(
+        compare_meta, trial_words, trial_fixations, canvas_width, canvas_height
+    )
+    # Resolve, don't rewrite (CMP-8 §5.3): `single_compare_layout` is left alone,
+    # so switching back to a same-dataset pair restores the user's Overlay.
+    compare_layout = requested_layout
+    if compare_layout == "overlay" and not compare_comparable:
+        compare_layout = "side_by_side"
+    # CMP-11: widget label -> the wire/settings vocabulary the builders take.
+    compare_stimulus = {"Both": "both", "A": "a", "B": "b"}.get(
+        str(st.session_state.get(SINGLE_COMPARE_STIMULUS) or "Both"), "both"
+    )
 
     # Fixation-index window (VIZ-7): the frames that feed the figure / animation
     # are sliced to the chosen range; the full frames still drive the chips,
@@ -3828,6 +3868,10 @@ def render_single_trial_tab(
         font_family=font_family,
         x_field=x_field,
         y_field=y_field,
+        # CMP-11: the dual animation draws ONE stimulus layer, so "B" is what
+        # stops a cross-dataset co-animation running B's trace over A's text.
+        # The comparison branch re-applies this through `with_overrides`.
+        compare_stimulus=compare_stimulus,
     )
 
     # PRE-3 drift correction (VIZ-23) — hoisted ABOVE the render-mode split, so the
@@ -3985,11 +4029,15 @@ def render_single_trial_tab(
     anim_playback_ms = None
     anim_file_stem = None
     # Use the windowed second scanpath: a window that empties B falls back to a
-    # single-trial animation (and info box). CMP-8 §5.3: a co-animation is an
-    # overlay on one clock, so it needs one coordinate space — a cross-dataset
-    # pair replays A alone rather than drawing two monitors on top of each other.
+    # single-trial animation (and info box). A co-animation is an overlay on one
+    # clock, so it needs one coordinate space — which is the same question the
+    # overlay layout asks. CMP-11 therefore gates it on the same predicate
+    # instead of refusing every cross-dataset pair outright (CMP-8 §5.3).
     dual_anim = (
-        animate and comparing and not fig_compare_fix.empty and not cross_dataset
+        animate
+        and comparing
+        and not fig_compare_fix.empty
+        and (not cross_dataset or compare_comparable)
     )
 
     # Animation info box, in its slot inside the rail's Playback popover.
@@ -4054,11 +4102,11 @@ def render_single_trial_tab(
                         drift_corrected=drift_corrected_primary,
                     )
                 )
-            if comparing and cross_dataset:
+            if comparing and cross_dataset and not compare_comparable:
                 st.warning(
                     "An animated comparison replays both scanpaths on one clock "
-                    "in one coordinate space, which two datasets don't share — "
-                    "showing only the first scanpath.",
+                    f"in one coordinate space. {compare_setup_note} Showing "
+                    "only the first scanpath.",
                     icon="⚠️",
                 )
             elif comparing and compare_fix.empty:
@@ -4079,9 +4127,11 @@ def render_single_trial_tab(
                 render_settings,
                 viz_settings,
                 layout=compare_layout,
+                compare_stimulus=compare_stimulus,
                 fix_index_range=fix_range,
                 compare_meta=compare_meta,
                 shared_numeric=shared_numeric,
+                setup_note=compare_setup_note,
             )
             save_slug = (
                 f"{selected_participant}__{selected_trial}__vs__"
@@ -4430,9 +4480,11 @@ def _render_comparison_figure(
     settings: FigureSettings,
     viz_settings: dict,
     layout: str = "overlay",
+    compare_stimulus: str = "both",
     fix_index_range=None,
     compare_meta: Optional[dict] = None,
     shared_numeric: Optional[frozenset[str]] = None,
+    setup_note: str = "",
 ):
     """Render comparison figure for two trials.
 
@@ -4449,7 +4501,15 @@ def _render_comparison_figure(
     own monitor (``canvas_b``), and a caption below the figure says so —
     panel sizes are not comparable when the two screens differ. ``shared_numeric``
     is §5.4's metric intersection; a ``color_by`` absent from one side would
-    colour one panel and blank the other, so it is dropped with a note."""
+    colour one panel and blank the other, so it is dropped with a note.
+
+    **CMP-11**: ``setup_note`` is `experimental_setup.setups_comparable`'s
+    sentence about the two screens — either why the pair could not be overlaid,
+    or, on an overlay that *was* allowed, the caveat that the matching canvas is
+    a shared default rather than a recorded screen. Empty when neither applies.
+    It surfaces where the user is looking (a warning under an overlay, appended
+    to the caption under a split layout) rather than only in the rail's
+    popover."""
     text_field = "unique_text_id" if "unique_text_id" in combos.columns else "text_id"
     cross_dataset = bool(compare_meta and compare_meta.get("dataset"))
     # Window both compared trials to the chosen fixation-index range. Slicing the
@@ -4501,6 +4561,7 @@ def _render_comparison_figure(
     overrides: dict = dict(
         trial_labels=(primary_label, compare_label),
         layout=layout,
+        compare_stimulus=compare_stimulus,
         style_a=viz_settings.get("compare_style_a"),
         style_b=viz_settings.get("compare_style_b"),
         show_legend=viz_settings.get("show_compare_legend", False),
@@ -4570,18 +4631,36 @@ def _render_comparison_figure(
         setup_b = compare_meta.get("setup")
         canvas_a = (settings.canvas_width, settings.canvas_height)
         canvas_b = setup_b.canvas if setup_b is not None else canvas_a
-        if tuple(canvas_a) != tuple(canvas_b):
+        if layout == "overlay":
+            # CMP-11: a cross-dataset pair only reaches the overlay on equal
+            # canvases, so the caption states the ground it stands on. When
+            # `setup_note` is non-empty the canvases matched but at least one
+            # corpus never *recorded* a screen — the overlay is still drawn (the
+            # user usually knows the two displays matched even when the data
+            # can't say so), and the caveat is raised to a warning rather than
+            # buried in the caption, because it qualifies what the figure means.
+            st.caption(
+                f"Overlaid across datasets — {active} and "
+                f"{compare_meta['dataset']}, both at "
+                f"{canvas_a[0]}×{canvas_a[1]}. Positions are comparable in "
+                "screen pixels; nothing has been rescaled."
+            )
+            if setup_note:
+                st.warning(setup_note, icon="⚠️")
+        elif tuple(canvas_a) != tuple(canvas_b):
             st.caption(
                 "Panels are drawn to each dataset's own screen — "
                 f"{active} {canvas_a[0]}×{canvas_a[1]}, "
                 f"{compare_meta['dataset']} {canvas_b[0]}×{canvas_b[1]}. "
                 "Sizes are not comparable across panels."
+                + (f" {setup_note}" if setup_note else "")
             )
         else:
             st.caption(
                 f"Comparing across datasets — {active} and "
                 f"{compare_meta['dataset']} — which happen to share a "
                 f"{canvas_a[0]}×{canvas_a[1]} screen."
+                + (f" {setup_note}" if setup_note else "")
             )
     if dropped_metric:
         st.caption(
@@ -7266,6 +7345,71 @@ def _active_stored_dataset() -> Optional[tuple]:
     return (name, entry) if entry is not None else None
 
 
+def _rename_active_dataset(old: str) -> None:
+    """DATA-23: apply the rename (the ✅ Rename button's ``on_click`` callback).
+
+    A callback, not an inline ``if button:`` handler, because the rename reassigns
+    ``data_source_choice`` — a widget key — and that only lands reliably when it
+    happens before the widgets instantiate (see ``wizard._enter_add_data_wizard``).
+    """
+    from scanpath_studio.wizard import rename_dataset
+
+    requested = str(st.session_state.get(f"dataset_rename_{old}", "") or "").strip()
+    if not requested:
+        st.session_state["_dataset_rename_note"] = ("warning", "Enter a dataset name.")
+        return
+    renamed = rename_dataset(old, requested)
+    if renamed is None:
+        st.session_state["_dataset_rename_note"] = (
+            "info",
+            f"Already named “{old}”.",
+        )
+        return
+    note = f"Renamed “{old}” to “{renamed}”."
+    if renamed != requested:
+        # _safe_dataset_name resolved a clash with a built-in source label or
+        # another stored dataset — say so rather than let the picker show a name
+        # the user did not type.
+        note += f" “{requested}” was already taken."
+    st.session_state["_dataset_rename_note"] = ("success", note)
+
+
+def _render_dataset_rename() -> None:
+    """DATA-23: rename the active dataset, for datasets the user added.
+
+    Only a stored upload can be renamed — every other source's name is the app's
+    (the demo, the synthetic trial) or the corpus' own (the public registry), and
+    is what the load path dispatches on. Lives here because Data Inspection is the
+    page about *this dataset*, and the wizard's naming step is a one-shot the user
+    can't get back to without uploading again.
+    """
+    active = _active_stored_dataset()
+    if active is None:
+        return
+    name, _ = active
+    label, rename = st.columns([5, 1.4], vertical_alignment="bottom")
+    label.markdown(f"**Dataset:** {name}")
+    editor = rename.popover("✏️ Rename", width="stretch", help="Rename this dataset.")
+    editor.text_input(
+        "Dataset name",
+        value=name,
+        # Keyed by the dataset so switching sources reseeds the box rather than
+        # carrying the previous dataset's half-typed name into it.
+        key=f"dataset_rename_{name}",
+        help="Shown in the Data source list.",
+    )
+    editor.button(
+        "✅ Rename",
+        key=f"dataset_rename_apply_{name}",
+        on_click=_rename_active_dataset,
+        args=(name,),
+        width="stretch",
+    )
+    kind, message = st.session_state.pop("_dataset_rename_note", (None, ""))
+    if kind is not None:
+        getattr(st, kind)(message)
+
+
 def _remap_proposed(schema: Optional[dict], frame_columns, canon: dict) -> dict:
     """Seed the remap editor from the stored schema: each field the dataset had
     mapped → its canonical column (present in the now-normalized frame), else
@@ -7583,9 +7727,10 @@ def render_data_inspection_tab(
 ) -> None:
     """Render the merged Data Inspection tab.
 
-    Combines the former **Raw Data** and **Data Statistics** tabs: the headline
-    dataset counts, every raw-data table, the per-metric summary statistics, and
-    the active column mapping — in that order.
+    Combines the former **Raw Data** and **Data Statistics** tabs: the dataset's
+    name (renamable when the user added it — DATA-23), the headline dataset
+    counts, every raw-data table, the per-metric summary statistics, and the
+    active column mapping — in that order.
     """
     stats = _dataset_statistics(
         words_filtered,
@@ -7598,7 +7743,9 @@ def render_data_inspection_tab(
         ),
     )
 
-    # 1. Headline dataset counts.
+    # 1. Headline dataset counts — under the dataset's own name, which DATA-23
+    # makes editable here for a dataset the user added.
+    _render_dataset_rename()
     st.subheader("Dataset statistics")
     # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.

@@ -160,6 +160,13 @@ SINGLE_ANIMATE = "single_animate"
 #: Turned on by a `?compare=` deep link, exactly as `?tab=animation` turns on
 #: `single_animate` (CMP-8 §7).
 SINGLE_COMPARE_TOGGLE = "single_compare_toggle"
+#: How the two scanpaths are arranged — "Overlay" / "Side by side" / "Stacked".
+#: CMP-8 shipped `compare=` and `cmp_source` but *not* this, so a shared
+#: comparison always reopened as Overlay; CMP-11 put it on the wire.
+SINGLE_COMPARE_LAYOUT = "single_compare_layout"
+#: Which reading supplies an overlay's word boxes + text — "Both" / "A" / "B"
+#: (CMP-11). Two datasets' AOIs coincide only when the text is identical.
+SINGLE_COMPARE_STIMULUS = "single_compare_stimulus"
 
 # --- Public-OneStop source options that ride the deep link (DATA-3) ---------
 ONESTOP_VARIANT = "onestop_variant"
@@ -227,6 +234,11 @@ SETUP_PROVENANCE_STATE_KEY = "_setup_provenance_arrived"
 # in the same dataset as A", which is every pre-CMP-8 comparison.
 COMPARE_PARAM = "compare"
 COMPARE_SOURCE_PARAM = "cmp_source"
+#: CMP-11 — the compare layout and the overlay's stimulus source. Closed
+#: vocabularies, so a bad value raises and the reader's "Ignored bad URL param"
+#: warning fires rather than the widget wedging on an option it has never heard of.
+COMPARE_LAYOUT_PARAM = "cmp_layout"
+COMPARE_STIMULUS_PARAM = "cmp_stimulus"
 #: Widget key holding the picked comparison dataset (`tabs`/`compare_source`).
 COMPARE_SOURCE_STATE_KEY = "cmp_dataset"
 #: Where an arriving `compare=` selection waits until the candidate list exists.
@@ -307,6 +319,11 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "preproc_short_policy": GLOBAL_PREPROC_SHORT_POLICY,
         "title_pattern": GLOBAL_TITLE_PATTERN,
         "caption_pattern": GLOBAL_CAPTION_PATTERN,
+        # CMP-11. Compare-mode settings rather than viz settings, but they ride
+        # the same value encoding, and a compare link that restores neither the
+        # layout nor the stimulus source restores the wrong figure.
+        COMPARE_LAYOUT_PARAM: SINGLE_COMPARE_LAYOUT,
+        COMPARE_STIMULUS_PARAM: SINGLE_COMPARE_STIMULUS,
     }
 )
 
@@ -608,6 +625,12 @@ PLOT_CONFIG_OTHER_STATE_KEYS = frozenset(
         SINGLE_SELECT_TRIAL_MODE,
         SINGLE_TRIAL_ID,
         TRIAL_ANNOTATIONS,
+        # CMP-11 — the compare view's own two settings, restored from the
+        # config's `compare_view` section. They are not `global_*` keys (compare
+        # mode owns them, not the rail), which is why they live here rather than
+        # in `PLOT_CONFIG_STATE_KEYS`.
+        SINGLE_COMPARE_LAYOUT,
+        SINGLE_COMPARE_STIMULUS,
     }
 )
 

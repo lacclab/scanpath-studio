@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 240,
+  "revision": 241,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -80,7 +80,7 @@
       "updated": "2026-08-04"
     },
     "CMP-11": {
-      "status": "Backlog",
+      "status": "Review",
       "priority": "Low",
       "implementationBrief": "",
       "archived": false,
@@ -173,6 +173,13 @@
       "status": "Planned",
       "priority": "High",
       "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
+    "DATA-23": {
+      "status": "Backlog",
+      "priority": "Normal",
+      "implementationBrief": "1. I think in data inspection is fine\n2. Nope, just rename.\n3. dunno, I think the faster option?",
       "archived": false,
       "updated": "2026-08-12"
     },

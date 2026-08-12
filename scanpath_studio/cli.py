@@ -679,7 +679,222 @@ def _render_parser() -> argparse.ArgumentParser:
         help="With --animate: cap the frame count at N (default: 360). A long "
         "reading coarsens the grid to stay under it.",
     )
+
+    # CMP-9 — compare mode's CLI surface. B comes either from the dataset
+    # already loaded (--compare-with alone) or from a second pair of tables.
+    # Deliberately files-only for the second dataset: twinning every source flag
+    # (--compare-potec, --compare-onestop + its regime/part/variant, …) would
+    # roughly double this parser for a narrow case, and `api.compare_scanpaths`
+    # takes B's frames directly, so a Python caller has no such limit.
+    cmp_group = parser.add_argument_group(
+        "comparison (CMP-9): draw a second scanpath beside or over the first"
+    )
+    cmp_group.add_argument(
+        "--compare-with",
+        metavar="PID:TRIAL",
+        help="Compare against a second scanpath, named as participant:trial. "
+        "Taken from the loaded dataset unless --compare-words/--compare-fixations "
+        "name a second one.",
+    )
+    cmp_group.add_argument(
+        "--compare-layout",
+        choices=["overlay", "side-by-side", "stacked"],
+        default="overlay",
+        help="How the two scanpaths are arranged (default: overlay). Across two "
+        "datasets, overlay needs both to have been recorded on the same known "
+        "screen — otherwise it is refused rather than silently split, so pass "
+        "side-by-side or stacked for a mismatched pair.",
+    )
+    cmp_group.add_argument(
+        "--compare-stimulus",
+        choices=["both", "a", "b"],
+        default="both",
+        help="On an overlay, whose word boxes and text to draw (default: both). "
+        "Two datasets' AOIs coincide only when the text is identical.",
+    )
+    cmp_group.add_argument(
+        "--compare-words",
+        metavar="PATH",
+        nargs="+",
+        help="Words/IA table(s) for the SECOND dataset. Same formats and "
+        "globbing as --words.",
+    )
+    cmp_group.add_argument(
+        "--compare-fixations",
+        metavar="PATH",
+        nargs="+",
+        help="Fixations table(s) for the SECOND dataset. Same formats and "
+        "globbing as --fixations.",
+    )
+    cmp_group.add_argument(
+        "--compare-dataset-name",
+        metavar="NAME",
+        default="Dataset B",
+        help="Label for the second dataset, used in the trace names (default: "
+        "'Dataset B').",
+    )
+    cmp_group.add_argument(
+        "--compare-canvas",
+        metavar="WxH",
+        help="Second dataset's monitor size in px, e.g. 1680x1050. Read off its "
+        "data when omitted. Overlay compares this against --canvas.",
+    )
+    # These two are accepted and recorded on the setup snapshots but are not read
+    # by the current render path: CMP-11 shipped as a gate, not a rescaling, so
+    # nothing converts to degrees. They exist because SetupSnapshot is on the CLI
+    # surface now and a half-populated one is worse than a complete one.
+    cmp_group.add_argument(
+        "--monitor-mm",
+        type=float,
+        default=None,
+        metavar="MM",
+        help="Physical width of the FIRST dataset's monitor, in millimetres.",
+    )
+    cmp_group.add_argument(
+        "--viewing-distance",
+        type=float,
+        default=None,
+        metavar="MM",
+        help="Eye-to-screen distance for the FIRST dataset, in millimetres.",
+    )
+    cmp_group.add_argument(
+        "--compare-monitor-mm",
+        type=float,
+        default=None,
+        metavar="MM",
+        help="Physical width of the SECOND dataset's monitor, in millimetres.",
+    )
+    cmp_group.add_argument(
+        "--compare-viewing-distance",
+        type=float,
+        default=None,
+        metavar="MM",
+        help="Eye-to-screen distance for the SECOND dataset, in millimetres.",
+    )
     return parser
+
+
+def _parse_compare_with(value: str) -> tuple:
+    """``"p01:t03"`` → ``("p01", "t03")``, or a clear SystemExit.
+
+    Split on the LAST colon: a participant id may legitimately contain one
+    (MultiplEYE's ``001_ZH_CH_1_ET1`` style ids do not, but composite trial ids
+    joined with ``_`` sit next to corpora that use colons), while a trial id
+    naming a screen never trails one.
+    """
+    text = str(value or "")
+    participant, sep, trial = text.rpartition(":")
+    if not sep or not participant.strip() or not trial.strip():
+        raise SystemExit(
+            f"--compare-with expects PARTICIPANT:TRIAL, got {value!r}. "
+            "Use --list-trials to see the available pairs."
+        )
+    return participant.strip(), trial.strip()
+
+
+def _compare_second_dataset(api, args, words, fixations):
+    """``(words_b, fixations_b)`` for the comparison — A's frames unless given.
+
+    Returns the *whole* second dataset, not one trial; both callers slice it.
+    """
+    if not (args.compare_words or args.compare_fixations):
+        return words, fixations, False
+    try:
+        return (
+            *api.load_scanpath_data(args.compare_words, args.compare_fixations),
+            True,
+        )
+    except (ValueError, FileNotFoundError, OSError) as exc:
+        raise SystemExit(f"--compare-words/--compare-fixations: {exc}")
+
+
+def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
+    """B's single-trial frames for a dual co-animation, gated like the overlay.
+
+    A co-animation draws both readings on one clock in one coordinate space —
+    i.e. an overlay — so it is refused for two different screens on exactly the
+    same terms `compare_scanpaths` refuses `layout="overlay"`, rather than
+    quietly replaying scanpath A alone (which is what happened before CMP-9
+    reached this branch at all).
+    """
+    from .experimental_setup import setups_comparable
+    from .utils import extract_trial, qualify_for_compare
+
+    participant_b, trial_b = _parse_compare_with(args.compare_with)
+    words_b, fixations_b, cross_dataset = _compare_second_dataset(
+        api, args, words, fixations
+    )
+    trial_words_b = extract_trial(words_b, participant_b, trial_b)
+    trial_fix_b = extract_trial(fixations_b, participant_b, trial_b)
+    if trial_fix_b.empty:
+        raise SystemExit(
+            f"No fixations for the compared scanpath participant={participant_b!r}, "
+            f"trial={trial_b!r}. Use --list-trials to see the available pairs."
+        )
+    if cross_dataset:
+        setup_a = _compare_setup_snapshot(
+            canvas, args.monitor_mm, args.viewing_distance
+        )
+        setup_b = _compare_setup_snapshot(
+            _parse_canvas(args.compare_canvas),
+            args.compare_monitor_mm,
+            args.compare_viewing_distance,
+        )
+        if setup_a is not None and setup_b is not None:
+            comparable, note = setups_comparable(setup_a, setup_b)
+            if not comparable:
+                raise SystemExit(
+                    f"{note} An animated comparison replays both readings on one "
+                    f"clock in one coordinate space, so it needs the same screen. "
+                    f"Drop --animate to compare them as separate panels."
+                )
+            if note:
+                # Allowed, but the matching canvas is a shared default rather than
+                # a recorded screen. Same stream as the other render warnings.
+                print(f"Warning: {note}", file=sys.stderr)
+        trial_words_b = qualify_for_compare(trial_words_b, args.compare_dataset_name)
+        trial_fix_b = qualify_for_compare(trial_fix_b, args.compare_dataset_name)
+    return {"words_b": trial_words_b, "fixations_b": trial_fix_b}
+
+
+def _compare_setup_snapshot(
+    canvas: Optional[tuple],
+    monitor_mm: Optional[float],
+    viewing_distance: Optional[float],
+):
+    """A `SetupSnapshot` from the CLI's geometry flags, or ``None`` if silent.
+
+    ``None`` lets `api.compare_scanpaths` infer the screen from the data, which
+    is the right default — inventing a canvas here would be a claim the caller
+    never made.
+    """
+    from .experimental_setup import Provenance, SetupSnapshot
+
+    if canvas is None and monitor_mm is None and viewing_distance is None:
+        return None
+    fields: dict = {}
+    if canvas is not None:
+        fields.update(canvas_width=int(canvas[0]), canvas_height=int(canvas[1]))
+    if monitor_mm is not None:
+        fields["monitor_width_mm"] = float(monitor_mm)
+    if viewing_distance is not None:
+        fields["viewing_distance_mm"] = float(viewing_distance)
+    return SetupSnapshot(
+        **fields,
+        # No canvas given means the snapshot carries the *default* one, so it must
+        # say ASSUMED — `setups_comparable` treats that as "screen unknown" and
+        # refuses the overlay. Reporting ESTIMATED here let `--monitor-mm 520`
+        # alone launder a default 2560x1440 into a screen the caller never stated,
+        # and it would then compare equal to a real 2560x1440.
+        screen_provenance=(
+            Provenance.MEASURED if canvas is not None else Provenance.ASSUMED
+        ),
+        geometry_provenance=(
+            Provenance.MEASURED
+            if (monitor_mm is not None and viewing_distance is not None)
+            else Provenance.ASSUMED
+        ),
+    )
 
 
 def _parse_canvas(value: Optional[str]) -> Optional[tuple]:
@@ -832,6 +1047,16 @@ def render(argv: List[str]) -> None:
         raise SystemExit("Missing -o/--output (or use --list-trials/--list-parts).")
     if args.trial_parts_manifest and not (args.words or args.fixations):
         raise SystemExit("--trial-parts-manifest requires --words and/or --fixations.")
+    # A comparison is one figure of two readings; --all-screens writes one figure
+    # per child screen of a multipart trial. There is no defined pairing between
+    # the two, and without this guard the compare branch left `figures` unbound
+    # and the run died on an UnboundLocalError instead of saying so.
+    if args.compare_with is not None and args.all_screens:
+        raise SystemExit(
+            "--compare-with cannot be combined with --all-screens: a comparison "
+            "is a single figure of two readings. Render one screen at a time with "
+            "--screen SCREEN_ID."
+        )
     canvas = _parse_canvas(args.canvas)
     if args.coordinate_grid_spacing is not None and args.coordinate_grid_spacing <= 0:
         raise SystemExit("--coordinate-grid-spacing must be a positive number.")
@@ -1179,6 +1404,15 @@ def render(argv: List[str]) -> None:
                     if k in overrides
                 }
             )
+            # CMP-9/CMP-11: `--animate --compare-with` is the *dual* co-animation
+            # the app renders when both modes are on — both readings on one clock.
+            # That is an overlay, so it needs one coordinate space, and it is gated
+            # on the same `setups_comparable` predicate the static overlay uses.
+            if args.compare_with is not None:
+                anim_kwargs.update(
+                    _compare_animation_frames(api, args, words, fixations, canvas)
+                )
+                anim_kwargs["compare_stimulus"] = args.compare_stimulus
             animation_options = dict(
                 playback_speed=args.playback_speed,
                 autoplay=args.autoplay,
@@ -1207,6 +1441,44 @@ def render(argv: List[str]) -> None:
                     screen=args.screen,
                     **animation_options,
                 )
+        elif args.compare_with is not None:
+            # `is not None`, not truthiness: `--compare-with ""` is a malformed
+            # request, and falling through here would silently render an ordinary
+            # single-trial figure for someone who asked for a comparison.
+            # CMP-9. Compare owns the whole figure, so it is a peer of the
+            # animate/static branches rather than an option on one of them: the
+            # comparison builder takes neither `--animate`'s playback settings
+            # nor the static path's per-layer extras.
+            compare_participant, compare_trial = _parse_compare_with(args.compare_with)
+            loaded_b, loaded_fix_b, cross_dataset = _compare_second_dataset(
+                api, args, words, fixations
+            )
+            # None keeps `compare_scanpaths` on its same-dataset path, which is
+            # what skips the namespacing.
+            words_b = loaded_b if cross_dataset else None
+            fixations_b = loaded_fix_b if cross_dataset else None
+            fig = api.compare_scanpaths(
+                words,
+                fixations,
+                (participant, trial),
+                (compare_participant, compare_trial),
+                words_b=words_b,
+                fixations_b=fixations_b,
+                dataset_b=args.compare_dataset_name,
+                layout=args.compare_layout,
+                compare_stimulus=args.compare_stimulus,
+                setup=_compare_setup_snapshot(
+                    canvas, args.monitor_mm, args.viewing_distance
+                ),
+                setup_b=_compare_setup_snapshot(
+                    _parse_canvas(args.compare_canvas),
+                    args.compare_monitor_mm,
+                    args.compare_viewing_distance,
+                ),
+                drift_correction=args.drift_correction,
+                **overrides,
+                **common,  # carries canvas_size / fonts / title / caption
+            )
         else:
             static_options = dict(
                 drift_correction=args.drift_correction,

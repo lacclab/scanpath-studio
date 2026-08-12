@@ -94,22 +94,57 @@ Three things behave differently across datasets, each on purpose:
 
 | | Why |
 | --- | --- |
-| **Overlay is unavailable** | Overlay pools both readings into one coordinate space; two datasets don't share one. Side by side and Stacked are used instead, and your Overlay choice is remembered for same-dataset pairs. |
-| **Each panel is drawn to its own screen** | A caption under the figure names both monitors. Box and text sizes are true-to-scale *within* a panel and **not** comparable across panels. |
+| **Overlay needs one shared screen** | Overlay pools both readings into one set of pixel coordinates, so it needs matching canvases — see below. Otherwise Side by side is used, and your Overlay choice is remembered for same-dataset pairs. |
+| **Each panel is drawn to its own screen** | In a split layout a caption under the figure names both monitors. Box and text sizes are true-to-scale *within* a panel and **not** comparable across panels. |
 | **Only shared metrics can colour it** | A measure one corpus ships and the other doesn't would colour one panel and blank the other, so it falls back with a note. |
 
 B carries its own filters (they never touch the main pool) and never shows 👤
 markers — two corpora don't share readers. 📄 still appears when a text id
 matches across them.
 
+#### When can two datasets be overlaid?
+
+When the two **canvas sizes match**. That is the only hard requirement: the
+overlay draws raw pixel positions, so equal canvases are what make them mean the
+same thing. Different screens still fall back to Side by side.
+
+If either dataset never *recorded* its screen — most public corpora don't, so
+their canvas is a shared default rather than a measurement — the overlay is
+still drawn, with a warning beside it. The app can't prove the two displays
+matched; you usually can. A matching canvas is real evidence, just not proof.
+
+Nothing is ever rescaled or reprojected to make an overlay possible. When the
+screens match, the pixels already mean the same thing on both sides; when they
+don't, the honest answer is two panels. (An earlier design converted each
+reading through its own monitor geometry into degrees of visual angle. That was
+dropped: no bundled corpus records the physical measurements it would need, so
+it would have been a claim the data can't support.)
+
+An animated comparison follows the same rule — a co-animation replays both
+readings on one clock, which is an overlay, so it needs the same shared screen.
+
+#### Whose text does an overlay show?
+
+**Stimulus from** (⚙️ *Compare options*, overlay only) picks which reading
+supplies the word boxes and text: **Both**, **A**, or **B**. Two datasets' word
+boxes line up only when the text, font and wrapping are identical, so across
+corpora *Both* often draws two offset sets of rectangles under the two traces.
+Pick one side to read the overlay as a comparison of the *fixation traces*
+against a single stimulus. It defaults to *Both*, which leaves same-dataset
+overlays exactly as they were.
+
 **⚖️ Download this comparison as a bundle** (Export → *This trial*) writes the
 figure plus both scanpaths' tables and a manifest naming each side's dataset,
 trial and recording setup. The image alone can't be reproduced; the bundle can.
 
 A share link carries the comparison as `?compare=<participant>:<trial>` plus
-`&cmp_source=<dataset>`. An uploaded dataset lives only in your session, so a
-link can't rebuild it — the Share panel says so rather than sending half a
-comparison.
+`&cmp_source=<dataset>`, `&cmp_layout=` and `&cmp_stimulus=`. An uploaded dataset
+lives only in your session, so a link can't rebuild it — the Share panel says so
+rather than sending half a comparison.
+
+Compare mode is also available headlessly — see
+[`compare_scanpaths`](../api.md#scanpath_studio.api.compare_scanpaths) and
+`render --compare-with` in the [CLI reference](../cli.md#compare-two-scanpaths).
 
 ## Correct vertical drift
 

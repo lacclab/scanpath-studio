@@ -23,9 +23,11 @@ from scanpath_studio.html_embed import embed_html_iframe
 from .annotations import restore_records
 from .experimental_setup import format_provenance_param, parse_provenance_param
 from .session_keys import (
+    COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
     COMPARE_SOURCE_PARAM,
     COMPARE_SOURCE_STATE_KEY,
+    COMPARE_STIMULUS_PARAM,
     PENDING_COMPARE_STATE_KEY,
     SETUP_PROVENANCE_PARAM,
     SETUP_PROVENANCE_STATE_KEY,
@@ -108,6 +110,37 @@ def _parse_saccade_classes(v) -> list[str]:
     if unknown:
         raise ValueError(f"unknown saccade class: {', '.join(unknown)}")
     return [cls for cls in SACCADE_CLASS_ORDER if cls in set(names)]
+
+
+#: The exact option spellings the two compare `st.segmented_control`s hold.
+#: A segmented control raises when session state carries a value outside its
+#: options, so a link's spelling has to be checked before it is seeded.
+_COMPARE_LAYOUT_OPTIONS = ("Overlay", "Side by side", "Stacked")
+_COMPARE_STIMULUS_OPTIONS = ("Both", "A", "B")
+
+
+def _parse_choice(value, options: tuple[str, ...], what: str) -> str:
+    """Match ``value`` case-insensitively against a closed vocabulary.
+
+    Raising (rather than falling back to the default) is what turns a mangled
+    link into the reader's "Ignored bad URL param" warning instead of a wedged
+    widget — the same contract `_parse_align_algorithm` follows. Hyphens are
+    accepted for the layout so the CLI's `--compare-layout side-by-side` and the
+    link agree on one spelling.
+    """
+    name = str(value).strip().replace("-", " ")
+    for option in options:
+        if option.lower() == name.lower():
+            return option
+    raise ValueError(f"unknown {what} {str(value)!r}")
+
+
+def _parse_compare_layout(v) -> str:
+    return _parse_choice(v, _COMPARE_LAYOUT_OPTIONS, "compare layout")
+
+
+def _parse_compare_stimulus(v) -> str:
+    return _parse_choice(v, _COMPARE_STIMULUS_OPTIONS, "compare stimulus source")
 
 
 def _parse_align_algorithm(v) -> str:
@@ -262,6 +295,13 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     # value param (the reader only applies them once the toggle is on).
     "title_pattern": "global_title_pattern",
     "caption_pattern": "global_caption_pattern",
+    # CMP-11: compare mode's own two settings. CMP-8 put `compare=<pid>:<trial>`
+    # and `cmp_source` on the link but neither of these, so a shared comparison
+    # always reopened as Overlay — and, cross-dataset, immediately resolved away
+    # from it. Both read sides are overridden in `_URL_PRESETS` with validating
+    # parsers, since each is a closed vocabulary.
+    "cmp_layout": "single_compare_layout",
+    "cmp_stimulus": "single_compare_stimulus",
 }
 _SHARE_INT_PARAMS = {
     "order_font_size": "global_order_font_size",
@@ -315,6 +355,9 @@ _URL_PRESETS = {
     # its options, so an unknown class name has to be rejected here rather than
     # wedging the rail.
     "saccade_classes": ("global_saccade_classes", _parse_saccade_classes),
+    # CMP-11 — same rule again: both are `st.segmented_control` options.
+    "cmp_layout": ("single_compare_layout", _parse_compare_layout),
+    "cmp_stimulus": ("single_compare_stimulus", _parse_compare_stimulus),
 }
 
 # Widget bounds for the URL-restorable params that feed a min/max-bounded widget
@@ -1475,6 +1518,26 @@ def _restore_plot_config(
     if isinstance(sbc, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sbc):
         put("global_span_border_color", sbc)
 
+    # CMP-11 — the compare *view* (layout + whose stimulus an overlay draws).
+    # Validated against the segmented controls' exact options for the same
+    # reason the URL params are: seeding a value outside them makes the widget
+    # raise. An absent section keeps the seeded defaults, so a pre-CMP-11 config
+    # restores unchanged and no schema bump is needed.
+    compare_view = config.get("compare_view")
+    if isinstance(compare_view, dict):
+        for field, options, label in (
+            ("layout", _COMPARE_LAYOUT_OPTIONS, "compare layout"),
+            ("stimulus", _COMPARE_STIMULUS_OPTIONS, "compare stimulus source"),
+        ):
+            if field not in compare_view:
+                continue
+            try:
+                value = _parse_choice(compare_view[field], options, label)
+            except ValueError:
+                skipped.append(label)
+                continue
+            put(f"single_compare_{field}", value)
+
     # Per-scanpath comparison styling (cmp{idx}_*). A short or hand-edited list
     # degrades gracefully — a missing field just keeps the seeded default.
     compare = config.get("compare")
@@ -1712,6 +1775,15 @@ def _build_share_query(
         value = st.session_state.get(state_key)
         if isinstance(value, (list, tuple)) and len(value) == 2:
             params[url_key] = f"{value[0]},{value[1]}"
+    # CMP-11: the two compare-view params describe a comparison, so they only
+    # travel when one does. Both widgets carry `persist_state="session"`, so the
+    # generic value sweep above would otherwise stamp `cmp_layout`/`cmp_stimulus`
+    # onto every later link — including ones where `compare=` was deliberately
+    # withheld by the identity picker or dropped because B's corpus can't be
+    # rebuilt. They restore nothing on their own.
+    if COMPARE_PARAM not in params:
+        params.pop(COMPARE_LAYOUT_PARAM, None)
+        params.pop(COMPARE_STIMULUS_PARAM, None)
     if st.session_state.get("single_animate"):
         params["tab"] = "animation"
 

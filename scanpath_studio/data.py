@@ -2371,6 +2371,222 @@ def filter_to_keys(
     return filter_frame_to_keys(words, keys), filter_frame_to_keys(fixations, keys)
 
 
+# ---------------------------------------------------------------------------
+# VAL-7 — is a "trial" actually more than one reading?
+#
+# The inverse of BUG-23. A Trial ID mapping that does not fully identify a
+# reading concatenates several readings into one `trial_id`, and nothing about
+# the result looks wrong: the figure renders as an ordinary scanpath with a lot
+# of regressions. Three independent signals catch it, and a fourth names the fix.
+#
+# THE KEY IS `(participant_id, trial_id, screen_id)` — the multipart scientific
+# grouping key, not `(participant_id, trial_id)`. A legitimate two-screen trial
+# restarts `word_id` per screen, so the words signal reports duplicates that are
+# correct data when grouped by trial alone. The two fixation signals are immune
+# either way, because multipart keeps `fixation_id` and `timestamp_ms`
+# parent-global by design — which is exactly why they are the right cross-check
+# rather than a redundant one.
+# ---------------------------------------------------------------------------
+
+#: Columns that should hold ONE value inside a reading, so a second value is
+#: evidence that two readings were merged — and the column name *is* the remedy
+#: ("add `article_id` to the Trial ID mapping"). Deliberately a fixed list of
+#: identity/condition fields rather than every column: a per-word or
+#: per-fixation column varies within a trial by design, and scanning them all
+#: would bury the signal in noise.
+_TRIAL_WITNESS_COLUMNS: Tuple[str, ...] = (
+    "TRIAL_INDEX",
+    "trial_index",
+    "trial_num",
+    "article_id",
+    "article_batch",
+    "article_title",
+    "difficulty_level",
+    "question",
+    "question_preview",
+    "repeated_reading_trial",
+    "selected_answer",
+    "is_correct",
+    "genre",
+    "session",
+    "is_practice",
+    "unique_paragraph_id",
+    "paragraph_id",
+    "unique_text_id",
+    "text_id",
+    SOURCE_FILE_COLUMN,
+)
+
+
+def trial_identity_key(frame: pd.DataFrame) -> List[str]:
+    """The columns that identify one *reading* in ``frame``.
+
+    ``screen_id`` joins the key when the frame is multipart, because a screen is
+    a coordinate space of its own and its ids restart.
+    """
+    key = [c for c in ("participant_id", "trial_id") if c in frame.columns]
+    if SCREEN_ID in frame.columns:
+        key.append(SCREEN_ID)
+    return key
+
+
+def diagnose_trial_identity(
+    words: pd.DataFrame, fixations: pd.DataFrame
+) -> Dict[str, object]:
+    """Report evidence that one ``trial_id`` covers more than one reading (VAL-7).
+
+    Returns a dict with:
+
+    - ``duplicate_word_rows`` — rows sharing ``(key…, word_id)`` in the words
+      table. The only *structural* signal: a word box is a property of the
+      stimulus, so one row per word per reading is an invariant, not a
+      heuristic — and it needs no clock.
+    - ``repeated_fixation_id_trials`` / ``backwards_clock_trials`` — the
+      independent cross-check, and the one that says *what* merged: a clock
+      jumping backwards mid-trial is a second recording starting, not a
+      regression.
+    - ``multi_valued_columns`` — ``column → number of trials in which it takes
+      more than one value``, over :data:`_TRIAL_WITNESS_COLUMNS`. The most
+      diagnostic, because the column name is the remedy.
+    - ``trials`` / ``affected_trials`` — the denominator, and how many readings
+      any signal implicates.
+
+    Pure and read-only: this reports, it never repairs. Empty frames, or frames
+    with no id columns, produce an all-clear rather than an error.
+    """
+    report: Dict[str, object] = {
+        "trials": 0,
+        "affected_trials": 0,
+        "duplicate_word_rows": 0,
+        "repeated_fixation_id_trials": 0,
+        "backwards_clock_trials": 0,
+        "multi_valued_columns": {},
+    }
+    key_frame = fixations if fixations is not None and not fixations.empty else words
+    if key_frame is None or key_frame.empty:
+        return report
+    key = trial_identity_key(key_frame)
+    if len(key) < 2:  # need at least participant + trial to speak of a reading
+        return report
+    # The denominator is the union across both frames, not one of them: a corpus
+    # can carry word boxes for readers who have no fixations (the bundled demo
+    # does), and counting the numerator over words against a fixations-only
+    # denominator reads as "6 of 4 trials".
+    all_keys: set = set()
+    for frame in (words, fixations):
+        if frame is None or frame.empty:
+            continue
+        fkey = trial_identity_key(frame)
+        if len(fkey) < 2:
+            continue
+        sub = frame[fkey].drop_duplicates()
+        all_keys |= {tuple(str(v) for v in row) for row in sub.to_numpy()}
+    report["trials"] = len(all_keys)
+    flagged: set = set()
+
+    def _keys_of(frame: pd.DataFrame, mask) -> set:
+        sub = frame.loc[mask, key].drop_duplicates()
+        return {tuple(str(v) for v in row) for row in sub.to_numpy()}
+
+    # (1) Structural: one word row per word per reading.
+    if words is not None and not words.empty and "word_id" in words.columns:
+        wkey = trial_identity_key(words)
+        if len(wkey) >= 2:
+            dup = words.duplicated(subset=wkey + ["word_id"], keep=False)
+            report["duplicate_word_rows"] = int(dup.sum())
+            flagged |= _keys_of(words, dup)
+
+    if fixations is not None and not fixations.empty:
+        fkey = trial_identity_key(fixations)
+        # (2) A fixation id repeating inside one reading.
+        if len(fkey) >= 2 and "fixation_id" in fixations.columns:
+            counts = fixations.groupby(fkey, dropna=False)["fixation_id"].agg(
+                lambda s: int(s.size - s.nunique())
+            )
+            bad = counts[counts > 0]
+            report["repeated_fixation_id_trials"] = int(len(bad))
+            flagged |= {tuple(str(v) for v in _as_tuple(k)) for k in bad.index}
+        # (3) A clock that runs backwards mid-reading.
+        if len(fkey) >= 2 and "timestamp_ms" in fixations.columns:
+            clock = pd.to_numeric(fixations["timestamp_ms"], errors="coerce")
+            ordered = pd.DataFrame({"_t": clock.to_numpy()})
+            for col in fkey:
+                ordered[col] = fixations[col].astype(str).to_numpy()
+            drops = ordered.groupby(fkey, dropna=False)["_t"].apply(
+                lambda s: bool((s.diff() < 0).any())
+            )
+            bad_clock = drops[drops]
+            report["backwards_clock_trials"] = int(len(bad_clock))
+            flagged |= {tuple(str(v) for v in _as_tuple(k)) for k in bad_clock.index}
+
+    # (4) A column that should be constant taking several values.
+    multi: Dict[str, int] = {}
+    for frame in (words, fixations):
+        if frame is None or frame.empty:
+            continue
+        fkey = trial_identity_key(frame)
+        if len(fkey) < 2:
+            continue
+        present = [c for c in _TRIAL_WITNESS_COLUMNS if c in frame.columns]
+        if not present:
+            continue
+        nunique = frame.groupby(fkey, dropna=False)[present].nunique(dropna=True)
+        for col in present:
+            offenders = nunique[col] > 1
+            count = int(offenders.sum())
+            if count:
+                multi[col] = max(multi.get(col, 0), count)
+                flagged |= {
+                    tuple(str(v) for v in _as_tuple(k))
+                    for k in nunique.index[offenders.to_numpy()]
+                }
+    report["multi_valued_columns"] = dict(
+        sorted(multi.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
+    report["affected_trials"] = len(flagged)
+    return report
+
+
+def _as_tuple(key) -> tuple:
+    """A groupby index label as a tuple, whether or not it was a MultiIndex."""
+    return key if isinstance(key, tuple) else (key,)
+
+
+def trial_identity_warning(report: Dict[str, object]) -> Optional[str]:
+    """One line naming the problem and the remedy, or ``None`` when all clear.
+
+    The column name is the fix, so it leads whenever there is one — "add it to
+    the Trial ID mapping" is something the user can act on, where "N trials look
+    wrong" is not.
+    """
+    if not report or not report.get("affected_trials"):
+        return None
+    affected = int(report["affected_trials"])
+    total = int(report.get("trials") or 0)
+    lead = (
+        f"**{affected} of {total} trials look like more than one reading "
+        f"under the current Trial ID.**"
+    )
+    multi = report.get("multi_valued_columns") or {}
+    if multi:
+        col, count = next(iter(multi.items()))
+        return (
+            f"{lead} `{col}` takes more than one value inside a trial "
+            f"({count} trials) — adding it to the Trial ID mapping would "
+            "separate them."
+        )
+    parts = []
+    if report.get("duplicate_word_rows"):
+        parts.append(f"{report['duplicate_word_rows']} duplicated word rows")
+    if report.get("repeated_fixation_id_trials"):
+        parts.append(
+            f"{report['repeated_fixation_id_trials']} with a repeated fixation id"
+        )
+    if report.get("backwards_clock_trials"):
+        parts.append(f"{report['backwards_clock_trials']} whose clock runs backwards")
+    return f"{lead} Evidence: {', '.join(parts)}."
+
+
 def count_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
     """How many distinct ``(participant_id, trial_id)`` trials the frames hold.
 

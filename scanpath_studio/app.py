@@ -93,6 +93,7 @@ from scanpath_studio.data import (
     count_trials,
     default_filters,
     diagnose_filters,
+    diagnose_trial_identity,
     empty_fixations_frame,
     empty_words_frame,
     filter_data,
@@ -119,6 +120,7 @@ from scanpath_studio.data import (
     read_tables,
     reset_fingerprint_memo,
     resolve_stimulus_image_paths,
+    trial_identity_warning,
     trial_keys,
     trial_mapping_columns,
     upload_exceeds_limit,
@@ -1446,6 +1448,19 @@ def _stimulus_font_install_hint(css_family: Optional[str]) -> Optional[Tuple[str
         else f"https://fonts.google.com/?query={name.replace(' ', '+')}"
     )
     return name, url
+
+
+@st.cache_data(show_spinner=False)
+def _cached_trial_identity_report(
+    _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
+) -> Dict:
+    """VAL-7's diagnosis, memoized on the two frames' fingerprints.
+
+    It groups the whole corpus by trial several times over, so it must not run
+    on every rerun — but it also must not be skipped, since the failure it
+    catches is invisible in the figure.
+    """
+    return diagnose_trial_identity(_words, _fixations)
 
 
 @st.cache_data(show_spinner="Loading MultiplEYE server bundle…")
@@ -3429,6 +3444,26 @@ def main() -> None:
     # the Bulk Export tab's "Export the whole dataset" option exports these,
     # ignoring the current filters.
     words_all, fixations_all = words_df, fixations_df
+
+    # VAL-7: does one `trial_id` actually cover several readings? A Trial ID
+    # mapping that under-specifies concatenates them, and the figure renders as
+    # an ordinary scanpath with a lot of regressions — nothing looks wrong. Run
+    # on the *unfiltered* frames: this is a property of the mapping, not of the
+    # current filter. The full evidence table is in 🔎 Data Inspection; here it
+    # gets one line, because the column name is the remedy.
+    identity_report = _cached_trial_identity_report(
+        words_all,
+        fixations_all,
+        cache_key=(frame_fingerprint(words_all), frame_fingerprint(fixations_all)),
+    )
+    st.session_state["_trial_identity_report"] = identity_report
+    identity_warning = trial_identity_warning(identity_report)
+    if identity_warning:
+        menu.notices.warning(
+            f"{identity_warning} The evidence is in **🔎 Data Inspection → "
+            "Trial identity**.",
+            icon="⚠️",
+        )
 
     # Trial-level filtering / grouping: narrow by participant, by condition
     # (Hunting/Gathering, difficulty, first/repeated reading, correctness), and by

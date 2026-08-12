@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 282,
+  "revision": 286,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -101,9 +101,9 @@
       "updated": "2026-08-12"
     },
     "CMP-13": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "",
+      "implementationBrief": "It works really nicely until at some point, not clear why or when, the compared to (B) slider suddenly skips to a different trial",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -678,9 +678,9 @@
       "updated": "2026-08-12"
     },
     "UX-49": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "",
+      "implementationBrief": "Great start, note that numeric can be float or int, if it is int then better that the slider matches that.",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -734,11 +734,11 @@
       "updated": "2026-08-11"
     },
     "VAL-7": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-12"
+      "updated": "2026-08-13"
     },
     "VIZ-14": {
       "status": "Closed",

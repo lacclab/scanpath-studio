@@ -7593,6 +7593,80 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     )
 
 
+def _render_trial_identity_section() -> None:
+    """VAL-7: the evidence behind "this trial id may cover several readings".
+
+    Reads the report ``app.main`` computed on the **unfiltered** frames, so the
+    verdict describes the dataset's mapping rather than whatever the current
+    filters left. Renders an all-clear as well as a warning — "we checked and
+    it's fine" is the more common answer and is worth stating, or the section
+    reads as an error box that only appears when something is wrong.
+    """
+    st.subheader("Trial identity")
+    report = st.session_state.get("_trial_identity_report") or {}
+    total = int(report.get("trials") or 0)
+    if not total:
+        st.caption("No trials loaded, so there is nothing to check.")
+        return
+    affected = int(report.get("affected_trials") or 0)
+    if not affected:
+        st.success(
+            f"Each of the {total} trials looks like a single reading.",
+            icon="✅",
+        )
+    else:
+        st.warning(
+            f"**{affected} of {total} trials look like more than one reading.** "
+            "A Trial ID that doesn't fully identify a reading concatenates "
+            "several into one scanpath — which renders perfectly happily, as an "
+            "ordinary scanpath with a lot of regressions. Add the column named "
+            "below to the Trial ID mapping to separate them.",
+            icon="⚠️",
+        )
+    rows = [
+        {
+            "Signal": "Duplicated word rows",
+            "Count": int(report.get("duplicate_word_rows") or 0),
+            "What it means": "A word box appears more than once in one trial. "
+            "One row per word per reading is a property of the stimulus, so this "
+            "is structural evidence rather than a heuristic.",
+        },
+        {
+            "Signal": "Trials with a repeated fixation id",
+            "Count": int(report.get("repeated_fixation_id_trials") or 0),
+            "What it means": "Two fixations in one trial share an id — an "
+            "independent cross-check that needs no word boxes.",
+        },
+        {
+            "Signal": "Trials whose clock runs backwards",
+            "Count": int(report.get("backwards_clock_trials") or 0),
+            "What it means": "The timestamp jumps back mid-trial. That is a "
+            "second recording starting, not a regression.",
+        },
+    ]
+    st.dataframe(rows, hide_index=True, width="stretch")
+    multi = report.get("multi_valued_columns") or {}
+    if multi:
+        st.markdown(
+            "**Columns that should be constant within a trial, but aren't** — "
+            "each names a distinction the Trial ID is currently ignoring:"
+        )
+        st.dataframe(
+            [
+                {"Column": col, "Trials with >1 value": count}
+                for col, count in multi.items()
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+    st.caption(
+        "Checked on the whole dataset, before any filtering, using "
+        "(participant, trial, screen) — a multipart trial restarts word ids per "
+        "screen, so grouping by trial alone would report duplicates that are "
+        "correct data."
+    )
+
+
 def _render_column_mapping_section() -> None:
     """Show how each source column was mapped to the app's canonical fields.
 
@@ -7868,5 +7942,10 @@ def render_data_inspection_tab(
 
     st.divider()
 
-    # 4. The active column mapping (data source → canonical fields).
+    # 4. VAL-7 — does one trial_id actually cover several readings?
+    _render_trial_identity_section()
+
+    st.divider()
+
+    # 5. The active column mapping (data source → canonical fields).
     _render_column_mapping_section()

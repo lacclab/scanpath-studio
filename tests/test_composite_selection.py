@@ -65,10 +65,12 @@ class TestCompositeTrialPicker:
         labels = [s.label for s in at.selectbox]
         assert not any(label.startswith("Trial ID") for label in labels), labels
 
-    def test_filter_col_component_dropped_from_cascade(self):
-        # UX-5: a composite component that is also a More-popover filter column
-        # (repeated_reading_trial) is NOT given a dedicated trial selector — it
-        # narrows via More instead, keeping the picker stable across datasets.
+    def test_filter_col_component_keeps_its_cascade_selector(self):
+        # BUG-16 reversed UX-5 here: a composite component that is *also* a
+        # More-popover filter column (repeated_reading_trial) keeps its own trial
+        # selector, because mapping a column into the trial id is a statement
+        # that it is part of trial identity — narrowing it away in More left the
+        # picker unable to reach one of two trials that differ only by it.
         def _filtered_picker_app():
             import pandas as pd
             import streamlit as st
@@ -97,17 +99,13 @@ class TestCompositeTrialPicker:
                 "repeated_reading_trial",
             ]
             combos, _, _ = build_combo_options(fixations)
-            select_trial(
-                combos,
-                key_prefix="single",
-                filter_cols=["repeated_reading_trial"],
-            )
+            select_trial(combos, key_prefix="single")
 
         at = AppTest.from_function(_filtered_picker_app)
         at.run(timeout=15)
         assert not at.exception
         labels = [s.label for s in at.selectbox]
-        assert "repeated_reading_trial" not in labels
+        assert "repeated_reading_trial" in labels
         # The canonical identity selectors stay.
         assert "Text" in labels
         assert "Participant" in labels

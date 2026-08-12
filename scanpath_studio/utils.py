@@ -966,11 +966,6 @@ def select_trial(
     ``picker_host`` is the container to render into (defaults to the current one);
     the picker builds its own row of columns, so call it where columns are allowed.
 
-    ``filter_cols`` lists the dataset's condition-filter columns (those offered in
-    the **More** popover). Composite components that are also filter columns are
-    dropped from the cascading selectors so the trial picker stays identical across
-    datasets — those columns narrow via **More** instead (UX-5).
-
     ``words`` / ``fixations`` (optional) are the frames ``combos`` was built from;
     passing them unlocks the UX-10 ⇅ sort popover's computed keys (fixation count,
     reading time). Without them the sort still offers the column-based orderings.

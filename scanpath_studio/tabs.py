@@ -81,7 +81,6 @@ from scanpath_studio.controls import (
     SUMMARY_CHIP_FIELDS,
     WORD_FIELD_SPECS,
     _collect_compare_styles,
-    _filter_fields_for,
     _numeric_slider,
     column_mapping_ui,
     corpus_style_controls,
@@ -3284,15 +3283,14 @@ def render_single_trial_tab(
             more_pop.caption("More ways to narrow — conditions & annotations.")
             render_trial_filters(words_all, fixations_all, host=more_pop)
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
-        # Pass the More-popover filter columns so composite components that are
-        # also conditions (e.g. repeated_reading_trial) narrow there, not as a
-        # dedicated trial selector — keeping the picker stable across datasets.
+        # It takes no filter-column list: BUG-16 stopped pruning composite
+        # components that are also **More** conditions, since mapping a column
+        # into the trial id is a statement that it is part of trial identity.
         with st.container(key="tour_grp_trial_picker"):
             selected_participant, selected_trial, selection_mode, selected_text = (
                 select_trial(
                     combos,
                     key_prefix="single",
-                    filter_cols=_filter_fields_for(words_all, fixations_all),
                     # UX-10: the frames `combos` was built from, so the ⇅ sort
                     # popover can offer computed keys (fixation count, reading
                     # time) alongside the reader / text / condition columns.

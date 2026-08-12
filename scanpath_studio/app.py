@@ -132,6 +132,7 @@ from scanpath_studio.datasets import (
     multipleye_bundle_dir,
 )
 from scanpath_studio.debug_log import install_log_capture, render_debug_panel
+from scanpath_studio.easter_egg import render_easter_egg
 from scanpath_studio.experimental_setup import (
     Provenance,
     SetupSnapshot,
@@ -3083,6 +3084,11 @@ def main() -> None:
     # UX-40: task-oriented tutorials share the spotlight mechanism but keep
     # their own progress and do not inherit the welcome tour's opt-out.
     render_use_case_tutorial()
+    # UX-39: arm the title's easter egg. After the tour/tutorial renders, because
+    # its suppression reads the `tour_mode` / `tutorial_active` those set — and it
+    # doesn't care about DOM order, being a height-0 script that retries until the
+    # heading has hydrated.
+    render_easter_egg()
     # UX-15: same deal for the FAQ dialog — the sidebar button that arms it
     # renders at the bottom of this function, so serving it here is what keeps
     # the modal from waiting out the whole rerun.

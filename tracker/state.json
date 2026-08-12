@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 241,
+  "revision": 253,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -80,7 +80,14 @@
       "updated": "2026-08-04"
     },
     "CMP-11": {
-      "status": "Review",
+      "status": "Closed",
+      "priority": "Low",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-12"
+    },
+    "CMP-12": {
+      "status": "Backlog",
       "priority": "Low",
       "implementationBrief": "",
       "archived": false,
@@ -111,6 +118,13 @@
       "priority": "High",
       "implementationBrief": "",
       "archived": false,
+      "updated": "2026-08-12"
+    },
+    "CMP-9": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
       "updated": "2026-08-12"
     },
     "DATA-1": {
@@ -162,11 +176,18 @@
       "archived": true,
       "updated": "2026-08-03"
     },
+    "DATA-20": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
     "DATA-21": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "High",
       "implementationBrief": "1. one with navigation\n2. good question, I don't know, should think of arbitrary datasets.\n3. support both. \n4. I think let user decide",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-12"
     },
     "DATA-22": {
@@ -177,10 +198,10 @@
       "updated": "2026-08-12"
     },
     "DATA-23": {
-      "status": "Backlog",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "1. I think in data inspection is fine\n2. Nope, just rename.\n3. dunno, I think the faster option?",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-12"
     },
     "ENG-19": {
@@ -565,10 +586,17 @@
       "archived": false,
       "updated": "2026-08-07"
     },
-    "UX-40": {
+    "UX-39": {
       "status": "Review",
       "priority": "Normal",
-      "implementationBrief": "Tutorials should guide as much as possible. Really opening up and highlighting relevant parts.\nDraft of tutorials and steps (I might have missed something):\n\n\\subsection{Example use cases}\n\\item \\textbf{Data collection}\n        \\begin{itemize}\n            \\item For: Researchers designing an experiment\n            \\item Trying to: Qualitatively compare two eye trackers\n            \\item Should do:\n            \\begin{itemize}\n                \\item 1. Upload data from eye tracker #1\n                \\item 2. Upload data from eye tracker #2\n                \\item 3. Visually compare scanpaths on the same text\n            \\end{itemize}\n        \\end{itemize}\n        \\item \\textbf{Data Filtering}\n            \\begin{itemize}\n                \\item For: Researchers using preexisting data for their research\n                \\item Trying to: Mark trials for inclusion (e.g. participants with a specific native language that have good calibration; or for any other reason)\n                \\item Should do:\n                \\begin{itemize}\n                \\item 1. Upload your data\n                \\item Filter trials\n                \\item 2. Go over trials \n                \\item 3. Annotate\n                \\item 4. Export marked trial IDs\n            \\end{itemize}\n    \\end{itemize}\n    \\item Publication-ready figures\n    \\begin{itemize}\n        \\item For: Researchers making an presentation about their research\n        \\item Trying to: showcase an example of a real scanpath\n        \\item Should do:\n        \\begin{itemize}\n            \\item Upload your data\n            \\item Choose a trial\n            \\item Configure visualization -\n            \\begin{itemize}\n                \\item 1 - heatmap\n                \\item 2 - animation\n            \\end{itemize}\n            \\begin{itemize}\n                \\item Bonus: save favorite settings for later (and then import)\n            \\end{itemize}\n            \\item export figure\n        \\end{itemize}\n    \\end{itemize}\n    \\item Comparison\n    \\begin{itemize}\n        \\item For: Researchers analyzing data\n        \\item Trying to: See progression over time\n        \\item should do: upload data; go to corpus view; select appropriate view.\n    \\end{itemize}",
+      "implementationBrief": "Maybe pressing three times on the title? and show something like big eyes popping up? something nice",
+      "archived": false,
+      "updated": "2026-08-12"
+    },
+    "UX-40": {
+      "status": "In progress",
+      "priority": "Normal",
+      "implementationBrief": "Improve them. This is a good start but could be improved.\n\nTutorials should guide as much as possible. Really opening up and highlighting relevant parts.\nDraft of tutorials and steps (I might have missed something):\n\n\\subsection{Example use cases}\n\\item \\textbf{Data collection}\n        \\begin{itemize}\n            \\item For: Researchers designing an experiment\n            \\item Trying to: Qualitatively compare two eye trackers\n            \\item Should do:\n            \\begin{itemize}\n                \\item 1. Upload data from eye tracker #1\n                \\item 2. Upload data from eye tracker #2\n                \\item 3. Visually compare scanpaths on the same text\n            \\end{itemize}\n        \\end{itemize}\n        \\item \\textbf{Data Filtering}\n            \\begin{itemize}\n                \\item For: Researchers using preexisting data for their research\n                \\item Trying to: Mark trials for inclusion (e.g. participants with a specific native language that have good calibration; or for any other reason)\n                \\item Should do:\n                \\begin{itemize}\n                \\item 1. Upload your data\n                \\item Filter trials\n                \\item 2. Go over trials \n                \\item 3. Annotate\n                \\item 4. Export marked trial IDs\n            \\end{itemize}\n    \\end{itemize}\n    \\item Publication-ready figures\n    \\begin{itemize}\n        \\item For: Researchers making an presentation about their research\n        \\item Trying to: showcase an example of a real scanpath\n        \\item Should do:\n        \\begin{itemize}\n            \\item Upload your data\n            \\item Choose a trial\n            \\item Configure visualization -\n            \\begin{itemize}\n                \\item 1 - heatmap\n                \\item 2 - animation\n            \\end{itemize}\n            \\begin{itemize}\n                \\item Bonus: save favorite settings for later (and then import)\n            \\end{itemize}\n            \\item export figure\n        \\end{itemize}\n    \\end{itemize}\n    \\item Comparison\n    \\begin{itemize}\n        \\item For: Researchers analyzing data\n        \\item Trying to: See progression over time\n        \\item should do: upload data; go to corpus view; select appropriate view.\n    \\end{itemize}",
       "archived": false,
       "updated": "2026-08-12"
     },
@@ -607,6 +635,13 @@
       "archived": false,
       "updated": "2026-08-12"
     },
+    "UX-48": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-12"
+    },
     "VAL-1": {
       "status": "On hold",
       "priority": "Normal",
@@ -634,6 +669,13 @@
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-04"
+    },
+    "VAL-5": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-12"
     },
     "VAL-6": {
       "status": "Backlog",

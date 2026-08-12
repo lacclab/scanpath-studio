@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -1143,6 +1143,124 @@ RAW_GAZE_FIELD_SPECS: List[Dict] = [
 ]
 
 
+def _assemble_mapping(
+    df: pd.DataFrame,
+    field_specs: List[Dict],
+    proposed: Dict[str, Optional[str]],
+    only_keys: Optional[List[str]],
+    *,
+    pick: Callable[..., Optional[str]],
+    pick_box_format: Callable[[Dict], str],
+    pick_multi: Callable[..., List[str]],
+) -> Dict[str, Optional[str]]:
+    """Build the schema dict, deferring every *choice* to the caller.
+
+    The **shape** of a mapping — which keys exist, that a ``kind: "box"`` field
+    expands into all eight box keys with the inactive four set to ``None``, that
+    a ``multi`` field collapses to a plain string when exactly one column is
+    picked — is defined once, here. :func:`column_mapping_ui` supplies choices by
+    rendering widgets; :func:`resolve_column_mapping` supplies them by reading the
+    session keys those widgets wrote. Sharing the loop is what stops the two
+    answering differently for the same dataset (DATA-26): the resolver runs on
+    every view where the editor is *not* on screen, so a divergence would show up
+    as the app quietly normalizing under a different mapping than the one the
+    user can see.
+    """
+    mapping: Dict[str, Optional[str]] = {}
+    for spec in field_specs:
+        key = spec["key"]
+        # When ``only_keys`` is given, handle just that subset (the wizard
+        # renders fields in grouped, ordered steps).
+        if only_keys is not None and key not in only_keys:
+            continue
+        default = proposed.get(key)
+        label = spec["label"] + (" *" if spec.get("required") else "")
+        if spec.get("kind") == "box":
+            fmt = pick_box_format(spec)
+            # Always emit all eight box keys; only the active format's four
+            # get a column, the rest stay None.
+            mapping.update({box_key: None for box_key in _ALL_BOX_KEYS})
+            for sub_key, sub_label in _BOX_SUBFIELDS[fmt]:
+                mapping[sub_key] = pick(sub_key, sub_label, None)
+            continue
+        if spec.get("multi"):
+            chosen_cols = pick_multi(spec, default, label)
+            if not chosen_cols:
+                mapping[key] = None
+            elif len(chosen_cols) == 1:
+                mapping[key] = chosen_cols[0]
+            else:
+                mapping[key] = list(chosen_cols)
+            continue
+        mapping[key] = pick(key, label, spec.get("help"))
+    return mapping
+
+
+def resolve_column_mapping(
+    df: pd.DataFrame,
+    state_key_prefix: str,
+    field_specs: List[Dict],
+    proposed: Dict[str, Optional[str]],
+    only_keys: Optional[List[str]] = None,
+) -> Dict[str, Optional[str]]:
+    """The mapping :func:`column_mapping_ui` *would* return, without rendering it.
+
+    **DATA-26.** The column-mapping editor used to live in a menu popover, which
+    executes on every rerun, so the load path could simply render it and use what
+    came back. On the **Data** page it executes only while that page is the
+    active view — and the mapping still has to drive ``prepare_data`` on the
+    Scanpath and Corpus views, which is precisely the trap that item flags.
+
+    Both halves of the answer are needed. The widgets carry
+    ``persist_state="session"`` so Streamlit keeps their values through the runs
+    in which they don't render (ENG-36; without it the keys are dropped at the
+    end of any such run and the mapping silently reverts to auto-detection).
+    This function then reads those values instead of re-rendering, so no view has
+    to draw the editor just to know the answer.
+
+    A stored column that no longer exists in ``df`` — a new upload with different
+    headers — falls back to the auto-detected proposal rather than to ``None``,
+    matching the rendering editor, whose selectbox ``index`` lookup self-heals the
+    same way.
+    """
+    columns = set(df.columns)
+
+    def _stored(field_key: str) -> Optional[str]:
+        value = st.session_state.get(f"{state_key_prefix}_{field_key}")
+        if value == NONE_OPTION:
+            return None
+        if isinstance(value, str) and value in columns:
+            return value
+        # Nothing usable stored: fall back to what auto-detection proposed.
+        fallback = proposed.get(field_key)
+        return fallback if fallback in columns else None
+
+    def _pick(field_key: str, _label, _help=None) -> Optional[str]:
+        return _stored(field_key)
+
+    def _pick_box_format(_spec) -> str:
+        fmt = st.session_state.get(f"{state_key_prefix}_box_format")
+        return fmt if fmt in _BOX_SUBFIELDS else _default_box_format(proposed)
+
+    def _pick_multi(spec, default, _label) -> List[str]:
+        stored = st.session_state.get(f"{state_key_prefix}_{spec['key']}")
+        if isinstance(stored, (list, tuple)):
+            valid = [c for c in stored if c in columns]
+            if valid:
+                return valid
+        return [default] if default in columns else []
+
+    return _assemble_mapping(
+        df,
+        field_specs,
+        proposed,
+        only_keys,
+        pick=_pick,
+        pick_box_format=_pick_box_format,
+        pick_multi=_pick_multi,
+    )
+
+
 def column_mapping_ui(
     df: pd.DataFrame,
     table_label: str,
@@ -1183,6 +1301,12 @@ def column_mapping_ui(
             index=index,
             key=f"{state_key_prefix}_{field_key}",
             help=help_text,
+            # DATA-26: the editor lives on the Data page, which executes only
+            # while it is the active view — but the mapping drives `prepare_data`
+            # on every view. Without this, Streamlit drops the key at the end of
+            # any run in which the widget did not render and the mapping reverts
+            # to auto-detection the moment the user clicks over to Scanpath.
+            persist_state="session",
         )
         # Surface what auto-detection found for this field (ENG-9) — and flag when
         # the user has overridden it — so the mapping isn't silently inferred.
@@ -1214,72 +1338,64 @@ def column_mapping_ui(
             st.warning(
                 "Fix these before the app can use this table: " + "; ".join(problems)
             )
-        mapping: Dict[str, Optional[str]] = {}
-        for spec in field_specs:
-            key = spec["key"]
-            # When ``only_keys`` is given, render just that subset (the wizard
-            # renders fields in grouped, ordered steps).
-            if only_keys is not None and key not in only_keys:
-                continue
-            default = proposed.get(key)
-            label = spec["label"] + (" *" if spec.get("required") else "")
-            if spec.get("kind") == "box":
-                fmt_key = f"{state_key_prefix}_box_format"
-                if fmt_key not in st.session_state:
-                    # Seed via session state (no `index=`) so it survives reruns
-                    # and never fights a default arg — same pattern as the
-                    # multiselect below.
-                    st.session_state[fmt_key] = _default_box_format(proposed)
-                star = " \\*" if spec.get("required") else ""
-                st.markdown(f"**{spec['label']}**{star}")
-                if spec.get("help"):
-                    st.caption(spec["help"])
-                fmt = st.radio(
-                    "Coordinate format",
-                    options=list(_BOX_SUBFIELDS),
-                    key=fmt_key,
-                    horizontal=True,
-                    label_visibility="collapsed",
-                )
-                # Always emit all eight box keys; only the active format's four
-                # get a column, the rest stay None.
-                mapping.update({box_key: None for box_key in _ALL_BOX_KEYS})
-                for sub_key, sub_label in _BOX_SUBFIELDS[fmt]:
-                    mapping[sub_key] = _selectbox(sub_key, sub_label)
-                continue
-            if spec.get("multi"):
-                state_key = f"{state_key_prefix}_{key}"
-                proposed_default = [default] if default in df.columns else []
-                stored = st.session_state.get(state_key)
-                if stored is None:
-                    # Seed via session state instead of `default=` so the
-                    # stale-column reset below never fights a default arg.
-                    st.session_state[state_key] = proposed_default
-                else:
-                    # A new upload changes the column universe — silently
-                    # keeping stale picks would leave the field empty (the
-                    # selectboxes self-heal via their index fallback; a
-                    # multiselect doesn't). Drop unknown columns and fall
-                    # back to the auto-proposal when nothing survives.
-                    valid = [c for c in stored if c in df.columns]
-                    if len(valid) != len(stored):
-                        st.session_state[state_key] = valid or proposed_default
-                chosen_cols = st.multiselect(
-                    label,
-                    options=list(df.columns),
-                    key=state_key,
-                    help=spec.get("help"),
-                )
-                if default and default in df.columns:
-                    st.caption(f"✨ {detected_label} `{default}`")
-                if not chosen_cols:
-                    mapping[key] = None
-                elif len(chosen_cols) == 1:
-                    mapping[key] = chosen_cols[0]
-                else:
-                    mapping[key] = list(chosen_cols)
-                continue
-            mapping[key] = _selectbox(key, label, spec.get("help"))
+
+        def _render_box_format(spec: Dict) -> str:
+            fmt_key = f"{state_key_prefix}_box_format"
+            if fmt_key not in st.session_state:
+                # Seed via session state (no `index=`) so it survives reruns
+                # and never fights a default arg — same pattern as the
+                # multiselect below.
+                st.session_state[fmt_key] = _default_box_format(proposed)
+            star = " \\*" if spec.get("required") else ""
+            st.markdown(f"**{spec['label']}**{star}")
+            if spec.get("help"):
+                st.caption(spec["help"])
+            return st.radio(
+                "Coordinate format",
+                options=list(_BOX_SUBFIELDS),
+                key=fmt_key,
+                horizontal=True,
+                label_visibility="collapsed",
+                persist_state="session",
+            )
+
+        def _render_multi(spec: Dict, default, label: str) -> List[str]:
+            state_key = f"{state_key_prefix}_{spec['key']}"
+            proposed_default = [default] if default in df.columns else []
+            stored = st.session_state.get(state_key)
+            if stored is None:
+                # Seed via session state instead of `default=` so the
+                # stale-column reset below never fights a default arg.
+                st.session_state[state_key] = proposed_default
+            else:
+                # A new upload changes the column universe — silently
+                # keeping stale picks would leave the field empty (the
+                # selectboxes self-heal via their index fallback; a
+                # multiselect doesn't). Drop unknown columns and fall
+                # back to the auto-proposal when nothing survives.
+                valid = [c for c in stored if c in df.columns]
+                if len(valid) != len(stored):
+                    st.session_state[state_key] = valid or proposed_default
+            chosen_cols = st.multiselect(
+                label,
+                options=list(df.columns),
+                key=state_key,
+                help=spec.get("help"),
+                persist_state="session",
+            )
+            if default and default in df.columns:
+                st.caption(f"✨ {detected_label} `{default}`")
+            return list(chosen_cols)
+
+        mapping = _assemble_mapping(
+            df,
+            field_specs,
+            proposed,
+            only_keys,
+            pick=_selectbox,
+            pick_box_format=_render_box_format,
+            pick_multi=_render_multi,
+        )
     return mapping
 
 

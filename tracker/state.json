@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 300,
+  "revision": 303,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -101,10 +101,10 @@
       "updated": "2026-08-12"
     },
     "CMP-13": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "CMP-5": {
@@ -608,10 +608,10 @@
       "updated": "2026-08-08"
     },
     "UX-37": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "UX-38": {
@@ -678,10 +678,10 @@
       "updated": "2026-08-12"
     },
     "UX-49": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "UX-50": {

@@ -151,3 +151,135 @@ class TestFixationFieldSpecs:
             assert field in optional_dests
         assert "noise_flag" not in spec_keys
         assert "noise_flag" not in optional_dests
+
+
+class TestTheResolverAgreesWithTheEditor:
+    """DATA-26: the mapping editor moves onto the **Data** page, whose body only
+    executes while that page is the active view — but the mapping has to drive
+    `prepare_data` on the Scanpath and Corpus views too.
+
+    So there are two ways to obtain a mapping: render the editor, or read the
+    session keys it wrote (`controls.resolve_column_mapping`). They share
+    `_assemble_mapping`, and these tests are what stops them drifting: a
+    divergence would show up as the app quietly normalizing under a mapping
+    other than the one the user can see.
+    """
+
+    @staticmethod
+    def _agreement_app():
+        import pandas as pd
+        import streamlit as st
+
+        from scanpath_studio.controls import (
+            FIX_FIELD_SPECS,
+            WORD_FIELD_SPECS,
+            column_mapping_ui,
+            resolve_column_mapping,
+        )
+        from scanpath_studio.data import propose_fix_schema, propose_word_schema
+
+        fix = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "paragraph": ["A"],
+                "CURRENT_FIX_X": [1.0],
+                "CURRENT_FIX_Y": [2.0],
+                "CURRENT_FIX_DURATION": [100],
+            }
+        )
+        words = pd.DataFrame(
+            {
+                "RECORDING_SESSION_LABEL": ["p1"],
+                "unique_paragraph_id": ["1_1_Ele"],
+                "IA_ID": [0],
+                "IA_LABEL": ["The"],
+                "IA_LEFT": [10.0],
+                "IA_RIGHT": [40.0],
+                "IA_TOP": [5.0],
+                "IA_BOTTOM": [25.0],
+            }
+        )
+        rendered_fix = column_mapping_ui(
+            fix,
+            table_label="Fixations",
+            state_key_prefix="col_map_fix",
+            field_specs=FIX_FIELD_SPECS,
+            proposed=propose_fix_schema(fix),
+        )
+        # The word table exercises the two shapes a plain selectbox doesn't:
+        # a `kind: "box"` field expanding into all eight box keys, and the
+        # multi-capable Trial ID.
+        rendered_words = column_mapping_ui(
+            words,
+            table_label="Words/IA",
+            state_key_prefix="col_map_words",
+            field_specs=WORD_FIELD_SPECS,
+            proposed=propose_word_schema(words),
+        )
+        st.session_state["_rendered"] = (rendered_fix, rendered_words)
+        st.session_state["_resolved"] = (
+            resolve_column_mapping(
+                fix, "col_map_fix", FIX_FIELD_SPECS, propose_fix_schema(fix)
+            ),
+            resolve_column_mapping(
+                words, "col_map_words", WORD_FIELD_SPECS, propose_word_schema(words)
+            ),
+        )
+
+    def test_they_produce_the_same_mapping(self):
+        at = AppTest.from_function(self._agreement_app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        rendered_fix, rendered_words = at.session_state["_rendered"]
+        resolved_fix, resolved_words = at.session_state["_resolved"]
+        assert resolved_fix == rendered_fix
+        assert resolved_words == rendered_words
+        # Not a vacuous pass: the box field really did expand into all
+        # eight keys, with the inactive format's four left at None.
+        from scanpath_studio.controls import _ALL_BOX_KEYS
+
+        assert set(_ALL_BOX_KEYS) <= set(rendered_words)
+        assert rendered_words["left"] == "IA_LEFT"
+        assert rendered_words["width"] is None
+
+    def test_a_user_override_is_what_the_resolver_reports(self):
+        """The point of reading the keys rather than re-proposing: an override
+        must survive a run in which the editor never renders."""
+        at = AppTest.from_function(self._agreement_app)
+        at.run(timeout=30)
+        at.selectbox(key="col_map_fix_participant").set_value("paragraph")
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        resolved_fix, _ = at.session_state["_resolved"]
+        assert resolved_fix["participant"] == "paragraph"
+
+    def test_a_stale_stored_column_falls_back_to_auto_detection(self):
+        """A new upload with different headers must not resolve to nothing —
+        the rendering editor self-heals via its index lookup, so this does too."""
+
+        def _stale_app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.controls import FIX_FIELD_SPECS, resolve_column_mapping
+            from scanpath_studio.data import propose_fix_schema
+
+            df = pd.DataFrame(
+                {
+                    "participant_id": ["p1"],
+                    "CURRENT_FIX_X": [1.0],
+                    "CURRENT_FIX_Y": [2.0],
+                    "CURRENT_FIX_DURATION": [100],
+                }
+            )
+            st.session_state["col_map_fix_participant"] = (
+                "a_column_from_the_last_upload"
+            )
+            st.session_state["_out"] = resolve_column_mapping(
+                df, "col_map_fix", FIX_FIELD_SPECS, propose_fix_schema(df)
+            )
+
+        at = AppTest.from_function(_stale_app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert at.session_state["_out"]["participant"] == "participant_id"

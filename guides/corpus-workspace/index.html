@@ -1719,6 +1719,13 @@ assignment.</p>
 </table>
 <p>The measure, aggregation, and spread controls apply to the current result. A
 minimum-readers threshold prevents sparse word estimates from looking complete.</p>
+<p><strong>Groups</strong> defines a cohort either by splitting one field or from an independent
+filter set. With a
+<a href="../../data-format/#participant-metadata">participant metadata</a> table attached,
+its fields are offered alongside the trial conditions, marked 👤 — a reader
+attribute answers a different question from a trial condition, so the picker
+says which is which. A field with more than 60 distinct values is not offered:
+that is a range question, and the trial filters have the slider for it.</p>
 <h2 id="move-between-summary-and-evidence">Move between summary and evidence<a class="headerlink" href="#move-between-summary-and-evidence" title="Permanent link">&para;</a></h2>
 <p>Download the table beside a result for downstream analysis. When a point or
 group looks unusual, return to the Scanpath view and inspect contributing

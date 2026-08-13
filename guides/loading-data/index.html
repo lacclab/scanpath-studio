@@ -1763,7 +1763,7 @@ and precomputed reading measures are optional but enable more features. Accepted
 files are CSV, TSV, Parquet, and Feather. See <a href="../../data-format/">Data format</a>
 for canonical fields.</p>
 <h2 id="use-the-setup-wizard">Use the setup wizard<a class="headerlink" href="#use-the-setup-wizard" title="Permanent link">&para;</a></h2>
-<p>The wizard is six steps. Work down them in order, or jump straight to one with
+<p>The wizard is seven steps. Work down them in order, or jump straight to one with
 the progress chips at the top; your answers are kept as you move around.</p>
 <ol>
 <li><strong>Your data</strong> — add the word/IA and fixation files; several files per table are
@@ -1779,6 +1779,11 @@ the progress chips at the top; your answers are kept as you move around.</p>
    unusual (word ID on fixations, timestamps, line index, character-AOI
    aggregation) is behind <strong>⚙️ Advanced</strong>.</li>
 <li><strong>Recording setup</strong> — see below.</li>
+<li><strong>About your readers</strong> — optional: attach a table with <strong>one row per reader</strong>
+   (native language, age, comprehension score). See
+   <a href="../../data-format/#participant-metadata">Participant metadata</a>; the same
+   attach-and-report UI is on the 🗂️ <strong>Data</strong> page for datasets that don't come
+   through this wizard.</li>
 <li><strong>Extra fields</strong> — keep any condition or analysis fields you will need later,
    and choose which become trial filters.</li>
 <li><strong>Name &amp; add</strong> — review every decision in one table, then <strong>Add dataset</strong>.</li>
@@ -1825,7 +1830,7 @@ how you know the value:</p>
 a skipped group is shown: with no physical width there is no honest pixels-per-
 degree or point-to-pixel conversion, so those are hidden rather than computed from
 a default.</p>
-<p>The answer travels with the dataset. It appears in the step-6 review table and
+<p>The answer travels with the dataset. It appears in the step-7 review table and
 under 🗂️ <strong>Data → Recording setup</strong>, rides a share link as <code>setup_prov</code>,
 and is written into the saved-setup JSON and into <code>plot_config.json</code> in a bulk
 export — so a figure set records that its monitor size was assumed, and whoever

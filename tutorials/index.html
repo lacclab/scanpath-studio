@@ -1683,15 +1683,28 @@ minutes; requires two readings sharing a text.</em></p>
 <li>Record the comparison settings with the figure or configuration export.</li>
 </ol>
 <h2 id="explore-the-corpus">Explore the corpus<a class="headerlink" href="#explore-the-corpus" title="Permanent link">&para;</a></h2>
-<p><strong>Outcome:</strong> a reader-, text-, or group-level question answered. <em>About 3
-minutes; requires variation across the loaded pool.</em></p>
+<p><strong>Outcome:</strong> one worked question answered — how a reader's average fixation
+duration moved across the experiment. <em>About 4 minutes; requires variation
+across the loaded pool.</em></p>
 <ol>
-<li>Switch to <strong>Corpus Analysis</strong> from the header.</li>
-<li>Choose <strong>Per text</strong>, <strong>Per reader</strong>, or <strong>Groups</strong> to match the unit of the
-   question.</li>
-<li>Interpret the sample size and distribution or effect together, then download
-   the displayed table.</li>
+<li>Switch to <strong>Corpus Analysis</strong> from the header. Your loaded data and filters
+   stay in place, so whatever you narrowed to on the Scanpath view is what gets
+   aggregated.</li>
+<li>Pick the <em>shape</em> of the question, not the chart. <strong>Per text</strong> — one text,
+   many readers. <strong>Per reader</strong> — one reader, all their trials. <strong>Groups</strong> — a
+   cohort, or two compared. For "did this reader speed up?", open <strong>Per
+   reader</strong>.</li>
+<li>Choose the reader on the left, then set <strong>View</strong> to <strong>Per-trial trend</strong> — one
+   point per trial in presentation order, the whole experiment on one axis.</li>
+<li>Set the measure to <strong>fixation duration</strong>. Each point is that trial's mean; a
+   downward slope is the reader settling in. Check the spread and the trial
+   count before believing it — one short trial moves a mean a long way.</li>
+<li>Optionally, <strong>Distribution vs cohort</strong> answers the companion question: is
+   this reader unusual, or is the whole cohort like this?</li>
 </ol>
+<p>With a <a href="../data-format/#participant-metadata">participant metadata</a> table
+attached, <strong>Groups</strong> can also split the cohort by a reader attribute — the
+group <strong>Field</strong> picker lists them marked 👤.</p>
 <p>See <a href="corpus-analysis/">Corpus analysis</a> for the longer worked workflow.</p>
 
 

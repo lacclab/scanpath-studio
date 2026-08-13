@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from time import perf_counter
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -123,6 +123,14 @@ class ExportOptions:
     # recorded in the per-trial manifest. Empty = off (the historical behaviour).
     title_pattern: str = ""
     caption_pattern: str = ""
+    # DATA-20 milestone 10: which columns of the attached participant table go
+    # into `metadata/participants.*`. `None` is every field (the default, and
+    # what a headless caller that knows nothing about this gets); a tuple is
+    # exactly those, always alongside the reader id; an **empty** tuple leaves
+    # the table out of the bundle. Reader attributes are the most re-identifying
+    # thing an export can carry, so the opt-out has to be per field rather than
+    # all-or-nothing.
+    metadata_fields: Optional[Tuple[str, ...]] = None
     # When True, export operates on the whole loaded dataset, ignoring the
     # sidebar "Filter trials" panel; the caller supplies the unfiltered frames.
     export_unfiltered: bool = False
@@ -824,6 +832,57 @@ def _preview_fields(combos: pd.DataFrame) -> dict:
     return fields
 
 
+def _render_metadata_field_picker(key_prefix: str):
+    """DATA-20 milestone 10 — which participant fields ride along in the bundle.
+
+    Renders nothing when no table is attached, and returns ``None`` — "no
+    restriction" — while every field is still selected, so an export made
+    without touching this control is byte-identical to one made before the
+    control existed.
+
+    It lives with the export options rather than beside the table on the 🗂️ Data
+    page because it is a decision about *this bundle*: the same attached table
+    can reasonably ship its full detail to a collaborator and only a group label
+    to a public repository.
+    """
+    import streamlit as st
+
+    from scanpath_studio import metadata as md
+
+    attached = md.active()
+    if attached is None or not attached.fields:
+        return None
+    names = [field.name for field in attached.fields]
+    labels = {field.name: field.label for field in attached.fields}
+    # Prune the persisted selection against *this* table's fields, the house
+    # `controls._drop_stale_multi` pattern. Without it, attaching a second table
+    # leaves a selection naming only the first one's columns; Streamlit filters
+    # invalid values out silently, the widget yields `[]`, and an empty tuple is
+    # "leave the table out of the bundle" — so a stale key would read as a
+    # deliberate omission and the participant file would just be missing.
+    state_key = f"{key_prefix}_meta_fields"
+    stored = st.session_state.get(state_key)
+    if isinstance(stored, (list, tuple)):
+        kept = [name for name in stored if name in names]
+        if not kept:
+            st.session_state.pop(state_key, None)
+        elif list(stored) != kept:
+            st.session_state[state_key] = kept
+    chosen = st.multiselect(
+        "Participant fields to include",
+        options=names,
+        default=names,
+        format_func=lambda name: labels.get(name, name),
+        key=state_key,
+        persist_state="session",
+        help="Columns of the attached participant table to write into "
+        "`metadata/participants.*`. The reader id is always included; clear "
+        "them all to leave the table out of the bundle entirely.",
+    )
+    ordered = tuple(name for name in names if name in set(chosen))
+    return None if len(ordered) == len(names) else ordered
+
+
 def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
     """The **Naming & labels** block: EXP-1's path pattern.
 
@@ -1008,6 +1067,7 @@ def render_export_options(
         else:
             table_format = str(st.session_state.get(f"{key_prefix}_fmt", "csv"))
 
+        metadata_fields = _render_metadata_field_picker(key_prefix)
         path_pattern = _render_naming_options(st, combos, key_prefix)
         if title_pattern or caption_pattern:
             st.caption(
@@ -1032,6 +1092,7 @@ def render_export_options(
         path_pattern=path_pattern,
         title_pattern=title_pattern,
         caption_pattern=caption_pattern,
+        metadata_fields=metadata_fields,
         export_unfiltered=export_unfiltered,
         scope=scope,
         scope_participant=scope_pid,
@@ -1235,6 +1296,23 @@ def pair_export(
         started_at=started,
     )
     return buffer.getvalue()
+
+
+def _selected_metadata_columns(frame, fields: Optional[Tuple[str, ...]]):
+    """``frame`` narrowed to ``fields`` (+ the reader id), or ``None`` to drop it.
+
+    ``fields is None`` keeps every column — the default, so nothing changes for
+    a caller that never heard of the opt-out. An **empty** tuple means the user
+    cleared the picker: the table is left out of the bundle entirely, rather
+    than shipped as a bare list of reader ids.
+    """
+    if frame is None or fields is None:
+        return frame
+    if not fields:
+        return None
+    keep = ["participant_id"] if "participant_id" in frame.columns else []
+    keep += [name for name in fields if name in frame.columns and name not in keep]
+    return frame[keep] if keep else None
 
 
 def _session_participant_metadata():
@@ -1708,15 +1786,18 @@ def bulk_export(
     # DATA-20: the participant table travels as its own per-grain table rather
     # than as columns smeared across the trial files — which is what keeps a
     # reader attribute distinguishable from a per-fixation measurement on the
-    # way out, exactly as it is on the way in. Whenever one is attached; there
-    # is no per-field exclusion list yet (that is milestone 10's opt-out).
-    # The frame is handed over out-of-band (the settings dict carries only its
-    # fingerprint, so the bulk-export cache signature stays honest — see the
-    # note in `tabs._render_export_panel`). API/CLI callers can pass the frame
-    # in `settings` directly, which still works.
+    # way out, exactly as it is on the way in. Whenever one is attached, narrowed
+    # to `options.metadata_fields` (milestone 10's per-field opt-out; `None` is
+    # every field). The frame is handed over out-of-band (the settings dict
+    # carries only its fingerprint, so the bulk-export cache signature stays
+    # honest — see the note in `tabs._render_export_panel`). API/CLI callers can
+    # pass the frame in `settings` directly, which still works.
     participant_metadata = (settings or {}).get("participant_metadata")
     if participant_metadata is None:
         participant_metadata = _session_participant_metadata()
+    participant_metadata = _selected_metadata_columns(
+        participant_metadata, options.metadata_fields
+    )
     if participant_metadata is not None and not participant_metadata.empty:
         for fmt in options.table_formats():
             progress.bytes_written += _write_table(

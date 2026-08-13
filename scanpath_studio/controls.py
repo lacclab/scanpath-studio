@@ -94,6 +94,12 @@ _LABEL_W = 0.36
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
 _LABEL_GAP = "xsmall"
 
+#: `label | field | note` for one column-mapping row (UX-52 round 3). Its own
+#: triple rather than `_LABEL_W`: the mapping renders full-width on the 🗂️ Data
+#: page and inside the upload wizard, not in the rail's ~28rem popover, so there
+#: is room for the "✨ auto-detected …" note beside the field instead of under it.
+_MAPPING_ROW_W = (0.24, 0.40, 0.36)
+
 #: Markdown emphasis, which a plain-text `title=` attribute would show as
 #: literal punctuation.
 _MD_MARKS = re.compile(r"\*\*|`")
@@ -1597,22 +1603,24 @@ def column_mapping_ui(
         return hosts["main"]
 
     def _row(field_key: str, field_label: str, help_text):
-        """A `label | field` pair; returns the field column to render into.
+        """A `label | field | note` triple; returns the field and note columns.
 
-        The caption ("✨ auto-detected …") goes in the *field* column too, so it
-        sits under the control it describes rather than under the label.
+        UX-52 round 3 — the "✨ auto-detected …" caption used to sit *under* the
+        control, so every row was two lines tall while the right half of a
+        full-width page sat empty. It now rides in a third column beside the
+        field: same information, half the vertical space.
         """
         host = _host_for(field_key)
-        label_col, field_col = host.columns(
-            [_LABEL_W, 1.0 - _LABEL_W], gap=_LABEL_GAP, vertical_alignment="center"
+        label_col, field_col, note_col = host.columns(
+            _MAPPING_ROW_W, gap=_LABEL_GAP, vertical_alignment="center"
         )
         _row_label(label_col, field_label, help_text)
-        return field_col
+        return field_col, note_col
 
     def _selectbox(field_key: str, field_label: str, help_text=None) -> Optional[str]:
         default = proposed.get(field_key)
         index = options.index(default) if default in options else 0
-        field_col = _row(field_key, field_label, help_text)
+        field_col, note_col = _row(field_key, field_label, help_text)
         chosen = field_col.selectbox(
             field_label,
             options=options,
@@ -1635,11 +1643,11 @@ def column_mapping_ui(
         # app normalized without it.
         if default and default in df.columns:
             if chosen == NONE_OPTION:
-                field_col.caption(f"✨ {detected_label} `{default}` · not used")
+                note_col.caption(f"✨ {detected_label} `{default}` · not used")
             elif chosen != default:
-                field_col.caption(f"✨ {detected_label} `{default}` · overridden")
+                note_col.caption(f"✨ {detected_label} `{default}` · overridden")
             else:
-                field_col.caption(f"✨ {detected_label} `{default}`")
+                note_col.caption(f"✨ {detected_label} `{default}`")
         return None if chosen == NONE_OPTION else chosen
 
     host = container if container is not None else st.container()
@@ -1731,7 +1739,7 @@ def column_mapping_ui(
                 valid = [c for c in stored if c in df.columns]
                 if len(valid) != len(stored):
                     st.session_state[state_key] = valid or proposed_default
-            field_col = _row(spec["key"], label, spec.get("help"))
+            field_col, note_col = _row(spec["key"], label, spec.get("help"))
             chosen_cols = field_col.multiselect(
                 label,
                 options=list(df.columns),
@@ -1741,7 +1749,7 @@ def column_mapping_ui(
                 persist_state="session",
             )
             if default and default in df.columns:
-                field_col.caption(f"✨ {detected_label} `{default}`")
+                note_col.caption(f"✨ {detected_label} `{default}`")
             return list(chosen_cols)
 
         mapping = _assemble_mapping(

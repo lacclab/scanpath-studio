@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 331,
+  "revision": 349,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -87,6 +87,13 @@
       "updated": "2026-08-13"
     },
     "BUG-26": {
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-13"
+    },
+    "BUG-27": {
       "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
@@ -207,7 +214,7 @@
     "DATA-20": {
       "status": "Review",
       "priority": "Normal",
-      "implementationBrief": "",
+      "implementationBrief": "1. finish it now.\n2. yes it should be a step in the upload wizard (that should be the main location).\n3. Continue with everything, including this.",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -240,10 +247,10 @@
       "updated": "2026-08-13"
     },
     "DATA-26": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "ENG-19": {
@@ -357,6 +364,20 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-08"
+    },
+    "ENG-38": {
+      "status": "In progress",
+      "priority": "Normal",
+      "implementationBrief": "Great start!\nI'm thinking that \"Whats left\" should be also just for you (working on the item), not it is kind of both for you and for me. Think of me as a tem lead and you as a developer. \nAll open things for me, including \"My review\" should be put in the Decisions to settle part",
+      "archived": false,
+      "updated": "2026-08-13"
+    },
+    "ENG-39": {
+      "status": "Planned",
+      "priority": "Normal",
+      "implementationBrief": "1. Umm list , currently just with Maya and Shubi. \n2. Maybe a separate claim button, because it is relevant at any stage\n3 + 4 Choose what suites best. My goal is for this to work seamlessy, without any manual work from my side, and without unecessary complications for you when working concurrently with someone else. You can assume that we do best-effort not to conflict specific items, and it is just the two of us (ENG-32 will be the full generalization)",
+      "archived": false,
+      "updated": "2026-08-13"
     },
     "EXP-3": {
       "status": "Closed",
@@ -650,10 +671,10 @@
       "updated": "2026-08-12"
     },
     "UX-40": {
-      "status": "In progress",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "generally yes. \nCould show specifically average fixation duration over the whole experiment (need to switch to per-reader and then select view: per-trial trend).",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "UX-41": {
@@ -720,10 +741,10 @@
       "updated": "2026-08-13"
     },
     "UX-52": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
-      "implementationBrief": "What about \"labels beside their fields\"?\nand do we really need Screen canvas width and height? or at least put under an advanced toggle? In general the column nampping can be over welmhing\n\nand maybe move 🔎 What's in this dataset to the top?",
-      "archived": false,
+      "implementationBrief": "1. I think keep as is now.\n2. stay closed\n3. I think promote? not sure.\n4. thats great that it also applies inside the upload wizard.\n\nHow about moving the \"automatically detected\" part to be on the same line as well? it will save vertical space and utilize unused horizontal space",
+      "archived": true,
       "updated": "2026-08-13"
     },
     "VAL-1": {
@@ -755,9 +776,9 @@
       "updated": "2026-08-04"
     },
     "VAL-5": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "I think the full plan is a bit of an overkill for my needs. It is more for internal usage. \nNot sure about (1).\nFor (2) i would go with all.\nCan put (3) on hold for now, let me first go over the computations.\n(4) I updated BUG-25 implementation notes. Follow it and fix that via BUG-25. \n(5) I don't know, I don't think that I understand the question.\n(6) Sounds big and not necessary, I think we can skip these link anchors",
+      "implementationBrief": "Great. \nAdd a followup task for me to manually review all computations",
       "archived": false,
       "updated": "2026-08-13"
     },

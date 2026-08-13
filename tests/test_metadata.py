@@ -426,3 +426,340 @@ class TestAnImpossibleNarrowingEmptiesThePool:
         assert built.report.conflicting == ("p2",)
         assert built.report.matched == again.report.matched == ("p1",)
         assert again.report.only_in_data == ()
+
+
+# -----------------------------------------------------------------------------
+# DATA-20 round 2 — the three surfaces the first pass left out.
+# -----------------------------------------------------------------------------
+
+
+class TestCorpusGroupingByAReaderAttribute:
+    """Milestone: group cohorts in Corpus Analysis by a metadata field.
+
+    The whole design rests on one translation — a participant-grain constraint
+    *is* a participant constraint — so these assert that a metadata group
+    arrives at `aggregation.group_mask` as an ordinary `participant_id` spec and
+    that the table is never joined onto the frames.
+    """
+
+    @staticmethod
+    def _attached(languages=("Hebrew", "English", "Hebrew")):
+        ids = [f"p{i + 1}" for i in range(len(languages))]
+        frame = pd.DataFrame(
+            {"participant_id": ids, "native_language": list(languages)}
+        )
+        return md.build_participant_metadata(
+            frame, "participant_id", source_name="readers.csv", participants=ids
+        )
+
+    def test_a_metadata_group_becomes_a_participant_spec(self, monkeypatch):
+        from scanpath_studio import aggregation, tabs
+
+        attached = self._attached()
+        monkeypatch.setattr(md, "active", lambda: attached)
+
+        spec = tabs._group_spec("meta:native_language", ["Hebrew"])
+        assert spec == {"participant_id": ["p1", "p3"]}, spec
+
+        # And it selects exactly those readers' rows — no join, no new column.
+        frame = pd.DataFrame(
+            {"participant_id": ["p1", "p2", "p3"], "duration_ms": [1.0, 2.0, 3.0]}
+        )
+        selected = aggregation.apply_group(frame, spec)
+        assert selected["participant_id"].tolist() == ["p1", "p3"]
+        assert "native_language" not in selected.columns
+
+    def test_a_group_matching_nobody_selects_nothing(self, monkeypatch):
+        """`group_mask` reads an empty value list as *no constraint*, so an
+        unmatched metadata group has to resolve to an impossible id instead —
+        otherwise a group that should be empty would quietly select every row."""
+        from scanpath_studio import aggregation, tabs
+
+        attached = self._attached()
+        monkeypatch.setattr(md, "active", lambda: attached)
+
+        spec = tabs._group_spec("meta:native_language", ["Klingon"])
+        frame = pd.DataFrame({"participant_id": ["p1", "p2"], "v": [1.0, 2.0]})
+        assert aggregation.apply_group(frame, spec).empty
+
+    def test_a_real_column_is_untouched_by_the_translation(self, monkeypatch):
+        from scanpath_studio import tabs
+
+        monkeypatch.setattr(md, "active", lambda: self._attached())
+        assert tabs._group_spec("difficulty_level", ["Adv"]) == {
+            "difficulty_level": ["Adv"]
+        }
+        assert tabs._group_spec("difficulty_level", []) == {}
+
+    def test_the_picker_marks_where_a_field_came_from(self, monkeypatch):
+        """A trial condition and a reader attribute answer different questions;
+        a picker that hid the difference would invite the wrong one."""
+        from scanpath_studio import tabs
+
+        monkeypatch.setattr(md, "active", lambda: self._attached())
+        assert tabs._metadata_group_fields() == ["meta:native_language"]
+        assert tabs._pretty_col("meta:native_language") == "👤 Native language"
+
+    def test_a_single_valued_field_is_not_offered(self, monkeypatch):
+        """Nothing to split — and a one-group comparison is not a comparison."""
+        from scanpath_studio import tabs
+
+        monkeypatch.setattr(
+            md, "active", lambda: self._attached(("Hebrew", "Hebrew", "Hebrew"))
+        )
+        assert tabs._metadata_group_fields() == []
+
+    def test_the_group_values_come_from_the_table_not_the_frames(self, monkeypatch):
+        """Neither frame carries the column, so the value picker has to read the
+        attached table — and only the *loaded* readers' values (`joined_frame`),
+        or it would offer a group that can only ever be empty."""
+        from scanpath_studio import tabs
+
+        ids = ["p1", "p2", "p3"]
+        frame = pd.DataFrame(
+            {
+                "participant_id": ids + ["p9"],
+                "native_language": ["Hebrew", "English", "Hebrew", "Klingon"],
+            }
+        )
+        attached = md.build_participant_metadata(
+            frame, "participant_id", source_name="readers.csv", participants=ids
+        )
+        monkeypatch.setattr(md, "active", lambda: attached)
+        words = pd.DataFrame({"participant_id": ids})
+        assert tabs._both_frame_values(words, words, "meta:native_language") == [
+            "English",
+            "Hebrew",
+        ]
+
+
+class TestTheExportOptOut:
+    """Milestone 10 — per-field control over what leaves in the bundle."""
+
+    @staticmethod
+    def _frame():
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1", "p2"],
+                "native_language": ["Hebrew", "English"],
+                "age": [24, 31],
+            }
+        )
+
+    def test_none_ships_every_field(self):
+        from scanpath_studio.export import _selected_metadata_columns
+
+        frame = self._frame()
+        assert _selected_metadata_columns(frame, None) is frame
+
+    def test_a_selection_keeps_the_id_and_those_fields_only(self):
+        from scanpath_studio.export import _selected_metadata_columns
+
+        out = _selected_metadata_columns(self._frame(), ("native_language",))
+        assert list(out.columns) == ["participant_id", "native_language"]
+
+    def test_clearing_every_field_leaves_the_table_out(self):
+        """Not "ship a bare list of reader ids" — that is the one thing an
+        opt-out must not do."""
+        from scanpath_studio.export import _selected_metadata_columns
+
+        assert _selected_metadata_columns(self._frame(), ()) is None
+
+    def test_an_unknown_field_name_is_ignored_not_an_error(self):
+        """A saved selection can outlive the table it named."""
+        from scanpath_studio.export import _selected_metadata_columns
+
+        out = _selected_metadata_columns(self._frame(), ("age", "shoe_size"))
+        assert list(out.columns) == ["participant_id", "age"]
+
+    def test_the_choice_reaches_the_zip(self, tmp_path):
+        import io
+        import zipfile
+
+        from scanpath_studio import api
+        from scanpath_studio.export import ExportOptions, bulk_export
+
+        words, fixations = api.load_sample_data()[:2]
+        combos = (
+            fixations[["participant_id", "trial_id"]].drop_duplicates().head(1).copy()
+        )
+        keep = combos.iloc[0]
+        words = words[
+            (words.participant_id == keep.participant_id)
+            & (words.trial_id == keep.trial_id)
+        ]
+        fixations = fixations[
+            (fixations.participant_id == keep.participant_id)
+            & (fixations.trial_id == keep.trial_id)
+        ]
+
+        def _names(fields):
+            data, _progress = bulk_export(
+                combos,
+                words,
+                fixations,
+                canvas_width=1200,
+                canvas_height=800,
+                base_font_size=12,
+                font_family="monospace",
+                x_field="x",
+                y_field="y",
+                options=ExportOptions(
+                    include_png=False,
+                    include_svg=False,
+                    include_plot_config=False,
+                    include_fixations=True,
+                    metadata_fields=fields,
+                ),
+                settings={"participant_metadata": self._frame()},
+            )
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                members = zf.namelist()
+                table = (
+                    pd.read_csv(io.BytesIO(zf.read("metadata/participants.csv")))
+                    if "metadata/participants.csv" in members
+                    else None
+                )
+            return members, table
+
+        _, full = _names(None)
+        assert list(full.columns) == ["participant_id", "native_language", "age"]
+
+        _, narrowed = _names(("age",))
+        assert list(narrowed.columns) == ["participant_id", "age"]
+
+        members, _ = _names(())
+        assert not any(name.startswith("metadata/") for name in members), members
+
+
+class TestGroupingEndToEnd:
+    """The Groups subtab offers the attached field and splits the cohort by it."""
+
+    @pytest.mark.timeout(180)
+    def test_a_reader_attribute_appears_in_the_group_field_picker(self):
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio.constants import _VIEW_CORPUS
+        from tests.conftest import APP_SCRIPT, pin_view
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        readers = list(at.multiselect(key="filter_participants").options)
+        assert len(readers) >= 2, readers
+
+        # Half the cohort in each language, so the split has two real groups.
+        languages = ["Hebrew" if i % 2 == 0 else "English" for i in range(len(readers))]
+        _attach(at, readers, languages)
+        pin_view(at, _VIEW_CORPUS)
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+
+        fields = [s for s in at.selectbox if s.key and s.key.endswith("_field")]
+        assert fields, "no group field picker on the Corpus view"
+        # `options` are the *rendered* labels (AppTest applies `format_func`),
+        # which is the half that matters here: the picker has to say the field
+        # describes a reader, not this trial.
+        offered = {option for picker in fields for option in picker.options}
+        assert "👤 Native language" in offered, sorted(offered)
+
+        # Its own picker is unchanged: a real frame column is still offered
+        # under its plain name, so the two provenances sit side by side.
+        assert "Difficulty" in offered, sorted(offered)
+        # (Selecting it and reading back the value multiselect is not asserted
+        # here: `pin_view` is a one-shot request, and re-pinning it to stay on
+        # the Corpus view discards a pending `set_value`. What the selection
+        # *does* is covered above, on the pure translation.)
+
+
+class TestTheWizardStep:
+    """DATA-20 round 2 — *About your readers* is a step of the upload wizard.
+
+    The user's call: the wizard is the **main** home, because a first-time
+    uploader is answering exactly this question and would otherwise never meet
+    the feature. The Data-page section stays, for the sources the wizard never
+    runs for.
+    """
+
+    @staticmethod
+    def _uploaded(monkeypatch):
+        from scanpath_studio import app
+
+        words = pd.DataFrame(
+            {
+                "reader": ["r0"] * 3,
+                "trial": ["t1"] * 3,
+                "IA_ID": [0, 1, 2],
+                "IA_LABEL": ["the", "cat", "sat"],
+                "IA_LEFT": [0, 80, 160],
+                "IA_RIGHT": [80, 160, 240],
+                "IA_TOP": [0, 0, 0],
+                "IA_BOTTOM": [40, 40, 40],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "reader": ["r0", "r0"],
+                "trial": ["t1", "t1"],
+                "CURRENT_FIX_X": [20.0, 100.0],
+                "CURRENT_FIX_Y": [20.0, 20.0],
+                "CURRENT_FIX_DURATION": [200, 220],
+                "CURRENT_FIX_START": [0, 200],
+            }
+        )
+        monkeypatch.setattr(
+            app,
+            "_read_uploaded_frame",
+            lambda **kw: (
+                words
+                if kw["state_prefix"] == "col_map_words"
+                else fixations
+                if kw["state_prefix"] == "col_map_fix"
+                else pd.DataFrame()
+            ),
+        )
+
+    @pytest.mark.timeout(180)
+    def test_the_step_renders_the_attach_panel(self, monkeypatch):
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio import app, wizard_shell
+        from tests.conftest import APP_SCRIPT
+
+        self._uploaded(monkeypatch)
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["setup_complete"] = False
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+
+        # The registry gained the step, in its place and optional.
+        step = wizard_shell.STEPS_BY_ID["readers"]
+        assert (step.number, step.required) == (5, False)
+        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4, 5, 6, 7]
+
+        # …and its body is the participant-table panel: the id-column picker is
+        # the widget that only exists once a table is being attached, so the
+        # uploader is what proves the step rendered.
+        uploader_keys = [u.key for u in at.file_uploader if u.key]
+        assert "participant_metadata_upload" in uploader_keys, uploader_keys
+
+    @pytest.mark.timeout(180)
+    def test_the_finished_wizard_does_not_render_it_twice(self, monkeypatch):
+        """The collapsed *Data & mapping* review panel and the 🗂️ Data page's
+        own section would be two widgets on one key — Streamlit raises on that,
+        so this is a crash test, not a cosmetic one."""
+        from streamlit.testing.v1 import AppTest
+
+        from scanpath_studio import app
+        from tests.conftest import APP_SCRIPT, pin_data_view
+
+        self._uploaded(monkeypatch)
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
+        at.session_state["setup_complete"] = True
+        pin_data_view(at)
+        at.run(timeout=120)
+        assert not at.exception, at.exception
+        keys = [u.key for u in at.file_uploader if u.key]
+        assert keys.count("participant_metadata_upload") == 1, keys

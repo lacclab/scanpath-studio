@@ -95,8 +95,14 @@ STEPS: tuple[WizardStep, ...] = (
     WizardStep(
         "setup", 4, "Recording setup", "The screen and font it was recorded on", True
     ),
-    WizardStep("fields", 5, "Extra fields", "What else to carry along", False),
-    WizardStep("review", 6, "Name & add", "Check it over and add the dataset", True),
+    # DATA-20: the participant table's main home. It was a Data-page section
+    # only, which every source can reach — but a first-time uploader never sees
+    # it during setup, and "what do you know about your readers" is a setup
+    # question. Optional, and after `identity`, which settles the reader id it
+    # joins on.
+    WizardStep("readers", 5, "About your readers", "Optional participant table", False),
+    WizardStep("fields", 6, "Extra fields", "What else to carry along", False),
+    WizardStep("review", 7, "Name & add", "Check it over and add the dataset", True),
 )
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}

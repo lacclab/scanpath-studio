@@ -28,7 +28,7 @@ for canonical fields.
 
 ## Use the setup wizard
 
-The wizard is six steps. Work down them in order, or jump straight to one with
+The wizard is seven steps. Work down them in order, or jump straight to one with
 the progress chips at the top; your answers are kept as you move around.
 
 1. **Your data** — add the word/IA and fixation files; several files per table are
@@ -44,9 +44,14 @@ the progress chips at the top; your answers are kept as you move around.
    unusual (word ID on fixations, timestamps, line index, character-AOI
    aggregation) is behind **⚙️ Advanced**.
 4. **Recording setup** — see below.
-5. **Extra fields** — keep any condition or analysis fields you will need later,
+5. **About your readers** — optional: attach a table with **one row per reader**
+   (native language, age, comprehension score). See
+   [Participant metadata](../data-format.md#participant-metadata); the same
+   attach-and-report UI is on the 🗂️ **Data** page for datasets that don't come
+   through this wizard.
+6. **Extra fields** — keep any condition or analysis fields you will need later,
    and choose which become trial filters.
-6. **Name & add** — review every decision in one table, then **Add dataset**.
+7. **Name & add** — review every decision in one table, then **Add dataset**.
 
 After loading, open the 🗂️ **Data** page and confirm that both tables share the
 expected trials and coordinate range.
@@ -70,7 +75,7 @@ a skipped group is shown: with no physical width there is no honest pixels-per-
 degree or point-to-pixel conversion, so those are hidden rather than computed from
 a default.
 
-The answer travels with the dataset. It appears in the step-6 review table and
+The answer travels with the dataset. It appears in the step-7 review table and
 under 🗂️ **Data → Recording setup**, rides a share link as `setup_prov`,
 and is written into the saved-setup JSON and into `plot_config.json` in a bulk
 export — so a figure set records that its monitor size was assumed, and whoever

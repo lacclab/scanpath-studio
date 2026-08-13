@@ -154,9 +154,18 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 "Verify what was parsed",
                 "**🔎 What's in this dataset** opens on the counts — the quickest "
                 "check that the mapping worked. The raw and derived tables fold "
-                "open below them, and **🧾 Trial identity** says whether one trial "
-                "id really is one reading.",
+                "open below them.",
                 ".st-key-tutorial_data_inspection",
+                view=_VIEW_DATA,
+            ),
+            TutorialStep(
+                "Check one trial id is one reading",
+                "**🧾 Trial identity** checks the whole dataset, before any "
+                "filtering, and says so either way. A warning here means the "
+                "Trial ID above is missing a column — several readings are being "
+                "drawn as one scanpath, which renders happily as a reading with a "
+                "lot of regressions.",
+                ".st-key-tutorial_trial_identity",
                 view=_VIEW_DATA,
             ),
             TutorialStep(
@@ -289,25 +298,61 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="explore_corpus",
         title="Explore a corpus question",
-        outcome="Finish in Corpus Analysis with a reader/text/group question answered.",
-        estimated_time="3 min",
+        outcome=(
+            "Finish having answered one worked question — how a reader's average "
+            "fixation duration moved across the experiment."
+        ),
+        estimated_time="4 min",
         prerequisite="Variation across trials, readers, or texts",
         availability="has_corpus_variation",
         completion_test="Corpus Analysis opened",
         docs_url=f"{DOCS_TUTORIALS_URL}#explore-the-corpus",
+        # UX-40 round 2: this was two steps where the others are four or five,
+        # and it named the three subtabs without answering anything. It now walks
+        # one real question end to end — the user's own example — because "here
+        # are three subtabs" is a menu, not a tutorial.
         steps=(
             TutorialStep(
                 "Switch analysis level",
                 "Open **Corpus Analysis** to aggregate instead of inspecting one trial. "
-                "Your loaded data and filters stay in place.",
+                "Your loaded data and filters stay in place, so whatever you narrowed "
+                "to on the Scanpath view is what gets aggregated here.",
                 NAV_SELECTOR,
             ),
             TutorialStep(
-                "Answer one corpus question",
-                "Choose Per text, Per reader, or Groups and read the sample size with the "
-                "effect or distribution—not only the plotted mean.",
+                "Pick the question, not the chart",
+                "Three subtabs, three shapes of question. **Per text** — one text, many "
+                "readers. **Per reader** — one reader, all their trials. **Groups** — a "
+                "cohort, or two compared. Our worked question is *did this reader speed "
+                "up over the experiment?*, so open **Per reader**.",
+                ".st-key-tutorial_corpus_subtabs",
+                view=_VIEW_CORPUS,
+            ),
+            TutorialStep(
+                "Choose the reader and the view",
+                "Pick the reader on the left, then set **View** to **Per-trial trend**. "
+                "That plots one point per trial in presentation order — the whole "
+                "experiment on one axis, rather than a single trial's dynamics.",
+                ".st-key-tutorial_per_reader_view",
+                view=_VIEW_CORPUS,
+            ),
+            TutorialStep(
+                "Read average fixation duration across the experiment",
+                "Set the measure to **fixation duration**; each point is that trial's "
+                "mean. A downward slope is the reader settling in — but check the "
+                "spread and the trial count before believing it, because one short "
+                "trial moves a mean a long way.",
                 ".st-key-tutorial_corpus_analysis",
                 view=_VIEW_CORPUS,
+            ),
+            TutorialStep(
+                "Put it against the cohort",
+                "**Distribution vs cohort** answers the companion question — is this "
+                "reader unusual, or is the whole cohort like this? Read the sample size "
+                "with the effect, never the plotted mean on its own.",
+                ".st-key-tutorial_per_reader_view",
+                view=_VIEW_CORPUS,
+                optional=True,
             ),
         ),
     ),
@@ -1595,7 +1640,7 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "📂 Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset in six "
+            "Turn your eye-tracking tables into an interactive dataset in seven "
             "steps: upload, tell us which columns mean what, say how the "
             "recording was set up, name it. Follow along with **Next** — the "
             "wizard opens each step as you go — or **Skip** to dive in."
@@ -1648,7 +1693,18 @@ _WIZARD_GUIDE_STEPS = [
         "step_id": "setup",
     },
     {
-        "title": "5 · Extra fields",
+        "title": "5 · About your readers",
+        "body": (
+            "Optional. Attach a table with **one row per reader** — language, "
+            "age, comprehension score. The join is reported in full before "
+            "anything uses it, and the columns then behave like fields in your "
+            "data: filters, chips, sorting, grouping, export."
+        ),
+        "selector": ".st-key-wiz_open_readers",
+        "step_id": "readers",
+    },
+    {
+        "title": "6 · Extra fields",
         "body": (
             "Optionally keep extra columns to colour and analyse by, and choose "
             "which trial-level conditions become filters. Fewer columns is faster."
@@ -1657,7 +1713,7 @@ _WIZARD_GUIDE_STEPS = [
         "step_id": "fields",
     },
     {
-        "title": "6 · Name & add",
+        "title": "7 · Name & add",
         "body": (
             "Check the review table — every decision, its value, and how it is "
             "known. **⬇️ Download setup** saves the mapping for next time; "

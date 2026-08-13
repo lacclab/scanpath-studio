@@ -2,7 +2,7 @@
 
 # Computations & methodology
 
-Register version **1** · 64 entries across 9 categories.
+Register version **1** · 65 entries across 9 categories.
 
 Every operation that derives or semantically changes a value you can see, export, or fetch through the API is listed here with its formula, its units, and how far it has actually been verified. Pure layout and byte-preserving file I/O are out of scope; filtering, precedence and assignment are in, because they change *which observations* a result stands for.
 
@@ -75,7 +75,7 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 | `agg.reader_summary` | Per-reader summary | Statistical aggregation / test | ms, px, counts, proportions | Partially verified |
 | `agg.trial_summary` | Per-trial summary | Statistical aggregation / test | ms, counts | Partially verified |
 | `agg.normalize` | Normalized measure column | Statistical aggregation / test | — | Partially verified |
-| `agg.landing_curve` | Landing-position curve | Statistical aggregation / test | letters | Partially verified |
+| `agg.landing_curve` | Landing-position curve | Statistical aggregation / test | fraction of the word (0–1), or px with `as_fraction=False` | Partially verified |
 | `agg.over_time` | Trend over time | Statistical aggregation / test | — | Partially verified |
 | `sim.nld` | Normalized Levenshtein distance | Similarity | dimensionless (0–1) | Verified |
 | `sim.aoi_sequence` | AoI sequence | Similarity | — | Verified |
@@ -83,7 +83,8 @@ Verification tiers: **A** hand-calculated synthetic oracle · **B** independent 
 | `geom.pixels_per_degree` | Pixels per degree of visual angle | Unit / coordinate conversion | px / degree | Verified |
 | `geom.font_pt_to_px` | Font point size to pixels | Unit / coordinate conversion | px | Verified |
 | `geom.word_box_bounds` | Corrected word-box edges | Unit / coordinate conversion | px | Partially verified |
-| `geom.word_box_space_px` | Character width estimate | Unit / coordinate conversion | px / character | Verified |
+| `geom.word_box_space_px` | Inter-word padding baked into each box | Unit / coordinate conversion | px | Verified |
+| `geom.word_char_advance` | Character advance within a word | Unit / coordinate conversion | px / character | Verified |
 | `disp.marker_sizes` | Fixation marker sizing | Display / export transformation | px (marker diameter) | Intentional convention |
 | `disp.axis_ranges` | Axis ranges and inversion | Display / export transformation | px | Intentional convention |
 | `disp.true_scale` | True-scale text rendering | Display / export transformation | — | Intentional convention |
@@ -317,13 +318,14 @@ Label each outgoing saccade by its reading role (VIZ-8).
 
 Fold a short fixation into a neighbour within a character distance.
 
-**Formula.** A fixation below the short threshold is merged into the nearer adjacent fixation when that neighbour is within the merge distance, expressed in characters and converted to px via the word-box character width. Durations add; position follows the survivor.
+**Formula.** A fixation below the short threshold is merged into the nearer adjacent fixation when that neighbour is within the merge distance, expressed in characters and converted to px via `geom.word_char_advance`. Durations add; position follows the survivor.
 
 | | |
 | --- | --- |
 | **Output** | A reduced fixation frame |
 | **Unit** | ms threshold, characters distance |
 | **Missing & edge cases** | Off by default; original rows stay available. |
+| **Precedence & caveats** | #BUG-27: the conversion reads the shared letter scale. It used to divide by `len(text)`, so on a tiling corpus "within 1 character" meant 1.25 characters for a four-letter word and 1.07 for a fifteen-letter one — a threshold whose meaning varied with the word it was applied to. |
 | **Reference** | A common cleaning step; thresholds are the user's choice. |
 | **Code** | `scanpath_studio/preprocessing.py:merge_short_fixations` |
 | **Consumers** | UI, API, Export |
@@ -409,12 +411,13 @@ One row per saccade, with amplitude, angle and class.
 
 Per-character boxes derived from word boxes.
 
-**Formula.** Each word box is divided evenly by its character count.
+**Formula.** Character `k` of a word spans `x + (k−1) × advance` to `x + k × advance`, where the advance is `geom.word_char_advance`.
 
 | | |
 | --- | --- |
 | **Unit** | px |
 | **Missing & edge cases** | Proportional fonts make this an approximation. |
+| **Precedence & caveats** | #BUG-27: the advance is the shared letter scale, not `width / len(text)` — which on a tiling corpus stretched the glyph row across the trailing inter-word padding, so each character box after the first sat progressively further right than its glyph. |
 | **Code** | `scanpath_studio/preprocessing.py:character_grid` |
 | **Consumers** | UI, Export, Data Inspection |
 | **Tests** | `tests/test_preprocessing.py` |
@@ -589,13 +592,14 @@ Whether a word was returned to, or left backwards.
 
 Where in the word the first fixation landed, in letters.
 
-**Formula.** `char_width = width / max(len(text), 1)`; `offset = first_fix_x − word.x` (LTR) or `word.x + width − first_fix_x` (RTL); `landing_position = offset / char_width + 1` — so the first letter is 1.
+**Formula.** `char_width = geom.word_char_advance`; `offset = first_fix_x − word.x` (LTR) or `word.x + width − first_fix_x` (RTL); `landing_position = offset / char_width + 1` — so the first letter starts at 1 and its centre is 1.5.
 
 | | |
 | --- | --- |
 | **Output** | initial_landing_position |
 | **Unit** | letters |
 | **Missing & edge cases** | No first-pass fixation, zero width, or no text ⇒ NaN. |
+| **Precedence & caveats** | VAL-5: the scale is `geom.word_char_advance`, not the local `width / len(text)` this used before — on a tiling corpus that divided a box of `n + 1` advances by `n` characters, reporting every landing ~`(n+1)/n` too far into the word. |
 | **Reference** | Assumes a monospaced advance within the word box — exact for the app's monospace default, approximate for proportional fonts. |
 | **Code** | `scanpath_studio/measures.py:compute_per_word_measures` |
 | **Consumers** | UI, API, Export, Corpus Analysis |
@@ -885,11 +889,12 @@ Rescale a measure for cross-reader comparison.
 
 Distribution of initial landing positions by word length.
 
-**Formula.** Histogram of `measure.landing_position`, binned per word length.
+**Formula.** Histogram of the landing position as a *fraction* of the word's glyph run — `(first_fix_x − word.x) / (len(text) × geom.word_char_advance)`, so 0 is the first glyph's left edge and 1 the last glyph's right edge — binned per word length.
 
 | | |
 | --- | --- |
-| **Unit** | letters |
+| **Unit** | fraction of the word (0–1), or px with `as_fraction=False` |
+| **Precedence & caveats** | #BUG-27: measured from the word's `x` and its glyph run, not from the `geom.word_box_bounds` AOI edge and the padded `width` — those put 0 half an inter-word space before the word and 1 half a space after it, so this disagreed with `measure.landing_position` on the same landing. |
 | **Code** | `scanpath_studio/aggregation.py:landing_positions` |
 | **Consumers** | Corpus Analysis |
 | **Tests** | `tests/test_aggregation.py` |
@@ -995,24 +1000,40 @@ Where one word's box ends and the next begins (BUG-11).
 | | |
 | --- | --- |
 | **Unit** | px |
-| **Precedence & caveats** | Used by `assign.fixation_to_word` and by `agg.word_rates`' left edge. **Known inconsistency:** the letter-position formulas in `measures.py` and `preprocessing.py` measure from the *raw* word `x`, not from this corrected edge. Recorded here rather than silently changed — an audit must not move scientific results under a documentation diff. |
+| **Precedence & caveats** | Used by `assign.fixation_to_word` and by `agg.word_rates`' left edge — the boundary *between* words. A position *inside* a word goes through `geom.word_char_advance` instead, whose origin is the word's `x` (its first glyph); the two are half an advance apart by construction, which is what #BUG-27 settled. |
 | **Code** | `scanpath_studio/measures.py:word_box_bounds` |
 | **Consumers** | UI, API, Corpus Analysis |
 | **Tests** | `tests/test_word_box_geometry.py`, `tests/test_word_id_offset.py` |
 | **Verification** | tier A, C — **Partially verified** |
 
-### `geom.word_box_space_px` — Character width estimate
+### `geom.word_box_space_px` — Inter-word padding baked into each box
 
-Pixels per character, from the word boxes themselves.
+Detects a tiling layout that carries one trailing space per box.
 
-**Formula.** Median of `width / len(text)` across the trial's words.
+**Formula.** Median of `width / (len(text) + 1)` across one trial's words — the advance — reported only when the boxes are consistently that wide **and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. 'these AOIs are glyph-tight, don't touch them'.
+
+| | |
+| --- | --- |
+| **Unit** | px |
+| **Missing & edge cases** | No usable words ⇒ 0.0 (no correction), never a guess. |
+| **Code** | `scanpath_studio/measures.py:word_box_space_px` |
+| **Consumers** | UI, API, Export |
+| **Tests** | `tests/test_measures.py` |
+| **Verification** | tier A, C — **Verified** |
+
+### `geom.word_char_advance` — Character advance within a word
+
+How wide one letter is — the scale for every within-word position.
+
+**Formula.** `width / (len(text) + 1)` when `geom.word_box_space_px` finds trailing padding, else `width / len(text)`.
 
 | | |
 | --- | --- |
 | **Unit** | px / character |
-| **Missing & edge cases** | No usable words ⇒ NaN, and character-based options are hidden. |
-| **Code** | `scanpath_studio/measures.py:word_box_space_px` |
-| **Consumers** | UI, API, Export |
+| **Missing & edge cases** | No `text`/`width` ⇒ NaN, and the letter measures report NaN. |
+| **Precedence & caveats** | The single accessor for the letter scale, as `geom.word_box_bounds` is for the boundary between words: `measure.landing_position`, `measure.landing_distance`, `agg.landing_curve` and the saccade table's launch/landing letter all read it. #BUG-27 — before that each derived its own `width / len(text)`, which is one advance too wide on a tiling corpus, by a factor that varied with word length. |
+| **Code** | `scanpath_studio/measures.py:word_char_advance` |
+| **Consumers** | UI, API, Export, Corpus Analysis |
 | **Tests** | `tests/test_measures.py` |
 | **Verification** | tier A, C — **Verified** |
 

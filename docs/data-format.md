@@ -24,11 +24,13 @@ pre-aggregated reading measures.
 ## Participant metadata
 
 Attach a table of **one row per reader** — native language, age, a
-comprehension score, a group label — on the 🗂️ **Data** page under **👤
+comprehension score, a group label. When you upload your own data it is step 5
+of the setup wizard (*About your readers*); for the demo, a public corpus, or a
+dataset you added earlier, the same panel is on the 🗂️ **Data** page under **👤
 Participant metadata**. Its columns then behave like fields in the data: they
 filter trials (*More → By reader*), show up as chips above the plot, sort the
-trial picker, appear in Data Inspection, and travel with exports and saved
-sessions.
+trial picker, group cohorts in Corpus Analysis, appear in Data Inspection, and
+travel with exports and saved sessions.
 
 ```csv
 participant_id,native_language,age,comprehension

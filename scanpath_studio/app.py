@@ -182,6 +182,7 @@ from scanpath_studio.tabs import (
     render_data_inspection_tab,
     render_participant_metadata_section,
     render_single_trial_tab,
+    render_trial_identity_section,
 )
 from scanpath_studio.tour import (
     build_tutorial_context,
@@ -3430,6 +3431,14 @@ def main() -> None:
     # *below* the editor: with "what's in it" moved above, filling that one
     # would put the tables above the controls that fix them.
     unmapped_slot = setup_page.container()
+    # UX-52 round 3 — the VAL-7 trial-identity verdict is its own section, not a
+    # `#####` item inside "What's in this dataset" (the user's call). It carries
+    # a *verdict* — sometimes a warning — and the fix it names is a change to the
+    # Trial ID mapping directly above it, so it belongs at the same level as the
+    # thing it judges rather than buried under the counts.
+    # Keyed → the `.st-key-…` selector the "Load and verify a dataset" tutorial
+    # spotlights, alongside its siblings above and below.
+    setup_identity_slot = setup_page.container(key="tutorial_trial_identity")
     # DATA-20 §1 — the participant-level metadata table. After the mapping (it
     # joins on the reader id the mapping just settled).
     setup_metadata_slot = setup_page.container(key="tutorial_participant_metadata")
@@ -3960,6 +3969,14 @@ def main() -> None:
         )
         with mapping_body_slot:
             _render_column_mapping_section(editor_rendered=mapping_editor_rendered)
+        with setup_identity_slot:
+            st.divider()
+            st.subheader("🧾 Trial identity")
+            st.caption(
+                "Whether the Trial ID above actually identifies one reading — "
+                "checked on the whole dataset, before any filtering."
+            )
+            render_trial_identity_section()
         with setup_metadata_slot:
             st.divider()
             st.subheader("👤 Participant metadata")

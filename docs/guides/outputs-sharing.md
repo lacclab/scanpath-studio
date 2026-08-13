@@ -12,6 +12,14 @@ Open the **Export** subtab in the Scanpath view.
 - **Separable layers** writes aligned text, boxes, fixations, saccades, heatmap,
   and image layers for editing.
 
+With a [participant metadata](../data-format.md#participant-metadata) table
+attached, the bundle also carries `metadata/participants.*`, and **Participant
+fields to include** chooses which of its columns go in. Every field is selected
+by default; clearing one drops it, and clearing them all leaves the table out
+entirely. Reader attributes are the most re-identifying thing an export can
+carry, so decide this per bundle — full detail for a collaborator, a group label
+for a public repository.
+
 Every app export reports its current stage immediately. Frame and trial totals
 appear only when the exporter has real countable units; Chrome startup, one
 static rasterization, encoding, compression, and zip finalization use an honest

@@ -334,3 +334,125 @@ class TestEyeLinkAmplitudesStayInDegrees:
         # 100 px apart — the degree column must not leak into the px one.
         assert enriched["saccade_amplitude"].iloc[1] == pytest.approx(100.0)
         assert enriched["next_saccade_amplitude_deg"].iloc[1] == 2.1
+
+
+class TestWithinWordLetterScale:
+    """VAL-5: a letter is one *advance* wide, not ``width / len(text)``.
+
+    The audit found the within-word measures and the between-word boundary
+    disagreeing. ``measures.word_box_bounds`` had been corrected for BUG-11's
+    trailing inter-word padding; the letter scale had not, so on a tiling corpus
+    it divided a box of ``n + 1`` advances by ``n`` characters — every letter
+    ~``(n+1)/n`` too wide, and by a factor that *varied with word length*.
+    """
+
+    @staticmethod
+    def _tiling_layout(advance: float = 20.0) -> pd.DataFrame:
+        """Monospaced boxes that tile, each carrying one trailing space.
+
+        The bundled OneStop demo's shape: ``width == (len(text) + 1) * advance``
+        and no gap between neighbours.
+        """
+        words = ["the", "cats", "sat"]
+        widths = [(len(w) + 1) * advance for w in words]
+        xs = np.cumsum([100.0] + widths[:-1])
+        return pd.DataFrame(
+            {
+                "participant_id": ["p1"] * len(words),
+                "trial_id": ["t1"] * len(words),
+                "word_id": list(range(1, len(words) + 1)),
+                "text": words,
+                "x": xs,
+                "y": [50.0] * len(words),
+                "width": widths,
+                "height": [40.0] * len(words),
+                "line_idx": [1] * len(words),
+            }
+        )
+
+    def test_the_advance_is_constant_across_word_lengths(self):
+        from scanpath_studio.measures import word_char_advance
+
+        layout = self._tiling_layout(advance=20.0)
+        assert word_char_advance(layout) == pytest.approx([20.0, 20.0, 20.0])
+
+    def test_a_glyph_tight_layout_keeps_width_over_characters(self, four_word_layout):
+        """The correction is conditional — a layout with real gaps between the
+        boxes is already glyph-tight, and dividing by ``n + 1`` there would
+        introduce the very error this fixes."""
+        from scanpath_studio.measures import word_char_advance
+
+        # 80px boxes at 100px pitch: 20px gaps, so no trailing padding.
+        assert word_char_advance(four_word_layout) == pytest.approx(
+            [80 / 3, 80 / 3, 80 / 3, 80 / 4]
+        )
+
+    def test_landing_on_the_third_letter_reports_three(self):
+        """A fixation on the centre of letter 3 of a 4-letter word lands at 3.5 —
+        the convention is that an integer is a letter *boundary* and 1.0 is the
+        word's first glyph, so the middle of letter k is k + 0.5."""
+        advance = 20.0
+        layout = self._tiling_layout(advance)
+        word = layout.iloc[1]  # "cats", x = 180
+        centre_of_letter_3 = float(word["x"]) + 2.5 * advance
+        fix = _make_fixations([(centre_of_letter_3, 70, 200, 0)])
+        out = compute_per_word_measures(fix, layout)
+        row = out[out["word_id"] == word["word_id"]].iloc[0]
+        assert row["initial_landing_position"] == pytest.approx(3.5)
+        # …and the centred distance is measured against the same scale.
+        assert row["initial_landing_distance"] == pytest.approx(3.5 - 2.5)
+
+    def test_the_last_letter_stays_inside_the_word(self):
+        """The old ``width / n`` scale put the end of a 4-letter word at 5.0 even
+        though the box is 5 advances wide, so a landing on the final glyph read
+        as if it were a letter earlier."""
+        advance = 20.0
+        layout = self._tiling_layout(advance)
+        word = layout.iloc[1]
+        last_glyph_centre = float(word["x"]) + 3.5 * advance
+        fix = _make_fixations([(last_glyph_centre, 70, 200, 0)])
+        out = compute_per_word_measures(fix, layout)
+        row = out[out["word_id"] == word["word_id"]].iloc[0]
+        assert row["initial_landing_position"] == pytest.approx(4.5)
+        assert 4.0 < row["initial_landing_position"] < 5.0
+
+    def test_right_to_left_counts_from_where_the_glyphs_end(self):
+        """The RTL origin is `x + n × advance`, not the padded box edge.
+
+        Those are one whole advance apart on a tiling layout, so the first pass
+        at BUG-27 fixed the scale and left RTL reading a letter late — and
+        disagreeing with `aggregation.landing_positions`, which measures across
+        the glyph run on both sides. Caught by the surface-parity reviewer.
+        """
+        from scanpath_studio import aggregation
+
+        advance = 20.0
+        layout = self._tiling_layout(advance)
+        layout["right_to_left"] = True
+        word = layout.iloc[1]  # "cats" — 4 glyphs, running x … x + 80
+        # 2.5 advances in *from the right*, i.e. the middle of letter 3.
+        fix = _make_fixations(
+            [(float(word["x"]) + 4 * advance - 2.5 * advance, 70, 200, 0)]
+        )
+        out = compute_per_word_measures(fix, layout)
+        row = out[out["word_id"] == word["word_id"]].iloc[0]
+        assert row["initial_landing_position"] == pytest.approx(3.5)
+        # …and the fraction agrees, as it does for LTR.
+        fraction = aggregation.landing_positions(out, fix)
+        assert fraction[0] == pytest.approx(2.5 / 4.0)
+
+    def test_the_landing_fraction_agrees_with_the_letter_position(self):
+        """``aggregation.landing_positions`` and ``initial_landing_position`` are
+        the same quantity in different units — the inconsistency VAL-5 found was
+        that they were not."""
+        from scanpath_studio import aggregation
+
+        advance = 20.0
+        layout = self._tiling_layout(advance)
+        word = layout.iloc[1]  # "cats" — 4 glyphs
+        fix = _make_fixations([(float(word["x"]) + 2.5 * advance, 70, 200, 0)])
+        measured = compute_per_word_measures(fix, layout)
+        fraction = aggregation.landing_positions(measured, fix)
+        assert len(fraction) == 1
+        # 2.5 advances into a 4-glyph run.
+        assert fraction[0] == pytest.approx(2.5 / 4.0)

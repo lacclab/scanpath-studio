@@ -1264,18 +1264,36 @@ def ensure_fixation_enrichment(
         return fixations
 
 
-def _box_left(
+def _glyph_span(
     words: pd.DataFrame, *, layout: Optional[pd.DataFrame] = None
-) -> np.ndarray:
-    """Corrected AOI left edges (BUG-11) — where "0% into the word" actually is.
+) -> tuple[np.ndarray, np.ndarray]:
+    """``(start, run)`` — where the word's glyphs begin and how wide they are.
 
-    Landing position is a *within-word* measure, so it is exactly what a
-    half-space offset corrupts: measured from the raw box left, every landing
-    reads half a character later than it was.
+    The frame a *within-word* position is measured in, and the fix for VAL-5's
+    letter-position finding. This used to take the BUG-11-corrected AOI left edge
+    as "0% into the word", which is half an inter-word space too far left: the
+    corrected edge is where the word's *interest area* starts, not where its
+    first glyph does. The rest of the box was wrong in the same direction — the
+    padded ``width`` is one advance wider than the glyph run — so a landing at
+    the last letter read as ~90% rather than 100%.
+
+    ``x`` is the glyph start by definition (see ``measures.word_box_bounds``) and
+    ``measures.word_char_advance`` is the shared letter scale, so the fraction is
+    now 0 at the first glyph's left edge and 1 at the last glyph's right edge, as
+    :func:`landing_positions` has always claimed. Falls back to the raw box for a
+    frame with no ``text`` column, where there are no letters to scale by.
     """
-    from .measures import word_box_bounds
+    from .measures import word_char_advance, word_char_counts
 
-    return word_box_bounds(words, layout=layout)[0]
+    start = pd.to_numeric(words["x"], errors="coerce").to_numpy(dtype=float)
+    width = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
+    if "text" not in words.columns:
+        return start, width
+    # Counted once and handed on: `.astype(str).str.len()` is a Python-level
+    # pass over the frame, and `word_char_advance` needs the same numbers.
+    chars = word_char_counts(words)
+    run = word_char_advance(words, layout=layout, chars=chars) * chars
+    return start, np.where(np.isfinite(run) & (run > 0), run, width)
 
 
 def landing_positions(
@@ -1298,8 +1316,9 @@ def landing_positions(
         if participant_id is not None and "participant_id" in wd.columns:
             wd = wd[wd["participant_id"].astype(str) == str(participant_id)]
         ffx = pd.to_numeric(wd.get("first_fix_x"), errors="coerce")
-        left = pd.Series(_box_left(wd, layout=words), index=wd.index)
-        width = pd.to_numeric(wd.get("width"), errors="coerce")
+        starts, runs = _glyph_span(wd, layout=words)
+        left = pd.Series(starts, index=wd.index)
+        width = pd.Series(runs, index=wd.index)
         dist = ffx - left
         if "right_to_left" in wd.columns:
             rtl = wd["right_to_left"].fillna(False).astype(bool)
@@ -1335,11 +1354,22 @@ def landing_positions(
         )
         box_keys = [k for k in keys if k in words.columns]
         extra = ["right_to_left"] if "right_to_left" in words else []
-        box = words[box_keys + ["x", "width", *extra]].assign(_left=_box_left(words))
-        box = box.drop_duplicates(box_keys)
+        # Dedup to one row per word *first*, then measure. `words` here is the
+        # whole filtered corpus — one row per word per reader — so the glyph span
+        # was being computed for every repetition of every box. `layout=` is what
+        # makes that safe: tiling detection still sees the full frame, which it
+        # has to, since a deduped subset's holes read as glyph-tight gaps.
+        # `text` rides along because the glyph run is counted from it — without
+        # it `_glyph_span` silently falls back to the padded box width.
+        text_col = ["text"] if "text" in words.columns else []
+        box = words[box_keys + ["x", "width", *text_col, *extra]].drop_duplicates(
+            box_keys
+        )
+        starts, runs = _glyph_span(box, layout=words)
+        box = box.assign(_left=starts, _run=runs)
         merged = first.merge(box, on=box_keys, how="inner")
         left = pd.to_numeric(merged["_left"], errors="coerce")
-        width = pd.to_numeric(merged["width"], errors="coerce")
+        width = pd.to_numeric(merged["_run"], errors="coerce")
         dist = pd.to_numeric(merged["_fx"], errors="coerce") - left
         if "right_to_left" in merged:
             rtl = merged["right_to_left"].fillna(False).astype(bool)

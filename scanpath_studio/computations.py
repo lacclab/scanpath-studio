@@ -515,16 +515,22 @@ REGISTER: Tuple[Computation, ...] = (
         category=CATEGORY_MEASURE,
         summary="Where in the word the first fixation landed, in letters.",
         formula=(
-            "`char_width = width / max(len(text), 1)`; "
+            "`char_width = geom.word_char_advance`; "
             "`offset = first_fix_x − word.x` (LTR) or "
             "`word.x + width − first_fix_x` (RTL); "
             "`landing_position = offset / char_width + 1` — so the first letter "
-            "is 1."
+            "starts at 1 and its centre is 1.5."
         ),
         code="scanpath_studio/measures.py:compute_per_word_measures",
         output="initial_landing_position",
         unit="letters",
         missing="No first-pass fixation, zero width, or no text ⇒ NaN.",
+        precedence=(
+            "VAL-5: the scale is `geom.word_char_advance`, not the local "
+            "`width / len(text)` this used before — on a tiling corpus that "
+            "divided a box of `n + 1` advances by `n` characters, reporting "
+            "every landing ~`(n+1)/n` too far into the word."
+        ),
         tiers="A",
         status=STATUS_PARTIAL,
         reference=(
@@ -671,8 +677,16 @@ REGISTER: Tuple[Computation, ...] = (
         formula=(
             "A fixation below the short threshold is merged into the nearer "
             "adjacent fixation when that neighbour is within the merge distance, "
-            "expressed in characters and converted to px via the word-box "
-            "character width. Durations add; position follows the survivor."
+            "expressed in characters and converted to px via "
+            "`geom.word_char_advance`. Durations add; position follows the "
+            "survivor."
+        ),
+        precedence=(
+            "#BUG-27: the conversion reads the shared letter scale. It used to "
+            'divide by `len(text)`, so on a tiling corpus "within 1 character" '
+            "meant 1.25 characters for a four-letter word and 1.07 for a "
+            "fifteen-letter one — a threshold whose meaning varied with the word "
+            "it was applied to."
         ),
         code="scanpath_studio/preprocessing.py:merge_short_fixations",
         output="A reduced fixation frame",
@@ -766,10 +780,19 @@ REGISTER: Tuple[Computation, ...] = (
         name="Character grid",
         category=CATEGORY_PREPROCESSING,
         summary="Per-character boxes derived from word boxes.",
-        formula="Each word box is divided evenly by its character count.",
+        formula=(
+            "Character `k` of a word spans `x + (k−1) × advance` to `x + k × "
+            "advance`, where the advance is `geom.word_char_advance`."
+        ),
         code="scanpath_studio/preprocessing.py:character_grid",
         unit="px",
         missing="Proportional fonts make this an approximation.",
+        precedence=(
+            "#BUG-27: the advance is the shared letter scale, not `width / "
+            "len(text)` — which on a tiling corpus stretched the glyph row "
+            "across the trailing inter-word padding, so each character box after "
+            "the first sat progressively further right than its glyph."
+        ),
         tiers="A, C",
         status=STATUS_CONVENTION,
         consumers=(_UI, _EXPORT, _INSPECT),
@@ -1016,9 +1039,21 @@ REGISTER: Tuple[Computation, ...] = (
         name="Landing-position curve",
         category=CATEGORY_AGGREGATION,
         summary="Distribution of initial landing positions by word length.",
-        formula="Histogram of `measure.landing_position`, binned per word length.",
+        formula=(
+            "Histogram of the landing position as a *fraction* of the word's "
+            "glyph run — `(first_fix_x − word.x) / (len(text) × "
+            "geom.word_char_advance)`, so 0 is the first glyph's left edge and 1 "
+            "the last glyph's right edge — binned per word length."
+        ),
         code="scanpath_studio/aggregation.py:landing_positions",
-        unit="letters",
+        unit="fraction of the word (0–1), or px with `as_fraction=False`",
+        precedence=(
+            "#BUG-27: measured from the word's `x` and its glyph run, not from "
+            "the `geom.word_box_bounds` AOI edge and the padded `width` — those "
+            "put 0 half an inter-word space before the word and 1 half a space "
+            "after it, so this disagreed with `measure.landing_position` on the "
+            "same landing."
+        ),
         tiers="C",
         status=STATUS_PARTIAL,
         consumers=(_CORPUS,),
@@ -1138,11 +1173,10 @@ REGISTER: Tuple[Computation, ...] = (
         unit="px",
         precedence=(
             "Used by `assign.fixation_to_word` and by `agg.word_rates`' left "
-            "edge. **Known inconsistency:** the letter-position formulas in "
-            "`measures.py` and `preprocessing.py` measure from the *raw* word "
-            "`x`, not from this corrected edge. Recorded here rather than "
-            "silently changed — an audit must not move scientific results under "
-            "a documentation diff."
+            "edge — the boundary *between* words. A position *inside* a word "
+            "goes through `geom.word_char_advance` instead, whose origin is the "
+            "word's `x` (its first glyph); the two are half an advance apart by "
+            "construction, which is what #BUG-27 settled."
         ),
         tiers="A, C",
         status=STATUS_PARTIAL,
@@ -1151,16 +1185,46 @@ REGISTER: Tuple[Computation, ...] = (
     ),
     Computation(
         id="geom.word_box_space_px",
-        name="Character width estimate",
+        name="Inter-word padding baked into each box",
         category=CATEGORY_GEOMETRY,
-        summary="Pixels per character, from the word boxes themselves.",
-        formula="Median of `width / len(text)` across the trial's words.",
+        summary="Detects a tiling layout that carries one trailing space per box.",
+        formula=(
+            "Median of `width / (len(text) + 1)` across one trial's words — the "
+            "advance — reported only when the boxes are consistently that wide "
+            "**and** actually tile (no gaps). Anything else ⇒ `0.0`, i.e. "
+            "'these AOIs are glyph-tight, don't touch them'."
+        ),
         code="scanpath_studio/measures.py:word_box_space_px",
-        unit="px / character",
-        missing="No usable words ⇒ NaN, and character-based options are hidden.",
+        unit="px",
+        missing="No usable words ⇒ 0.0 (no correction), never a guess.",
         tiers="A, C",
         status=STATUS_VERIFIED,
         consumers=(_UI, _API, _EXPORT),
+        tests=("tests/test_measures.py",),
+    ),
+    Computation(
+        id="geom.word_char_advance",
+        name="Character advance within a word",
+        category=CATEGORY_GEOMETRY,
+        summary="How wide one letter is — the scale for every within-word position.",
+        formula=(
+            "`width / (len(text) + 1)` when `geom.word_box_space_px` finds "
+            "trailing padding, else `width / len(text)`."
+        ),
+        code="scanpath_studio/measures.py:word_char_advance",
+        unit="px / character",
+        missing="No `text`/`width` ⇒ NaN, and the letter measures report NaN.",
+        precedence=(
+            "The single accessor for the letter scale, as `geom.word_box_bounds` "
+            "is for the boundary between words: `measure.landing_position`, "
+            "`measure.landing_distance`, `agg.landing_curve` and the saccade "
+            "table's launch/landing letter all read it. #BUG-27 — before that "
+            "each derived its own `width / len(text)`, which is one advance too "
+            "wide on a tiling corpus, by a factor that varied with word length."
+        ),
+        tiers="A, C",
+        status=STATUS_VERIFIED,
+        consumers=(_UI, _API, _EXPORT, _CORPUS),
         tests=("tests/test_measures.py",),
     ),
     # ------------------------------------------------------------------

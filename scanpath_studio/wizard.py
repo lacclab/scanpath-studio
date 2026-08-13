@@ -840,6 +840,45 @@ def wide_frame_warning(n_extra_fields: int, n_rows: int) -> Optional[str]:
     )
 
 
+def _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema) -> list:
+    """The reader ids the finished dataset will have, read from the raw tables.
+
+    DATA-20's *About your readers* step runs **before** the frames are
+    normalized (normalization needs the keep-columns the next step chooses), so
+    the join report can't be built from `metadata.participant_ids`. The mapped
+    participant column is only *renamed* by `normalize_*` — its values are
+    untouched — so reading it off the raw frame gives the same id set the join
+    will see, which is what makes "no row for reader p7" trustworthy here.
+
+    Cached and **gated**, following `app._cached_participant_ids`: this is a
+    `.unique()` over the *raw* (unfiltered, un-normalized) frames, the largest
+    version there is, and the wizard reruns on every keystroke across all seven
+    steps. Only the join report consumes the list, so nothing is scanned until a
+    table is actually being attached.
+    """
+    from scanpath_studio import metadata as metadata_mod
+
+    if st.session_state.get(metadata_mod.RAW_SESSION_KEY) is None:
+        return []
+    found: set = set()
+    for frame, schema in ((raw_fix, fix_schema), (raw_words, word_schema)):
+        column = (schema or {}).get("participant")
+        if not column or frame is None or frame.empty or column not in frame.columns:
+            continue
+        found |= set(_wizard_reader_ids_cached(frame, column, frame_fingerprint(frame)))
+    return sorted(found)
+
+
+@st.cache_data(show_spinner=False)
+def _wizard_reader_ids_cached(_frame, column: str, fingerprint: str) -> list:
+    """Distinct reader ids in one raw frame's mapped participant column.
+
+    Underscore-prefixed frame + an explicit `frame_fingerprint` key, the house
+    convention — see `app._cached_participant_ids`.
+    """
+    return sorted({str(value) for value in _frame[column].dropna().unique()})
+
+
 def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> Tuple[dict, list]:
     """Render ONE cross-table *Filter trials by* picker (``filter_host``) and ONE
     *Additional fields to keep* picker (``keep_host``) — instead of duplicating
@@ -1658,6 +1697,8 @@ def _wizard_statuses() -> Dict[str, wizard_shell.StepStatus]:
     **gate** on *Add dataset* is computed from live values at the end, never from
     this.
     """
+    from scanpath_studio import metadata as metadata_mod
+
     S = wizard_shell.StepStatus
     ss = st.session_state
     uploaded_core = bool(ss.get("col_map_fix_upload") or ss.get("col_map_words_upload"))
@@ -1685,6 +1726,11 @@ def _wizard_statuses() -> Dict[str, wizard_shell.StepStatus]:
         "identity": required(trial_mapped),
         "geometry": required(uploaded_any and not problems),
         "setup": required(setup_answered),
+        # DATA-20: optional until a table is actually attached. Reads the parsed
+        # frame, not the uploader widget — the frame is what survives a rerun.
+        "readers": (
+            S.DONE if ss.get(metadata_mod.RAW_SESSION_KEY) is not None else S.OPTIONAL
+        ),
         "fields": S.DONE if fields_touched else S.OPTIONAL,
     }
     statuses["review"] = (
@@ -1795,7 +1841,7 @@ def _setup_group_value(snapshot: SetupSnapshot, group: str) -> str:
 
 
 def _render_data_setup(active: bool) -> _UploadResult:
-    """The Add-dataset wizard: six steps in an accordion (DATA-22).
+    """The Add-dataset wizard: seven steps in an accordion (DATA-22).
 
     Replaces a single 620-line function that rendered 16 expanders across five
     numbered subsections under a three-step progress bar matching neither. The
@@ -1817,7 +1863,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if active:
         st.header("📂 Set up your dataset")
         st.caption(
-            "Work down the six steps in order, or jump straight to one with the "
+            "Work down the seven steps in order, or jump straight to one with the "
             "chips below. Your answers are kept as you move around."
         )
         st.caption(
@@ -2210,7 +2256,27 @@ def _render_data_setup(active: bool) -> _UploadResult:
         s4.caption("✓ Pre-answered from the restored setup file — review it below.")
     setup_snapshot = _wizard_setup_step(s4, raw_words, raw_fix, has_boxes=has_words)
 
-    # === 5 · Extra fields ====================================================
+    # === 5 · About your readers ==============================================
+    # DATA-20: the participant table's main home. Rendered only while the wizard
+    # is `active` — the collapsed *Data & mapping* review panel would otherwise
+    # build the same widget keys as the 🗂️ Data page's section, which renders
+    # once the wizard is finished.
+    readers_step, s_readers = step_of("readers")
+    if active:
+        from scanpath_studio.tabs import render_participant_metadata_section
+
+        s_readers.caption(
+            "Optional, and separate from the tables above: one row per **reader**, "
+            "not per trial. Attach it here and its columns behave like fields in "
+            "your data — filters, chips, trial sorting, corpus grouping, export."
+        )
+        render_participant_metadata_section(
+            _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
+            host=s_readers.container(),
+        )
+        wizard_shell.continue_button(s_readers, readers_step, label="Continue →")
+
+    # === 6 · Extra fields ====================================================
     fields_step, s5 = step_of("fields")
     s5.caption(
         "*Filter trials by* becomes a value picker in the Narrow-by panel; "

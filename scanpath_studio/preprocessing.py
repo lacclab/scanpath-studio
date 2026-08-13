@@ -60,14 +60,26 @@ def add_text_direction(words: pd.DataFrame) -> pd.DataFrame:
 
 
 def _character_width(words: pd.DataFrame, word_id) -> float:
+    """One character's width for this word — BUG-27's shared letter scale.
+
+    This scales the *merge distance*, which the user sets in **characters** and
+    which travels on the share link and the saved config
+    (`session_keys.GLOBAL_PREPROC_MERGE_DISTANCE_CHARS`). It used to divide by
+    `len(text)`, so on a tiling corpus "merge within 1 character" silently meant
+    1.25 characters for a four-letter word and 1.07 for a fifteen-letter one —
+    the same length-dependent error BUG-27 fixed in the landing measures, on a
+    setting whose whole point is to mean one thing.
+    """
+    from .measures import word_char_advance
+
     match = words[pd.to_numeric(words.get("word_id"), errors="coerce") == word_id]
     if match.empty:
         return 1.0
-    text_len = max(len(str(match.iloc[0].get("text", ""))), 1)
-    return max(
-        float(pd.to_numeric(match.iloc[0].get("width"), errors="coerce")) / text_len,
-        1.0,
-    )
+    # `layout=words`: tiling is a property of the whole line, and a one-row
+    # subset reads as glyph-tight.
+    advance = word_char_advance(match, layout=words)
+    value = float(advance[0]) if len(advance) else np.nan
+    return max(value, 1.0) if np.isfinite(value) else 1.0
 
 
 def merge_short_fixations(
@@ -456,6 +468,11 @@ def character_grid(words: pd.DataFrame) -> pd.DataFrame:
         global_position = 0
         line_positions: dict[object, int] = {}
         words_seen: dict[object, int] = {}
+        # One advance per word, resolved once for the trial — tiling detection is
+        # a property of the layout, so it must not run per word.
+        from .measures import word_char_advance
+
+        advances = dict(zip(trial.index, word_char_advance(trial, layout=words)))
         for word in trial.itertuples():
             text = str(getattr(word, "text", ""))
             if not text:
@@ -466,7 +483,10 @@ def character_grid(words: pd.DataFrame) -> pd.DataFrame:
                 global_position += 1
             words_seen[line_id] = words_seen.get(line_id, 0) + 1
             line_positions.setdefault(line_id, 0)
-            char_width = float(getattr(word, "width")) / len(text)
+            # BUG-27: one advance, not `width / len(text)` — on a tiling corpus
+            # the latter stretches the glyph row across the trailing padding, so
+            # every character box after the first sat progressively too far right.
+            char_width = advances.get(word.Index, float(getattr(word, "width")))
             rtl = bool(getattr(word, "right_to_left", False))
             for physical_offset in range(len(text)):
                 logical_offset = (
@@ -569,21 +589,34 @@ def duration_mass_table(
 
 def _word_letter_geometry(
     words: Optional[pd.DataFrame], keys: Sequence[str]
-) -> dict[tuple, tuple[float, float, int, bool]]:
-    """``(identity…, word_id) -> (x, width, character count, right_to_left)``.
+) -> dict[tuple, tuple[float, float, float, bool]]:
+    """``(identity…, word_id) -> (x, glyph run, character advance, right_to_left)``.
 
     Built once per :func:`saccade_table` call so the per-saccade letter-position
     lookup is a dict hit rather than a scan of the whole words frame (PERF-3).
     The first row wins for a duplicated key, which is what the old
     ``target.iloc[0]`` did.
+
+    BUG-27: the advance comes from :func:`measures.word_char_advance` rather than
+    the local ``width / len(text)`` this used to divide by — the same accessor
+    the per-word landing measures use, so a saccade's launch/landing letter and
+    the word's landing position are on one scale (they disagreed by the
+    inter-word padding on a tiling corpus). The second slot is the **glyph run**
+    (``n × advance``) and not the box ``width`` for the same reason: it is only
+    read to mirror an RTL offset, and the padded width would put an RTL landing
+    one whole advance late.
     """
     if words is None or words.empty or "word_id" not in words:
         return {}
+    from .measures import word_char_advance, word_char_counts
+
     ids = pd.to_numeric(words["word_id"], errors="coerce")
     present = [key for key in keys if key in words]
-    lengths = words["text"].astype(str).str.len() if "text" in words else None
+    has_text = "text" in words
+    counts = word_char_counts(words) if has_text else None
+    advances = word_char_advance(words, chars=counts) if has_text else None
     rtl = words["right_to_left"] if "right_to_left" in words else None
-    geometry: dict[tuple, tuple[float, float, int, bool]] = {}
+    geometry: dict[tuple, tuple[float, float, float, bool]] = {}
     for position, word_id in enumerate(ids.to_numpy()):
         if pd.isna(word_id):
             continue
@@ -592,10 +625,13 @@ def _word_letter_geometry(
         )
         if key in geometry:
             continue
+        width = float(words["width"].iat[position])
+        advance = float(advances[position]) if advances is not None else width
+        run = advance * float(counts[position]) if counts is not None else width
         geometry[key] = (
             float(words["x"].iat[position]),
-            float(words["width"].iat[position]),
-            max(int(lengths.iat[position]) if lengths is not None else 1, 1),
+            run,
+            advance,
             bool(rtl.iat[position]) if rtl is not None else False,
         )
     return geometry
@@ -615,11 +651,13 @@ def _letter_position_in_word(
         found = geometry.get((float(word_id),))
     if found is None:
         return np.nan
-    word_x, width, length, right_to_left = found
+    word_x, glyph_run, advance, right_to_left = found
+    if not np.isfinite(advance) or advance <= 0:
+        return np.nan
     offset = float(event["x"]) - word_x
     if right_to_left:
-        offset = width - offset
-    return offset / (width / length) + 1
+        offset = glyph_run - offset
+    return offset / advance + 1
 
 
 def saccade_table(

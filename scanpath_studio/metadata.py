@@ -246,8 +246,13 @@ def _coerce(series: pd.Series, dtype: str) -> pd.Series:
     return series.astype("object").where(series.notna(), np.nan)
 
 
-def _label_for(name: str) -> str:
-    """Human-readable label for a raw column name (``native_language`` → …)."""
+def field_label(name: str) -> str:
+    """Human-readable label for a raw column name (``native_language`` → …).
+
+    Public because it is the *only* labeller for a metadata field: the picker in
+    ``tabs._pretty_col`` has to name a field the same way whether or not it can
+    reach the attached table at that moment.
+    """
     text = str(name).replace("_", " ").replace("-", " ").strip()
     return text[:1].upper() + text[1:] if text else str(name)
 
@@ -306,7 +311,7 @@ def build_participant_metadata(
         fields.append(
             MetadataField(
                 name=column,
-                label=_label_for(column),
+                label=field_label(column),
                 grain=GRAIN_PARTICIPANT,
                 dtype=dtype,
                 source=source_name,

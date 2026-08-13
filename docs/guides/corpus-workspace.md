@@ -34,6 +34,14 @@ Select **📊 Corpus Analysis →** in the header.
 The measure, aggregation, and spread controls apply to the current result. A
 minimum-readers threshold prevents sparse word estimates from looking complete.
 
+**Groups** defines a cohort either by splitting one field or from an independent
+filter set. With a
+[participant metadata](../data-format.md#participant-metadata) table attached,
+its fields are offered alongside the trial conditions, marked 👤 — a reader
+attribute answers a different question from a trial condition, so the picker
+says which is which. A field with more than 60 distinct values is not offered:
+that is a range question, and the trial filters have the slider for it.
+
 ## Move between summary and evidence
 
 Download the table beside a result for downstream analysis. When a point or

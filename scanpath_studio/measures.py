@@ -218,6 +218,55 @@ def word_box_bounds(
     return x0, y, x0 + w, y + h
 
 
+def word_char_advance(
+    words: pd.DataFrame,
+    *,
+    layout: pd.DataFrame | None = None,
+    chars: np.ndarray | None = None,
+) -> np.ndarray:
+    """Width of one character in each word, in px — the *within-word* scale.
+
+    **The** accessor for anything that measures a position *inside* a word in
+    letters (initial landing position, a saccade's launch/landing letter), the
+    way :func:`word_box_bounds` is the accessor for the boundary between words.
+
+    VAL-5 found the two disagreeing. The boundary had been corrected for BUG-11's
+    trailing inter-word padding while the letter scale had not: ``width /
+    len(text)`` divides a box that is ``len(text) + 1`` advances wide by
+    ``len(text)``, so on a tiling corpus every letter was reported ~``(n+1)/n``
+    too wide and every landing position that far into the word. The fix is the
+    same detection, applied to the denominator — ``width / (len(text) + 1)`` for
+    a tiling layout, ``width / len(text)`` for a glyph-tight one.
+
+    The *origin* of a within-word position stays the word's ``x`` (where the
+    glyphs start), not the corrected boundary: half an inter-word space to the
+    left of the first glyph is where the AOI begins, not where the word does.
+    With the advance fixed, ``x`` and the corrected boundary are one advance/2
+    apart by construction, so the two accessors describe one consistent geometry.
+
+    ``layout`` has the same meaning as in :func:`word_box_bounds`: pass the full
+    trial when ``words`` is a subset, since tiling is a property of the line.
+
+    ``chars`` lets a caller that already counted the characters hand them in —
+    ``.astype(str).str.len()`` is a Python-level pass over the frame, and
+    ``aggregation._glyph_span`` needs the same counts for the glyph run.
+    """
+    if words is None or words.empty or not {"width", "text"} <= set(words.columns):
+        # NaN, never `np.empty` — that returns *uninitialized* floats, and a
+        # garbage positive one passes the `isfinite and > 0` guard at the call
+        # site and lands a silently wrong landing position in a cached frame.
+        return np.full(0 if words is None else len(words), np.nan, dtype=float)
+    width = pd.to_numeric(words["width"], errors="coerce").to_numpy(dtype=float)
+    counts = word_char_counts(words) if chars is None else chars
+    padded = word_box_space_px(words if layout is None else layout) > 0
+    return width / (counts + (1.0 if padded else 0.0))
+
+
+def word_char_counts(words: pd.DataFrame) -> np.ndarray:
+    """Characters per word, floor 1 — the companion of :func:`word_char_advance`."""
+    return words["text"].astype(str).str.len().clip(lower=1).to_numpy(dtype=float)
+
+
 def recentre_word_boxes(words: pd.DataFrame) -> pd.DataFrame:
     """The :func:`word_box_bounds` correction as a frame, for row-wise consumers.
 
@@ -650,6 +699,10 @@ def compute_per_word_measures(
 
     out = words.copy()
     key_cols = grouping_columns(words, include_word=True)
+    # VAL-5: the letter scale for the landing measures, resolved once on the
+    # whole frame (tiling is a property of the layout, so it must not be
+    # re-detected per trial word, which is a subset with holes in it).
+    char_advance = pd.Series(word_char_advance(words), index=words.index)
 
     # Initialize defaults
     computed = (
@@ -796,11 +849,19 @@ def compute_per_word_measures(
                     target = trial_word.iloc[0]
                     text_len = max(len(str(target.get("text", ""))), 1)
                     width = float(pd.to_numeric(target.get("width"), errors="coerce"))
-                    char_width = width / text_len if width > 0 else np.nan
-                    if np.isfinite(char_width) and char_width > 0:
+                    char_width = float(char_advance.loc[trial_word.index[0]])
+                    if np.isfinite(char_width) and char_width > 0 and width > 0:
                         rtl = bool(target.get("right_to_left", False))
+                        # BUG-27: RTL counts from where the glyphs *end*
+                        # (`x + n × advance`), not from the padded box edge
+                        # `x + width` — on a tiling layout those are one whole
+                        # advance apart, so an RTL landing read a letter late
+                        # and disagreed with `aggregation.landing_positions`,
+                        # which measures across the glyph run on both sides.
                         offset = (
-                            float(target.get("x")) + width - float(ffx.loc[w])
+                            float(target.get("x"))
+                            + text_len * char_width
+                            - float(ffx.loc[w])
                             if rtl
                             else float(ffx.loc[w]) - float(target.get("x"))
                         )

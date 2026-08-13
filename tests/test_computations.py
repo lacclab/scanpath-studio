@@ -115,7 +115,8 @@ class TestGeneratedDocsAreCurrent:
 
 class TestKnownInconsistenciesAreRecorded:
     """VAL-5 step 6: an audit records discrepancies, it does not silently fix
-    them. Both findings from the recon pass must stay visible."""
+    them. Both findings from the recon pass were then fixed under their own BUG
+    items, and the register carries what changed and why."""
 
     def test_the_saccade_amplitude_units_finding_is_recorded(self):
         entry = reg.BY_ID["fix.saccade_amplitude"]
@@ -123,7 +124,20 @@ class TestKnownInconsistenciesAreRecorded:
         assert "BUG-25" in entry.reference
         assert "_deg" in entry.precedence
 
-    def test_the_letter_position_edge_inconsistency_is_recorded(self):
-        entry = reg.BY_ID["geom.word_box_bounds"]
-        assert "inconsistency" in entry.precedence.lower()
-        assert "raw" in entry.precedence
+    def test_the_two_within_word_scales_point_at_one_accessor(self):
+        """#BUG-27. The audit found the letter measures deriving their own
+        `width / len(text)` while the word *boundary* was BUG-11-corrected. Both
+        now resolve through `word_char_advance`, and the two geometry entries
+        have to say how they relate — a reader landing on either one must not
+        conclude that the corrected AOI edge is where a word's letters start."""
+        advance = reg.BY_ID["geom.word_char_advance"]
+        assert "BUG-27" in advance.precedence
+        for consumer in (
+            "measure.landing_position",
+            "agg.landing_curve",
+        ):
+            assert consumer in advance.precedence
+            assert "word_char_advance" in reg.BY_ID[consumer].formula
+        bounds = reg.BY_ID["geom.word_box_bounds"]
+        assert "between" in bounds.precedence
+        assert "word_char_advance" in bounds.precedence

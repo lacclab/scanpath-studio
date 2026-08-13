@@ -88,6 +88,7 @@ from scanpath_studio.controls import (
     SUMMARY_CHIP_FIELDS,
     WORD_FIELD_SPECS,
     _collect_compare_styles,
+    _drop_stale,
     _labeled,
     _numeric_slider,
     column_mapping_ui,
@@ -4969,7 +4970,22 @@ _GROUP_COL_LABELS = {
 
 
 def _pretty_col(col: str) -> str:
-    """Friendly label for a raw column id (group-definition pickers)."""
+    """Friendly label for a raw column id (group-definition pickers).
+
+    A ``meta:`` option is labelled with the field's own label and marked as
+    coming from the attached participant table — the two provenances answer
+    different questions ("this trial's condition" vs "this reader's language")
+    and a picker that hid the difference would invite the wrong one.
+    """
+    name = _meta_field_name(col)
+    if name is not None:
+        from scanpath_studio import metadata as md
+
+        # `metadata.field_label`, not the attached table's own `field.label`:
+        # a `format_func` can be called when `md.active()` is out of reach (no
+        # script run — Streamlit's own widget-state bookkeeping does this), and
+        # a label that changes with the caller's context is a label that flickers.
+        return f"👤 {md.field_label(name)}"
     return _GROUP_COL_LABELS.get(col, str(col).replace("_", " ").strip().title())
 
 
@@ -5134,7 +5150,48 @@ _FILTER_SET_FIELDS = (
 )
 
 
+#: A group field that lives on the attached participant table rather than on the
+#: word/fixation frames (DATA-20). The prefix keeps one flat picker while making
+#: the two provenances impossible to confuse — both in the UI and in the code
+#: that has to translate one of them.
+_META_FIELD_PREFIX = "meta:"
+
+
+def _meta_field_name(option: str) -> Optional[str]:
+    """The metadata field behind a picker option, or ``None`` for a real column."""
+    if isinstance(option, str) and option.startswith(_META_FIELD_PREFIX):
+        return option[len(_META_FIELD_PREFIX) :]
+    return None
+
+
+def _metadata_group_fields() -> list[str]:
+    """Prefixed picker options for the attached table's groupable fields.
+
+    Categorical fields, plus a numeric one with few enough distinct values to
+    read as a category (a birth year, a session number). A wide-ranging numeric
+    field is a *range* question and belongs in the trial filters, which already
+    have the slider for it.
+    """
+    from scanpath_studio import metadata as md
+
+    meta = md.active()
+    if meta is None or meta.frame.empty:
+        return []
+    out = []
+    for field in meta.fields:
+        values = md.options_for(meta, field.name)
+        if 2 <= len(values) <= 60:
+            out.append(f"{_META_FIELD_PREFIX}{field.name}")
+    return out
+
+
 def _both_frame_values(words, fixations, col):
+    """Distinct values of ``col`` — a frame column, or a metadata field."""
+    name = _meta_field_name(col)
+    if name is not None:
+        from scanpath_studio import metadata as md
+
+        return md.options_for(md.active(), name)
     frames = [f for f in (fixations, words) if col in getattr(f, "columns", [])]
     vals = set()
     for f in frames:
@@ -5142,8 +5199,43 @@ def _both_frame_values(words, fixations, col):
     return sorted(vals)
 
 
+def _group_spec(col: str, values) -> dict:
+    """One ``{column: values}`` group spec — the metadata translation lives here.
+
+    DATA-20's rule is that a participant-grain constraint **is** a participant
+    constraint: the table is never broadcast onto the word/fixation frames, so a
+    group defined on "native language = Hebrew" resolves to the set of readers
+    whose row says Hebrew, and the spec `aggregation.group_mask` sees is an
+    ordinary ``participant_id`` one. Nothing downstream needs to know.
+
+    An empty selection is "no constraint" and returns ``{}``, matching the frame
+    branch — but a selection that matches *nobody* must return an impossible
+    spec rather than ``{}``, or a group that should be empty would silently
+    select every row.
+    """
+    if not values:
+        return {}
+    name = _meta_field_name(col)
+    if name is None:
+        return {col: values}
+    from scanpath_studio import metadata as md
+
+    ids = md.participants_matching(md.active(), {name: list(values)})
+    if ids is None:
+        # No table (detached mid-run), so the field this group was defined on no
+        # longer exists. Fail *closed*: silently widening a cohort to everyone is
+        # the one outcome that produces a plausible, wrong comparison.
+        return {"participant_id": [_NO_SUCH_PARTICIPANT]}
+    return {"participant_id": sorted(ids) or [_NO_SUCH_PARTICIPANT]}
+
+
+#: A reader id no dataset can hold, so `group_mask` selects nothing. Used when a
+#: metadata group matches no loaded reader — see `_group_spec`.
+_NO_SUCH_PARTICIPANT = "\x00__no_such_participant__"
+
+
 def _group_split_columns(words, fixations):
-    """Categorical columns present in BOTH frames with 2…60 values."""
+    """Categorical fields with 2…60 values, from both frames or the metadata."""
     out = []
     text_col = _text_column(words) or _text_column(fixations)
     candidates = list(_GROUP_SPLIT_CANDIDATES) + ([text_col] if text_col else [])
@@ -5152,7 +5244,7 @@ def _group_split_columns(words, fixations):
             n = words[col].astype(str).nunique()
             if 2 <= n <= 60:
                 out.append(col)
-    return out
+    return out + _metadata_group_fields()
 
 
 def _join_label(values):
@@ -5171,6 +5263,9 @@ def _render_filter_set(words, fixations, *, key, default_label):
         ("participant_id", "Participants"),
         (text_col, "Texts"),
         *[(c, _pretty_col(c)) for c in _FILTER_SET_FIELDS],
+        # DATA-20: the attached participant table's fields are offered here too,
+        # translated to reader ids by `_group_spec`.
+        *[(c, _pretty_col(c)) for c in _metadata_group_fields()],
     ):
         if not col:
             continue
@@ -5178,8 +5273,19 @@ def _render_filter_set(words, fixations, *, key, default_label):
         if len(opts) < 2 or len(opts) > 400:
             continue
         sel = st.multiselect(pretty, opts, key=f"{key}_{col}", placeholder="All")
-        if sel:
-            spec[col] = sel
+        # Two metadata fields (or a metadata field and an explicit Participants
+        # pick) both land on `participant_id`, so they have to intersect rather
+        # than the later one overwriting the earlier. An empty intersection is
+        # the impossible-id sentinel, never `[]` — `group_mask` reads an empty
+        # value list as "no constraint" and would select every row.
+        for column, values in _group_spec(col, sel).items():
+            if column in spec:
+                merged = sorted(
+                    set(map(str, spec[column])) & set(map(str, values))
+                ) or [_NO_SUCH_PARTICIPANT]
+                spec[column] = merged
+            else:
+                spec[column] = values
     return spec, (label or default_label)
 
 
@@ -5202,6 +5308,10 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
                 "*Independent filter sets* instead."
             )
             return (None, None, "Group A", "Group B") if two_groups else (None, "Group")
+        # Detaching the participant table removes its `meta:` options; without
+        # this Streamlit falls back to the first option silently and the cohort
+        # on screen changes with no notice (`controls._drop_stale`'s job).
+        _drop_stale(f"{key}_field", cols)
         col = host.selectbox("Field", cols, key=f"{key}_field", format_func=_pretty_col)
         vals = _both_frame_values(words, fixations, col)
         if two_groups:
@@ -5214,15 +5324,15 @@ def _render_group_definition(words, fixations, *, key, two_groups, host=None):
                 f"Group B — {_pretty_col(col)}", vals, default=rest[:1], key=f"{key}_b"
             )
             return (
-                ({col: a} if a else {}),
-                ({col: b} if b else {}),
+                _group_spec(col, a),
+                _group_spec(col, b),
                 _join_label(a) or "Group A",
                 _join_label(b) or "Group B",
             )
         sel = host.multiselect(
             f"{_pretty_col(col)} =", vals, default=vals[:1], key=f"{key}_g"
         )
-        return ({col: sel} if sel else {}), (_join_label(sel) or "All")
+        return _group_spec(col, sel), (_join_label(sel) or "All")
     # Independent filter sets.
     if two_groups:
         c = host.columns(2)
@@ -5318,9 +5428,13 @@ def render_corpus_analysis_tab(
         line_spacing=line_spacing,
         scale_text_to_boxes=scale_text_to_boxes,
     )
-    text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
-        ["Per text", "Per sentence", "Per reader", "Groups"]
-    )
+    # Keyed → the `.st-key-…` selector the "Explore a corpus question" tutorial
+    # spotlights when it names the subtab to open (UX-40). The tab bar carries no
+    # widget key, so a tutorial can only *point* at it, never switch it.
+    with st.container(key="tutorial_corpus_subtabs"):
+        text_tab, sentence_tab, reader_tab, groups_tab = st.tabs(
+            ["Per text", "Per sentence", "Per reader", "Groups"]
+        )
     with text_tab:
         render_per_text_tab(
             words_filtered, fixations_filtered, viz_settings=viz_settings, **common
@@ -5763,7 +5877,8 @@ def render_per_reader_tab(
     if fixations_filtered.empty and words_filtered.empty:
         st.info("No data after filtering.")
         return
-    top = st.columns([2, 3])
+    # Keyed → the tutorial's "pick the reader, then the view" step (UX-40).
+    top = st.container(key="tutorial_per_reader_view").columns([2, 3])
     pid = _participant_picker(
         words_filtered, fixations_filtered, key="prdr_pid", host=top[0]
     )
@@ -7734,19 +7849,32 @@ def _clear_participant_metadata() -> None:
     st.session_state.pop("participant_metadata_upload", None)
 
 
-def render_participant_metadata_section(participants) -> None:
+def render_participant_metadata_section(participants, *, host=None) -> None:
     """DATA-20 §1 — attach a participant-level table and report the join.
 
-    On the 🗂️ Data page rather than as a seventh wizard step, deliberately: the
-    wizard runs only for an *upload*, and "which readers are these" is a
-    question about the demo, a public corpus and an upload alike. DATA-26 made
-    this page the one place a dataset is set up, so a source-agnostic section
-    here reaches every dataset instead of one ingestion route.
+    Two homes, one body. The **upload wizard**'s *About your readers* step is the
+    main one (the user's call): a first-time uploader is answering exactly this
+    question and would otherwise never meet the feature. The 🗂️ **Data page**
+    section is the other, because "which readers are these" is a question about
+    the demo and a public corpus too, and the wizard runs only for an upload.
+
+    They never render together: while the wizard is active ``app.main`` returns
+    before the page's slot is filled, and the collapsed *Data & mapping* review
+    panel skips this step's body entirely — two live copies would be two widgets
+    on one key.
 
     Nothing is guessed. The id column is offered pre-filled but overridable, and
     the join is reported in full before the fields go anywhere — unmatched on
     both sides, duplicated rows, and rows that disagree with themselves.
     """
+    if host is not None:
+        with host:
+            _participant_metadata_body(participants)
+        return
+    _participant_metadata_body(participants)
+
+
+def _participant_metadata_body(participants) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
@@ -8062,7 +8190,7 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     )
 
 
-def _render_trial_identity_section() -> None:
+def render_trial_identity_section() -> None:
     """VAL-7: the evidence behind "this trial id may cover several readings".
 
     Reads the report ``app.main`` computed on the **unfiltered** frames, so the
@@ -8070,10 +8198,13 @@ def _render_trial_identity_section() -> None:
     filters left. Renders an all-clear as well as a warning — "we checked and
     it's fine" is the more common answer and is worth stating, or the section
     reads as an error box that only appears when something is wrong.
+
+    UX-52 round 3 promoted this to a **section** of the Data page (``app.main``
+    draws the heading into the slot below the column mapping), from an ``#####``
+    item at the foot of "What's in this dataset". The verdict answers whether the
+    Trial ID mapping is sufficient, and the fix it names is an edit to that
+    mapping — a level below the counts was the wrong place for both.
     """
-    # UX-52: h5, not a subheader — it is one item inside "🔎 What's in this
-    # dataset", and at h3 it read as a section in its own right.
-    st.markdown("##### 🧾 Trial identity")
     report = st.session_state.get("_trial_identity_report") or {}
     total = int(report.get("trials") or 0)
     if not total:
@@ -8450,9 +8581,9 @@ def render_data_inspection_tab(
             "source data."
         )
 
-    # 4. VAL-7 — does one trial_id actually cover several readings? The verdict
-    # stays in the open (it can be a warning); only its evidence table folds.
-    _render_trial_identity_section()
+    # UX-52 round 3 — VAL-7's "does one trial_id cover several readings?" used to
+    # close this panel. It is now its own Data-page section, rendered by
+    # `app.main` beside the mapping whose Trial ID it judges.
 
     # DATA-26: the column mapping is no longer the last thing on this panel — it
     # is its own section *above* it on the Data page, next to the source and its

@@ -317,14 +317,33 @@ class TestDependentConsumers:
         # 'Robert' glyphs run 358 → 472, so the centre is 415.
         assert out["x"].iloc[0] == pytest.approx(415.0)
 
-    def test_landing_position_is_measured_from_the_corrected_left_edge(self):
+    def test_landing_position_is_measured_from_the_first_glyph(self):
+        """#BUG-27 moved this origin, on purpose.
+
+        It used to measure from the **corrected left edge** — 348.5, half an
+        advance left of the first glyph — because that is where the word's
+        *interest area* starts. But a within-word position is a position among
+        the word's letters, and the test directly above already pins where those
+        are: 'Robert' glyphs run 358 → 472, centre 415. Measuring the landing
+        from 348.5 put "0% into the word" half a space before the word, and
+        dividing by the padded 133 px width put "100%" half a space after it —
+        so `landing_positions`' own docstring promise (0 = word start, 1 = word
+        end) was untrue in both directions on a tiling corpus.
+
+        `word_box_bounds` still answers *which* word a point is in, from the
+        corrected edge; this answers *where in it*, from the glyphs. The two are
+        exactly half an advance apart by construction.
+        """
         from scanpath_studio.aggregation import landing_positions
 
         words = _tiling_words()
         words["first_fix_x"] = [400.0] * len(words)
         got = landing_positions(words, as_fraction=False)
-        # 400 is 51.5 px past 'Robert''s corrected left edge of 348.5.
-        assert got[0] == pytest.approx(51.5)
+        # 400 is 42 px past 'Robert''s first glyph at 358.
+        assert got[0] == pytest.approx(42.0)
+        # …and 42 of the 114 px its six glyphs occupy, not of the padded 133.
+        fraction = landing_positions(words)
+        assert fraction[0] == pytest.approx(42.0 / (6 * ADVANCE))
 
 
 def test_the_bundled_demo_is_recognised_as_a_tiling_layout():

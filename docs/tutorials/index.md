@@ -103,13 +103,27 @@ minutes; requires two readings sharing a text.*
 
 ## Explore the corpus
 
-**Outcome:** a reader-, text-, or group-level question answered. *About 3
-minutes; requires variation across the loaded pool.*
+**Outcome:** one worked question answered — how a reader's average fixation
+duration moved across the experiment. *About 4 minutes; requires variation
+across the loaded pool.*
 
-1. Switch to **Corpus Analysis** from the header.
-2. Choose **Per text**, **Per reader**, or **Groups** to match the unit of the
-   question.
-3. Interpret the sample size and distribution or effect together, then download
-   the displayed table.
+1. Switch to **Corpus Analysis** from the header. Your loaded data and filters
+   stay in place, so whatever you narrowed to on the Scanpath view is what gets
+   aggregated.
+2. Pick the *shape* of the question, not the chart. **Per text** — one text,
+   many readers. **Per reader** — one reader, all their trials. **Groups** — a
+   cohort, or two compared. For "did this reader speed up?", open **Per
+   reader**.
+3. Choose the reader on the left, then set **View** to **Per-trial trend** — one
+   point per trial in presentation order, the whole experiment on one axis.
+4. Set the measure to **fixation duration**. Each point is that trial's mean; a
+   downward slope is the reader settling in. Check the spread and the trial
+   count before believing it — one short trial moves a mean a long way.
+5. Optionally, **Distribution vs cohort** answers the companion question: is
+   this reader unusual, or is the whole cohort like this?
+
+With a [participant metadata](../data-format.md#participant-metadata) table
+attached, **Groups** can also split the cohort by a reader attribute — the
+group **Field** picker lists them marked 👤.
 
 See [Corpus analysis](corpus-analysis.md) for the longer worked workflow.

@@ -233,10 +233,12 @@ def test_data_inspection_reports_the_verdict():
     pin_data_view(at)
     at.run(timeout=90)
     assert not at.exception, at.exception
-    # UX-52 demoted the heading to h5 (it is one item inside "What's in this
-    # dataset", not a section of its own) and folded the evidence table into a
-    # "What was checked" expander — the verdict itself stays in the open.
-    headings = [m.value for m in at.markdown]
+    # UX-52 round 3 promoted this back to a section of its own on the Data page
+    # (round 1 had demoted it to an h5 inside "What's in this dataset"): it
+    # carries a verdict, and the fix it names is an edit to the Column mapping
+    # section right above it. The evidence table stays folded into "What was
+    # checked"; the verdict itself is in the open.
+    headings = [h.value for h in at.subheader]
     assert any("Trial identity" in h for h in headings), headings
     assert any("single reading" in s.value for s in at.success)
     assert any(e.label == "What was checked" for e in at.expander)

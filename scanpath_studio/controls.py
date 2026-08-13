@@ -110,13 +110,26 @@ def _row_label(host, label: str, help: Optional[str]) -> None:
     ``help`` folds into the title's own hover tooltip rather than getting a `?`
     icon beside it, and the title text is repeated at the head of that tooltip so
     a label the column had to truncate is still readable in full.
+
+    The tooltip is CSS (``data-tip`` + ``styles.py``'s ``.sps-fhelp::after``),
+    not the browser's native ``title=``. Native ``title`` waits about a second
+    before it appears — fine for an occasional "what is this file", far too slow
+    for a form whose every row hides its description there. The CSS one opens in
+    ~120 ms, matching the `?` icons Streamlit draws elsewhere. ``aria-label``
+    keeps the text reachable now that no ``title`` carries it.
     """
     text = _plain(label)
-    tip = f"{text} — {_plain(help)}" if help else text
-    classes = "sps-flabel sps-flabel-help" if help else "sps-flabel"
+    if not help:
+        host.markdown(
+            f'<span class="sps-flabel">{html.escape(text)}</span>',
+            unsafe_allow_html=True,
+        )
+        return
+    tip = html.escape(f"{text} — {_plain(help)}", quote=True)
     host.markdown(
-        f'<span class="{classes}" title="{html.escape(tip, quote=True)}">'
-        f"{html.escape(text)}</span>",
+        f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
+        f'<span class="sps-flabel sps-flabel-help">{html.escape(text)}</span>'
+        "</span>",
         unsafe_allow_html=True,
     )
 
@@ -1375,6 +1388,85 @@ def _assemble_mapping(
     return mapping
 
 
+#: Marker key recording which table a stored mapping was made for.
+#:
+#: The prefix, not a suffix, and deliberately outside ``col_map_*``:
+#: `tabs._collect_column_mapping` sweeps **every** `col_map_*` key that does not
+#: end in `_upload` into the saved config, so a marker named
+#: ``col_map_fix__mapped_columns`` would travel in one — come back from JSON as a
+#: *list* rather than the tuple it was written as, never compare equal to the
+#: signature again, and so clear the mapping on the first run after every
+#: restore. It describes this session's widget state, not the mapping, and has
+#: no business in a file that opens on another machine.
+def _mapped_columns_key(state_key_prefix: str) -> str:
+    """Session key holding the column signature ``state_key_prefix`` maps."""
+    return f"_mapped_columns_{state_key_prefix}"
+
+
+def _mapping_state_keys(state_key_prefix: str, field_specs: List[Dict]) -> List[str]:
+    """Every session key the mapping widgets for ``field_specs`` write."""
+    keys: List[str] = []
+    for spec in field_specs:
+        if spec.get("kind") == "box":
+            keys.append(f"{state_key_prefix}_box_format")
+            keys.extend(f"{state_key_prefix}_{box_key}" for box_key in _ALL_BOX_KEYS)
+            continue
+        keys.append(f"{state_key_prefix}_{spec['key']}")
+    return keys
+
+
+def forget_mapping_for_other_table(
+    df: pd.DataFrame, state_key_prefix: str, field_specs: List[Dict]
+) -> None:
+    """Drop a stored mapping that was made for a *different* table (DATA-24).
+
+    A mapping widget owns its key once it has rendered, and a key that exists
+    beats the ``index=`` computed from auto-detection — that is what makes a
+    user's override stick. But the app switches data sources in place, so the
+    same keys outlive the table they describe: opening the bundled demo (no
+    screen columns → *Screen order* = ``(none)``) and then switching to
+    MultiplEYE left *Screen order* on ``(none)`` while the caption beneath it
+    still read "✨ auto-detected `screen_index`", because the proposal had indeed
+    found the column and only the widget was stale. The multipart trial then
+    ordered its screens by name instead of by reading order, and the user had to
+    set a field the app had already detected.
+
+    The discriminator is the **column universe**, not the data: a new file with
+    the same headers is the case where keeping the mapping is the whole point,
+    while different headers mean this mapping was never about this table. The
+    first sighting of a prefix only *records* the signature — it must not clear,
+    or it would wipe the ``col_map_*`` keys a deep link or a restored config
+    seeds before any widget renders (``url_state._seed_column_mapping``).
+
+    Even then it clears only what has gone stale — a pick naming a column the new
+    table still has survives. That is not tidiness: the wizard *grows* its own
+    frame mid-flow (``_wizard_filename_derive`` appends ``file_part_N``), so a
+    signature change is routine there and dropping the whole mapping would reset
+    steps the user had already filled in. What gets cleared is a field left at
+    ``(none)`` or pointing at a column that is gone — in both cases there is no
+    user choice to lose, and auto-detection deserves another go.
+    """
+    signature = tuple(str(column) for column in df.columns)
+    marker = _mapped_columns_key(state_key_prefix)
+    previous = st.session_state.get(marker)
+    st.session_state[marker] = signature
+    if previous is None or previous == signature:
+        return
+    columns = set(signature)
+    for key in _mapping_state_keys(state_key_prefix, field_specs):
+        stored = st.session_state.get(key)
+        if isinstance(stored, str) and stored != NONE_OPTION and stored in columns:
+            continue
+        if isinstance(stored, (list, tuple)):
+            # The multi-capable Trial ID. Keep a composite whose every component
+            # survived; a partial one is not a mapping the user can have meant.
+            if stored and all(column in columns for column in stored):
+                continue
+        # The box *format* is a property of the table (which four columns it
+        # has), not a preference, so it is re-derived from the new proposal.
+        st.session_state.pop(key, None)
+
+
 def resolve_column_mapping(
     df: pd.DataFrame,
     state_key_prefix: str,
@@ -1402,6 +1494,7 @@ def resolve_column_mapping(
     matching the rendering editor, whose selectbox ``index`` lookup self-heals the
     same way.
     """
+    forget_mapping_for_other_table(df, state_key_prefix, field_specs)
     columns = set(df.columns)
 
     def _stored(field_key: str) -> Optional[str]:
@@ -1468,6 +1561,7 @@ def column_mapping_ui(
     box keys (the four inactive ones set to None) so the returned schema keeps
     its fixed shape.
     """
+    forget_mapping_for_other_table(df, state_key_prefix, field_specs)
     options = [NONE_OPTION] + list(df.columns)
     expanded = bool(expand_on_problem and problems)
 
@@ -1489,8 +1583,14 @@ def column_mapping_ui(
         )
         # Surface what auto-detection found for this field (ENG-9) — and flag when
         # the user has overridden it — so the mapping isn't silently inferred.
+        # DATA-24: `(none)` gets its own wording. It used to fall into the plain
+        # branch, so a field detection had found but the widget was not using
+        # read exactly like one it was — the caption named the column while the
+        # app normalized without it.
         if default and default in df.columns:
-            if chosen != default and chosen != NONE_OPTION:
+            if chosen == NONE_OPTION:
+                st.caption(f"✨ {detected_label} `{default}` · not used")
+            elif chosen != default:
                 st.caption(f"✨ {detected_label} `{default}` · overridden")
             else:
                 st.caption(f"✨ {detected_label} `{default}`")

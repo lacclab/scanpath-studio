@@ -420,6 +420,47 @@ def get_app_css() -> str:
         text-underline-offset: 3px;
         cursor: help;
     }
+    /* …and the tooltip it opens. Deliberately NOT the browser's native `title=`
+       (UX-51 shipped that first): a native tooltip waits about a second, which
+       reads as broken when every row in a dense form keeps its description
+       there. This one opens in 120 ms — the same feel as the `?` icons
+       Streamlit draws elsewhere, which sit on Base Web's 200 ms default.
+       The wrapper is what carries `position: relative`, because `.sps-flabel`
+       itself is `overflow: hidden` for the ellipsis and would clip its own
+       tooltip. Painted below-left of the title, non-interactive, and animated on
+       `opacity` alone so it never takes part in layout or intercepts a click. */
+    .sps-fhelp {
+        position: relative;
+        display: block;
+        max-width: 100%;
+    }
+    .sps-fhelp::after {
+        content: attr(data-tip);
+        position: absolute;
+        top: calc(100% + 0.3rem);
+        left: 0;
+        z-index: 1000;
+        width: max-content;
+        max-width: 17rem;
+        padding: 0.35rem 0.55rem;
+        border-radius: 0.5rem;
+        background: rgba(38, 39, 48, 0.96);
+        color: #fafafa;
+        font-size: 0.78rem;
+        font-weight: 400;
+        line-height: 1.35;
+        white-space: normal;
+        text-align: left;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 80ms linear;
+    }
+    .sps-fhelp:hover::after,
+    .sps-fhelp:focus-within::after {
+        opacity: 1;
+        transition-delay: 120ms;
+    }
 
     /* Control rail: a subtle card so it reads as a panel, with a hair more
        breathing room between the stacked toggles than the app-wide gap:0 rule.

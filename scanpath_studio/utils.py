@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from .annotations import get_entry
+from .constants import SELECTOR_ROW_GRID
 from .data import frame_fingerprint
 
 # Annotation markers shown beside a trial in the pickers (UX-6). Independent of
@@ -848,7 +849,7 @@ def _select_trial_none_mode(
         # them, so a prev/next *pair* didn't read as a pair and the group didn't
         # line up with the **More** row above or the chip row below.
         sel_col, slider_col, trail_col = host.columns(
-            [3, 5, 1.9], vertical_alignment="bottom"
+            SELECTOR_ROW_GRID, vertical_alignment="bottom"
         )
         trail = trail_col.container(key=f"railbtn_{key_prefix}_trail")
         # Created in display order (◀ ▶ then ⇅) but filled out of order: the sort

@@ -120,20 +120,30 @@ class TestOneRow:
     def test_the_help_folds_into_the_title_tooltip(self):
         """The `?` icon's replacement — hovering the title shows the help.
 
-        The markdown emphasis is stripped: a `title=` attribute is plain text, so
+        The markdown emphasis is stripped: the tooltip is plain text, so
         `**hue**` would otherwise reach the user as literal asterisks.
+
+        The text rides on `data-tip`, read by a CSS tooltip, and NOT on the
+        browser's native `title=` — that one waits about a second to appear,
+        which is unusable when it is where every row in the rail keeps its
+        description.
         """
         at = AppTest.from_function(_row_app)
         at.run(timeout=30)
         (label,) = _label_markup(at)
         assert (
-            'title="Color fixations by — The metric mapped to fixation marker hue."'
+            'data-tip="Color fixations by — The metric mapped to fixation marker hue."'
             in label
+        )
+        assert "title=" not in label, (
+            "the native browser tooltip is ~1 s slow; the help must ride on "
+            "data-tip so styles.py's .sps-fhelp rule can open it in 120 ms"
         )
         assert "sps-flabel-help" in label, (
             "a title carrying help needs the hover affordance class — it is the "
             "only hint left that there is something to hover"
         )
+        assert "sps-fhelp" in label, "the tooltip needs its positioning wrapper"
 
     def test_the_tooltip_repeats_the_title(self):
         """What makes a truncated label recoverable.
@@ -144,14 +154,16 @@ class TestOneRow:
         at = AppTest.from_function(_row_app)
         at.run(timeout=30)
         (label,) = _label_markup(at)
-        assert 'title="Color fixations by' in label
+        assert 'data-tip="Color fixations by' in label
 
     def test_a_title_without_help_gets_no_hover_affordance(self):
         at = AppTest.from_function(_plain_row_app)
         at.run(timeout=30)
         (label,) = _label_markup(at)
         assert "sps-flabel-help" not in label
-        assert 'title="Marker shape"' in label
+        assert "sps-fhelp" not in label
+        assert "data-tip" not in label
+        assert ">Marker shape</span>" in label
 
     def test_markup_in_a_title_or_help_is_escaped(self):
         """The label is rendered with `unsafe_allow_html`, so it must escape."""
@@ -225,4 +237,4 @@ class TestTheRealRail:
         for title in ("Color fixations by", "Drift correction", "Marker shape"):
             assert f">{title}</span>" in labels, f"{title} lost its label column"
         # …carrying the control's help as the title's own tooltip.
-        assert 'title="Drift correction — Snap fixations' in labels
+        assert 'data-tip="Drift correction — Snap fixations' in labels

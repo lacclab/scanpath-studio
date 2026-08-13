@@ -283,3 +283,135 @@ class TestTheResolverAgreesWithTheEditor:
         at.run(timeout=30)
         assert not at.exception, at.exception
         assert at.session_state["_out"]["participant"] == "participant_id"
+
+
+class TestSwitchingToAnotherTable:
+    """DATA-24: a mapping made for one dataset must not govern the next one.
+
+    A mapping widget owns its key once it has rendered, and an existing key beats
+    the ``index=`` auto-detection computes — that is what makes an override
+    stick. But the app switches data sources *in place*, so those keys outlive
+    the table they describe. Opening the bundled demo (no screen columns, so
+    *Screen order* = ``(none)``) and then switching to MultiplEYE left the field
+    on ``(none)`` while the caption under it still read
+    "✨ auto-detected ``screen_index``" — the proposal had found the column and
+    only the widget was stale, so the multipart trial ordered its screens by name
+    instead of by reading order.
+    """
+
+    @staticmethod
+    def _switch_app():
+        import pandas as pd
+        import streamlit as st
+
+        from scanpath_studio.controls import FIX_FIELD_SPECS, column_mapping_ui
+        from scanpath_studio.data import propose_fix_schema
+
+        columns = {
+            "participant_id": ["p1"],
+            "trial": ["t1"],
+            "CURRENT_FIX_X": [1.0],
+            "CURRENT_FIX_Y": [2.0],
+            "CURRENT_FIX_DURATION": [100],
+        }
+        if st.session_state.get("_multipart"):
+            columns = {**columns, "page": ["page_1"], "screen_index": [1]}
+        df = pd.DataFrame(columns)
+        st.session_state["_mapping"] = column_mapping_ui(
+            df,
+            table_label="Fixations",
+            state_key_prefix="col_map_fix",
+            field_specs=FIX_FIELD_SPECS,
+            proposed=propose_fix_schema(df),
+        )
+
+    def test_a_field_detected_only_in_the_new_table_is_used(self):
+        at = AppTest.from_function(self._switch_app)
+        at.run(timeout=30)
+        assert at.session_state["_mapping"]["screen_index"] is None
+
+        at.session_state["_multipart"] = True
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert at.session_state["_mapping"]["screen_index"] == "screen_index", (
+            "the second table has a screen_index column and auto-detection "
+            "proposes it, so the field must not stay on the (none) left behind "
+            "by the first table"
+        )
+        assert at.session_state["_mapping"]["screen_id"] == "page"
+
+    def test_a_pick_that_still_applies_survives_the_switch(self):
+        """Only what has gone stale is cleared — the wizard grows its own frame
+        mid-flow (`file_part_N`), so a column-universe change is routine there
+        and must not reset the steps already filled in."""
+        at = AppTest.from_function(self._switch_app)
+        at.run(timeout=30)
+        at.selectbox(key="col_map_fix_participant").select("trial").run(timeout=30)
+        assert at.session_state["_mapping"]["participant"] == "trial"
+
+        at.session_state["_multipart"] = True
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        assert at.session_state["_mapping"]["participant"] == "trial"
+
+    def test_none_is_respected_while_the_table_is_the_same(self):
+        """Within one table the widget stays authoritative, so a field the user
+        deliberately cleared is not quietly re-detected on the next rerun."""
+        at = AppTest.from_function(self._switch_app)
+        at.session_state["_multipart"] = True
+        at.run(timeout=30)
+        assert at.session_state["_mapping"]["screen_index"] == "screen_index"
+
+        at.selectbox(key="col_map_fix_screen_index").select("(none)").run(timeout=30)
+        assert at.session_state["_mapping"]["screen_index"] is None
+        at.run(timeout=30)
+        assert at.session_state["_mapping"]["screen_index"] is None
+
+    def test_the_table_marker_stays_out_of_the_saved_config(self):
+        """It records this session's widget state, not the mapping.
+
+        `tabs._collect_column_mapping` sweeps every `col_map_*` key that does not
+        end in `_upload` into the saved-config JSON, so a marker named
+        `col_map_fix__mapped_columns` would travel in one — and come back as a
+        *list* rather than the tuple it was written as, never compare equal to the
+        signature again, and clear the mapping on the first run after every
+        restore.
+        """
+
+        def _sweep_app():
+            import pandas as pd
+            import streamlit as st
+
+            from scanpath_studio.controls import FIX_FIELD_SPECS, column_mapping_ui
+            from scanpath_studio.data import propose_fix_schema
+            from scanpath_studio.tabs import _collect_column_mapping
+
+            df = pd.DataFrame(
+                {
+                    "participant_id": ["p1"],
+                    "trial": ["t1"],
+                    "CURRENT_FIX_X": [1.0],
+                    "CURRENT_FIX_Y": [2.0],
+                    "CURRENT_FIX_DURATION": [100],
+                }
+            )
+            column_mapping_ui(
+                df,
+                table_label="Fixations",
+                state_key_prefix="col_map_fix",
+                field_specs=FIX_FIELD_SPECS,
+                proposed=propose_fix_schema(df),
+            )
+            st.session_state["_swept"] = _collect_column_mapping()
+
+        at = AppTest.from_function(_sweep_app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        swept = at.session_state["_swept"]
+        assert swept, "the sweep should still collect the real mapping keys"
+        assert not any("mapped_columns" in key for key in swept), (
+            f"the table marker rode into the saved config: {sorted(swept)}"
+        )
+        import json
+
+        json.dumps(swept)  # the config is written as JSON; a tuple would survive

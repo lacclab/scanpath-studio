@@ -71,9 +71,12 @@ from scanpath_studio.constants import (
     DEFAULT_SACCADE_WIDTH,
     DEMO_CHOICE,
     HIGHLIGHTED_TEXT_COLOR,
+    NARROW_BY_GRID,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
+    SELECTOR_ROW_GRID,
+    SELECTOR_ROW_WIDE_GRID,
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
@@ -85,6 +88,7 @@ from scanpath_studio.controls import (
     SUMMARY_CHIP_FIELDS,
     WORD_FIELD_SPECS,
     _collect_compare_styles,
+    _labeled,
     _numeric_slider,
     column_mapping_ui,
     corpus_style_controls,
@@ -267,7 +271,7 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> Optional[str]:
         for row in catalog.itertuples()
     }
     sel_col, slider_col, trail_col = st.columns(
-        [3, 5, 1.9], vertical_alignment="bottom"
+        SELECTOR_ROW_GRID, vertical_alignment="bottom"
     )
     position = options.index(str(st.session_state["single_screen_id"]))
     selected = sel_col.selectbox(
@@ -1018,7 +1022,12 @@ def _render_compare_dataset_picker() -> Optional[SecondaryDataset]:
     names = [THIS_DATASET, *(name for name, _, _ in options)]
     if st.session_state.get(COMPARE_SOURCE_KEY) not in names:
         st.session_state[COMPARE_SOURCE_KEY] = THIS_DATASET
-    ds_col, filter_col = st.columns([3, 6.9], vertical_alignment="bottom")
+    # UX-47: B's row is A's row one level down, so it takes the same grid —
+    # the **Compare with** dropdown lands under **Select Trial**, and B's own
+    # **More** under A's.
+    ds_col, filter_col, more_col = st.columns(
+        SELECTOR_ROW_GRID, vertical_alignment="bottom"
+    )
     chosen = ds_col.selectbox(
         "**Compare with**",
         options=names,
@@ -1049,8 +1058,8 @@ def _render_compare_dataset_picker() -> Optional[SecondaryDataset]:
     # §5.2: B's own Narrow-by pair + More popover, on B's columns. Mirrors A's
     # row above the chips; the `cmp` prefix is what keeps the two independent.
     box = filter_col.container(key="cmp_narrow_by")
-    nb_label, nb_text, nb_part, more_col = box.columns(
-        [1.1, 2.2, 2.2, 1.1], vertical_alignment="center"
+    nb_label, nb_text, nb_part = box.columns(
+        NARROW_BY_GRID, vertical_alignment="center"
     )
     nb_label.markdown("**Filter B by**")
     render_narrow_by(
@@ -1212,7 +1221,7 @@ def _render_compare_selector(
     sort_col = None
     if n > 1:
         sel_col, slider_col, trail_col = st.columns(
-            [3, 5, 1.9], vertical_alignment="bottom"
+            SELECTOR_ROW_GRID, vertical_alignment="bottom"
         )
         trail = trail_col.container(key="railbtn_single_compare_trail")
         # Create the children in display order, then fill the ordering popover
@@ -3371,10 +3380,16 @@ def render_single_trial_tab(
         # "More" holds the condition + annotation filters. The specific trial is
         # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
         # UX-42: Data source and Filter by have separate tour steps, so they need
-        # sibling spotlight targets even though they share one visual row. The
-        # nested columns preserve the existing proportions: 2.2 for the source,
-        # then 0.9 + 2.2 + 2.2 + 1.1 for the narrowing controls.
-        nb_source, nb_filters = st.columns([2.2, 6.4], vertical_alignment="center")
+        # sibling spotlight targets even though they share one visual row.
+        # UX-47: on `SELECTOR_ROW_GRID`, the same three tracks as the trial picker
+        # below — so the source dropdown ends exactly where the trial dropdown
+        # does, the filters start where the scrub slider does, and **More** sits
+        # on the ◀ ▶ ⇅ edge. It used to be [2.2, 6.4] with the narrowing controls
+        # subdivided inside the second column, which put every boundary in this
+        # row a few dozen pixels off the row below it.
+        nb_source, nb_filters, nb_more = st.columns(
+            SELECTOR_ROW_GRID, vertical_alignment="center"
+        )
         # Rendered by app (it owns the entry list + the wizard hooks) — see
         # app.render_data_source_picker; its own `tour_grp_data_source` wrapper
         # now sits beside, rather than inside, the Filter-by spotlight.
@@ -3382,12 +3397,12 @@ def render_single_trial_tab(
             data_source_renderer(nb_source)
 
         filter_box = nb_filters.container(key="tour_grp_narrow_by")
-        nb_label, nb_text, nb_part, more_col = filter_box.columns(
-            [0.9, 2.2, 2.2, 1.1], vertical_alignment="center"
+        nb_label, nb_text, nb_part = filter_box.columns(
+            NARROW_BY_GRID, vertical_alignment="center"
         )
         nb_label.markdown("**Filter by**")
         render_narrow_by(words_all, fixations_all, text_host=nb_text, part_host=nb_part)
-        with more_col:
+        with nb_more:
             # UX-27: keyed so styles.py can give it the shared rail-button
             # shape, matching the picker's ◀ ▶ ⇅ and the chip row below.
             more_pop = st.container(key="railbtn_more").popover("More", width="content")
@@ -3540,7 +3555,9 @@ def render_single_trial_tab(
                     st.session_state.setdefault(
                         "single_playback_speed", _ANIM_DEFAULT_SPEED
                     )
-                    playback_speed = st.select_slider(
+                    playback_speed = _labeled(
+                        st,
+                        "select_slider",
                         "Playback speed",
                         options=_ANIM_SPEED_OPTIONS,
                         format_func=lambda x: _ANIM_SPEED_LABELS[
@@ -3611,7 +3628,9 @@ def render_single_trial_tab(
                         st.session_state["global_anim_quality"] = "Custom"
                     elif previous_quality != "Custom":
                         st.session_state["global_anim_quality"] = matched_quality
-                    st.segmented_control(
+                    _labeled(
+                        st,
+                        "segmented_control",
                         "Animation quality",
                         options=["Coarse", "Fine", "Custom"],
                         key="global_anim_quality",
@@ -3627,15 +3646,18 @@ def render_single_trial_tab(
                         st.session_state["global_anim_quality"] = "Custom"
 
                     if st.session_state["global_anim_quality"] == "Custom":
-                        # UX-30: two short numeric pickers, side by side rather
-                        # than stacked — the popover is narrow and they are read
-                        # together (step against cap).
-                        grid_left, grid_right = st.columns(2)
+                        # UX-30 put these two side by side in half-width columns,
+                        # because label-above made each of them two rows tall and
+                        # stacking cost four. UX-51's `label | slider | box` row is
+                        # one row either way, so they go back to full width: same
+                        # height, and each slider gets a usable track instead of
+                        # half the popover minus its own label.
                         _numeric_slider(
-                            grid_left,
+                            st,
                             "Frame every (ms)",
                             key="global_anim_grid_step_ms",
                             persist_state="session",
+                            label_left=True,
                             min_value=20,
                             max_value=500,
                             step=10,
@@ -3645,10 +3667,11 @@ def render_single_trial_tab(
                             "slider scrubs linearly through seconds either way.",
                         )
                         _numeric_slider(
-                            grid_right,
+                            st,
                             "Max frames",
                             key="global_anim_max_frames",
                             persist_state="session",
+                            label_left=True,
                             min_value=30,
                             max_value=2000,
                             step=10,
@@ -3713,7 +3736,9 @@ def render_single_trial_tab(
                         # Seed so the control shows "Overlay" selected by default
                         # (the body reads this key to resolve compare_layout).
                         st.session_state.setdefault(SINGLE_COMPARE_LAYOUT, "Overlay")
-                        st.segmented_control(
+                        _labeled(
+                            st,
+                            "segmented_control",
                             "View",
                             options=["Overlay", "Side by side", "Stacked"],
                             key=SINGLE_COMPARE_LAYOUT,
@@ -3745,7 +3770,9 @@ def render_single_trial_tab(
                         # would just blank half the figure.
                         if st.session_state.get(SINGLE_COMPARE_LAYOUT) == "Overlay":
                             st.session_state.setdefault(SINGLE_COMPARE_STIMULUS, "Both")
-                            st.segmented_control(
+                            _labeled(
+                                st,
+                                "segmented_control",
                                 "Stimulus from",
                                 options=["Both", "A", "B"],
                                 key=SINGLE_COMPARE_STIMULUS,
@@ -3782,6 +3809,7 @@ def render_single_trial_tab(
                                 # hovering the tooltip (UX-31).
                                 placeholder=DEFAULT_COMPARE_LABEL_PATTERN,
                                 help="Leave empty for the auto label.",
+                                label_left=True,
                             )
                         render_pattern_help(box, label_fields)
         # The visualization controls moved out of the sidebar into this rail
@@ -4057,7 +4085,9 @@ def render_single_trial_tab(
         # cluster — styles.py lays every such container out as a right-packed
         # flex row, so this row's pair ends flush with **More** above it and
         # ◀ ▶ ⇅ between them, at the same 3px internal spacing.
-        strip_col, trail_col = st.columns([11, 2.5], vertical_alignment="top")
+        strip_col, trail_col = st.columns(
+            SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
+        )
         trail = trail_col.container(key="railbtn_chip_trail")
         # Created in display order (Details, then ✏️) but filled out of order:
         # the popover body needs `summary`, which the strip below computes.

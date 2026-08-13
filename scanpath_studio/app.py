@@ -82,6 +82,7 @@ from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
     RAW_GAZE_FIELD_SPECS,
     WORD_FIELD_SPECS,
+    _labeled,
     _pin,
     clear_trial_filter,
     clear_trial_filters,
@@ -2190,7 +2191,7 @@ def render_data_source_picker(host=None) -> None:
 
     # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
     box = (host if host is not None else st).container(key="tour_grp_data_source")
-    pick_col, add_col = box.columns([4, 1.2], vertical_alignment="center")
+    pick_col, add_col = box.columns([5.6, 1], vertical_alignment="center")
     # Mirror the canonical key onto the widget key before it instantiates, so a
     # deep link / restore / wizard finalize shows up in the picker.
     current = st.session_state.get("data_source_choice")
@@ -2205,7 +2206,13 @@ def render_data_source_picker(host=None) -> None:
         on_change=_on_data_source_pick,
         label_visibility="collapsed",
     )
-    manage = add_col.popover("➕", width="stretch", help="Add or remove datasets.")
+    # UX-47: `railbtn_*`, like every other trigger on the four control rows above
+    # the plot. It was the one that never joined UX-27's shared shape, and it
+    # showed: a 40 px-tall stretched rectangle beside 27 px pills, which also made
+    # this row the tallest of the four for no reason.
+    manage = add_col.container(key="railbtn_data_add").popover(
+        "➕", width="content", help="Add or remove datasets."
+    )
     # The state change runs in an on_click callback (before widgets instantiate)
     # so it can reassign the data_source_choice key — see _enter_add_data_wizard.
     # The callback fires, then Streamlit reruns into the wizard branch.
@@ -2576,6 +2583,20 @@ def render_sidebar_canvas_controls(
     _, font_css = _dataset_font(words_filtered)
     host = slot if slot is not None else st.container()
     display = host if bare else host.expander(title, expanded=expanded)
+
+    def field(host, kind: str, label: str, **kwargs):
+        """One control, `label | field` in the rail and label-above in the wizard.
+
+        UX-51 made the rail read as a compact form; the wizard's flat expander
+        keeps the label above its field, for the same reason it stays flat — that
+        step *is* the setup form, laid out across the page rather than inside a
+        28rem popover, so there is no height to buy back.
+        """
+        if bare:
+            return _labeled(host, kind, label, **kwargs)
+        kwargs.pop("display", None)
+        return getattr(host, kind)(label, **kwargs)
+
     # Both sub-groups are created up front (Streamlit lays containers out in
     # creation order), so the code below keeps its order while landing in the
     # right group. Flat mode points both names at the one container.
@@ -2583,7 +2604,9 @@ def render_sidebar_canvas_controls(
         display.popover("🖥️ Screen & geometry", width="stretch") if bare else display
     )
     text = display.popover("🔤 Text & fonts", width="stretch") if bare else display
-    canvas_width = screen.number_input(
+    canvas_width = field(
+        screen,
+        "number_input",
         "Monitor width (px)",
         min_value=100,
         max_value=10000,
@@ -2592,7 +2615,9 @@ def render_sidebar_canvas_controls(
         key="global_canvas_width",
         persist_state="session",
     )
-    canvas_height = screen.number_input(
+    canvas_height = field(
+        screen,
+        "number_input",
         "Monitor height (px)",
         min_value=100,
         max_value=10000,
@@ -2604,8 +2629,11 @@ def render_sidebar_canvas_controls(
     # DATA-2: physical setup values live beside the pixel canvas they explain.
     # They are persisted with the plot config and immediately yield a px/degree
     # scale for downstream saccade/reporting work.
-    monitor_width_mm = screen.number_input(
+    monitor_width_mm = field(
+        screen,
+        "number_input",
         "Monitor physical width (mm)",
+        display="Physical width (mm)",
         min_value=100.0,
         max_value=3000.0,
         step=1.0,
@@ -2613,7 +2641,9 @@ def render_sidebar_canvas_controls(
         persist_state="session",
         help="Width of the visible display area, not the diagonal size.",
     )
-    viewing_distance_mm = screen.number_input(
+    viewing_distance_mm = field(
+        screen,
+        "number_input",
         "Viewing distance (mm)",
         min_value=100.0,
         max_value=3000.0,
@@ -2623,7 +2653,9 @@ def render_sidebar_canvas_controls(
         help="Eye-to-screen distance during the experiment.",
     )
     derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
-    display_dpi = screen.number_input(
+    display_dpi = field(
+        screen,
+        "number_input",
         "Display DPI",
         min_value=20.0,
         max_value=1000.0,
@@ -2654,7 +2686,9 @@ def render_sidebar_canvas_controls(
         "line spacing) so it stays true to the real experiment at any zoom. "
         "Untick to use the fixed 'Figure font size' below instead.",
     )
-    line_spacing = text.number_input(
+    line_spacing = field(
+        text,
+        "number_input",
         "Line spacing",
         min_value=1.0,
         max_value=10.0,
@@ -2673,8 +2707,11 @@ def render_sidebar_canvas_controls(
         help="Convert the original stimulus point size with the DPI above. "
         "Scale-to-boxes still takes precedence when enabled.",
     )
-    stimulus_font_pt = text.number_input(
+    stimulus_font_pt = field(
+        text,
+        "number_input",
         "Stimulus font size (pt)",
+        display="Font size (pt)",
         min_value=4.0,
         max_value=144.0,
         step=0.5,
@@ -2686,7 +2723,9 @@ def render_sidebar_canvas_controls(
         st.session_state["global_base_font_size"] = int(
             min(max(round(font_pt_to_px(stimulus_font_pt, display_dpi)), 6), 72)
         )
-    base_font_size = text.number_input(
+    base_font_size = field(
+        text,
+        "number_input",
         "Figure font size (px)",
         min_value=6,
         max_value=72,
@@ -2717,7 +2756,9 @@ def render_sidebar_canvas_controls(
         ),
         help="A CJK/Hebrew/Arabic-capable CSS fallback stack (PRE-6).",
     )
-    font_family = text.text_input(
+    font_family = field(
+        text,
+        "text_input",
         "Text font",
         key="global_font_family",
         persist_state="session",
@@ -2750,7 +2791,9 @@ def render_sidebar_canvas_controls(
 
     # Base reading-text colour (highlighted-text colour lives in Visualization
     # controls). Read back into viz_settings by controls.sidebar_controls.
-    text.color_picker(
+    field(
+        text,
+        "color_picker",
         "Text color",
         key="global_text_color",
         persist_state="session",
@@ -2760,7 +2803,9 @@ def render_sidebar_canvas_controls(
     # Plot background lives here (Experimental Setup) rather than under
     # Visualization; sidebar_controls reads the chosen value from session state.
     bg_options = list(BACKGROUND_PRESETS.keys()) + ["Custom…"]
-    text.selectbox(
+    field(
+        text,
+        "selectbox",
         "Plot background",
         options=bg_options,
         key="global_bg_choice",
@@ -2776,8 +2821,11 @@ def render_sidebar_canvas_controls(
         # widget's own `persist_state="session"` (ENG-36) rather than by
         # re-asserting the value from Python on every run.
         _pin("global_bg_custom", DEFAULT_BACKGROUND_COLOR)
-        text.color_picker(
+        field(
+            text,
+            "color_picker",
             "Custom background color",
+            display="Custom colour",
             key="global_bg_custom",
             persist_state="session",
         )

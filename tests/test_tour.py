@@ -456,7 +456,11 @@ class TestSpotlightSelectorsResolve:
         from scanpath_studio.tabs import render_single_trial_tab
 
         source = inspect.getsource(render_single_trial_tab)
-        assert "nb_source, nb_filters = st.columns(" in source
+        # UX-47 added a third track (the **More** popover moved out of the
+        # Filter-by group onto the shared grid's right-hand column), but the
+        # invariant is unchanged: the source picker is a *sibling* of the
+        # Filter-by spotlight, never a child of it.
+        assert "nb_source, nb_filters, nb_more = st.columns(" in source
         assert "data_source_renderer(nb_source)" in source
         assert 'filter_box = nb_filters.container(key="tour_grp_narrow_by")' in source
 

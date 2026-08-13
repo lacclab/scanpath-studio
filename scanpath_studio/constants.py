@@ -482,3 +482,35 @@ _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 # loader into a render/resolve pair.
 DATA_PAGE_KEY = "data_setup_page"
 DATA_PAGE_OFFSCREEN_KEY = "data_setup_page_offscreen"
+
+# UX-47: ONE column grid for every control row stacked above the plot — the
+# Narrow-by row, the trial picker, the multipart screen navigator, the chip
+# strip, and (in Compare mode) the second dataset's picker and its own Narrow-by
+# row. Three tracks: **pick** (the row's own dropdown), **scrub** (the wide
+# middle — a slider, a pair of multiselects, the chips), **act** (the right-hand
+# `railbtn_*` pills, which `styles.py` packs flush right).
+#
+# It is a shared constant rather than a repeated literal because that is the
+# whole feature: the rows are built in three functions across two modules, and
+# each of them owning its own weights is exactly how they drifted apart — the
+# source dropdown ended 50 px short of the trial dropdown directly below it, and
+# the middle track started 38 px further left on one row than the next. Tracks
+# span by *summing* the weights they cover (the chip strip is 3 + 5), never by
+# inventing a second pair; a `st.columns` of merged weights differs from the
+# three-track boundary by a fraction of one gutter (~3 px at the default 1 rem),
+# which is below the threshold where an eye reads two edges as unaligned.
+#
+# Widths, not pixels: Streamlit shares the row minus its gutters out by weight,
+# so the grid holds at every window size.
+SELECTOR_ROW_GRID = [3.0, 5.0, 1.9]
+
+#: The first two tracks of ``SELECTOR_ROW_GRID`` as one — for a row whose left
+#: side is a single wide element (the chip strip) rather than pick + scrub.
+SELECTOR_ROW_WIDE_GRID = [
+    SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1],
+    SELECTOR_ROW_GRID[2],
+]
+
+#: The Narrow-by row's middle track, split into `label | text | participant`.
+#: Used by both A's row and (in Compare mode) B's, so the two line up too.
+NARROW_BY_GRID = [0.9, 2.2, 2.2]

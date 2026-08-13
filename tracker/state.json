@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 316,
+  "revision": 326,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -87,10 +87,10 @@
       "updated": "2026-08-13"
     },
     "BUG-26": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "BUG-4": {
@@ -233,10 +233,10 @@
       "updated": "2026-08-12"
     },
     "DATA-24": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
-      "implementationBrief": "",
-      "archived": false,
+      "implementationBrief": "Great, One comment - I needed to change 'screen order' from none to screen_index for this to work. It isweird becuase the app writes: ✨ auto-detected screen_index, but screen_index was not selected. Fix it.",
+      "archived": true,
       "updated": "2026-08-13"
     },
     "DATA-26": {
@@ -685,10 +685,10 @@
       "updated": "2026-08-11"
     },
     "UX-47": {
-      "status": "In progress",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "Not good enough, it can be better. Think in terms of UX\\UI. It is small updates to the left\\right and spacing to align everything.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "UX-48": {
@@ -713,7 +713,14 @@
       "updated": "2026-08-12"
     },
     "UX-51": {
-      "status": "Review",
+      "status": "Closed",
+      "priority": "Normal",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-13"
+    },
+    "UX-52": {
+      "status": "Planned",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,

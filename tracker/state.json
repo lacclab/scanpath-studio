@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 329,
+  "revision": 331,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -650,9 +650,9 @@
       "updated": "2026-08-12"
     },
     "UX-40": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "This is a good start. Should be updated based on other changes made throughout the app, and also generally improved and polished.",
+      "implementationBrief": "generally yes. \nCould show specifically average fixation duration over the whole experiment (need to switch to per-reader and then select view: per-trial trend).",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -720,7 +720,7 @@
       "updated": "2026-08-13"
     },
     "UX-52": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "What about \"labels beside their fields\"?\nand do we really need Screen canvas width and height? or at least put under an advanced toggle? In general the column nampping can be over welmhing\n\nand maybe move 🔎 What's in this dataset to the top?",
       "archived": false,

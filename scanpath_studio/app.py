@@ -3377,8 +3377,9 @@ def main() -> None:
     #     Options         (source-specific: OneStop regime + parts + variant, …)
     #     Data location   (path input + Expected files + found/download status)
     #     Add a dataset   (the upload wizard, while one is being added)
+    #     What's in it    (name + counts + raw tables + stats + trial identity)
     #     Column mapping  (ONE section, three modes — see _render_setup_mapping)
-    #     What's in it    (name + counts + raw tables + stats + recording setup)
+    #     Participant metadata (DATA-20)
     #     Preprocessing
     data_view = active_view == _VIEW_DATA
     setup_page = st.container(
@@ -3387,9 +3388,10 @@ def main() -> None:
     if data_view:
         setup_page.header("Set up your dataset")
         setup_page.caption(
-            "Where the data comes from, how its columns map onto the app's "
-            "canonical fields, what is actually in it, and the optional "
-            "preprocessing applied before anything is measured."
+            "Where the data comes from, what is actually in it, how its columns "
+            "map onto the app's canonical fields, what you know about the "
+            "readers, and the optional preprocessing applied before anything is "
+            "measured."
         )
         # UX-52 — four peer sections, one heading level, one divider between
         # each. The source block used to open with no heading at all, which
@@ -3407,8 +3409,16 @@ def main() -> None:
     source_options_slot = setup_page.container()
     data_location_slot = setup_page.container()
     setup_wizard_slot = setup_page.container()
+    # UX-52 round 2 — "what's in this dataset" comes **before** the mapping, on
+    # the user's call. It breaks pipeline order deliberately: the counts are the
+    # first thing you want after choosing a source ("did it load, and is it the
+    # right size?"), and the mapping is what you scroll to when the answer looks
+    # wrong. Reserving the slots in this order is the whole change — Streamlit
+    # lays containers out in creation order, so *when* each is filled during the
+    # load is unaffected.
+    setup_body_slot = setup_page.container()
     # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
-    # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` below.
+    # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` above.
     column_mapping_slot = setup_page.container(key="tutorial_column_mapping")
     # The heading belongs to the *section*, not to any one of its three modes —
     # mode A's panels are written into the body by `prepare_data` during the
@@ -3416,11 +3426,13 @@ def main() -> None:
     # slot of its own above them (see tabs._render_column_mapping_section).
     mapping_head_slot = column_mapping_slot.container()
     mapping_body_slot = column_mapping_slot.container()
+    # Raw tables for a dataset whose mapping is still broken. Its own slot,
+    # *below* the editor: with "what's in it" moved above, filling that one
+    # would put the tables above the controls that fix them.
+    unmapped_slot = setup_page.container()
     # DATA-20 §1 — the participant-level metadata table. After the mapping (it
-    # joins on the reader id the mapping just settled) and before "what's in
-    # it" (whose counts it does not change).
+    # joins on the reader id the mapping just settled).
     setup_metadata_slot = setup_page.container(key="tutorial_participant_metadata")
-    setup_body_slot = setup_page.container()
     setup_preproc_slot = setup_page.container(key="tutorial_preprocessing")
 
     # Data source selection. UX-25: only the *resolution* happens here (it must
@@ -3600,7 +3612,7 @@ def main() -> None:
         # (which hid the data the user needs to choose the mapping), show the
         # raw tables on the Data page, right under the still-editable Column
         # mapping section — and, from any other view, say where that page is.
-        with setup_body_slot:
+        with unmapped_slot:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         _render_offpage_setup_notice(data_view)
         return

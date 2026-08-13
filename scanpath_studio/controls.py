@@ -1097,6 +1097,22 @@ def _default_box_format(proposed: Dict[str, Optional[str]]) -> str:
     return BOX_FORMAT_EDGES
 
 
+# UX-52: mapping fields that only a **multipart** dataset needs (one logical
+# trial spread over several screens, DATA-21/DATA-24) plus the per-screen canvas
+# size. All optional, all inert for an ordinary single-screen corpus, and
+# together they were half the rows in the editor — so they fold into an
+# "Advanced" group instead of padding the list everyone reads.
+_ADVANCED_MAPPING_KEYS = frozenset(
+    {
+        "screen_id",
+        "screen_index",
+        "screen_timestamp",
+        "screen_fixation_id",
+        "canvas_width",
+        "canvas_height",
+    }
+)
+
 WORD_FIELD_SPECS: List[Dict] = [
     {
         "key": "participant",
@@ -1564,16 +1580,46 @@ def column_mapping_ui(
     forget_mapping_for_other_table(df, state_key_prefix, field_specs)
     options = [NONE_OPTION] + list(df.columns)
     expanded = bool(expand_on_problem and problems)
+    # UX-52 round 2 — "the column mapping can be overwhelming". Two changes:
+    # every row is `label | field` (UX-51's shape, which the user asked for here
+    # too), and the multipart/canvas fields fold into an **Advanced** group.
+    # They are all optional, all meaningless for an ordinary single-screen
+    # dataset, and they were half the rows. The group is skipped when the caller
+    # asks for a subset (`only_keys`) — that is the wizard, which already groups
+    # these fields into its own ordered steps (DATA-22).
+    group_advanced = only_keys is None
+    hosts: Dict[str, object] = {}
+
+    def _host_for(field_key: str):
+        """The container a field's row renders into (main, or Advanced)."""
+        if group_advanced and field_key in _ADVANCED_MAPPING_KEYS:
+            return hosts.get("advanced") or hosts["main"]
+        return hosts["main"]
+
+    def _row(field_key: str, field_label: str, help_text):
+        """A `label | field` pair; returns the field column to render into.
+
+        The caption ("✨ auto-detected …") goes in the *field* column too, so it
+        sits under the control it describes rather than under the label.
+        """
+        host = _host_for(field_key)
+        label_col, field_col = host.columns(
+            [_LABEL_W, 1.0 - _LABEL_W], gap=_LABEL_GAP, vertical_alignment="center"
+        )
+        _row_label(label_col, field_label, help_text)
+        return field_col
 
     def _selectbox(field_key: str, field_label: str, help_text=None) -> Optional[str]:
         default = proposed.get(field_key)
         index = options.index(default) if default in options else 0
-        chosen = st.selectbox(
+        field_col = _row(field_key, field_label, help_text)
+        chosen = field_col.selectbox(
             field_label,
             options=options,
             index=index,
             key=f"{state_key_prefix}_{field_key}",
             help=help_text,
+            label_visibility="collapsed",
             # DATA-26: the editor lives on the Data page, which executes only
             # while it is the active view — but the mapping drives `prepare_data`
             # on every view. Without this, Streamlit drops the key at the end of
@@ -1589,11 +1635,11 @@ def column_mapping_ui(
         # app normalized without it.
         if default and default in df.columns:
             if chosen == NONE_OPTION:
-                st.caption(f"✨ {detected_label} `{default}` · not used")
+                field_col.caption(f"✨ {detected_label} `{default}` · not used")
             elif chosen != default:
-                st.caption(f"✨ {detected_label} `{default}` · overridden")
+                field_col.caption(f"✨ {detected_label} `{default}` · overridden")
             else:
-                st.caption(f"✨ {detected_label} `{default}`")
+                field_col.caption(f"✨ {detected_label} `{default}`")
         return None if chosen == NONE_OPTION else chosen
 
     host = container if container is not None else st.container()
@@ -1617,6 +1663,35 @@ def column_mapping_ui(
             st.warning(
                 "Fix these before the app can use this table: " + "; ".join(problems)
             )
+        # Both hosts are reserved up front, so the Advanced group sits *after*
+        # every ordinary row no matter where its fields fall in the spec order
+        # (Streamlit lays containers out in creation order, and
+        # `_assemble_mapping` interleaves them).
+        hosts["main"] = st.container()
+        advanced_slot = st.container()
+        if group_advanced and any(
+            spec["key"] in _ADVANCED_MAPPING_KEYS for spec in field_specs
+        ):
+            # Open when the dataset actually uses one of them, so a multipart
+            # corpus does not hide its screen mapping behind a fold.
+            def _mapped(key: str) -> bool:
+                # `NONE_OPTION` is the literal string the selectbox holds for
+                # "not mapped" — truthy, so a bare `or` kept the group open
+                # forever once the widgets had rendered once.
+                stored = st.session_state.get(f"{state_key_prefix}_{key}")
+                if stored in (None, NONE_OPTION, ""):
+                    stored = None
+                return bool(proposed.get(key) or stored)
+
+            in_use = any(_mapped(key) for key in _ADVANCED_MAPPING_KEYS)
+            hosts["advanced"] = advanced_slot.expander(
+                "⚙️ Multipart screens & canvas — advanced", expanded=bool(in_use)
+            )
+            hosts["advanced"].caption(
+                "Only for a dataset where one logical trial spans several "
+                "screens, or that records its canvas size per screen. Leave "
+                "empty otherwise."
+            )
 
         def _render_box_format(spec: Dict) -> str:
             fmt_key = f"{state_key_prefix}_box_format"
@@ -1626,10 +1701,11 @@ def column_mapping_ui(
                 # multiselect below.
                 st.session_state[fmt_key] = _default_box_format(proposed)
             star = " \\*" if spec.get("required") else ""
-            st.markdown(f"**{spec['label']}**{star}")
+            box_host = hosts["main"]
+            box_host.markdown(f"**{spec['label']}**{star}")
             if spec.get("help"):
-                st.caption(spec["help"])
-            return st.radio(
+                box_host.caption(spec["help"])
+            return box_host.radio(
                 "Coordinate format",
                 options=list(_BOX_SUBFIELDS),
                 key=fmt_key,
@@ -1655,15 +1731,17 @@ def column_mapping_ui(
                 valid = [c for c in stored if c in df.columns]
                 if len(valid) != len(stored):
                     st.session_state[state_key] = valid or proposed_default
-            chosen_cols = st.multiselect(
+            field_col = _row(spec["key"], label, spec.get("help"))
+            chosen_cols = field_col.multiselect(
                 label,
                 options=list(df.columns),
                 key=state_key,
                 help=spec.get("help"),
+                label_visibility="collapsed",
                 persist_state="session",
             )
             if default and default in df.columns:
-                st.caption(f"✨ {detected_label} `{default}`")
+                field_col.caption(f"✨ {detected_label} `{default}`")
             return list(chosen_cols)
 
         mapping = _assemble_mapping(

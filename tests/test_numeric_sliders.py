@@ -45,6 +45,67 @@ def _range_app():
     )
 
 
+def _float_range_with_int_format_app():
+    """The colour-range shape: whole numbers on screen, float bounds underneath.
+
+    The bounds are floats on purpose (a restored config clamps into another
+    dataset's range), so a bare ``"%d"`` made ``st.number_input`` print a yellow
+    type-mismatch warning above each box in the rail.
+    """
+    import streamlit as st
+
+    from scanpath_studio.controls import _range_slider
+
+    st.session_state.setdefault("global_fixation_color_range", (100.0, 1058.0))
+    _range_slider(
+        st,
+        "Fixation color range",
+        key="global_fixation_color_range",
+        min_value=100.0,
+        max_value=1058.0,
+        step=1.0,
+        slider_format="%d",
+    )
+
+
+def _float_scalar_with_int_format_app():
+    import streamlit as st
+
+    from scanpath_studio.controls import _numeric_slider
+
+    st.session_state.setdefault("some_float_setting", 12.0)
+    _numeric_slider(
+        st,
+        "Whole number",
+        key="some_float_setting",
+        min_value=0.0,
+        max_value=100.0,
+        step=1.0,
+        slider_format="%d",
+    )
+
+
+class TestIntFormatOnFloatValues:
+    def test_range_boxes_do_not_warn(self):
+        at = AppTest.from_function(_float_range_with_int_format_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert not at.warning, [w.value for w in at.warning]
+        assert at.number_input(key="global_fixation_color_range__num_lo").value == 100.0
+
+    def test_scalar_box_does_not_warn(self):
+        at = AppTest.from_function(_float_scalar_with_int_format_app)
+        at.run()
+        assert not at.exception, at.exception
+        assert not at.warning, [w.value for w in at.warning]
+
+    def test_the_slider_keeps_the_integer_format(self):
+        """Only the box's format is adapted — the slider ticks stay whole."""
+        at = AppTest.from_function(_float_range_with_int_format_app)
+        at.run()
+        assert at.slider(key="global_fixation_color_range").value == (100.0, 1058.0)
+
+
 class TestNumericSlider:
     def test_box_mirrors_the_canonical_value(self):
         at = AppTest.from_function(_scalar_app)

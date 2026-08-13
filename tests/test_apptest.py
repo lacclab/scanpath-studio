@@ -2024,10 +2024,12 @@ class TestNavRegressions:
             at.session_state["main_nav"] = view
             at.run(timeout=60)
             assert not at.exception, f"{view}: {at.exception}"
-            captions = " ".join(c.value for c in at.caption)
-            assert "Save the full plot configuration" in captions, (
-                f"Save & restore panel missing on the {view} view"
-            )
+            # Anchor on the panel's widgets, not its prose (UX-53 trimmed the
+            # copy): the config download + the restore uploader ARE the panel.
+            assert [
+                d for d in at.get("download_button") if d.key == "plot_config_download"
+            ], f"Save & restore panel missing on the {view} view"
+            assert [u for u in at.get("file_uploader") if u.key == "plot_config_upload"]
 
 
 def _mpe_upload_frames():

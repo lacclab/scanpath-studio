@@ -490,23 +490,21 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
     with container:
         if not status["enabled"]:
             st.caption(
-                "**Off here.** This deployment keeps your session in memory "
-                "only — a refresh or a restart loses uploaded datasets, "
-                "mappings, and annotations. Use **💾 Session → Save & restore** "
-                "menu bar to keep your work, or run Scanpath Studio locally (or as the "
-                "desktop app), where the session is restored automatically."
+                "**Off here.** A refresh loses your session — save it above.",
+                help="This deployment keeps your session in memory only, so a "
+                "refresh or a restart loses uploaded datasets, mappings and "
+                "annotations. Run Scanpath Studio locally (or as the desktop "
+                "app) and it is restored automatically.",
             )
             if status["override"] == "off":
                 st.caption(f"Disabled by `{PERSIST_ENV_VAR}=0`.")
             return
 
-        st.caption(
-            "Uploaded datasets, column mappings, view settings, and annotations "
-            "are cached **on this computer** so a refresh or restart picks up "
-            "where you left off. Nothing is sent anywhere."
-        )
+        # UX-53: what is cached and that it never leaves the machine is the
+        # group caption's tooltip in `menu.py`; this panel shows the *state* of
+        # the cache — restored, size, when — and its two controls.
         if restored_from_cache(st.session_state):
-            st.success("Restored from this cache when the app opened.", icon="↩️")
+            st.success("Restored when the app opened.", icon="↩️")
         if status["exists"] and status["readable"]:
             n_sets = len(status["datasets"])
             bits = [f"**{n_sets}** dataset{'s' if n_sets != 1 else ''}"]
@@ -520,13 +518,15 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
                 f"**{human_size(status['bytes'])}** on disk",
             ]
             st.markdown(" · ".join(bits))
+            # One line, not three: which datasets and when, together.
+            line = []
             if status["datasets"]:
-                st.caption(
-                    "Stored: " + ", ".join(d["name"] for d in status["datasets"]) + "."
-                )
+                line.append(", ".join(d["name"] for d in status["datasets"]))
             saved_at = str(status["saved_at"] or "").replace("T", " ")
             if saved_at:
-                st.caption(f"Last written {saved_at}.")
+                line.append(f"saved {saved_at}")
+            if line:
+                st.caption(" · ".join(line))
         elif status["exists"]:
             st.warning(
                 "The stored session can't be read (written by a different "
@@ -547,7 +547,7 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "persist_local_saving", not persistence_paused(st.session_state)
         )
         st.toggle(
-            "Save this session on this computer",
+            "Keep saving here",
             key="persist_local_saving",
             on_change=_toggle_recovery_saving,
             help="Turn off to stop writing to the cache for the rest of this "
@@ -561,11 +561,13 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             help="Delete the stored copy from this computer and pause saving. "
             "The data you have loaded stays open.",
         )
-        st.caption(f"Folder: `{status['directory']}`")
+        # The folder is the one detail worth a line of its own (it is what you
+        # go and look at); the env-var switches live in its tooltip.
         st.caption(
-            f"Always off: `{PERSIST_ENV_VAR}=0` · move the folder: "
-            f"`{STATE_DIR_ENV_VAR}=…` · same info from the terminal: "
-            "`scanpath-studio cache`."
+            f"Folder: `{status['directory']}`",
+            help=f"Always off: `{PERSIST_ENV_VAR}=0` · move the folder: "
+            f"`{STATE_DIR_ENV_VAR}=…` · same info from a terminal: "
+            "`scanpath-studio cache`.",
         )
 
 

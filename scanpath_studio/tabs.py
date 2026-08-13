@@ -2431,15 +2431,16 @@ def _render_save_restore_expander(
                 height=0,
             )
     with container:
+        # UX-53: what the file holds used to be a four-line caption above the
+        # button, largely repeating the group's own caption; it is the button's
+        # tooltip now. The label stays exactly "⬇ Download (JSON)" — the bulk
+        # Export panel's test identifies its own button by *not* being this one.
         n_anno = len(annotation_records)
-        st.caption(
-            "Save the full plot configuration **and** all annotations "
-            f"({n_anno} trial{'s' if n_anno != 1 else ''}) — plus the data "
-            "source and column mapping — to one JSON file, or restore them. "
-            "Everything that fits the loaded data is re-applied."
-        )
         st.download_button(
             "⬇ Download (JSON)",
+            help="Plot configuration, annotations "
+            f"({n_anno} trial{'s' if n_anno != 1 else ''}), data source and "
+            "column mapping, in one file.",
             data=json.dumps(plot_config, indent=2),
             # General filename — the config spans the whole session, not one
             # trial.
@@ -2452,8 +2453,10 @@ def _render_save_restore_expander(
         # file always carries the selected participant/trial AND every note you
         # have typed, for every annotated trial. Say so before it is mailed on.
         st.caption(
-            "⚠️ The file names the selected participant and trial, and includes "
-            "the text of every annotation note you've written."
+            "⚠️ Names the selected participant and trial, and includes your note text.",
+            help="The file records the participant and trial you have open, "
+            "and the full text of every annotation note you have written — "
+            "check it before sending it on.",
         )
         st.file_uploader(
             "Restore from JSON",

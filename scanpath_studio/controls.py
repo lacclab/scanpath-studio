@@ -201,6 +201,23 @@ def _shadow_key_missing(*keys: str) -> bool:
     return any(k not in st.session_state for k in keys)
 
 
+_INT_NUMBER_FORMATS = frozenset({"%d", "%u", "%i"})
+
+
+def _number_box_format(fmt: Optional[str], *values) -> Optional[str]:
+    """Adapt a slider's ``format`` for the number box beside it.
+
+    ``st.number_input`` renders a yellow "value below has type float, but format
+    %d displays as integer" warning above itself when an integer format meets a
+    float value — and the colour-range sliders pass float bounds on purpose (so a
+    restored config clamps into another dataset's range) while wanting whole
+    numbers on screen. ``"%.0f"`` shows the same digits without the warning.
+    """
+    if fmt in _INT_NUMBER_FORMATS and any(isinstance(v, float) for v in values):
+        return "%.0f"
+    return fmt
+
+
 def _numeric_slider(
     host,
     label: str,
@@ -270,7 +287,13 @@ def _numeric_slider(
         min_value=min_value,
         max_value=max_value,
         step=step,
-        format=number_format if number_format is not None else slider_format,
+        format=_number_box_format(
+            number_format if number_format is not None else slider_format,
+            min_value,
+            max_value,
+            step,
+            st.session_state.get(num_key),
+        ),
         key=num_key,
         on_change=_apply,
         label_visibility="collapsed",
@@ -344,7 +367,9 @@ def _range_slider(
             min_value=min_value,
             max_value=max_value,
             step=step,
-            format=fmt,
+            format=_number_box_format(
+                fmt, min_value, max_value, step, st.session_state.get(num_key)
+            ),
             key=num_key,
             on_change=_apply,
             label_visibility="collapsed",

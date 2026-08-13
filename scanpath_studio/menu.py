@@ -282,20 +282,26 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
     session = bar.popover(
         "💾 Session",
         key=SAVE_RESTORE_KEY,
-        help="Save the plot configuration and every annotation to one JSON "
-        "file or restore them, and see what is kept on this computer.",
+        help="Save or restore your work, and see what is kept on this computer.",
     )
+    # UX-53: one short line per block, with the detail folded into its `?` —
+    # the panel opens on a menu click, so nobody arrives here to read prose.
     save_restore = session.container()
     save_restore.markdown("**💾 Save & restore**")
     save_restore.caption(
-        "One portable JSON file — the plot configuration plus every annotation. "
-        "Travels to another machine."
+        "One JSON file — opens on any machine.",
+        help="Holds the plot configuration, every annotation, the data source "
+        "and the column mapping. On restore, everything that fits the loaded "
+        "data is re-applied and the rest is skipped.",
     )
     recovery_cache = session.container()
     recovery_cache.divider()
     recovery_cache.markdown("**🗄️ Recovery cache**")
     recovery_cache.caption(
-        "What this app keeps on *this* computer so a refresh doesn't lose your session."
+        "Kept on *this* computer, so a refresh doesn't lose your work.",
+        help="Uploaded datasets, column mappings, view settings and "
+        "annotations are written to this computer only — nothing is sent "
+        "anywhere.",
     )
     debug = bar.popover("🐛 Debug") if show_debug else None
     return TopMenu(

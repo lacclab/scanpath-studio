@@ -20,7 +20,10 @@ Arguments: free-form — e.g. `CMP "chips reset on rerun"` (new item),
   (preprocessing), `UX`, `VAL`, `VIZ`. Scan `data.js` for the highest used
   number in the prefix — including archived items — before assigning.
 - **Statuses (six):** `Backlog | Planned | In progress | On hold | Review |
-  Closed`. `archived: true` once signed off or closed. The retired wording
+  Closed`, moved along the path the UI's transition buttons offer — Backlog →
+  *Plan it* / *Put on hold*; Planned → *Start work*; In progress → *Ready for
+  review*; Review → *Approve & close* / *Send back*; On hold → *Resume*; Closed →
+  *Reopen*. `archived: true` once signed off or closed. The retired wording
   (`Pending approval`, `Done`, `Parked`, `Dropped`) still appears on older
   items — never write it into a new or edited item, and don't mass-rewrite the
   historical ones.
@@ -53,11 +56,12 @@ the shape is now enforced by `tests/test_tracker_server.py`:
 
 1. `request` — what was asked for, in the asker's terms. **Required.**
 2. `whatWasDone` — what actually shipped.
-3. `whatsLeft` — what remains; link the follow-up item if the remainder was
-   split out. An item you are moving to `Review` is **never** "Nothing" — what's
-   left is the user's review, so name what to look at (the judgement calls you
-   made, the surface to click). "Nothing" is only for an item that is finished
-   *and* signed off.
+3. `whatsLeft` — **the developer's** remaining work, and nothing else; link the
+   follow-up item if the remainder was split out. Think team lead / developer:
+   you are the developer, so this field is your own to-do, not a message to the
+   user. When the code is finished it says "Nothing." — including on an item you
+   are moving to `Review`, because the review is not developer work. The ask to
+   review goes in `decisions`.
 4. `background` — anchors, design calls, gotchas, related IDs.
 
 `statusNote` is the optional lede rendered above all four — the status or
@@ -75,20 +79,23 @@ carry the legacy single `body` array — leave them alone; both shapes render.
 Not a bookkeeping step at the end — the tracker is what the user and any other
 session read to know the state of the project:
 
-- **Flip to `In progress` when you pick the item up**, before writing code, so a
-  parallel session doesn't start the same work.
+- **Claim it and flip to `In progress` when you pick the item up**, before
+  writing code, so a parallel session doesn't start the same work. Claiming sets
+  `owner` (a name from `TRACKER.people` in `data.js`) — in the UI that is the
+  **Claim** button; editing `state.json` by hand, it is `"owner": "<name>"`.
 - **Clear a `decisions` entry the moment it is answered** — including when you
   answered it yourself by making the call, before implementing — and record the
   call in `background` in the same edit.
 - **Commit early and often.** One commit per feature or fix rather than one per
   session, tracker edit in the same commit as the code it describes.
-- **Land in `Review`** and say what the user should look at.
+- **Land in `Review`**, and put the ask to review in `decisions`, not
+  `whatsLeft`.
 
-## Decisions to settle
+## `decisions` — everything that is waiting on the user
 
-Questions that need the **user's** call before the work can start do **not** go
-in `background` — they go in a `decisions` field on the item, a sibling of
-`request`:
+Anything only the **user** can do goes in a `decisions` field on the item, a
+sibling of `request` — both the design calls that block the work *and*, once it
+is built, the review to run:
 
 ```js
 "decisions": [
@@ -97,14 +104,17 @@ in `background` — they go in a `decisions` field on the item, a sibling of
 ],
 ```
 
-One self-contained line per decision (markdown inline is rendered; `#ID` refs
-link). The tracker shows them as an amber callout pinned above the write-up,
-badges the collapsed card **⚖ N to settle**, and collects them under the
-*Waiting on my decision* filter — which is the point: the user should be able to
-see every call waiting on them in one click. Rules:
+One self-contained line each (markdown inline is rendered; `#ID` refs link). The
+tracker shows them as the amber **Waiting on you** box pinned above the write-up,
+badges the collapsed card **⚖ N for you**, and collects them under the *Waiting
+on me* filter — which is the point: one click shows every item holding on the
+user. Rules:
 
 - **Omit the field** when nothing is open. Never write an empty array.
 - **Ask, don't hedge.** A decision is a question with options, not "TBD".
+- **A `Review` item always has at least one entry** — the review ask itself.
+  Name what to look at: the judgement calls you made, the surfaces to click, the
+  things worth disagreeing with. A test enforces this.
 - **Clear it when settled**, in the same edit that acts on the answer, and
   record the call you made in `background` so the reasoning survives. This holds
   even when you settle it yourself before implementing.

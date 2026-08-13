@@ -18,11 +18,20 @@
 // the tracker page prints the section label itself, so never repeat it inside:
 //   "request":     [...]  what was asked for, in the asker's terms.  REQUIRED.
 //   "whatWasDone": [...]  what actually shipped.
-//   "whatsLeft":   [...]  what remains, or "Nothing" — say it either way.
+//   "whatsLeft":   [...]  the DEVELOPER's remaining work, and nothing else.
+//                         Think team lead / developer: this is your own to-do,
+//                         never a message to the user. On a finished item it
+//                         honestly says "Nothing." — including one in Review.
 //   "background":  [...]  anchors, design calls, gotchas, related ids.
 //   "statusNote":  [...]  optional lede above the write-up — the status/update
 //                         line that used to be the leading `>` quote.
-//   "decisions":   [...]  calls that need the user's input before work starts.
+//   "decisions":   [...]  EVERYTHING waiting on the user: the calls that block
+//                         the work, and — once it is built — the ask to review
+//                         it. Renders as the amber "Waiting on you" box, badges
+//                         the card "⚖ N for you", and is what the "Waiting on
+//                         me" filter collects, so one click shows every item
+//                         holding on the user. An item in Review always has at
+//                         least the review ask here.
 // Omit a field entirely rather than writing an empty array. An item with no
 // implementation behind it has only `request` (+ `background`), regardless of
 // whether it is Backlog, Planned, or On hold; `whatWasDone` / `whatsLeft` appear
@@ -33,19 +42,25 @@
 //
 // Working the tracker (agents, read this) — the tracker is only useful if it
 // matches reality, so keep it current *as you work*, not at the end:
-//   1. Set `"status": "In progress"` when you start, not when you finish.
+//   1. Claim it and set `"status": "In progress"` when you start, not when you
+//      finish. Claiming is `"owner": "<name>"` in `tracker/state.json`, one of
+//      the names in `people` below; it works from any status.
 //   2. Answered a decision — even before writing code — clear it out of
 //      `decisions` in the same edit and record the call in `background`.
 //      A settled question left in the amber box wastes the user's next review.
 //   3. Commit early and often: one commit per feature/fix, not one per session.
 //      The tracker edit belongs in the same commit as the code it describes.
-//   4. Finished → `"status": "Review"` (never straight to Closed) and write
-//      `whatsLeft` as what the *user* should look at. Only their sign-off makes
-//      it `"status": "Closed"` + `"archived": true`.
+//   4. Finished → `"status": "Review"` (never straight to Closed), with the ask
+//      to review in `decisions` — not in `whatsLeft`. Only the user's sign-off
+//      makes it `"status": "Closed"` + `"archived": true`.
 //   5. Noticed something unrelated? Small — fix it now; otherwise add an item
 //      here so it is not lost.
 
 window.TRACKER = {
+ "people": [
+  "Maya",
+  "Shubi"
+ ],
  "groups": [
   {
    "name": "UX & Interaction",
@@ -7068,23 +7083,58 @@ window.TRACKER = {
    "num": 39,
    "sub": "",
    "title": "Make the tracker work for two people — who has an item, and a state.json that survives a merge",
-   "status": "Backlog",
-   "note": "",
-   "date": "",
+   "status": "Review",
+   "note": "Implemented 2026-08-13; pending user review.",
+   "date": "2026-08-13",
    "added": "2026-08-13",
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
    "decisions": [
-    "**Where does an owner come from?** A free-text name, a fixed list of the two of you configured in `data.js`, or the local `git config user.name` (which the tracker server can read and offer as the default)? Free text is one line of code and drifts; a fixed list is the only one a *Mine* filter can be honest about.",
-    "**Is `In progress` + an owner enough, or do you want an explicit claim?** Setting the status is the natural moment to say \"mine\", so the editor could just require an owner whenever the status becomes `In progress`. The alternative is a separate **Claim** button that works from any status.",
-    "**What happens to `revision`?** It exists to stop two browser tabs on one machine from clobbering each other, and it is the field that conflicts on every parallel `git pull` — observed twice on 2026-08-13 alone, in two sessions sharing one checkout. Three ways out: **(a)** a `.gitattributes` merge driver that resolves it as `max(ours, theirs)`, which is correct for a monotonic counter the server owns and settles every such conflict without moving anything; **(b)** move it to a gitignored sidecar file, same protection, no merge cost, one more file in `tracker/`; **(c)** leave it and keep merging by hand per `CONTRIBUTING.md`. (a) is the cheapest if a merge driver is acceptable — it needs a one-line `.gitattributes` plus a tiny script that each clone must register locally with `git config`, which is the catch.",
-    "**Split `state.json` per person?** `state.<name>.json`, merged by the page at load. Conflicts would then be almost impossible, but the last-writer-wins semantics you have today would be replaced by \"both, and the page decides\" — which needs a rule for what happens when you both set a different status on one item."
+    "**Confirm the two names.** `people` in [`data.js`](tracker/data.js) is `[\"Maya\", \"Shubi\"]`, and an owner outside that list is a rejected save. If Maya's git identity is not literally \"Maya\", the auto-guess will miss and she picks her name once from the header — no harm, but worth knowing before she starts.",
+    "**Claim something, then check the Owner filter.** The header shows who the tracker thinks you are; **Claim** on any item puts 👤 on the card. The judgement call to second-guess: claiming is *separate* from status, per your note that it is relevant at any stage — so nothing forces an owner when an item goes `In progress`, and an unclaimed `In progress` item is still possible.",
+    "**`revision` has left `state.json`.** It now lives in a gitignored `tracker/.local.json`, which is the option that needs nothing set up in either clone — the merge driver in (a) would have needed each of you to register it locally with `git config` or it silently does nothing. Reload the tracker once after pulling this. If you would rather keep everything in one file and merge by hand, say so and it goes back."
    ],
    "request": [
     "A second person is joining the project, working from their own clone and",
     "their own coding agent. What in the tracker should change so that two people",
-    "(and their agents) do not collide?"
+    "(and their agents) do not collide?",
+    "",
+    "Your answers: *\"1. Umm list, currently just with Maya and Shubi. 2. Maybe a",
+    "separate claim button, because it is relevant at any stage. 3 + 4 Choose what",
+    "suites best. My goal is for this to work seamlessly, without any manual work",
+    "from my side, and without unnecessary complications for you when working",
+    "concurrently with someone else. You can assume that we do best-effort not to",
+    "conflict specific items, and it is just the two of us (#ENG-32 will be the full",
+    "generalization).\"*"
+   ],
+   "whatWasDone": [
+    "**An item can be claimed, by one of two named people.** `people` in",
+    "[`data.js`](tracker/data.js) is the fixed list (`Maya`, `Shubi`) — per your (1),",
+    "and the only shape an *Owner* filter can be honest about; the server rejects an",
+    "owner outside it, so a typo is a failed save rather than a third person who does",
+    "not exist. **Claim** / **Release** is its own button on the transition row, per",
+    "your (2), working from any status — you can take something that is still",
+    "Planned. The card shows **👤 name** beside the status, highlighted when it is",
+    "yours, and the sidebar gains an *Owner* facet (each person, plus *Unassigned*).",
+    "",
+    "**Who you are is resolved once and never asked again.** The server reads",
+    "`git config user.name` and matches it token-wise against `people`, so \"Omer",
+    "Shubi\" resolves to `Shubi` with nothing configured; the header picker overrides",
+    "it, and the choice is remembered on that machine only. That is the \"no manual",
+    "work from my side\" half of your (3+4).",
+    "",
+    "**`revision` is out of the git-tracked file** and into a gitignored",
+    "`tracker/.local.json` — option (b). It changed on *every* save, so it conflicted",
+    "on every parallel pull even when the two of you touched different items; it is a",
+    "two-tabs-on-one-machine guard, which is per-machine by definition. With it gone,",
+    "`state.json` is a sorted, one-block-per-item JSON file, so two people editing",
+    "different items produce disjoint hunks that git merges without asking. The",
+    "server still reads a version-2 file that has `revision` inline and writes it back",
+    "without, so nothing has to be migrated by hand."
+   ],
+   "whatsLeft": [
+    "Nothing."
    ],
    "background": [
     "**The two concrete gaps.** *(1) Nothing records who has an item.* `In progress`",
@@ -7099,17 +7149,36 @@ window.TRACKER = {
     "edit.* It is git-tracked, rewritten whole on each save, and carries a",
     "monotonically increasing `revision`. Two people working the same day will",
     "conflict on that one line even when they touched different items. The",
-    "`revision` check in [`server.py`](tracker/server.py:263) is real protection",
+    "`revision` check in [`server.py`](tracker/server.py) is real protection",
     "against two tabs on one machine — it just has no business being in a shared",
-    "file. Until this lands, the merge rule is written up in `CONTRIBUTING.md` →",
-    "*Working together*: keep both sides' `items` entries, set `revision` to the",
-    "higher of the two plus one, and reload the page.",
+    "file.",
+    "",
+    "**The four decisions, as settled.** *(1) Owner source — a fixed list*, per your",
+    "answer. *(2) A separate Claim button*, per your answer, so claiming is",
+    "orthogonal to status; nothing forces an owner when an item starts, which is the",
+    "one place this is weaker than tying the two together. *(3) `revision` — option",
+    "(b), the gitignored sidecar*, chosen over the (a) merge driver on your \"without",
+    "any manual work from my side\": a merge driver has to be registered per clone with",
+    "`git config`, and a clone that forgets gets silent no-op conflicts, which is",
+    "exactly the failure mode you were asking to avoid. *(4) Per-person state files —",
+    "no.* Splitting `state.json` would trade a rare conflict for a permanent \"both",
+    "sides, and the page decides\" rule, and you said best-effort not to collide on",
+    "specific items. Removing `revision` already makes disjoint edits merge cleanly,",
+    "so the remaining conflict surface is two people editing the *same* item — which",
+    "is the case a merge *should* surface. #ENG-32 is the full generalization.",
     "",
     "**Deliberately not proposed.** Real-time presence, locking, or a hosted",
     "tracker. The tracker is a static page over a JSON file precisely so it needs",
-    "no server-side state; two researchers do not need a Jira. Related:",
-    "#ENG-38 (the structured write-up fields, the other half of \"agents keep the",
-    "tracker honest\"), #ENG-35 (`decisions`)."
+    "no server-side state; two researchers do not need a Jira.",
+    "",
+    "**Anchors.** `_known_people` / `_whoami` / `_read_local` in",
+    "[`server.py`](tracker/server.py), `owner` added to `EDIT_FIELDS`, and a",
+    "`GET`/`PUT api/whoami` endpoint beside the existing `api/state`. On the page,",
+    "`PEOPLE` / `ME` and the `.claim` button, which shares `saveField` with the",
+    "#ENG-38 transitions. `CONTRIBUTING.md` → *Working together* still carries the",
+    "by-hand merge rule for `items`, which is unchanged — only the `revision` line of",
+    "it is now moot. Related: #ENG-38 (the structured write-up fields, the other half",
+    "of \"agents keep the tracker honest\"), #ENG-35 (`decisions`), #ENG-32."
    ]
   },
   {
@@ -7125,12 +7194,24 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
+   "decisions": [
+    "**Read one open item and one Review item.** The four labelled sections should read as designed rather than as a wall of bold, and everything addressed to you should now be in the amber *Waiting on you* box — including this line. #DATA-20 is the one worth opening: it is the only item with both a real developer remainder *and* a review ask, so it shows the split doing actual work.",
+    "**Click a transition button.** Expand anything and use the row above the fields — `Backlog → Plan it`, `Review → Approve & close`. It saves on the click, with no second trip to *Save changes*; say so if that is too eager and you want a confirm step.",
+    "**Two judgement calls on the field split.** *(1)* `whatsLeft` on a `Review` item now honestly says \"Nothing.\" — the alternative was to keep it as \"the review\", which is what made it ambiguous in the first place. *(2)* `statusNote` is still one field for two things (the `>` status quote *and* the occasional \"update as of ⟨date⟩\" paragraph); they render identically, but say so if you want them split."
+   ],
    "request": [
     "\"Make all the fields more structured instead of just defined by bold text, as",
     "not all agents respect the format. Implement this for all open items. Add a note",
     "for agents working with the tracker to *be on it* — switching the status,",
     "removing the decisions to settle if you already updated the task based on them",
-    "(before implementing even), more frequent committing of code, etc.\""
+    "(before implementing even), more frequent committing of code, etc.\"",
+    "",
+    "Round 2, on the first pass: *\"'What's left' should be also just for you (working",
+    "on the item), not it is kind of both for you and for me. Think of me as a team",
+    "lead and you as a developer. All open things for me, including 'My review',",
+    "should be put in the Decisions to settle part.\"* Plus: make the transitions",
+    "between statuses directed — \"usually I'll want to move backlog to planned or on",
+    "hold, and review to closed or in progress, so make that clear buttons.\""
    ],
    "whatWasDone": [
     "**The write-up is now five fields.** `statusNote` (optional lede) · `request`",
@@ -7156,22 +7237,28 @@ window.TRACKER = {
     "you pick the item up rather than when you finish; clear an answered decision in",
     "the same edit that acts on it, even before implementing, and record the call in",
     "`background`; commit one feature or fix at a time with the tracker edit in the",
-    "same commit; land in `Review`, never straight in `Closed`."
+    "same commit; land in `Review`, never straight in `Closed`.",
+    "",
+    "**Round 2 — one home for everything that needs you.** `whatsLeft` is now the",
+    "*developer's* remainder and nothing else; the ask to review moved wholesale into",
+    "`decisions`, which renders as the amber **Waiting on you** box, badges the card",
+    "**⚖ N for you**, and feeds the *Waiting on me* filter. So one click now lists",
+    "every item holding on you — which the old shape could not do, because half of",
+    "what was waiting on you was prose buried inside *What's left*. Two tests hold",
+    "the line: a `Review` item must carry a `decisions` entry, and `whatsLeft` may",
+    "not contain \"your review\" / \"your call\" / \"you should look\".",
+    "",
+    "**Round 2 — directed transitions.** Expanding an item now shows the moves that",
+    "status actually makes, first one primary: Backlog → *Plan it* · *Put on hold*;",
+    "Planned → *Start work*; In progress → *Ready for review*; On hold → *Resume*;",
+    "Review → *Approve & close* · *Send back*; Closed → *Reopen*. A click sets the",
+    "status **and saves**, so the common move is one action instead of dropdown →",
+    "*Save changes*. The Status dropdown stays for anything off that path, and",
+    "`test_every_status_offers_a_directed_transition` fails if a status loses its",
+    "moves."
    ],
    "whatsLeft": [
-    "Your review — open any open item and read it: the four labelled sections should",
-    "read as designed rather than as a wall of bold. Two judgement calls worth a",
-    "look. **(1)** Only open items were converted, because the ask was scoped to",
-    "them and the archive is 144 items of settled history; the renderer keeps both",
-    "paths, so the archive can stay as-is indefinitely. **(2)** `statusNote` is one",
-    "field for what used to be two different things — the `>` status quote *and* the",
-    "occasional \"update as of ⟨date⟩\" paragraph some items carried before *Request*.",
-    "They render identically, but say so if you want them split.",
-    "",
-    "Note that `state.json` marks most of the catalogue Closed, so only ~26 items are",
-    "live by the tracker's own reckoning — the structural tests bite on those. The",
-    "other ~90 migrated items are structured too, just already archived from the",
-    "page's point of view."
+    "Nothing."
    ],
    "background": [
     "The migration was line-based on purpose: `data.js` is hand-maintained (literal",
@@ -7188,9 +7275,24 @@ window.TRACKER = {
     "[`tracker/server.py`](tracker/server.py) replace the old exact-key-set check, so",
     "a UI-created task may now also carry `decisions` — which the previous exact set",
     "made impossible (that limitation was called out in the `/track` skill and is now",
-    "removed). Related: **ENG-35** (which introduced `decisions` as a field for the",
-    "same reason), **ENG-29** (the group-name test, same \"make it fail a test rather",
-    "than rot\" instinct)."
+    "removed).",
+    "",
+    "**Only open items were converted**, because the ask was scoped to them and the",
+    "archive is 144 items of settled history; the renderer keeps both paths, so the",
+    "archive can stay as-is indefinitely. `state.json` marks most of the catalogue",
+    "Closed, so only ~26 items are live by the tracker's own reckoning — the",
+    "structural tests bite on those, and the other ~90 migrated items are structured",
+    "too, just already archived from the page's point of view.",
+    "",
+    "**Round 2 anchors.** `TRANSITIONS` in",
+    "[`tracker/index.html`](tracker/index.html) is the whole transition feature; a",
+    "click routes through `saveField`, which sets one control and calls the existing",
+    "`saveItem`, so a transition and a claim share one code path and the same",
+    "conflict handling. The amber box is still the `decisions` field — only its",
+    "label, badge and hint changed, so nothing about the wire format moved. Related:",
+    "**ENG-35** (which introduced `decisions` as a field for the same reason),",
+    "**ENG-39** (owner + claim, built in the same pass), **ENG-29** (the group-name",
+    "test, same \"make it fail a test rather than rot\" instinct)."
    ]
   },
   {
@@ -10258,26 +10360,21 @@ window.TRACKER = {
     "ticked; clearing one drops it from `metadata/participants.*`, and clearing them",
     "all leaves the table out of the bundle entirely."
    ],
+   "decisions": [
+    "**The wizard step** — ➕ Add data, upload something, and open *5 · About your readers*. It is the same panel as the Data page's, so an attached table shows the same join report either way (they never render together — the wizard owns the page while it is active, and the collapsed *Data & mapping* review panel skips this step, or the two copies would be two widgets on one key).",
+    "**Corpus grouping** — attach a table, open Corpus Analysis → Groups, and check the **Field** picker offers your reader attributes marked 👤; splitting on one should give the same cohorts as filtering by it.",
+    "**The export opt-out** — the Export panel's *Participant fields to include* starts with everything ticked; clearing one drops it from `metadata/participants.csv`, and clearing them all leaves the file out.",
+    "**One judgement call to disagree with:** a field with more than 60 distinct values is **not** offered as a group split, the same rule the frame columns already use. A continuous field (age, a comprehension score) is a *range* question and the trial filters have the slider for it — but it does mean you cannot split a cohort at an age threshold from the Groups tab yet."
+   ],
    "whatsLeft": [
-    "Your review of the finished milestone-1 scope, and then the later milestones,",
-    "which are **not** started and are listed below unchanged. Three things are worth",
-    "clicking, one per surface added in round 2. **(a) The wizard step** — ➕ Add data,",
-    "upload something, and open *5 · About your readers*; it is the same panel as the",
-    "Data page's, so an attached table shows the same join report either way (they",
-    "never render together — the wizard owns the page while it is active, and the",
-    "collapsed *Data & mapping* review panel skips this step, or the two copies would",
-    "be two widgets on one key). **(b) Corpus grouping** — attach a table, open Corpus",
-    "Analysis → Groups, and check the **Field** picker offers your reader attributes",
-    "marked 👤; splitting on one should give the same cohorts as filtering by it.",
-    "**(c) The export opt-out** — the Export panel's *Participant fields to include*",
-    "starts with everything ticked; clearing one drops it from",
-    "`metadata/participants.csv`, and clearing them all leaves the file out.",
+    "Milestone 1 is complete. The later milestones are **not** started and are listed",
+    "below unchanged — the *Metadata* view (milestone 9) is the largest of them, and",
+    "#VAL-5 defers to it too.",
     "",
-    "One judgement call to disagree with: **a field with more than 60 distinct values",
-    "is not offered as a group split**, the same rule the frame columns already use. A",
-    "continuous field (age, a comprehension score) is a *range* question, and the",
-    "trial filters have the slider for it — but it does mean you cannot split a cohort",
-    "at an age threshold from the Groups tab yet."
+    "One follow-up the round-2 work leaves open: splitting a cohort at a *threshold*",
+    "on a continuous reader attribute (age over 40, score above the median). The",
+    "Groups tab offers categorical splits only — see the >60-distinct-values call in",
+    "the box above — so today that has to go through the trial filters' range slider."
    ],
    "background": [
     "**Milestone 1's plan, and the three calls you settled in round 2.**",
@@ -11464,6 +11561,10 @@ window.TRACKER = {
    "group": "Validation",
    "subgroup": "",
    "archived": false,
+   "decisions": [
+    "**Sign this one off on the build, not on the reading.** Everything you asked for is built; the read-through of all 65 entries is #VAL-8 and will outlast this item. What to check here is that the *register* is the right artefact — that [docs/computations.md](docs/computations.md)'s summary table has the columns you would want, and that the verification tiers are stated conservatively enough (I erred low deliberately, and tier B stays on hold per your answer).",
+    "**Anything missing from the scope?** The rule was \"derives or semantically changes a user-visible value\"; pure layout and byte-preserving I/O are out. If something you care about is absent, that is a register gap rather than a #VAL-8 finding, and it belongs here."
+   ],
    "request": [
     "Perform a complete audit of computations across Scanpath Studio so",
     "the user can see what is calculated, verify that each calculation is correct, and",
@@ -11515,15 +11616,9 @@ window.TRACKER = {
     "step 6 \u2014 an audit must not move scientific results under a documentation diff."
    ],
    "whatsLeft": [
-    "Your review \u2014 this is a *read it* item, which is the point: you",
-    "said you wanted to go over the computations first. Start at",
-    "[docs/computations.md](docs/computations.md)'s summary table (**65 entries** now).",
-    "Two things to look for. **(a) Anything missing** \u2014 the scope rule was \"derives or",
-    "semantically changes a user-visible value\"; pure layout and byte-preserving I/O are",
-    "out. **(b) Anything whose formula is wrong or whose status is too generous** \u2014 I set",
-    "every status by hand and deliberately erred low, but a formula I paraphrased from a",
-    "docstring rather than from the arithmetic is the likeliest error class, and that is",
-    "exactly how #BUG-27 was found.",
+    "Nothing. The one remaining piece \u2014 your read-through of all 65 register entries",
+    "\u2014 is split out as #VAL-8 on your instruction, because it is your work rather",
+    "than the developer's and it outlives this item.",
     "",
     "Not done, by your decision: tier-B verification (#VAL-4 stays on hold), per-measure",
     "help anchors in the UI, and stamping the register version into `export.manifest()`",
@@ -11579,6 +11674,52 @@ window.TRACKER = {
     "Related: #VAL-4 (reference comparison, on hold), #PRE-4, #ENG-37 (coverage \u2014 which",
     "proves code ran, not that it is right; this register is the other half), #BUG-25,",
     "#BUG-27, #BUG-11."
+   ]
+  },
+  {
+   "id": "VAL-8",
+   "prefix": "VAL",
+   "num": 8,
+   "sub": "",
+   "title": "Read every computation in the register and confirm the science",
+   "status": "Backlog",
+   "note": "the human half of #VAL-5 — nobody can do this but you",
+   "date": "",
+   "added": "2026-08-13",
+   "group": "Validation",
+   "subgroup": "",
+   "archived": false,
+   "decisions": [
+    "**Start with `pre.merge_short` and `pre.character_grid`.** Both moved onto the shared letter scale under #BUG-27 on 2026-08-13, so both changed *meaning* rather than just wording. The merge distance is the one with real consequences: it is a preprocessing setting that travels in share links and export bundles, so a wrong scale there silently changes other people's results, not just a number on a page.",
+    "**Then the four reading measures** — `measure.first_fixation`, `measure.first_pass`, `measure.regression_path`, `measure.total_fixation`. They are what a reader of a paper would assume standard, so a definition that quietly differs from the field's is the most expensive kind of error here.",
+    "**Say which entries you have cleared** as you go, so the status column can move from *Partially verified* to *Verified* for those. There is no point in me guessing which ones you actually read."
+   ],
+   "request": [
+    "*\"Add a followup task for me to manually review all computations.\"* — the",
+    "manual read-through that #VAL-5's register was built to make possible, split out",
+    "so #VAL-5 can close on the artefact while the reading proceeds at your pace."
+   ],
+   "background": [
+    "**Why this is a separate item.** #VAL-5 built the thing; this is reading it, and",
+    "the two have different owners and very different timescales. Keeping them",
+    "together would have parked a finished piece of work in `Review` for as long as",
+    "the reading took.",
+    "",
+    "**What to read.** [`docs/computations.md`](docs/computations.md), generated from",
+    "[`computations.py`](scanpath_studio/computations.py) — **65 entries** as of",
+    "2026-08-13. Each carries its exact formula, unit, grouping keys, missing-value",
+    "behaviour, imported-vs-computed precedence, a code link and the tests behind it.",
+    "Regenerate with `python -m scanpath_studio.computations` if the page looks stale;",
+    "`tests/test_computations.py` fails if it is.",
+    "",
+    "**What this can and cannot establish.** A read-through is tier A (a human",
+    "oracle): it catches a wrong formula, a wrong unit, a definition that differs from",
+    "the field's convention, and a verification status that claims more than it",
+    "should. It cannot catch a formula that is right on the page and wrong in the code",
+    "— that is tier B, an independent implementation, which is #VAL-4 and stays on",
+    "hold by your decision. Related: #VAL-5 (the register), #VAL-4, #BUG-27 (found",
+    "exactly this way, by working the arithmetic instead of trusting the docstring),",
+    "#BUG-25, #ENG-37."
    ]
   },
   {

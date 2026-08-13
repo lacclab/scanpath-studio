@@ -98,24 +98,28 @@ selectively and reading what you staged.
 
 Common to both:
 
-- **Claim the item before you start it.** Set the tracker item to
-  `In progress` — and push that change — *before* writing code, not when you
-  finish. That flip is the only signal the other person has that the item is
-  taken. Same for a new item: create it, push it, then work on it.
+- **Claim the item before you start it.** Press **Claim** on the tracker item and
+  set it to `In progress` — and push that change — *before* writing code, not
+  when you finish. Your name on the card is the only signal the other person has
+  that the item is taken. Claiming works from any status, so you can also take
+  something that is still Planned. Same for a new item: create it, push it, then
+  work on it.
 - **Commit small, push often.** One commit per feature or fix, with the tracker
   edit in the same commit as the code it describes. A large uncommitted working
   tree is the thing that actually hurts — it can't be pulled, reviewed, or built
   on, and merging it later is a marathon. Between clones, always `git pull`
   before you push.
-- **`tracker/state.json` will conflict; merge it, never pick a side.** The file
+- **If `tracker/state.json` conflicts, merge it — never pick a side.** The file
   holds every status override and implementation brief, and the tracker server
-  rewrites it whole on each save. Its `revision` counter changes on *every*
-  save, so parallel work conflicts there almost every time. Resolve by keeping
-  **both** sides' entries under `items` / `createdItems` and setting `revision`
-  to one more than the higher of the two. Taking one side wholesale silently
-  discards the other person's status changes and briefs. Reload the tracker page
-  afterwards — it caches the revision it last read, and will refuse to save
-  against a stale one ("The tracker changed in another tab").
+  rewrites it whole on each save. It is sorted one block per item, so two people
+  editing *different* items now merge cleanly; a conflict means you both edited
+  the same item. Resolve by keeping **both** sides' entries under `items` /
+  `createdItems` — taking one side wholesale silently discards the other
+  person's status changes and briefs. Reload the tracker page afterwards.
+  (The save counter that used to conflict on every single pull lives in a
+  gitignored `tracker/.local.json` now. **Restart `python3 tracker/server.py`**
+  the first time you pull that change — an older server process cannot read the
+  new file.)
 - **`tracker/data.js` merges cleanly** as long as you add new items in the right
   group and never renumber an existing ID. Two people adding an item to the same
   group at the same moment will both reach for the same next free number — check

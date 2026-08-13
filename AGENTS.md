@@ -156,13 +156,22 @@ overrides first and treat each `implementationBrief` as the task-specific work
 instructions; this lets the user scope work in the tracker without repeating it in
 chat. Run the editable site with `python3 tracker/server.py` (or
 `tracker/start.command`). The live workflow has six statuses: `Backlog`, `Planned`,
-`In progress`, `On hold`, `Review`, and `Closed`; `priority` orders work within a status. Tasks
+`In progress`, `On hold`, `Review`, and `Closed`, moved along the path the UI's
+directed transition buttons offer (Backlog → *Plan it*, Review → *Approve &
+close* / *Send back*, …); `priority` orders work within a status. An item also
+carries an `owner` — one of `TRACKER.people` in `data.js` — set by the **Claim**
+button from any status, so `In progress` says by whom (ENG-39). Tasks
 created in the UI live under `createdItems` in the same state file, and their prefix
-is derived from their group.
+is derived from their group. The save counter and "who is at this keyboard" live
+in a gitignored `tracker/.local.json`, which is why `state.json` no longer
+conflicts on every parallel pull.
 
 An open item's write-up is **structured fields**, not prose with bold leads:
 `request` (required) · `whatWasDone` · `whatsLeft` · `background`, each an array of
 markdown lines, plus an optional `statusNote` lede and the `decisions` array.
+`whatsLeft` is the **developer's** remaining work only; everything waiting on the
+user — open calls *and* the ask to review — goes in `decisions`, which renders as
+the amber *Waiting on you* box and feeds the *Waiting on me* filter.
 Omit a field rather than emptying it, never repeat the section label inside the
 field, and keep the status current *as you work* — see `CLAUDE.md` → *Tracking
 work*. `tests/test_tracker_server.py` pins the shape; archived items keep the

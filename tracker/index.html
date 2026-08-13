@@ -228,7 +228,22 @@
     background: var(--panel-2);
   }
   .editor-title { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 9px; }
-  .editor-grid { display: grid; grid-template-columns: 160px 130px minmax(0, 1fr); gap: 10px; align-items: start; }
+  /* One-click moves along the path an item actually travels, so the common
+     step is a button rather than a dropdown hunt (ENG-38). */
+  .transitions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 11px; }
+  .transitions .from {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint);
+    font-weight: 650;
+  }
+  .transitions .go { padding: 5px 12px; }
+  .transitions .claim { margin-left: auto; }
+  .editor-grid { display: grid; grid-template-columns: 150px 120px 130px minmax(0, 1fr); gap: 10px; align-items: start; }
+  .owner {
+    flex: none; font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+    margin-top: 1px; border: 1px solid var(--line-soft); background: var(--panel-2); color: var(--ink-dim);
+  }
+  .owner.me { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+  #whoami { padding: 5px 8px; max-width: 150px; }
   .editor label { display: block; color: var(--ink-dim); font-size: 12px; }
   .editor select, .editor textarea {
     display: block; width: 100%; margin-top: 4px; color: var(--ink); background: var(--panel);
@@ -286,6 +301,7 @@
     </div>
     <input id="q" class="search" type="search" placeholder="Search id, title, text…  (/)">
     <span class="connection" id="connection" aria-live="polite">Connecting…</span>
+    <select id="whoami" title="Who is at this keyboard — used by Claim, and remembered on this machine only" hidden></select>
     <button class="primary" id="newTask" disabled>＋ New task</button>
     <button id="expand">Expand all</button>
     <button id="help">How this works</button>
@@ -308,6 +324,10 @@
       <summary>Priority<span class="summary-meta" id="prioritySummary">All</span></summary>
       <div id="priorities"></div>
     </details>
+    <details class="facet" id="ownerFacet" hidden>
+      <summary>Owner<span class="summary-meta" id="ownerSummary">All</span></summary>
+      <div id="owners"></div>
+    </details>
     <details class="facet">
       <summary>Group<span class="summary-meta" id="groupSummary">All</span></summary>
       <div id="groups"></div>
@@ -315,7 +335,7 @@
     <details class="facet">
       <summary>View<span class="summary-meta" id="viewSummary">Open</span></summary>
       <div>
-      <button class="chip" id="toggleDecisions"><span class="dot" style="background:var(--decide)"></span>Waiting on my decision<span class="n" id="decideN"></span></button>
+      <button class="chip" id="toggleDecisions"><span class="dot" style="background:var(--decide)"></span>Waiting on me<span class="n" id="decideN"></span></button>
       <button class="chip" id="toggleArchive"><span class="dot" style="background:var(--ink-faint)"></span>Show archived<span class="n" id="archN"></span></button>
       <button class="chip" id="reset">Reset filters</button>
       </div>
@@ -375,15 +395,32 @@
       restores it to the open list.</li>
   </ul>
 
-  <h4>Status</h4>
+  <h4>Status, and the moves between them</h4>
   <ul>
-    <li><b>Backlog</b> — captured, not scheduled.</li>
-    <li><b>Planned</b> — scoped and intended as upcoming work.</li>
-    <li><b>In progress</b> — actively being implemented.</li>
-    <li><b>On hold</b> — intentionally paused or waiting on something.</li>
-    <li><b>Review</b> — implemented and waiting for your sign-off.</li>
-    <li><b>Closed</b> — finished or no longer active; it is archived automatically.</li>
+    <li><b>Backlog</b> — captured, not scheduled. → <i>Plan it</i> · <i>Put on hold</i></li>
+    <li><b>Planned</b> — scoped and intended as upcoming work. → <i>Start work</i> ·
+      <i>Put on hold</i> · <i>Back to backlog</i></li>
+    <li><b>In progress</b> — actively being implemented. → <i>Ready for review</i> ·
+      <i>Put on hold</i></li>
+    <li><b>On hold</b> — intentionally paused or waiting on something. →
+      <i>Resume as planned</i> · <i>Resume work</i></li>
+    <li><b>Review</b> — implemented and waiting for your sign-off. →
+      <i>Approve &amp; close</i> · <i>Send back</i></li>
+    <li><b>Closed</b> — finished or no longer active; archived automatically. → <i>Reopen</i></li>
   </ul>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Expanding an item puts those moves on
+    the row above the fields, with the one you almost always want first. A move saves on
+    the click — there is no second trip to <i>Save changes</i>. The <b>Status</b> dropdown
+    is still there for anything off the usual path.</p>
+
+  <h4>Who has an item</h4>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Pick your name once in the header; the
+    tracker guesses it from <code>git config user.name</code> and remembers it on this
+    machine only. <b>Claim</b> puts your name on an item and <b>Release</b> takes it off,
+    from any status — claiming is not the same as starting, so you can take something
+    while it is still Planned. The card shows <b>👤 name</b> next to the status, and the
+    <i>Owner</i> filter narrows to one person or to what nobody has taken. Claim before
+    you write code: it is the only signal the other person has that an item is taken.</p>
 
   <h4>Write-up shape</h4>
   <p style="font-size:13.4px;color:var(--ink-dim)">Four sections, in this order, so the
@@ -395,10 +432,11 @@
   <ul>
     <li><b>Request</b> — what was asked for, in the asker's terms. Always present.</li>
     <li><b>What was done</b> — what actually shipped.</li>
-    <li><b>What's left</b> — what remains. Say it either way, and link the follow-up
-      item when the remainder was split out. An item in <code>Review</code> is never
-      "Nothing" — what is left is <i>your</i> review, so name what to look at.
-      "Nothing" is for an item that is genuinely finished and signed off.</li>
+    <li><b>What's left</b> — <i>the developer's</i> remaining work, and nothing else.
+      Link the follow-up item when the remainder was split out. When the code is
+      finished this really is "Nothing", including on an item sitting in
+      <code>Review</code> — the review itself is not developer work, so it belongs in
+      the amber box below, not here.</li>
     <li><b>Background (technical)</b> — code anchors, design calls, gotchas, related
       IDs. The internal half, kept out of the first three.</li>
   </ul>
@@ -406,13 +444,15 @@
     <code>statusNote</code> renders above them as the item's lede — the status or
     "update as of &lt;date&gt;" line that used to be a leading <code>&gt;</code> quote.
     Archived items still hold the older single <code>body</code> array; both render.</p>
-  <p style="font-size:13.4px;color:var(--ink-dim)">Open questions do <b>not</b> live in
-    <i>Background</i>. They go in a separate <code>decisions</code> field — a list of the
-    calls that need your input before the work can start. They render as their own
-    amber box at the top of the item, put a <b>⚖ to settle</b> badge on the card, and
-    are what the <i>Waiting on my decision</i> filter collects. Answer them in
-    <i>Instructions for implementation</i>; whoever implements clears the field and
-    records the call in <i>Background</i>.</p>
+  <p style="font-size:13.4px;color:var(--ink-dim)"><b>Anything that needs <i>you</i> goes
+    in one place</b> — the <code>decisions</code> field, rendered as the amber
+    <i>Waiting on you</i> box at the top of the item. Design calls that block the work,
+    and the review to run once it is built: both are things only you can do, so both are
+    listed there rather than buried in <i>Background</i> or addressed to you from inside
+    <i>What's left</i>. The box badges the card <b>⚖ N for you</b> and is what the
+    <i>Waiting on me</i> filter collects, so one click shows every item holding on you.
+    Answer in <i>Instructions for implementation</i>; whoever implements clears the field
+    and records the call in <i>Background</i>.</p>
   <p style="font-size:13.4px;color:var(--ink-dim)">An item with no implementation
     behind it has only <i>Request</i> (plus <i>Background</i>), whether it is Backlog,
     Planned, or On hold. The other two appear once work exists, and are required once
@@ -422,16 +462,18 @@
   <p style="font-size:13.4px;color:var(--ink-dim)">The tracker is only worth reading if
     it matches reality, so it gets updated <i>while</i> the work happens, not after:</p>
   <ul>
-    <li><b>Flip the status when the work starts</b>, not when it ends —
-      <code>In progress</code> the moment you pick an item up, so a second person (or
-      a second agent) can see it is taken.</li>
+    <li><b>Claim it and flip the status when the work starts</b>, not when it ends —
+      <b>Claim</b> plus <code>In progress</code> the moment you pick an item up, so the
+      other person (or the other agent) can see it is taken.</li>
     <li><b>Clear a decision the moment it is answered</b>, even before any code is
       written, and record the call in <i>Background</i>. A settled question left in the
       amber box costs a round of review.</li>
     <li><b>Commit early and often</b> — one commit per feature or fix rather than one
       per session, with the tracker edit in the same commit as the code it describes.</li>
-    <li><b>Finish into <code>Review</code></b>, never straight to <code>Closed</code>,
-      and write <i>What's left</i> as what <i>you</i> should look at.</li>
+    <li><b>Finish into <code>Review</code></b>, never straight to <code>Closed</code>.
+      Leave <i>What's left</i> as the honest developer remainder, and put the review ask
+      — which surfaces to click, which judgement calls to disagree with — in
+      <i>Waiting on you</i>.</li>
     <li><b>Nothing half-recorded.</b> Something noticed in passing is either fixed on
       the spot or gets its own item; it never lives only in a chat log.</li>
   </ul>
@@ -481,6 +523,19 @@
   const PRIORITY_RANK = { High: 0, Normal: 1, Low: 2 };
   const color = s => COLOR[s] || "#94a3b8";
   const TERMINAL = new Set(["Closed"]);
+  /* The moves an item actually makes, in the order you reach for them — the
+     first is the one you almost always want, so it gets the primary button.
+     The Status dropdown stays for anything off this path. */
+  const TRANSITIONS = {
+    "Backlog": [["Planned", "Plan it"], ["On hold", "Put on hold"]],
+    "Planned": [["In progress", "Start work"], ["On hold", "Put on hold"], ["Backlog", "Back to backlog"]],
+    "In progress": [["Review", "Ready for review"], ["On hold", "Put on hold"]],
+    "On hold": [["Planned", "Resume as planned"], ["In progress", "Resume work"]],
+    "Review": [["Closed", "Approve & close"], ["In progress", "Send back"]],
+    "Closed": [["In progress", "Reopen"]],
+  };
+  const PEOPLE = DATA.people || [];
+  let ME = "";
   ITEMS.forEach(it => {
     it.status = STATUS_ALIASES[it.status] || it.status;
     if (it.status === "Closed") it.archived = true;
@@ -585,12 +640,13 @@
   const saved = JSON.parse(localStorage.getItem("tracker-ui") || "{}");
   const state = {
     q: "", status: new Set(saved.status || []), priority: new Set(saved.priority || []),
+    owner: new Set(saved.owner || []),
     group: saved.group || null, archive: !!saved.archive, decisions: !!saved.decisions,
     expandAll: false,
   };
   const persist = () => localStorage.setItem("tracker-ui",
     JSON.stringify({ status: [...state.status], priority: [...state.priority], group: state.group,
-      archive: state.archive, decisions: state.decisions }));
+      owner: [...state.owner], archive: state.archive, decisions: state.decisions }));
   const openIds = new Set();
 
   // An item is "waiting on a decision" only while it is still open — a closed item's
@@ -604,10 +660,12 @@
     if (state.decisions && !openDecisions(it).length) return false;
     if (state.status.size && !state.status.has(it.status)) return false;
     if (state.priority.size && !state.priority.has(it.priority || "Normal")) return false;
+    if (state.owner.size && !state.owner.has(it.owner || "")) return false;
     if (state.group && it.group !== state.group) return false;
     if (state.q) {
       const hay = (it.id + " " + it.title + " " + it.status + " " + it.note + " "
-        + (it.priority || "Normal") + " " + (it.implementationBrief || "") + " "
+        + (it.priority || "Normal") + " " + (it.owner || "") + " "
+        + (it.implementationBrief || "") + " "
         + it.added + " " + (it.decisions || []).join(" ") + " " + writeUpText(it)).toLowerCase();
       if (!state.q.split(/\s+/).every(t => hay.includes(t))) return false;
     }
@@ -639,6 +697,20 @@
       </button>`).join("");
     el("prioritySummary").textContent = state.priority.size ? `${state.priority.size} selected` : "All";
 
+    if (PEOPLE.length) {
+      el("ownerFacet").hidden = false;
+      const ownerCounts = {};
+      pool.forEach(i => ownerCounts[i.owner || ""] = (ownerCounts[i.owner || ""] || 0) + 1);
+      const rows = [...PEOPLE.map(p => [p, p === ME ? `${p} (you)` : p]), ["", "Unassigned"]];
+      el("owners").innerHTML = rows.filter(([key]) => ownerCounts[key]).map(([key, label]) => `
+        <button class="chip ${state.owner.has(key) ? "on" : ""}" data-owner="${esc(key)}">
+          <span class="dot" style="background:${key ? (key === ME ? "var(--accent)" : "#0ea5e9") : "var(--ink-faint)"}"></span>
+          ${esc(label)}<span class="n">${ownerCounts[key]}</span>
+        </button>`).join("");
+      el("ownerSummary").textContent = state.owner.size
+        ? [...state.owner].map(o => o || "Unassigned").join(", ") : "All";
+    }
+
     const gc = {};
     pool.forEach(i => gc[i.group] = (gc[i.group] || 0) + 1);
     el("groups").innerHTML = DATA.groups.filter(g => gc[g.name]).map(g => `
@@ -665,20 +737,33 @@
     const options = ORDER.map(s => `<option${s === it.status ? " selected" : ""}>${s}</option>`).join("");
     const priority = it.priority || "Normal";
     const priorityOptions = PRIORITIES.map(p => `<option${p === priority ? " selected" : ""}>${p}</option>`).join("");
+    const owner = it.owner || "";
+    const ownerOptions = ["", ...PEOPLE]
+      .map(p => `<option value="${esc(p)}"${p === owner ? " selected" : ""}>${p ? esc(p) : "— unassigned —"}</option>`).join("");
     const note = it.implementationBrief
       ? `<div class="implementation-brief"><strong>Instructions for implementation</strong>${esc(it.implementationBrief)}</div>` : "";
     const decisions = openDecisions(it);
     const decideBox = decisions.length ? `<div class="decisions">
-      <strong>Decisions to settle before implementing</strong>
+      <strong>Waiting on you</strong>
       <ol>${decisions.map(d => `<li>${inline(d)}</li>`).join("")}</ol>
-      <p class="hint">Answer these in <em>Instructions for implementation</em> below — that is what a
-        coding agent reads before starting.</p>
+      <p class="hint">Every open call — a design decision, or a review to run — answered in
+        <em>Instructions for implementation</em> below, which is what a coding agent reads next.</p>
     </div>` : "";
+    const moves = (TRANSITIONS[it.status] || []).map(([to, label], i) =>
+      `<button class="go ${i ? "" : "primary"}" data-go="${to}" title="Move to ${to}">${label}</button>`).join("");
+    const claim = !PEOPLE.length || !ME ? ""
+      : owner === ME
+        ? `<button class="claim" data-claim="">Release</button>`
+        : `<button class="claim" data-claim="${esc(ME)}">${owner ? `Take over from ${esc(owner)}` : "👤 Claim"}</button>`;
     const editor = `<div class="editor" data-editor="${it.id}">
       <div class="editor-title">Edit task</div>
+      <div class="transitions">
+        <span class="from">${it.status} →</span>${moves}${claim}
+      </div>
       <div class="editor-grid">
         <label>Status<select class="edit-status">${options}</select></label>
         <label>Priority<select class="edit-priority">${priorityOptions}</select></label>
+        <label>Owner<select class="edit-owner"${PEOPLE.length ? "" : " disabled"}>${ownerOptions}</select></label>
         <label>Instructions for implementation
           <textarea class="edit-note" placeholder="Describe what to build, important constraints, and how you will know it is done.">${esc(it.implementationBrief || "")}</textarea>
         </label>
@@ -696,7 +781,8 @@
           <span class="ttl">${inline(it.title)}</span>
           ${sub ? `<div class="sub">${inline(sub)}</div>` : ""}
         </span>
-        ${decisions.length ? `<span class="decide-badge" title="Open decisions that need your call">⚖ ${decisions.length} to settle</span>` : ""}
+        ${decisions.length ? `<span class="decide-badge" title="Open calls and reviews that need you">⚖ ${decisions.length} for you</span>` : ""}
+        ${owner ? `<span class="owner ${owner === ME ? "me" : ""}" title="Claimed by ${esc(owner)}">👤 ${esc(owner)}</span>` : ""}
         ${priority !== "Normal" ? `<span class="priority priority-${priority.toLowerCase()}">${priority}</span>` : ""}
         <span class="status"><span class="dot" style="background:${color(it.status)}"></span>${it.status}</span>
       </button>
@@ -742,6 +828,7 @@
       if (!edit) return;
       if (typeof edit.status === "string") it.status = STATUS_ALIASES[edit.status] || edit.status;
       if (typeof edit.priority === "string") it.priority = edit.priority;
+      if (typeof edit.owner === "string") it.owner = edit.owner;
       if (typeof edit.implementationBrief === "string") it.implementationBrief = edit.implementationBrief;
       if (typeof edit.archived === "boolean") it.archived = edit.archived;
     });
@@ -782,6 +869,7 @@
       });
       Object.assign(EDITS, payload.state.items || {});
       applyEdits();
+      await loadWhoami();
       serverConnected = true;
       el("newTask").disabled = false;
       setConnection("Live · saved to project", "on");
@@ -801,11 +889,12 @@
     const id = editor.dataset.editor;
     const status = editor.querySelector(".edit-status").value;
     const priority = editor.querySelector(".edit-priority").value;
+    const owner = editor.querySelector(".edit-owner").value;
     const implementationBrief = editor.querySelector(".edit-note").value.trim();
     const archived = TERMINAL.has(status);
     const updated = localDateStamp();
-    Object.assign(BY_ID.get(id), { status, priority, implementationBrief, archived });
-    EDITS[id] = { status, priority, implementationBrief, archived, updated };
+    Object.assign(BY_ID.get(id), { status, priority, owner, implementationBrief, archived });
+    EDITS[id] = { status, priority, owner, implementationBrief, archived, updated };
     return id;
   }
 
@@ -844,6 +933,45 @@
     const result = await saveState();
     if (result.ok) render();
     else editor.querySelector(".item-save-state").textContent = result.error;
+  }
+
+  /* A transition or a claim is a one-click action: set the field the button
+     stands for, then save straight away — no second trip to "Save changes". */
+  async function saveField(button, selector, value) {
+    const editor = button.closest(".editor");
+    editor.querySelector(selector).value = value;
+    await saveItem(button);
+  }
+
+  const WHOAMI_PATH = "api/whoami";
+
+  function renderWhoami() {
+    const picker = el("whoami");
+    if (!PEOPLE.length) return;
+    picker.hidden = false;
+    picker.innerHTML = ["", ...PEOPLE]
+      .map(p => `<option value="${esc(p)}"${p === ME ? " selected" : ""}>${p ? `👤 ${esc(p)}` : "👤 Who are you?"}</option>`).join("");
+  }
+
+  async function loadWhoami() {
+    try {
+      const response = await fetch(WHOAMI_PATH, { cache: "no-store" });
+      const payload = await response.json();
+      if (payload.ok) ME = payload.person || "";
+    } catch { /* identity is a convenience; the tracker works without it */ }
+    renderWhoami();
+  }
+
+  async function setWhoami(person) {
+    ME = person;
+    try {
+      await fetch(WHOAMI_PATH, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ person }),
+      });
+    } catch { /* the choice still applies to this page load */ }
+    render();
   }
 
   function taskIdentityForGroup(group) {
@@ -903,6 +1031,7 @@
     state.group = group;
     state.status.clear();
     state.priority.clear();
+    state.owner.clear();
     state.archive = false;
     state.q = "";
     el("q").value = "";
@@ -916,6 +1045,10 @@
   el("list").addEventListener("click", async e => {
     const save = e.target.closest(".save-item");
     if (save) { await saveItem(save); return; }
+    const go = e.target.closest(".go");
+    if (go) { await saveField(go, ".edit-status", go.dataset.go); return; }
+    const claim = e.target.closest(".claim");
+    if (claim) { await saveField(claim, ".edit-owner", claim.dataset.claim); return; }
     const head = e.target.closest(".head");
     if (!head) return;
     const id = head.dataset.id;
@@ -931,9 +1064,11 @@
   });
 
   el("list").addEventListener("change", e => {
-    if (!e.target.matches(".edit-status, .edit-priority")) return;
+    if (!e.target.matches(".edit-status, .edit-priority, .edit-owner")) return;
     markDirty(e.target.closest(".editor"));
   });
+
+  el("whoami").addEventListener("change", e => setWhoami(e.target.value));
 
   document.querySelector("aside").addEventListener("click", e => {
     const chip = e.target.closest(".chip");
@@ -944,6 +1079,9 @@
     } else if (chip.dataset.priority) {
       const priority = chip.dataset.priority;
       state.priority.has(priority) ? state.priority.delete(priority) : state.priority.add(priority);
+    } else if (chip.dataset.owner !== undefined) {
+      const owner = chip.dataset.owner;
+      state.owner.has(owner) ? state.owner.delete(owner) : state.owner.add(owner);
     } else if (chip.dataset.group) {
       state.group = state.group === chip.dataset.group ? null : chip.dataset.group;
     } else if (chip.id === "toggleDecisions") {
@@ -951,7 +1089,7 @@
     } else if (chip.id === "toggleArchive") {
       state.archive = !state.archive;
     } else if (chip.id === "reset") {
-      state.status.clear(); state.priority.clear(); state.group = null;
+      state.status.clear(); state.priority.clear(); state.owner.clear(); state.group = null;
       state.archive = false; state.decisions = false;
       el("q").value = ""; state.q = "";
     }
@@ -1014,6 +1152,7 @@
     if (it.archived && !state.archive) { state.archive = true; persist(); }
     if (state.group && it.group !== state.group) state.group = null;
     if (state.status.size && !state.status.has(it.status)) state.status.clear();
+    if (state.owner.size && !state.owner.has(it.owner || "")) state.owner.clear();
     openIds.add(id);
     render();
     const node = document.getElementById(id);

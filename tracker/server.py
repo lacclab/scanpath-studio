@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import tempfile
 import threading
 import webbrowser
@@ -19,8 +20,15 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 TRACKER_DIR = APP_ROOT / "tracker"
 DATA_FILE = TRACKER_DIR / "data.js"
 STATE_FILE = TRACKER_DIR / "state.json"
+#: Machine-local, git-ignored (ENG-39). Holds the two things that must *not* be
+#: shared: the save counter — which changes on every save and so conflicted on
+#: every parallel pull — and which of the people in `data.js` is at this
+#: keyboard. Neither means anything in another clone.
+LOCAL_FILE = TRACKER_DIR / ".local.json"
 API_PATH = "/tracker/api/state"
+WHOAMI_PATH = "/tracker/api/whoami"
 MAX_BODY_BYTES = 2 * 1024 * 1024
+STATE_VERSION = 3
 STATUSES = {
     "Backlog",
     "Planned",
@@ -43,7 +51,14 @@ GROUP_PREFIXES = {
     "Bugs": "BUG",
     "Engineering": "ENG",
 }
-EDIT_FIELDS = ("status", "priority", "implementationBrief", "archived", "updated")
+EDIT_FIELDS = (
+    "status",
+    "priority",
+    "owner",
+    "implementationBrief",
+    "archived",
+    "updated",
+)
 # The write-up is structured, one array of markdown lines per section, so a
 # section cannot be silently dropped, reordered, or hidden inside prose. Only
 # `request` is required; the rest appear once there is work behind the item.
@@ -76,6 +91,17 @@ def _known_item_ids() -> set[str]:
 
 def _known_groups() -> set[str]:
     return set(re.findall(r'"group"\s*:\s*"([^"]+)"', DATA_FILE.read_text()))
+
+
+def _known_people() -> list[str]:
+    """The names an item may be claimed by, from ``TRACKER.people`` in data.js.
+
+    A fixed list rather than free text (ENG-39): it is the only shape a *Mine* /
+    *Unassigned* filter can be honest about, and a typo'd owner is then a
+    rejected save instead of a third person who does not exist.
+    """
+    match = re.search(r'"people"\s*:\s*\[([^\]]*)\]', DATA_FILE.read_text())
+    return re.findall(r'"([^"]+)"', match.group(1)) if match else []
 
 
 def _validate_created_item(value: Any, known_ids: set[str]) -> dict[str, Any]:
@@ -129,18 +155,26 @@ def _validate_created_item(value: Any, known_ids: set[str]) -> dict[str, Any]:
 
 
 def _validate_state(value: Any) -> dict[str, Any]:
-    expected = {"version", "revision", "items", "createdItems"}
-    if not isinstance(value, dict) or set(value) != expected:
+    # `revision` is accepted but never stored: it is a machine-local save
+    # counter that lives in `.local.json` now, and version 2 files (and every
+    # request from the page) still carry it inline.
+    expected = {"version", "items", "createdItems"}
+    if not isinstance(value, dict) or not expected <= set(value):
         raise ValueError("Invalid tracker state.")
-    if value["version"] != 2:
+    if set(value) - expected - {"revision"}:
+        raise ValueError("Invalid tracker state.")
+    if value["version"] not in (2, STATE_VERSION):
         raise ValueError("Unsupported tracker state version.")
-    if not isinstance(value["revision"], int) or value["revision"] < 0:
+    if "revision" in value and (
+        not isinstance(value["revision"], int) or value["revision"] < 0
+    ):
         raise ValueError("Invalid tracker state revision.")
     if not isinstance(value["items"], dict):
         raise ValueError("Tracker items must be a JSON object.")
     if not isinstance(value["createdItems"], list):
         raise ValueError("Created tracker items must be an array.")
 
+    people = _known_people()
     known_ids = _known_item_ids()
     created_items = []
     for raw_item in value["createdItems"]:
@@ -160,6 +194,8 @@ def _validate_state(value: Any) -> dict[str, Any]:
             raise ValueError(f"Invalid status for {item_id}.")
         if "priority" in edit and edit["priority"] not in PRIORITIES:
             raise ValueError(f"Invalid priority for {item_id}.")
+        if "owner" in edit and edit["owner"] not in ("", *people):
+            raise ValueError(f"Invalid owner for {item_id}.")
         if "implementationBrief" in edit:
             note = edit["implementationBrief"]
             if not isinstance(note, str) or len(note) > 100_000:
@@ -172,8 +208,7 @@ def _validate_state(value: Any) -> dict[str, Any]:
                 raise ValueError(f"Invalid update date for {item_id}.")
         clean[item_id] = {field: edit[field] for field in EDIT_FIELDS if field in edit}
     return {
-        "version": 2,
-        "revision": value["revision"],
+        "version": STATE_VERSION,
         "items": clean,
         "createdItems": created_items,
     }
@@ -181,6 +216,62 @@ def _validate_state(value: Any) -> dict[str, Any]:
 
 def _read_state() -> dict[str, Any]:
     return _validate_state(json.loads(STATE_FILE.read_text()))
+
+
+def _read_local() -> dict[str, Any]:
+    try:
+        value = json.loads(LOCAL_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _write_local(local: dict[str, Any]) -> None:
+    LOCAL_FILE.write_text(f"{json.dumps(local, indent=2, ensure_ascii=False)}\n")
+
+
+def _read_revision() -> int:
+    revision = _read_local().get("revision")
+    return revision if isinstance(revision, int) and revision >= 0 else 0
+
+
+def _bump_revision() -> int:
+    local = _read_local()
+    local["revision"] = _read_revision() + 1
+    _write_local(local)
+    return local["revision"]
+
+
+def _git_name() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "config", "user.name"],
+            cwd=APP_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return result.stdout.strip()
+
+
+def _whoami() -> dict[str, Any]:
+    """Who is at this keyboard, resolved once and remembered locally.
+
+    An explicit choice wins; otherwise `git config user.name` is matched
+    token-wise against the people in `data.js`, which covers the ordinary case
+    ("Omer Shubi" → "Shubi") without anyone configuring anything. No match just
+    means unclaimed work stays unclaimed until someone picks a name.
+    """
+    people = _known_people()
+    stored = _read_local().get("person")
+    if isinstance(stored, str) and stored in people:
+        return {"person": stored, "people": people}
+    tokens = {token.casefold() for token in _git_name().split()}
+    guess = next((p for p in people if p.casefold() in tokens), "")
+    return {"person": guess, "people": people}
 
 
 def _write_state(state: dict[str, Any]) -> None:
@@ -219,7 +310,7 @@ class TrackerHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         path = urlsplit(self.path).path
-        if path.endswith(self._NO_STORE_PATHS) or path == API_PATH:
+        if path.endswith(self._NO_STORE_PATHS) or path in (API_PATH, WHOAMI_PATH):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
@@ -232,35 +323,40 @@ class TrackerHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802
-        if urlsplit(self.path).path == API_PATH:
-            self._send_json(HTTPStatus.OK, {"ok": True, "state": _read_state()})
+        path = urlsplit(self.path).path
+        if path == API_PATH:
+            state = {**_read_state(), "revision": _read_revision()}
+            self._send_json(HTTPStatus.OK, {"ok": True, "state": state})
+            return
+        if path == WHOAMI_PATH:
+            self._send_json(HTTPStatus.OK, {"ok": True, **_whoami()})
             return
         super().do_GET()
 
-    def do_PUT(self) -> None:  # noqa: N802
-        if urlsplit(self.path).path != API_PATH:
-            self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found."})
-            return
+    def _read_body(self) -> Any:
         if self.headers.get_content_type() != "application/json":
-            self._send_json(
-                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
-                {"ok": False, "error": "Expected application/json."},
-            )
-            return
+            raise ValueError("Expected application/json.")
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
         if not 0 < length <= MAX_BODY_BYTES:
-            self._send_json(
-                HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Invalid request size."}
-            )
+            raise ValueError("Invalid request size.")
+        return json.loads(self.rfile.read(length))
+
+    def do_PUT(self) -> None:  # noqa: N802
+        path = urlsplit(self.path).path
+        if path not in (API_PATH, WHOAMI_PATH):
+            self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found."})
             return
         try:
-            incoming = _validate_state(json.loads(self.rfile.read(length)))
+            body = self._read_body()
+            if path == WHOAMI_PATH:
+                self._put_whoami(body)
+                return
+            incoming = _validate_state(body)
             with STATE_LOCK:
-                current = _read_state()
-                if incoming["revision"] != current["revision"]:
+                if body.get("revision") != _read_revision():
                     self._send_json(
                         HTTPStatus.CONFLICT,
                         {
@@ -269,12 +365,24 @@ class TrackerHandler(SimpleHTTPRequestHandler):
                         },
                     )
                     return
-                incoming["revision"] += 1
                 _write_state(incoming)
+                incoming["revision"] = _bump_revision()
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
             self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(error)})
             return
         self._send_json(HTTPStatus.OK, {"ok": True, "state": incoming})
+
+    def _put_whoami(self, body: Any) -> None:
+        person = body.get("person") if isinstance(body, dict) else None
+        if person is not None and (
+            not isinstance(person, str) or person not in ("", *_known_people())
+        ):
+            raise ValueError("Unknown person.")
+        with STATE_LOCK:
+            local = _read_local()
+            local["person"] = person or ""
+            _write_local(local)
+        self._send_json(HTTPStatus.OK, {"ok": True, **_whoami()})
 
 
 def main() -> None:

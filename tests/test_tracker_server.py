@@ -118,6 +118,38 @@ def test_implemented_items_say_what_was_done_and_what_is_left() -> None:
             )
 
 
+def test_review_items_ask_for_the_review_in_the_waiting_box() -> None:
+    """An item in ``Review`` is holding on the user, and must say so where the
+    user looks (ENG-38 round 2).
+
+    ``whatsLeft`` is the *developer's* remainder — on a finished item that is
+    honestly "Nothing". The review itself is not developer work, so it lives in
+    ``decisions``, which is the amber *Waiting on you* box, the ``⚖ N for you``
+    badge, and the *Waiting on me* filter. Without this, an implemented item
+    reads as finished and drops off the one list the user actually scans.
+    """
+    for item in _open_items():
+        if item["status"] != "Review":
+            continue
+        assert item.get("decisions"), (
+            f"{item['id']} is in Review but has no `decisions` entry — name the "
+            "review ask there (which surfaces to click, which calls to second-guess) "
+            "so it lands in the 'Waiting on me' filter."
+        )
+
+
+def test_whats_left_is_developer_work_not_a_message_to_the_user() -> None:
+    """``whatsLeft`` addresses the developer; anything for the user is a decision."""
+    addressed = ("your review", "you should look", "for you to review", "your call")
+    for item in _open_items():
+        text = " ".join(item.get("whatsLeft") or []).lower()
+        found = [phrase for phrase in addressed if phrase in text]
+        assert not found, (
+            f"{item['id']}: `whatsLeft` addresses the user ({found[0]!r}). It holds "
+            "the developer's remaining work only — move the ask to `decisions`."
+        )
+
+
 def test_write_up_sections_do_not_repeat_their_own_lead() -> None:
     """The label is the field name now; a leftover `**Request.**` is a double."""
     leads = ("**Request.", "**What was done.", "**What's left.", "**Background (")
@@ -151,6 +183,76 @@ def test_validate_state_accepts_implementation_brief() -> None:
     assert (
         state["items"]["CMP-7"]["implementationBrief"] == "Use one shared colour scale."
     )
+
+
+def test_validate_state_accepts_an_owner_from_the_people_list() -> None:
+    people = SERVER._known_people()
+    assert people, "tracker/data.js must declare `people` for Claim to work (ENG-39)."
+
+    state = SERVER._validate_state(
+        {
+            "version": SERVER.STATE_VERSION,
+            "items": {"CMP-7": {"owner": people[0]}},
+            "createdItems": [],
+        }
+    )
+
+    assert state["items"]["CMP-7"]["owner"] == people[0]
+
+
+def test_validate_state_rejects_an_unknown_owner() -> None:
+    """A typo'd owner is a rejected save, not a third person who doesn't exist."""
+    with pytest.raises(ValueError, match="Invalid owner"):
+        SERVER._validate_state(
+            {
+                "version": SERVER.STATE_VERSION,
+                "items": {"CMP-7": {"owner": "Nobody"}},
+                "createdItems": [],
+            }
+        )
+
+
+def test_validated_state_never_carries_the_revision_counter() -> None:
+    """``revision`` is machine-local now (ENG-39), so it never reaches state.json.
+
+    It changed on every save, which made the git-tracked file conflict on every
+    parallel pull even when two people touched different items. The two-tabs
+    protection it provides is per-machine, so it lives in a gitignored
+    ``tracker/.local.json`` — and a version 2 file that still has it inline is
+    read, then written back without it.
+    """
+    state = SERVER._validate_state(
+        {"version": 2, "revision": 349, "items": {}, "createdItems": []}
+    )
+
+    assert "revision" not in state
+    assert state["version"] == SERVER.STATE_VERSION
+
+
+def test_state_file_is_free_of_the_revision_counter() -> None:
+    state = json.loads((TRACKER_DIR / "state.json").read_text())
+
+    assert "revision" not in state, (
+        "tracker/state.json still carries `revision` — it belongs in the "
+        "gitignored tracker/.local.json (ENG-39)."
+    )
+
+
+def test_local_state_file_is_gitignored() -> None:
+    ignored = (Path(__file__).parents[1] / ".gitignore").read_text()
+
+    assert "tracker/.local.json" in ignored
+
+
+def test_every_status_offers_a_directed_transition() -> None:
+    """Each status names the moves it actually makes, as buttons (ENG-38)."""
+    source = (TRACKER_DIR / "index.html").read_text()
+    block = source.split("const TRANSITIONS = {", 1)[1].split("};", 1)[0]
+
+    for status in SERVER.STATUSES:
+        assert f'"{status}": [' in block, f"{status} has no directed transitions."
+    for expected in ('["Closed", "Approve & close"]', '["In progress", "Send back"]'):
+        assert expected in block, f"Review is missing {expected}."
 
 
 def test_validate_state_accepts_on_hold_status() -> None:
@@ -235,8 +337,52 @@ def test_write_state_is_valid_json(
     state_file = tmp_path / "state.json"
     monkeypatch.setattr(SERVER, "TRACKER_DIR", tmp_path)
     monkeypatch.setattr(SERVER, "STATE_FILE", state_file)
-    state = {"version": 2, "revision": 1, "items": {}, "createdItems": []}
+    state = {"version": SERVER.STATE_VERSION, "items": {}, "createdItems": []}
 
     SERVER._write_state(state)
 
     assert json.loads(state_file.read_text()) == state
+
+
+def test_revision_counter_lives_outside_the_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
+
+    assert SERVER._read_revision() == 0
+    assert SERVER._bump_revision() == 1
+    assert SERVER._read_revision() == 1
+
+
+def test_whoami_prefers_an_explicit_choice_over_the_git_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    people = SERVER._known_people()
+    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
+    monkeypatch.setattr(SERVER, "_git_name", lambda: people[0])
+
+    assert SERVER._whoami() == {"person": people[0], "people": people}
+
+    SERVER._write_local({"person": people[-1]})
+
+    assert SERVER._whoami()["person"] == people[-1]
+
+
+def test_whoami_matches_a_full_git_name_token_wise(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ "Omer Shubi" resolves to "Shubi" with nobody configuring anything."""
+    people = SERVER._known_people()
+    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
+    monkeypatch.setattr(SERVER, "_git_name", lambda: f"Some {people[0].lower()}")
+
+    assert SERVER._whoami()["person"] == people[0]
+
+
+def test_whoami_is_empty_when_the_git_name_matches_nobody(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
+    monkeypatch.setattr(SERVER, "_git_name", lambda: "Someone Else")
+
+    assert SERVER._whoami()["person"] == ""

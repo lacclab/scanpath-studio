@@ -192,3 +192,9 @@ uv.lock
 /*.csv.zip
 .claude/skills/developing-with-streamlit
 .gitignore
+
+# Tracker machine-local state (ENG-39): the save counter and which of the
+# people in tracker/data.js is at this keyboard. Neither travels between
+# clones, and keeping the counter out of git is what stops tracker/state.json
+# from conflicting on every parallel pull.
+tracker/.local.json

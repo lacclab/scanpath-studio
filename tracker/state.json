@@ -100,11 +100,12 @@
       "updated": "2026-08-13"
     },
     "BUG-4": {
-      "status": "On hold",
+      "status": "Backlog",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-04"
+      "updated": "2026-08-13"
     },
     "CMP-11": {
       "status": "Closed",
@@ -162,25 +163,28 @@
       "updated": "2026-08-12"
     },
     "DATA-1": {
-      "status": "On hold",
+      "status": "Backlog",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-07"
+      "updated": "2026-08-13"
     },
     "DATA-10": {
-      "status": "On hold",
+      "status": "Backlog",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "Use code from eyegenbench",
       "archived": false,
-      "updated": "2026-08-04"
+      "updated": "2026-08-13"
     },
     "DATA-15": {
-      "status": "On hold",
+      "status": "Backlog",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-07"
+      "updated": "2026-08-13"
     },
     "DATA-17": {
       "status": "Closed",
@@ -537,11 +541,12 @@
       "updated": "2026-08-04"
     },
     "PRE-7": {
-      "status": "On hold",
+      "status": "Backlog",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-04"
+      "updated": "2026-08-13"
     },
     "PRE-8": {
       "status": "Closed",
@@ -758,25 +763,28 @@
       "updated": "2026-08-13"
     },
     "VAL-1": {
-      "status": "On hold",
+      "status": "Closed",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-04"
+      "archived": true,
+      "updated": "2026-08-13"
     },
     "VAL-2": {
-      "status": "On hold",
+      "status": "Backlog",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-04"
+      "updated": "2026-08-13"
     },
     "VAL-3": {
-      "status": "On hold",
+      "status": "Backlog",
       "priority": "Normal",
+      "owner": "",
       "implementationBrief": "Can be closed by MECO",
       "archived": false,
-      "updated": "2026-08-07"
+      "updated": "2026-08-13"
     },
     "VAL-4": {
       "status": "On hold",

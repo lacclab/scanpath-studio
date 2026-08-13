@@ -86,17 +86,27 @@ conventions are in the tracker's *How this works* panel and `CLAUDE.md` →
 
 The repo commits **directly to `main`** and its work queue is a file in the
 repo, so two people (or two AI sessions) staying out of each other's way is a
-matter of habit rather than tooling:
+matter of habit rather than tooling.
+
+Two situations, and they need opposite instincts. **Two clones** — the ordinary
+case — is what git is for: you each have your own working tree, conflicts surface
+at `pull`, and the discipline is pull/commit/push. **One checkout shared by
+several editor or AI sessions** gets none of that: there is no second tree to
+merge from, `git diff` is *already* the combined state of everyone's edits, and
+`git pull` protects you from nothing. There the only defence is staging
+selectively and reading what you staged.
+
+Common to both:
 
 - **Claim the item before you start it.** Set the tracker item to
   `In progress` — and push that change — *before* writing code, not when you
   finish. That flip is the only signal the other person has that the item is
   taken. Same for a new item: create it, push it, then work on it.
-- **Pull before you start, commit small, push often.** One commit per feature or
-  fix, with the tracker edit in the same commit as the code it describes. A
-  large uncommitted working tree is the thing that actually hurts here — it
-  can't be pulled, reviewed, or built on, and merging it later is a marathon.
-  Always `git pull` before you push.
+- **Commit small, push often.** One commit per feature or fix, with the tracker
+  edit in the same commit as the code it describes. A large uncommitted working
+  tree is the thing that actually hurts — it can't be pulled, reviewed, or built
+  on, and merging it later is a marathon. Between clones, always `git pull`
+  before you push.
 - **`tracker/state.json` will conflict; merge it, never pick a side.** The file
   holds every status override and implementation brief, and the tracker server
   rewrites it whole on each save. Its `revision` counter changes on *every*
@@ -111,19 +121,26 @@ matter of habit rather than tooling:
   group at the same moment will both reach for the same next free number — check
   the *How this works* panel again after pulling, and renumber **your own** new
   item if it collides.
-- **Several AI sessions against one checkout is a special case.** They share one
-  working tree, so two of them editing the same file clobber each other even in
-  different regions. Have them enumerate their peers and agree on file ownership
-  before editing, and keep `tracker/state.json` owned by one session — it is
-  user-authored and its status override masks whatever `tracker/data.js` says.
-- **In a shared working tree, `git add <file>` takes the whole file** — including
-  whatever the other session wrote into it since you last looked. `CHANGELOG.md`
-  and `tracker/data.js` are the two everyone touches, so read
-  `git diff --cached` before committing either, and stage with `git add -p` when
-  the file is one you agreed to share. Sweeping someone else's half into your
-  commit isn't destructive, but it lands their work under your message and ahead
-  of the code it describes; if you notice before pushing, say so in the message
-  rather than unpicking it.
+Only when several sessions share one checkout:
+
+- **Agree on file ownership before editing.** Two sessions writing one file
+  clobber each other even in different regions, because an edit is a
+  read-modify-write of the whole file. Have them enumerate their peers, say which
+  files they hold, and honour it. Keep `tracker/state.json` owned by **one**
+  session — it is user-authored, and its status override masks whatever
+  `tracker/data.js` says.
+- **`git add <file>` takes the whole file**, including whatever the other session
+  wrote into it since you last looked — and `git pull` will not save you, because
+  their edits are not on a remote, they are already in your working tree.
+  `CHANGELOG.md` and `tracker/data.js` are the two everyone touches. Stage
+  selectively and **read `git diff --cached` before committing**: it is the only
+  view that shows what your commit will actually contain. To take one hunk of a
+  shared file non-interactively, `git diff -- <file>`, keep the hunk you want
+  with its `diff`/`---`/`+++` header, and `git apply --cached` it.
+- **Sweeping someone else's half in isn't destructive**, but it lands their work
+  under your commit message and possibly ahead of the code it describes. If you
+  catch it before pushing, amend the message to say so rather than unpicking the
+  content.
 
 ### Docs site
 

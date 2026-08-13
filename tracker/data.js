@@ -7063,6 +7063,56 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "ENG-39",
+   "prefix": "ENG",
+   "num": 39,
+   "sub": "",
+   "title": "Make the tracker work for two people — who has an item, and a state.json that survives a merge",
+   "status": "Backlog",
+   "note": "",
+   "date": "",
+   "added": "2026-08-13",
+   "group": "Engineering",
+   "subgroup": "",
+   "archived": false,
+   "decisions": [
+    "**Where does an owner come from?** A free-text name, a fixed list of the two of you configured in `data.js`, or the local `git config user.name` (which the tracker server can read and offer as the default)? Free text is one line of code and drifts; a fixed list is the only one a *Mine* filter can be honest about.",
+    "**Is `In progress` + an owner enough, or do you want an explicit claim?** Setting the status is the natural moment to say \"mine\", so the editor could just require an owner whenever the status becomes `In progress`. The alternative is a separate **Claim** button that works from any status.",
+    "**Should `revision` leave `state.json`?** It exists to stop two browser tabs on one machine from clobbering each other, and it is the field that conflicts on every parallel `git pull`. It could move to a gitignored sidecar file, keeping the same protection with none of the merge cost — at the price of one more file in `tracker/`.",
+    "**Split `state.json` per person?** `state.<name>.json`, merged by the page at load. Conflicts would then be almost impossible, but the last-writer-wins semantics you have today would be replaced by \"both, and the page decides\" — which needs a rule for what happens when you both set a different status on one item."
+   ],
+   "request": [
+    "A second person is joining the project, working from their own clone and",
+    "their own coding agent. What in the tracker should change so that two people",
+    "(and their agents) do not collide?"
+   ],
+   "background": [
+    "**The two concrete gaps.** *(1) Nothing records who has an item.* `In progress`",
+    "says the work started; it does not say by whom, so the only way to avoid",
+    "picking up something already underway is to ask. An `owner` on the item, shown",
+    "on the collapsed card next to the status badge and filterable (*Mine* /",
+    "*Unassigned*), is the whole feature. It is also what makes the existing",
+    "\"claim the item before you start it\" convention in",
+    "[`CONTRIBUTING.md`](CONTRIBUTING.md) enforceable rather than aspirational.",
+    "",
+    "*(2) [`tracker/state.json`](tracker/state.json) conflicts on every parallel",
+    "edit.* It is git-tracked, rewritten whole on each save, and carries a",
+    "monotonically increasing `revision`. Two people working the same day will",
+    "conflict on that one line even when they touched different items. The",
+    "`revision` check in [`server.py`](tracker/server.py:263) is real protection",
+    "against two tabs on one machine — it just has no business being in a shared",
+    "file. Until this lands, the merge rule is written up in `CONTRIBUTING.md` →",
+    "*Working together*: keep both sides' `items` entries, set `revision` to the",
+    "higher of the two plus one, and reload the page.",
+    "",
+    "**Deliberately not proposed.** Real-time presence, locking, or a hosted",
+    "tracker. The tracker is a static page over a JSON file precisely so it needs",
+    "no server-side state; two researchers do not need a Jira. Related:",
+    "#ENG-38 (the structured write-up fields, the other half of \"agents keep the",
+    "tracker honest\"), #ENG-35 (`decisions`)."
+   ]
+  },
+  {
    "id": "ENG-38",
    "prefix": "ENG",
    "num": 38,

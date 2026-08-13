@@ -132,8 +132,12 @@ pip install -e ".[test]"          # or: uv sync
 streamlit run streamlit_app.py
 ```
 
-Tested on Python 3.11–3.14. Run the tests with `pytest`; see
+Tested on Python 3.11–3.14. Run the tests with `uv run pytest`; see
 [AGENTS.md](AGENTS.md) for an architectural overview.
+
+Joining the project? [CONTRIBUTING.md](CONTRIBUTING.md) is the whole of it —
+setup, the work tracker (`python3 tracker/server.py`), the checks that gate CI,
+and how two people stay out of each other's way.
 
 ## Documentation
 

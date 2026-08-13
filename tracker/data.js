@@ -11887,7 +11887,20 @@ window.TRACKER = {
     "reads as a compact form rather than a long scroll. Do the same kind of UX/UI pass on",
     "the 🗂️ **Data** page: make it look and feel designed rather than assembled.",
     "",
-    "**Background (technical).** The page is **DATA-26**'s, built in",
+    "**Background (technical).** All four open calls were settled on **2026-08-13**.",
+    "**(1) Scope is the whole 🗂️ Data page** — source · description · options · data",
+    "location · column mapping · what's-in-it · 🧹 Preprocessing — not just the inspection",
+    "block. **(2) One scroll with stronger hierarchy**, not a stepper: keep the page in",
+    "pipeline order and fix it with grouping, heading weight and vertical rhythm, with",
+    "expanders for the bulky parts. It composes with (4), and it cannot break the",
+    "render-every-run rule the way a step that skips rendering would. **(3) Native",
+    "primitives only** — `st.columns` / containers / expanders / heading levels, same",
+    "constraint as **UX-51** decision (2); CSS in `styles.py` is the fallback if the native",
+    "route reads badly, not the starting point. **(4) The raw and derived tables collapse",
+    "by default** (**DATA-26** established they are \"not checked that often\"), so the page",
+    "opens on the counts and the mapping rather than on several screens of dataframe.",
+    "",
+    "The page is **DATA-26**'s, built in",
     "[`app.py`](scanpath_studio/app.py:3282) as eight containers reserved in pipeline order",
     "— data source · description · source options · data location · add-a-dataset wizard ·",
     "column mapping · what's in this dataset · 🧹 Preprocessing — and rendered on *every*",
@@ -11926,12 +11939,6 @@ window.TRACKER = {
     "this stays layout + labels and `tests/test_session_key_contract.py` must pass",
     "untouched. Note **DATA-26** is itself still in *Review*, so this should land after that",
     "sign-off rather than rewriting a page the user has not yet accepted."
-   ],
-   "decisions": [
-    "Scope: the whole 🗂️ Data page (source · location · mapping · what's-in-it · preprocessing), or only the *what's in this dataset* block that came from the old 🔎 Data Inspection subtab?",
-    "Structure: keep one scrollable page with stronger headings and grouping, or break it into steps/sections the user opens one at a time (reusing `wizard_shell`'s accordion) — noting every section must still *render* each run, only appear collapsed?",
-    "Same constraint as UX-51 decision (2) — native `st.columns` / containers only, with container-scoped CSS in `styles.py` as a fallback? Or is CSS a first-class option on this page?",
-    "The raw + derived tables are the page's bulk: cap their height / collapse them by default (they are \"not checked that often\" per DATA-26), or leave them full-height as today?"
    ]
   }
  ]

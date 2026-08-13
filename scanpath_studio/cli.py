@@ -271,6 +271,15 @@ def _render_parser() -> argparse.ArgumentParser:
         "screens of the same trial).",
     )
 
+    src.add_argument(
+        "--participant-metadata",
+        metavar="FILE",
+        help="Participant-level metadata table (DATA-20): one row per reader, an "
+        "id column plus anything known about them. The join is validated and "
+        "reported against the loaded readers, and the fields are added to "
+        "--list-trials output.",
+    )
+
     parser.add_argument(
         "-p", "--participant", help="Participant id (default: first available)."
     )
@@ -1190,8 +1199,36 @@ def render(argv: List[str]) -> None:
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
 
+    # DATA-20: attaching a participant table headlessly is worth doing for the
+    # join report alone — a mistyped id column or a cohort file from the wrong
+    # study is exactly what you want to hear about before rendering 300 figures.
+    if args.participant_metadata:
+        try:
+            attached = api.load_participant_metadata(
+                args.participant_metadata, participants=fixations
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
+        report = attached.report
+        print(
+            f"Participant metadata: {len(attached.fields)} field(s) "
+            f"({', '.join(attached.names)}) for {len(report.matched)} reader(s).",
+            file=sys.stderr,
+        )
+        for label, ids in (
+            ("no row in the table", report.only_in_data),
+            ("not in the data", report.only_in_table),
+            ("rows that disagree (left empty)", report.conflicting),
+        ):
+            if ids:
+                print(f"  {len(ids)} {label}: {', '.join(ids)}", file=sys.stderr)
+
     if args.list_trials:
         combos = api.list_trials(words, fixations)
+        if args.participant_metadata:
+            from scanpath_studio import metadata as _metadata
+
+            combos = _metadata.project(attached, combos)
         print(combos.to_string(index=False))
         return
     if args.list_parts:

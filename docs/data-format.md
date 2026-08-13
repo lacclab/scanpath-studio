@@ -15,10 +15,42 @@ any guess.
 | **Words / IA** | one row per word / interest area, with its on-screen box | participant id, trial id, word id, word text, and the box as **edges** (`IA_LEFT/RIGHT/TOP/BOTTOM`) **or** origin+size (`x/y/width/height`) |
 | **Fixations** | one row per fixation | participant id, trial id, duration (ms); optionally x/y, timestamp, fixation id, word/IA id |
 | **Raw gaze** *(optional)* | one row per gaze sample | participant id, trial id, x, y, timestamp |
+| **Participant metadata** *(optional)* | one row per reader | participant id, plus anything you know about them |
 
 Either main table may be omitted for single-report datasets — the missing layer
 is simply skipped. A words-only table still draws a heatmap from its
 pre-aggregated reading measures.
+
+## Participant metadata
+
+Attach a table of **one row per reader** — native language, age, a
+comprehension score, a group label — on the 🗂️ **Data** page under **👤
+Participant metadata**. Its columns then behave like fields in the data: they
+filter trials (*More → By reader*), show up as chips above the plot, sort the
+trial picker, appear in Data Inspection, and travel with exports and saved
+sessions.
+
+```csv
+participant_id,native_language,age,comprehension
+p01,Hebrew,24,0.83
+p02,English,31,0.91
+```
+
+Three rules are worth knowing:
+
+- **The table is never copied onto your fixations.** It stays its own table, and
+  a reader attribute stays distinguishable from a per-fixation measurement — on
+  the way in, in the exported bundle (`metadata/participants.csv`), and
+  everywhere in between.
+- **Nothing is guessed.** The join is reported before anything uses it: readers
+  in your data with no row, rows describing readers you did not load, and
+  duplicate rows. Duplicates that *disagree* are dropped and named rather than
+  resolved by taking the first one, so the field reads as missing.
+- **A missing reader is missing, not excluded.** Attaching a table that forgets
+  someone never removes them from the pool.
+
+Headless, it is a `--participant-metadata FILE` flag on `scanpath-studio render`
+and [`load_participant_metadata()`](api.md) in the Python API.
 
 ## Flexible loading
 

@@ -152,6 +152,32 @@ def test_welcome_tour_text_is_concise():
 # -----------------------------------------------------------------------------
 
 
+def _surface_open_probe_app():
+    """Verdicts of ``_tutorial_surface_is_open`` from each of the three views.
+
+    Runs as its own app because the function reads ``st.session_state``, which
+    needs a script run context. Order: a Data-page step seen from Data /
+    Corpus / Scanpath, then a Scanpath step seen from the Data page.
+    """
+    import streamlit as st
+
+    from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
+    from scanpath_studio.tour import TUTORIALS, TutorialStep, _tutorial_surface_is_open
+
+    data_step = next(
+        s for tutorial in TUTORIALS for s in tutorial.steps if s.view == _VIEW_DATA
+    )
+    verdicts = []
+    for view in (_VIEW_DATA, _VIEW_CORPUS, _VIEW_SCANPATH):
+        st.session_state["main_nav"] = view
+        verdicts.append(_tutorial_surface_is_open(data_step))
+    st.session_state["main_nav"] = _VIEW_DATA
+    verdicts.append(
+        _tutorial_surface_is_open(TutorialStep("t", "b", ".x", view=_VIEW_SCANPATH))
+    )
+    st.markdown(",".join(str(v) for v in verdicts))
+
+
 def _use_case_tutorial_app():
     import streamlit as st
 
@@ -279,6 +305,18 @@ class TestUseCaseTutorials:
         at.button(key="tutorial_done").click().run()
         assert at.session_state["tutorial_completed"]["filter_annotate"] is True
         assert "load_inspect" not in at.session_state["tutorial_completed"]
+
+    def test_a_data_page_step_counts_as_open_on_the_data_page(self):
+        """UX-40: the surface check predated DATA-26's third top-level view.
+
+        Anything that was not Corpus Analysis was treated as Scanpath, so a
+        ``view=_VIEW_DATA`` step reported "not open" *while the user stood on
+        the Data page* — the card offered to open the panel already on screen,
+        and withheld the spotlight that belonged on it.
+        """
+        at = AppTest.from_function(_surface_open_probe_app).run()
+        assert not at.exception, at.exception
+        assert at.markdown[0].value == "True,False,False,False"
 
     def test_library_remains_available_after_welcome_opt_out(self):
         at = AppTest.from_function(_tutorial_library_optout_app).run()

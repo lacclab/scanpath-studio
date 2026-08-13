@@ -605,6 +605,57 @@ def load_scanpath_data(
     return words_norm, fixations_norm
 
 
+def load_participant_metadata(
+    table: TablesLike,
+    *,
+    id_column: Optional[str] = None,
+    participants: Optional[Union[pd.DataFrame, list]] = None,
+):
+    """Load a participant-level metadata table (DATA-20 milestone 1).
+
+    ``table`` is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with
+    **one row per reader**: an id column plus anything known about them
+    (``native_language``, ``age``, a comprehension score). ``id_column``
+    defaults to the first recognised spelling (``participant_id``, ``subject``,
+    ``RECORDING_SESSION_LABEL``, …).
+
+    Pass ``participants`` — a normalized frame or a list of ids — to have the
+    join validated against the data you actually loaded; the returned object's
+    ``.report`` then names the readers missing from either side.
+
+    Returns a
+    :class:`~scanpath_studio.metadata.ParticipantMetadata`: the cleaned frame,
+    a field registry (name, label, grain, dtype, missingness), and the join
+    report. Nothing is broadcast onto the words/fixations frames — use
+    :func:`scanpath_studio.metadata.project` to attach chosen columns to a
+    per-trial frame, or ``.values_for(pid)`` for one reader.
+
+    >>> words, fixations = load_sample_data()
+    >>> meta = load_participant_metadata(
+    ...     "readers.csv", participants=fixations
+    ... )  # doctest: +SKIP
+    >>> meta.names  # doctest: +SKIP
+    ('native_language', 'age')
+    """
+    from scanpath_studio import metadata as _metadata
+
+    frame = _as_dataframe(table, "participant metadata")
+    resolved = id_column or _metadata.infer_participant_id_column(frame)
+    if not resolved or resolved not in frame.columns:
+        raise ValueError(
+            "Could not find the participant-id column in the metadata table. "
+            f"Columns: {_column_preview(frame)}. Pass id_column= explicitly."
+        )
+    if isinstance(participants, pd.DataFrame):
+        participants = _metadata.participant_ids(participants)
+    return _metadata.build_participant_metadata(
+        frame,
+        resolved,
+        source_name=getattr(table, "name", None) or "participant metadata",
+        participants=participants,
+    )
+
+
 def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Return the bundled OneStop demo, normalized and ready to plot.
 

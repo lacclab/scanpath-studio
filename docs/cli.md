@@ -131,6 +131,7 @@ the recorded setup.
 | select or inspect a child screen | `--screen ID`, `--list-parts` |
 | render every ordered screen | `--all-screens`, optionally `--screen-transition instant|recorded` |
 | map arbitrary source rows to screens | `--trial-parts-manifest manifest.json` |
+| attach participant metadata | `--participant-metadata readers.csv` |
 | export editable layers | `--separable-layers` |
 
 Use the installed command as the authoritative full reference:

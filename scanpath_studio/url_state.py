@@ -1617,6 +1617,24 @@ def _restore_plot_config(
         restore.applied += 1
         st.toast(f"Restored {n_anno} annotation(s) from config.", icon="📝")
 
+    # DATA-20 — the participant table, restored *before* the filter widgets read
+    # their keys, so a saved `filter_meta_*` selection lands on fields that
+    # already exist. Absent key = leave whatever is attached alone, the same
+    # rule the annotations above follow.
+    payload = config.get("participant_metadata")
+    if isinstance(payload, dict):
+        from scanpath_studio import metadata as _metadata
+
+        attached = _metadata.from_payload(payload)
+        if attached is not None:
+            st.session_state[_metadata.SESSION_KEY] = attached
+            st.session_state[_metadata.RAW_SESSION_KEY] = attached.frame
+            restore.applied += 1
+            st.toast(
+                f"Restored participant metadata ({len(attached.fields)} field(s)).",
+                icon="👤",
+            )
+
     return restore.applied, skipped
 
 

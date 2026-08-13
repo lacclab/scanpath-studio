@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "revision": 326,
+  "revision": 329,
   "items": {
     "AN-29": {
       "status": "Closed",
@@ -80,10 +80,10 @@
       "updated": "2026-08-12"
     },
     "BUG-25": {
-      "status": "Planned",
+      "status": "Closed",
       "priority": "Normal",
       "implementationBrief": "Not sure, go with the option that is more straight forward. I don't want to deal with complicated or uncertain conversions.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "BUG-26": {
@@ -205,11 +205,11 @@
       "updated": "2026-08-03"
     },
     "DATA-20": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-12"
+      "updated": "2026-08-13"
     },
     "DATA-21": {
       "status": "Closed",
@@ -650,7 +650,7 @@
       "updated": "2026-08-12"
     },
     "UX-40": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "This is a good start. Should be updated based on other changes made throughout the app, and also generally improved and polished.",
       "archived": false,
@@ -720,9 +720,9 @@
       "updated": "2026-08-13"
     },
     "UX-52": {
-      "status": "Planned",
+      "status": "In progress",
       "priority": "Normal",
-      "implementationBrief": "",
+      "implementationBrief": "What about \"labels beside their fields\"?\nand do we really need Screen canvas width and height? or at least put under an advanced toggle? In general the column nampping can be over welmhing\n\nand maybe move 🔎 What's in this dataset to the top?",
       "archived": false,
       "updated": "2026-08-13"
     },
@@ -755,7 +755,7 @@
       "updated": "2026-08-04"
     },
     "VAL-5": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "implementationBrief": "I think the full plan is a bit of an overkill for my needs. It is more for internal usage. \nNot sure about (1).\nFor (2) i would go with all.\nCan put (3) on hold for now, let me first go over the computations.\n(4) I updated BUG-25 implementation notes. Follow it and fix that via BUG-25. \n(5) I don't know, I don't think that I understand the question.\n(6) Sounds big and not necessary, I think we can skip these link anchors",
       "archived": false,

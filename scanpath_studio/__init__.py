@@ -7,6 +7,7 @@ __all__ = [
     "main",
     "load_scanpath_data",
     "load_sample_data",
+    "load_participant_metadata",
     "list_trials",
     "list_parts",
     "compute_word_metrics",

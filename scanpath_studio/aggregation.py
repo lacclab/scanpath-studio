@@ -311,6 +311,10 @@ MEASURES: Dict[str, Measure] = {
         Measure(
             "fix_dur", "Fixation duration", "fixations", "duration_ms", "ms", False
         ),
+        # BUG-25: "px" is honest now — `saccade_amplitude` is always the pixel
+        # distance between consecutive fixations. EyeLink's degree-valued
+        # amplitudes normalize to `next_/prev_saccade_amplitude_deg` and never
+        # reach this measure, so the axis label can't disagree with the data.
         Measure(
             "sacc_amp",
             "Saccade amplitude",

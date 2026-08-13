@@ -42,6 +42,8 @@ scanpath_studio/
 ├─ illustration.py   detects geometry-changing/synthetic views that require an Illustration disclosure
 ├─ alignment.py      vertical drift-correction: native port of the ten Carr et al. (2021) line-assignment algorithms (PRE-3). Not exposed by default — PRE-21 gates it (and similarity.py) behind SCANPATH_EXPERIMENTAL=1
 ├─ similarity.py     scanpath similarity metrics (NLD etc.) scoring the Comparisons subtab
+├─ metadata.py       DATA-20 §1: keyed, entity-level metadata tables — `ParticipantMetadata` (validated frame + `MetadataField` registry + `JoinReport`), built by `build_participant_metadata`. Three narrow consumers, and the table is **never** broadcast onto words/fixations: `participants_matching` turns a participant-grain constraint into reader ids for the existing participant filter, `project` left-joins chosen columns onto a *small* frame (the per-trial `combos`), `to_payload`/`from_payload` round-trip it through save & restore
+├─ computations.py   VAL-5: the computation register — 64 `Computation` entries (formula, units, grouping keys, missing behaviour, precedence, code link, tests, consumers, verification tier + status) covering everything that derives or semantically changes a user-visible value. Generates `docs/computations.md` (`python -m scanpath_studio.computations`); `tests/test_computations.py` pins it against `aggregation.MEASURES`, `alignment.ALGORITHMS` and the similarity metric so the catalogue cannot drift from the code
 ├─ model_scanpaths.py synthetic "model-generated" scanpaths over a real text's word boxes (Comparisons placeholder data)
 ├─ plots.py          `FigureSettings` is the shared render contract used by UI, API, export, scanpath, animation, and comparison builders; also owns the Plotly builders, render helpers, and separable-layer export
 ├─ export.py         configurable bulk-export module (PNG/SVG/JSON/CSV/Parquet/mega-table; VIZ-5 separable per-layer files via `plots.split_scanpath_layers`)
@@ -85,7 +87,7 @@ After `normalize_words` / `normalize_fixations`:
 - **Fixations**: `participant_id`, `trial_id`, `text_id`, `x`, `y`,
   `duration_ms`, `timestamp_ms`, `fixation_id` (synthesized per trial when
   absent), `word_id`, `pass_index`, `saccade_type`, `saccade_amplitude`,
-  `eye`, `order_in_trial`. (`noise_flag` was removed — it silently dropped
+  `eye`, `order_in_trial`, and — when the export carries EyeLink's degree-valued amplitudes — `next_saccade_amplitude_deg` / `prev_saccade_amplitude_deg`, which BUG-25 keeps distinct from the pixel-valued `saccade_amplitude`. (`noise_flag` was removed — it silently dropped
   fixations.)
 - **Multipart fixations** retain those parent-global clock/index columns and add
   `screen_id`, `screen_index`, optional `screen_timestamp_ms`,
@@ -117,6 +119,22 @@ assignment feeds the reading measures and the "out-of-text" flag
 (`measures.fixation_in_text_mask`); "color by line" derives visual lines from
 word-box `y` clustering (`measures.cluster_word_lines`) because `line_idx` is
 often a constant in IA exports.
+
+### Participant metadata (DATA-20)
+
+An optional **separate** table, one row per reader, attached on the 🗂️ Data page
+(`tabs.render_participant_metadata_section`) or headlessly via
+`api.load_participant_metadata` / `render --participant-metadata`. Its columns
+behave like fields in the data — trial filters (`filter_meta_<name>` keys, so the
+existing clear/mirror/Share machinery applies unchanged), chips, trial sorting,
+Data Inspection, and `metadata/participants.*` in the export bundle.
+
+**Never broadcast it onto the word/fixation frames.** A participant-grain
+constraint is a participant constraint (`metadata.participants_matching` →
+reader ids → the existing `participants` filter slot), and the only join is
+`metadata.project` onto the per-trial `combos` frame in `app.main`. Duplicate
+reader rows that *disagree* are dropped and reported, never resolved by taking
+the first.
 
 ### Trial annotations & filtering
 
@@ -238,10 +256,13 @@ normalization.
 1. Compute it in `measures.compute_per_word_measures` per trial.
 2. Add it to `WORD_OPTIONAL_FIELDS` in `data.py` if it can come pre-computed
    from EyeLink IA columns.
-3. Surface it in `controls.color_field_options` (if useful for coloring) and
+3. Add a `computations.py` register entry (VAL-5) — its formula, unit,
+   grouping keys, missing behaviour and precedence. A `MEASURES` entry with no
+   register row fails `tests/test_computations.py`.
+4. Surface it in `controls.color_field_options` (if useful for coloring) and
    register it in `aggregation.MEASURES` (surfaced via
    `aggregation.available_measures`, which feeds the measure pickers).
-4. Add a test under `tests/test_measures.py`.
+5. Add a test under `tests/test_measures.py`.
 
 ## Adding a new figure type
 

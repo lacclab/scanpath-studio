@@ -153,6 +153,7 @@ from scanpath_studio.experimental_setup import (
     font_pt_to_px,
     pixels_per_degree,
 )
+from scanpath_studio import metadata as metadata_mod
 from scanpath_studio.menu import (
     close_open_popovers,
     render_top_menu,
@@ -179,6 +180,7 @@ from scanpath_studio.tabs import (
     _render_save_restore_expander,
     render_corpus_analysis_tab,
     render_data_inspection_tab,
+    render_participant_metadata_section,
     render_single_trial_tab,
 )
 from scanpath_studio.tour import (
@@ -301,13 +303,26 @@ def _filter_diagnosis_steps(trial_filters: dict) -> list:
     the question the blanket warning used to leave unanswered.
     """
     steps: list = []
-    if trial_filters.get("participants"):
+    if trial_filters.get("participants") is not None:
         chosen = trial_filters["participants"]
+        # DATA-20: a participant-grain metadata constraint resolves into this
+        # same slot, so the step has to name *and clear* whichever widgets
+        # actually produced the narrowing — otherwise the report blamed
+        # "Participant" and its Clear button popped `filter_participants`, a
+        # no-op against a `filter_meta_*` selection.
+        meta_keys = tuple(trial_filters.get("participant_filter_keys") or ())
+        label = f"{_FILTER_GROUP_LABELS['participants']} ({len(chosen)} selected)"
+        if meta_keys:
+            label = (
+                "By reader"
+                if not st.session_state.get("filter_participants")
+                else f"{label} + by reader"
+            )
         steps.append(
             (
-                f"{_FILTER_GROUP_LABELS['participants']} ({len(chosen)} selected)",
+                label,
                 lambda w, f, p=chosen: filter_trials(w, f, participants=p),
-                ("filter_participants",),
+                ("filter_participants", *meta_keys),
             )
         )
     keys_by_col = trial_filters.get("metadata_keys") or {}
@@ -1798,6 +1813,34 @@ def _render_unmapped_view(
         st.info("No data loaded yet.")
     _render_raw_preview("Words / IA", raw_words_df)
     _render_raw_preview("Fixations", raw_fixations_df)
+
+
+@st.cache_data(show_spinner=False)
+def _cached_participant_ids(_words, _fixations, cache_key) -> list:
+    """Every reader id in the dataset (DATA-20), memoized per frame pair.
+
+    Underscore-prefixed frames + an explicit `frame_fingerprint` key, the house
+    convention: this is a `.unique()` over the *unfiltered* corpus, which is
+    hundreds of milliseconds on a full-size one.
+    """
+    del cache_key
+    return metadata_mod.participant_ids(_words, _fixations)
+
+
+def _refresh_participant_metadata(participants) -> None:
+    """Re-report an attached participant table against the loaded readers.
+
+    The table outlives a data-source switch (it is session state, like the
+    annotations), so the join it was validated against can go stale the moment
+    a different corpus loads. Recomputing the report — not the fields — keeps
+    "no row for these readers" honest without asking the user to re-upload.
+    """
+    from scanpath_studio import metadata as md
+
+    attached = st.session_state.get(md.SESSION_KEY)
+    if attached is None:
+        return
+    st.session_state[md.SESSION_KEY] = md.rejoin(attached, participants)
 
 
 def _render_offpage_setup_notice(data_view: bool) -> None:
@@ -3297,10 +3340,18 @@ def main() -> None:
     # sitting there unclaimed, so the "Loading…" never went away. Always
     # claiming the slot means the next run overwrites it with an empty
     # container, which is what clears it.
-    _view_bridge = st.container()
+    #
+    # It has to be an `st.empty()` placeholder, not a plain container:
+    # `container.empty()` *appends* an empty child, it does not drop the
+    # children already written into it, so the banner and skeleton survived the
+    # clear below and sat above the finished page until some later rerun
+    # happened to redraw the slot. A placeholder holds exactly one element — a
+    # child container when there is something to say, nothing after `.empty()`.
+    _view_bridge = st.empty()
     if st.session_state.get("_last_rendered_view") not in (None, active_view):
-        _view_bridge.info(f"Loading {view_label(active_view)}…", icon="⏳")
-        _view_bridge.skeleton(height=420)
+        _bridge_box = _view_bridge.container()
+        _bridge_box.info(f"Loading {view_label(active_view)}…", icon="⏳")
+        _bridge_box.skeleton(height=420)
     else:
         _view_bridge = None
     st.session_state["_last_rendered_view"] = active_view
@@ -3340,20 +3391,37 @@ def main() -> None:
             "canonical fields, what is actually in it, and the optional "
             "preprocessing applied before anything is measured."
         )
+        # UX-52 — four peer sections, one heading level, one divider between
+        # each. The source block used to open with no heading at all, which
+        # made the three headings below it read as the whole page rather than
+        # as three of its four stages. Written straight into `setup_page`
+        # before the slots are created, so it lands above them (Streamlit lays
+        # containers out in creation order).
+        setup_page.divider()
+        setup_page.subheader("📂 Data source")
+        setup_page.caption(
+            "Which dataset, where its files are, and any options that source offers."
+        )
     setup_source_slot = setup_page.container()
     description_slot = setup_page.container()
     source_options_slot = setup_page.container()
     data_location_slot = setup_page.container()
     setup_wizard_slot = setup_page.container()
-    column_mapping_slot = setup_page.container()
+    # Keyed → the stable `.st-key-…` selectors the "Load and verify a dataset"
+    # tutorial spotlights (UX-40), alongside `tutorial_data_inspection` below.
+    column_mapping_slot = setup_page.container(key="tutorial_column_mapping")
     # The heading belongs to the *section*, not to any one of its three modes —
     # mode A's panels are written into the body by `prepare_data` during the
     # load, long before the dispatch below picks a mode, so the title needs a
     # slot of its own above them (see tabs._render_column_mapping_section).
     mapping_head_slot = column_mapping_slot.container()
     mapping_body_slot = column_mapping_slot.container()
+    # DATA-20 §1 — the participant-level metadata table. After the mapping (it
+    # joins on the reader id the mapping just settled) and before "what's in
+    # it" (whose counts it does not change).
+    setup_metadata_slot = setup_page.container(key="tutorial_participant_metadata")
     setup_body_slot = setup_page.container()
-    setup_preproc_slot = setup_page.container()
+    setup_preproc_slot = setup_page.container(key="tutorial_preprocessing")
 
     # Data source selection. UX-25: only the *resolution* happens here (it must
     # precede the load); the picker itself renders in the main view — on the
@@ -3385,11 +3453,14 @@ def main() -> None:
     # page doesn't reflow when the figure lands. Standalone mode, not the `with`
     # form: the wait spans everything between here and the tab render below, not
     # one block.
+    # An `st.empty()` placeholder for the same reason as the view bridge above:
+    # `.empty()` on a plain container adds a child instead of clearing one.
     _finalizing_bridge = None
     if st.session_state.pop("_wizard_finalizing", False):
-        _finalizing_bridge = st.container()
-        _finalizing_bridge.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
-        _finalizing_bridge.skeleton(height=420)
+        _finalizing_bridge = st.empty()
+        _finalizing_box = _finalizing_bridge.container()
+        _finalizing_box.info("✅ Dataset added — loading your scanpaths…", icon="⏳")
+        _finalizing_box.skeleton(height=420)
     # (DATA-9's ordered source-config group — description · options · data
     # location · column mapping — is now the top of the Data page reserved
     # above. VIZ-31 had already moved "Experimental Setup" out of it: monitor
@@ -3612,6 +3683,26 @@ def main() -> None:
     # the Bulk Export tab's "Export the whole dataset" option exports these,
     # ignoring the current filters.
     words_all, fixations_all = words_df, fixations_df
+    # DATA-20: every reader in the dataset, before any narrowing — what the
+    # participant-metadata join is reported against.
+    #
+    # Gated and cached, both deliberately. `participant_ids` is a `.unique()`
+    # over *both unfiltered corpus frames* — ~0.5 s on full OneStop — and on
+    # the default path (no table attached, not on the Data page) the answer is
+    # thrown away, so an unconditional call put half a second on every rail
+    # toggle and every ◀ ▶ step for nothing. The fingerprints are the ones
+    # computed just below for the identity report, so the cache key is free.
+    participants_all: list = []
+    if data_view or metadata_mod.active() is not None:
+        participants_all = _cached_participant_ids(
+            words_all,
+            fixations_all,
+            cache_key=(
+                frame_fingerprint(words_all),
+                frame_fingerprint(fixations_all),
+            ),
+        )
+        _refresh_participant_metadata(participants_all)
 
     # UX-37: the dataset is loaded and normalized — one line saying *what*, and
     # only when it changes. A rerun re-executes all of this, so an unconditional
@@ -3731,6 +3822,13 @@ def main() -> None:
         if not words_filtered.empty
         else raw_gaze_filtered
     )
+    # DATA-20 §3 — the *one* place the participant table is joined onto anything.
+    # `combos` is one row per trial (tens to thousands), so this is the cheap
+    # projection the item asks for rather than a broadcast across every fixation
+    # — and it is enough: trial sorting, the trial labels and everything else
+    # downstream discovers its columns from this frame, with no allowlist to
+    # extend per surface.
+    combos = metadata_mod.project(metadata_mod.active(), combos)
 
     # Land a shared/deep link on its exact `?trial_id=` (once) now that combos
     # exist — see _apply_url_trial_selection. Runs before the sidebar/tab widgets
@@ -3850,6 +3948,12 @@ def main() -> None:
         )
         with mapping_body_slot:
             _render_column_mapping_section(editor_rendered=mapping_editor_rendered)
+        with setup_metadata_slot:
+            st.divider()
+            st.subheader("👤 Participant metadata")
+            # The *unfiltered* readers: the join report describes the dataset,
+            # not whatever the current Narrow-by left standing.
+            render_participant_metadata_section(participants_all)
         with setup_body_slot:
             st.divider()
             st.subheader("🔎 What's in this dataset")

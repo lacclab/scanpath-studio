@@ -36,12 +36,23 @@ scientific settings for you.
 **Outcome:** parsed words, fixations, and mappings visibly checked. *About 3
 minutes.*
 
-1. Open **Data source → Add data**, upload either or both reports, and check the
-   proposed mappings. Map **Multipart screens** only when one logical trial has
-   several coordinate spaces.
-2. Finish setup, choose a trial, and open the 🗂️ **Data** page.
-3. Check row and trial counts, coordinate ranges, the active mapping, and—when
-   present—the ordered screen catalogue and per-screen canvas sizes.
+Everything below is on the 🗂️ **Data** page, which is laid out in the order the
+pipeline uses it.
+
+1. **📂 Data source** — keep the demo, or use ➕ to add your own tables. Upload
+   either or both reports and check the proposed mappings. Map **Multipart
+   screens** only when one logical trial has several coordinate spaces.
+2. **🔤 Column mapping** — the one thing that decides what every measure
+   downstream is computed from. Rows marked ✨ were auto-detected; override any
+   that guessed wrong.
+3. **🔎 What's in this dataset** — the counts come first, as the quickest check
+   that the mapping worked. The raw and derived tables fold open below them
+   (including, when present, the ordered screen catalogue and per-screen canvas
+   sizes), and **🧾 Trial identity** says whether one trial id really is one
+   reading.
+4. **🧹 Preprocessing** — optional soft exclusion or merging of short fixations,
+   applied before anything is measured. Off by default, and it never discards
+   your original rows.
 
 The longer data-collection workflow is in [Data collection](data-collection.md),
 and every accepted field is in [Data format](../data-format.md).
@@ -71,19 +82,23 @@ requires words or fixations.*
    explicit boundary and never draws a cross-screen saccade.
 3. Open **Export**, download the figure, and include the plot configuration when
    someone else must reproduce it.
+4. Optionally open **🔗 Share** for a link that carries the exact configuration,
+   or 💾 **Session** to save it (with your annotations) as JSON. The image on its
+   own does not reproduce the figure.
 
 See [Exporting figures](exporting-figures.md) for raster, vector, animation, and
 bulk-output details.
 
 ## Compare two readers
 
-**Outcome:** comparable same-text scanpaths and similarity scores. *About 3
+**Outcome:** the other readings of one text side by side, at one scale. *About 3
 minutes; requires two readings sharing a text.*
 
 1. Select the reference reading and, for multipart data, the reference screen.
-2. Open **Comparisons**, choose the grouping field, and compare the grid and
-   ranking. Candidates must share the text and screen, so different coordinate
-   spaces are not overlaid.
+2. Open **🔬 Comparisons** and choose the grouping field. Candidates must share
+   the text and screen, so different coordinate spaces are not overlaid.
+   Similarity (NLD) scoring ranks them for you when the build has experimental
+   features enabled (`SCANPATH_EXPERIMENTAL=1`).
 3. Record the comparison settings with the figure or configuration export.
 
 ## Explore the corpus

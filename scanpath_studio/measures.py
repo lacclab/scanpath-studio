@@ -18,7 +18,10 @@ Canonical output columns added to words:
 
 The fixations dataframe is also enriched with:
 - word_id            — assigned via bbox containment + nearest-word fallback
-- saccade_amplitude  — pixel distance from the previous fixation in the trial
+- saccade_amplitude  — pixel distance from the previous fixation in the trial.
+                       Always pixels (BUG-25): EyeLink's degree-valued
+                       NEXT_SAC_AMPLITUDE / PREVIOUS_SAC_AMPLITUDE keep their
+                       own `*_deg` names rather than sharing this one.
 - progression        — 1 if the next fixation moves to a later word, -1 if earlier, 0 otherwise
 - is_regression      — True if this fixation lands on a word earlier than the
                        running maximum word reached in the trial

@@ -1237,6 +1237,22 @@ def pair_export(
     return buffer.getvalue()
 
 
+def _session_participant_metadata():
+    """The attached participant table, when running inside the app (DATA-20).
+
+    Handed over through session state rather than through ``settings`` so the
+    frame never reaches the bulk-export cache signature, which stringifies the
+    settings dict and would truncate a long table into a colliding key. Returns
+    ``None`` headlessly, where callers pass the frame in ``settings`` instead.
+    """
+    try:
+        import streamlit as st
+
+        return st.session_state.get("_export_participant_metadata")
+    except Exception:  # no script run context (API, CLI)
+        return None
+
+
 def bulk_export(
     combos: pd.DataFrame,
     words: pd.DataFrame,
@@ -1689,6 +1705,26 @@ def bulk_export(
                     ),
                     fmt,
                 )
+    # DATA-20: the participant table travels as its own per-grain table rather
+    # than as columns smeared across the trial files — which is what keeps a
+    # reader attribute distinguishable from a per-fixation measurement on the
+    # way out, exactly as it is on the way in. Whenever one is attached; there
+    # is no per-field exclusion list yet (that is milestone 10's opt-out).
+    # The frame is handed over out-of-band (the settings dict carries only its
+    # fingerprint, so the bulk-export cache signature stays honest — see the
+    # note in `tabs._render_export_panel`). API/CLI callers can pass the frame
+    # in `settings` directly, which still works.
+    participant_metadata = (settings or {}).get("participant_metadata")
+    if participant_metadata is None:
+        participant_metadata = _session_participant_metadata()
+    if participant_metadata is not None and not participant_metadata.empty:
+        for fmt in options.table_formats():
+            progress.bytes_written += _write_table(
+                zf,
+                f"metadata/participants.{fmt}",
+                participant_metadata,
+                fmt,
+            )
     emit_status(
         status_callback,
         ExportStage.FINALIZING,

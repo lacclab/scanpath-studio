@@ -68,6 +68,7 @@ from .constants import (
     _VIEW_DATA,
     _VIEW_SCANPATH,
     drift_correction_enabled,
+    similarity_enabled,
 )
 
 # UX-12: name of the first-party cookie holding the "don't show the welcome tour
@@ -111,6 +112,17 @@ class TutorialDefinition:
 
 DOCS_TUTORIALS_URL = f"{CITATION['docs_url']}tutorials/"
 
+# PRE-21 hides NLD similarity scoring unless SCANPATH_EXPERIMENTAL=1, so the
+# comparison tutorial must not promise a ranking this build does not show —
+# the same honesty rule `faq_items()` applies to the drift-correction answers.
+# The flag is an environment variable, fixed for the life of the process, so
+# resolving it once at import is equivalent to checking it per render.
+_SIMILARITY_SENTENCE = (
+    " Similarity scores (NLD) rank the closest readings for you."
+    if similarity_enabled()
+    else ""
+)
+
 TUTORIALS: tuple[TutorialDefinition, ...] = (
     TutorialDefinition(
         id="load_inspect",
@@ -124,16 +136,37 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
         steps=(
             TutorialStep(
                 "Choose the data source",
-                "Use the current demo or open **Data source** to add your own tables. "
-                "The setup guide handles upload and column mapping.",
+                "Everything about the dataset lives on the 🗂️ **Data** page, in the "
+                "order the pipeline uses it. Start at **📂 Data source** — keep the "
+                "demo, or use ➕ to add your own tables.",
                 ".st-key-tour_grp_data_source",
+                view=_VIEW_DATA,
+            ),
+            TutorialStep(
+                "Check the column mapping",
+                "**🔤 Column mapping** is the one thing that decides what every "
+                "measure downstream is computed from. Rows marked ✨ were "
+                "auto-detected; override any that guessed wrong.",
+                ".st-key-tutorial_column_mapping",
+                view=_VIEW_DATA,
             ),
             TutorialStep(
                 "Verify what was parsed",
-                "On the 🗂️ **Data** page: check counts, raw tables, multipart screens "
-                "when present, and the active column mapping before analysis.",
+                "**🔎 What's in this dataset** opens on the counts — the quickest "
+                "check that the mapping worked. The raw and derived tables fold "
+                "open below them, and **🧾 Trial identity** says whether one trial "
+                "id really is one reading.",
                 ".st-key-tutorial_data_inspection",
                 view=_VIEW_DATA,
+            ),
+            TutorialStep(
+                "Decide on preprocessing",
+                "**🧹 Preprocessing** (bottom of the page) can soft-exclude or merge "
+                "short fixations before anything is measured. It is off by default, "
+                "applies to every view, and never discards your original rows.",
+                ".st-key-tutorial_preprocessing",
+                view=_VIEW_DATA,
+                optional=True,
             ),
         ),
     ),
@@ -155,9 +188,18 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Review one trial at a time",
-                "Use the picker and ◀ ▶ controls to inspect the narrowed pool. For a "
-                "multipart trial, use the screen navigator immediately below it.",
+                "One picker for every dataset: the **Trial id** dropdown, a scrubbing "
+                "slider showing *index / total*, and ◀ ▶ to step through the pool "
+                "you just narrowed.",
                 ".st-key-tour_grp_trial_picker",
+            ),
+            TutorialStep(
+                "Move between screens",
+                "A multipart trial (one reading spread over several screens) adds a "
+                "screen navigator under the picker. Each screen is its own "
+                "coordinate space, so nothing is ever drawn across two of them.",
+                ".st-key-tour_grp_screen_picker",
+                optional=True,
             ),
             TutorialStep(
                 "Annotate at the right scope",
@@ -204,12 +246,23 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 ".st-key-tutorial_export",
                 subtab="Export",
             ),
+            TutorialStep(
+                "Keep the figure reproducible",
+                "**🔗 Share** turns the exact configuration into a link, and 💾 "
+                "**Session** saves it (with your annotations) as JSON. Either one "
+                "reproduces this figure later — the PNG on its own does not.",
+                ".st-key-tutorial_share",
+                subtab="🔗 Share",
+                optional=True,
+            ),
         ),
     ),
     TutorialDefinition(
         id="compare_readings",
         title="Compare readings of one text",
-        outcome="Finish with comparable same-text scanpaths and similarity scores.",
+        outcome=(
+            "Finish with the other readings of one text side by side, at one scale."
+        ),
         estimated_time="3 min",
         prerequisite="Two readings sharing a text (and screen for multipart data)",
         availability="has_comparable_readings",
@@ -224,8 +277,10 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             ),
             TutorialStep(
                 "Compare like with like",
-                "Open **Comparisons**, choose the grouping column, and inspect the grid "
-                "plus similarity ranking. Unmatched multipart screens are excluded.",
+                "Open **🔬 Comparisons** and pick the column that separates the "
+                "readings — participant, session, condition. You get the other "
+                "readings of *this* text at the same scale, so the grid compares "
+                "like with like." + _SIMILARITY_SENTENCE,
                 ".st-key-tutorial_comparisons",
                 subtab="🔬 Comparisons",
             ),
@@ -1062,12 +1117,21 @@ def _open_tutorial_surface(step: TutorialStep) -> None:
         st.session_state["single_subtab"] = step.subtab
 
 
+_KNOWN_VIEWS = (_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA)
+
+
 def _tutorial_surface_is_open(step: TutorialStep) -> bool:
-    current_view = (
-        _VIEW_CORPUS
-        if st.session_state.get("main_nav") == _VIEW_CORPUS
-        else _VIEW_SCANPATH
-    )
+    """Is the view (and subtab) this step points at the one on screen?
+
+    UX-40: this used to fold everything that was not Corpus Analysis into
+    Scanpath, which predates DATA-26's third view — so a step with
+    ``view=_VIEW_DATA`` reported "not open" *while the user was standing on the
+    Data page*, and the card offered to open the panel they were already
+    looking at (and withheld the spotlight that should have been on it).
+    """
+    current_view = st.session_state.get("main_nav", _VIEW_SCANPATH)
+    if current_view not in _KNOWN_VIEWS:
+        current_view = _VIEW_SCANPATH
     if current_view != step.view:
         return False
     return (
@@ -1119,37 +1183,59 @@ def _tutorial_library_dialog() -> None:
     close_open_popovers()
     context = st.session_state.get("_tutorial_context") or {}
     st.markdown("**Choose the outcome you want to reach.**")
-    st.caption("Each tutorial is independent from the automatic welcome tour.")
+    st.caption(
+        "Each one points at the real controls and changes nothing — your data, "
+        "filters and settings are exactly where you left them. Independent of "
+        "the automatic welcome tour."
+    )
+    # UX-40: one bordered card per tutorial instead of five identical
+    # caption/caption/caption/two-buttons stacks separated by dividers — at that
+    # density the eye had nothing to land on, and "Start over" sat there at full
+    # weight even for a tutorial nobody had started yet.
     for tutorial in TUTORIALS:
         available, reason = tutorial_availability(tutorial, context)
         completed = bool(_tutorial_completed().get(tutorial.id))
         progress = int(_tutorial_progress().get(tutorial.id, 0))
-        status = " · ✓ Complete" if completed else ""
-        st.markdown(f"**{tutorial.title}** · {tutorial.estimated_time}{status}")
-        st.caption(tutorial.outcome)
-        st.caption(f"Needs: {tutorial.prerequisite}")
-        if not available:
-            st.caption(f"Unavailable: {reason}")
-        button_label = "Resume" if progress > 0 and not completed else "Start"
-        start_col, restart_col = st.columns(2)
-        start_col.button(
-            button_label,
+        started = progress > 0 and not completed
+        card = st.container(border=True)
+        head, action = card.columns([3, 1], vertical_alignment="center")
+        badge = " ✓" if completed else ""
+        head.markdown(f"**{tutorial.title}**{badge}")
+        head.caption(tutorial.outcome)
+        if started:
+            state = f"Paused at step {progress + 1} of {len(tutorial.steps)}"
+        elif completed:
+            state = "Completed — replay any time"
+        else:
+            state = f"{len(tutorial.steps)} steps · {tutorial.estimated_time}"
+        head.caption(f"{state} · needs {tutorial.prerequisite.lower()}")
+        # Handled by return value, not `on_click`, because **an `st.dialog` body
+        # is a fragment**: a callback here reruns only the dialog, so the state
+        # `_start_use_case` writes never reached `main()` — the chooser sat
+        # there unchanged and the task card it was supposed to hand over to was
+        # never drawn. `st.rerun(scope="app")` both closes the modal (the
+        # `_tutorial_library_requested` flag was already popped, so the next run
+        # does not re-open it) and renders the card underneath.
+        if action.button(
+            "Resume" if started else "Start",
             key=f"tutorial_start_{tutorial.id}",
             disabled=not available,
-            on_click=_start_use_case,
-            args=(tutorial.id,),
+            type="primary" if started else "secondary",
             width="stretch",
-        )
-        restart_col.button(
+        ):
+            _start_use_case(tutorial.id)
+            st.rerun(scope="app")
+        # Only offered once there is progress to discard.
+        if (started or completed) and action.button(
             "Start over",
             key=f"tutorial_restart_{tutorial.id}",
             disabled=not available,
-            on_click=_start_use_case,
-            args=(tutorial.id,),
-            kwargs={"restart": True},
             width="stretch",
-        )
-        st.divider()
+        ):
+            _start_use_case(tutorial.id, restart=True)
+            st.rerun(scope="app")
+        if not available:
+            card.caption(f"⚠️ Unavailable — {reason.lower()}")
 
 
 @st.fragment
@@ -1305,6 +1391,8 @@ def render_use_case_tutorial() -> None:
 # -----------------------------------------------------------------------------
 
 DOCS_FAQ_URL = f"{CITATION['docs_url']}faq/"
+# VAL-5's generated register page — the app's one link into the methodology.
+DOCS_COMPUTATIONS_URL = f"{CITATION['docs_url']}computations/"
 
 # (question, markdown answer). Two-to-four lines each — anything longer belongs
 # on the docs page.
@@ -1414,7 +1502,7 @@ def _faq_dialog() -> None:
             st.markdown(answer)
 
     st.divider()
-    docs_col, tutorials_col, close_col = st.columns(3)
+    docs_col, tutorials_col, methods_col, close_col = st.columns(4)
     docs_col.link_button(
         "📚 Full FAQ ↗",
         DOCS_FAQ_URL,
@@ -1427,6 +1515,17 @@ def _faq_dialog() -> None:
         width="stretch",
         help="Task-by-task walkthroughs: load your own data, compare two "
         "readers, make a paper figure, run it headless. Opens in a new tab.",
+    )
+    # VAL-5 — one link to the whole computation register, rather than a help
+    # anchor per measure picker (the user's call: that end is a much bigger job
+    # for a research tool, and this is where someone goes looking anyway).
+    methods_col.link_button(
+        "🔬 Methodology ↗",
+        DOCS_COMPUTATIONS_URL,
+        width="stretch",
+        help="Every computation the app performs: the exact formula, its units, "
+        "its missing-data behaviour, and how far it has been verified. Opens in "
+        "a new tab.",
     )
     if close_col.button("✓ Close", key="faq_close", width="stretch", type="primary"):
         _close_dialog_clientside()

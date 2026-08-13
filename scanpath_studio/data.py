@@ -1729,9 +1729,19 @@ FIX_OPTIONAL_FIELDS = [
     ("reread", "pass_index", "numeric", "fixation"),
     ("saccade_type", "saccade_type", "string", "fixation"),
     ("NEXT_SAC_DIRECTION", "saccade_type", "string", "fixation"),
+    # BUG-25: `saccade_amplitude` is *pixels* — either the source column of that
+    # name, or (when absent) the euclidean distance measures.py computes from
+    # X/Y. EyeLink's two amplitude columns are **degrees of visual angle**, and
+    # they are two *different* saccades — the one leaving this fixation and the
+    # one that arrived at it — so each keeps its own canonical name with the unit
+    # in it. They are deliberately NOT aliased onto `saccade_amplitude`: that
+    # made one column mean px or deg depending on which columns the export
+    # happened to carry (~78x apart on the bundled demo), under a hard-coded
+    # "px" label. Converting instead would need `pixels_per_degree`, which is
+    # ASSUMED on every built-in corpus.
     ("saccade_amplitude", "saccade_amplitude", "numeric", "fixation"),
-    ("NEXT_SAC_AMPLITUDE", "saccade_amplitude", "numeric", "fixation"),
-    ("PREVIOUS_SAC_AMPLITUDE", "saccade_amplitude", "numeric", "fixation"),
+    ("NEXT_SAC_AMPLITUDE", "next_saccade_amplitude_deg", "numeric", "fixation"),
+    ("PREVIOUS_SAC_AMPLITUDE", "prev_saccade_amplitude_deg", "numeric", "fixation"),
     ("eye", "eye", "string", "fixation"),
     ("EYE_USED", "eye", "string", "fixation"),
     ("EYE_TRACKED", "eye", "string", "fixation"),
@@ -2249,9 +2259,11 @@ def filter_data(
         # mask, no copy), the common large-upload case.
         return words, fixations
 
-    participants = filters.get("participants") or _union_column_values(
-        words, fixations, "participant_id"
-    )
+    # As in `filter_trials`: only a missing key means "every participant". An
+    # explicit empty list is a narrowing that matches nobody.
+    participants = filters.get("participants")
+    if participants is None:
+        participants = _union_column_values(words, fixations, "participant_id")
     trials = filters.get("trials") or _union_column_values(words, fixations, "trial_id")
     word_mask = words["participant_id"].isin(participants) & words["trial_id"].isin(
         trials
@@ -2299,7 +2311,13 @@ def filter_trials(
     obvious bare ``.between()`` would silently drop every one of them.
     """
     w, f = words, fixations
-    if participants:
+    # `None` is "no constraint"; an **empty list is a constraint that nothing
+    # satisfies** and must empty the pool. The two were conflated while every
+    # producer could only emit None-or-non-empty, but DATA-20's metadata
+    # narrowing intersects sets and can legitimately land on zero readers —
+    # under the old falsy test that silently applied no filter at all, so an
+    # impossible combination showed the *whole* corpus.
+    if participants is not None:
         # participant_id is already string after normalization (as the metadata
         # filters below also assume), so skip a full-column .astype(str) recast.
         keep = set(map(str, participants))

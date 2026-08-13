@@ -76,6 +76,7 @@ nav:
       - Python API: api.md
       - CLI reference: cli.md
       - Data format: data-format.md
+      - Computations & methodology: computations.md
       - Desktop app: desktop.md
       - Export troubleshooting: export-troubleshooting.md
       - FAQ: faq.md

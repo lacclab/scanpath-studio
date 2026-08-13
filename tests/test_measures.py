@@ -296,3 +296,41 @@ class TestSaccadeAmplitudePreserved:
         assert enriched["saccade_amplitude"].iloc[0] == 42.0
         # NaN gets filled from x,y diff
         assert enriched["saccade_amplitude"].iloc[1] == pytest.approx(100.0)
+
+
+class TestEyeLinkAmplitudesStayInDegrees:
+    """BUG-25: EyeLink's two amplitude columns are degrees, and are two
+    *different* saccades. Neither may land on the pixel-valued canonical
+    ``saccade_amplitude``."""
+
+    def test_normalization_gives_each_source_column_its_own_name(self):
+        from scanpath_studio import data as data_mod
+
+        raw = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1"],
+                "trial_id": ["t1", "t1"],
+                "CURRENT_FIX_X": [140, 240],
+                "CURRENT_FIX_Y": [70, 70],
+                "CURRENT_FIX_DURATION": [200, 250],
+                "CURRENT_FIX_START": [0, 200],
+                "NEXT_SAC_AMPLITUDE": [1.9, 2.1],
+                "PREVIOUS_SAC_AMPLITUDE": [0.8, 1.9],
+            }
+        )
+        schema = data_mod.infer_fix_schema(raw)
+        keep = data_mod.compute_keep_columns(schema, optional_sources=list(raw.columns))
+        out = data_mod.normalize_fixations(raw, schema, keep_columns=keep)
+        assert out["next_saccade_amplitude_deg"].tolist() == [1.9, 2.1]
+        assert out["prev_saccade_amplitude_deg"].tolist() == [0.8, 1.9]
+        # The px column must NOT have been claimed by either of them.
+        assert "saccade_amplitude" not in out.columns
+
+    def test_the_pixel_amplitude_is_computed_not_borrowed(self, four_word_layout):
+        fix = _make_fixations([(140, 70, 200, 0), (240, 70, 250, 200)])
+        fix["next_saccade_amplitude_deg"] = [1.9, 2.1]
+        fix = assign_fixations_to_words(fix, four_word_layout, overwrite=True)
+        enriched = enrich_fixations(fix, four_word_layout)
+        # 100 px apart — the degree column must not leak into the px one.
+        assert enriched["saccade_amplitude"].iloc[1] == pytest.approx(100.0)
+        assert enriched["next_saccade_amplitude_deg"].iloc[1] == 2.1

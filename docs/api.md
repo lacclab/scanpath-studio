@@ -24,6 +24,8 @@ app's default view and change only the needed layers.
 
 ::: scanpath_studio.api.load_sample_data
 
+::: scanpath_studio.api.load_participant_metadata
+
 ::: scanpath_studio.api.build_authored_scanpath
 
 ::: scanpath_studio.api.load_authored_scanpath

@@ -1727,6 +1727,10 @@ def color_field_options(trial_fixations: pd.DataFrame) -> List[str]:
         "eye",
         "saccade_type",
         "saccade_amplitude",
+        # BUG-25: EyeLink's own amplitudes, in degrees, kept distinct from the
+        # pixel one above (and from each other — outgoing vs incoming saccade).
+        "next_saccade_amplitude_deg",
+        "prev_saccade_amplitude_deg",
         "word_id",
         "timestamp_ms",
         "is_regression",
@@ -4165,6 +4169,10 @@ _EMPTY_TRIAL_FILTERS: Dict = {
     # apart from `metadata` because that one is membership (`.isin`) and
     # enumerating a float column's values is exactly what doesn't work.
     "ranges": {},
+    # DATA-20: widget keys behind a participant-grain metadata narrowing (which
+    # lands in `participants`, not `metadata`), so UX-7's per-filter clear can
+    # reset the control that actually caused it.
+    "participant_filter_keys": (),
     "favorites_only": False,
     "required_tags": [],
     "excluded_tags": [],
@@ -4298,7 +4306,9 @@ def has_active_trial_filters(prefix: str = "") -> bool:
     """Whether any trial filter is currently narrowing the pool."""
     f = read_trial_filters(prefix)
     return bool(
-        f.get("participants")
+        # `[]` is a narrowing that matched nobody — the *most* active a filter
+        # can be. `None` is the no-constraint default.
+        f.get("participants") is not None
         or f.get("metadata")
         or f.get("ranges")
         or f.get("favorites_only")
@@ -4392,6 +4402,11 @@ def _chip_field_options(words, fixations, trial_level: set) -> List[str]:
     for c in list(words.columns) + list(fixations.columns):
         if c in trial_level:
             add(c)
+    # DATA-20: participant-grain metadata is constant within a trial by
+    # construction, so it belongs in this list on exactly the same terms as a
+    # trial-level recorded column — no allowlist of its own.
+    for field in participant_metadata_fields():
+        add(field.name)
     cols.extend(SUMMARY_CHIP_FIELDS)
     return cols
 
@@ -4437,7 +4452,15 @@ def render_trial_chip_picker(
     # Cached per column-signature (stable across trials / filters within a
     # dataset), recomputed on a dataset/column change or Refresh. Shared with
     # UX-49's range filters, which gate on the same answer.
-    signature = (tuple(words.columns), tuple(fixations.columns))
+    # DATA-20: the field universe now also depends on the attached participant
+    # registry, so it has to be part of the signature — attaching or detaching a
+    # table changes what the picker offers, and without this the component kept
+    # a drag order built from the old set.
+    signature = (
+        tuple(words.columns),
+        tuple(fixations.columns),
+        tuple(field.name for field in participant_metadata_fields()),
+    )
     available = _chip_field_options(
         words, fixations, cached_trial_level_columns(words, fixations)
     )
@@ -4656,6 +4679,129 @@ def _numeric_filter_fields(
     return fields
 
 
+def metadata_filter_key(name: str, prefix: str = "") -> str:
+    """Session key of a participant-metadata filter (DATA-20).
+
+    Under the ``filter_`` prefix like every other trial filter, which is what
+    gets it swept by *✕ Clear all filters*, mirrored into
+    ``_trial_filters_raw``, and kept out of compare-mode B's namespace — all
+    for free, rather than by teaching each of those about a new field kind.
+    """
+    return f"{prefix}filter_meta_{name}"
+
+
+def participant_metadata_fields():
+    """The attached participant table's fields, or ``()`` when none (DATA-20)."""
+    from scanpath_studio.tabs import active_participant_metadata
+
+    attached = active_participant_metadata()
+    return attached.fields if attached is not None else ()
+
+
+def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> None:
+    """One control per registered participant-grain field.
+
+    A reader attribute narrows by **reader**, so these do not need the field to
+    exist on the words/fixations frames — `_compute_trial_filters` resolves the
+    selection to a set of participant ids and intersects it with the participant
+    filter. That is the whole reason the table never has to be broadcast.
+    """
+    from scanpath_studio import metadata as md
+    from scanpath_studio.tabs import active_participant_metadata
+
+    attached = active_participant_metadata()
+    if attached is None or not attached.fields:
+        return
+    host.markdown("**By reader**")
+    for field in attached.fields:
+        key = metadata_filter_key(field.name, prefix)
+        if field.is_numeric:
+            bounds = md.bounds_for(attached, field.name)
+            if bounds is None:
+                continue
+            low, high = bounds
+            _seed_range_bounds(key, low, high, prefix=prefix)
+            host.slider(
+                field.label,
+                min_value=low,
+                max_value=high,
+                key=key,
+                on_change=on_change,
+                help=f"From your participant table ({field.source}). Readers with "
+                "no value are kept.",
+            )
+            continue
+        options = md.options_for(attached, field.name)
+        if len(options) <= 1:
+            continue
+        _seed_filter_widget(key, options, options, prefix=prefix)
+        _labeled(
+            host,
+            "multiselect",
+            field.label,
+            options=options,
+            key=key,
+            on_change=on_change,
+            help=f"From your participant table ({field.source}).",
+        )
+
+
+def _seed_range_bounds(key: str, low: float, high: float, *, prefix: str) -> None:
+    """``_seed_range_widget`` for a key that is not derived from a column name."""
+
+    def _clamped(pair) -> tuple:
+        return (min(max(pair[0], low), high), min(max(pair[1], low), high))
+
+    if key in st.session_state:
+        stored = st.session_state[key]
+        if isinstance(stored, (tuple, list)) and len(stored) == 2:
+            st.session_state[key] = _clamped(stored)
+            return
+    mirror = st.session_state.get(f"{prefix}_trial_filters_raw", {})
+    stored = mirror.get(key)
+    if isinstance(stored, (tuple, list)) and len(stored) == 2:
+        st.session_state[key] = _clamped(stored)
+    else:
+        st.session_state[key] = (low, high)
+
+
+def _participant_metadata_narrowing(prefix: str) -> tuple:
+    """``(reader ids | None, widget keys)`` for the active metadata filters.
+
+    ``None`` means no constraint; an **empty set** means a constraint nothing
+    satisfies. The keys are the widgets that produced it, so UX-7's per-filter
+    clear can reset the right controls.
+    """
+    from scanpath_studio import metadata as md
+    from scanpath_studio.tabs import active_participant_metadata
+
+    attached = active_participant_metadata()
+    if attached is None or not attached.fields:
+        return None, ()
+    selections: Dict[str, list] = {}
+    ranges: Dict[str, tuple] = {}
+    keys: list = []
+    for field in attached.fields:
+        key = metadata_filter_key(field.name, prefix)
+        chosen = st.session_state.get(key)
+        if field.is_numeric:
+            bounds = md.bounds_for(attached, field.name)
+            if (
+                bounds
+                and isinstance(chosen, (tuple, list))
+                and len(chosen) == 2
+                and tuple(chosen) != bounds
+            ):
+                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+                keys.append(key)
+            continue
+        options = md.options_for(attached, field.name)
+        if chosen and len(chosen) < len(options):
+            selections[field.name] = list(chosen)
+            keys.append(key)
+    return md.participants_matching(attached, selections, ranges), tuple(keys)
+
+
 def _compute_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
 ) -> Dict:
@@ -4677,6 +4823,9 @@ def _compute_trial_filters(
         # Narrow-by Text multiselect lands in `metadata` under the *text column*
         # but lives under `filter_text_id`.
         "metadata_keys": {},
+        # DATA-20: widget keys behind a participant-grain metadata narrowing,
+        # which lands in `participants` above rather than in `metadata`.
+        "participant_filter_keys": (),
         "favorites_only": False,
         "required_tags": [],
         "excluded_tags": [],
@@ -4690,6 +4839,24 @@ def _compute_trial_filters(
         sel = st.session_state.get(f"{prefix}filter_participants")
         if sel and len(sel) < len(parts):
             result["participants"] = list(sel)
+    # DATA-20: a participant-grain metadata constraint *is* a participant
+    # constraint, so it folds into the same slot rather than becoming a fourth
+    # kind of filter every consumer would have to learn. Intersection, not
+    # replacement: an explicit reader pick still wins over the table.
+    by_metadata, meta_keys = _participant_metadata_narrowing(prefix)
+    if by_metadata is not None:
+        chosen = result["participants"]
+        keep = by_metadata if chosen is None else by_metadata & {str(p) for p in chosen}
+        # Ordered by the dataset's own participant order, so the resulting
+        # selector list doesn't reshuffle when a metadata filter changes. May
+        # legitimately be **empty** — an impossible combination narrows to no
+        # reader, which `data.filter_trials` distinguishes from "no constraint".
+        result["participants"] = [p for p in parts if str(p) in keep]
+        # UX-7's per-filter report clears by widget key, and this narrowing did
+        # not come from `filter_participants`. Its own top-level slot, not an
+        # entry in `metadata_keys`: that dict is column-name → *one* key string,
+        # and a dataset is free to have a column called "participants".
+        result["participant_filter_keys"] = meta_keys
     # Text narrowing (the "Narrow by → Text" multiselect). Like a categorical
     # condition, but the text id isn't in the condition list, so handle it here.
     text_field, text_frame = _text_field_and_frame(words, fixations)
@@ -4913,6 +5080,8 @@ def render_trial_filters(
                     on_change=_apply,
                 )
 
+    _render_participant_metadata_filters(host, prefix=prefix, on_change=_apply)
+
     host.markdown("**By annotation**")
     if f"{prefix}filter_favorites" not in st.session_state:
         st.session_state[f"{prefix}filter_favorites"] = bool(
@@ -4975,6 +5144,10 @@ def render_trial_filters(
         ]
         + [f"{prefix}filter_{c}" for c in _filter_fields_for(words, fixations)]
         + [_range_filter_key(c, prefix) for c in numeric_fields]
+        # DATA-20 — mirrored like any other filter, so a metadata narrowing
+        # survives a run where the popover didn't render and round-trips
+        # through Share / save & restore with the rest of the filter layer.
+        + [metadata_filter_key(f.name, prefix) for f in participant_metadata_fields()]
     )
     st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state

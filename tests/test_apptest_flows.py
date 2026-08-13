@@ -387,6 +387,10 @@ class TestTrialFilterFlow:
             "metadata": {},
             "ranges": {},  # UX-49's continuous filters, likewise unconstrained
             "metadata_keys": {},
+            # DATA-20: the widget keys behind a participant-grain metadata
+            # narrowing. Empty here — nothing was attached — and it must reset
+            # with the rest, or a cleared filter would still claim a cause.
+            "participant_filter_keys": (),
             "favorites_only": False,
             "required_tags": [],
             "excluded_tags": [],

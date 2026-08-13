@@ -503,14 +503,24 @@ class TestDataInspectionTab:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
+        # UX-52 gave the page one heading level: the four *stages* are
+        # subheaders, and the bulky tables inside "What's in this dataset" are
+        # collapsed expanders rather than same-weight subheaders of their own.
         subheaders = [s.value for s in at.subheader]
         for section in (
-            "Dataset statistics",
-            "Raw data",
-            "Summary statistics",
+            "📂 Data source",
             "🔤 Column mapping",
+            "🔎 What's in this dataset",
+            "🧹 Preprocessing",
         ):
-            assert section in subheaders, f"missing section {section}: {subheaders}"
+            assert section in subheaders, f"missing stage {section}: {subheaders}"
+        folded = [e.label for e in at.expander]
+        for section in ("Raw data", "Derived analysis tables", "Summary statistics"):
+            assert any(section in label for label in folded), (
+                f"missing folded section {section}: {folded}"
+            )
+        # The counts are the section's opening answer, so they kept no heading.
+        assert "Dataset statistics" not in subheaders
 
         metric_labels = [m.label for m in at.metric]
         for headline in ("Participants", "Texts", "Trials", "Fixations", "Words"):
@@ -2589,8 +2599,8 @@ class TestLazySubtabBodiesStillRender:
         pin_data_view(at)
         at.run(timeout=120)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        headings = " ".join(m.value for m in at.markdown)
-        assert "Dataset statistics" in headings or at.dataframe
+        headings = " ".join(s.value for s in at.subheader)
+        assert "What's in this dataset" in headings or at.dataframe
 
 
 class TestAnimationExportRasterBranch:

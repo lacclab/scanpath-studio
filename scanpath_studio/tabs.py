@@ -2316,7 +2316,19 @@ def _build_studio_config(
             "stimulus": st.session_state.get(SINGLE_COMPARE_STIMULUS, "Both"),
         },
         "annotations": annotation_records,
+        # DATA-20: the participant table travels with the saved session, so a
+        # restored config brings back the metadata *and* the filters/chips that
+        # refer to it — otherwise a restored `filter_meta_*` selection would
+        # point at fields that no longer exist. Records, not a file path: the
+        # JSON has to be portable between machines like everything else in it.
+        "participant_metadata": _participant_metadata_payload(),
     }
+
+
+def _participant_metadata_payload():
+    from scanpath_studio import metadata as md
+
+    return md.to_payload(active_participant_metadata())
 
 
 def _collect_column_mapping() -> dict:
@@ -3120,6 +3132,23 @@ def _render_export_panel(
         )
     except (TypeError, ValueError):
         pass
+    # DATA-20: ship the participant table with the bundle, as its own file.
+    #
+    # The **fingerprint** goes in the settings dict, not the frame. `sig` below
+    # hashes `figure_settings` through `json.dumps(..., default=str)`, and
+    # `default=str` on a DataFrame falls through to `repr(df)`, which pandas
+    # truncates past 60 rows — so re-uploading a corrected table of the same
+    # shape produced an identical signature and served the *stale* cached zip,
+    # with the pre-edit `metadata/participants.csv` inside it. The frame itself
+    # rides on a private key the exporter reads and the signature ignores.
+    _attached = active_participant_metadata()
+    if _attached is not None and not _attached.frame.empty:
+        bulk_settings["participant_metadata_fingerprint"] = frame_fingerprint(
+            _attached.frame
+        )
+        st.session_state["_export_participant_metadata"] = _attached.frame
+    else:
+        st.session_state.pop("_export_participant_metadata", None)
     _render_bulk_export(
         combos,
         words_filtered,
@@ -3184,6 +3213,15 @@ def _chip_value_and_uniqueness(col, trial_words, trial_fixations, participant):
             if non_null.empty:
                 return (None, True)
             return (non_null.iloc[0], int(series.nunique(dropna=True)) <= 1)
+    # DATA-20: not a recorded column — try the attached participant table. A
+    # reader attribute is trivially constant within a trial, so it never earns
+    # the ⚠️ "varies within this trial" flag. Checked *after* the frames, so a
+    # real column of the same name always wins.
+    attached = active_participant_metadata()
+    if attached is not None and participant is not None:
+        value = attached.values_for(participant).get(col)
+        if value is not None and not pd.isna(value):
+            return (value, True)
     return (None, True)
 
 
@@ -4461,11 +4499,13 @@ def render_single_trial_tab(
 
     with tab_share:
         # The former header Share popover, now a subtab. app.main passes the
-        # renderer (it owns the deep-link builder + data source).
-        if share_renderer is not None:
-            share_renderer()
-        else:
-            st.caption("Sharing is unavailable in this context.")
+        # renderer (it owns the deep-link builder + data source). Keyed wrapper →
+        # the spotlight target for the publication-figure tutorial (UX-40).
+        with st.container(key="tutorial_share"):
+            if share_renderer is not None:
+                share_renderer()
+            else:
+                st.caption("Sharing is unavailable in this context.")
 
     # Save & restore (plot config + annotations) is rendered by app.main on every
     # view (it must stay reachable when a non-Scanpath view is active), sourcing
@@ -7257,20 +7297,20 @@ def render_metrics_tab(
     words_filtered: pd.DataFrame, fixations_filtered: pd.DataFrame
 ) -> None:
     """Render word-level metrics tab."""
-    st.subheader("Word-level data")
+    st.markdown("##### Word-level data")
     metrics = compute_word_metrics(words_filtered, fixations_filtered)
     _render_raw_table(metrics)
 
 
 def render_fixations_tab(fixations_filtered: pd.DataFrame) -> None:
     """Render fixation-level data tab."""
-    st.subheader("Fixation-level data")
+    st.markdown("##### Fixation-level data")
     _render_raw_table(fixations_filtered)
 
 
 def render_raw_gaze_tab(raw_gaze_filtered: pd.DataFrame) -> None:
     """Render raw gaze data tab."""
-    st.subheader("Raw gaze data")
+    st.markdown("##### Raw gaze data")
     if raw_gaze_filtered.empty:
         st.info("No raw gaze data available after filtering.")
         return
@@ -7348,7 +7388,7 @@ def _build_stimuli_table_cached(_words: pd.DataFrame, cache_key) -> pd.DataFrame
 
 def render_stimuli_tab(words_filtered: pd.DataFrame) -> None:
     """Render the stimuli subtab — one reconstructed passage per Text ID."""
-    st.subheader("Stimuli")
+    st.markdown("##### Stimuli")
     if words_filtered.empty:
         st.info("No word data available after filtering.")
         return
@@ -7413,19 +7453,37 @@ def render_raw_data_tab(
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
 ) -> None:
-    """Render the raw data tab with sub-tabs."""
-    _render_data_provenance()
-    stimuli_tab, word_tab, fixation_tab, raw_gaze_tab = st.tabs(
-        ["Stimuli", "Word-level", "Fixation-level", "Raw gaze"]
-    )
-    with stimuli_tab:
+    """Render the raw data tab with sub-tabs.
+
+    UX-52 folds this whole block into a collapsed expander, so the provenance
+    banner moved out to its caller (it owns an expander, which cannot nest) —
+    see ``render_data_inspection_tab``.
+    """
+    labels = ["Stimuli", "Word-level", "Fixation-level", "Raw gaze"]
+    # DATA-20: the participant table is a *source* table, so it is shown
+    # losslessly beside the others — and only when one is attached, rather than
+    # as a permanently empty tab.
+    attached = active_participant_metadata()
+    if attached is not None and not attached.frame.empty:
+        labels.append("Participants")
+    tabs = st.tabs(labels)
+    with tabs[0]:
         render_stimuli_tab(words_filtered)
-    with word_tab:
+    with tabs[1]:
         render_metrics_tab(words_filtered, fixations_filtered)
-    with fixation_tab:
+    with tabs[2]:
         render_fixations_tab(fixations_filtered)
-    with raw_gaze_tab:
+    with tabs[3]:
         render_raw_gaze_tab(raw_gaze_filtered)
+    if len(tabs) > 4:
+        with tabs[4]:
+            st.markdown("##### Participant metadata")
+            st.caption(
+                f"From **{attached.source_name}**, joined on `participant_id`. "
+                "Kept as its own table — it is not copied onto the word or "
+                "fixation rows."
+            )
+            _render_raw_table(attached.frame)
 
 
 # -----------------------------------------------------------------------------
@@ -7651,6 +7709,168 @@ def _rename_active_dataset(old: str) -> None:
     st.session_state["_dataset_rename_note"] = ("success", note)
 
 
+# The file name the attached table came from, for the "from **X**" captions.
+# Separate from the file *identity* (`md.FILE_SESSION_KEY`), which is now an
+# opaque `file_id` rather than something readable.
+_PM_NAME_KEY = "_participant_metadata_name"
+
+
+def active_participant_metadata():
+    """The attached participant table for this session, or ``None`` (DATA-20)."""
+    from scanpath_studio import metadata as md
+
+    return md.active()
+
+
+def _clear_participant_metadata() -> None:
+    from scanpath_studio import metadata as md
+
+    for key in (md.SESSION_KEY, md.RAW_SESSION_KEY, md.FILE_SESSION_KEY, _PM_NAME_KEY):
+        st.session_state.pop(key, None)
+    # And the uploader's own key: without it the widget still holds the file on
+    # the next run, the (now absent) signature check reads as "new file", and
+    # the table re-attaches itself immediately. Safe in an `on_click` callback,
+    # which runs before the widgets instantiate.
+    st.session_state.pop("participant_metadata_upload", None)
+
+
+def render_participant_metadata_section(participants) -> None:
+    """DATA-20 §1 — attach a participant-level table and report the join.
+
+    On the 🗂️ Data page rather than as a seventh wizard step, deliberately: the
+    wizard runs only for an *upload*, and "which readers are these" is a
+    question about the demo, a public corpus and an upload alike. DATA-26 made
+    this page the one place a dataset is set up, so a source-agnostic section
+    here reaches every dataset instead of one ingestion route.
+
+    Nothing is guessed. The id column is offered pre-filled but overridable, and
+    the join is reported in full before the fields go anywhere — unmatched on
+    both sides, duplicated rows, and rows that disagree with themselves.
+    """
+    from scanpath_studio import metadata as md
+    from scanpath_studio.data import read_table
+
+    st.caption(
+        "Optional. One row per reader — `participant_id` plus anything you know "
+        "about them (native language, age, comprehension score). The columns "
+        "then behave like fields in the data: filters, chips, trial sorting, "
+        "inspection and export."
+    )
+    upload = st.file_uploader(
+        "Participant table",
+        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        key="participant_metadata_upload",
+        # No `persist_state` — `st.file_uploader` does not take it. It does not
+        # need it either: the parsed frame is kept in session state under
+        # `md.RAW_SESSION_KEY`, so the attached table survives even if the
+        # uploader widget itself is ever reset.
+        help="CSV / TSV / Parquet / Excel. One row per participant.",
+    )
+    if upload is None:
+        if active_participant_metadata() is None:
+            return
+    else:
+        # `file_id`, not (name, size): re-uploading a corrected file of the
+        # same name and byte length must be read again (VIZ-4 precedent in
+        # `controls._uploaded_image_data_uri`).
+        signature = getattr(upload, "file_id", None) or (
+            upload.name,
+            getattr(upload, "size", None),
+        )
+        if st.session_state.get(md.FILE_SESSION_KEY) != signature:
+            try:
+                st.session_state[md.RAW_SESSION_KEY] = read_table(upload)
+                st.session_state[md.FILE_SESSION_KEY] = signature
+                st.session_state[_PM_NAME_KEY] = upload.name
+                st.session_state.pop("participant_metadata_id_column", None)
+            except Exception as exc:  # unreadable file — say so, keep the page
+                st.error(f"Could not read {upload.name}: {exc}")
+                return
+
+    raw = st.session_state.get(md.RAW_SESSION_KEY)
+    if raw is None or raw.empty:
+        return
+
+    columns = [str(column) for column in raw.columns]
+    inferred = md.infer_participant_id_column(raw)
+    id_column = st.selectbox(
+        "Participant ID column",
+        columns,
+        index=columns.index(inferred) if inferred in columns else 0,
+        key="participant_metadata_id_column",
+        persist_state="session",
+        help="Which column holds the reader id that joins to your data.",
+    )
+    attached = md.build_participant_metadata(
+        raw,
+        id_column,
+        source_name=str(st.session_state.get(_PM_NAME_KEY) or "participant table"),
+        participants=participants,
+    )
+    st.session_state[md.SESSION_KEY] = attached
+
+    report = attached.report
+    if not attached.fields:
+        st.warning(
+            "That table has no columns besides the id, so there is nothing to add.",
+            icon="⚠️",
+        )
+        return
+    matched = len(report.matched)
+    if report.is_clean:
+        st.success(f"Joined to all {matched} readers.", icon="✅")
+    else:
+        st.info(f"Joined to {matched} readers.", icon="🔗")
+    if report.conflicting:
+        st.warning(
+            f"**{len(report.conflicting)} reader(s) have rows that disagree** "
+            f"({_id_list(report.conflicting)}). Their fields are left empty "
+            "rather than resolved by taking the first row.",
+            icon="⚠️",
+        )
+    if report.only_in_data:
+        st.caption(
+            f"No row for {len(report.only_in_data)} loaded reader(s): "
+            f"{_id_list(report.only_in_data)}. Their fields read as missing."
+        )
+    if report.only_in_table:
+        st.caption(
+            f"{len(report.only_in_table)} row(s) describe readers that are not "
+            f"loaded: {_id_list(report.only_in_table)}. Ignored."
+        )
+
+    with st.expander(f"👤 {len(attached.fields)} field(s) added", expanded=False):
+        st.dataframe(
+            [
+                {
+                    "Field": field.label,
+                    "Column": field.name,
+                    "Grain": field.grain,
+                    "Type": field.dtype,
+                    "Distinct": field.n_unique,
+                    "Missing": field.n_missing,
+                }
+                for field in attached.fields
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+        st.dataframe(attached.frame, hide_index=True, width="stretch")
+    st.button(
+        "✕ Detach this table",
+        key="participant_metadata_clear",
+        on_click=_clear_participant_metadata,
+        help="Remove the participant metadata from this session.",
+    )
+
+
+def _id_list(ids, limit: int = 6) -> str:
+    """``p1, p2, p3 …`` — enough to act on without flooding the page."""
+    shown = ", ".join(f"`{value}`" for value in list(ids)[:limit])
+    extra = len(ids) - limit
+    return f"{shown} +{extra} more" if extra > 0 else shown
+
+
 def _render_dataset_rename() -> None:
     """DATA-23: rename the active dataset, for datasets the user added.
 
@@ -7851,7 +8071,9 @@ def _render_trial_identity_section() -> None:
     it's fine" is the more common answer and is worth stating, or the section
     reads as an error box that only appears when something is wrong.
     """
-    st.subheader("Trial identity")
+    # UX-52: h5, not a subheader — it is one item inside "🔎 What's in this
+    # dataset", and at h3 it read as a section in its own right.
+    st.markdown("##### 🧾 Trial identity")
     report = st.session_state.get("_trial_identity_report") or {}
     total = int(report.get("trials") or 0)
     if not total:
@@ -7893,27 +8115,31 @@ def _render_trial_identity_section() -> None:
             "second recording starting, not a regression.",
         },
     ]
-    st.dataframe(rows, hide_index=True, width="stretch")
+    # UX-52: the verdict above is the answer and stays open; the three signals
+    # behind it are evidence, and open by default only when they are the
+    # explanation for a warning the user is already reading.
     multi = report.get("multi_valued_columns") or {}
-    if multi:
-        st.markdown(
-            "**Columns that should be constant within a trial, but aren't** — "
-            "each names a distinction the Trial ID is currently ignoring:"
+    with st.expander("What was checked", expanded=bool(affected)):
+        st.dataframe(rows, hide_index=True, width="stretch")
+        if multi:
+            st.markdown(
+                "**Columns that should be constant within a trial, but aren't** — "
+                "each names a distinction the Trial ID is currently ignoring:"
+            )
+            st.dataframe(
+                [
+                    {"Column": col, "Trials with >1 value": count}
+                    for col, count in multi.items()
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+        st.caption(
+            "Checked on the whole dataset, before any filtering, using "
+            "(participant, trial, screen) — a multipart trial restarts word ids "
+            "per screen, so grouping by trial alone would report duplicates that "
+            "are correct data."
         )
-        st.dataframe(
-            [
-                {"Column": col, "Trials with >1 value": count}
-                for col, count in multi.items()
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-    st.caption(
-        "Checked on the whole dataset, before any filtering, using "
-        "(participant, trial, screen) — a multipart trial restarts word ids per "
-        "screen, so grouping by trial alone would report duplicates that are "
-        "correct data."
-    )
 
 
 def _render_column_mapping_section(*, editor_rendered: bool = False) -> None:
@@ -7975,7 +8201,7 @@ def _render_setup_provenance_note() -> None:
     snapshot = active_setup_snapshot()
     if snapshot is None:
         return
-    st.subheader("Recording setup")
+    st.markdown("##### Recording setup")
     values = {
         "screen": f"{snapshot.canvas_width} × {snapshot.canvas_height} px",
         "geometry": (
@@ -8099,12 +8325,26 @@ def render_data_inspection_tab(
     fixations_filtered: pd.DataFrame,
     raw_gaze_filtered: pd.DataFrame,
 ) -> None:
-    """Render the merged Data Inspection tab.
+    """Render the *What's in this dataset* section of the 🗂️ Data page.
 
     Combines the former **Raw Data** and **Data Statistics** tabs: the dataset's
     name (renamable when the user added it — DATA-23), the headline dataset
     counts, every raw-data table, the per-metric summary statistics, and the
-    active column mapping — in that order.
+    trial-identity check — in that order.
+
+    UX-52 gave it one level of hierarchy instead of five equally-weighted
+    ``st.subheader`` + ``st.divider()`` pairs: **the answer stays open** (the
+    dataset's name, the counts, the provenance banner, and the trial-identity
+    verdict) and **the appendix folds away** (raw tables, derived tables,
+    summary statistics, the identity evidence table). The tables were the bulk
+    of the page's scroll and, per DATA-26, are "not checked that often".
+
+    Every expander body still renders on every run — collapse is client-side, so
+    no widget key is dropped. The one thing that could not simply be wrapped is
+    ``_render_data_provenance``: it owns an expander of its own, and Streamlit
+    nests neither expander-in-expander nor popover-in-popover. It is a
+    whole-dataset fact rather than a raw-table one, so it moved *up* beside the
+    counts instead of down inside the fold.
     """
     stats = _dataset_statistics(
         words_filtered,
@@ -8118,9 +8358,11 @@ def render_data_inspection_tab(
     )
 
     # 1. Headline dataset counts — under the dataset's own name, which DATA-23
-    # makes editable here for a dataset the user added.
+    # makes editable here for a dataset the user added. No heading of its own
+    # (UX-52): the counts *are* the opening answer of "what's in this dataset",
+    # and a second same-weight subheader under the section's own only flattened
+    # the hierarchy it was supposed to create.
     _render_dataset_rename()
-    st.subheader("Dataset statistics")
     # ENG-36: icons (1.61) so the six counts are scannable rather than a row of
     # equally-weighted numbers — one glyph per *kind* of thing being counted.
     parts = part_catalog(words_filtered, fixations_filtered)
@@ -8151,16 +8393,16 @@ def render_data_inspection_tab(
             )
             st.dataframe(parts, hide_index=True, width="stretch")
 
-    st.divider()
+    # Provenance is a fact about the *dataset*, so it sits with the counts —
+    # and it has to, because it owns an expander and cannot nest inside one.
+    # Silent for every source but a OneStop server bundle.
+    _render_data_provenance()
 
     # 2. Every raw-data table (Stimuli / Word-level / Fixation-level / Raw gaze).
-    st.subheader("Raw data")
-    render_raw_data_tab(words_filtered, fixations_filtered, raw_gaze_filtered)
-
-    st.divider()
+    with st.expander("📋 Raw data — stimuli, words, fixations, gaze", expanded=False):
+        render_raw_data_tab(words_filtered, fixations_filtered, raw_gaze_filtered)
 
     # PRE-11/12/15/19 + AN-30: first-class derived tables, all exportable.
-    st.subheader("Derived analysis tables")
     from scanpath_studio.experimental_setup import pixels_per_degree
 
     try:
@@ -8180,33 +8422,36 @@ def render_data_inspection_tab(
         frame_fingerprint(raw_gaze_filtered),
         ppd,
     )
-    for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
-        with tab:
-            if table.empty:
-                st.caption(f"No {label.lower()} table is available for this selection.")
-            else:
-                _render_raw_table(table)
-
-    st.divider()
+    with st.expander(
+        "🧮 Derived analysis tables — " + " · ".join(derived), expanded=False
+    ):
+        for tab, (label, table) in zip(st.tabs(list(derived)), derived.items()):
+            with tab:
+                if table.empty:
+                    st.caption(
+                        f"No {label.lower()} table is available for this selection."
+                    )
+                else:
+                    _render_raw_table(table)
 
     # 3. Per-metric summary statistics.
-    st.subheader("Summary statistics")
-    st.dataframe(
-        stats["stats_df"],
-        hide_index=True,
-        width="stretch",
-        column_config={
-            col: st.column_config.NumberColumn(format="%.2f")
-            for col in ["Mean", "Std", "Min", "Median", "Max"]
-        },
-    )
-    st.caption(
-        "Statistics computed after filtering; missing values indicate empty source data."
-    )
+    with st.expander("📊 Summary statistics", expanded=False):
+        st.dataframe(
+            stats["stats_df"],
+            hide_index=True,
+            width="stretch",
+            column_config={
+                col: st.column_config.NumberColumn(format="%.2f")
+                for col in ["Mean", "Std", "Min", "Median", "Max"]
+            },
+        )
+        st.caption(
+            "Statistics computed after filtering; missing values indicate empty "
+            "source data."
+        )
 
-    st.divider()
-
-    # 4. VAL-7 — does one trial_id actually cover several readings?
+    # 4. VAL-7 — does one trial_id actually cover several readings? The verdict
+    # stays in the open (it can be a warning); only its evidence table folds.
     _render_trial_identity_section()
 
     # DATA-26: the column mapping is no longer the last thing on this panel — it

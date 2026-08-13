@@ -1488,8 +1488,17 @@
 
 
 <h1 id="correct-vertical-drift">Correct vertical drift<a class="headerlink" href="#correct-vertical-drift" title="Permanent link">&para;</a></h1>
-<p>See <a href="../../guides/scanpath-visualization/#correct-vertical-drift">Correct vertical drift</a>
-for the current controls and behavior.</p>
+<div class="admonition note">
+<p class="admonition-title">Not available in this build</p>
+<p>Vertical drift correction and the <strong>Line assignment</strong> subtab are not exposed
+in the released app (PRE-21): the feature works, but it is not yet fully
+integrated, and a half-wired control invites results it can't support. The
+code ships with the package — set <code>SCANPATH_EXPERIMENTAL=1</code> before starting
+the app (or the CLI / Python API) to turn it back on.</p>
+</div>
+<p>When enabled, see
+<a href="../../guides/scanpath-visualization/#correct-vertical-drift">Correct vertical drift</a>
+for the controls and behavior.</p>
 
 
 

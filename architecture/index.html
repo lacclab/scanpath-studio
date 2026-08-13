@@ -1654,7 +1654,7 @@ the repo root (kept current as the code changes); this is the short version.</p>
 </tr>
 <tr>
 <td><code>tabs.py</code></td>
-<td>View renderers: Scanpath Visualization (Annotations / Stimulus &amp; questions / Comparisons / Line assignment / Export / Data Inspection / Share subtabs), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections).</td>
+<td>View renderers: Scanpath Visualization (Annotations / Stimulus &amp; questions / Comparisons / Export / Share subtabs; Line assignment only under <code>SCANPATH_EXPERIMENTAL=1</code>), Corpus Analysis (Per text · Per reader · Groups subtabs — the question-oriented analysis sections), and the Data page's inspection panel (<code>render_data_inspection_tab</code>).</td>
 </tr>
 <tr>
 <td><code>controls.py</code></td>
@@ -1718,7 +1718,7 @@ the repo root (kept current as the code changes); this is the short version.</p>
 </tr>
 <tr>
 <td><code>alignment.py</code></td>
-<td>Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms.</td>
+<td>Vertical drift correction: native port of the ten Carr et al. (2021) line-assignment algorithms. Gated off by default (PRE-21).</td>
 </tr>
 <tr>
 <td><code>datasets.py</code></td>

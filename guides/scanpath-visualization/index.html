@@ -1950,6 +1950,13 @@ rather than sending half a comparison.</p>
 <a href="../../api/#scanpath_studio.api.compare_scanpaths"><code>compare_scanpaths</code></a> and
 <code>render --compare-with</code> in the <a href="../../cli/#compare-two-scanpaths">CLI reference</a>.</p>
 <h2 id="correct-vertical-drift">Correct vertical drift<a class="headerlink" href="#correct-vertical-drift" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Not available by default</p>
+<p>Vertical drift correction and NLD scanpath similarity are gated off in
+the released app (PRE-21) — they work, but are not fully integrated yet.
+Set <code>SCANPATH_EXPERIMENTAL=1</code> to expose them in the app, the CLI and the
+Python API.</p>
+</div>
 <p>Fixations that follow the text horizontally but sit above or below their line
 may need line assignment. Choose a drift-correction algorithm in the fixation
 controls, or use <strong>Line assignment</strong> to compare algorithms before applying one.

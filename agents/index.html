@@ -2329,7 +2329,8 @@ change <em>which fixations are drawn</em> rather than how:</p>
 <li><code>fix_index_range</code> is the app's fixation-index window; <code>animate_scanpath</code>
   accepts it too, and replays only that stretch. A window that lands outside the
   trial raises rather than drawing an empty scanpath.</li>
-<li><code>drift_correction</code> snaps each fixation to its assigned text line and colours by
+<li><code>drift_correction</code> needs <code>SCANPATH_EXPERIMENTAL=1</code> (PRE-21) and raises without
+  it. It snaps each fixation to its assigned text line and colours by
   line, exactly like the app's <em>Drift correction</em> control. Windowing is applied
   first, then the correction — the app's order.</li>
 </ul>
@@ -2830,7 +2831,10 @@ fixations and word boxes.</p>
 <code>--drift-correction ALGORITHM</code> (any of the ten names) and
 <code>--drift-connectors</code>. So are the public corpora — <code>--potec DIR</code>,
 <code>--onestop DIR</code> (+ <code>--onestop-regime</code> / <code>--onestop-part</code> /
-<code>--onestop-variant</code>), <code>--source multipleye --export DIR</code> — plus styling and
+<code>--onestop-variant</code>), <code>--source multipleye --export DIR</code>
+(+ <code>--no-question-screens</code>; a MultiplEYE trial is a whole stimulus, so pick a
+page or question screen inside it with <code>--screen</code> / <code>--all-screens</code> /
+<code>--list-parts</code>) — plus styling and
 output controls (<code>--fixation-symbol</code>, <code>--saccade-arcs</code>, <code>--snap-fixations</code>,
 <code>--saccade-color-by-type</code> / <code>-by-direction</code>, the <code>--stimulus-image*</code> family,
 <code>--width</code> / <code>--height</code> / <code>--scale</code>, <code>--anim-grid-step-ms</code> /

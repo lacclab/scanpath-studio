@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">2077 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">1980<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">97<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">1981<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">96<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_preprocessing_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 20:54 +0000
+            created at 2026-08-13 07:20 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -2843,7 +2843,7 @@
     <p class="run"><span class="n"><a id="t2761" href="#t2761">2761</a></span><span class="t">    <span class="nam">boxes</span> <span class="op">=</span> <span class="nam">zip</span><span class="op">(</span><span class="op">*</span><span class="nam">word_box_bounds</span><span class="op">(</span><span class="nam">words</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2762" href="#t2762">2762</a></span><span class="t">    <span class="nam">nonzero_rows</span> <span class="op">=</span> <span class="op">[</span><span class="op">(</span><span class="nam">box</span><span class="op">,</span> <span class="nam">v</span><span class="op">)</span> <span class="key">for</span> <span class="nam">box</span><span class="op">,</span> <span class="nam">v</span> <span class="key">in</span> <span class="nam">zip</span><span class="op">(</span><span class="nam">boxes</span><span class="op">,</span> <span class="nam">word_values</span><span class="op">)</span> <span class="key">if</span> <span class="nam">v</span> <span class="op">&gt;</span> <span class="num">0</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2763" href="#t2763">2763</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">nonzero_rows</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t2764" href="#t2764">2764</a></span><span class="t">        <span class="key">return</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t2764" href="#t2764">2764</a></span><span class="t">        <span class="key">return</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2765" href="#t2765">2765</a></span><span class="t">    <span class="nam">vals</span> <span class="op">=</span> <span class="op">[</span><span class="nam">v</span> <span class="key">for</span> <span class="nam">_</span><span class="op">,</span> <span class="nam">v</span> <span class="key">in</span> <span class="nam">nonzero_rows</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2766" href="#t2766">2766</a></span><span class="t">    <span class="nam">z_min_raw</span> <span class="op">=</span> <span class="nam">heatmap_range</span><span class="op">[</span><span class="num">0</span><span class="op">]</span> <span class="key">if</span> <span class="nam">heatmap_range</span> <span class="key">else</span> <span class="nam">float</span><span class="op">(</span><span class="nam">min</span><span class="op">(</span><span class="nam">vals</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t2767" href="#t2767">2767</a></span><span class="t">    <span class="nam">z_max_raw</span> <span class="op">=</span> <span class="nam">heatmap_range</span><span class="op">[</span><span class="num">1</span><span class="op">]</span> <span class="key">if</span> <span class="nam">heatmap_range</span> <span class="key">else</span> <span class="nam">float</span><span class="op">(</span><span class="nam">max</span><span class="op">(</span><span class="nam">vals</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -6735,7 +6735,7 @@
             <a class="nav" href="z_370c57a259db20f3_preprocessing_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 20:54 +0000
+            created at 2026-08-13 07:20 +0000
         </p>
     </div>
 </footer>

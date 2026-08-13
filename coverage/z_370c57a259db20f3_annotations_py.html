@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/annotations.py: 88%</title>
+    <title>Coverage for scanpath_studio/annotations.py: 91%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>annotations.py</b>:
-            <span class="pc_cov">88%</span>
+            <span class="pc_cov">91%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">130 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">115<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">15<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">118<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">12<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_api_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 20:54 +0000
+            created at 2026-08-13 07:20 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -299,16 +299,16 @@
     <p class="pln"><span class="n"><a id="t217" href="#t217">217</a></span><span class="t"><span class="str">    ``bare=True`` drops the expander wrapper so it can sit inside a subtab.&quot;&quot;&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t218" href="#t218">218</a></span><span class="t">    <span class="nam">annotation_screen</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t219" href="#t219">219</a></span><span class="t">    <span class="key">if</span> <span class="nam">screen_id</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">        <span class="nam">scope_key</span> <span class="op">=</span> <span class="fst">f&quot;</span><span class="op">{</span><span class="nam">_WIDGET_PREFIX</span><span class="op">}</span><span class="fst">scope_</span><span class="op">{</span><span class="nam">participant_id</span><span class="op">}</span><span class="fst">__</span><span class="op">{</span><span class="nam">trial_id</span><span class="op">}</span><span class="fst">&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">        <span class="nam">scope</span> <span class="op">=</span> <span class="nam">st</span><span class="op">.</span><span class="nam">radio</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">            <span class="str">&quot;Annotation scope&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">            <span class="op">[</span><span class="str">&quot;Parent trial&quot;</span><span class="op">,</span> <span class="str">&quot;This screen&quot;</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">            <span class="nam">key</span><span class="op">=</span><span class="nam">scope_key</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">            <span class="nam">horizontal</span><span class="op">=</span><span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">            <span class="nam">help</span><span class="op">=</span><span class="str">&quot;Parent annotations follow the logical trial; screen annotations &quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">            <span class="str">&quot;describe only the active coordinate space.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">        <span class="key">if</span> <span class="nam">scope</span> <span class="op">==</span> <span class="str">&quot;This screen&quot;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t220" href="#t220">220</a></span><span class="t">        <span class="nam">scope_key</span> <span class="op">=</span> <span class="fst">f&quot;</span><span class="op">{</span><span class="nam">_WIDGET_PREFIX</span><span class="op">}</span><span class="fst">scope_</span><span class="op">{</span><span class="nam">participant_id</span><span class="op">}</span><span class="fst">__</span><span class="op">{</span><span class="nam">trial_id</span><span class="op">}</span><span class="fst">&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t221" href="#t221">221</a></span><span class="t">        <span class="nam">scope</span> <span class="op">=</span> <span class="nam">st</span><span class="op">.</span><span class="nam">radio</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t222" href="#t222">222</a></span><span class="t">            <span class="str">&quot;Annotation scope&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t223" href="#t223">223</a></span><span class="t">            <span class="op">[</span><span class="str">&quot;Parent trial&quot;</span><span class="op">,</span> <span class="str">&quot;This screen&quot;</span><span class="op">]</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t224" href="#t224">224</a></span><span class="t">            <span class="nam">key</span><span class="op">=</span><span class="nam">scope_key</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t225" href="#t225">225</a></span><span class="t">            <span class="nam">horizontal</span><span class="op">=</span><span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t226" href="#t226">226</a></span><span class="t">            <span class="nam">help</span><span class="op">=</span><span class="str">&quot;Parent annotations follow the logical trial; screen annotations &quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t227" href="#t227">227</a></span><span class="t">            <span class="str">&quot;describe only the active coordinate space.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t228" href="#t228">228</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t229" href="#t229">229</a></span><span class="t">        <span class="key">if</span> <span class="nam">scope</span> <span class="op">==</span> <span class="str">&quot;This screen&quot;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t230" href="#t230">230</a></span><span class="t">            <span class="nam">annotation_screen</span> <span class="op">=</span> <span class="nam">str</span><span class="op">(</span><span class="nam">screen_id</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t231" href="#t231">231</a></span><span class="t">    <span class="nam">entry</span> <span class="op">=</span> <span class="nam">get_entry</span><span class="op">(</span><span class="nam">participant_id</span><span class="op">,</span> <span class="nam">trial_id</span><span class="op">,</span> <span class="nam">annotation_screen</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t232" href="#t232">232</a></span><span class="t">    <span class="nam">slug</span> <span class="op">=</span> <span class="fst">f&quot;</span><span class="op">{</span><span class="nam">participant_id</span><span class="op">}</span><span class="fst">__</span><span class="op">{</span><span class="nam">trial_id</span><span class="op">}</span><span class="fst">__</span><span class="op">{</span><span class="nam">annotation_screen</span> <span class="key">or</span> <span class="str">&#x27;parent&#x27;</span><span class="op">}</span><span class="fst">&quot;</span>&nbsp;</span><span class="r"></span></p>
@@ -371,7 +371,7 @@
     <p class="run run2"><span class="n"><a id="t289" href="#t289">289</a></span><span class="t">            <span class="str">&quot;as JSON or restore them from the sidebar.&quot;</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t290" href="#t290">290</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t291" href="#t291">291</a></span><span class="t">        <span class="nam">st</span><span class="op">.</span><span class="nam">button</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t292" href="#t292">292</a></span><span class="t">            <span class="str">&quot;&#128190; Open Save &amp; restore&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t292" href="#t292">292</a></span><span class="t">            <span class="str">&quot;&#128190; Open Session&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t293" href="#t293">293</a></span><span class="t">            <span class="nam">key</span><span class="op">=</span><span class="str">&quot;annotation_open_save_restore&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t294" href="#t294">294</a></span><span class="t">            <span class="nam">type</span><span class="op">=</span><span class="str">&quot;tertiary&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t295" href="#t295">295</a></span><span class="t">            <span class="nam">on_click</span><span class="op">=</span><span class="key">lambda</span><span class="op">:</span> <span class="nam">st</span><span class="op">.</span><span class="nam">session_state</span><span class="op">.</span><span class="nam">__setitem__</span><span class="op">(</span><span class="str">&quot;_open_save_restore&quot;</span><span class="op">,</span> <span class="key">True</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
@@ -433,7 +433,7 @@
             <a class="nav" href="z_370c57a259db20f3_api_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-12 20:54 +0000
+            created at 2026-08-13 07:20 +0000
         </p>
     </div>
 </footer>

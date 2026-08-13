@@ -2532,6 +2532,8 @@ the normalized frames from :func:<code>load_scanpath_data</code>.</p>
     <div class="doc doc-contents first">
 
         <p>Word-measure sensitivity and correction QA across line algorithms.</p>
+<p>PRE-21: a derived surface of vertical drift correction, so it is gated with
+it and raises rather than returning something that looks like a result.</p>
 
 
     </div>
@@ -2811,7 +2813,7 @@ deployment. This reports that store without launching the app: <code>enabled</co
 <code>directory</code>, <code>datasets</code> (name + per-frame row counts), <code>rows</code>,
 <code>annotations</code>, <code>settings</code>, <code>bytes</code>, <code>saved_at</code>, plus <code>exists</code> /
 <code>readable</code> for a missing or unreadable manifest. Delete it with
-:func:<code>clear_cache</code>; the same information is in the app's 🗄️ Recovery cache
+:func:<code>clear_cache</code>; the same information is in the app's 💾 Session → 🗄️ Recovery cache
 panel and in <code>scanpath-studio cache</code>.</p>
 
 

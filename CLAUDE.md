@@ -60,12 +60,19 @@ you work under `scanpath_studio/`); contributor setup is in
 - **New items get `"added": "<today's date>"`**, set once at creation and never
   edited afterwards — even when `note`/`date` (which track a later status
   milestone, e.g. implemented/signed-off) stay empty.
-- **Write-up shape.** Four bold-led paragraphs in this order — **Request** (what
-  was asked, in the asker's terms) · **What was done** · **What's left** (say it
-  either way, and link the follow-up when the remainder was split out) ·
-  **Background (technical)** (anchors, design calls, gotchas, related IDs). A
-  Backlog item has only *Request* + *Background*. The tracker's *How this works*
-  panel carries the same convention.
+- **Write-up shape — structured fields, not bold leads.** Each section is its own
+  key on the item, an array of markdown lines: `request` (what was asked, in the
+  asker's terms — **required**) · `whatWasDone` · `whatsLeft` (say it either way,
+  and link the follow-up when the remainder was split out) · `background`
+  (anchors, design calls, gotchas, related IDs). Optional `statusNote` is the
+  lede above them (the status / "update as of ⟨date⟩" line that used to be a
+  leading `>` quote). **Never repeat the label inside the field** — the tracker
+  prints it. **Omit a field rather than writing an empty array.** A Backlog item
+  has only `request` (+ `background`); `whatWasDone` / `whatsLeft` are required
+  once the item is `In progress` or `Review`.
+  `tests/test_tracker_server.py` enforces this, so a dropped section fails a
+  test instead of quietly rotting. Archived items keep the older single `body`
+  array — both shapes render; don't convert them.
 - **An item in `Review` never says "What's left. Nothing."** What's left is the
   user's review — name what to look at (the judgement calls, the surfaces to
   click). "Nothing" is only for an item that is finished *and* signed off.
@@ -91,6 +98,17 @@ you work under `scanpath_studio/`); contributor setup is in
   their prefix (the app's *How this works* panel prints it).
 - **Notice an unrelated issue?** Fix it on the spot if it's small; otherwise add
   an item to `tracker/data.js` so it doesn't get lost.
+- **Keep it current *while* you work — be on it.** The tracker is a shared,
+  multi-person, multi-agent view of the project; a stale one is worse than none.
+  1. Flip to `In progress` **when you pick the item up**, not when you finish, so
+     nobody else starts the same thing.
+  2. The moment a decision is answered — even before any code is written — clear
+     it out of `decisions` and record the call in `background`, in the same edit.
+     A settled question left in the amber box costs the user a review round.
+  3. **Commit early and often**: one commit per feature or fix, not one per
+     session, with the tracker edit in the same commit as the code it describes.
+     Long-lived uncommitted work blocks the other sessions sharing this checkout.
+  4. Finish into `Review` and write `whatsLeft` as what the *user* should look at.
 
 ## On release
 

@@ -56,37 +56,78 @@ def test_decision_callout_renders_numbered_list() -> None:
     assert ".decisions ul" not in source
 
 
-def test_open_catalog_items_follow_write_up_shape() -> None:
+ALIASES = {
+    "Pending approval": "Review",
+    "Done": "Closed",
+    "Dropped": "Closed",
+    "Decided": "Closed",
+    "Blocked": "On hold",
+    "Parked": "On hold",
+    "Partly done": "In progress",
+}
+
+
+def _open_items() -> list[dict]:
+    """Every catalogue + UI-created item that is not archived or Closed."""
     catalog = _load_catalog()
     state = json.loads((TRACKER_DIR / "state.json").read_text())
-    aliases = {
-        "Pending approval": "Review",
-        "Done": "Closed",
-        "Dropped": "Closed",
-        "Decided": "Closed",
-        "Blocked": "On hold",
-        "Parked": "On hold",
-        "Partly done": "In progress",
-    }
-    order = ["Request.", "What was done.", "What's left.", "Background (technical)."]
-
+    items = []
     for item in [*catalog["items"], *state.get("createdItems", [])]:
         edit = state.get("items", {}).get(item["id"], {})
-        status = aliases.get(
-            edit.get("status", item["status"]), edit.get("status", item["status"])
-        )
-        if status == "Closed":
+        raw = edit.get("status", item["status"])
+        if ALIASES.get(raw, raw) == "Closed" or edit.get("archived", item["archived"]):
             continue
+        item = {**item, "status": ALIASES.get(raw, raw)}
+        items.append(item)
+    return items
 
-        labels = []
-        for line in item["body"]:
-            labels.extend(label for label in order if line.startswith(f"**{label}**"))
 
-        assert labels and labels[0] == "Request.", item["id"]
-        assert labels == sorted(labels, key=order.index), item["id"]
-        assert len(labels) == len(set(labels)), item["id"]
-        if status in {"In progress", "Review"}:
-            assert labels == order, item["id"]
+def test_open_items_carry_the_structured_write_up() -> None:
+    """Open items store the write-up as fields, not as bold leads in one blob.
+
+    The four-paragraph shape used to live entirely inside ``body`` as
+    ``**Request.**`` / ``**What was done.**`` prose leads, which agents dropped,
+    reordered, or reworded often enough to be worth making structural. Each
+    section is now its own array of markdown lines, so a missing section is a
+    missing key and this test can see it. The archived catalogue keeps ``body``.
+    """
+    for item in _open_items():
+        assert "body" not in item, (
+            f"{item['id']} still uses the legacy `body` blob — split it into "
+            f"{SERVER.WRITE_UP_FIELDS}."
+        )
+        assert item.get("request"), f"{item['id']} has no `request` section."
+        for field in ("decisions", *SERVER.WRITE_UP_FIELDS):
+            lines = item.get(field)
+            if lines is None:
+                continue
+            assert isinstance(lines, list) and all(
+                isinstance(line, str) for line in lines
+            ), f"{item['id']}: `{field}` must be an array of markdown lines."
+            assert lines, f"{item['id']}: `{field}` is empty — omit the field instead."
+
+
+def test_implemented_items_say_what_was_done_and_what_is_left() -> None:
+    """An item being worked on or awaiting review owes all four sections."""
+    for item in _open_items():
+        if item["status"] not in {"In progress", "Review"}:
+            continue
+        for field in ("whatWasDone", "whatsLeft", "background"):
+            assert item.get(field), (
+                f"{item['id']} is {item['status']} but has no `{field}` section."
+            )
+
+
+def test_write_up_sections_do_not_repeat_their_own_lead() -> None:
+    """The label is the field name now; a leftover `**Request.**` is a double."""
+    leads = ("**Request.", "**What was done.", "**What's left.", "**Background (")
+    for item in _open_items():
+        for field in SERVER.WRITE_UP_FIELDS:
+            first = (item.get(field) or [""])[0]
+            assert not first.startswith(leads), (
+                f"{item['id']}: `{field}` repeats a bold lead — the tracker "
+                "renders the section label itself."
+            )
 
 
 def test_validate_state_accepts_implementation_brief() -> None:
@@ -155,7 +196,7 @@ def test_validate_state_accepts_created_task() -> None:
         "subgroup": "",
         "archived": False,
         "added": "2026-08-03",
-        "body": ["**Request.** A new comparison task"],
+        "request": ["A new comparison task"],
     }
 
     state = SERVER._validate_state(
@@ -179,7 +220,7 @@ def test_validate_state_rejects_group_prefix_mismatch() -> None:
         "subgroup": "",
         "archived": False,
         "added": "2026-08-03",
-        "body": ["**Request.** Wrong group prefix"],
+        "request": ["Wrong group prefix"],
     }
 
     with pytest.raises(ValueError, match="Invalid prefix"):

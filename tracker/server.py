@@ -44,6 +44,10 @@ GROUP_PREFIXES = {
     "Engineering": "ENG",
 }
 EDIT_FIELDS = ("status", "priority", "implementationBrief", "archived", "updated")
+# The write-up is structured, one array of markdown lines per section, so a
+# section cannot be silently dropped, reordered, or hidden inside prose. Only
+# `request` is required; the rest appear once there is work behind the item.
+WRITE_UP_FIELDS = ("statusNote", "request", "whatWasDone", "whatsLeft", "background")
 CREATED_FIELDS = {
     "id",
     "prefix",
@@ -57,8 +61,9 @@ CREATED_FIELDS = {
     "subgroup",
     "archived",
     "added",
-    "body",
+    "request",
 }
+CREATED_OPTIONAL_FIELDS = {"decisions", *WRITE_UP_FIELDS} - CREATED_FIELDS
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 STATE_LOCK = threading.Lock()
 
@@ -74,7 +79,9 @@ def _known_groups() -> set[str]:
 
 
 def _validate_created_item(value: Any, known_ids: set[str]) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != CREATED_FIELDS:
+    if not isinstance(value, dict) or not CREATED_FIELDS <= set(value):
+        raise ValueError("Invalid created tracker item.")
+    if set(value) - CREATED_FIELDS - CREATED_OPTIONAL_FIELDS:
         raise ValueError("Invalid created tracker item.")
     item_id = value["id"]
     prefix = value["prefix"]
@@ -102,13 +109,23 @@ def _validate_created_item(value: Any, known_ids: set[str]) -> dict[str, Any]:
         raise ValueError(f"Invalid archive value for {item_id}.")
     if not isinstance(value["added"], str) or not DATE_RE.fullmatch(value["added"]):
         raise ValueError(f"Invalid creation date for {item_id}.")
-    if not isinstance(value["body"], list) or not all(
-        isinstance(line, str) for line in value["body"]
-    ):
-        raise ValueError(f"Invalid body for {item_id}.")
+    for field in ("decisions", *WRITE_UP_FIELDS):
+        lines = value.get(field)
+        if lines is None:
+            continue
+        if not isinstance(lines, list) or not all(
+            isinstance(line, str) for line in lines
+        ):
+            raise ValueError(f"Invalid {field} for {item_id}.")
+        if not lines:
+            raise ValueError(f"Empty {field} for {item_id} — omit the field instead.")
     if not isinstance(value["sub"], str) or not isinstance(value["subgroup"], str):
         raise ValueError(f"Invalid grouping for {item_id}.")
-    return {field: value[field] for field in CREATED_FIELDS}
+    return {
+        field: value[field]
+        for field in (*CREATED_FIELDS, *CREATED_OPTIONAL_FIELDS)
+        if field in value
+    }
 
 
 def _validate_state(value: Any) -> dict[str, Any]:

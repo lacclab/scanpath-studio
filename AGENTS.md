@@ -160,6 +160,14 @@ chat. Run the editable site with `python3 tracker/server.py` (or
 created in the UI live under `createdItems` in the same state file, and their prefix
 is derived from their group.
 
+An open item's write-up is **structured fields**, not prose with bold leads:
+`request` (required) · `whatWasDone` · `whatsLeft` · `background`, each an array of
+markdown lines, plus an optional `statusNote` lede and the `decisions` array.
+Omit a field rather than emptying it, never repeat the section label inside the
+field, and keep the status current *as you work* — see `CLAUDE.md` → *Tracking
+work*. `tests/test_tracker_server.py` pins the shape; archived items keep the
+legacy single `body` array and both render.
+
 ## Build / Lint / Test
 
 ```bash

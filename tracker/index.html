@@ -190,6 +190,16 @@
   .body table { border-collapse: collapse; font-size: 13px; display: block; overflow-x: auto; }
   .body th, .body td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
   .body th { background: var(--panel-2); font-weight: 600; }
+  .section { margin-top: 1.1em; }
+  .section > h4 {
+    margin: 0 0 .1em 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--ink-faint);
+  }
+  .section > h4::after {
+    content: ""; display: block; margin-top: 4px; border-top: 1px solid var(--line-soft);
+  }
+  .section-statusNote { margin-top: .8em; }
+  .section-statusNote > h4 { display: none; }
   .ref { font-weight: 600; }
   .empty { color: var(--ink-faint); padding: 40px 0; text-align: center; }
   .implementation-brief {
@@ -376,11 +386,14 @@
   </ul>
 
   <h4>Write-up shape</h4>
-  <p style="font-size:13.4px;color:var(--ink-dim)">Four bold-led paragraphs, in this
-    order, so the ask stays legible next to what shipped (there are no headings —
-    the renderer is deliberately tiny):</p>
+  <p style="font-size:13.4px;color:var(--ink-dim)">Four sections, in this order, so the
+    ask stays legible next to what shipped. They are separate <b>fields</b> on the item
+    (<code>request</code>, <code>whatWasDone</code>, <code>whatsLeft</code>,
+    <code>background</code>) rather than bold leads inside one blob of prose — a missing
+    section is now a missing key, which the test suite can see and an agent cannot
+    quietly reword away:</p>
   <ul>
-    <li><b>Request</b> — what was asked for, in the asker's terms.</li>
+    <li><b>Request</b> — what was asked for, in the asker's terms. Always present.</li>
     <li><b>What was done</b> — what actually shipped.</li>
     <li><b>What's left</b> — what remains. Say it either way, and link the follow-up
       item when the remainder was split out. An item in <code>Review</code> is never
@@ -389,6 +402,10 @@
     <li><b>Background (technical)</b> — code anchors, design calls, gotchas, related
       IDs. The internal half, kept out of the first three.</li>
   </ul>
+  <p style="font-size:13.4px;color:var(--ink-dim)">An optional
+    <code>statusNote</code> renders above them as the item's lede — the status or
+    "update as of &lt;date&gt;" line that used to be a leading <code>&gt;</code> quote.
+    Archived items still hold the older single <code>body</code> array; both render.</p>
   <p style="font-size:13.4px;color:var(--ink-dim)">Open questions do <b>not</b> live in
     <i>Background</i>. They go in a separate <code>decisions</code> field — a list of the
     calls that need your input before the work can start. They render as their own
@@ -398,9 +415,26 @@
     records the call in <i>Background</i>.</p>
   <p style="font-size:13.4px;color:var(--ink-dim)">An item with no implementation
     behind it has only <i>Request</i> (plus <i>Background</i>), whether it is Backlog,
-    Planned, or On hold. The other two appear once work exists. An implemented item
-    keeps its status line as the leading
-    <code>&gt;</code> quote.</p>
+    Planned, or On hold. The other two appear once work exists, and are required once
+    the item reaches <code>In progress</code> or <code>Review</code>.</p>
+
+  <h4>Keeping it current (for coding agents)</h4>
+  <p style="font-size:13.4px;color:var(--ink-dim)">The tracker is only worth reading if
+    it matches reality, so it gets updated <i>while</i> the work happens, not after:</p>
+  <ul>
+    <li><b>Flip the status when the work starts</b>, not when it ends —
+      <code>In progress</code> the moment you pick an item up, so a second person (or
+      a second agent) can see it is taken.</li>
+    <li><b>Clear a decision the moment it is answered</b>, even before any code is
+      written, and record the call in <i>Background</i>. A settled question left in the
+      amber box costs a round of review.</li>
+    <li><b>Commit early and often</b> — one commit per feature or fix rather than one
+      per session, with the tracker edit in the same commit as the code it describes.</li>
+    <li><b>Finish into <code>Review</code></b>, never straight to <code>Closed</code>,
+      and write <i>What's left</i> as what <i>you</i> should look at.</li>
+    <li><b>Nothing half-recorded.</b> Something noticed in passing is either fixed on
+      the spot or gets its own item; it never lives only in a chat log.</li>
+  </ul>
 
   <h4>Rules</h4>
   <ul>
@@ -524,6 +558,29 @@
     return out.join("");
   }
 
+  /* ---------- write-up ----------
+     Open items carry the write-up as structured fields, one array of markdown
+     lines each, so an agent cannot quietly drop a section or reorder it. The
+     archived catalogue still holds the old single `body` with bold leads, and
+     is rendered as-is. */
+  const SECTIONS = [
+    ["statusNote", "Status"],
+    ["request", "Request"],
+    ["whatWasDone", "What was done"],
+    ["whatsLeft", "What's left"],
+    ["background", "Background (technical)"],
+  ];
+  const sectionLines = it => SECTIONS.flatMap(([key]) => it[key] || []);
+  const writeUpText = it => (it.body || sectionLines(it)).join(" ");
+
+  function writeUp(it) {
+    if (it.body) return markdown(it.body);
+    return SECTIONS.filter(([key]) => (it[key] || []).length)
+      .map(([key, label]) => `<section class="section section-${key}">
+        <h4>${label}</h4>${markdown(it[key])}
+      </section>`).join("");
+  }
+
   /* ---------- state ---------- */
   const saved = JSON.parse(localStorage.getItem("tracker-ui") || "{}");
   const state = {
@@ -551,7 +608,7 @@
     if (state.q) {
       const hay = (it.id + " " + it.title + " " + it.status + " " + it.note + " "
         + (it.priority || "Normal") + " " + (it.implementationBrief || "") + " "
-        + it.added + " " + (it.decisions || []).join(" ") + " " + it.body.join(" ")).toLowerCase();
+        + it.added + " " + (it.decisions || []).join(" ") + " " + writeUpText(it)).toLowerCase();
       if (!state.q.split(/\s+/).every(t => hay.includes(t))) return false;
     }
     return true;
@@ -643,7 +700,7 @@
         ${priority !== "Normal" ? `<span class="priority priority-${priority.toLowerCase()}">${priority}</span>` : ""}
         <span class="status"><span class="dot" style="background:${color(it.status)}"></span>${it.status}</span>
       </button>
-      ${open ? `<div class="body">${editor}${decideBox}${note}${markdown(it.body)}</div>` : ""}
+      ${open ? `<div class="body">${editor}${decideBox}${note}${writeUp(it)}</div>` : ""}
     </article>`;
   }
 
@@ -823,7 +880,7 @@
     const added = localDateStamp();
     const item = {
       id, prefix, num, sub: "", title, status: "Backlog", priority, implementationBrief,
-      group, subgroup: "", archived: false, added, body: [`**Request.** ${title}`],
+      group, subgroup: "", archived: false, added, request: [title],
     };
 
     if (!title) { el("taskError").textContent = "Add a title first."; return; }

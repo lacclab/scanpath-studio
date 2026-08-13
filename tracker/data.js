@@ -2,7 +2,6 @@
 // Edit this file to add / update / archive items; open tracker/index.html to read it.
 // Live status: Backlog | Planned | In progress | On hold | Review | Closed.
 // Historical catalogue values are normalized to that concise workflow by index.html.
-// `body` is an array of markdown lines (one array entry per source line).
 // User-authored status/priority overrides, implementation briefs, and UI-created
 // tasks are stored separately in `tracker/state.json`; the tracker page applies
 // them on top of this catalogue.
@@ -14,16 +13,37 @@
 // "implemented"/"signed off", not true creation) since no earlier record exists;
 // blank means no `date` was on record to backfill from.
 //
-// Write-up shape — four bold-led paragraphs, in this order, so a reader can tell
-// the ask apart from what shipped (there are no `#` headings in the renderer):
-//   **Request.**              what was asked for, in the asker's terms.
-//   **What was done.**        what actually shipped.
-//   **What's left.**          what remains, or "Nothing" — say it either way.
-//   **Background (technical).** anchors, design calls, gotchas, related ids.
-// An item with no implementation behind it has only Request (+ Background),
-// regardless of whether it is Backlog, Planned, or On hold. What was done / What's
-// left appear once work exists. An implemented item keeps its status line as the
-// leading `>` quote (e.g. "> **Done — approved 2026-08-02.**").
+// Write-up shape — the four sections are STRUCTURED FIELDS, not bold leads in
+// prose. Each is an array of markdown lines (one array entry per source line);
+// the tracker page prints the section label itself, so never repeat it inside:
+//   "request":     [...]  what was asked for, in the asker's terms.  REQUIRED.
+//   "whatWasDone": [...]  what actually shipped.
+//   "whatsLeft":   [...]  what remains, or "Nothing" — say it either way.
+//   "background":  [...]  anchors, design calls, gotchas, related ids.
+//   "statusNote":  [...]  optional lede above the write-up — the status/update
+//                         line that used to be the leading `>` quote.
+//   "decisions":   [...]  calls that need the user's input before work starts.
+// Omit a field entirely rather than writing an empty array. An item with no
+// implementation behind it has only `request` (+ `background`), regardless of
+// whether it is Backlog, Planned, or On hold; `whatWasDone` / `whatsLeft` appear
+// once work exists, and are REQUIRED once the item is In progress or Review.
+// `tests/test_tracker_server.py` enforces all of that — a dropped section fails
+// a test rather than quietly rotting. Archived items keep the older single
+// `body` array with `**Request.**`-style bold leads; both shapes render.
+//
+// Working the tracker (agents, read this) — the tracker is only useful if it
+// matches reality, so keep it current *as you work*, not at the end:
+//   1. Set `"status": "In progress"` when you start, not when you finish.
+//   2. Answered a decision — even before writing code — clear it out of
+//      `decisions` in the same edit and record the call in `background`.
+//      A settled question left in the amber box wastes the user's next review.
+//   3. Commit early and often: one commit per feature/fix, not one per session.
+//      The tracker edit belongs in the same commit as the code it describes.
+//   4. Finished → `"status": "Review"` (never straight to Closed) and write
+//      `whatsLeft` as what the *user* should look at. Only their sign-off makes
+//      it `"status": "Closed"` + `"archived": true`.
+//   5. Noticed something unrelated? Small — fix it now; otherwise add an item
+//      here so it is not lost.
 
 window.TRACKER = {
  "groups": [
@@ -274,25 +294,28 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Stop tutorial output from silently going stale: execute opted-in",
+   "request": [
+    "Stop tutorial output from silently going stale: execute opted-in",
     "Python snippets during `mkdocs build` and render their real stdout instead of",
-    "copying output into Markdown by hand.",
-    "",
-    "**What was done.** Added [`scripts/mkdocs_hooks.py`](scripts/mkdocs_hooks.py) and",
+    "copying output into Markdown by hand."
+   ],
+   "whatWasDone": [
+    "Added [`scripts/mkdocs_hooks.py`](scripts/mkdocs_hooks.py) and",
     "registered it in [`mkdocs.yml`](mkdocs.yml). A `python exec=\"true\"` fence runs",
     "against the repository during the build, shares state with later executable",
     "fences on the page, and injects captured stdout directly below the source. The",
     "runner disables network sockets, uses a 30-second timeout, and fails the docs",
     "build when a snippet fails. No notebook format or third-party execution plugin",
-    "was added.",
-    "",
-    "**What's left.** Nothing for the current docs. **UX-23** removed the old",
+    "was added."
+   ],
+   "whatsLeft": [
+    "Nothing for the current docs. **UX-23** removed the old",
     "pasted-output tutorial blocks while making the tutorials compact, so no canonical",
     "page currently needs an executable marker; the hook remains available for future",
-    "deterministic examples that print output.",
-    "",
-    "**Background (technical).** Execution is deliberately opt-in and hermetic:",
+    "deterministic examples that print output."
+   ],
+   "background": [
+    "Execution is deliberately opt-in and hermetic:",
     "network-dependent corpus downloads, shell commands, Chrome/Kaleido image export,",
     "and GIF/MP4 generation are not run by the hook. Related: **UX-14**, **UX-22**,",
     "**UX-23**."
@@ -311,26 +334,29 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Present equivalent app, Python, and CLI tutorial paths as linked tabs",
+   "request": [
+    "Present equivalent app, Python, and CLI tutorial paths as linked tabs",
     "instead of narrating all three surfaces in sequence, and capture real app",
-    "screenshots through a repeatable process rather than making mock images.",
-    "",
-    "**What was done.** The original six tutorials were normalized around linked",
+    "screenshots through a repeatable process rather than making mock images."
+   ],
+   "whatWasDone": [
+    "The original six tutorials were normalized around linked",
     "`In the app` / `Python` / `CLI` tab labels, and",
     "[`scripts/capture_tutorial_screenshots.py`](scripts/capture_tutorial_screenshots.py)",
     "was added to boot the bundled demo, drive the relevant UI states at a fixed",
     "viewport, and regenerate tutorial captures. **UX-23** later replaced those six",
     "long mixed-surface tutorials with four much shorter, app-first use-case workflows;",
     "the old URLs now forward to the new canonical pages, while the capture script is",
-    "kept for future UI documentation.",
-    "",
-    "**What's left.** Nothing under the current **UX-23** information architecture.",
+    "kept for future UI documentation."
+   ],
+   "whatsLeft": [
+    "Nothing under the current **UX-23** information architecture.",
     "Reintroducing three-surface tabs or a screenshot on every workflow would add back",
     "the density the latest documentation request explicitly removed; it should be",
-    "re-scoped if that becomes desirable again.",
-    "",
-    "**Background (technical).** `pymdownx.tabbed` and `content.tabs.link` remain enabled",
+    "re-scoped if that becomes desirable again."
+   ],
+   "background": [
+    "`pymdownx.tabbed` and `content.tabs.link` remain enabled",
     "in [`mkdocs.yml`](mkdocs.yml), so future tabs must reuse identical labels to keep",
     "cross-page selection linked. The screenshot script is the source of truth for",
     "repeatable captures. Related: **UX-14**, **UX-21**, **UX-23**."
@@ -409,14 +435,15 @@ window.TRACKER = {
    "group": "Compare mode",
    "subgroup": "",
    "archived": false,
-   "body": [
+   "statusNote": [
     "> **Pending approval.** Implemented 2026-08-02; the 2026-08-03 compare-mode",
     "> revision is complete and no additional CMP-5 gap was named.",
     "",
     "*(Scope note: the main visualization's \"Compare with trial\" stays a **two**-scanpath",
-    "overlay — that's not what this item changes.)*",
-    "",
-    "**Request.** The **Comparisons** subtab (`render_multiple_comparison_tab`) is hard",
+    "overlay — that's not what this item changes.)*"
+   ],
+   "request": [
+    "The **Comparisons** subtab (`render_multiple_comparison_tab`) is hard",
     "to follow: it takes the scanpath from the *main* trial picker, finds other",
     "scanpaths of the same text, groups them by a user-chosen column, scores each",
     "against the selected one, and — when there are more candidates than it can show —",
@@ -425,9 +452,10 @@ window.TRACKER = {
     "was dropped. Make each explicit: name the reference scanpath prominently (**ENG-8**",
     "removed the local picker), label every panel with the trial it is and the group it",
     "belongs to, state the grouping column and the ranking rule in the tab itself, and",
-    "say plainly when candidates were truncated.",
-    "",
-    "**What was done.** Each of the four asks, in",
+    "say plainly when candidates were truncated."
+   ],
+   "whatWasDone": [
+    "Each of the four asks, in",
     "[`render_multiple_comparison_tab`](scanpath_studio/tabs.py:4779):",
     "",
     "- **The reference is named where the comparison happens** — the main-column",
@@ -446,12 +474,14 @@ window.TRACKER = {
     "  ranked by NLD similarity … (most similar first)\"*, extended with *\"showing the",
     "  24 most similar of N scored\"* when the grid caps), and the scoring-budget",
     "  caption now says the cap keeps the first `_GEN_MAX_SCORE` **by label order**",
-    "  and that the rest are not shown.",
-    "",
-    "**What's left.** Nothing for this scope. Whatever **CMP-8**",
-    "(cross-dataset compare) adds will re-open the labelling question for its panels.",
-    "",
-    "**Background (technical).** Pure-presentation change — no scoring, grouping or",
+    "  and that the rest are not shown."
+   ],
+   "whatsLeft": [
+    "Nothing for this scope. Whatever **CMP-8**",
+    "(cross-dataset compare) adds will re-open the labelling question for its panels."
+   ],
+   "background": [
+    "Pure-presentation change — no scoring, grouping or",
     "capping behaviour moved, so the existing smoke/apptest coverage stands. The",
     "multi-reading flag matters because `_collect_generations` concatenates a group's",
     "fixations wholesale: a coarse column (a regime, a condition) yields panels that",
@@ -472,20 +502,22 @@ window.TRACKER = {
    "group": "Compare mode",
    "subgroup": "",
    "archived": false,
-   "body": [
+   "statusNote": [
     "> **Pending approval.** Core shipped 2026-08-02; the 2026-08-03 revision moved",
-    "> **Order by** to the end of the picker row, after the ◀ ▶ step buttons.",
-    "",
-    "**Request.** Similarity scoring exists ([`similarity.py`](scanpath_studio/similarity.py),",
+    "> **Order by** to the end of the picker row, after the ◀ ▶ step buttons."
+   ],
+   "request": [
+    "Similarity scoring exists ([`similarity.py`](scanpath_studio/similarity.py),",
     "`compute_similarity_table`) but only inside the Comparisons subtab, where it ranks",
     "the table. Use it as an **ordering** wherever a trial is picked — first and",
     "foremost the **compare-trial (B) selector** in the main visualization, so the",
     "candidates for B can be sorted by similarity to A instead of in data order, making",
     "\"now show me the most similar reading / the most different one\" a scroll rather",
     "than a search. Generalize to other orderings while there (reading speed,",
-    "regression rate, fixation count), consistent with **UX-10**.",
-    "",
-    "**What was done.** The compare-B picker row",
+    "regression rate, fixation count), consistent with **UX-10**."
+   ],
+   "whatWasDone": [
+    "The compare-B picker row",
     "([`tabs._render_compare_selector`](scanpath_studio/tabs.py:825)) gained an",
     "**Order by** selectbox at the end of the row (key `single_compare_order`, shown when there are >2",
     "candidates): **Same text first** (the historical 📄→👤→rest data order, default) ·",
@@ -503,16 +535,18 @@ window.TRACKER = {
     "  fixation's own `word_id`, so no geometry pass on corpora that carry it) and is",
     "  cached via `@st.cache_data` (`_c_compare_nld`, keyed on the pool + word-box",
     "  fingerprints + selection + candidate set; `_c_compare_trial_stats` likewise",
-    "  backs the count/time orderings with one groupby per pool).",
-    "",
-    "**What's left.** Nothing for the requested scope. Regression rate / reading",
+    "  backs the count/time orderings with one groupby per pool)."
+   ],
+   "whatsLeft": [
+    "Nothing for the requested scope. Regression rate / reading",
     "speed (per-word normalization) orderings remain possible follow-ups — they",
     "  need the measures table, not just the fixation pool; add on request. The",
     "  general trial pickers (**UX-10**) keep their property sorts — similarity is",
     "  only meaningful relative to a reference trial, which only the compare",
-    "  selector has.",
-    "",
-    "**Background (technical).** `_order_compare_options` is pure (unit-tested in",
+    "  selector has."
+   ],
+   "background": [
+    "`_order_compare_options` is pure (unit-tested in",
     "[`tests/test_compare_ordering.py`](tests/test_compare_ordering.py) — 5 tests:",
     "identity default, most-similar-first, most-different reversal with NaN/other-text",
     "still last, count/time orderings, small-pool pass-through). The widget is",
@@ -536,53 +570,56 @@ window.TRACKER = {
   "group": "Compare mode",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** The word-level heatmap is single-scanpath only; in compare mode there's no",
-    "heatmap view. Support two scanpaths in one heatmap by **splitting each word box**",
-    "— e.g. left/top half tinted by reader A's measure, right/bottom half by reader B",
-    "— on a shared colour scale, so per-word differences are readable at a glance",
-    "without a separate difference plot. Renders through the existing",
-    "`layout.shapes` heatmap path in [`plots.py`](scanpath_studio/plots.py). Related:",
-  "**AN-19** (difference word profile), **AN-22** (stacked two-group heatmap).",
-  "",
-  "**What was done.** Compare mode supports split-half, side-by-side, and stacked word",
-  "heatmaps for readers A/B on one shared colour scale and colour bar — and, after the",
-  "2026-08-07 report, they now actually draw. **Both** symptoms the user saw were real, and",
-  "they were two separate bugs:",
-  "",
-  "1. *No heatmap.* The per-word values are joined to the word boxes by `word_id`, across two",
-  "   frames that disagree on dtype: boxes carry an `int64` id, fixations a `float64` one (it is",
-  "   `NaN` wherever a fixation landed outside every box). `str()` on each side therefore",
-  "   compared `\"7\"` against `\"7.0\"`, every word scored 0, `_comparison_heatmap_shapes`",
-  "   skipped every box on `value <= 0`, and the layer came out **empty on all three layouts**",
-  "   — reproduced on the bundled demo at 0 shapes, now 156. Both sides go through a new",
-  "   `plots._word_id_keys`, which drops the decimal tail on whole numbers and leaves",
-  "   non-numeric ids alone (string word ids still join).",
-  "2. *Fixations drawn with the toggle off.* That part was by design and wrong for this",
-  "   feature: `show_fix` was gated static-only, so Compare always drew both marker sets —",
-  "   which buries the split boxes the mode exists to show. `make_comparison_figure` /",
-  "   `_make_split_comparison_figure` now take `show_fixations`, `tabs._render_comparison_figure`",
-  "   passes `viz_settings[\"show_fix\"]`, and the rail's toggle is un-gated in Compare (still",
-  "   gated in Animate, where the replay *is* the trail). Saccades keep their own toggle, so a",
-  "   lines-only comparison still works.",
-  "",
-  "**What's left.** The user's review — the layouts have never been eyeballed, since nothing",
-  "rendered before. Worth checking in the app: whether the split-half halves read as A-left /",
-  "B-right at a glance, whether 0.55 shape opacity is right under the word labels, and the",
-  "colour bar's `· left A / right B` caption. No default needed changing: **split-half** was the",
-  "user's call and `single_compare_layout` already defaults to **Overlay**, which is the",
-  "split-half path.",
-  "",
-  "**Background (technical).** Both halves use the existing word-box shape pipeline and the same",
-  "metric range, avoiding misleading reader-specific normalization. `global_heatmap_style` stays",
-  "greyed while comparing on purpose — Compare is always word boxes, since an interpolated or",
-  "density layer has no half to split. Regression coverage is `TestComparisonHeatmap` in",
-  "[`tests/test_mode_parity.py`](tests/test_mode_parity.py), whose fixture deliberately uses",
-  "**float** fixation `word_id`s with one `NaN` (the real-corpus shape) — an int-only fixture",
-  "would have passed against the broken join. The mode-parity table in",
-  "`scanpath_studio/CLAUDE.md` is updated for both cells. Related: **AN-19**, **AN-22**,",
-  "**VIZ-21/23** (mode gating)."
-   ]
+  "request": [
+   "The word-level heatmap is single-scanpath only; in compare mode there's no",
+   "heatmap view. Support two scanpaths in one heatmap by **splitting each word box**",
+   "— e.g. left/top half tinted by reader A's measure, right/bottom half by reader B",
+   "— on a shared colour scale, so per-word differences are readable at a glance",
+   "without a separate difference plot. Renders through the existing",
+   "`layout.shapes` heatmap path in [`plots.py`](scanpath_studio/plots.py). Related:",
+   "**AN-19** (difference word profile), **AN-22** (stacked two-group heatmap)."
+  ],
+  "whatWasDone": [
+   "Compare mode supports split-half, side-by-side, and stacked word",
+   "heatmaps for readers A/B on one shared colour scale and colour bar — and, after the",
+   "2026-08-07 report, they now actually draw. **Both** symptoms the user saw were real, and",
+   "they were two separate bugs:",
+   "",
+   "1. *No heatmap.* The per-word values are joined to the word boxes by `word_id`, across two",
+   "   frames that disagree on dtype: boxes carry an `int64` id, fixations a `float64` one (it is",
+   "   `NaN` wherever a fixation landed outside every box). `str()` on each side therefore",
+   "   compared `\"7\"` against `\"7.0\"`, every word scored 0, `_comparison_heatmap_shapes`",
+   "   skipped every box on `value <= 0`, and the layer came out **empty on all three layouts**",
+   "   — reproduced on the bundled demo at 0 shapes, now 156. Both sides go through a new",
+   "   `plots._word_id_keys`, which drops the decimal tail on whole numbers and leaves",
+   "   non-numeric ids alone (string word ids still join).",
+   "2. *Fixations drawn with the toggle off.* That part was by design and wrong for this",
+   "   feature: `show_fix` was gated static-only, so Compare always drew both marker sets —",
+   "   which buries the split boxes the mode exists to show. `make_comparison_figure` /",
+   "   `_make_split_comparison_figure` now take `show_fixations`, `tabs._render_comparison_figure`",
+   "   passes `viz_settings[\"show_fix\"]`, and the rail's toggle is un-gated in Compare (still",
+   "   gated in Animate, where the replay *is* the trail). Saccades keep their own toggle, so a",
+   "   lines-only comparison still works."
+  ],
+  "whatsLeft": [
+   "The user's review — the layouts have never been eyeballed, since nothing",
+   "rendered before. Worth checking in the app: whether the split-half halves read as A-left /",
+   "B-right at a glance, whether 0.55 shape opacity is right under the word labels, and the",
+   "colour bar's `· left A / right B` caption. No default needed changing: **split-half** was the",
+   "user's call and `single_compare_layout` already defaults to **Overlay**, which is the",
+   "split-half path."
+  ],
+  "background": [
+   "Both halves use the existing word-box shape pipeline and the same",
+   "metric range, avoiding misleading reader-specific normalization. `global_heatmap_style` stays",
+   "greyed while comparing on purpose — Compare is always word boxes, since an interpolated or",
+   "density layer has no half to split. Regression coverage is `TestComparisonHeatmap` in",
+   "[`tests/test_mode_parity.py`](tests/test_mode_parity.py), whose fixture deliberately uses",
+   "**float** fixation `word_id`s with one `NaN` (the real-corpus shape) — an int-only fixture",
+   "would have passed against the broken join. The mode-parity table in",
+   "`scanpath_studio/CLAUDE.md` is updated for both cells. Related: **AN-19**, **AN-22**,",
+   "**VIZ-21/23** (mode gating)."
+  ]
   },
   {
   "id": "CMP-9",
@@ -597,14 +634,15 @@ window.TRACKER = {
   "group": "Compare mode",
   "subgroup": "",
   "archived": false,
-  "body": [
-   "**Request.** Split out of **UX-31** on the user's call (2026-08-08): Compare",
+  "request": [
+   "Split out of **UX-31** on the user's call (2026-08-08): Compare",
    "mode is UI-only. `plots.make_comparison_figure` exists and is fully featured,",
    "but neither `scanpath-studio render` nor `sps.plot_scanpath` can produce a",
    "comparison figure, so a two-scanpath figure cannot be scripted, batch-rendered",
-   "or dropped into a paper pipeline — only clicked.",
-   "",
-   "**What was done.** Built alongside **CMP-11** (2026-08-12), which the user",
+   "or dropped into a paper pipeline — only clicked."
+  ],
+  "whatWasDone": [
+   "Built alongside **CMP-11** (2026-08-12), which the user",
    "asked to ship on all four surfaces — so this rode with it rather than waiting.",
    "`api.compare_scanpaths` ([`api.py`](scanpath_studio/api.py)) wraps",
    "`make_comparison_figure`: `(words, fixations, trial_a, trial_b)` plus `layout`,",
@@ -617,9 +655,10 @@ window.TRACKER = {
    "`--compare-layout`, `--compare-stimulus`, `--compare-words`/",
    "`--compare-fixations`, `--compare-dataset-name`, `--compare-canvas`, and the",
    "`--monitor-mm`/`--viewing-distance` pairs. `tests/test_api_compare.py` (14) and",
-   "12 new CLI tests cover both, including the cross-dataset id-collision case.",
-   "",
-   "**What's left.** Your review. Three judgement calls worth a look: (1) **headless",
+   "12 new CLI tests cover both, including the cross-dataset id-collision case."
+  ],
+  "whatsLeft": [
+   "Your review. Three judgement calls worth a look: (1) **headless",
    "raises where the app resolves** — an incomparable overlay is a `ValueError`, not",
    "a silent fall back to side-by-side, on the grounds that a script can't see which",
    "layout it got; (2) **the CLI loads a second dataset from files only** —",
@@ -628,9 +667,10 @@ window.TRACKER = {
    "`compare_scanpaths` takes frames directly so Python callers are unrestricted;",
    "(3) **`--monitor-mm` / `--viewing-distance` are accepted but unread** — nothing",
    "converts to degrees any more (see **CMP-12**), and they are there to complete",
-   "the setup snapshot rather than to affect this render.",
-   "",
-   "**Background (technical).** This was a **four-surface-rule** gap (`AGENTS.md` →",
+   "the setup snapshot rather than to affect this render."
+  ],
+  "background": [
+   "This was a **four-surface-rule** gap (`AGENTS.md` →",
    "*Exposing a feature on every surface*). **ENG-28** landing first made it much",
    "smaller than the original estimate: the builder takes one `FigureSettings`",
    "rather than 45 parameters, so `compare_scanpaths` composes a settings object",
@@ -658,90 +698,93 @@ window.TRACKER = {
   "group": "Compare mode",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Comparison assumes both scanpaths come from the same loaded dataset (and,",
-    "for the overlay, the same text). Allow picking scanpath A and B from **different**",
-    "datasets \u2014 the same text read under two corpora, or a reader from one study against a",
-    "reader from another. Hard part isn't the UI: it's reconciling coordinate spaces, screen",
-    "geometry and stimulus layout between corpora, plus column sets that only partly overlap.",
-    "Depends on **CMP-5**.",
-    "",
-    "**What was done.** All eight steps of the plan's build order",
-    "([`plans/cmp-8-cross-dataset-compare.md`](plans/cmp-8-cross-dataset-compare.md) \u00a711).",
-    "**\u00a71 per-dataset setup snapshot:** `experimental_setup.SetupSnapshot` (canvas \u00b7 physical",
-    "size \u00b7 viewing distance \u00b7 typography, each with a `Provenance`) + `app.resolve_source_monitor`",
-    "lifted out of `seed_canvas_state` so there is one source\u2192monitor table; this fixed a live",
-    "bug on its own (a stored upload declared no geometry, so switching to one left the figure",
-    "on the *previous* source's monitor). **\u00a75.2:** the nine `controls.py` filter helpers take a",
-    "key `prefix` (default `\"\"`, existing call sites byte-identical) and the clear-sweep matches",
-    "its own namespace \u2014 `\"filter_\"` is a prefix of `\"cmpfilter_\"`, so the old prefix-blind sweep",
-    "would have wiped B along with A. **\u00a72 + \u00a75.1:** new `compare_source.py` \u2014",
-    "`secondary_dataset_options()` / `load_secondary_dataset()` \u2192 `SecondaryDataset`, feeding a",
-    "**Compare with** selectbox (`tabs._render_compare_dataset_picker`) with B's own `cmp`-prefixed",
-    "Narrow-by row beside it. **\u00a73:** `tabs._qualify_for_compare` namespaces B's `participant_id`",
-    "in the throwaway compare frames, `_align_compare_columns` reindexes both onto the column",
-    "union and reports the shared-numeric intersection, `_build_compare_meta(source=\u2026)` extracts",
-    "from B's frames and returns B's own `dataset` / `text_id` / `setup`. **\u00a74:**",
-    "`FigureSettings.canvas_b` + `background_image_b*`, honoured per panel in",
-    "`plots._make_split_comparison_figure` (axis ranges, label-fit size, coordinate-grid reserve,",
-    "background image). **\u00a75.3/\u00a75.4:** Overlay and dual animation resolve away for a cross-dataset",
-    "pair *without rewriting the stored choice*, a caption names both monitors, and an unshared",
-    "metric falls back with a note. **\u00a76:** `export.pair_export` + `ComparisonSide` write the",
-    "`<A>__vs__<B>/` bundle (figure, both tables with a `dataset` column, `plot_config.json` with a",
-    "`datasets` block naming both sources and both setups), surfaced as \u2696\ufe0f *Download this",
-    "comparison as a bundle* in Export \u2192 This trial. **\u00a77:** `compare` + `cmp_source` on the share",
-    "link, pinned in `session_keys.py`. Docs: a *Comparing across datasets* section in",
-    "`docs/guides/scanpath-visualization.md`.",
-    "",
-    "**What's left.** (1) **CMP-9 still owes compare mode a CLI + headless surface.** The",
-    "plan says to sequence CMP-9 *before* CMP-8's \u00a77 or CMP-8 ships UI-only and widens the",
-    "gap CMP-9 exists to close; \u00a77 shipped first anyway, so the share link now round-trips a",
-    "comparison that `api`/`render` still cannot express. Not a blocker \u2014 the B-side figure",
-    "fields are excluded from `STATIC_FIGURE_OPTIONS`, so the documented option table stays",
-    "honest \u2014 but it is real remaining work, tracked as **CMP-9**. (2) Your review, on four",
-    "judgement calls. (1) **\u00a77 grew**: the plan assumed",
-    "\"the share link already names B's exact (participant, trial)\" \u2014 it does not; compare mode",
-    "had **no** link representation at all (Animate has `?tab=animation`, Compare had nothing).",
-    "A `cmp_source` alone would have pinned a param that restores nothing, so `compare=<pid>:<trial>`",
-    "was added with it, which also makes *same-dataset* compare shareable for the first time.",
-    "Check you want that. (2) **Overlay is gated with a caption, not a disabled option** \u2014",
-    "Streamlit's `segmented_control` has no per-option disable, so the three options stay and an",
-    "amber caption explains the resolve; the plan's wording asked for `disabled`. (3) **Dual",
-    "animation is gated too**, which the plan doesn't mention: Animate+Compare co-animates on one",
-    "clock, i.e. an overlay, so it hits the same one-coordinate-space problem. (4) **Live check on",
-    "a real second corpus** \u2014 the plan's \u00a710 asks for demo-vs-PoTeC side-by-side and stacked, with",
-    "and without word boxes/heatmap, confirming each panel's boxes sit true-to-scale on its own",
-    "monitor and that the bundle re-identifies both sides. I could not do that here: PoTeC isn't",
-    "downloaded in this checkout and the preview harness can't run this app, so the cross-corpus",
-    "path is covered by tests and the *demo vs. synthetic* AppTest flow only. The two repo",
-    "subagents (`surface-parity-reviewer`, `perf-reviewer`) were not run \u2014 not available in the",
-    "session.",
-    "",
-    "**Background (technical).** Three seams kept the change small: the split comparison layouts",
-    "already computed `_compute_axis_ranges` per panel (so they tolerated two coordinate spaces",
-    "before this work \u2014 only the shared canvas and single background image had to become",
-    "per-panel); `_build_compare_meta` is the single place B's frames are extracted; and the two",
-    "scanpaths stay separate frames until the `cmp_words`/`cmp_fixations` concat. **The rule the",
-    "whole thing rests on:** the namespacing is confined to the throwaway compare frames. Two",
-    "corpora holding the same `(participant_id, trial_id)` would otherwise make",
-    "`make_comparison_figure` slice the same rows twice and draw *both* scanpaths in *both*",
-    "panels \u2014 correct-looking and wrong. `tests/test_compare_cross_dataset.py` asserts per-*panel*",
-    "y-values for exactly this reason: a \"both values appear somewhere in the figure\" check passes",
-    "on the bug (verified by reintroducing it). Everything user-facing keeps the corpus' own ids",
-    "(`compare_meta[\"raw_participant\"]`, `_unqualify_for_export`) \u2014 annotations, export slugs and",
-    "deep links must never see `dataset \u00b7 pid`. `compare_source.py` may not render, which is why it",
-    "reads the `<prefix>_dir` location state the sidebar loaders already wrote and calls the",
-    "widget-free `datasets.load_*` rather than `prepare_data`; an unready corpus is offered",
-    "*disabled* rather than loaded blind, which would silently fall back to the demo. It imports",
-    "`app` lazily (app \u2192 tabs \u2192 compare_source would close the cycle), the same rule `wizard.py`",
-    "follows. `canvas_b=None` is a true no-op, including whole-figure sizing, so every existing",
-    "same-dataset comparison is byte-identical. The `SetupSnapshot` is the *same* type **DATA-22**",
-    "needed for upload provenance, so the two plans' overlapping designs were unified into one",
-    "rather than built twice. **CMP-9** still owes compare mode a CLI/headless surface; \u00a77 names",
-    "the spelling it should adopt (`compare_with=(source, participant, trial)`). Overlay across",
-    "datasets stays **CMP-11**. Related: **CMP-11**, **CMP-9**, **CMP-5**, **DATA-2**, **DATA-22**,",
-    "**CMP-7**, **CMP-10**."
-   ]
+  "request": [
+   "Comparison assumes both scanpaths come from the same loaded dataset (and,",
+   "for the overlay, the same text). Allow picking scanpath A and B from **different**",
+   "datasets \u2014 the same text read under two corpora, or a reader from one study against a",
+   "reader from another. Hard part isn't the UI: it's reconciling coordinate spaces, screen",
+   "geometry and stimulus layout between corpora, plus column sets that only partly overlap.",
+   "Depends on **CMP-5**."
+  ],
+  "whatWasDone": [
+   "All eight steps of the plan's build order",
+   "([`plans/cmp-8-cross-dataset-compare.md`](plans/cmp-8-cross-dataset-compare.md) \u00a711).",
+   "**\u00a71 per-dataset setup snapshot:** `experimental_setup.SetupSnapshot` (canvas \u00b7 physical",
+   "size \u00b7 viewing distance \u00b7 typography, each with a `Provenance`) + `app.resolve_source_monitor`",
+   "lifted out of `seed_canvas_state` so there is one source\u2192monitor table; this fixed a live",
+   "bug on its own (a stored upload declared no geometry, so switching to one left the figure",
+   "on the *previous* source's monitor). **\u00a75.2:** the nine `controls.py` filter helpers take a",
+   "key `prefix` (default `\"\"`, existing call sites byte-identical) and the clear-sweep matches",
+   "its own namespace \u2014 `\"filter_\"` is a prefix of `\"cmpfilter_\"`, so the old prefix-blind sweep",
+   "would have wiped B along with A. **\u00a72 + \u00a75.1:** new `compare_source.py` \u2014",
+   "`secondary_dataset_options()` / `load_secondary_dataset()` \u2192 `SecondaryDataset`, feeding a",
+   "**Compare with** selectbox (`tabs._render_compare_dataset_picker`) with B's own `cmp`-prefixed",
+   "Narrow-by row beside it. **\u00a73:** `tabs._qualify_for_compare` namespaces B's `participant_id`",
+   "in the throwaway compare frames, `_align_compare_columns` reindexes both onto the column",
+   "union and reports the shared-numeric intersection, `_build_compare_meta(source=\u2026)` extracts",
+   "from B's frames and returns B's own `dataset` / `text_id` / `setup`. **\u00a74:**",
+   "`FigureSettings.canvas_b` + `background_image_b*`, honoured per panel in",
+   "`plots._make_split_comparison_figure` (axis ranges, label-fit size, coordinate-grid reserve,",
+   "background image). **\u00a75.3/\u00a75.4:** Overlay and dual animation resolve away for a cross-dataset",
+   "pair *without rewriting the stored choice*, a caption names both monitors, and an unshared",
+   "metric falls back with a note. **\u00a76:** `export.pair_export` + `ComparisonSide` write the",
+   "`<A>__vs__<B>/` bundle (figure, both tables with a `dataset` column, `plot_config.json` with a",
+   "`datasets` block naming both sources and both setups), surfaced as \u2696\ufe0f *Download this",
+   "comparison as a bundle* in Export \u2192 This trial. **\u00a77:** `compare` + `cmp_source` on the share",
+   "link, pinned in `session_keys.py`. Docs: a *Comparing across datasets* section in",
+   "`docs/guides/scanpath-visualization.md`."
+  ],
+  "whatsLeft": [
+   "(1) **CMP-9 still owes compare mode a CLI + headless surface.** The",
+   "plan says to sequence CMP-9 *before* CMP-8's \u00a77 or CMP-8 ships UI-only and widens the",
+   "gap CMP-9 exists to close; \u00a77 shipped first anyway, so the share link now round-trips a",
+   "comparison that `api`/`render` still cannot express. Not a blocker \u2014 the B-side figure",
+   "fields are excluded from `STATIC_FIGURE_OPTIONS`, so the documented option table stays",
+   "honest \u2014 but it is real remaining work, tracked as **CMP-9**. (2) Your review, on four",
+   "judgement calls. (1) **\u00a77 grew**: the plan assumed",
+   "\"the share link already names B's exact (participant, trial)\" \u2014 it does not; compare mode",
+   "had **no** link representation at all (Animate has `?tab=animation`, Compare had nothing).",
+   "A `cmp_source` alone would have pinned a param that restores nothing, so `compare=<pid>:<trial>`",
+   "was added with it, which also makes *same-dataset* compare shareable for the first time.",
+   "Check you want that. (2) **Overlay is gated with a caption, not a disabled option** \u2014",
+   "Streamlit's `segmented_control` has no per-option disable, so the three options stay and an",
+   "amber caption explains the resolve; the plan's wording asked for `disabled`. (3) **Dual",
+   "animation is gated too**, which the plan doesn't mention: Animate+Compare co-animates on one",
+   "clock, i.e. an overlay, so it hits the same one-coordinate-space problem. (4) **Live check on",
+   "a real second corpus** \u2014 the plan's \u00a710 asks for demo-vs-PoTeC side-by-side and stacked, with",
+   "and without word boxes/heatmap, confirming each panel's boxes sit true-to-scale on its own",
+   "monitor and that the bundle re-identifies both sides. I could not do that here: PoTeC isn't",
+   "downloaded in this checkout and the preview harness can't run this app, so the cross-corpus",
+   "path is covered by tests and the *demo vs. synthetic* AppTest flow only. The two repo",
+   "subagents (`surface-parity-reviewer`, `perf-reviewer`) were not run \u2014 not available in the",
+   "session."
+  ],
+  "background": [
+   "Three seams kept the change small: the split comparison layouts",
+   "already computed `_compute_axis_ranges` per panel (so they tolerated two coordinate spaces",
+   "before this work \u2014 only the shared canvas and single background image had to become",
+   "per-panel); `_build_compare_meta` is the single place B's frames are extracted; and the two",
+   "scanpaths stay separate frames until the `cmp_words`/`cmp_fixations` concat. **The rule the",
+   "whole thing rests on:** the namespacing is confined to the throwaway compare frames. Two",
+   "corpora holding the same `(participant_id, trial_id)` would otherwise make",
+   "`make_comparison_figure` slice the same rows twice and draw *both* scanpaths in *both*",
+   "panels \u2014 correct-looking and wrong. `tests/test_compare_cross_dataset.py` asserts per-*panel*",
+   "y-values for exactly this reason: a \"both values appear somewhere in the figure\" check passes",
+   "on the bug (verified by reintroducing it). Everything user-facing keeps the corpus' own ids",
+   "(`compare_meta[\"raw_participant\"]`, `_unqualify_for_export`) \u2014 annotations, export slugs and",
+   "deep links must never see `dataset \u00b7 pid`. `compare_source.py` may not render, which is why it",
+   "reads the `<prefix>_dir` location state the sidebar loaders already wrote and calls the",
+   "widget-free `datasets.load_*` rather than `prepare_data`; an unready corpus is offered",
+   "*disabled* rather than loaded blind, which would silently fall back to the demo. It imports",
+   "`app` lazily (app \u2192 tabs \u2192 compare_source would close the cycle), the same rule `wizard.py`",
+   "follows. `canvas_b=None` is a true no-op, including whole-figure sizing, so every existing",
+   "same-dataset comparison is byte-identical. The `SetupSnapshot` is the *same* type **DATA-22**",
+   "needed for upload provenance, so the two plans' overlapping designs were unified into one",
+   "rather than built twice. **CMP-9** still owes compare mode a CLI/headless surface; \u00a77 names",
+   "the spelling it should adopt (`compare_with=(source, participant, trial)`). Overlay across",
+   "datasets stays **CMP-11**. Related: **CMP-11**, **CMP-9**, **CMP-5**, **DATA-2**, **DATA-22**,",
+   "**CMP-7**, **CMP-10**."
+  ]
   },
   {
    "id": "CMP-10",
@@ -811,17 +854,18 @@ window.TRACKER = {
    "group": "Compare mode",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Split out of **CMP-8** on the user's call (2026-08-12). CMP-8 puts two",
+   "request": [
+    "Split out of **CMP-8** on the user's call (2026-08-12). CMP-8 puts two",
     "scanpaths from different datasets side by side or stacked, where each panel keeps its",
     "own coordinate space; the **overlay** layout is deliberately blocked there. This item",
     "is the overlay. As filed it asked for an **Align by** control with three modes —",
     "*Screen pixels*, *Visual angle* (px/degree rescaling per corpus) and *Text box*. The",
     "user **withdrew that mid-design** (2026-08-12): *\"allow overlay of different datasets",
     "only if they have the same setup\"*. What shipped is a gate, not a transform. The",
-    "rescaling half is **CMP-12**.",
-    "",
-    "**What was done.** `experimental_setup.setups_comparable(a, b) -> (allowed, note)`",
+    "rescaling half is **CMP-12**."
+   ],
+   "whatWasDone": [
+    "`experimental_setup.setups_comparable(a, b) -> (allowed, note)`",
     "([`experimental_setup.py`](scanpath_studio/experimental_setup.py)) is the one",
     "predicate, and **equal canvases are its only hard gate**. Different screens ->",
     "`(False, reason)` and the layout resolves to Side by side. Matching canvases that",
@@ -845,9 +889,10 @@ window.TRACKER = {
     "ride the share link and the saved config's new `compare_view` section. Tests:",
     "`tests/test_setup_comparable.py` (7), a rewritten `TestOverlayGate` that drives the",
     "real gate instead of re-implementing it, and `TestCompareStimulusSource`. CMP-9's",
-    "CLI/API surface rode along.",
-    "",
-    "**What's left.** Your review. The gate loosened **twice** during the work, so the",
+    "CLI/API surface rode along."
+   ],
+   "whatsLeft": [
+    "Your review. The gate loosened **twice** during the work, so the",
     "thing to confirm is that it has landed where you want it. (1) The first cut also",
     "required physical geometry to match — dropped, because every built-in corpus",
     "hard-codes `geometry: ASSUMED` ([`app.py:2253`](scanpath_studio/app.py:2253),",
@@ -885,9 +930,10 @@ window.TRACKER = {
     "though the `TypeError` text points callers at it; and `cmp_layout`/",
     "`cmp_stimulus` rode *every* later share link (both keys persist), including",
     "ones where `compare=` was deliberately withheld — they now travel only with a",
-    "comparison, with a positive control test so the assertion cannot go vacuous.",
-    "",
-    "**Background (technical).** Design doc:",
+    "comparison, with a positive control test so the assertion cannot go vacuous."
+   ],
+   "background": [
+    "Design doc:",
     "[`plans/cmp-11-cross-dataset-overlay.md`](plans/cmp-11-cross-dataset-overlay.md).",
     "`plots._render_comparison_figure`'s overlay branch computes ONE `_compute_axis_ranges`",
     "over both trials — correct once, and only once, the two screens are the same, which is",
@@ -918,16 +964,17 @@ window.TRACKER = {
    "group": "Compare mode",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The half of **CMP-11** the user dropped on 2026-08-12. CMP-11 allows a",
+   "request": [
+    "The half of **CMP-11** the user dropped on 2026-08-12. CMP-11 allows a",
     "cross-dataset overlay only when both corpora used the same screen; a pair recorded on",
     "two different monitors still falls back to side-by-side panels. This item is the",
     "**Align by** control that would let those overlay too: *Visual angle* (scale each",
     "reading by its own px/degree so one degree is one degree on both) and *Text box*",
     "(translate + scale so the two texts' bounding boxes coincide — the pragmatic one for a",
-    "corpus that never recorded its physical setup).",
-    "",
-    "**Background (technical).** Dropped on purpose rather than deferred by accident: a",
+    "corpus that never recorded its physical setup)."
+   ],
+   "background": [
+    "Dropped on purpose rather than deferred by accident: a",
     "rescaled overlay asserts a physical equivalence the data usually cannot support, and —",
     "the decisive point — **no bundled corpus records the measurements visual angle needs.**",
     "Every built-in hard-codes `geometry: ASSUMED`",
@@ -1087,23 +1134,26 @@ window.TRACKER = {
   "group": "Visualization & display",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Split out of VIZ-4 (2026-07-03). The `image_path` / `image_x` / `image_y` column",
-    "convention already lets *any* dataset declare embedded/absolute per-trial images,",
-    "and an uploaded image can be aligned via VIZ-4's **Align to text** controls. What's",
-    "still missing is the case the user raised — a dataset that stores images **on disk",
-    "keyed by a column value**: a UI to point at an **image folder** + a **filename",
-    "pattern / column** (e.g. `{text_id}.png`) so per-trial images resolve without",
-    "embedding them. Local-only (folders aren't reachable on the hosted demo); generalize",
-    "`data._resolve_sample_image_paths` from the bundled `sample_data` dir to a",
-    "user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus.",
-    "",
-    "**What was done.** Added local folder/pattern controls, a safe resolver, API arguments, and CLI flags for per-row stimulus-image lookup.",
-    "",
-    "**What's left.** User approval and validation against the user's real folder convention.",
-    "",
-    "**Background (technical).** Resolved paths must remain beneath the selected root; missing files preserve any existing image path instead of failing the dataset."
-   ]
+  "request": [
+   "Split out of VIZ-4 (2026-07-03). The `image_path` / `image_x` / `image_y` column",
+   "convention already lets *any* dataset declare embedded/absolute per-trial images,",
+   "and an uploaded image can be aligned via VIZ-4's **Align to text** controls. What's",
+   "still missing is the case the user raised — a dataset that stores images **on disk",
+   "keyed by a column value**: a UI to point at an **image folder** + a **filename",
+   "pattern / column** (e.g. `{text_id}.png`) so per-trial images resolve without",
+   "embedding them. Local-only (folders aren't reachable on the hosted demo); generalize",
+   "`data._resolve_sample_image_paths` from the bundled `sample_data` dir to a",
+   "user-supplied root. Keep it deferred until someone needs it on a real on-disk corpus."
+  ],
+  "whatWasDone": [
+   "Added local folder/pattern controls, a safe resolver, API arguments, and CLI flags for per-row stimulus-image lookup."
+  ],
+  "whatsLeft": [
+   "User approval and validation against the user's real folder convention."
+  ],
+  "background": [
+   "Resolved paths must remain beneath the selected root; missing files preserve any existing image path instead of failing the dataset."
+  ]
   },
   {
   "id": "VIZ-20",
@@ -1118,31 +1168,34 @@ window.TRACKER = {
   "group": "Visualization & display",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Two related asks for making *teaching* and *figure* material rather than showing",
-    "recorded data:",
-    "",
-    "- **Author a scanpath by hand.** Place fixations (position + duration) and their",
-    "  saccades directly on a text to build a scanpath from scratch — the canonical",
-    "  \"this is what a regression looks like\" figure, with no participant data",
-    "  involved. Output should flow through the normal figure/export path, and be",
-    "  saveable/restorable like any other trial.",
-    "- **An \"Illustration\" preset.** A one-click schematic styling — snapped fixations",
-    "  (`fixation_snap_to_word`), arcing saccades (`saccade_render_mode=\"Arc\"`, see",
-    "  **BUG-9** / **BUG-10**), clean uniform colours (**VIZ-17**), no raw noise — so",
-    "  *recorded* data can also be rendered as a diagram. The preset should compose",
-    "  with the existing controls rather than being a separate renderer.",
-    "",
-    "Note: [`synthetic.py`](scanpath_studio/synthetic.py) already builds a fully",
-    "hand-specified trial (the \"Synthetic test trial\" data source) — the same",
-    "construction could back the authoring UI.",
-    "",
-    "**What was done.** Added deterministic text layout, editable fixation events, JSON save/restore, a first-class authored source, and an Illustration preset that flows through normal plotting/export.",
-    "",
-    "**What's left.** User approval and optional refinement of the initial authored event defaults.",
-    "",
-    "**Background (technical).** Authored scanpaths use the canonical word/fixation tables, so deep links, CLI/API rendering, and exports do not need a parallel renderer."
-   ]
+  "request": [
+   "Two related asks for making *teaching* and *figure* material rather than showing",
+   "recorded data:",
+   "",
+   "- **Author a scanpath by hand.** Place fixations (position + duration) and their",
+   "  saccades directly on a text to build a scanpath from scratch — the canonical",
+   "  \"this is what a regression looks like\" figure, with no participant data",
+   "  involved. Output should flow through the normal figure/export path, and be",
+   "  saveable/restorable like any other trial.",
+   "- **An \"Illustration\" preset.** A one-click schematic styling — snapped fixations",
+   "  (`fixation_snap_to_word`), arcing saccades (`saccade_render_mode=\"Arc\"`, see",
+   "  **BUG-9** / **BUG-10**), clean uniform colours (**VIZ-17**), no raw noise — so",
+   "  *recorded* data can also be rendered as a diagram. The preset should compose",
+   "  with the existing controls rather than being a separate renderer.",
+   "",
+   "Note: [`synthetic.py`](scanpath_studio/synthetic.py) already builds a fully",
+   "hand-specified trial (the \"Synthetic test trial\" data source) — the same",
+   "construction could back the authoring UI."
+  ],
+  "whatWasDone": [
+   "Added deterministic text layout, editable fixation events, JSON save/restore, a first-class authored source, and an Illustration preset that flows through normal plotting/export."
+  ],
+  "whatsLeft": [
+   "User approval and optional refinement of the initial authored event defaults."
+  ],
+  "background": [
+   "Authored scanpaths use the canonical word/fixation tables, so deep links, CLI/API rendering, and exports do not need a parallel renderer."
+  ]
   },
   {
    "id": "VIZ-21",
@@ -1215,48 +1268,51 @@ window.TRACKER = {
   "group": "Visualization & display",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Several controls change *where the data is drawn*, not just how it looks — and a",
-    "figure exported with one of them on is indistinguishable from a faithful one once",
-    "it's in a slide deck or a paper. Stamp such a figure with a small **Illustration**",
-    "(or *schematic — not to scale*) sign so the distinction survives the export.",
-    "",
-    "The cases where the drawing stops being the recording:",
-    "",
-    "- **`fixation_snap_to_word`** — fixations moved to sit above their word, not where",
-    "  the eye landed.",
-    "- **`saccade_render_mode=\"Arc\"`** — saccades arched rather than straight",
-    "  (**VIZ-9**).",
-    "- **Drift correction** (`global_align_algorithm`, **PRE-3**) — fixation *y* is an",
-    "  algorithm's estimate, not the measurement.",
-    "- **`fixation_flags` → Discard** (**PRE-2**) — fixations hidden from the plot while",
-    "  saccades still bridge across them, so the path looks continuous.",
-    "- **Fixation-index range** (**VIZ-7**) — a subset shown as if it were the trial.",
-    "- **Synthetic sources** — the \"Synthetic test trial\" data source and the demo's",
-    "  synthesized `raw_gaze` (**DATA-15**), which look like recordings and aren't.",
-    "",
-    "Design questions to settle: one generic sign or a short reason (*\"snapped ·",
-    "drift-corrected\"*)? Automatic with a manual override, or opt-in? Cosmetic-only",
-    "settings (colour, marker size, opacity) must **not** trigger it, or the sign stops",
-    "meaning anything. Implementation is a paper-referenced `fig.add_annotation` in",
-    "[`plots.py`](scanpath_studio/plots.py) so it rides along into PNG/SVG export",
-    "(including each layer of **VIZ-5**'s separable export), and it should be recorded",
-    "in the export metadata as well as drawn.",
-    "",
-    "Needs all four surfaces (*AGENTS.md → Exposing a feature on every surface*): the",
-    "rail control, the deep link / Share, the CLI flag, and the headless API — a",
-    "headless render of a snapped figure should carry the same sign the app draws.",
-    "",
-    "Related: **VIZ-20** (an *Illustration* preset would switch this on by definition),",
-    "**VIZ-21** (auditing which settings actually apply per render path overlaps with",
-    "auditing which ones distort), **DATA-15**, **PRE-3**, **PRE-9**.",
-    "",
-    "**What was done.** Added automatic reason detection, Auto/Show/Hide controls, an exported figure annotation, metadata, deep-link/save support, CLI flags, and API parameters.",
-    "",
-    "**What's left.** User approval of the label wording and placement.",
-    "",
-    "**Background (technical).** Only semantic geometry/data changes trigger disclosure; palette and other cosmetic styling do not."
-   ]
+  "request": [
+   "Several controls change *where the data is drawn*, not just how it looks — and a",
+   "figure exported with one of them on is indistinguishable from a faithful one once",
+   "it's in a slide deck or a paper. Stamp such a figure with a small **Illustration**",
+   "(or *schematic — not to scale*) sign so the distinction survives the export.",
+   "",
+   "The cases where the drawing stops being the recording:",
+   "",
+   "- **`fixation_snap_to_word`** — fixations moved to sit above their word, not where",
+   "  the eye landed.",
+   "- **`saccade_render_mode=\"Arc\"`** — saccades arched rather than straight",
+   "  (**VIZ-9**).",
+   "- **Drift correction** (`global_align_algorithm`, **PRE-3**) — fixation *y* is an",
+   "  algorithm's estimate, not the measurement.",
+   "- **`fixation_flags` → Discard** (**PRE-2**) — fixations hidden from the plot while",
+   "  saccades still bridge across them, so the path looks continuous.",
+   "- **Fixation-index range** (**VIZ-7**) — a subset shown as if it were the trial.",
+   "- **Synthetic sources** — the \"Synthetic test trial\" data source and the demo's",
+   "  synthesized `raw_gaze` (**DATA-15**), which look like recordings and aren't.",
+   "",
+   "Design questions to settle: one generic sign or a short reason (*\"snapped ·",
+   "drift-corrected\"*)? Automatic with a manual override, or opt-in? Cosmetic-only",
+   "settings (colour, marker size, opacity) must **not** trigger it, or the sign stops",
+   "meaning anything. Implementation is a paper-referenced `fig.add_annotation` in",
+   "[`plots.py`](scanpath_studio/plots.py) so it rides along into PNG/SVG export",
+   "(including each layer of **VIZ-5**'s separable export), and it should be recorded",
+   "in the export metadata as well as drawn.",
+   "",
+   "Needs all four surfaces (*AGENTS.md → Exposing a feature on every surface*): the",
+   "rail control, the deep link / Share, the CLI flag, and the headless API — a",
+   "headless render of a snapped figure should carry the same sign the app draws.",
+   "",
+   "Related: **VIZ-20** (an *Illustration* preset would switch this on by definition),",
+   "**VIZ-21** (auditing which settings actually apply per render path overlaps with",
+   "auditing which ones distort), **DATA-15**, **PRE-3**, **PRE-9**."
+  ],
+  "whatWasDone": [
+   "Added automatic reason detection, Auto/Show/Hide controls, an exported figure annotation, metadata, deep-link/save support, CLI flags, and API parameters."
+  ],
+  "whatsLeft": [
+   "User approval of the label wording and placement."
+  ],
+  "background": [
+   "Only semantic geometry/data changes trigger disclosure; palette and other cosmetic styling do not."
+  ]
   },
   {
   "id": "DATA-1",
@@ -1271,24 +1327,28 @@ window.TRACKER = {
   "group": "Datasets & ingestion",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "> **In progress.** Dataset support is an ongoing epic; completed and open adapters",
-    "> are tracked as their own tasks.",
-    "",
-    "**Request.** Load more corpora beyond the bundled sample and OneStop through",
-    "first-class dataset adapters.",
-    "",
-    "**What was done.** The shared dataset-loading foundation and adapters for the",
-    "bundled sample, OneStop, MultiplEYE, and PoTeC are in place.",
-    "",
-    "**What's left.** Continue the open corpus adapters and compatibility work,",
-    "including EyeLink `.asc` import (**PRE-7**), RTL/multilingual rendering",
-    "(**PRE-6**), and non-English validation (**VAL-3**).",
-    "",
-    "**Background (technical).** Per-dataset adapters live in",
-    "[`datasets.py`](scanpath_studio/datasets.py) and",
-    "[`data.py`](scanpath_studio/data.py)."
-   ]
+  "statusNote": [
+   "> **In progress.** Dataset support is an ongoing epic; completed and open adapters",
+   "> are tracked as their own tasks."
+  ],
+  "request": [
+   "Load more corpora beyond the bundled sample and OneStop through",
+   "first-class dataset adapters."
+  ],
+  "whatWasDone": [
+   "The shared dataset-loading foundation and adapters for the",
+   "bundled sample, OneStop, MultiplEYE, and PoTeC are in place."
+  ],
+  "whatsLeft": [
+   "Continue the open corpus adapters and compatibility work,",
+   "including EyeLink `.asc` import (**PRE-7**), RTL/multilingual rendering",
+   "(**PRE-6**), and non-English validation (**VAL-3**)."
+  ],
+  "background": [
+   "Per-dataset adapters live in",
+   "[`datasets.py`](scanpath_studio/datasets.py) and",
+   "[`data.py`](scanpath_studio/data.py)."
+  ]
   },
   {
    "id": "DATA-2",
@@ -1303,25 +1363,28 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Fold experimental-setup values—screen resolution, physical monitor",
+   "request": [
+    "Fold experimental-setup values—screen resolution, physical monitor",
     "size, viewing distance, DPI, and stimulus font points—into the display/data",
     "settings so true-to-scale rendering and the px↔pt guidance (**VIZ-1**) use an",
-    "explicit setup rather than hidden assumptions.",
-    "",
-    "**What was done.** The shared **Experimental Setup** panel now holds monitor pixels,",
+    "explicit setup rather than hidden assumptions."
+   ],
+   "whatWasDone": [
+    "The shared **Experimental Setup** panel now holds monitor pixels,",
     "physical width, viewing distance, DPI, line spacing, stimulus font points, and",
     "font family. It reports px/degree immediately, can convert pt→px when box-based",
     "text sizing is off, and is reused inside the upload wizard. The values are written",
     "to shared `global_*` keys and round-trip through 💾 Save & restore under the",
     "`experimental_setup` section. Pure conversions live in",
-    "[`experimental_setup.py`](scanpath_studio/experimental_setup.py).",
-    "",
-    "**What's left.** Nothing for this scope. The physical values are now available to",
+    "[`experimental_setup.py`](scanpath_studio/experimental_setup.py)."
+   ],
+   "whatsLeft": [
+    "Nothing for this scope. The physical values are now available to",
     "downstream features, but no new degree-of-visual-angle analysis was added beyond",
-    "the displayed px/degree conversion.",
-    "",
-    "**Background (technical).** `app.render_sidebar_canvas_controls` is the single UI",
+    "the displayed px/degree conversion."
+   ],
+   "background": [
+    "`app.render_sidebar_canvas_controls` is the single UI",
     "owner, so the normal app and upload wizard cannot diverge. Config restoration is",
     "handled in [`url_state.py`](scanpath_studio/url_state.py); conversion tests are in",
     "[`tests/test_experimental_setup.py`](tests/test_experimental_setup.py). Related:",
@@ -1341,12 +1404,12 @@ window.TRACKER = {
   "group": "Datasets & ingestion",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Add a MECO adapter (the multilingual eye-tracking-while-reading corpus) alongside",
-    "OneStop / MultiplEYE / PoTeC in [`datasets.py`](scanpath_studio/datasets.py).",
-    "Feeds **DATA-1**, and exercises **PRE-6** (RTL / multilingual rendering) and",
-    "**VAL-3** (non-English validation)."
-   ]
+  "request": [
+   "Add a MECO adapter (the multilingual eye-tracking-while-reading corpus) alongside",
+   "OneStop / MultiplEYE / PoTeC in [`datasets.py`](scanpath_studio/datasets.py).",
+   "Feeds **DATA-1**, and exercises **PRE-6** (RTL / multilingual rendering) and",
+   "**VAL-3** (non-English validation)."
+  ]
   },
   {
    "id": "DATA-15",
@@ -1361,22 +1424,24 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
+   "statusNote": [
     "> **In progress.** The *label it* branch shipped 2026-08-02. **User feedback",
     "> 2026-08-03: the labelling is not the end state — the demo should include",
     "> real raw-gaze data, because the lab does have the raw recordings somewhere**",
     "> (the OneStop raw EyeLink data exists in the lab even though the public",
-    "> release ships none). See *What's left*.",
-    "",
-    "**Request.** The demo's `raw_gaze.{csv,parquet}` is **synthesized** from the",
+    "> release ships none). See *What's left*."
+   ],
+   "request": [
+    "The demo's `raw_gaze.{csv,parquet}` is **synthesized** from the",
     "fixation report (`synthesize_raw_gaze` in",
     "[`update_sample_data.py`](scanpath_studio/update_sample_data.py:322), seeded) — it",
     "looks like real eye-tracker output but isn't, so the raw-gaze overlay demos a",
     "plausible fiction. Either ship genuine OneStop raw samples for the bundled",
     "trials, or label it unmistakably as synthetic everywhere it's shown (the overlay",
-    "control, the docs, the export).",
-    "",
-    "**What was done.** The **label** branch (the *public* OneStop release ships no",
+    "control, the docs, the export)."
+   ],
+   "whatWasDone": [
+    "The **label** branch (the *public* OneStop release ships no",
     "sample-level gaze, which is why the demo file was synthesized in the first",
     "place). The caption is identical everywhere: *\"the",
     "demo's raw gaze is **synthesized** from its fixations for illustration — it is",
@@ -1390,9 +1455,10 @@ window.TRACKER = {
     "  the one place the synthetic samples are shown as data rather than dots.",
     "- **Docs** — a note admonition on",
     "  [`docs/getting-started.md`](docs/getting-started.md) (the page that introduces",
-    "  the demo): raw gaze synthetic, words/fixations/measures real.",
-    "",
-    "**What's left.** Ship **real raw-gaze samples** for the bundled demo trials",
+    "  the demo): raw gaze synthetic, words/fixations/measures real."
+   ],
+   "whatsLeft": [
+    "Ship **real raw-gaze samples** for the bundled demo trials",
     "(user, 2026-08-03: *\"we have it somewhere\"* — the lab holds the raw OneStop",
     "EyeLink recordings even though the public release ships none). Steps: locate",
     "the lab's raw recordings (likely the original `.edf`/`.asc` sessions behind",
@@ -1403,9 +1469,10 @@ window.TRACKER = {
     "samples replace the synthesized file, remove the DATA-15 captions (controls,",
     "Data Inspection, getting-started note) and the `synthesize_raw_gaze` path,",
     "and update `tests/test_raw_gaze_sample.py`. Export needed no label either",
-    "way: bulk export writes fixations/measures tables only.",
-    "",
-    "**Background (technical).** The gate reads the `data_source_choice` session key",
+    "way: bulk export writes fixations/measures tables only."
+   ],
+   "background": [
+    "The gate reads the `data_source_choice` session key",
     "(the sidebar source radio) rather than tagging the frame — the synthetic frame",
     "is only ever *loaded* for the demo source (`app.load_raw_gaze_data`), so source",
     "identity is the reliable signal and survives caching. The internal gotcha note",
@@ -1490,26 +1557,29 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Stop presenting Scanpath Studio as a OneStop viewer. Lead with the",
+   "request": [
+    "Stop presenting Scanpath Studio as a OneStop viewer. Lead with the",
     "generic fixation-report + word-box contract and the bring-your-own-data path; keep",
     "bundled/public corpora as examples and reference material rather than the front",
-    "door.",
-    "",
-    "**What was done.** The documentation home, Getting started, tutorials, and feature",
+    "door."
+   ],
+   "whatWasDone": [
+    "The documentation home, Getting started, tutorials, and feature",
     "guides now describe generic research workflows and user-supplied data first. The",
     "top-level Datasets section was removed: OneStop and MultiplEYE now sit under",
     "**Automation & reference → Public corpora**, while **Loading public and own data**",
     "is a primary feature guide and Data format is adjacent reference. Shared copy uses",
     "the bundled corpus as a small demo only; corpus-specific details stay on their own",
-    "appendix pages.",
-    "",
-    "**What's left.** Nothing in the docs-site scope. The README and in-app source labels",
+    "appendix pages."
+   ],
+   "whatsLeft": [
+    "Nothing in the docs-site scope. The README and in-app source labels",
     "were deliberately left alone because this item was implemented as a documentation",
     "information-architecture change; they can receive a separate wording pass if the",
-    "same imbalance remains there.",
-    "",
-    "**Background (technical).** The final navigation is in [`mkdocs.yml`](mkdocs.yml),",
+    "same imbalance remains there."
+   ],
+   "background": [
+    "The final navigation is in [`mkdocs.yml`](mkdocs.yml),",
     "with the canonical loading guidance at",
     "[`docs/guides/loading-data.md`](docs/guides/loading-data.md). Legacy",
     "`bring-your-own-data.md` remains as a short forwarding page so incoming links do",
@@ -1529,23 +1599,27 @@ window.TRACKER = {
   "group": "Performance",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "> **On hold (2026-07-29).** Parked at the user's request; resume from the existing",
-    "> migration branch rather than starting over.",
-    "",
-    "**Request.** Interactivity isn't essential for the core spatial plot; a static renderer should",
-    "be much faster. Keep the spatial plot on the true-scale path.",
-    "",
-    "**What was done.** Work began in",
-    "[PR #83](https://github.com/lacclab/scanpath-studio/pull/83) on the",
-    "`matplotlib-migration` branch.",
-    "",
-    "**What's left.** Unpark the branch, finish the renderer migration, and verify the",
-    "speed improvement without regressing the true-scale spatial path.",
-    "",
-    "**Background (technical).** This is not ordinary next work while it remains On",
-    "hold. PR #83 is the handoff point."
-   ]
+  "statusNote": [
+   "> **On hold (2026-07-29).** Parked at the user's request; resume from the existing",
+   "> migration branch rather than starting over."
+  ],
+  "request": [
+   "Interactivity isn't essential for the core spatial plot; a static renderer should",
+   "be much faster. Keep the spatial plot on the true-scale path."
+  ],
+  "whatWasDone": [
+   "Work began in",
+   "[PR #83](https://github.com/lacclab/scanpath-studio/pull/83) on the",
+   "`matplotlib-migration` branch."
+  ],
+  "whatsLeft": [
+   "Unpark the branch, finish the renderer migration, and verify the",
+   "speed improvement without regressing the true-scale spatial path."
+  ],
+  "background": [
+   "This is not ordinary next work while it remains On",
+   "hold. PR #83 is the handoff point."
+  ]
   },
   {
   "id": "PERF-2",
@@ -1560,17 +1634,20 @@ window.TRACKER = {
   "group": "Performance",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Hypothesis: selecting many columns/measures/metadata fields slows the app.",
-    "**First verify** whether it's actually true (profile a wide vs narrow frame); if",
-    "so, add a note/warning. If not, close this item.",
-    "",
-    "**What was done.** Profiled wide-frame normalization/hashing and added a setup warning at 50 extra fields or five million cells.",
-    "",
-    "**What's left.** User approval; the warning remains advisory because research metadata may be necessary.",
-    "",
-    "**Background (technical).** The measured wide case was materially slower, so the threshold uses both schema width and total cell count rather than file size alone."
-   ]
+  "request": [
+   "Hypothesis: selecting many columns/measures/metadata fields slows the app.",
+   "**First verify** whether it's actually true (profile a wide vs narrow frame); if",
+   "so, add a note/warning. If not, close this item."
+  ],
+  "whatWasDone": [
+   "Profiled wide-frame normalization/hashing and added a setup warning at 50 extra fields or five million cells."
+  ],
+  "whatsLeft": [
+   "User approval; the warning remains advisory because research metadata may be necessary."
+  ],
+  "background": [
+   "The measured wide case was materially slower, so the threshold uses both schema width and total cell count rather than file size alone."
+  ]
   },
   {
   "id": "AN-29",
@@ -1585,38 +1662,41 @@ window.TRACKER = {
   "group": "Analysis & corpus views",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** **AN-28** made the Corpus view *read* the visualization settings; it still has no",
-    "way to *change* them. Every control lives in the Scanpath view's right rail, so",
-    "restyling a corpus figure means switching views, adjusting a control that shows a",
-    "scanpath, and switching back to see what it did — and only the per-text stimulus",
-    "figure responds at all.",
-    "",
-    "Two halves:",
-    "",
-    "- **Controls in the view.** Whatever subset of the rail actually affects these",
-    "  figures should be reachable from Corpus Analysis, so the loop is",
-    "  change→see→change. `controls.sidebar_controls(host=…)` already renders into an",
-    "  arbitrary container, and `viz_settings_from_state` reads the same `global_*`",
-    "  keys, so the plumbing is in place — the design question is *which* controls",
-    "  belong here (most of the rail is about a single scanpath) and whether a Corpus",
-    "  figure's settings are shared with the Scanpath view or its own.",
-    "- **Colour for the non-stimulus figures.** `make_word_profile_figure`,",
-    "  `make_distribution_figure` and `make_difference_profile_figure`",
-    "  ([`plots.py`](scanpath_studio/plots.py)) take no colour or colourscale argument",
-    "  at all — they can't be restyled for print, greyscale, or a colourblind-safe",
-    "  scheme even from the rail. Give them a colour parameter and feed it from the",
-    "  palette (**VIZ-18**) like the scanpath figures.",
-    "",
-    "Whatever ships needs the deep link / Share, CLI and headless API too (*AGENTS.md",
-  "→ Exposing a feature on every surface*). Related: **AN-23**, **AN-24**, **VIZ-18**.",
-  "",
-  "**What was done.** Added focused Corpus Analysis styling controls, shared palette state, colour-aware profile/distribution/difference builders, plus a public corpus-figure API and CLI table surface.",
-  "",
-  "**What's left.** User approval and visual review with the target manuscript palette.",
-  "",
-  "**Background (technical).** The controls reuse the existing global visualization state, so scanpath and corpus views share reproducible settings without duplicating a second state contract."
-   ]
+  "request": [
+   "**AN-28** made the Corpus view *read* the visualization settings; it still has no",
+   "way to *change* them. Every control lives in the Scanpath view's right rail, so",
+   "restyling a corpus figure means switching views, adjusting a control that shows a",
+   "scanpath, and switching back to see what it did — and only the per-text stimulus",
+   "figure responds at all.",
+   "",
+   "Two halves:",
+   "",
+   "- **Controls in the view.** Whatever subset of the rail actually affects these",
+   "  figures should be reachable from Corpus Analysis, so the loop is",
+   "  change→see→change. `controls.sidebar_controls(host=…)` already renders into an",
+   "  arbitrary container, and `viz_settings_from_state` reads the same `global_*`",
+   "  keys, so the plumbing is in place — the design question is *which* controls",
+   "  belong here (most of the rail is about a single scanpath) and whether a Corpus",
+   "  figure's settings are shared with the Scanpath view or its own.",
+   "- **Colour for the non-stimulus figures.** `make_word_profile_figure`,",
+   "  `make_distribution_figure` and `make_difference_profile_figure`",
+   "  ([`plots.py`](scanpath_studio/plots.py)) take no colour or colourscale argument",
+   "  at all — they can't be restyled for print, greyscale, or a colourblind-safe",
+   "  scheme even from the rail. Give them a colour parameter and feed it from the",
+   "  palette (**VIZ-18**) like the scanpath figures.",
+   "",
+   "Whatever ships needs the deep link / Share, CLI and headless API too (*AGENTS.md",
+   "→ Exposing a feature on every surface*). Related: **AN-23**, **AN-24**, **VIZ-18**."
+  ],
+  "whatWasDone": [
+   "Added focused Corpus Analysis styling controls, shared palette state, colour-aware profile/distribution/difference builders, plus a public corpus-figure API and CLI table surface."
+  ],
+  "whatsLeft": [
+   "User approval and visual review with the target manuscript palette."
+  ],
+  "background": [
+   "The controls reuse the existing global visualization state, so scanpath and corpus views share reproducible settings without duplicating a second state contract."
+  ]
   },
   {
    "id": "PRE-0",
@@ -1657,21 +1737,24 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Optional stage between `data.normalize_fixations` and",
-    "`measures.enrich_fixations`/`compute_per_word_measures`. Fixations gain an",
-    "`excluded` flag (soft-exclude, not hard-drop) + a derived-column convention so",
-    "corrections keep the original. New **\"Preprocessing\"** panel, `global_preproc_*`",
-    "keys, off by default, with a recompute trigger. Fold preproc settings into the",
-    "cache key (don't break the OneStop `frame_fingerprint`/`st.cache_data` fast path).",
-    "AC: disabled = byte-identical output to today.",
-    "",
-    "**What was done.** Added a cached optional stage with soft exclusions, original-value preservation, preprocessing controls, recompute, share/save state, API and CLI access, and disabled-path identity tests.",
-    "",
-    "**What's left.** User approval and validation on a dataset with real cleaning decisions.",
-    "",
-    "**Background (technical).** Disabled preprocessing returns the original dataframe object; enabled processing retains every row and records reasons instead of hard-dropping data."
-   ]
+  "request": [
+   "Optional stage between `data.normalize_fixations` and",
+   "`measures.enrich_fixations`/`compute_per_word_measures`. Fixations gain an",
+   "`excluded` flag (soft-exclude, not hard-drop) + a derived-column convention so",
+   "corrections keep the original. New **\"Preprocessing\"** panel, `global_preproc_*`",
+   "keys, off by default, with a recompute trigger. Fold preproc settings into the",
+   "cache key (don't break the OneStop `frame_fingerprint`/`st.cache_data` fast path).",
+   "AC: disabled = byte-identical output to today."
+  ],
+  "whatWasDone": [
+   "Added a cached optional stage with soft exclusions, original-value preservation, preprocessing controls, recompute, share/save state, API and CLI access, and disabled-path identity tests."
+  ],
+  "whatsLeft": [
+   "User approval and validation on a dataset with real cleaning decisions."
+  ],
+  "background": [
+   "Disabled preprocessing returns the original dataframe object; enabled processing retains every row and records reasons instead of hard-dropping data."
+  ]
   },
   {
    "id": "PRE-2",
@@ -1690,18 +1773,20 @@ window.TRACKER = {
     "Does an excluded fixation stay excluded everywhere by default — reading measures, corpus aggregation, every export — or is that opt-in with the plot-only behaviour as the default? Today's shipped half silently means \"plot only\", which is the mismatch users would trip on.",
     "Should `purge` reindex `fixation_id` / `order_in_trial` after the hard drop (matching eyekit), knowing that breaks ID stability against anything exported before the purge?"
    ],
-   "body": [
+   "statusNote": [
     "> **In progress.** The visualization-only half shipped 2026-06-23; the",
     "> eyekit-parity pipeline half (real exclude/purge reaching measures + export) is",
-    "> still open — see **What's left**.",
-    "",
-    "**Request.** Part of the eyekit-parity effort (build order `PRE-0` → `PRE-1` →",
+    "> still open — see **What's left**."
+   ],
+   "request": [
+    "Part of the eyekit-parity effort (build order `PRE-0` → `PRE-1` →",
     "`PRE-2`): mirror eyekit's fixation cleaning — discard fixations that are too",
     "short, too long, or land outside any text/AOI, plus a `purge` that hard-drops",
     "and reindexes so downstream reading measures and exports never see the",
-    "excluded fixations.",
-    "",
-    "**What was done.** A visualization-only version, per the user's 2026-06-23",
+    "excluded fixations."
+   ],
+   "whatWasDone": [
+    "A visualization-only version, per the user's 2026-06-23",
     "reframing: under the ⚙️ Fixation style controls, **short / long /",
     "out-of-bounds** each get Off / **Highlight** (chosen marker + colour) /",
     "**Discard** (hide from the plot only), with editable short/long ms thresholds",
@@ -1714,18 +1799,20 @@ window.TRACKER = {
     "controls, the deep link / Save & restore config, and it reads through to the",
     "static, animation (**VIZ-23**), \"This trial\" export and bulk export render",
     "paths — but not the CLI/API as a first-class flag beyond what the shared",
-    "figure settings already carry.",
-    "",
-    "**What's left.** The actual eyekit-parity pipeline version: a real `excluded`",
+    "figure settings already carry."
+   ],
+   "whatsLeft": [
+    "The actual eyekit-parity pipeline version: a real `excluded`",
     "soft-flag stage between `data.normalize_fixations` and",
     "`measures.enrich_fixations` (depends **PRE-1**, still Backlog), an \"N",
     "excluded\" count surfaced in the UI, and `purge` — a hard-drop + reindex that",
     "propagates to reading measures, corpus aggregation, and every export, not",
     "just the plot. Today's shipped version never touches measures or exports:",
     "a Discarded fixation still counts toward FFD/FPRT/TFD and still appears in",
-    "the CSV/Parquet/mega-table export.",
-    "",
-    "**Background (technical).** `plots.py` holds the classification core:",
+    "the CSV/Parquet/mega-table export."
+   ],
+   "background": [
+    "`plots.py` holds the classification core:",
     "`_fixation_flag_masks` (boolean mask per category over the fixations index) +",
     "`_discard_flagged_fixations` (drop *Discard*-mode rows), both shared by the",
     "static and animation builders so they classify identically. Session keys are",
@@ -1750,35 +1837,39 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
+  "statusNote": [
    "> **Parked (2026-08-03).** Implemented and awaiting sign-off since 2026-06-28;",
-   "> the user will **revisit this later** before approving.",
-   "",
-    "**Request.** The headline gap (today only a 50px nearest-word fallback exists in",
-    "[`measures.py`](scanpath_studio/measures.py)). **This is the \"support fixation",
-    "alignment algorithms\" request.** Wrap eyekit `FixationSequence.snap_to_lines`",
-    "(Carr et al. 2022): `chain / cluster / merge / regress / segment / slice / split /",
-    "stretch / warp`. Adapter: word boxes → line y-centers (reuse",
-    "`measures.cluster_word_lines`); write corrected y to a derived column. Algorithm",
-    "picker + per-algorithm params in the Preprocessing panel. Before/after toggle on",
-    "the true-scale plot (ghost originals, arrows to corrected, optional color-by line).",
-    "",
-    "**What was done.** The approved plan was implemented 2026-06-28 as a native",
-    "port in [`alignment.py`](scanpath_studio/alignment.py), a **📐 Line assignment**",
-    "comparison-grid subtab, and an in-place main-plot correction under **Fixations",
-    "⚙️ → Drift correction**, with optional connectors.",
-    "",
-    "**What's left.** User review and sign-off are paused until this item is revisited.",
-    "CLI and headless-API exposure also remain if full surface parity is still wanted.",
-    "",
-    "**Background (technical).** The detailed plan is",
-    "[`plans/pre-3-vertical-drift-correction.md`](plans/pre-3-vertical-drift-correction.md).",
-    "Per **PRE-0**, this is a native CC BY 4.0 port (see [`NOTICE`](NOTICE)). The Carr",
-    "et al. (2021) set is `attach / chain / cluster / compare / merge / regress /",
-    "segment / split / stretch / warp`; it adds `attach`/`compare` and drops the",
-    "post-2021 `slice` addition. Drift correction is currently a viz-time transform",
-    "applied in `tabs.py`, while `alignment.correct` is importable for scripting."
-   ]
+   "> the user will **revisit this later** before approving."
+  ],
+  "request": [
+   "The headline gap (today only a 50px nearest-word fallback exists in",
+   "[`measures.py`](scanpath_studio/measures.py)). **This is the \"support fixation",
+   "alignment algorithms\" request.** Wrap eyekit `FixationSequence.snap_to_lines`",
+   "(Carr et al. 2022): `chain / cluster / merge / regress / segment / slice / split /",
+   "stretch / warp`. Adapter: word boxes → line y-centers (reuse",
+   "`measures.cluster_word_lines`); write corrected y to a derived column. Algorithm",
+   "picker + per-algorithm params in the Preprocessing panel. Before/after toggle on",
+   "the true-scale plot (ghost originals, arrows to corrected, optional color-by line)."
+  ],
+  "whatWasDone": [
+   "The approved plan was implemented 2026-06-28 as a native",
+   "port in [`alignment.py`](scanpath_studio/alignment.py), a **📐 Line assignment**",
+   "comparison-grid subtab, and an in-place main-plot correction under **Fixations",
+   "⚙️ → Drift correction**, with optional connectors."
+  ],
+  "whatsLeft": [
+   "User review and sign-off are paused until this item is revisited.",
+   "CLI and headless-API exposure also remain if full surface parity is still wanted."
+  ],
+  "background": [
+   "The detailed plan is",
+   "[`plans/pre-3-vertical-drift-correction.md`](plans/pre-3-vertical-drift-correction.md).",
+   "Per **PRE-0**, this is a native CC BY 4.0 port (see [`NOTICE`](NOTICE)). The Carr",
+   "et al. (2021) set is `attach / chain / cluster / compare / merge / regress /",
+   "segment / split / stretch / warp`; it adds `attach`/`compare` and drops the",
+   "post-2021 `slice` addition. Drift correction is currently a viz-time transform",
+   "applied in `tabs.py`, while `alignment.correct` is importable for scripting."
+  ]
   },
   {
   "id": "PRE-4",
@@ -1793,20 +1884,23 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Extend `measures.compute_per_word_measures`: `initial_landing_position` and",
-    "`initial_landing_distance`; `number_of_regressions_in` as an integer count (app",
-    "has only the boolean flag); `second_pass_duration`; `single_fixation_duration`",
-    "(FFD when exactly one first-pass fixation). Audit that the app's",
-    "`regression_path_duration` == eyekit `go_past_duration`. Surface in per-word",
-    "export, color-by options, corpus aggregation; keep IA_* pre-aggregated precedence.",
-    "",
-    "**What was done.** Added initial landing position/distance, integer regression-in count, second-pass duration, and single-fixation duration to computation, aggregation, display, and export.",
-    "",
-    "**What's left.** User approval and literature-facing naming review.",
-    "",
-    "**Background (technical).** Existing pre-aggregated values continue to win field-by-field, while missing measures are computed from the materialized visits."
-   ]
+  "request": [
+   "Extend `measures.compute_per_word_measures`: `initial_landing_position` and",
+   "`initial_landing_distance`; `number_of_regressions_in` as an integer count (app",
+   "has only the boolean flag); `second_pass_duration`; `single_fixation_duration`",
+   "(FFD when exactly one first-pass fixation). Audit that the app's",
+   "`regression_path_duration` == eyekit `go_past_duration`. Surface in per-word",
+   "export, color-by options, corpus aggregation; keep IA_* pre-aggregated precedence."
+  ],
+  "whatWasDone": [
+   "Added initial landing position/distance, integer regression-in count, second-pass duration, and single-fixation duration to computation, aggregation, display, and export."
+  ],
+  "whatsLeft": [
+   "User approval and literature-facing naming review."
+  ],
+  "background": [
+   "Existing pre-aggregated values continue to win field-by-field, while missing measures are computed from the materialized visits."
+  ]
   },
   {
   "id": "PRE-5",
@@ -1821,14 +1915,14 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Today AOIs == precomputed per-word boxes only. Define IAs per text by word range,",
-    "regex over word text, or eyekit-style `[bracket]{id}` markup (union of member word",
-    "boxes). Render as distinct highlighted regions in",
-    "[`plots.py`](scanpath_studio/plots.py). IA-level measures (reuse PRE-4) →",
-    "`interest_area_report`-style table for Corpus Analysis + export. Persist",
-    "definitions per `text_id` via the Save & restore JSON."
-   ]
+  "request": [
+   "Today AOIs == precomputed per-word boxes only. Define IAs per text by word range,",
+   "regex over word text, or eyekit-style `[bracket]{id}` markup (union of member word",
+   "boxes). Render as distinct highlighted regions in",
+   "[`plots.py`](scanpath_studio/plots.py). IA-level measures (reuse PRE-4) →",
+   "`interest_area_report`-style table for Corpus Analysis + export. Persist",
+   "definitions per `text_id` via the Save & restore JSON."
+  ]
   },
   {
   "id": "PRE-6",
@@ -1843,38 +1937,41 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Lab is Technion (Hebrew); MultiplEYE anticipates an RTL sample. Today the",
-    "true-scale renderer assumes LTR monospace. Add a `right_to_left` flag (per",
-    "dataset/trial, auto-detect from script) that flips word/line order + label",
-    "anchoring; Arabic shaping/bidi; a CJK-capable font option. Ensure reading-order",
-    "inference, line clustering, landing-position direction (**PRE-4**), and order",
-    "numbers respect direction. Keep stimulus-image background as fallback (**VIZ-4**).",
-    "",
-    "**2026-08-02 — measured, and less is broken than this item assumed.** On a",
-    "synthetic Hebrew trial laid out right-to-left (5 words, one line, one",
-    "regression): `assign_fixations_to_words` recovers the intended reading order",
-    "exactly; `compute_word_metrics` gets FFD / FPRT / TFD / skip / regression-in /",
-    "regression-out right; `enrich_fixations` and `classify_saccades` flag the",
-    "revisit as a regression even though it moves *rightward* on screen (both are",
-    "`word_id`-delta based, not x-based); `make_scanpath_figure` builds; and",
-    "`word_box_space_px` correctly declines to shift boundaries. So direction-aware",
-    "work is narrower than \"flip everything\":",
-    "",
-    "- **`aggregation.landing_positions` is genuinely mirrored** — it measures from",
-    "  `_box_left`, i.e. \"0% into the word\" is the box's LEFT edge, which is where an",
-    "  RTL word *ends*. The PVL curve reads backwards. This is the one measure that is",
-    "  wrong rather than merely untested.",
-    "- Label anchoring / bidi shaping and the VIZ-9 arc schematic are still unverified.",
-    "",
-    "Verified against v0.26; the manuscript's Discussion states the same caveat.",
-    "",
-    "**What was done.** Added automatic per-trial direction detection, RTL-aware landing calculations, direction metadata, a multilingual font-stack option, and Hebrew/Arabic character-grid tests.",
-    "",
-    "**What's left.** User approval and visual checks on representative Arabic shaping and mixed-script stimuli.",
-    "",
-    "**Background (technical).** Word IDs remain the canonical reading order; only direction-sensitive geometry is reversed, avoiding regressions in already-correct assignment and saccade logic."
-   ]
+  "request": [
+   "Lab is Technion (Hebrew); MultiplEYE anticipates an RTL sample. Today the",
+   "true-scale renderer assumes LTR monospace. Add a `right_to_left` flag (per",
+   "dataset/trial, auto-detect from script) that flips word/line order + label",
+   "anchoring; Arabic shaping/bidi; a CJK-capable font option. Ensure reading-order",
+   "inference, line clustering, landing-position direction (**PRE-4**), and order",
+   "numbers respect direction. Keep stimulus-image background as fallback (**VIZ-4**).",
+   "",
+   "**2026-08-02 — measured, and less is broken than this item assumed.** On a",
+   "synthetic Hebrew trial laid out right-to-left (5 words, one line, one",
+   "regression): `assign_fixations_to_words` recovers the intended reading order",
+   "exactly; `compute_word_metrics` gets FFD / FPRT / TFD / skip / regression-in /",
+   "regression-out right; `enrich_fixations` and `classify_saccades` flag the",
+   "revisit as a regression even though it moves *rightward* on screen (both are",
+   "`word_id`-delta based, not x-based); `make_scanpath_figure` builds; and",
+   "`word_box_space_px` correctly declines to shift boundaries. So direction-aware",
+   "work is narrower than \"flip everything\":",
+   "",
+   "- **`aggregation.landing_positions` is genuinely mirrored** — it measures from",
+   "  `_box_left`, i.e. \"0% into the word\" is the box's LEFT edge, which is where an",
+   "  RTL word *ends*. The PVL curve reads backwards. This is the one measure that is",
+   "  wrong rather than merely untested.",
+   "- Label anchoring / bidi shaping and the VIZ-9 arc schematic are still unverified.",
+   "",
+   "Verified against v0.26; the manuscript's Discussion states the same caveat."
+  ],
+  "whatWasDone": [
+   "Added automatic per-trial direction detection, RTL-aware landing calculations, direction metadata, a multilingual font-stack option, and Hebrew/Arabic character-grid tests."
+  ],
+  "whatsLeft": [
+   "User approval and visual checks on representative Arabic shaping and mixed-script stimuli."
+  ],
+  "background": [
+   "Word IDs remain the canonical reading order; only direction-sensitive geometry is reversed, avoiding regressions in already-correct assignment and saccade logic."
+  ]
   },
   {
   "id": "PRE-7",
@@ -1889,14 +1986,14 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** App requires pre-extracted fixations today. Wrap `eyekit.io.import_asc` (EFIX",
-    "fixations; optional messages/variables) → normalized fixation schema; derive",
-    "participant/trial from filename (like the MultiplEYE path). New \"Dataset format\"",
-    "in the upload wizard; optional raw-sample surfacing; message-based trial",
-    "segmentation. Word boxes/AOIs still come from a separate stimulus file. Feeds",
-    "**DATA-1**."
-   ]
+  "request": [
+   "App requires pre-extracted fixations today. Wrap `eyekit.io.import_asc` (EFIX",
+   "fixations; optional messages/variables) → normalized fixation schema; derive",
+   "participant/trial from filename (like the MultiplEYE path). New \"Dataset format\"",
+   "in the upload wizard; optional raw-sample surfacing; message-based trial",
+   "segmentation. Word boxes/AOIs still come from a separate stimulus file. Feeds",
+   "**DATA-1**."
+  ]
   },
   {
   "id": "PRE-8",
@@ -1911,19 +2008,22 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Add eyekit `measure.duration_mass` as a 4th heatmap style (alongside",
-    "word/density/interpolated): spread each fixation's duration across nearby",
-    "characters via a Gaussian (sigma in chars) instead of hard word assignment. New",
-    "style + sigma param in the existing heatmap control; render through the existing",
-    "heatmap path in [`plots.py`](scanpath_studio/plots.py). Related to **VIZ-3**.",
-    "",
-    "**What was done.** Added a Duration mass style and sigma-in-characters control across the UI, deep links/save, CLI, API, and figure builder.",
-    "",
-    "**What's left.** User approval and visual tuning of the default sigma on target stimuli.",
-    "",
-    "**Background (technical).** Fixation duration is distributed over character centres with a Gaussian kernel, then normalized through the existing linear/log heatmap pipeline."
-   ]
+  "request": [
+   "Add eyekit `measure.duration_mass` as a 4th heatmap style (alongside",
+   "word/density/interpolated): spread each fixation's duration across nearby",
+   "characters via a Gaussian (sigma in chars) instead of hard word assignment. New",
+   "style + sigma param in the existing heatmap control; render through the existing",
+   "heatmap path in [`plots.py`](scanpath_studio/plots.py). Related to **VIZ-3**."
+  ],
+  "whatWasDone": [
+   "Added a Duration mass style and sigma-in-characters control across the UI, deep links/save, CLI, API, and figure builder."
+  ],
+  "whatsLeft": [
+   "User approval and visual tuning of the default sigma on target stimuli."
+  ],
+  "background": [
+   "Fixation duration is distributed over character centres with a Gaussian kernel, then normalized through the existing linear/log heatmap pipeline."
+  ]
   },
   {
    "id": "PRE-9",
@@ -1980,27 +2080,30 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Follow-ups on the 📐 **Line assignment** comparison grid shipped with **PRE-3**:",
-    "",
-    "- **Bigger, and consistent with the main plot.** The grid panels are too small to",
-    "  judge an algorithm; render them larger and match the main scanpath plot's",
-    "  styling and scale so the comparison reads like the plot above it.",
-    "- **Better diff visualization.** Make it obvious *which* fixations an algorithm",
-    "  moved and how far — e.g. only the moved fixations highlighted, with their",
-    "  displacement — instead of leaving the reader to spot the difference between two",
-    "  near-identical panels.",
-    "- **Citations.** Show the source for each algorithm (Carr et al. 2021 plus the",
-    "  original method papers) next to the picker, so a user can cite what they used.",
-    "- *(Parked)* A short recording/animation explaining how `merge` works — worth",
-    "  doing eventually, set aside for now.",
-    "",
-    "**What was done.** Enlarged and simplified the comparison grid, highlighted moved fixations and displacement, reported mean correction and measure sensitivity, and added method citations.",
-    "",
-    "**What's left.** User approval; the parked recording remains outside this implementation.",
-    "",
-    "**Background (technical).** Panels use the same true-scale renderer and styling inputs as the main plot so visual differences represent algorithms rather than layout."
-   ]
+  "request": [
+   "Follow-ups on the 📐 **Line assignment** comparison grid shipped with **PRE-3**:",
+   "",
+   "- **Bigger, and consistent with the main plot.** The grid panels are too small to",
+   "  judge an algorithm; render them larger and match the main scanpath plot's",
+   "  styling and scale so the comparison reads like the plot above it.",
+   "- **Better diff visualization.** Make it obvious *which* fixations an algorithm",
+   "  moved and how far — e.g. only the moved fixations highlighted, with their",
+   "  displacement — instead of leaving the reader to spot the difference between two",
+   "  near-identical panels.",
+   "- **Citations.** Show the source for each algorithm (Carr et al. 2021 plus the",
+   "  original method papers) next to the picker, so a user can cite what they used.",
+   "- *(Parked)* A short recording/animation explaining how `merge` works — worth",
+   "  doing eventually, set aside for now."
+  ],
+  "whatWasDone": [
+   "Enlarged and simplified the comparison grid, highlighted moved fixations and displacement, reported mean correction and measure sensitivity, and added method citations."
+  ],
+  "whatsLeft": [
+   "User approval; the parked recording remains outside this implementation."
+  ],
+  "background": [
+   "Panels use the same true-scale renderer and styling inputs as the main plot so visual differences represent algorithms rather than layout."
+  ]
   },
   {
   "id": "PRE-21",
@@ -2015,8 +2118,8 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-   "**Request.** Ahead of publication, two things that aren't fully integrated should not be",
+  "request": [
+   "Ahead of publication, two things that aren't fully integrated should not be",
    "visible in the app — shipping them half-wired invites users to lean on them:",
    "",
    "1. **Vertical drift correction / line assignment** — the rail control and the whole",
@@ -2029,9 +2132,10 @@ window.TRACKER = {
    "native Carr et al. (2021) port from **PRE-3**, and",
    "[`similarity.py`](scanpath_studio/similarity.py)) stays; this is a visibility gate, not a",
    "removal. Note the Comparisons half is a *within-panel* hide: the Generations grid itself",
-   "stays, only the scoring comes off it.",
-   "",
-   "**What was done.** One env-var gate in",
+   "stays, only the scoring comes off it."
+  ],
+  "whatWasDone": [
+   "One env-var gate in",
    "[`constants.py`](scanpath_studio/constants.py:26) — `SCANPATH_EXPERIMENTAL`,",
    "read at *call time*, default **off** — behind `experimental_features_enabled()`",
    "plus the two named readers `drift_correction_enabled()` /",
@@ -2067,9 +2171,10 @@ window.TRACKER = {
    "fixture in `conftest.py`), so hiding the features deleted none of their",
    "coverage; [`tests/test_experimental_gate.py`](tests/test_experimental_gate.py)",
    "is the other half — 30 assertions about what the *default* build must not",
-   "offer, in the same process, which is what read-at-call-time buys.",
-   "",
-   "**What's left.** Your review. Worth checking: (a) the **env-var name** —",
+   "offer, in the same process, which is what read-at-call-time buys."
+  ],
+  "whatsLeft": [
+   "Your review. Worth checking: (a) the **env-var name** —",
    "`SCANPATH_EXPERIMENTAL` covers both features under one flag, per \"one env-var",
    "gate\"; if you'd rather they were independently switchable, that is a two-line",
    "change in `constants.py`; (b) the Comparisons grid without scoring — 60",
@@ -2184,7 +2289,7 @@ window.TRACKER = {
    "moot while it's hidden), **PRE-10** (subtab polish — parked behind this), **ENG-23**,",
    "**ENG-8** (built the Generations panel + its NLD scoring), **CMP-5** (the ranking",
    "captions), **CMP-6** (the other similarity consumer)."
-   ]
+  ]
   },
   {
   "id": "VAL-1",
@@ -2199,10 +2304,10 @@ window.TRACKER = {
   "group": "Validation",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Confirm the true-to-scale rendering matches what EyeLink produced for the same",
-    "trial (word boxes / fixation positions overlay correctly)."
-   ]
+  "request": [
+   "Confirm the true-to-scale rendering matches what EyeLink produced for the same",
+   "trial (word boxes / fixation positions overlay correctly)."
+  ]
   },
   {
   "id": "VAL-2",
@@ -2217,10 +2322,10 @@ window.TRACKER = {
   "group": "Validation",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Verify the 1-pixel text-spacing difference in OneStop spacing version 1 shows up",
-    "correctly in the layout."
-   ]
+  "request": [
+   "Verify the 1-pixel text-spacing difference in OneStop spacing version 1 shows up",
+   "correctly in the layout."
+  ]
   },
   {
   "id": "VAL-3",
@@ -2235,16 +2340,19 @@ window.TRACKER = {
   "group": "Validation",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Smoke-test loading/rendering on non-English corpora. Surfaces RTL needs (**PRE-6**)",
-    "and feeds **DATA-1**.",
-    "",
-    "**What was done.** Validation ownership was assigned to MECO in the tracker brief; this implementation batch added RTL-aware measures and multilingual rendering support but did not claim the external dataset check.",
-    "",
-    "**What's left.** MECO should run and record the non-English corpus smoke tests, then close or return the item with reproducible findings.",
-    "",
-    "**Background (technical).** Keep dataset validation separate from feature implementation so a passing synthetic Hebrew unit test is not mistaken for corpus-level evidence."
-   ]
+  "request": [
+   "Smoke-test loading/rendering on non-English corpora. Surfaces RTL needs (**PRE-6**)",
+   "and feeds **DATA-1**."
+  ],
+  "whatWasDone": [
+   "Validation ownership was assigned to MECO in the tracker brief; this implementation batch added RTL-aware measures and multilingual rendering support but did not claim the external dataset check."
+  ],
+  "whatsLeft": [
+   "MECO should run and record the non-English corpus smoke tests, then close or return the item with reproducible findings."
+  ],
+  "background": [
+   "Keep dataset validation separate from feature implementation so a passing synthetic Hebrew unit test is not mistaken for corpus-level evidence."
+  ]
   },
   {
   "id": "BUG-4",
@@ -2259,23 +2367,23 @@ window.TRACKER = {
   "group": "Bugs",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Follow-up to **BUG-3** (signed off 2026-07-03, archived). After the BUG-3 fixes (real",
-    "`FONT_SIZE`/`FONT` threaded through, line-pitch-based `scale_text_to_boxes`,",
-    "script-aware width cap) the MultiplEYE true-to-scale word text lines up *much*",
-    "better, but a **small** residual offset between the rendered text layer and the",
-    "stimulus image remains — the labels are close but not pixel-exact on top of the",
-    "image words. Likely the leftover slack noted in BUG-3's root cause (2): the",
-    "nominal-vs-inked glyph size + anchor difference between how PIL drew the image",
-    "glyphs (top-left in a glyph-tight cell) and how Plotly centers/rasterizes the",
-    "label in the box, and/or remaining font-metric differences between the CJK",
-    "fallback font and the exact stimulus font. Quantify the residual (by how much,",
-    "and whether it's a constant shift vs. per-line/per-word drift) before fixing.",
-    "Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`",
-    "([`plots.py`](scanpath_studio/plots.py:339)), MultiplEYE font stamping",
-    "(`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap",
-    "in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**."
-   ]
+  "request": [
+   "Follow-up to **BUG-3** (signed off 2026-07-03, archived). After the BUG-3 fixes (real",
+   "`FONT_SIZE`/`FONT` threaded through, line-pitch-based `scale_text_to_boxes`,",
+   "script-aware width cap) the MultiplEYE true-to-scale word text lines up *much*",
+   "better, but a **small** residual offset between the rendered text layer and the",
+   "stimulus image remains — the labels are close but not pixel-exact on top of the",
+   "image words. Likely the leftover slack noted in BUG-3's root cause (2): the",
+   "nominal-vs-inked glyph size + anchor difference between how PIL drew the image",
+   "glyphs (top-left in a glyph-tight cell) and how Plotly centers/rasterizes the",
+   "label in the box, and/or remaining font-metric differences between the CJK",
+   "fallback font and the exact stimulus font. Quantify the residual (by how much,",
+   "and whether it's a constant shift vs. per-line/per-word drift) before fixing.",
+   "Code anchors: `_word_label_font_px` / `scale_text_to_boxes` / `_line_pitch`",
+   "([`plots.py`](scanpath_studio/plots.py:339)), MultiplEYE font stamping",
+   "(`datasets._multipleye_font_config` / `_multipleye_font_css`), and the font snap",
+   "in `app.render_sidebar_canvas_controls`. Related: **BUG-3**, **VIZ-4**, **PRE-6**."
+  ]
   },
   {
    "id": "BUG-8",
@@ -2490,25 +2598,28 @@ window.TRACKER = {
   "group": "Engineering",
   "subgroup": "Distribution / packaging",
   "archived": false,
-  "body": [
-    "**Request.** Reported by the user (2026-07-29): the macOS bundle from",
-    "[`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) does not run.",
-    "**The failure mode isn't captured yet** — first step is to get the actual",
-    "symptom (Gatekeeper refusal vs. a launcher/PyInstaller error vs. the server",
-    "starting but no browser opening), from a clean machine that never had the repo,",
-    "since a dev Mac hides missing-bundle problems. Only the Linux build was verified",
-    "by hand before release, so treat macOS as unverified rather than regressed. Note",
-    "that the CI matrix *does* run `desktop/smoke_test.py` on `macos-latest` and it",
-    "passes — so whatever this is, the smoke test doesn't cover it, and extending it",
-    "is part of the fix. Related: **ENG-21** (signing) if it turns out to be",
-  "Gatekeeper.",
-  "",
-  "**What was done.** Added ad-hoc signing and signature verification to macOS release CI, extended the desktop smoke test, and documented quarantine removal and right-click Open recovery.",
-  "",
-  "**What's left.** User approval and a clean-Mac download check; notarization remains deliberately out of scope.",
-  "",
-  "**Background (technical).** Ad-hoc signing guarantees bundle integrity but not Apple identity, so Gatekeeper may still require the documented local trust step."
-   ]
+  "request": [
+   "Reported by the user (2026-07-29): the macOS bundle from",
+   "[`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) does not run.",
+   "**The failure mode isn't captured yet** — first step is to get the actual",
+   "symptom (Gatekeeper refusal vs. a launcher/PyInstaller error vs. the server",
+   "starting but no browser opening), from a clean machine that never had the repo,",
+   "since a dev Mac hides missing-bundle problems. Only the Linux build was verified",
+   "by hand before release, so treat macOS as unverified rather than regressed. Note",
+   "that the CI matrix *does* run `desktop/smoke_test.py` on `macos-latest` and it",
+   "passes — so whatever this is, the smoke test doesn't cover it, and extending it",
+   "is part of the fix. Related: **ENG-21** (signing) if it turns out to be",
+   "Gatekeeper."
+  ],
+  "whatWasDone": [
+   "Added ad-hoc signing and signature verification to macOS release CI, extended the desktop smoke test, and documented quarantine removal and right-click Open recovery."
+  ],
+  "whatsLeft": [
+   "User approval and a clean-Mac download check; notarization remains deliberately out of scope."
+  ],
+  "background": [
+   "Ad-hoc signing guarantees bundle integrity but not Apple identity, so Gatekeeper may still require the documented local trust step."
+  ]
   },
   {
   "id": "ENG-20",
@@ -2523,18 +2634,18 @@ window.TRACKER = {
   "group": "Engineering",
   "subgroup": "Distribution / packaging",
   "archived": false,
-  "body": [
-    "**Request.** Two known v1 limits, both documented at release rather than fixed:",
-    "",
-    "- **A console window stays open** behind the app for the life of the session.",
-    "  Closing it kills the server. Options: `console=False` in the spec (loses the",
-    "  crash output the launcher prints), or a native window (pywebview) that owns the",
-    "  lifecycle — the ADR deferred this.",
-    "- **SmartScreen warns on first run** because the build is unsigned — **ENG-21**.",
-    "",
-    "Also unverified: only the Linux build was checked by hand, so the same \"does it",
-    "actually run on a clean machine\" pass **ENG-19** needs is owed to Windows."
-   ]
+  "request": [
+   "Two known v1 limits, both documented at release rather than fixed:",
+   "",
+   "- **A console window stays open** behind the app for the life of the session.",
+   "  Closing it kills the server. Options: `console=False` in the spec (loses the",
+   "  crash output the launcher prints), or a native window (pywebview) that owns the",
+   "  lifecycle — the ADR deferred this.",
+   "- **SmartScreen warns on first run** because the build is unsigned — **ENG-21**.",
+   "",
+   "Also unverified: only the Linux build was checked by hand, so the same \"does it",
+   "actually run on a clean machine\" pass **ENG-19** needs is owed to Windows."
+  ]
   },
   {
   "id": "ENG-21",
@@ -2549,15 +2660,15 @@ window.TRACKER = {
   "group": "Engineering",
   "subgroup": "Distribution / packaging",
   "archived": false,
-  "body": [
-    "**Request.** Unsigned bundles make both non-Linux platforms hostile on first run: macOS",
-    "Gatekeeper blocks (or quarantines) the app, Windows SmartScreen warns. Needs an",
-    "Apple Developer ID + notarization/stapling in the macOS CI job, and an",
-    "Authenticode certificate for Windows — i.e. **paid certificates and secrets in",
-    "the repo**, which is a decision for the user, not just work to schedule. Blocks a",
-    "comfortable install story for the audience the desktop build exists for",
-    "(researchers without a toolchain). Feeds **ENG-19** / **ENG-20**."
-   ]
+  "request": [
+   "Unsigned bundles make both non-Linux platforms hostile on first run: macOS",
+   "Gatekeeper blocks (or quarantines) the app, Windows SmartScreen warns. Needs an",
+   "Apple Developer ID + notarization/stapling in the macOS CI job, and an",
+   "Authenticode certificate for Windows — i.e. **paid certificates and secrets in",
+   "the repo**, which is a decision for the user, not just work to schedule. Blocks a",
+   "comfortable install story for the audience the desktop build exists for",
+   "(researchers without a toolchain). Feeds **ENG-19** / **ENG-20**."
+  ]
   },
   {
   "id": "ENG-17",
@@ -2572,15 +2683,15 @@ window.TRACKER = {
   "group": "Engineering",
   "subgroup": "Distribution / packaging",
   "archived": false,
-  "body": [
-    "**Request.** A deployed multi-user mode: authentication (`st.login` / OIDC), per-user datasets",
-    "that persist between sessions, and optionally a warehouse backend (Snowflake via",
-    "`st.connection`) instead of local files — so a lab could keep a shared corpus",
-    "online rather than everyone loading their own copy. The opposite trade-off from",
-    "**ENG-15** (the desktop bundle keeps everything local), and it would make",
-    "**DATA-13** (data security) a hard prerequisite. **Parked at the user's request",
-    "(2026-07-28)** — captured so the idea isn't lost, not scoped."
-   ]
+  "request": [
+   "A deployed multi-user mode: authentication (`st.login` / OIDC), per-user datasets",
+   "that persist between sessions, and optionally a warehouse backend (Snowflake via",
+   "`st.connection`) instead of local files — so a lab could keep a shared corpus",
+   "online rather than everyone loading their own copy. The opposite trade-off from",
+   "**ENG-15** (the desktop bundle keeps everything local), and it would make",
+   "**DATA-13** (data security) a hard prerequisite. **Parked at the user's request",
+   "(2026-07-28)** — captured so the idea isn't lost, not scoped."
+  ]
   },
   {
    "id": "UX-1",
@@ -3037,25 +3148,28 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Add two more entries to **UX-10**'s trial-pool sort keys",
+   "request": [
+    "Add two more entries to **UX-10**'s trial-pool sort keys",
     "(alongside Fixations (n) / Reading time (s) / Mean fixation (ms) / Words (n) /",
     "reader-text-behaviour columns): (1) the **default order of the data** — as",
     "the rows arrived in the uploaded/source file, and (2) **min timestamp in the",
-    "trial** — order chronologically by each trial's earliest fixation.",
-    "",
-    "**What was done.** The trial-order menu now offers **Data order** and",
+    "trial** — order chronologically by each trial's earliest fixation."
+   ],
+   "whatWasDone": [
+    "The trial-order menu now offers **Data order** and",
     "**Min timestamp in trial**. `build_combo_options` records each trial's",
     "first-appearance rank before applying the historical participant/ID sort, so the",
     "source order can be reconstructed later. The timestamp option groups each trial's",
     "minimum `timestamp_ms`; it appears only when that field is available and follows",
-    "the existing ascending/descending control.",
-    "",
-    "**What's left.** Nothing for the requested sort keys. Data order means first trial",
+    "the existing ascending/descending control."
+   ],
+   "whatsLeft": [
+    "Nothing for the requested sort keys. Data order means first trial",
     "appearance in the normalized fixation rows; it does not attempt to reconstruct an",
-    "earlier order once an upstream pipeline has already reordered the file.",
-    "",
-    "**Background (technical).** These two need different amounts of new plumbing.",
+    "earlier order once an upstream pipeline has already reordered the file."
+   ],
+   "background": [
+    "These two need different amounts of new plumbing.",
     "The min-timestamp key is a straight fit for `_TRIAL_SORT_STATS`",
     "([`utils.py`](scanpath_studio/utils.py:181), same shape as the existing",
     "`(\"fixations\", \"size\")` / `(\"fixations\", \"duration_sum_s\")` entries) —",
@@ -5144,14 +5258,15 @@ window.TRACKER = {
    "group": "Export",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** EXP-2's figure title/caption only lives inside **Export → Naming &",
+   "request": [
+    "EXP-2's figure title/caption only lives inside **Export → Naming &",
     "labels** ([`export._render_naming_options`](scanpath_studio/export.py:709),",
     "the \"Title & caption on the figure\" toggle) — a setting a user has to remember",
     "to go find under Export rather than see live on the canvas. Move/expose it on the",
-    "**Scanpath rail** as well, alongside the other figure-level controls.",
-    "",
-    "**What was done.** Added **Title & caption on the figure** to the rail's",
+    "**Scanpath rail** as well, alongside the other figure-level controls."
+   ],
+   "whatWasDone": [
+    "Added **Title & caption on the figure** to the rail's",
     "📐 Figure & axes group — same EXP-2 pattern language (`{participant_id}`/",
     "`{trial_id}`/… + live preview, via the same `export.pattern_fields`/",
     "`render_pattern`/`pattern_error` helpers), pre-filling a friendly starting",
@@ -5170,11 +5285,13 @@ window.TRACKER = {
     "full), the CLI (`--title`/`--caption`, literal text — the caller already",
     "knows which trial it's rendering, unlike the rail/bulk-export's",
     "many-trials case), and the headless API (`title=`/`caption=` on",
-    "`plot_scanpath`/`animate_scanpath`, applied via the same `annotate_figure`).",
-    "",
-    "**What's left.** Nothing.",
-    "",
-    "**Background (technical).** `export.annotate_figure` (`export.py:349`) is the",
+    "`plot_scanpath`/`animate_scanpath`, applied via the same `annotate_figure`)."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "`export.annotate_figure` (`export.py:349`) is the",
     "only renderer that stamps `title`/`caption` onto a `go.Figure`; today it's called",
     "exactly once, from the export path, after the pattern strings are collected in",
     "`_render_naming_options`. The rail's **📐 Figure & axes** section",
@@ -5507,21 +5624,24 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Make the animation's reading-time and playback-length summary describe",
+   "request": [
+    "Make the animation's reading-time and playback-length summary describe",
     "the fixations actually replayed. After **VIZ-23**, a fixation class set to",
-    "*Discard* disappeared from the animation while the info box still counted it.",
-    "",
-    "**What was done.** Before calling `tabs._render_anim_info_box`, the selected trial",
+    "*Discard* disappeared from the animation while the info box still counted it."
+   ],
+   "whatWasDone": [
+    "Before calling `tabs._render_anim_info_box`, the selected trial",
     "and optional comparison trial now pass through the same",
     "[`plots._discard_flagged_fixations`](scanpath_studio/plots.py:1459) helper used by",
     "the animation builder. The summary therefore uses the visible timeline for both",
-    "single and dual replay instead of the unfiltered frame.",
-    "",
-    "**What's left.** Nothing. Highlight-mode fixations still count because they remain",
-    "in the replay; only Discard removes them from both the animation and its timing.",
-    "",
-    "**Background (technical).** The correction is applied in",
+    "single and dual replay instead of the unfiltered frame."
+   ],
+   "whatsLeft": [
+    "Nothing. Highlight-mode fixations still count because they remain",
+    "in the replay; only Discard removes them from both the animation and its timing."
+   ],
+   "background": [
+    "The correction is applied in",
     "[`tabs.render_single_trial_tab`](scanpath_studio/tabs.py:2787), immediately before",
     "the info box, so classification cannot drift from the plot builder. Related:",
     "**PRE-2**, **VIZ-23**."
@@ -5540,26 +5660,29 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Replace fixed word/fixation tooltips with user-selectable field lists.",
+   "request": [
+    "Replace fixed word/fixation tooltips with user-selectable field lists.",
     "Words should allow several reading measures, linguistic features, or metadata",
     "columns at once; fixations should gain their own picker instead of always showing",
-    "only index, duration, and word ID.",
-    "",
-    "**What was done.** The word and fixation style popovers now each contain a",
+    "only index, duration, and word ID."
+   ],
+   "whatWasDone": [
+    "The word and fixation style popovers now each contain a",
     "multi-select **Hover fields** control populated from retained columns. The shared",
     "`plots._hover_payload` builds ordered `customdata` and readable Plotly templates",
     "for arbitrary fields, including ms suffixes and the geometry-derived line number.",
     "Defaults preserve the old tooltip content. `word_hover_fields` and",
     "`fixation_hover_fields` reach static, animation, and comparison builders and",
     "round-trip through Share links, saved configs, the CLI, and the public API; the",
-    "legacy one-word-measure setting remains a restore fallback.",
-    "",
-    "**What's left.** Nothing for the requested surfaces. A field absent from the active",
+    "legacy one-word-measure setting remains a restore fallback."
+   ],
+   "whatsLeft": [
+    "Nothing for the requested surfaces. A field absent from the active",
     "frame is removed from the picker/restored selection rather than rendering an empty",
-    "tooltip row.",
-    "",
-    "**Background (technical).** The new session keys are pinned in",
+    "tooltip row."
+   ],
+   "background": [
+    "The new session keys are pinned in",
     "[`session_keys.py`](scanpath_studio/session_keys.py); defaults live in",
     "`api.CANONICAL_FIGURE_DEFAULTS`, and CLI values are comma-separated field names.",
     "The pure tooltip builder is shared across render paths. Related: **VIZ-21**,",
@@ -5579,23 +5702,26 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Move short/long/out-of-bounds Highlight/Discard controls out of",
+   "request": [
+    "Move short/long/out-of-bounds Highlight/Discard controls out of",
     "**Fixation style** into their own fixation-filter control. The fixation-index",
     "range belongs with filtering too, not with marker appearance. Keep active filters",
-    "visible enough that a hidden class is not forgotten.",
-    "",
-    "**What was done.** The rail now has a separate **🧹 Fixation filter** popover beside",
+    "visible enough that a hidden class is not forgotten."
+   ],
+   "whatWasDone": [
+    "The rail now has a separate **🧹 Fixation filter** popover beside",
     "the fixation layer. It contains the fixation-index range first, followed by the",
     "PRE-2 short, long, and out-of-bounds modes and thresholds. A local badge reports",
     "how many rules are active and how many currently hide points. The alternative",
     "trial-chip prototype was rejected because filters are view settings, not trial",
-    "facts. Existing `global_fixclass_*` and `single_fix_range` keys were preserved.",
-    "",
-    "**What's left.** Nothing. Compare-mode gating remains as before; the popover stays",
-    "visible but explains when the current render path cannot apply a control.",
-    "",
-    "**Background (technical).** `_collect_fixation_flags` already separated the data",
+    "facts. Existing `global_fixclass_*` and `single_fix_range` keys were preserved."
+   ],
+   "whatsLeft": [
+    "Nothing. Compare-mode gating remains as before; the popover stays",
+    "visible but explains when the current render path cannot apply a control."
+   ],
+   "background": [
+    "`_collect_fixation_flags` already separated the data",
     "contract from styling, so this was a rail-layout move plus `_fixation_filter_badge`.",
     "The range slider uses the selected trial's fixation frame and includes the",
     "**BUG-16** full-range fix. Related: **PRE-2**, **VIZ-21**, **VIZ-23**, **BUG-16**."
@@ -5614,8 +5740,8 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Refreshing the tab or restarting the app loses everything —",
+   "request": [
+    "Refreshing the tab or restarting the app loses everything —",
     "uploaded tables, datasets built in the wizard, column mappings, annotations",
     "(favourites/tags/notes), and the current plot config all live in",
     "**`st.session_state` only**, which dies with the session (see",
@@ -5625,23 +5751,26 @@ window.TRACKER = {
     "export/import for annotations — three different exports the user has to",
     "remember to run *before* refreshing. Make the common case (I refreshed by",
     "accident, or restarted the server, and want to pick back up) survive without",
-    "having pre-exported anything.",
-    "",
-    "**What was done.** Added [`persistence.py`](scanpath_studio/persistence.py), a",
+    "having pre-exported anything."
+   ],
+   "whatWasDone": [
+    "Added [`persistence.py`](scanpath_studio/persistence.py), a",
     "single-user recovery cache enabled by default only on localhost/loopback (including",
     "the desktop app) and disabled on public deployments. It stores completed uploaded",
     "datasets as Parquet plus a versioned JSON manifest containing mappings, durable",
     "view/session settings, and annotations; startup restores without overwriting",
     "already-seeded URL/config values, and reruns skip writes when the state fingerprint",
     "has not changed. `SCANPATH_STUDIO_PERSIST=0` disables it and",
-    "`SCANPATH_STUDIO_STATE_DIR` relocates it.",
-    "",
-    "**What's left.** Nothing for the local survive-refresh/restart case. This is not",
+    "`SCANPATH_STUDIO_STATE_DIR` relocates it."
+   ],
+   "whatsLeft": [
+    "Nothing for the local survive-refresh/restart case. This is not",
     "cloud sync, multi-user storage, an account system, or a replacement for portable",
     "Save & restore/annotation exports; those remain the way to move work between",
-    "machines or people.",
-    "",
-    "**Background (technical).** The pieces to persist already have serializers:",
+    "machines or people."
+   ],
+   "background": [
+    "The pieces to persist already have serializers:",
     "`wizard._wizard_setup_config`/`_render_setup_download` (column mapping),",
     "`tabs._build_studio_config` (plot config, versioned via",
     "`url_state.PLOT_CONFIG_SCHEMA`), and `annotations.py`'s serialize/deserialize",
@@ -5671,23 +5800,26 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "Code quality",
    "archived": false,
-   "body": [
-    "**Request.** Make mode-gated controls follow the render mode that can actually be",
+   "request": [
+    "Make mode-gated controls follow the render mode that can actually be",
     "entered, not the raw Compare/Animate toggles. With Compare on but no valid second",
     "trial, the rail previously disabled static-only controls while the renderer still",
-    "drew the ordinary static figure and honored them.",
-    "",
-    "**What was done.** `tabs.render_single_trial_tab` now resolves Compare from both the",
+    "drew the ordinary static figure and honored them."
+   ],
+   "whatWasDone": [
+    "`tabs.render_single_trial_tab` now resolves Compare from both the",
     "toggle and the existence of a valid comparison candidate, and publishes",
     "`_resolved_comparing`; it publishes `_resolved_animating` alongside it. The rail's",
     "mode gates read those resolved flags, with the legacy raw keys only as a fallback",
     "before the main tab has rendered. Controls therefore grey out only for the builder",
-    "that is actually active.",
-    "",
-    "**What's left.** Nothing for the current two modes. Any future render mode should",
-    "publish one resolved state rather than teaching individual controls to infer it.",
-    "",
-    "**Background (technical).** The resolved keys are internal coordination state, not",
+    "that is actually active."
+   ],
+   "whatsLeft": [
+    "Nothing for the current two modes. Any future render mode should",
+    "publish one resolved state rather than teaching individual controls to infer it."
+   ],
+   "background": [
+    "The resolved keys are internal coordination state, not",
     "part of the Share/config wire format. The fix lives at the view-mode boundary in",
     "[`tabs.py`](scanpath_studio/tabs.py:2524) and is consumed by",
     "[`controls.py`](scanpath_studio/controls.py:1930). Related: **VIZ-21**, **VIZ-23**,",
@@ -5707,33 +5839,36 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Scanpath Studio has **no sentence concept at all** — `grep sentence scanpath_studio/*.py`",
-    "matches only prose in comments. GazeGenie emits a full per-sentence table (popEye",
-    "definitions): `skip`, `nrun`, `reread`, `reg_in` / `reg_out`, `total_n_fixations`,",
-    "`total_dur`, reading `rate` (words/min), `gopast` + `gopast_sel` (selective go-past =",
-    "regression-path duration minus the regression path itself), the `firstrun_*` variants,",
-    "`firstpass_n_fixations` / `firstpass_dur`, and the four path measures from the SR",
-    "*Getting Reading Measures* tool — `firstpass_forward_{n_fixations,dur}`,",
-    "`firstpass_reread_{n_fixations,dur}`, `lookback_{n_fixations,dur}`,",
-    "`lookfrom_{n_fixations,dur}`.",
-    "",
-    "Needs a `sentence_id` per word: from the dataset where it exists (OneStop and",
-    "MultiplEYE both carry one), otherwise inferred by sentence-final punctuation over the",
-    "reading-order word sequence. Then the measures fall out of the run structure",
-    "(**PRE-16**). Surface as a per-sentence table in Data Inspection + export",
-    "(**EXP-3**), and as an aggregation unit in Corpus Analysis alongside word and trial.",
-    "Sentence is the level most reading papers actually report at, and it is the biggest",
-    "single hole in the measure set. Related: **PRE-4**, **PRE-16**, **AN-30**.",
-    "",
-  "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
-  "",
-  "**What was done.** Added sentence-ID inference and a per-sentence table covering run/reread, regression, first-pass, go-past, forward/reread, lookback, lookfrom, duration, fixation count, and reading-rate measures.",
-  "",
-  "**What's left.** User approval; sparse datasets intentionally expose only fields supported by their inputs.",
-  "",
-  "**Background (technical).** Sentence measures share the materialized run structure and are exposed through Data Inspection, API/CLI analysis, and the full-family export."
-   ]
+  "request": [
+   "Scanpath Studio has **no sentence concept at all** — `grep sentence scanpath_studio/*.py`",
+   "matches only prose in comments. GazeGenie emits a full per-sentence table (popEye",
+   "definitions): `skip`, `nrun`, `reread`, `reg_in` / `reg_out`, `total_n_fixations`,",
+   "`total_dur`, reading `rate` (words/min), `gopast` + `gopast_sel` (selective go-past =",
+   "regression-path duration minus the regression path itself), the `firstrun_*` variants,",
+   "`firstpass_n_fixations` / `firstpass_dur`, and the four path measures from the SR",
+   "*Getting Reading Measures* tool — `firstpass_forward_{n_fixations,dur}`,",
+   "`firstpass_reread_{n_fixations,dur}`, `lookback_{n_fixations,dur}`,",
+   "`lookfrom_{n_fixations,dur}`.",
+   "",
+   "Needs a `sentence_id` per word: from the dataset where it exists (OneStop and",
+   "MultiplEYE both carry one), otherwise inferred by sentence-final punctuation over the",
+   "reading-order word sequence. Then the measures fall out of the run structure",
+   "(**PRE-16**). Surface as a per-sentence table in Data Inspection + export",
+   "(**EXP-3**), and as an aggregation unit in Corpus Analysis alongside word and trial.",
+   "Sentence is the level most reading papers actually report at, and it is the biggest",
+   "single hole in the measure set. Related: **PRE-4**, **PRE-16**, **AN-30**.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ],
+  "whatWasDone": [
+   "Added sentence-ID inference and a per-sentence table covering run/reread, regression, first-pass, go-past, forward/reread, lookback, lookfrom, duration, fixation count, and reading-rate measures."
+  ],
+  "whatsLeft": [
+   "User approval; sparse datasets intentionally expose only fields supported by their inputs."
+  ],
+  "background": [
+   "Sentence measures share the materialized run structure and are exposed through Data Inspection, API/CLI analysis, and the full-family export."
+  ]
   },
   {
   "id": "PRE-12",
@@ -5748,32 +5883,35 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Saccades exist today only as a *per-fixation* classification —",
-    "`measures.classify_saccades` returns forward / regression / return_sweep — plus a",
-    "`saccade_amplitude` in **pixels**. GazeGenie emits a saccades dataframe as a sibling of",
-    "the fixations dataframe: `xs`/`ys`/`xe`/`ye`, duration, `ampl` in **degrees of visual",
-    "angle**, `pv` (**peak velocity**, deg/s), `angle`, `dX`/`dY`, Euclidean distance,",
-    "blink-before/after, and — once lines are assigned — starting line, landing line,",
-    "word-on-line at each end, and launch/landing letter positions.",
-    "",
-    "Two of these need inputs the app doesn't use yet: degrees needs screen geometry",
-    "(viewing distance + px/mm — that is **DATA-2**'s experimental-setup parameters), and",
-    "peak velocity needs the raw gaze samples (which the app already loads but only",
-    "displays). Also add the cheap fixation-side counterparts `angle_incoming` /",
-    "`angle_outgoing`, which characterize scanpath shape and cost nothing.",
-    "",
-    "Amplitude in degrees is the unit saccade findings are reported in; pixels are not",
-    "comparable across setups. Related: **DATA-2**, **DATA-15**, **EXP-3**.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
-    "",
-    "**What was done.** Added a first-class saccade table with endpoints, deltas, duration, angle, pixel and optional degree amplitudes, raw-gaze peak velocity, blink flags, line/word endpoints, and launch/landing letters; fixations also carry incoming/outgoing angles.",
-    "",
-    "**What's left.** User approval; sparse datasets intentionally expose only fields supported by their inputs.",
-    "",
-    "**Background (technical).** Screen calibration supplies degrees and optional raw gaze supplies peak velocity; unsupported physical fields remain missing rather than inventing values."
-   ]
+  "request": [
+   "Saccades exist today only as a *per-fixation* classification —",
+   "`measures.classify_saccades` returns forward / regression / return_sweep — plus a",
+   "`saccade_amplitude` in **pixels**. GazeGenie emits a saccades dataframe as a sibling of",
+   "the fixations dataframe: `xs`/`ys`/`xe`/`ye`, duration, `ampl` in **degrees of visual",
+   "angle**, `pv` (**peak velocity**, deg/s), `angle`, `dX`/`dY`, Euclidean distance,",
+   "blink-before/after, and — once lines are assigned — starting line, landing line,",
+   "word-on-line at each end, and launch/landing letter positions.",
+   "",
+   "Two of these need inputs the app doesn't use yet: degrees needs screen geometry",
+   "(viewing distance + px/mm — that is **DATA-2**'s experimental-setup parameters), and",
+   "peak velocity needs the raw gaze samples (which the app already loads but only",
+   "displays). Also add the cheap fixation-side counterparts `angle_incoming` /",
+   "`angle_outgoing`, which characterize scanpath shape and cost nothing.",
+   "",
+   "Amplitude in degrees is the unit saccade findings are reported in; pixels are not",
+   "comparable across setups. Related: **DATA-2**, **DATA-15**, **EXP-3**.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ],
+  "whatWasDone": [
+   "Added a first-class saccade table with endpoints, deltas, duration, angle, pixel and optional degree amplitudes, raw-gaze peak velocity, blink flags, line/word endpoints, and launch/landing letters; fixations also carry incoming/outgoing angles."
+  ],
+  "whatsLeft": [
+   "User approval; sparse datasets intentionally expose only fields supported by their inputs."
+  ],
+  "background": [
+   "Screen calibration supplies degrees and optional raw gaze supplies peak velocity; unsupported physical fields remain missing rather than inventing values."
+  ]
   },
   {
   "id": "PRE-13",
@@ -5788,27 +5926,30 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** The app has no notion of a blink. GazeGenie flags `blink_before` / `blink_after` /",
-    "`blink` on both fixations and saccades, and its **first** cleaning option is *\"should",
-    "fixations that happen just before or after a blink event be discarded?\"* (default",
-    "**on**) — standard practice, because the fixations bracketing a blink are the ones most",
-    "likely to be mislocated, and they contaminate whatever word they land on.",
-    "",
-    "Needs a blink source: EyeLink `EBLINK` events via **PRE-7**, a `blink` column when the",
-    "dataset ships one, or a gap heuristic over raw gaze. Then wire it in three places — a",
-    "fourth class in the **PRE-2** fixation flags (Off / Highlight / **Discard**), a real",
-    "`excluded` reason once **PRE-1** exists, and a per-trial blink count in the trial /",
-    "reader summaries (**AN-30**). Related: **PRE-1**, **PRE-2**, **PRE-7**, **AN-30**.",
-    "",
-    "**What was done.** Added detection of shipped blink columns, before/after flags, optional soft exclusion, plot highlighting/discard support, saccade flags, and trial/reader blink counts.",
-    "",
-    "**What's left.** User approval; parsing native EyeLink blink events remains with PRE-7.",
-    "",
-    "**Background (technical).** Blink-adjacent cleaning records excluded_reason and preserves the original row, so measures and QA share one auditable decision.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "The app has no notion of a blink. GazeGenie flags `blink_before` / `blink_after` /",
+   "`blink` on both fixations and saccades, and its **first** cleaning option is *\"should",
+   "fixations that happen just before or after a blink event be discarded?\"* (default",
+   "**on**) — standard practice, because the fixations bracketing a blink are the ones most",
+   "likely to be mislocated, and they contaminate whatever word they land on.",
+   "",
+   "Needs a blink source: EyeLink `EBLINK` events via **PRE-7**, a `blink` column when the",
+   "dataset ships one, or a gap heuristic over raw gaze. Then wire it in three places — a",
+   "fourth class in the **PRE-2** fixation flags (Off / Highlight / **Discard**), a real",
+   "`excluded` reason once **PRE-1** exists, and a per-trial blink count in the trial /",
+   "reader summaries (**AN-30**). Related: **PRE-1**, **PRE-2**, **PRE-7**, **AN-30**."
+  ],
+  "whatWasDone": [
+   "Added detection of shipped blink columns, before/after flags, optional soft exclusion, plot highlighting/discard support, saccade flags, and trial/reader blink counts."
+  ],
+  "whatsLeft": [
+   "User approval; parsing native EyeLink blink events remains with PRE-7."
+  ],
+  "background": [
+   "Blink-adjacent cleaning records excluded_reason and preserves the original row, so measures and QA share one auditable decision.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "PRE-14",
@@ -5823,29 +5964,32 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** **PRE-2** shipped *discard* for short fixations. GazeGenie offers three policies and",
-    "defaults to a merging one: **Merge** (fold a sub-threshold fixation into its previous or",
-    "next neighbour when they are within N character widths horizontally; drop it if it is",
-    "last and unmergeable), **Merge then discard** (merge what can be merged, discard the",
-    "rest), **Discard** (today's behaviour). Defaults: 80 ms threshold, merge distance in",
-    "character widths.",
-    "",
-    "Merging is the popEye / EyeLink-standard treatment and it is *not* equivalent to",
-    "discarding — a merged fixation's duration is added to its neighbour rather than",
-    "vanishing, so first-fixation and gaze durations move. Implement inside the **PRE-1**",
-    "pipeline stage so it reaches measures and export, not only the plot; expose the",
-    "threshold and the distance in character widths (not pixels, so it travels across",
-    "fonts). Related: **PRE-1**, **PRE-2**, **PRE-19** (character widths).",
-    "",
-    "**What was done.** Added Merge, Merge then discard, and Discard policies with configurable duration and character-distance thresholds and preserved original durations.",
-    "",
-    "**What's left.** User approval and corpus-specific threshold selection.",
-    "",
-    "**Background (technical).** A merged source row is soft-excluded while its duration is transferred to the closest temporal neighbour within the character-width bound.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "**PRE-2** shipped *discard* for short fixations. GazeGenie offers three policies and",
+   "defaults to a merging one: **Merge** (fold a sub-threshold fixation into its previous or",
+   "next neighbour when they are within N character widths horizontally; drop it if it is",
+   "last and unmergeable), **Merge then discard** (merge what can be merged, discard the",
+   "rest), **Discard** (today's behaviour). Defaults: 80 ms threshold, merge distance in",
+   "character widths.",
+   "",
+   "Merging is the popEye / EyeLink-standard treatment and it is *not* equivalent to",
+   "discarding — a merged fixation's duration is added to its neighbour rather than",
+   "vanishing, so first-fixation and gaze durations move. Implement inside the **PRE-1**",
+   "pipeline stage so it reaches measures and export, not only the plot; expose the",
+   "threshold and the distance in character widths (not pixels, so it travels across",
+   "fonts). Related: **PRE-1**, **PRE-2**, **PRE-19** (character widths)."
+  ],
+  "whatWasDone": [
+   "Added Merge, Merge then discard, and Discard policies with configurable duration and character-distance thresholds and preserved original durations."
+  ],
+  "whatsLeft": [
+   "User approval and corpus-specific threshold selection."
+  ],
+  "background": [
+   "A merged source row is soft-excluded while its duration is transferred to the closest temporal neighbour within the character-width bound.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "PRE-15",
@@ -5860,29 +6004,32 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** GazeGenie records the whole cleaning history per trial as columns: fixations *before*",
-    "cleaning; how many were discarded as too long / far out of text / blink-adjacent; how",
-    "many were merged; each as **both a count and a % of the trial's fixations**; and which",
-    "short-fixation policy was used. It also runs a sanity check that warns when a single",
-    "word collects an implausible number of fixations",
-    "(`check_for_large_number_of_fixations_on_word`) — a cheap detector for a bad line",
-    "assignment or a misaligned stimulus.",
-    "",
-    "Give Scanpath Studio the same: an exportable per-trial QA row, an in-app warning strip",
-    "on the affected trials, and the numbers written into the settings sidecar / figure",
-    "caption, so a published figure carries what was thrown away to make it. Right now a",
-    "user can silently drop a third of a trial's fixations and nothing on screen says so.",
-    "Related: **PRE-2**, **PRE-14**, **PRE-18**, **VAL-1**.",
-    "",
-    "**What was done.** Added per-trial before/excluded counts and percentages, reason/policy counts, suspicious word-load detection, in-app warnings/captions, API tables, and export sidecars.",
-    "",
-    "**What's left.** User approval and tuning of the suspicious-load threshold on larger corpora.",
-    "",
-    "**Background (technical).** QA is derived from retained rows and exclusion reasons, so the displayed report can be reproduced from the exported fixation table.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "GazeGenie records the whole cleaning history per trial as columns: fixations *before*",
+   "cleaning; how many were discarded as too long / far out of text / blink-adjacent; how",
+   "many were merged; each as **both a count and a % of the trial's fixations**; and which",
+   "short-fixation policy was used. It also runs a sanity check that warns when a single",
+   "word collects an implausible number of fixations",
+   "(`check_for_large_number_of_fixations_on_word`) — a cheap detector for a bad line",
+   "assignment or a misaligned stimulus.",
+   "",
+   "Give Scanpath Studio the same: an exportable per-trial QA row, an in-app warning strip",
+   "on the affected trials, and the numbers written into the settings sidecar / figure",
+   "caption, so a published figure carries what was thrown away to make it. Right now a",
+   "user can silently drop a third of a trial's fixations and nothing on screen says so.",
+   "Related: **PRE-2**, **PRE-14**, **PRE-18**, **VAL-1**."
+  ],
+  "whatWasDone": [
+   "Added per-trial before/excluded counts and percentages, reason/policy counts, suspicious word-load detection, in-app warnings/captions, API tables, and export sidecars."
+  ],
+  "whatsLeft": [
+   "User approval and tuning of the suspicious-load threshold on larger corpora."
+  ],
+  "background": [
+   "QA is derived from retained rows and exclusion reasons, so the displayed report can be reproduced from the exported fixation table.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "PRE-16",
@@ -5897,28 +6044,31 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** `measures.compute_per_word_measures` computes first-pass quantities inline, inside one",
-    "pass over the fixations. GazeGenie instead materializes the **run** structure as",
-    "columns — `run` and `linerun` per fixation, `word_run` / `word_runid` / `word_run_fix`",
-    "per word visit, `nrun` and `reread` per word and per sentence — and then derives every",
-    "first-pass-vs-rereading measure from it.",
-    "",
-    "Worth copying for three reasons: (a) **PRE-4**'s `second_pass_duration` and",
-    "**PRE-11**'s lookback / lookfrom measures become trivial instead of each needing its own",
-    "temporal walk; (b) it is a genuinely good **color-by** for the scanpath plot — *which",
-    "pass over this word is this fixation part of?* — which today cannot be asked; (c) it",
-    "gives Corpus Analysis a first-pass / rereading split, which is how reading-time effects",
-    "are usually decomposed. Related: **PRE-4**, **PRE-11**, **AN-30**.",
-    "",
-    "**What was done.** Materialized run, line-run, word visit ID, visit number, fixation-within-visit, run count, and reread columns on enriched fixations.",
-    "",
-    "**What's left.** User approval and possible color-by presets for run structure.",
-    "",
-    "**Background (technical).** The transformation is idempotent and trial-scoped, and now backs second-pass, sentence, and summary calculations.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "`measures.compute_per_word_measures` computes first-pass quantities inline, inside one",
+   "pass over the fixations. GazeGenie instead materializes the **run** structure as",
+   "columns — `run` and `linerun` per fixation, `word_run` / `word_runid` / `word_run_fix`",
+   "per word visit, `nrun` and `reread` per word and per sentence — and then derives every",
+   "first-pass-vs-rereading measure from it.",
+   "",
+   "Worth copying for three reasons: (a) **PRE-4**'s `second_pass_duration` and",
+   "**PRE-11**'s lookback / lookfrom measures become trivial instead of each needing its own",
+   "temporal walk; (b) it is a genuinely good **color-by** for the scanpath plot — *which",
+   "pass over this word is this fixation part of?* — which today cannot be asked; (c) it",
+   "gives Corpus Analysis a first-pass / rereading split, which is how reading-time effects",
+   "are usually decomposed. Related: **PRE-4**, **PRE-11**, **AN-30**."
+  ],
+  "whatWasDone": [
+   "Materialized run, line-run, word visit ID, visit number, fixation-within-visit, run count, and reread columns on enriched fixations."
+  ],
+  "whatsLeft": [
+   "User approval and possible color-by presets for run structure."
+  ],
+  "background": [
+   "The transformation is idempotent and trial-scoped, and now backs second-pass, sentence, and summary calculations.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "PRE-17",
@@ -5933,30 +6083,33 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** `alignment.ALGORITHMS` ships the Carr et al. (2021) ten. GazeGenie offers two more that",
-    "are worth having:",
-    "",
-    "- **`slice`** — the post-2021 eyekit addition, deliberately dropped when **PRE-3**",
-    "  landed. GazeGenie makes it half of its *default* choice (`[\"slice\", \"DIST\"]`).",
-    "- **Wisdom of the crowd** — run every classic algorithm and take the per-fixation",
-    "  **consensus** line. It beats any single algorithm on noisy data in Carr's own",
-    "  evaluation, and it is nearly free here: the 📐 Line assignment grid (**PRE-3**)",
-    "  already runs all ten for the comparison panels, so the votes exist.",
-    "",
-    "Report the **agreement** alongside the result (how many algorithms voted for the winning",
-    "line): fixations where the algorithms disagree are exactly the ones a user should look",
-    "at, and that is a better confidence signal than any single algorithm's output. Related:",
-    "**PRE-3**, **PRE-10**, **PRE-18**.",
-    "",
-    "**What was done.** Added slice and consensus to the alignment registry, majority-vote assignments, per-fixation agreement, UI selection, CLI/API compatibility, and tests.",
-    "",
-    "**What's left.** User approval and evaluation against hand-labelled noisy trials.",
-    "",
-    "**Background (technical).** Consensus votes across the classic native algorithms; agreement records the winning vote share rather than hiding disagreement.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "`alignment.ALGORITHMS` ships the Carr et al. (2021) ten. GazeGenie offers two more that",
+   "are worth having:",
+   "",
+   "- **`slice`** — the post-2021 eyekit addition, deliberately dropped when **PRE-3**",
+   "  landed. GazeGenie makes it half of its *default* choice (`[\"slice\", \"DIST\"]`).",
+   "- **Wisdom of the crowd** — run every classic algorithm and take the per-fixation",
+   "  **consensus** line. It beats any single algorithm on noisy data in Carr's own",
+   "  evaluation, and it is nearly free here: the 📐 Line assignment grid (**PRE-3**)",
+   "  already runs all ten for the comparison panels, so the votes exist.",
+   "",
+   "Report the **agreement** alongside the result (how many algorithms voted for the winning",
+   "line): fixations where the algorithms disagree are exactly the ones a user should look",
+   "at, and that is a better confidence signal than any single algorithm's output. Related:",
+   "**PRE-3**, **PRE-10**, **PRE-18**."
+  ],
+  "whatWasDone": [
+   "Added slice and consensus to the alignment registry, majority-vote assignments, per-fixation agreement, UI selection, CLI/API compatibility, and tests."
+  ],
+  "whatsLeft": [
+   "User approval and evaluation against hand-labelled noisy trials."
+  ],
+  "background": [
+   "Consensus votes across the classic native algorithms; agreement records the winning vote share rather than hiding disagreement.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "PRE-18",
@@ -5971,29 +6124,32 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** GazeGenie suffixes **every line-dependent column** with the algorithm that produced it",
-    "— `y_ALGO`, `y_ALGO_correction`, `word_land_ALGO`, `firstrun_dur_ALGO`, `skip_ALGO`, … —",
-    "so a run can carry several assignments at once, and reports",
-    "`average_y_correction_ALGO` per trial: how far, on average, that algorithm moved the",
-    "fixations.",
-    "",
-    "This turns \"which algorithm?\" from a blind choice into a measurable one. Compute the",
-    "headline measures under two or three algorithms and show where they **disagree**, per",
-    "trial and per word — the trials whose conclusions depend on the algorithm are the ones",
-    "that need a human. The comparison grid already computes the corrections; what is missing",
-    "is carrying them through `compute_per_word_measures` and reporting the spread. Also",
-    "surface `average_y_correction` as a per-trial QA number (a trial needing a large mean",
-    "correction deserves a look). Related: **PRE-3**, **PRE-10**, **PRE-15**, **PRE-17**.",
-    "",
-    "**What was done.** Added alignment-sensitivity helpers and UI/API reports for mean correction and measure spread across selected algorithms.",
-    "",
-    "**What's left.** User approval and selection of the default comparison algorithm set.",
-    "",
-    "**Background (technical).** Each assignment is corrected and measured independently; the report retains algorithm-suffixed values and summarizes disagreement without overwriting raw coordinates.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "GazeGenie suffixes **every line-dependent column** with the algorithm that produced it",
+   "— `y_ALGO`, `y_ALGO_correction`, `word_land_ALGO`, `firstrun_dur_ALGO`, `skip_ALGO`, … —",
+   "so a run can carry several assignments at once, and reports",
+   "`average_y_correction_ALGO` per trial: how far, on average, that algorithm moved the",
+   "fixations.",
+   "",
+   "This turns \"which algorithm?\" from a blind choice into a measurable one. Compute the",
+   "headline measures under two or three algorithms and show where they **disagree**, per",
+   "trial and per word — the trials whose conclusions depend on the algorithm are the ones",
+   "that need a human. The comparison grid already computes the corrections; what is missing",
+   "is carrying them through `compute_per_word_measures` and reporting the spread. Also",
+   "surface `average_y_correction` as a per-trial QA number (a trial needing a large mean",
+   "correction deserves a look). Related: **PRE-3**, **PRE-10**, **PRE-15**, **PRE-17**."
+  ],
+  "whatWasDone": [
+   "Added alignment-sensitivity helpers and UI/API reports for mean correction and measure spread across selected algorithms."
+  ],
+  "whatsLeft": [
+   "User approval and selection of the default comparison algorithm set."
+  ],
+  "background": [
+   "Each assignment is corrected and measured independently; the report retains algorithm-suffixed values and summarizes disagreement without overwriting raw coordinates.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "PRE-19",
@@ -6008,30 +6164,33 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** `data.aggregate_char_boxes` reads character-level AOIs but collapses them to word boxes",
-    "immediately; nothing downstream is character-aware. GazeGenie keeps a **character",
-    "dataframe** — per-character box, `letternum`, `letline` (position from line start),",
-    "`letword` (position from the space before the word), char → word / sentence membership —",
-    "and expresses landing and launch in **letters** rather than pixels: `word_land`,",
-    "`firstfix_cland` (centred landing position, Vitu et al. 2001: `land - (len+1)/2`),",
-    "`firstfix_launch`, and `sac_in` / `sac_out` in letters.",
-    "",
-    "Letters are the unit the reading literature reports landing positions in, and they are",
-    "what makes those measures comparable across fonts and datasets. A character grid also",
-    "unblocks **PRE-8** (`duration_mass` spreads duration over *characters*) and gives",
-    "`aggregation.landing_positions` a definition that can be made direction-aware for",
-    "**PRE-6** — today it measures from `_box_left`, which is the wrong end of an RTL word.",
-    "Related: **PRE-4**, **PRE-6**, **PRE-8**, **PRE-14**.",
-    "",
-    "**What was done.** Added an exportable character grid with line/word positions and direction-aware letter landing/launch fields on the saccade table.",
-    "",
-    "**What's left.** User approval and validation against corpora that provide native character AOIs.",
-    "",
-    "**Background (technical).** When only word boxes exist, character centres are deterministically interpolated; explicit direction reverses the within-word letter order.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "`data.aggregate_char_boxes` reads character-level AOIs but collapses them to word boxes",
+   "immediately; nothing downstream is character-aware. GazeGenie keeps a **character",
+   "dataframe** — per-character box, `letternum`, `letline` (position from line start),",
+   "`letword` (position from the space before the word), char → word / sentence membership —",
+   "and expresses landing and launch in **letters** rather than pixels: `word_land`,",
+   "`firstfix_cland` (centred landing position, Vitu et al. 2001: `land - (len+1)/2`),",
+   "`firstfix_launch`, and `sac_in` / `sac_out` in letters.",
+   "",
+   "Letters are the unit the reading literature reports landing positions in, and they are",
+   "what makes those measures comparable across fonts and datasets. A character grid also",
+   "unblocks **PRE-8** (`duration_mass` spreads duration over *characters*) and gives",
+   "`aggregation.landing_positions` a definition that can be made direction-aware for",
+   "**PRE-6** — today it measures from `_box_left`, which is the wrong end of an RTL word.",
+   "Related: **PRE-4**, **PRE-6**, **PRE-8**, **PRE-14**."
+  ],
+  "whatWasDone": [
+   "Added an exportable character grid with line/word positions and direction-aware letter landing/launch fields on the saccade table."
+  ],
+  "whatsLeft": [
+   "User approval and validation against corpora that provide native character AOIs."
+  ],
+  "background": [
+   "When only word boxes exist, character centres are deterministically interpolated; explicit direction reverses the within-word letter order.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "PRE-20",
@@ -6046,34 +6205,34 @@ window.TRACKER = {
   "group": "Preprocessing — eyekit parity",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** GazeGenie's headline differentiator over the classic algorithms is a **trained model**",
-    "for line assignment: `DIST` (a single network) and `DIST-Ensemble`, plus hybrids that",
-    "feed the model's prediction into the consensus vote",
-    "(`Wisdom_of_Crowds_with_DIST[_Ensemble]`). It ships checkpoints in `models/`, uses",
-    "PyTorch Lightning + timm, and falls back to the classic-only consensus when the model",
-    "fails or the fixation sequence exceeds the model's max length.",
-    "",
-    "**Parked, not rejected.** The cost is the problem, not the idea: torch + lightning +",
-    "timm + bundled checkpoints against a package that is `pip install scanpath-studio`, runs",
-    "the demo on Streamlit Cloud, and ships a desktop build (**ENG-19**/**20**). If this is",
-    "ever wanted, the shape is an **optional extra** (`pip install scanpath-studio[neural]`)",
-    "that registers itself as one more entry in `alignment.ALGORITHMS` and is simply absent",
-    "when the extra isn't installed — never a hard dependency. **PRE-17**'s consensus is the",
-    "cheap 80 % of the benefit and should land first. Related: **PRE-3**, **PRE-17**.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
-    "",
-    "**2026-08-07.** The model also ships as its own standalone repo,",
-    "[DIST-Dual_Input_Stream_Transformer](https://github.com/Gittingthehubbing/DIST-Dual_Input_Stream_Transformer)",
-    "(same author, same drift-correction task), with a Hugging Face Space demo, a",
-    "notebook-based correction workflow, a full training pipeline, and a companion",
-    "OSF dataset — decoupled from the rest of the GazeGenie app. Worth re-checking",
-    "against that repo directly if this is picked up: it may be a lighter integration",
-    "path than pulling in the full GazeGenie stack (still torch + lightning + timm,",
-    "but without GazeGenie's other dependencies), which would change the cost side",
-    "of the parked decision above."
-   ]
+  "request": [
+   "GazeGenie's headline differentiator over the classic algorithms is a **trained model**",
+   "for line assignment: `DIST` (a single network) and `DIST-Ensemble`, plus hybrids that",
+   "feed the model's prediction into the consensus vote",
+   "(`Wisdom_of_Crowds_with_DIST[_Ensemble]`). It ships checkpoints in `models/`, uses",
+   "PyTorch Lightning + timm, and falls back to the classic-only consensus when the model",
+   "fails or the fixation sequence exceeds the model's max length.",
+   "",
+   "**Parked, not rejected.** The cost is the problem, not the idea: torch + lightning +",
+   "timm + bundled checkpoints against a package that is `pip install scanpath-studio`, runs",
+   "the demo on Streamlit Cloud, and ships a desktop build (**ENG-19**/**20**). If this is",
+   "ever wanted, the shape is an **optional extra** (`pip install scanpath-studio[neural]`)",
+   "that registers itself as one more entry in `alignment.ALGORITHMS` and is simply absent",
+   "when the extra isn't installed — never a hard dependency. **PRE-17**'s consensus is the",
+   "cheap 80 % of the benefit and should land first. Related: **PRE-3**, **PRE-17**.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
+   "",
+   "**2026-08-07.** The model also ships as its own standalone repo,",
+   "[DIST-Dual_Input_Stream_Transformer](https://github.com/Gittingthehubbing/DIST-Dual_Input_Stream_Transformer)",
+   "(same author, same drift-correction task), with a Hugging Face Space demo, a",
+   "notebook-based correction workflow, a full training pipeline, and a companion",
+   "OSF dataset — decoupled from the rest of the GazeGenie app. Worth re-checking",
+   "against that repo directly if this is picked up: it may be a lighter integration",
+   "path than pulling in the full GazeGenie stack (still torch + lightning + timm,",
+   "but without GazeGenie's other dependencies), which would change the cost side",
+   "of the parked decision above."
+  ]
   },
   {
   "id": "AN-30",
@@ -6088,30 +6247,33 @@ window.TRACKER = {
   "group": "Analysis & corpus views",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** `aggregation.reader_summary` / `_summary_row` builds a per-reader row (n_trials,",
-    "n_fixations, mean fixation ms, mean saccade px, regression rate, wpm, skip rate) to",
-    "back the *Per reader* view — but it is not a first-class exportable table and it is",
-    "thinner than the standard summary. GazeGenie exports **two**: a per-trial table and a",
-    "per-subject table, carrying n fixations, blink count, mean and total fixation duration,",
-    "mean (forward) saccade length, **skip / refixation / regression-in rates**, `nrun`,",
-    "**first-pass time vs. rereading time**, reading rate in words/min, and **comprehension",
-    "accuracy** (`question_correct` per trial, `n_question_correct` per subject).",
-    "",
-    "Refixation rate, the first-pass/rereading split and comprehension accuracy are the",
-    "missing ones, and each has a home already: refixation and the split come from",
-    "**PRE-16**'s runs; accuracy exists in OneStop and MultiplEYE but is never surfaced. Make",
-    "both tables first-class and exportable (**EXP-3**), and have the *Per reader* / *Groups*",
-    "views read them instead of recomputing. Related: **PRE-11**, **PRE-16**, **EXP-3**.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*",
-    "",
-    "**What was done.** Added first-class trial and reader summaries with fixation, blink, saccade, skip/refixation/regression, run, first-pass/rereading, rate, and comprehension fields; surfaced them in the app, API, CLI, and exports.",
-    "",
-    "**What's left.** User approval; sparse datasets intentionally expose only fields supported by their inputs.",
-    "",
-    "**Background (technical).** Shared aggregation helpers now feed every surface so summary definitions do not drift between the UI and downloaded tables."
-   ]
+  "request": [
+   "`aggregation.reader_summary` / `_summary_row` builds a per-reader row (n_trials,",
+   "n_fixations, mean fixation ms, mean saccade px, regression rate, wpm, skip rate) to",
+   "back the *Per reader* view — but it is not a first-class exportable table and it is",
+   "thinner than the standard summary. GazeGenie exports **two**: a per-trial table and a",
+   "per-subject table, carrying n fixations, blink count, mean and total fixation duration,",
+   "mean (forward) saccade length, **skip / refixation / regression-in rates**, `nrun`,",
+   "**first-pass time vs. rereading time**, reading rate in words/min, and **comprehension",
+   "accuracy** (`question_correct` per trial, `n_question_correct` per subject).",
+   "",
+   "Refixation rate, the first-pass/rereading split and comprehension accuracy are the",
+   "missing ones, and each has a home already: refixation and the split come from",
+   "**PRE-16**'s runs; accuracy exists in OneStop and MultiplEYE but is never surfaced. Make",
+   "both tables first-class and exportable (**EXP-3**), and have the *Per reader* / *Groups*",
+   "views read them instead of recomputing. Related: **PRE-11**, **PRE-16**, **EXP-3**.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ],
+  "whatWasDone": [
+   "Added first-class trial and reader summaries with fixation, blink, saccade, skip/refixation/regression, run, first-pass/rereading, rate, and comprehension fields; surfaced them in the app, API, CLI, and exports."
+  ],
+  "whatsLeft": [
+   "User approval; sparse datasets intentionally expose only fields supported by their inputs."
+  ],
+  "background": [
+   "Shared aggregation helpers now feed every surface so summary definitions do not drift between the UI and downloaded tables."
+  ]
   },
   {
   "id": "DATA-18",
@@ -6126,24 +6288,24 @@ window.TRACKER = {
   "group": "Datasets & ingestion",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** GazeGenie ships `create_interest_areas_from_image.py`: run Tesseract over the stimulus",
-    "screenshot, recover per-word **and** per-character bounding boxes, and draw them back",
-    "over the image so the result can be eyeballed before use.",
-    "",
-    "That is the missing on-ramp for a common case — a lab kept the screenshots but never",
-    "exported an interest-area report — which today the app simply cannot open, since word",
-    "boxes are the one thing it can't derive. It pairs naturally with **VIZ-14** (per-trial",
-    "stimulus images from a folder + naming pattern): the same image that becomes the plot",
-    "background becomes the AOIs.",
-    "",
-    "Keep it optional (pytesseract is a *system* dependency, not a wheel — same",
-    "\"absent when not installed\" shape as **PRE-20**), always render the derived boxes over",
-    "the image for inspection, and let the result be corrected/saved rather than trusted",
-    "blind. Related: **VIZ-14**, **PRE-5**, **DATA-1**.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "GazeGenie ships `create_interest_areas_from_image.py`: run Tesseract over the stimulus",
+   "screenshot, recover per-word **and** per-character bounding boxes, and draw them back",
+   "over the image so the result can be eyeballed before use.",
+   "",
+   "That is the missing on-ramp for a common case — a lab kept the screenshots but never",
+   "exported an interest-area report — which today the app simply cannot open, since word",
+   "boxes are the one thing it can't derive. It pairs naturally with **VIZ-14** (per-trial",
+   "stimulus images from a folder + naming pattern): the same image that becomes the plot",
+   "background becomes the AOIs.",
+   "",
+   "Keep it optional (pytesseract is a *system* dependency, not a wheel — same",
+   "\"absent when not installed\" shape as **PRE-20**), always render the derived boxes over",
+   "the image for inspection, and let the result be corrected/saved rather than trusted",
+   "blind. Related: **VIZ-14**, **PRE-5**, **DATA-1**.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
    "id": "DATA-19",
@@ -6211,27 +6373,30 @@ window.TRACKER = {
   "group": "Export",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** Bulk export writes `fixations.csv` + `measures.csv` per trial and the concatenated",
-    "`all_*` pair ([`export.py`](scanpath_studio/export.py)). GazeGenie's batch mode writes",
-    "the whole family: fixations, **saccades**, word measures, **sentence measures**, a",
-    "**per-trial** summary, a **per-subject** summary, the character / stimulus tables, and",
-    "the **run configuration** — with an explicit choice between one file per trial and one",
-    "concatenated file per run.",
-    "",
-    "As **PRE-11** / **PRE-12** / **AN-30** land, extend the export scope picker to cover",
-    "them rather than bolting each on separately, and write the preprocessing + cleaning",
-    "settings alongside (**PRE-15**) as the reproducibility record for the numbers in the",
-    "zip. Related: **PRE-11**, **PRE-12**, **PRE-15**, **AN-30**.",
-    "",
-    "**What was done.** Added a Full measure family option with per-trial and aggregate saccades, sentence/trial/reader tables, character grids, cleaning QA, and run configuration; added matching API and CLI analysis export.",
-    "",
-    "**What's left.** User approval and a size check on a full production corpus.",
-    "",
-    "**Background (technical).** Existing fixation/word mega-table behavior is unchanged; the new family is opt-in and uses the same CSV/Parquet format selection.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "Bulk export writes `fixations.csv` + `measures.csv` per trial and the concatenated",
+   "`all_*` pair ([`export.py`](scanpath_studio/export.py)). GazeGenie's batch mode writes",
+   "the whole family: fixations, **saccades**, word measures, **sentence measures**, a",
+   "**per-trial** summary, a **per-subject** summary, the character / stimulus tables, and",
+   "the **run configuration** — with an explicit choice between one file per trial and one",
+   "concatenated file per run.",
+   "",
+   "As **PRE-11** / **PRE-12** / **AN-30** land, extend the export scope picker to cover",
+   "them rather than bolting each on separately, and write the preprocessing + cleaning",
+   "settings alongside (**PRE-15**) as the reproducibility record for the numbers in the",
+   "zip. Related: **PRE-11**, **PRE-12**, **PRE-15**, **AN-30**."
+  ],
+  "whatWasDone": [
+   "Added a Full measure family option with per-trial and aggregate saccades, sentence/trial/reader tables, character grids, cleaning QA, and run configuration; added matching API and CLI analysis export."
+  ],
+  "whatsLeft": [
+   "User approval and a size check on a full production corpus."
+  ],
+  "background": [
+   "Existing fixation/word mega-table behavior is unchanged; the new family is opt-in and uses the same CSV/Parquet format selection.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
   "id": "VAL-4",
@@ -6246,22 +6411,22 @@ window.TRACKER = {
   "group": "Validation",
   "subgroup": "",
   "archived": false,
-  "body": [
-    "**Request.** GazeGenie is useful to us as an **oracle**, independent of whether we adopt any of its",
-    "features: it computes word measures three ways over the same trial — its own",
-    "(`analysis_funcs.py`), popEye's aggregation (`popEye_funcs.py`), and EMReading's",
-    "(`emreading_funcs.word_measures_EM`) — and can run eyekit's alongside.",
-    "",
-    "Take one trial with a known-good line assignment, run it through",
-    "`measures.compute_per_word_measures` and through the references, and diff the shared",
-    "measures: FFD, gaze duration (FPRT), go-past (RPD), total (TFD), skip, regression-in,",
-    "regression-out. Every systematic difference is either a bug or a documented definitional",
-    "choice — and the manuscript should say which. This also settles the audit **PRE-4** asks",
-    "for (is our `regression_path_duration` the same thing as `go_past_duration`?) with a",
-    "number rather than a reading of the code. Related: **PRE-4**, **PRE-11**, **VAL-1**.",
-    "",
-    "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
-   ]
+  "request": [
+   "GazeGenie is useful to us as an **oracle**, independent of whether we adopt any of its",
+   "features: it computes word measures three ways over the same trial — its own",
+   "(`analysis_funcs.py`), popEye's aggregation (`popEye_funcs.py`), and EMReading's",
+   "(`emreading_funcs.word_measures_EM`) — and can run eyekit's alongside.",
+   "",
+   "Take one trial with a known-good line assignment, run it through",
+   "`measures.compute_per_word_measures` and through the references, and diff the shared",
+   "measures: FFD, gaze duration (FPRT), go-past (RPD), total (TFD), skip, regression-in,",
+   "regression-out. Every systematic difference is either a bug or a documented definitional",
+   "choice — and the manuscript should say which. This also settles the audit **PRE-4** asks",
+   "for (is our `regression_path_duration` the same thing as `go_past_duration`?) with a",
+   "number rather than a reading of the code. Related: **PRE-4**, **PRE-11**, **VAL-1**.",
+   "",
+   "*Surveyed 2026-08-02 from [GazeGenie](https://github.com/Gittingthehubbing/GazeGenie) (Streamlit, parsing → cleaning → line assignment → measures for reading eye-tracking; measure definitions adapted from popEye).*"
+  ]
   },
   {
    "id": "BUG-15",
@@ -6276,15 +6441,17 @@ window.TRACKER = {
    "group": "Bugs",
    "subgroup": "",
    "archived": false,
-   "body": [
+   "statusNote": [
     "> **Pending approval.** The reported bug and the leftover per-widget cleanup",
-    "> are complete (2026-08-03).",
-    "",
-    "**Request.** \"Saccade line style and shape don't show as pressed on first open",
+    "> are complete (2026-08-03)."
+   ],
+   "request": [
+    "\"Saccade line style and shape don't show as pressed on first open",
     "although they should be.\" Both are `st.segmented_control`s in the Saccade-style",
-    "popover, and neither highlighted its active option.",
-    "",
-    "**What was done.** Reproduced in the browser, then fixed at the root for every",
+    "popover, and neither highlighted its active option."
+   ],
+   "whatWasDone": [
+    "Reproduced in the browser, then fixed at the root for every",
     "control in the rail, not just those two. `controls._pin(key, default,",
     "rewrite=…)` replaces the `setdefault` sweep in `_seed_viz_state`: it still leaves",
     "a URL-preset / restored value in place, but *re-asserts* it each run, which is",
@@ -6293,12 +6460,14 @@ window.TRACKER = {
     "on `?show_saccades=0&saccade_style=Dotted&saccade_color=%23ff0000&saccade_render_mode=Arc`:",
     "before, both segmented controls showed **nothing** pressed and the colour picker",
     "showed black; after, **Dotted** and **Arc** are pressed and the picker is red.",
-    "Covered by `tests/test_widget_value_sync.py`.",
-    "",
-    "**What's left.** Nothing. The VIZ-8 saccade-class and per-scanpath comparison",
-    "colour pickers now use the same keyed `_pin` synchronization path.",
-    "",
-    "**Background (technical).** Streamlit sends a session-state value down to the",
+    "Covered by `tests/test_widget_value_sync.py`."
+   ],
+   "whatsLeft": [
+    "Nothing. The VIZ-8 saccade-class and per-scanpath comparison",
+    "colour pickers now use the same keyed `_pin` synchronization path."
+   ],
+   "background": [
+    "Streamlit sends a session-state value down to the",
     "browser only on the run where the key was written **programmatically** — that is",
     "what sets `set_value` on the widget's proto. `setdefault` writes once, on the",
     "first run. A widget whose *first* render happens later (its layer toggle was off",
@@ -6325,15 +6494,16 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Significantly reduce the documentation site's reading load: remove",
+   "request": [
+    "Significantly reduce the documentation site's reading load: remove",
     "repetition, verbosity, misplaced detail, and vague high-level prose. Follow",
     "`overleaf/structure.tex` with one compact tutorial for each of the four intended",
     "use cases (data collection, data filtering, exporting figures, corpus analysis),",
     "one guide for each feature group, and clearer Getting started and Automation &",
-    "reference sections.",
-    "",
-    "**What was done.** The site now has five task-oriented top-level destinations:",
+    "reference sections."
+   ],
+   "whatWasDone": [
+    "The site now has five task-oriented top-level destinations:",
     "Home, Get started, Tutorials, Feature guides, and Automation & reference. Six",
     "mixed-surface tutorials were replaced in navigation by the four workflows from",
     "the paper outline, each about 300 words and covering the default path end to end.",
@@ -6343,12 +6513,14 @@ window.TRACKER = {
     "URLs remain as small forwarding pages. Across the replaced pages this removes",
     "roughly 13,000 words while adding the missing workflow/feature structure. The",
     "rendered landing page and a tutorial were reviewed in the local browser, and",
-    "`mkdocs build --strict` passes without broken-link notices.",
-    "",
-    "**What's left.** Nothing for this pass; awaiting review of the new page boundaries",
-    "and tutorial wording.",
-    "",
-    "**Background (technical).** Navigation lives in [`mkdocs.yml`](mkdocs.yml); the",
+    "`mkdocs build --strict` passes without broken-link notices."
+   ],
+   "whatsLeft": [
+    "Nothing for this pass; awaiting review of the new page boundaries",
+    "and tutorial wording."
+   ],
+   "background": [
+    "Navigation lives in [`mkdocs.yml`](mkdocs.yml); the",
     "new canonical content is under [`docs/tutorials/`](docs/tutorials/) and",
     "[`docs/guides/`](docs/guides/), with [`docs/automation.md`](docs/automation.md)",
     "as the automation decision page. Generated API signatures remain in the API",
@@ -6369,8 +6541,8 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "Code quality",
    "archived": false,
-   "body": [
-    "**Request.** The app logs a deprecation warning on every run:",
+   "request": [
+    "The app logs a deprecation warning on every run:",
     "",
     "```text",
     "`st.components.v1.html` will be removed after 2026-06-01.",
@@ -6378,17 +6550,20 @@ window.TRACKER = {
     "```",
     "",
     "Finish the migration so the warning goes away before the removal takes the app",
-    "with it.",
-    "",
-    "**What was done.** A shared `html_embed.embed_html_iframe` now routes the spatial",
+    "with it."
+   ],
+   "whatWasDone": [
+    "A shared `html_embed.embed_html_iframe` now routes the spatial",
     "plot, tour scripts, and Share widget through `st.iframe`. Script-only documents",
     "receive an explicit body to avoid the frontend autosizing observer race, and the",
-    "deprecated components import/call is gone.",
-    "",
-    "**What's left.** Nothing. Live-browser verification covered the tour, playback",
-    "and filter popovers and found no new iframe/frontend errors after reload.",
-    "",
-    "**Background (technical).** Verify against a live app, not only `AppTest`, which",
+    "deprecated components import/call is gone."
+   ],
+   "whatsLeft": [
+    "Nothing. Live-browser verification covered the tour, playback",
+    "and filter popovers and found no new iframe/frontend errors after reload."
+   ],
+   "background": [
+    "Verify against a live app, not only `AppTest`, which",
     "runs no frontend: the tour's clicks and the Share copy are exactly the behaviour",
     "a silent iframe-attribute change breaks. Related and already fixed in passing:",
     "`styles.py`'s ≤1024 px overflow rule matched `iframe[title*=\"components.html\"]`,",
@@ -6410,22 +6585,24 @@ window.TRACKER = {
    "group": "Bugs",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The Fixation index range slider (`single_fix_range`, VIZ-7) should",
+   "request": [
+    "The Fixation index range slider (`single_fix_range`, VIZ-7) should",
     "default to the **full range of the current trial's fixations**. Instead the",
     "default is anchored to whichever trial happened to load first, and stays that",
-    "way as later trials are selected.",
-    "",
-    "**What was done.** The range widget now tracks whether its current value was set by",
+    "way as later trials are selected."
+   ],
+   "whatWasDone": [
+    "The range widget now tracks whether its current value was set by",
     "the user (`single_fix_range_user_set`) and which trial seeded it. Untouched defaults",
     "re-expand to `(1, max_fix)` whenever the selected trial changes; deliberate user",
     "windows are preserved and clamped only when the new trial is shorter. The widget's",
-    "own `on_change` callback is the only path that marks the range as user-set.",
-    "",
-    "**What's left.** Nothing. The slider now defaults to the full current trial while",
-    "still honoring an intentional narrowed range across trial changes.",
-    "",
-    "**Background (technical).**",
+    "own `on_change` callback is the only path that marks the range as user-set."
+   ],
+   "whatsLeft": [
+    "Nothing. The slider now defaults to the full current trial while",
+    "still honoring an intentional narrowed range across trial changes."
+   ],
+   "background": [
     "[`controls._render_fix_range_slider`](scanpath_studio/controls.py:1357) only",
     "resets `single_fix_range` to `(1, max_fix)` when the stored value is missing",
     "or malformed (controls.py:1376-1382); otherwise it **clamps** the existing",
@@ -6558,8 +6735,8 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Switch to the latest Streamlit and see what we can stop",
+   "request": [
+    "Switch to the latest Streamlit and see what we can stop",
     "hand-rolling. We are on **1.58**; **1.61** is current, and 1.59/1.60/1.61 added",
     "a lot that overlaps with machinery this app maintains itself. Release notes:",
     "[1.61.0](https://github.com/streamlit/streamlit/releases/tag/1.61.0) ·",
@@ -6567,9 +6744,10 @@ window.TRACKER = {
     "· [1.59.0](https://docs.streamlit.io/develop/quick-reference/release-notes/2026#version-1590).",
     "Two halves: do the version bump safely, then go through the new surface and",
     "adopt what deletes code we own. The repo rule is *prefer the latest*, no",
-    "back-compat shims (`CLAUDE.md` → Building features).",
-    "",
-    "**What was done.** The runtime moved from 1.58.0 to **1.61.1** (the latest on",
+    "back-compat shims (`CLAUDE.md` → Building features)."
+   ],
+   "whatWasDone": [
+    "The runtime moved from 1.58.0 to **1.61.1** (the latest on",
     "PyPI, not 1.61.0): `requirements.txt` `~=1.61.1`, `pyproject.toml` `>=1.61.1`,",
     "`uv.lock` regenerated with `uv lock --upgrade-package streamlit`. One real",
     "breaking change landed, and only in the tests: **1.61 resolves a relative",
@@ -6578,18 +6756,18 @@ window.TRACKER = {
     "`tests/streamlit_app.py` and raised `FileNotFoundError`; they now pass",
     "`tests/conftest.py`'s absolute `APP_SCRIPT`. All five flagged breaking changes",
     "were checked (see below) and needed no app-side change; `docs/security.md` now",
-    "records 1.61.1 as the runtime plus the two new config surfaces.",
-    "",
-    "**What's left.** The user's review: the automated gates are green (full suite,",
+    "records 1.61.1 as the runtime plus the two new config surfaces."
+   ],
+   "whatsLeft": [
+    "The user's review: the automated gates are green (full suite,",
     "ruff, a real `streamlit run` boot on the bundled demo returning 200/healthy),",
     "but the three surfaces that historically break on a Streamlit upgrade were only",
     "covered headlessly — worth clicking in a browser are the **true-scale chart**",
     "(`tabs._render_true_scale_chart`), the **spotlight tour**, and the",
     "**`?embed=true`** iframe from the OneStop review app. The feature-adoption pass",
-    "is **ENG-36**, unchanged.",
-    "",
-    "**Background (technical).**",
-    "",
+    "is **ENG-36**, unchanged."
+   ],
+   "background": [
     "*How the five flagged breaking changes came out.* (1) `server.allowedHosts`",
     "(1.61) is empty by default and empty means *accept any Host*, and",
     "`client.allowedOrigins` (1.60) only gates `postMessage` host *commands* — the",
@@ -6659,14 +6837,15 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The second half of **ENG-31**, split out on the user's call",
+   "request": [
+    "The second half of **ENG-31**, split out on the user's call",
     "(2026-08-07): once the app is on 1.61, go through the surface 1.59/1.60/1.61",
     "added and adopt what lets us stop hand-rolling machinery of our own. Ordered",
     "roughly by how much first-party code each one deletes. Depends on **ENG-31**",
-    "landing first.",
-    "",
-    "**What was done.** Both of the user's calls, plus the two list items that",
+    "landing first."
+   ],
+   "whatWasDone": [
+    "Both of the user's calls, plus the two list items that",
     "actually delete code. Everything else on the list was evaluated and the",
     "decision recorded — several turned out to be no-ops or wrong for this app,",
     "which is worth knowing so nobody re-opens them.",
@@ -6811,9 +6990,10 @@ window.TRACKER = {
     "answer it (an unmatched request used to sit in session state and would fire",
     "later, re-pointing the picker the moment a filter change brought that trial",
     "into scope), and `scanpath_studio/CLAUDE.md` gained the three module-map",
-    "entries this work owed it.",
-    "",
-    "**What's left.** Two things for you. *(a)* The **Open** button in the",
+    "entries this work owed it."
+   ],
+   "whatsLeft": [
+    "Two things for you. *(a)* The **Open** button in the",
     "Per-reader → Summary tables → Trials table: the server-side hop is pinned by",
     "tests (`TestOpenTrialFromCorpusTable`) and the column renders, but the actual",
     "click was **not** driven in a browser this session, so that last inch is",
@@ -6822,10 +7002,9 @@ window.TRACKER = {
     "scanning a cohort takes you to *that reader's* trial, not just the text).",
     "*(b)* Your review of the three judgement calls that came back \"no\" —",
     "**fragments**, **sidebar lock** and now **`App.run()`** — since the first two",
-    "were your items. Nothing on the list is undecided anymore.",
-    "",
-    "**Background (technical).**",
-    "",
+    "were your items. Nothing on the list is undecided anymore."
+   ],
+   "background": [
     "*Two calls the user already made (2026-08-07).*",
     "- **`persist_state` — adopt it.** `controls._seed_viz_state` / `_pin(rewrite=True)`",
     "  exists only because Streamlit pushes a programmatic value to the browser on the",
@@ -6884,6 +7063,87 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "ENG-38",
+   "prefix": "ENG",
+   "num": 38,
+   "sub": "",
+   "title": "Make the tracker write-up structured fields instead of bold-led prose",
+   "status": "Review",
+   "note": "Implemented 2026-08-13; pending user review.",
+   "date": "2026-08-13",
+   "added": "2026-08-13",
+   "group": "Engineering",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "\"Make all the fields more structured instead of just defined by bold text, as",
+    "not all agents respect the format. Implement this for all open items. Add a note",
+    "for agents working with the tracker to *be on it* — switching the status,",
+    "removing the decisions to settle if you already updated the task based on them",
+    "(before implementing even), more frequent committing of code, etc.\""
+   ],
+   "whatWasDone": [
+    "**The write-up is now five fields.** `statusNote` (optional lede) · `request`",
+    "(required) · `whatWasDone` · `whatsLeft` · `background`, each an array of",
+    "markdown lines, sitting beside the existing `decisions`. The tracker prints the",
+    "section label itself, so the `**Request.**`-style lead is gone from the text.",
+    "All **116** open items were migrated by a one-shot script that reused the",
+    "original string literals verbatim — verified word-for-word against a",
+    "pre-migration snapshot, so no wording, escape, or code anchor moved. The 144",
+    "archived items keep the legacy single `body` array; both shapes render.",
+    "",
+    "**Three tests now hold the shape** in",
+    "[`tests/test_tracker_server.py`](tests/test_tracker_server.py): every open item",
+    "carries structured fields and no `body`; anything `In progress` or `Review` owes",
+    "`whatWasDone` / `whatsLeft` / `background`; and no field repeats its own bold",
+    "lead. `tracker/server.py` validates the same fields on UI-created tasks, which",
+    "now open with `request` instead of a fabricated `**Request.**` line.",
+    "",
+    "**The \"be on it\" note landed on four surfaces** so an agent meets it wherever it",
+    "enters: the `data.js` header comment, the tracker's own *How this works* panel",
+    "(a new *Keeping it current* section), [`CLAUDE.md`](CLAUDE.md) → *Tracking work*,",
+    "and the `/track` skill. Same four points each time — flip to `In progress` when",
+    "you pick the item up rather than when you finish; clear an answered decision in",
+    "the same edit that acts on it, even before implementing, and record the call in",
+    "`background`; commit one feature or fix at a time with the tracker edit in the",
+    "same commit; land in `Review`, never straight in `Closed`."
+   ],
+   "whatsLeft": [
+    "Your review — open any open item and read it: the four labelled sections should",
+    "read as designed rather than as a wall of bold. Two judgement calls worth a",
+    "look. **(1)** Only open items were converted, because the ask was scoped to",
+    "them and the archive is 144 items of settled history; the renderer keeps both",
+    "paths, so the archive can stay as-is indefinitely. **(2)** `statusNote` is one",
+    "field for what used to be two different things — the `>` status quote *and* the",
+    "occasional \"update as of ⟨date⟩\" paragraph some items carried before *Request*.",
+    "They render identically, but say so if you want them split.",
+    "",
+    "Note that `state.json` marks most of the catalogue Closed, so only ~26 items are",
+    "live by the tracker's own reckoning — the structural tests bite on those. The",
+    "other ~90 migrated items are structured too, just already archived from the",
+    "page's point of view."
+   ],
+   "background": [
+    "The migration was line-based on purpose: `data.js` is hand-maintained (literal",
+    "em-dashes, escaped emoji), so a `json.dumps` round-trip would have churned all",
+    "12k lines. The script sliced each open item's `\"body\": [` block, split it on the",
+    "ASCII bold leads, and re-emitted the *raw* literals, so every `\\u` escape",
+    "survived untouched.",
+    "",
+    "Renderer: `writeUp` / `writeUpText` in",
+    "[`tracker/index.html`](tracker/index.html) branch on the presence of `body`;",
+    "search now spans the structured fields too. `.section > h4` draws the label,",
+    "hidden for `statusNote` so the lede stays a lede. Server-side,",
+    "`WRITE_UP_FIELDS` + `CREATED_OPTIONAL_FIELDS` in",
+    "[`tracker/server.py`](tracker/server.py) replace the old exact-key-set check, so",
+    "a UI-created task may now also carry `decisions` — which the previous exact set",
+    "made impossible (that limitation was called out in the `/track` skill and is now",
+    "removed). Related: **ENG-35** (which introduced `decisions` as a field for the",
+    "same reason), **ENG-29** (the group-name test, same \"make it fail a test rather",
+    "than rot\" instinct)."
+   ]
+  },
+  {
    "id": "ENG-37",
    "prefix": "ENG",
    "num": 37,
@@ -6896,12 +7156,13 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "Tests",
    "archived": false,
-   "body": [
-    "**Request.** Run a coverage pass over the test suite, close the gaps that",
+   "request": [
+    "Run a coverage pass over the test suite, close the gaps that",
     "matter, and add a coverage badge to `README.md` alongside the existing",
-    "PyPI/CI/docs badges.",
-    "",
-    "**What was done.** Both halves. **Baseline was 89%**, ending at **90%** —",
+    "PyPI/CI/docs badges."
+   ],
+   "whatWasDone": [
+    "Both halves. **Baseline was 89%**, ending at **90%** —",
     "the suite was already broad, so the audit was about the *shape* of the gaps",
     "rather than the number.",
     "",
@@ -6957,9 +7218,10 @@ window.TRACKER = {
     "Kaleido failure surfacing as a message rather than a traceback. **The lesson",
     "generalizes: after PERF-3, an `AppTest` that changes session state and expects",
     "a subtab to still be open has to re-pin `single_subtab` on that same run** —",
-    "it is written into the new tests' comments. `tabs.py` went 77% → 85%.",
-    "",
-    "**What's left.** Your review, and one thing only verifiable *after* a",
+    "it is written into the new tests' comments. `tabs.py` went 77% → 85%."
+   ],
+   "whatsLeft": [
+    "Your review, and one thing only verifiable *after* a",
     "merge to main: the badge cannot resolve until the Docs workflow has published",
     "`coverage/badge.json` once, so the README badge will read \"invalid\" until then",
     "— worth a look after the first deploy. Also a judgement call to confirm: the",
@@ -6970,9 +7232,10 @@ window.TRACKER = {
     "modules; both are mostly Streamlit render paths and argparse branches (the",
     "largest single block in `cli.py` is the MultiplEYE source resolver, which needs",
     "a real raw export that cannot exist in CI), and neither was worth chasing for",
-    "the number alone.",
-    "",
-    "**Background (technical).** `pytest-cov` is already a dependency",
+    "the number alone."
+   ],
+   "background": [
+    "`pytest-cov` is already a dependency",
     "(`pyproject.toml`) but CI's `pytest -q -n auto`",
     "([`.github/workflows/ci.yml`](.github/workflows/ci.yml:44)) doesn't invoke it,",
     "so there's no `--cov` run and no report to badge today. Two parts:",
@@ -7066,25 +7329,28 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Split each release section of `CHANGELOG.md` in two: a **very**",
+   "request": [
+    "Split each release section of `CHANGELOG.md` in two: a **very**",
     "concise headline list — essentially just today's bold lead of each entry, short",
     "enough to paste straight into Slack — followed by the longer per-item",
     "descriptions for anyone who wants to read further. Today every entry is one",
     "long line (bold lead + an em-dash paragraph), so the release notes can't be",
-    "skimmed and can't be shared without hand-trimming.",
-    "",
-    "**What was done.** Restructured the `[Unreleased]` section into the settled",
+    "skimmed and can't be shared without hand-trimming."
+   ],
+   "whatWasDone": [
+    "Restructured the `[Unreleased]` section into the settled",
     "shape — a headline list per group (`- **Bold lead** (ID)`), then a",
     "`### Details` subsection with matching `#### Added` / `#### Changed` /",
     "`#### Fixed` blocks carrying the existing long text. Already-released",
     "sections are untouched. Updated the writing rule in `CLAUDE.md`'s *Before",
     "every commit / push* and `CONTRIBUTING.md` so future entries follow the new",
-    "shape from the start.",
-    "",
-    "**What's left.** Nothing.",
-    "",
-    "**Background (technical).** Current shape: `## [version]` → `### Added` /",
+    "shape from the start."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "Current shape: `## [version]` → `### Added` /",
     "`### Changed` / `### Fixed` → one `- **Bold lead** (ID) — long sentence…` bullet",
     "per item. Proposed shape: keep the Added/Changed/Fixed grouping for the headline",
     "list (`- **Bold lead** (ID)` and nothing else), then a `### Details` subsection",
@@ -7114,13 +7380,12 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Should the tracker move to GitHub Issues? Reviewed and",
+   "request": [
+    "Should the tracker move to GitHub Issues? Reviewed and",
     "**deliberately deferred** — not rejected. Park the decision with the reasoning",
-    "written down so the next look starts from the analysis rather than redoing it.",
-    "",
-    "**Background (technical).**",
-    "",
+    "written down so the next look starts from the analysis rather than redoing it."
+   ],
+   "background": [
     "*Why not now.* The tracker's decisive advantage is that it lives **in the",
     "repo**: it is checked out beside the code, readable at zero cost at the start of",
     "a session, and editable in the *same commit* as the change it describes. Issues",
@@ -7170,13 +7435,12 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Should the tracker move to GitHub Issues? Reviewed and",
+   "request": [
+    "Should the tracker move to GitHub Issues? Reviewed and",
     "**deliberately deferred** — not rejected. Park the decision with the reasoning",
-    "written down so the next look starts from the analysis rather than redoing it.",
-    "",
-    "**Background (technical).**",
-    "",
+    "written down so the next look starts from the analysis rather than redoing it."
+   ],
+   "background": [
     "*Why not now.* The tracker's decisive advantage is that it lives **in the",
     "repo**: it is checked out beside the code, readable at zero cost at the start of",
     "a session, and editable in the *same commit* as the change it describes. Issues",
@@ -7226,11 +7490,12 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Two freshly added items (**BUG-17**, **VIZ-30**) did not show up in the",
-    "tracker at all.",
-    "",
-    "**What was done.** Two independent causes, both fixed.",
+   "request": [
+    "Two freshly added items (**BUG-17**, **VIZ-30**) did not show up in the",
+    "tracker at all."
+   ],
+   "whatWasDone": [
+    "Two independent causes, both fixed.",
     "(1) [`tracker/server.py`](tracker/server.py)'s `end_headers` sent `Cache-Control:",
     "no-store` only for `state.json` and the write API, so `data.js` went out with just",
     "`Last-Modified`; browsers then apply *heuristic* freshness and can serve a cached",
@@ -7238,14 +7503,16 @@ window.TRACKER = {
     "(2) **VIZ-30** was written with `\"group\": \"Visualization\"`, but the real group is",
     "`Visualization & display` — [`tracker/index.html`](tracker/index.html) renders by",
     "iterating `DATA.groups`, so an item whose `group` matches no declared group is",
-    "silently dropped from the page.",
-    "",
-    "**What's left.** Nothing for the cache (verified: `data.js` now returns",
+    "silently dropped from the page."
+   ],
+   "whatsLeft": [
+    "Nothing for the cache (verified: `data.js` now returns",
     "`Cache-Control: no-store`, `state.json` unchanged, `index.html` untouched). The",
     "group name is a data-entry hazard with no guard — a validation test would close it",
-    "properly; filed as the follow-up note below rather than done here.",
-    "",
-    "**Background (technical).** The invisible-item failure mode is nasty because both",
+    "properly; filed as the follow-up note below rather than done here."
+   ],
+   "background": [
+    "The invisible-item failure mode is nasty because both",
     "halves are silent: the file on disk is correct, the server serves the correct bytes",
     "(confirmed with `curl`), and the page simply renders an older copy — or renders the",
     "current copy while dropping one item. Worth adding a cheap test that every",
@@ -7267,13 +7534,14 @@ window.TRACKER = {
    "group": "Bugs",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The console logs `The widget with key \"global_preproc_short_threshold_ms\"`",
+   "request": [
+    "The console logs `The widget with key \"global_preproc_short_threshold_ms\"`",
     "`was created with a default value but also had its value set via the Session State API`",
     "on every run, with a full stack trace — noisy, and a sign the restored value and the",
-    "literal default are fighting.",
-    "",
-    "**What was done.** Converted every offender to the repo's seed-then-render pattern:",
+    "literal default are fighting."
+   ],
+   "whatWasDone": [
+    "Converted every offender to the repo's seed-then-render pattern:",
     "the five PRE-1 controls in",
     "[`app._preprocessing_settings`](scanpath_studio/app.py) (new `_PREPROC_DEFAULTS`",
     "seeded with `setdefault`, `value=` dropped), the custom background colour picker in",
@@ -7283,13 +7551,15 @@ window.TRACKER = {
     "[`tabs.render_single_trial_tab`](scanpath_studio/tabs.py). Also aligned",
     "`tabs._build_studio_config`'s `discard_blink_adjacent` fallback to `True`, matching",
     "the widget, the restore path and `preprocessing.py` (it read `False`, so a save with",
-    "the key absent would have silently flipped the setting).",
-    "",
-    "**What's left.** Nothing. Verified by booting the app under `AppTest` with the",
+    "the key absent would have silently flipped the setting)."
+   ],
+   "whatsLeft": [
+    "Nothing. Verified by booting the app under `AppTest` with the",
     "`global_preproc_*` keys pre-seeded exactly as `url_state` writes them: zero warnings",
-    "and all five restored values survive the widget render.",
-    "",
-    "**Background (technical).** A keyed Streamlit widget given both `value=`/`index=`/",
+    "and all five restored values survive the widget render."
+   ],
+   "background": [
+    "A keyed Streamlit widget given both `value=`/`index=`/",
     "`default=` and a session-state entry warns and prefers the literal — which is why",
     "`controls._pin` / `_seed_viz_state` exist (**BUG-15**). The gap was in the guard:",
     "[`tests/test_widget_value_sync.py`](tests/test_widget_value_sync.py)'s",
@@ -7314,23 +7584,26 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Add a checkbox next to the fixation range slider — something like",
+   "request": [
+    "Add a checkbox next to the fixation range slider — something like",
     "*Apply to all trials* — unchecked by default, so the range applies to all trials",
-    "only when you check it.",
-    "",
-    "**What was done.** Added the `single_fix_range_all_trials` checkbox under the slider",
+    "only when you check it."
+   ],
+   "whatWasDone": [
+    "Added the `single_fix_range_all_trials` checkbox under the slider",
     "in [`controls._render_fix_range_slider`](scanpath_studio/controls.py), pinned in",
     "`_VIZ_WIDGET_DEFAULTS` (default `False`). A new `controls._fix_range_trial_key`",
     "derives the rendered frame's `(participant_id, trial_id)`; when it changes and the",
     "box is unchecked, `single_fix_range_user_set` is cleared, which routes into the",
     "existing **BUG-16** branch that re-expands the window to the new trial's full range.",
-    "Checked keeps the previous sticky behaviour (clamped per trial).",
-    "",
-    "**What's left.** User approval of the default (previously a touched window was",
-    "always sticky; it is now per-trial unless the box is checked).",
-    "",
-    "**Background (technical).** Covered by",
+    "Checked keeps the previous sticky behaviour (clamped per trial)."
+   ],
+   "whatsLeft": [
+    "User approval of the default (previously a touched window was",
+    "always sticky; it is now per-trial unless the box is checked)."
+   ],
+   "background": [
+    "Covered by",
     "[`tests/test_fix_range_scope.py`](tests/test_fix_range_scope.py) across both modes,",
     "the untouched-default case (**BUG-16** unchanged), and clamping onto a shorter trial.",
     "An ambiguous frame (multi-trial, or missing identity columns) returns `None` and is",
@@ -7540,25 +7813,28 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Add two animation quality modes — **Coarse** (fast rendering,",
+   "request": [
+    "Add two animation quality modes — **Coarse** (fast rendering,",
     "less accurate) and **Fine** (smooth, more accurate) — that each set defaults",
     "for the animation controls, instead of the one fixed default everyone gets",
-    "today.",
-    "",
-    "**What was done.** Added an **Animation quality** segmented control above the raw",
+    "today."
+   ],
+   "whatWasDone": [
+    "Added an **Animation quality** segmented control above the raw",
     "frame-grid sliders: **Coarse** sets 300 ms / 120 frames for fast drafts; **Fine**",
     "sets 40 ms / 900 frames for smoother review/export. The sliders remain editable,",
     "and changing either moves the mode to **Custom**; values that already match a preset",
     "infer that preset on render. Playback speed stays independent because it changes",
-    "pace, not fidelity.",
-    "",
-    "**What's left.** Nothing. The user's follow-up to make Fine finer is included in the",
+    "pace, not fidelity."
+   ],
+   "whatsLeft": [
+    "Nothing. The user's follow-up to make Fine finer is included in the",
     "40 ms / 900-frame values. Presets are UI shortcuts over the existing frame-step and",
     "frame-cap settings, so the underlying values—not the label—remain the portable",
-    "Share/config/CLI/API contract.",
-    "",
-    "**Background (technical).** The relevant knobs already live in the Animate",
+    "Share/config/CLI/API contract."
+   ],
+   "background": [
+    "The relevant knobs already live in the Animate",
     "⚙️ Playback popover ([`tabs.py:2398`](scanpath_studio/tabs.py:2398)), added by",
     "**VIZ-11**: **Frame every (ms)** (`global_anim_grid_step_ms`, 20–500, default",
     "100) and **Max frames** (`global_anim_max_frames`, 30–2000, default 360) —",
@@ -7591,8 +7867,8 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Improve the Scanpath Studio icon so it more clearly resembles a",
+   "request": [
+    "Improve the Scanpath Studio icon so it more clearly resembles a",
     "scanpath rather than a generic data or eye-tracking mark. The design should",
     "use recognizable fixation points connected by saccades and remain legible at",
     "small favicon, sidebar, and desktop-app sizes.",
@@ -7603,13 +7879,16 @@ window.TRACKER = {
     "[`desktop/make_icons.py`](desktop/make_icons.py), so the chosen design should",
     "be produced from one high-resolution source and verified after conversion. Needs",
     "a few scanpath-focused variants tested at real display sizes and on light/dark",
-    "backgrounds before the canonical source and derived formats are replaced.",
-    "",
-    "**What was done.** Explored scanpath-focused concepts, rebuilt the selected compact design in the deterministic icon generator, regenerated PNG/ICO/ICNS/docs assets, and added format and small-size tests.",
-    "",
-    "**What's left.** User approval of the selected icon.",
-    "",
-    "**Background (technical).** The production asset remains deterministic; bold fixations and a return sweep survive 16 px rendering on light and dark backgrounds."
+    "backgrounds before the canonical source and derived formats are replaced."
+   ],
+   "whatWasDone": [
+    "Explored scanpath-focused concepts, rebuilt the selected compact design in the deterministic icon generator, regenerated PNG/ICO/ICNS/docs assets, and added format and small-size tests."
+   ],
+   "whatsLeft": [
+    "User approval of the selected icon."
+   ],
+   "background": [
+    "The production asset remains deterministic; bold fixations and a return sweep survive 16 px rendering on light and dark backgrounds."
    ]
   },
   {
@@ -7625,28 +7904,31 @@ window.TRACKER = {
    "group": "Engineering",
    "subgroup": "Documentation",
    "archived": false,
-   "body": [
-    "**Request.** Replace the stale, duplicated `overleaf/structure.tex` outline with",
+   "request": [
+    "Replace the stale, duplicated `overleaf/structure.tex` outline with",
     "the best prospective structure for the paper, regardless of the current draft.",
     "Give every bullet paragraph-level scope, distinguish researchers collecting new",
     "data from researchers reusing existing datasets, remove project-management notes,",
-    "and leave the file as valid, compilable LaTeX.",
-    "",
-    "**What was done.** Replaced [`overleaf/structure.tex`](../../overleaf/structure.tex)",
+    "and leave the file as valid, compilable LaTeX."
+   ],
+   "whatWasDone": [
+    "Replaced [`overleaf/structure.tex`](../../overleaf/structure.tex)",
     "with one prospective outline organized as motivation, design goals, system",
     "capabilities, persona-specific workflows, demonstrations and evaluation, related",
     "work, discussion, conclusion, and availability. Every bullet now scopes roughly",
     "one paragraph or two short paragraphs; primary collection and secondary reuse",
     "remain separate workflows with different quality-assurance decisions. Removed the",
     "duplicate generated outline, questions, tutorial plan, product notes, TODOs, stray",
-    "Markdown fence, and the unsupported deep list nesting.",
-    "",
-    "**What's left.** Author approval of the proposed structure, followed by a separate",
+    "Markdown fence, and the unsupported deep list nesting."
+   ],
+   "whatsLeft": [
+    "Author approval of the proposed structure, followed by a separate",
     "rewrite of the manuscript to match it. The extracted questions, tutorial ideas, and",
     "product follow-ups were returned to the author for placement in their preferred",
-    "planning system rather than silently moved into another repository file.",
-    "",
-    "**Background (technical).** The old outline has two competing top-level structures,",
+    "planning system rather than silently moved into another repository file."
+   ],
+   "background": [
+    "The old outline has two competing top-level structures,",
     "mixes manuscript content with questions/tutorial and product-backlog notes, and",
     "exceeds LaTeX's supported itemize depth at its experiment-design branch. The new",
     "outline should use section commands plus shallow paragraph-level lists, while",
@@ -7718,16 +8000,17 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Take the **Data source** picker out of the sidebar and put it in the",
+   "request": [
+    "Take the **Data source** picker out of the sidebar and put it in the",
     "main view, on the **Filter by** row, to the *left* of the \"Filter by\" label — so",
     "the first thing the eye meets reads left-to-right as *which dataset → how to narrow",
     "it → which trial*. Follows the same direction as the earlier moves of the viz",
     "controls and the trial filters out of the sidebar: the app is built to be used with",
     "the sidebar closed, and the data source is the one remaining step that still forces",
-    "it open.",
-    "",
-    "**What was done.** `app.render_sidebar_data_source` kept its position at the top of",
+    "it open."
+   ],
+   "whatWasDone": [
+    "`app.render_sidebar_data_source` kept its position at the top of",
     "`main` but no longer renders a widget: it applies the `_pending_source_choice`",
     "seam, heals a stale selection, and publishes the entry list",
     "(`_data_source_entries` / `_kinds` / `_uploaded`). The new",
@@ -7743,11 +8026,13 @@ window.TRACKER = {
     "a **➕** popover beside the picker (2026-08-06 follow-up: a plus, not a gear —",
     "the affordance is \"add a dataset\", and the button was widened a little). The tour step now points at the main-view",
     "widget (`in_sidebar: False`) with new copy. `data_source_choice` is unchanged as",
-    "the canonical key, so `?source=\u2026`, saved configs and the wizard all still work.",
-    "",
-    "**What's left.** Nothing.",
-    "",
-    "**Background (technical).** Today the picker is",
+    "the canonical key, so `?source=\u2026`, saved configs and the wizard all still work."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "Today the picker is",
     "[`app.render_sidebar_data_source`](scanpath_studio/app.py:1748) — an",
     "`expanded=True` sidebar expander inside the `tour_grp_data_source` keyed container",
     "— called from `main` (around [`app.py:2435`](scanpath_studio/app.py:2435)) *before*",
@@ -7797,14 +8082,15 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** One obvious way to get back to a clean slate: a **Reset settings**",
+   "request": [
+    "One obvious way to get back to a clean slate: a **Reset settings**",
     "action that returns the trial filters *and* the visualization settings to their",
     "defaults. Today, after a long session of tweaking — or after landing on someone",
     "else's share link — the only way back is to remember which of the dozens of",
-    "controls were touched and undo each by hand.",
-    "",
-    "**What was done.** `controls.reset_viz_settings` deletes every visualization key —",
+    "controls were touched and undo each by hand."
+   ],
+   "whatWasDone": [
+    "`controls.reset_viz_settings` deletes every visualization key —",
     "`session_keys.PLOT_CONFIG_STATE_KEYS`, both `compare_state_keys`, every live",
     "`global_*` key, and the `single_fix_range*` pair — plus the `_canvas_seeded_for` /",
     "`_font_seeded_for` / `_palette_picked` guards, then strips",
@@ -7816,17 +8102,19 @@ window.TRACKER = {
     "button at the foot of the More filter popover, next to the widgets it clears,",
     "which the user judged sufficient (2026-08-06 follow-up: the rail action is",
     "visualization-only, and `reset_all_settings` was dropped). Covered by",
-    "`tests/test_apptest.py::TestResetSettings`.",
-    "",
-    "**What's left.** Nothing. Scope was settled as: settings only — annotations,",
+    "`tests/test_apptest.py::TestResetSettings`."
+   ],
+   "whatsLeft": [
+    "Nothing. Scope was settled as: settings only — annotations,",
     "column mapping, data source and the selected trial all survive (the selection",
     "params are deliberately left in the URL). The recovery cache needs no special",
     "handling: `persistence.save_local_state` rewrites it every run, so the reset",
     "state is what gets persisted. No CLI / API surface — a reset is an interactive",
     "action on session state, not a figure parameter; the headless defaults are",
-    "`api.CANONICAL_FIGURE_DEFAULTS` and are unaffected.",
-    "",
-    "**Background (technical).** Half the machinery exists. Filters already have it",
+    "`api.CANONICAL_FIGURE_DEFAULTS` and are unaffected."
+   ],
+   "background": [
+    "Half the machinery exists. Filters already have it",
     "from **UX-7**: [`controls.clear_trial_filters`](scanpath_studio/controls.py:3196)",
     "drops every `filter_`-prefixed key plus `_trial_filters` / `_trial_filters_raw`,",
     "and each widget re-seeds to its own no-constraint default on the next render.",
@@ -7891,16 +8179,17 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The user attached a screenshot of three stacked rows above the",
+   "request": [
+    "The user attached a screenshot of three stacked rows above the",
     "plot — the Narrow-by/**More** row, the trial-picker's ◀ ▶ ⇅ row, and the",
     "chip strip's **Details** / **✏️ Edit chips** row — and asked for the buttons",
     "across them to be visually aligned so the block reads as one coherent control",
     "cluster instead of three independently-sized rows. Reviewed twice: *\"current",
     "is not good enough\"*, then *\"the right most buttons are perfectly aligned but",
-    "the rest are not\"*.",
-    "",
-    "**What was done.** Three passes, each answering the round of feedback before",
+    "the rest are not\"*."
+   ],
+   "whatWasDone": [
+    "Three passes, each answering the round of feedback before",
     "it. **(1) One shape.** All six triggers render inside a container keyed",
     "`railbtn_*`, and `styles.py` gives `[class*=\"st-key-railbtn_\"] button` a",
     "single geometry — the **chip pill** (`border-radius: 999px`, `padding: .1rem",
@@ -7918,16 +8207,18 @@ window.TRACKER = {
     "them `width: 100%`, which in a flex row makes the group overflow *leftwards*),",
     "and a 3px `margin-left` between neighbours. Measured in Chrome, all three rows",
     "now end on the same pixel (x = 1326 at a 1682px viewport) with identical 3px",
-    "internal spacing and one 27px height.",
-    "",
-    "**What's left.** The user's eye on the result. Unlike the first pass this one",
+    "internal spacing and one 27px height."
+   ],
+   "whatsLeft": [
+    "The user's eye on the result. Unlike the first pass this one",
     "*was* looked at — the geometry above is measured off the running app, and a",
     "screenshot is in the implementing session — so what remains is taste, not",
     "verification: whether the 3px pairing reads right, and whether the cluster",
     "still holds at a narrow rail width, where the Quick-view buttons already drop",
-    "to emoji-only (UX-29).",
-    "",
-    "**Background (technical).** Each row was built independently with its own",
+    "to emoji-only (UX-29)."
+   ],
+   "background": [
+    "Each row was built independently with its own",
     "`st.columns` call and its own width unit, which is why nothing lined up: the",
     "**More** popover trigger in `tabs.py`'s Narrow-by row, the ◀ ▶ ⇅ in",
     "[`utils.py`](scanpath_studio/utils.py:478) `_select_trial_none_mode`, and the",
@@ -7964,14 +8255,15 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The user attached a screenshot of the condition-chip strip (Text,",
+   "request": [
+    "The user attached a screenshot of the condition-chip strip (Text,",
     "Difficulty level, Question preview, Correct) showing green/blue tinted",
     "backgrounds on specific chips, and asked to either get rid of that coloring on",
     "the OneStop demo, or generalize it into a feature that lets any dataset's",
-    "chips be highlighted.",
-    "",
-    "**What was done.** Generalized rather than removed, per the decision. The",
+    "chips be highlighted."
+   ],
+   "whatWasDone": [
+    "Generalized rather than removed, per the decision. The",
     "✏️ Edit chips popover (`controls.render_trial_chip_picker`) now has a",
     "**Chip colours** section — one colour picker per currently-shown field,",
     "writing a `trial_chip_colors` session dict (picking a field's colour back",
@@ -7979,17 +8271,18 @@ window.TRACKER = {
     "below). `tabs._chip_color` checks that override first, before its existing",
     "OneStop-specific defaults (difficulty/preview/repeat/correctness) — so any",
     "dataset's chips can now be highlighted, not just OneStop's, and the demo's",
-    "out-of-the-box look is unchanged.",
-    "",
-    "**What's left.** Nothing. Scope note: chips aren't part of the rendered",
+    "out-of-the-box look is unchanged."
+   ],
+   "whatsLeft": [
+    "Nothing. Scope note: chips aren't part of the rendered",
     "figure (they're a Streamlit-only display strip above the plot, not a",
     "`make_scanpath_figure` parameter), and the *existing* `trial_chip_fields`",
     "picker this extends is likewise session-local — not on the deep link,",
     "Save & restore, CLI, or API. The new per-chip colours follow that same,",
     "already-established precedent rather than inventing reach the underlying",
-    "feature doesn't have.",
-    "",
-    "**Background (technical).**",
+    "feature doesn't have."
+   ],
+   "background": [
     "[`tabs._chip_color`](scanpath_studio/tabs.py:2226) hardcodes the tint to four",
     "OneStop condition columns and their specific values —",
     "`difficulty_level` ele/adv → `_DIFFICULTY_COLORS`",
@@ -8034,16 +8327,17 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The user attached two screenshots of the rail's Quick views row",
+   "request": [
+    "The user attached two screenshots of the rail's Quick views row",
     "(Scanpath / Heatmap / Illustration): the labels wrap to two lines with the",
     "left sidebar closed and three lines with it open, which reads cramped. Two",
     "directions to try: widen the rail so the words fit in one/two lines instead",
     "of two/three, or — if that doesn't leave enough room for the plot — think of",
     "a fourth quick view and lay the four out as a 2×2 grid instead of one row of",
-    "three.",
-    "",
-    "**What was done.** Implemented as a CSS **container query**",
+    "three."
+   ],
+   "whatWasDone": [
+    "Implemented as a CSS **container query**",
     "(`container-type: inline-size` on `.st-key-scanpath_rail`,",
     "`styles.py`) rather than a viewport `@media` breakpoint — the reported wrap",
     "comes from the rail's own column narrowing (sidebar open/closed), not",
@@ -8051,15 +8345,17 @@ window.TRACKER = {
     "wouldn't reliably catch the sidebar-open case. Below a ~320px rail width,",
     "each Quick-view button's label text collapses to zero size and a",
     "`::before` re-adds just its emoji — same three-button row and column split",
-    "at every width, nothing stacks.",
-    "",
-    "**What's left.** The 320px threshold is a first pass, not visually tuned —",
+    "at every width, nothing stacks."
+   ],
+   "whatsLeft": [
+    "The 320px threshold is a first pass, not visually tuned —",
     "this session had no browser access to open the app and check where the",
     "wrap actually starts. Please open the rail at a few widths (sidebar open",
     "and closed) and confirm the emoji-only fallback kicks in right around where",
-    "the text used to wrap, nudging the number in `styles.py` if it's off.",
-    "",
-    "**Background (technical).** The row is",
+    "the text used to wrap, nudging the number in `styles.py` if it's off."
+   ],
+   "background": [
+    "The row is",
     "[`controls.py:2079-2107`](scanpath_studio/controls.py:2079) —",
     "`_qv = viz.columns(3)`, one `width=\"stretch\"` button per preset (👁️ Scanpath,",
     "🔥 Heatmap, ✏️ Illustration; `_apply_view_preset` writes the matching layer",
@@ -8100,8 +8396,8 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Two related asks from a screenshot of the rail's **🎬 View",
+   "request": [
+    "Two related asks from a screenshot of the rail's **🎬 View",
     "modes** section. First, the 🎬 clapperboard only reads as \"animation\" — it",
     "says nothing about **Compare** sitting right below it, so the user asked to",
     "rethink the icons so both modes read clearly and look good together. Second,",
@@ -8110,9 +8406,10 @@ window.TRACKER = {
     "**Playback speed** instead of at the bottom; add a divider before **Frame",
     "grid**; show **Frame every (ms)** / **Max frames** only once **Custom** is",
     "picked (today they're always visible even though Coarse/Fine set them for",
-    "you); and anything else that tightens the popover up.",
-    "",
-    "**What was done.** Animate keeps 🎬 (now on the toggle label itself, not",
+    "you); and anything else that tightens the popover up."
+   ],
+   "whatWasDone": [
+    "Animate keeps 🎬 (now on the toggle label itself, not",
     "just the section header); Compare reads ⚖️. In the Playback popover: the",
     "reading-time/playback-duration info box now sits right below Playback",
     "speed; a divider separates Autoplay from Frame grid; Frame every (ms) /",
@@ -8124,9 +8421,10 @@ window.TRACKER = {
     "otherwise the re-inference would immediately snap it back and hide the",
     "sliders that were just revealed. Also gave the View-modes block its own",
     "keyed container (`tour_grp_view_modes`) so UX-34's tour step could target",
-    "just it instead of the whole rail.",
-    "",
-    "**What's left.** The user's review.",
+    "just it instead of the whole rail."
+   ],
+   "whatsLeft": [
+    "The user's review.",
     "",
     "**Follow-up (2026-08-08).** The user asked *why* the \"other polish worth a",
     "look\" ideas were left out, and said to implement them — so all three are done,",
@@ -8144,9 +8442,10 @@ window.TRACKER = {
     "  foot of the popover as a second, disconnected caption. It is part of the same",
     "  \"what will this replay be like?\" answer, so it is now the box's second line.",
     "  (The dual A/B animation keeps it as a separate caption — that box already",
-    "  carries two reading times and a same-trial/different-text warning.)",
-    "",
-    "**Background (technical).** Everything lives in one block in",
+    "  carries two reading times and a same-trial/different-text warning.)"
+   ],
+   "background": [
+    "Everything lives in one block in",
     "[`tabs.py:2499-2660`](scanpath_studio/tabs.py:2499), inside",
     "`render_single_trial_tab`'s rail render:",
     "- The section header is `st.markdown(\"## 🎬 View modes\")`",
@@ -8219,13 +8518,14 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Looking at the ⚙️ Compare options popover's **Show A/B legend**",
+   "request": [
+    "Looking at the ⚙️ Compare options popover's **Show A/B legend**",
     "checkbox ([`tabs.py:2655`](scanpath_studio/tabs.py:2655)), the user asked how",
     "the legend text is actually determined, and whether it can be made",
-    "changeable.",
-    "",
-    "**What was done.** Added an actual override, per the decision. Once **Show",
+    "changeable."
+   ],
+   "whatWasDone": [
+    "Added an actual override, per the decision. Once **Show",
     "A/B legend** is on, the ⚙️ Compare options popover shows **Label A** /",
     "**Label B** text inputs (EXP-2-style pattern language — empty = the",
     "existing auto `participant · trial` label), backed by a new",
@@ -8237,9 +8537,10 @@ window.TRACKER = {
     "the animation's plain `participant · trial` — are unchanged; only the",
     "override is new and shared). Wired into 💾 Save & restore",
     "(`compare[idx].label_pattern`, alongside the existing per-scanpath",
-    "`cmp{idx}_*` styling it sits next to in `session_keys.py`).",
-    "",
-    "**What's left.** Your read on the three boxes — **Label A**, **Label B** and",
+    "`cmp{idx}_*` styling it sits next to in `session_keys.py`)."
+   ],
+   "whatsLeft": [
+    "Your read on the three boxes — **Label A**, **Label B** and",
     "the **Available fields** list — with Compare on and *Show A/B legend* ticked.",
     "The judgement calls to look at: that the greyed `{participant_id} · {trial_id}`",
     "in an empty box is legible as \"this is what you get\" rather than as text you",
@@ -8249,9 +8550,10 @@ window.TRACKER = {
     "the deep link/Share, CLI, or headless API either today (Compare mode itself",
     "has no CLI/API surface — `api.py` doesn't expose a comparison-figure",
     "builder at all) — the label override follows that same existing precedent",
-    "rather than being the one `cmp{idx}_*` setting that's wired up differently.",
-    "",
-    "**Background (technical).** The two render paths derive it two different",
+    "rather than being the one `cmp{idx}_*` setting that's wired up differently."
+   ],
+   "background": [
+    "The two render paths derive it two different",
     "ways today, and neither is user-editable — the checkbox only toggles",
     "*whether* a legend shows, never *what it says*:",
     "- **Static Compare** (`plots.make_comparison_figure`, called from",
@@ -8326,12 +8628,13 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Check whether the **Stimulus & questions** subtab (in Scanpath",
+   "request": [
+    "Check whether the **Stimulus & questions** subtab (in Scanpath",
     "Visualization) is effectively still OneStop-specific in practice, and decide",
-    "whether it should be generalized further for other datasets or dropped.",
-    "",
-    "**What was done.** Verified against a PoTeC-shaped frame (word `text` but no",
+    "whether it should be generalized further for other datasets or dropped."
+   ],
+   "whatWasDone": [
+    "Verified against a PoTeC-shaped frame (word `text` but no",
     "span/QA columns) and a generic-upload-shaped frame via `AppTest` — the panel",
     "never shows a false empty expander (it's a fixed subtab, so it can't",
     "disappear; with no span/QA columns it correctly falls back to plain",
@@ -8366,9 +8669,10 @@ window.TRACKER = {
     "column, but a deliberately-picked `reading_time_ms` is a legitimate thing to",
     "want on screen. Verified in Chrome on the bundled demo: the picker opens",
     "pre-filled with `is_in_aspan`/`is_in_dspan` and `question`/`question_preview`/",
-    "`selected_answer`/`is_correct`, and the OneStop rendering is unchanged.",
-    "",
-    "**What's left.** Your read on two calls. (1) The **re-seed rule**: the stored",
+    "`selected_answer`/`is_correct`, and the OneStop rendering is unchanged."
+   ],
+   "whatsLeft": [
+    "Your read on two calls. (1) The **re-seed rule**: the stored",
     "pick is left alone while the candidate pool is stable (so stepping through",
     "trials keeps your choice) but is reset to auto-detection whenever the pool",
     "changes shape — otherwise switching corpora would leave the panel blank,",
@@ -8384,9 +8688,10 @@ window.TRACKER = {
     "not anything a figure draws — the same category as the trial-chip picker",
     "(`trial_chip_fields`), which is likewise absent from the share link, the saved",
     "config, the CLI and the headless API. There is no headless equivalent of this",
-    "panel to carry them to: `api.py` builds figures.",
-    "",
-    "**Background (technical).** `tabs._render_paragraph_panel`",
+    "panel to carry them to: `api.py` builds figures."
+   ],
+   "background": [
+    "`tabs._render_paragraph_panel`",
     "([`tabs.py:1269`](scanpath_studio/tabs.py:1269)) already claims to be",
     "corpus-generic — `_detect_span_columns`",
     "([`tabs.py:1021`](scanpath_studio/tabs.py:1021)) and",
@@ -8452,22 +8757,25 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** In the main Scanpath Visualization view, the trial-picker",
+   "request": [
+    "In the main Scanpath Visualization view, the trial-picker",
     "selectbox is labeled plainly \"Trial ID\" — reads as a data field, not an",
-    "invitation to act. Rename it to something like **Select Trial**, bolded.",
-    "",
-    "**What was done.** Both spots in `utils.select_trial` now read **Select",
+    "invitation to act. Rename it to something like **Select Trial**, bolded."
+   ],
+   "whatWasDone": [
+    "Both spots in `utils.select_trial` now read **Select",
     "Trial**, bolded via plain markdown in the widget's `label=` string (no",
     "`st.markdown` workaround needed — see the Background correction below); the",
     "sort-suffixed form becomes `**Select Trial**  ·  by <key> <arrow>`. Updated",
     "the handful of tests that matched on the old `\"Trial ID\"` label prefix",
     "(`test_disclosure.py`, `test_trial_sort.py`, `test_apptest.py`,",
-    "`test_composite_selection.py`).",
-    "",
-    "**What's left.** Nothing.",
-    "",
-    "**Background (technical).** The label is set in",
+    "`test_composite_selection.py`)."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "The label is set in",
     "[`utils.select_trial`](scanpath_studio/utils.py:436)",
     "(`picker_label = \"Trial ID\"`), and re-derived at",
     "[`utils.py:504`](scanpath_studio/utils.py:504) to append the active sort",
@@ -8496,14 +8804,15 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Follow-up to **VIZ-18** (closed/signed-off, so filed as a new",
+   "request": [
+    "Follow-up to **VIZ-18** (closed/signed-off, so filed as a new",
     "item rather than reopened): make **Colourblind-safe** the palette a fresh",
     "session opens with, instead of it being one of four choices a user has to",
     "know to pick — and rename it to read as the default, e.g. **\"Default",
-    "(colourblind-safe)\"**.",
-    "",
-    "**What was done.** Dropped the old `\"Default\"` (colour-screen) entry from",
+    "(colourblind-safe)\"**."
+   ],
+   "whatWasDone": [
+    "Dropped the old `\"Default\"` (colour-screen) entry from",
     "`constants.PALETTES`, renamed `\"Colourblind-safe\"` → `\"Default",
     "(colourblind-safe)\"`, and repointed `DEFAULT_PALETTE` — leaving three",
     "palettes, per the settled decision. Went further than the rename: this",
@@ -8523,13 +8832,15 @@ window.TRACKER = {
     "the old `\"Default\"` entry did) instead of duplicating the literals.",
     "Updated every doc/CLI-help/test reference to the retired `\"Default\"` /",
     "`\"Colourblind-safe\"` names, including two saved-config test fixtures that",
-    "named the old palette literally.",
-    "",
-    "**What's left.** Nothing functionally. The **Compatibility note** below",
+    "named the old palette literally."
+   ],
+   "whatsLeft": [
+    "Nothing functionally. The **Compatibility note** below",
     "still holds; I did not chase down doc/tutorial screenshots that show the",
-    "old colour-screen tuning (images, not text — not caught by a grep pass).",
-    "",
-    "**Background (technical).** `constants.PALETTES`",
+    "old colour-screen tuning (images, not text — not caught by a grep pass)."
+   ],
+   "background": [
+    "`constants.PALETTES`",
     "([`constants.py:218-295`](scanpath_studio/constants.py:218)) holds four",
     "entries — `\"Default\"` (the original colour-screen tuning),",
     "`\"Colourblind-safe\"` (Okabe–Ito + Viridis), `\"Print / greyscale\"`, `\"High",
@@ -8585,17 +8896,18 @@ window.TRACKER = {
    "group": "Performance",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Since recent caching-related work, changing almost any",
+   "request": [
+    "Since recent caching-related work, changing almost any",
     "visualization-rail setting — the reported example was a fixation/heatmap",
     "**color** — drives a noticeably long rerun (the browser's \"Running…\"",
     "indicator stays up far longer than a cosmetic style tweak should need). The",
     "app still finishes and renders correctly; this is a performance regression,",
     "not a hard failure. See also **BUG-18**, filed from the same testing",
     "session, for a real crash that surfaces when the user changes a setting",
-    "again before a slow rerun like this one finishes.",
-    "",
-    "**What was done.** Profiled (`cProfile` around one `AppTest` rerun on the",
+    "again before a slow rerun like this one finishes."
+   ],
+   "whatWasDone": [
+    "Profiled (`cProfile` around one `AppTest` rerun on the",
     "bundled demo) and fixed: **a rerun went from ~12.9 s to ~0.45 s**, ~28×.",
     "Neither triage suspect was involved — it was not a cache key and not",
     "`persistence.py`, and it was not a regression from recent work either; the",
@@ -8702,17 +9014,19 @@ window.TRACKER = {
     "session-state dict — to check one key. 65 widgets × ~1.2 ms, and it grows with",
     "the number of session-state keys, so it is a fixed tax on a control-dense page",
     "that no change on our side removes. The rest is the 52 ms of genuine hashing",
-    "plus widget construction. There is no single hot spot left to attack.",
-    "",
-    "**What's left.** The user's review, in the app rather than in a profile: does",
+    "plus widget construction. There is no single hot spot left to attack."
+   ],
+   "whatsLeft": [
+    "The user's review, in the app rather than in a profile: does",
     "\"Running…\" now clear as fast as it should on the rail, on a corpus bigger than",
     "the bundled demo? The numbers above are `AppTest` (server-side Python only); a",
     "browser also pays render time, which this change does not touch. Note the",
     "`st.tabs` finding is general — **any** heavy subtab body costs every rerun, so",
     "it is worth remembering when adding one. And if a future change ever needs to",
-    "mutate a loaded frame in place, read the memo note in `data.py` first.",
-    "",
-    "**Background (technical).** The two candidates named in triage were both",
+    "mutate a loaded frame in place, read the memo note in `data.py` first."
+   ],
+   "background": [
+    "The two candidates named in triage were both",
     "checked and cleared: no `frame_fingerprint` key was recomputing spuriously,",
     "and `persistence.py`'s end-of-run save was not in the profile. The",
     "`@st.cache_data` on `_c_derived_tables` follows the house convention",
@@ -8758,8 +9072,8 @@ window.TRACKER = {
    "group": "Bugs",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Reported alongside **PERF-3** (viz-rail reruns are running",
+   "request": [
+    "Reported alongside **PERF-3** (viz-rail reruns are running",
     "unusually long right now): changing a rail setting again before the",
     "previous rerun's \"Running…\" spinner clears can crash the app instead of",
     "just queuing the change. The user hit it via the heatmap color-range number",
@@ -8776,9 +9090,10 @@ window.TRACKER = {
     "`app.render_data_source_picker`'s popover call — likely a secondary,",
     "cascading failure surfaced while Streamlit was already unwinding the first",
     "exception rather than an independent bug, but worth confirming rather than",
-    "assuming.",
-    "",
-    "**What was done.** Both UX-9 callbacks — `_numeric_slider._apply` and",
+    "assuming."
+   ],
+   "whatWasDone": [
+    "Both UX-9 callbacks — `_numeric_slider._apply` and",
     "`_range_slider._apply` — now return early when their own shadow key is absent,",
     "through a shared `controls._shadow_key_missing` whose docstring carries the",
     "reason. A missing shadow key means there is no pending edit to apply (the",
@@ -8791,14 +9106,15 @@ window.TRACKER = {
     "pruning does. The second traceback needed no fix: `gear_col` no longer exists",
     "anywhere in the tree (`app.render_data_source_picker` was rewritten to",
     "`pick_col, add_col` in fb004f8, the ➕ manage popover), confirming it was the",
-    "cascading failure it looked like.",
-    "",
-    "**What's left.** The user's review — specifically whether the *original* repro",
+    "cascading failure it looked like."
+   ],
+   "whatsLeft": [
+    "The user's review — specifically whether the *original* repro",
     "still reproduces anything: the crash is gone, but the underlying trigger was a",
     "rerun slow enough to change a setting twice inside, which is **PERF-3**. This",
-    "fix makes that survivable, not fast.",
-    "",
-    "**Background (technical).**",
+    "fix makes that survivable, not fast."
+   ],
+   "background": [
     "[`controls._range_slider`](scanpath_studio/controls.py:124) seeds",
     "`{key}__num_lo` / `{key}__num_hi` from the stored `(lo, hi)` tuple only when",
     "it renders, and its `_apply()` on-change callback",
@@ -8830,16 +9146,17 @@ window.TRACKER = {
    "group": "Bugs",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** In the hand-authored **✏️ Author a scanpath** editor, the user",
+   "request": [
+    "In the hand-authored **✏️ Author a scanpath** editor, the user",
     "could not change the values of every row — reported example: editing the",
     "fixation targeting word 7 didn't take. Separately, the \"Target word\"",
     "column (the `word_id` a fixation lands on) isn't explained anywhere in the",
     "UI, so it's unclear what a user is supposed to enter there. Overall the",
     "feature reads as unfinished polish, not just this one bug — it needs a",
-    "pass to make it usable end to end.",
-    "",
-    "**What was done.** The edit bug is a `st.data_editor` misuse, reproduced and",
+    "pass to make it usable end to end."
+   ],
+   "whatWasDone": [
+    "The edit bug is a `st.data_editor` misuse, reproduced and",
     "fixed. The editor keeps edits as a **delta against the frame it was handed**,",
     "and the browser re-sends that delta on every rerun — but `_render_authoring_source`",
     "wrote the editor's *return value* back into `_authored_events_frame`, which is",
@@ -8858,17 +9175,19 @@ window.TRACKER = {
     "says it also sets the marker size. `max_value` is bound to the stimulus length",
     "so an out-of-range word can't be typed, and a new pure",
     "`authoring.unusable_event_rows` drives a warning naming any row that still",
-    "targets no real word — that silent drop is what read as \"my edit didn't take\".",
-    "",
-    "**What's left.** The user's review, on the judgement calls rather than the",
+    "targets no real word — that silent drop is what read as \"my edit didn't take\"."
+   ],
+   "whatsLeft": [
+    "The user's review, on the judgement calls rather than the",
     "mechanism: whether the caption + three tooltips are the right amount of",
     "explanation or too much chrome above a small grid, and whether the",
     "dropped-row warning should instead be an inline error on the cell. The item",
     "also asked for a general \"unfinished polish\" pass — what shipped is the",
     "reported bug plus the explanation gap; if more of the editor still feels rough",
-    "after clicking through it, that is worth its own item with specifics.",
-    "",
-    "**Background (technical).** The editor is",
+    "after clicking through it, that is worth its own item with specifics."
+   ],
+   "background": [
+    "The editor is",
     "[`app._render_authoring_source`](scanpath_studio/app.py:2512), backed by",
     "`scanpath_studio/authoring.py` (`default_events` / `authored_fixations` /",
     "`layout_text`). The grid is an `st.data_editor` over",
@@ -8900,8 +9219,8 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Feedback from a walkthrough of the spotlight welcome tour",
+   "request": [
+    "Feedback from a walkthrough of the spotlight welcome tour",
     "(`tour._SPOTLIGHT_STEPS`, replayable via **🎓 Show tutorial**) — several",
     "separate polish issues on the same feature, filed together:",
     "",
@@ -8921,9 +9240,10 @@ window.TRACKER = {
     "  body text; give it its own step instead.",
     "- Step 9 (\"💾 Save, share & more\") is titled/framed around Save & restore",
     "  specifically, but its selector spans the whole sidebar — reframe it as a",
-    "  general \"here's the left menu\" step instead.",
-    "",
-    "**What was done.** All seven, plus the tour grew from nine steps to eleven.",
+    "  general \"here's the left menu\" step instead."
+   ],
+   "whatWasDone": [
+    "All seven, plus the tour grew from nine steps to eleven.",
     "Step 2's copy is now \"This is the main plot...\". The old step 3 split into",
     "**🎯 Pick a trial** (picking only) and a new **🔍 Narrow the pool** (Text /",
     "Participant / More filters). **🎬 Animate & compare** now spotlights a new",
@@ -8933,11 +9253,13 @@ window.TRACKER = {
     "**📂 Data source** moved up to right after the plot step. **📊 Corpus",
     "Analysis** is now its own step, spotlighting the header's",
     "`.st-key-header_buttons` nav button. The final step is retitled **📚 The",
-    "left sidebar** and reframed generally rather than around Save & restore.",
-    "",
-    "**What's left.** Nothing.",
-    "",
-    "**Background (technical).** All nine steps live in `tour._SPOTLIGHT_STEPS`",
+    "left sidebar** and reframed generally rather than around Save & restore."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "All nine steps live in `tour._SPOTLIGHT_STEPS`",
     "([`tour.py:232`](scanpath_studio/tour.py:232)), one",
     "`{selector, title, body}` dict per step (`selector` drives the pulsing-",
     "outline target). In reading order: step 1 = Welcome (no selector), 2 =",
@@ -8987,25 +9309,28 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The recent caching work surfaced (again) that Streamlit",
+   "request": [
+    "The recent caching work surfaced (again) that Streamlit",
     "doesn't reload imported modules on rerun and `st.cache_data` doesn't hash",
     "transitively-called helpers — so a code change, or a stale cached result,",
     "doesn't show up without a full server restart. This is documented for",
     "contributors (`CONTRIBUTING.md`), but not anywhere a *user* hitting it",
     "would look — the in-app **❓ FAQ** dialog and `docs/faq.md` have no entry",
-    "for it, and this came up again this session.",
-    "",
-    "**What was done.** Added a matching entry to both: `tour._FAQ_ITEMS`",
+    "for it, and this came up again this session."
+   ],
+   "whatWasDone": [
+    "Added a matching entry to both: `tour._FAQ_ITEMS`",
     "(\"I edited the code (or a setting looks stale) and nothing changed.\") and",
     "`docs/faq.md` (\"I edited the code and nothing changed?\", linking",
     "CONTRIBUTING's longer version). Both explain the module-reload /",
     "`st.cache_data` gotcha and explicitly distinguish it from the on-device",
-    "Recovery cache, per the request.",
-    "",
-    "**What's left.** Nothing.",
-    "",
-    "**Background (technical).** In-app FAQ items live in `tour._FAQ_ITEMS`",
+    "Recovery cache, per the request."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "In-app FAQ items live in `tour._FAQ_ITEMS`",
     "([`tour.py:777`](scanpath_studio/tour.py:777), two-to-four lines each per",
     "the module's own convention), with the canonical longer version on",
     "`docs/faq.md` — the two are meant to stay in sync",
@@ -9033,20 +9358,23 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The **🤖 Built with AI assistance** note in the sidebar",
+   "request": [
+    "The **🤖 Built with AI assistance** note in the sidebar",
     "**ℹ️ About** popover is much too long next to the equivalent note on the",
-    "documentation site — trim it down to roughly that length and tone.",
-    "",
-    "**What was done.** `app._render_about_sidebar`'s note is now four short",
+    "documentation site — trim it down to roughly that length and tone."
+   ],
+   "whatWasDone": [
+    "`app._render_about_sidebar`'s note is now four short",
     "sentences (was a heading plus two full paragraphs), matching",
     "`docs/index.md`'s phrasing and length while keeping both verifiable points",
     "(the `?source=synthetic` ground-truth trial, EyeLink `IA_*` passthrough)",
-    "and the issue-report call to action.",
-    "",
-    "**What's left.** Nothing.",
-    "",
-    "**Background (technical).** The two live in different places and have",
+    "and the issue-report call to action."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "The two live in different places and have",
     "drifted: `app._render_about_sidebar`",
     "([`app.py:628-639`](scanpath_studio/app.py:628)) carries a heading plus",
     "two full paragraphs, while `docs/index.md`'s",
@@ -9202,7 +9530,7 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
+   "statusNote": [
     "**Update 2026-08-13 — all four placement moves have landed.** (1) and (2) shipped",
     "with **DATA-26**: ⚙️ Configure and 🧹 Preprocessing left `menu.TopMenu` for the new 🗂️",
     "Data page (Preprocessing to the page rather than the 👁️ Fixations rail — it reshapes",
@@ -9220,9 +9548,10 @@ window.TRACKER = {
     "whether *Session* is the word (it covers a portable file and a local cache, and the",
     "sub-headings inside carry the old names), and whether Help leading still makes sense",
     "now that it is the leftmost thing on the page. Copy naming the old panels was updated",
-    "across the app, the tour, the FAQ and the wizard.",
-    "",
-    "**Request.** General feedback that the left sidebar menu \"should be improved\" — the",
+    "across the app, the tour, the FAQ and the wizard."
+   ],
+   "request": [
+    "General feedback that the left sidebar menu \"should be improved\" — the",
     "pain point being *placement and grouping*, not the widgets themselves. Sharpened by",
     "the user on **2026-08-12**, now that the sidebar has become a **top bar**:",
     "",
@@ -9231,9 +9560,10 @@ window.TRACKER = {
     "- **🧹 Preprocessing** can go under **👁️ Fixations** in the plot rail *or* onto that",
     "  same data-management page — implementer's pick.",
     "- **❓ Help** should be at the top.",
-    "- **💾 Save & restore** and **🗄️ Recovery cache** are undecided — \"suggest ideas\".",
-    "",
-    "**What was done.** The host swap only: every group that used to be an `st.sidebar`",
+    "- **💾 Save & restore** and **🗄️ Recovery cache** are undecided — \"suggest ideas\"."
+   ],
+   "whatWasDone": [
+    "The host swap only: every group that used to be an `st.sidebar`",
     "section is now an `st.popover` on one row under the header",
     "([`menu.py`](scanpath_studio/menu.py), spec",
     "[`plans/ux-top-menu-design.md`](plans/ux-top-menu-design.md)), so nothing writes to",
@@ -9254,9 +9584,10 @@ window.TRACKER = {
     "sitting there; a loading bridge claims that space at once.",
     "",
     "None of the placement moves below has been implemented yet — everything that landed",
-    "so far kept each group exactly where it was.",
-    "",
-    "**What's left.** All four placement moves. (1) **Configure → DATA-26's page**, which",
+    "so far kept each group exactly where it was."
+   ],
+   "whatsLeft": [
+    "All four placement moves. (1) **Configure → DATA-26's page**, which",
     "makes this item land *after* DATA-26 and partly undo the bar it just gained — settle",
     "which shape wins before either is finished. (2) **Preprocessing** — pick a home; see",
     "the trade-off below. (3) **Help first**, which on the settings row is a one-line",
@@ -9265,9 +9596,10 @@ window.TRACKER = {
     "not a question: portable JSON (plot config + annotations) on top, the on-device cache as",
     "a second block underneath, one trigger carrying `menu.SAVE_RESTORE_KEY`. Once Configure",
     "and Preprocessing leave, the bar is down to Help + Session, which is worth re-checking",
-    "as a whole rather than shipping each move on its own.",
-    "",
-    "**Background (technical).** Anchors and constraints for whoever implements it:",
+    "as a whole rather than shipping each move on its own."
+   ],
+   "background": [
+    "Anchors and constraints for whoever implements it:",
     "",
     "- **The Session merge (decided).** 💾 Save & restore and 🗄️ Recovery cache both answer",
     "  one question — *what is kept, and how do I get it back* — differing only in whether",
@@ -9317,14 +9649,15 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Tuck a small easter egg somewhere in the app. Now scoped by the",
+   "request": [
+    "Tuck a small easter egg somewhere in the app. Now scoped by the",
     "user: **triple-click the \"Scanpath Studio\" title** and something nice happens",
     "— \"big eyes popping up\", i.e. a pair of oversized googly eyes that appear",
     "(and, fittingly for an eye-tracking tool, could track the cursor for a",
-    "moment) before fading out on their own. Playful, brief, self-dismissing.",
-    "",
-    "**What was done.** New `easter_egg.py`: triple-clicking the heading pops up a",
+    "moment) before fading out on their own. Playful, brief, self-dismissing."
+   ],
+   "whatWasDone": [
+    "New `easter_egg.py`: triple-clicking the heading pops up a",
     "pair of oversized googly eyes that blink once, follow the cursor, and fade out",
     "after ~4 seconds. It is one same-origin `st.iframe` script bound to a `click`",
     "with `event.detail >= 3` — no session-state key, no rerun, no wire format. The",
@@ -9333,9 +9666,10 @@ window.TRACKER = {
     "button — see *Background*). Inert under `?embed=true` and while a tour or",
     "tutorial is running. Six tests in `tests/test_easter_egg.py` pin the trigger,",
     "the selector against the header's container key, the inert/self-cleaning",
-    "properties, and the suppression rules.",
-    "",
-    "**What's left.** The user's review — and the judgement calls are all aesthetic:",
+    "properties, and the suppression rules."
+   ],
+   "whatsLeft": [
+    "The user's review — and the judgement calls are all aesthetic:",
     "the eyes' size (1.45× the heading's font, capped at 72 px), the ~4 s lifetime,",
     "whether cursor-following is charming or too much, and whether the",
     "peek-over-the-top fallback is the right answer on a narrow window (open the",
@@ -9344,9 +9678,10 @@ window.TRACKER = {
     "cursor in both placements, but continuous tracking across cursor movement was",
     "not captured — the egg expires faster than a screenshot round-trip, and the",
     "preview pane throttles `requestAnimationFrame` while hidden, which is worth",
-    "one manual look.",
-    "",
-    "**Background (technical).** The trigger decision was settled by the user",
+    "one manual look."
+   ],
+   "background": [
+    "The trigger decision was settled by the user",
     "(2026-08-12): triple-click the title, not a key sequence or a random",
     "occurrence — the older candidates (Konami sequence, hidden sidebar target, a",
     "rare `tour.py` welcome variant) are dropped. The heading is",
@@ -9429,8 +9764,8 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Significantly improve the hand-authored scanpath introduced in",
+   "request": [
+    "Significantly improve the hand-authored scanpath introduced in",
     "**VIZ-20**. Make the canvas the primary editor: click to place a fixation and",
     "drag an existing fixation to change its X/Y position. Keep the table for precise",
     "numeric edits and bulk changes, add an explicit fixation index/order column, and",
@@ -9442,9 +9777,10 @@ window.TRACKER = {
     "after parsing the text, show a word-level table with **word**, **word index**,",
     "**line index**, and its bounding box (**x, y, width, height**). Respect explicit",
     "line breaks as well as automatic wrapping so multiline text is represented and",
-    "authored accurately.",
-    "",
-    "**What was done.** Rebuilt authoring around a schema-2 document with stable",
+    "authored accurately."
+   ],
+   "whatWasDone": [
+    "Rebuilt authoring around a schema-2 document with stable",
     "fixation IDs, explicit order, portable layout settings, and schema-1 migration.",
     "The line-aware layout preserves explicit/blank lines and wrapping; the app exposes",
     "the requested word geometry, keeps one centred default fixation per word, and treats",
@@ -9453,13 +9789,15 @@ window.TRACKER = {
     "rebuilds cleanly on reruns and remounts the numeric editor after canvas changes.",
     "The existing visualization, measures, JSON save/restore, CLI, and Python API consume",
     "the same canonical tables. Focused tests plus a real browser check proved a drag to",
-    "X=251.5/Y=154.6 appeared identically in the table without duplicating markers.",
-    "",
-    "**What's left.** Review the authored-text geometry and exercise click, drag, exact",
+    "X=251.5/Y=154.6 appeared identically in the table without duplicating markers."
+   ],
+   "whatsLeft": [
+    "Review the authored-text geometry and exercise click, drag, exact",
     "table edits, reorder, delete, save, and restore with a representative multiline",
-    "stimulus; approve the card if the canvas/table workflow feels right.",
-    "",
-    "**Background (technical).** This is the next iteration of **VIZ-20** and",
+    "stimulus; approve the card if the canvas/table workflow feels right."
+   ],
+   "background": [
+    "This is the next iteration of **VIZ-20** and",
     "**BUG-19**, not a second authoring pipeline. Today",
     "[`authoring.layout_text`](scanpath_studio/authoring.py) tokenizes with `\\S+`, so",
     "newlines disappear, while `app._render_authoring_source` exposes only the fixation",
@@ -9531,28 +9869,31 @@ window.TRACKER = {
    "group": "Visualization & display",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Add an option to overlay a readable coordinate grid on the",
+   "request": [
+    "Add an option to overlay a readable coordinate grid on the",
     "visualization canvas in every scanpath mode, not only while authoring manually.",
     "Show screen X/Y coordinates with sensible major/minor spacing and unobtrusive",
     "labels so a user can inspect positions without relying only on hover tooltips. The",
     "first implementation is a monitor-pixel grid; degrees of visual angle and physical",
-    "units belong to a later extension rather than being mixed into an ambiguous axis.",
-    "",
-    "**What was done.** Added a shared zero-anchored monitor-pixel grid with automatic",
+    "units belong to a later extension rather than being mixed into an ambiguous axis."
+   ],
+   "whatWasDone": [
+    "Added a shared zero-anchored monitor-pixel grid with automatic",
     "1/2/5×10ⁿ or exact manual spacing, fifth-interval minor lines, label thinning, and",
     "explicit margins that preserve the equal-aspect data domain. Static, replay, overlay,",
     "side-by-side, stacked, HTML/static-image, and bulk render paths use the same helper.",
     "The option is off by default and round-trips through the rail, Share/deep links,",
     "schema-3 saved configs, CLI, canonical API defaults, and export manifests. Tests pin",
     "the off-state identity and every surface. Browser measurements at 800 px and 1440 px",
-    "showed non-overlapping labels 8.4 px and 19.5 px high respectively.",
-    "",
-    "**What's left.** Review the grid on a densely populated real trial at narrow and wide",
+    "showed non-overlapping labels 8.4 px and 19.5 px high respectively."
+   ],
+   "whatsLeft": [
+    "Review the grid on a densely populated real trial at narrow and wide",
     "window sizes, including cropped/full-monitor transitions and a manual interval;",
-    "approve the card if the label weight and spacing are suitable for analysis figures.",
-    "",
-    "**Background (technical).** The grid must use the same monitor-pixel coordinate",
+    "approve the card if the label weight and spacing are suitable for analysis figures."
+   ],
+   "background": [
+    "The grid must use the same monitor-pixel coordinate",
     "system as the word boxes and fixations, including the inverted screen Y axis, and",
     "remain correct when **Show full monitor** crops or expands the figure. Spatial",
     "figures currently hide axis ticks/grids in [`plots.py`](scanpath_studio/plots.py)",
@@ -9804,8 +10145,8 @@ window.TRACKER = {
     "Should the participant table **also** be a step in the upload wizard? Today it is a Data-page section, which reaches every source rather than only an upload — but a first-time uploader never sees it during setup.",
     "**Export ships every metadata field.** The per-field include/exclude opt-out is milestone 10 of the plan. Pull it forward, or is include-everything right for now?"
    ],
-   "body": [
-    "**Request.** Add first-class support for dataset metadata instead of relying on a",
+   "request": [
+    "Add first-class support for dataset metadata instead of relying on a",
     "small hard-coded list of known corpus columns. Preserve metadata through ingestion",
     "and make it discoverable and usable in the app, including inspection, trial",
     "filtering/sorting, labels or hover where appropriate, corpus grouping, and export.",
@@ -9816,9 +10157,10 @@ window.TRACKER = {
     "participant-level table, where each row is a participant, and columns beside the",
     "participant id column include additional information (e.g. native language). I want",
     "these fields to appear as if they were fields in the data, relevant for chips,",
-    "filtering, and maybe other parts that I didn't think of.\"*",
-    "",
-    "**What was done.** **Milestone 1 \u2014 the requested slice \u2014 is implemented.** A new",
+    "filtering, and maybe other parts that I didn't think of.\"*"
+   ],
+   "whatWasDone": [
+    "**Milestone 1 \u2014 the requested slice \u2014 is implemented.** A new",
     "[`metadata.py`](scanpath_studio/metadata.py) owns the whole model: a",
     "`ParticipantMetadata` (validated frame + field registry + join report) built by",
     "`build_participant_metadata`, and three narrow consumers \u2014 `participants_matching`",
@@ -9857,9 +10199,10 @@ window.TRACKER = {
     "records (not a file path, so it is portable) and restores it **before** the filter",
     "widgets read their keys, so a saved `filter_meta_*` selection lands on fields that",
     "exist. The filter keys sit under the `filter_` prefix, so \u2715 Clear all filters, the",
-    "`_trial_filters_raw` mirror and compare-mode B's namespace all work unchanged.",
-    "",
-    "**What's left.** Your review of milestone 1, and then the later milestones, which",
+    "`_trial_filters_raw` mirror and compare-mode B's namespace all work unchanged."
+   ],
+   "whatsLeft": [
+    "Your review of milestone 1, and then the later milestones, which",
     "are **not** started and are listed below unchanged. Three judgement calls to look",
     "at. **(a) It is a Data-page section, not a seventh wizard step** \u2014 the plan said",
     "\"a new wizard step\", but the wizard runs only for an *upload*, and \"who are these",
@@ -9889,9 +10232,10 @@ window.TRACKER = {
     "which truncates a DataFrame past 60 rows — a corrected table of the same shape",
     "produced an identical key and served the **stale** zip. Only the fingerprint goes",
     "in the signature now. **(4)** \"✕ Detach this table\" re-attached on the same",
-    "rerun, because the uploader's own widget key survived the clear.",
-    "",
-    "**Background (technical).** Metadata support used to be distributed across",
+    "rerun, because the uploader's own widget key survived the clear."
+   ],
+   "background": [
+    "Metadata support used to be distributed across",
     "`WORD_OPTIONAL_FIELDS` / `FIX_OPTIONAL_FIELDS`, selected keep-columns, trial-filter",
     "discovery, `utils.gather_trial_metadata`, hover/chip/filter allowlists, and export",
     "passthrough, with no single registry saying what entity a column describes, which",
@@ -9972,17 +10316,18 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Support a multipart trial: one logical trial containing multiple",
+   "request": [
+    "Support a multipart trial: one logical trial containing multiple",
     "ordered screens/parts under a nested trial definition. Treat this as a large",
     "staged task. **Stage 1:** ingest and preserve the parent-trial subdivision and",
     "screen order without flattening it away. **Stage 2:** visualize and navigate that",
     "structure in the main scanpath view. **Stage 3:** propagate it to animation,",
     "comparison, analysis, export, annotations, Share/save, CLI, and the headless API.",
     "Each stage should be independently reviewable; do not hide the data-model work inside",
-    "one final all-surfaces change.",
-    "",
-    "**What was done.** Added a flat, validated multipart identity model with parent-trial",
+    "one final all-surfaces change."
+   ],
+   "whatWasDone": [
+    "Added a flat, validated multipart identity model with parent-trial",
     "and ordered screen keys, explicit-column mapping in the upload wizard, arbitrary",
     "source selectors through a nested API/CLI manifest, per-screen canvas metadata, and",
     "a hand-authored two-screen executable fixture. Parent-global and screen-local clocks",
@@ -9997,16 +10342,18 @@ window.TRACKER = {
     "retains screen identity in analysis tables/configs. Legacy data keeps its old shape and",
     "behavior. Documentation, changelog, architecture notes, and focused UI/API/CLI/export",
     "tests were added; the full pinned suite passes apart from the tracker handoff check this",
-    "write-up resolves.",
-    "",
-    "**What's left.** User review: load a representative multipart export and confirm the",
+    "write-up resolves."
+   ],
+   "whatsLeft": [
+    "User review: load a representative multipart export and confirm the",
     "screen/order/canvas column proposals; move through screens in the main trial view; add",
     "one parent note and one screen note; follow a Share link back to the same screen; and",
     "inspect `scanpath-studio render --list-parts` / `--all-screens`. Approval should confirm",
     "that ordered per-screen parent output plus selectable instant/recorded gaps is the",
-    "desired full-trial handoff. No implementation work is knowingly outstanding.",
-    "",
-    "**Background (technical).** The current canonical identity and most grouping logic",
+    "desired full-trial handoff. No implementation work is knowingly outstanding."
+   ],
+   "background": [
+    "The current canonical identity and most grouping logic",
     "assume `(participant_id, trial_id)` identifies one coordinate space and one stimulus.",
     "The existing composite-trial feature is different: it combines several input columns",
     "into one flat `trial_id` and renders cascading selectors, but the result still has one",
@@ -10099,8 +10446,8 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Four things, with explicit authority to break the whole pipeline down",
+   "request": [
+    "Four things, with explicit authority to break the whole pipeline down",
     "and rebuild it. (1) Changing a field \u2014 e.g. in **Trial identifier** \u2014 collapses the",
     "step every time; keep it open. (2) The setup guide does not follow you or highlight",
     "the part it is talking about. (3) Steps that take processing time must make it",
@@ -10109,9 +10456,10 @@ window.TRACKER = {
     "overwhelming, and easy to miss important steps. The user may be the person who",
     "collected the data or someone merely using it, and may not have all the details to",
     "hand \u2014 so **don't assume a default that may be incorrect**. Let them make a conscious",
-    "choice between finding out the real value, taking a named default, or skipping.",
-    "",
-    "**What was done.** All four, per [`plans/data-22-upload-pipeline-rebuild.md`](plans/data-22-upload-pipeline-rebuild.md).",
+    "choice between finding out the real value, taking a named default, or skipping."
+   ],
+   "whatWasDone": [
+    "All four, per [`plans/data-22-upload-pipeline-rebuild.md`](plans/data-22-upload-pipeline-rebuild.md).",
     "*(1)* A new [`wizard_shell.py`](scanpath_studio/wizard_shell.py) owns a six-step",
     "accordion (Your data \u00b7 Trials & readers \u00b7 Fixations & text \u00b7 Recording setup \u00b7 Extra",
     "fields \u00b7 Name & add) whose open flag is a **keyed `st.expander`** written only by",
@@ -10130,9 +10478,10 @@ window.TRACKER = {
     "six step bodies; sub-blocks are popovers (expander-in-expander is forbidden). The",
     "**Recording setup** moved *after* the upload and is three `st.radio(index=None)`",
     "groups \u2014 nothing preselected \u2014 offering *I know these* / *Estimate from my data* /",
-    "*Use a named default* / *Skip*, gating **Add dataset** until all three are answered.",
-    "",
-    "**What's left.** User review. First round of feedback (2026-08-12) is **fixed**: the",
+    "*Use a named default* / *Skip*, gating **Add dataset** until all three are answered."
+   ],
+   "whatsLeft": [
+    "User review. First round of feedback (2026-08-12) is **fixed**: the",
     "step no longer closes on upload; the *jump to Recording setup* shortcut is gone (a",
     "detected mapping still has to be confirmed \u2014 detection matches column *names*, so it",
     "is confident and occasionally wrong, and a wrong mapping renders a plausible figure of",
@@ -10144,9 +10493,10 @@ window.TRACKER = {
     "the step stays open; (b) the Recording-setup wording \u2014 whether the three groups and",
     "their four choices are the right questions, and whether *Estimate from my data* stating",
     "a **lower bound** reads clearly; (c) the guide's highlight/scroll on each step; (d) the",
-    "step-6 review table and whether the provenance column earns its place.",
-    "",
-    "**Background (technical).** The provenance model lives in",
+    "step-6 review table and whether the provenance column earns its place."
+   ],
+   "background": [
+    "The provenance model lives in",
     "[`experimental_setup.py`](scanpath_studio/experimental_setup.py) as `Provenance` +",
     "`SetupSnapshot`, unified with **CMP-8**'s per-dataset snapshot rather than built twice",
     "\u2014 both plans wanted a type in the same module and a key on the same",
@@ -10198,14 +10548,16 @@ window.TRACKER = {
    "added": "2026-08-12",
    "group": "Validation",
    "subgroup": "",
-   "body": [
-    "**Request.** The inverse of **BUG-23**: how do we know a \"trial\" is actually more",
+   "archived": false,
+   "request": [
+    "The inverse of **BUG-23**: how do we know a \"trial\" is actually more",
     "than one trial? A Trial ID mapping that does not fully identify a reading",
     "concatenates several readings into one `trial_id`. Nothing warns — the figure",
     "renders, and it looks like an ordinary scanpath with a lot of regressions. The",
-    "same class of failure as CMP-8's participant namespacing: plausible, and wrong.",
-    "",
-    "**What was done.** `data.diagnose_trial_identity(words, fixations)` — pure,",
+    "same class of failure as CMP-8's participant namespacing: plausible, and wrong."
+   ],
+   "whatWasDone": [
+    "`data.diagnose_trial_identity(words, fixations)` — pure,",
     "read-only, keyed on `trial_identity_key` = `(participant_id, trial_id,",
     "screen_id)` — computes all four signals and returns counts plus",
     "`multi_valued_columns` (column → how many trials hold >1 value), sorted so the",
@@ -10227,9 +10579,10 @@ window.TRACKER = {
     "against a fixations-only denominator printed \"6 of 4 trials\". Tests:",
     "[`tests/test_trial_identity.py`](tests/test_trial_identity.py), including the",
     "multipart false-positive (and a companion asserting that dropping `screen_id`",
-    "from the key *would* have flagged it) and the item's own demo measurement.",
-    "",
-    "**What's left.** Your review. (a) The bundled corpora are all clean, so the",
+    "from the key *would* have flagged it) and the item's own demo measurement."
+   ],
+   "whatsLeft": [
+    "Your review. (a) The bundled corpora are all clean, so the",
     "warning is invisible on a normal visit — to see it, add the demo CSVs as an",
     "upload and map **Trial ID** to `article_id` + `article_batch`; every signal",
     "fires and the line names `TRIAL_INDEX`. (b) Judgement call worth confirming:",
@@ -10237,9 +10590,10 @@ window.TRACKER = {
     "else), *not* as a modal or a banner over the plot — is that prominent enough",
     "for a wrong-data warning, or should it interrupt? (c) The witness column list",
     "is fixed rather than inferred; check nothing obvious is missing for the",
-    "corpora you care about.",
-    "",
-    "**Background (technical).** Three independent signals, measured on the bundled",
+    "corpora you care about."
+   ],
+   "background": [
+    "Three independent signals, measured on the bundled",
     "demo by deliberately dropping `article_id`/`article_batch`/`difficulty_level` from",
     "the trial mapping so each pair of real trials merges (correct mapping → merged):",
     "duplicate `(participant, trial, word_id)` rows in the words table **0 → 1,587**",
@@ -10393,13 +10747,14 @@ window.TRACKER = {
    "group": "Bugs",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Not asked for \u2014 found while scoping #VAL-5, and confirmed on the",
+   "request": [
+    "Not asked for \u2014 found while scoping #VAL-5, and confirmed on the",
     "bundled demo before filing. Your call on the open decision: *\"go with the option",
     "that is more straightforward. I don't want to deal with complicated or uncertain",
-    "conversions.\"*",
-    "",
-    "**What was done.** The straightforward option is **no conversion in either",
+    "conversions.\"*"
+   ],
+   "whatWasDone": [
+    "The straightforward option is **no conversion in either",
     "direction**, so the two quantities stop sharing a name. `saccade_amplitude` is",
     "now always **pixels** \u2014 the euclidean distance `measures.enrich_fixations`",
     "computes, or a source column of that literal name \u2014 and EyeLink's degree-valued",
@@ -10417,18 +10772,20 @@ window.TRACKER = {
     "the 1.95 is still there, correctly labelled, as `next_saccade_amplitude_deg`.",
     "`aggregation.MEASURES[\"sacc_amp\"]`'s hard-coded `unit=\"px\"` is now *true* rather",
     "than something to fix, so it stays \u2014 and `mean_saccade_px` in the per-reader",
-    "summary needs no rename for the same reason.",
-    "",
-    "**What's left.** Your review. One judgement call to check: this **changes what",
+    "summary needs no rename for the same reason."
+   ],
+   "whatsLeft": [
+    "Your review. One judgement call to check: this **changes what",
     "the demo's saccade-amplitude figure shows** \u2014 from ~1.95 (degrees, mislabelled)",
     "to ~151 (pixels, correctly labelled). That is the point of the fix, but it is a",
     "visible change to a published-looking number, so it is worth agreeing to",
     "deliberately. Worth clicking: Corpus Analysis \u2192 any saccade-amplitude view, and",
     "the per-reader summary's `mean_saccade_px`. Also worth deciding for later:",
     "whether the degree columns deserve their own entry in `aggregation.MEASURES`",
-    "(they are currently passthrough fields, not offered as a corpus measure).",
-    "",
-    "**Background (technical).** Two source columns were mapped onto one canonical",
+    "(they are currently passthrough fields, not offered as a corpus measure)."
+   ],
+   "background": [
+    "Two source columns were mapped onto one canonical",
     "name in [`data.py:1726`](scanpath_studio/data.py:1726). EyeLink writes both in",
     "**degrees of visual angle**; when neither was present,",
     "[`measures.py`](scanpath_studio/measures.py:372) computed a euclidean distance",
@@ -10461,8 +10818,8 @@ window.TRACKER = {
    "group": "Bugs",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Reported 2026-08-13. The Corpus Analysis **Per text** views aggregate",
+   "request": [
+    "Reported 2026-08-13. The Corpus Analysis **Per text** views aggregate",
     "per-word measures by `(text_id, word_id)` with **no screen key**, but a `word_id` is",
     "only unique *within a screen* — which is exactly why",
     "[`multipart.grouping_columns`](scanpath_studio/multipart.py:33) appends `screen_id`.",
@@ -10471,9 +10828,10 @@ window.TRACKER = {
     "since DATA-24, with each comprehension-question screen's first word too. *Word",
     "difficulty on stimulus* draws reading-page and answer-block boxes overlapping in one",
     "figure. The page-vs-page half predates DATA-24 (`text_id` was already the stimulus);",
-    "the question screens widen it.",
-    "",
-    "**What was done.** Option **(a)**: the per-text views are scoped to **one screen**.",
+    "the question screens widen it."
+   ],
+   "whatWasDone": [
+    "Option **(a)**: the per-text views are scoped to **one screen**.",
     "[`aggregation._text_subset`](scanpath_studio/aggregation.py:454) now takes a",
     "`screen_id`, and the five per-text helpers (`per_reader_word_measure`,",
     "`cohort_word_profile`, `word_box_aggregate`, `word_measure_vs_feature`,",
@@ -10486,18 +10844,20 @@ window.TRACKER = {
     "every cached wrapper *and its cache key*. Single-screen datasets — the bundled demo,",
     "OneStop, PoTeC, any upload without `screen_id` — see **no picker and byte-identical",
     "output**, because `multipart.has_screen_identity` is False and the new argument is",
-    "inert. `docs/multipleye.md` loses the caveat it recorded this under.",
-    "",
-    "**What's left.** Your review, and one judgement call worth disagreeing with: **(a)",
+    "inert. `docs/multipleye.md` loses the caveat it recorded this under."
+   ],
+   "whatsLeft": [
+    "Your review, and one judgement call worth disagreeing with: **(a)",
     "means you can no longer see a whole stimulus's word profile in one chart** — a",
     "MultiplEYE text is now read one page at a time in the per-text views, and the",
     "comprehension questions are their own screens in the same picker. Worth clicking: the",
     "Screen picker on a MultiplEYE text (it should list the reading pages then the question",
     "screens, in reading order), *Word difficulty on stimulus* on a question screen (one",
     "canvas, boxes hugging the stem and the four answers — not two pages stacked), and any",
-    "single-screen corpus to confirm the picker is absent and the figures are unchanged.",
-    "",
-    "**Background (technical).** **Why (a) and not (b)** (carry a stimulus-global word",
+    "single-screen corpus to confirm the picker is absent and the figures are unchanged."
+   ],
+   "background": [
+    "**Why (a) and not (b)** (carry a stimulus-global word",
     "index alongside the corpus's native `word_idx` and aggregate on that): (b) fixes the",
     "*pooling* but not the *figure*. *Word difficulty on stimulus* draws word **boxes**, and",
     "page 1's boxes and page 2's boxes occupy the same pixel rectangle — each is measured",
@@ -10518,6 +10878,75 @@ window.TRACKER = {
     "is per-reader and unaffected. Related: **DATA-24**, **DATA-21** (the screen key),",
     "**AN-1 … AN-6** (the per-text views), **VAL-5** (the class of defect a computation",
     "register exists to catch)."
+   ]
+  },
+  {
+   "id": "BUG-27",
+   "prefix": "BUG",
+   "num": 27,
+   "sub": "",
+   "title": "A letter is measured as width / len(text), which is one inter-word space too wide",
+   "status": "Review",
+   "note": "Implemented 2026-08-13; pending user review.",
+   "date": "2026-08-13",
+   "added": "2026-08-13",
+   "group": "Bugs",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "Split out of #VAL-5, whose audit found the two halves of the word",
+    "geometry disagreeing: the boundary *between* words had been corrected for #BUG-11's",
+    "trailing inter-word padding, while the scale used *inside* a word had not. Your call",
+    "on it was \"I think use the corrected, not sure\"."
+   ],
+   "whatWasDone": [
+    "Not the literal alignment — working the arithmetic showed it would",
+    "make the number worse, so this fixes the denominator instead of moving the origin (see",
+    "*Background*). New",
+    "[`measures.word_char_advance`](scanpath_studio/measures.py:222) is the one accessor",
+    "for the letter scale, the way `word_box_bounds` is for the boundary: it returns",
+    "`width / (len(text) + 1)` when #BUG-11's detector reports trailing padding and",
+    "`width / len(text)` otherwise. Three call sites that each derived their own now read",
+    "it — `measures.compute_per_word_measures` (`initial_landing_position` /",
+    "`initial_landing_distance`), `preprocessing._word_letter_geometry` (a saccade's",
+    "launch/landing letter) and `aggregation.landing_positions` (the AN-12 landing curve),",
+    "the last of which also moves its origin from the corrected AOI edge back to the word's",
+    "`x`. The register records the new entry and both consumers; five hand-oracle tests in",
+    "`tests/test_measures.py` pin the constant advance, the glyph-tight fallback, and that",
+    "the letter position and the landing fraction now describe the same landing."
+   ],
+   "whatsLeft": [
+    "Your review — and this one changes published-looking numbers, so it",
+    "is worth a look rather than a nod. On the bundled demo the advance is a flat **19 px**",
+    "for every word, where the old formula gave **21.4–25.3 px** depending on word length;",
+    "a mid-word landing on a 5-letter word now reads ~3.7 letters instead of ~4.3. The",
+    "*direction* is not in doubt (the old scale was demonstrably too wide) but the effect",
+    "on any number you have already quoted is real."
+   ],
+   "background": [
+    "The demo's boxes are `(n_chars + 1) x 19 px` and tile with",
+    "no gaps, so `width / len(text)` divides a box of `n + 1` advances by `n` characters —",
+    "every letter reads `(n+1)/n` too wide, i.e. **the error varies with word length**",
+    "(+33% on a 3-letter word, +7% on a 15-letter one), which is worse than a constant bias",
+    "because it distorts the shape of a landing-position-by-word-length curve.",
+    "",
+    "**Why not \"align on the corrected edge\" literally.** The corrected edge sits half an",
+    "advance left of the first glyph — that is what #BUG-11 means. Measuring letters from",
+    "it would report a fixation on the word's first glyph as ~1.5 rather than 1.0, so a",
+    "measure whose whole convention is \"the first letter is 1\" would acquire a half-letter",
+    "bias. Once the advance is right the two accessors are *exactly* half an advance apart",
+    "by construction, so they describe one consistent geometry with no inconsistency left",
+    "to align: `word_box_bounds` answers \"which word\", `word_char_advance` answers \"where",
+    "in it\", and `x` (the glyph start) is the origin of the second, as its docstring has",
+    "always said. `aggregation.landing_positions` was the one place actually measuring from",
+    "the AOI edge, and its own docstring promised \"0 = word start, 1 = word end\" — which",
+    "was untrue in both directions on a tiling corpus; it now measures across the glyph run",
+    "and the promise holds.",
+    "",
+    "The correction stays conditional on `word_box_space_px`, so glyph-tight corpora",
+    "(PoTeC, MultiplEYE) are untouched — `tests/test_measures.py` pins that too. Related:",
+    "#BUG-11 (the boundary half of the same geometry), #VAL-5 (the audit), #BUG-25 (the",
+    "other finding it split out), #AN-12 (the landing curve)."
    ]
   },
   {
@@ -10647,8 +11076,8 @@ window.TRACKER = {
     "Are these **five outcomes** still the right first set now that the 🗂️ Data page exists — load/verify · filter & mark · publication figure · compare readings · explore a corpus? A sixth is a registry entry, not new machinery.",
     "**Explore a corpus question** is two steps where the others are four or five. Expand it, or is a short pointer the right shape for that one?"
    ],
-   "body": [
-    "**Request.** Add task-oriented tutorials inside the app, so a user can choose the",
+   "request": [
+    "Add task-oriented tutorials inside the app, so a user can choose the",
     "workflow they are trying to complete instead of receiving only one generic welcome",
     "tour. Start with the established use cases: load/inspect a dataset, filter and clean",
     "trials, build/export a publication figure, compare readings, and explore a corpus.",
@@ -10656,9 +11085,10 @@ window.TRACKER = {
     "must not merely rename five slices of the existing feature tour.",
     "",
     "Your review of the first pass: *\"This is a good start. Should be updated based on",
-    "other changes made throughout the app, and also generally improved and polished.\"*",
-    "",
-    "**What was done.** The engine from the first pass is unchanged \u2014 one registry, one",
+    "other changes made throughout the app, and also generally improved and polished.\"*"
+   ],
+   "whatWasDone": [
+    "The engine from the first pass is unchanged \u2014 one registry, one",
     "state machine, five outcome-based flows, independent progress, Show me / Open,",
     "Exit restores the starting location. This pass did three things to it.",
     "",
@@ -10689,17 +11119,19 @@ window.TRACKER = {
     "**The chooser was polished.** Five bordered cards instead of a flat wall of",
     "title/caption/caption/two-buttons stacks separated by dividers: one **Start**",
     "button (primary and reading *Resume* when there is progress), the step count and",
-    "time on one line, and **Start over** shown only once there is progress to discard.",
-    "",
-    "**What's left.** Your review. Open **\u2753 Help \u2192 \ud83e\udded Tutorials** and start *Load and",
+    "time on one line, and **Start over** shown only once there is progress to discard."
+   ],
+   "whatsLeft": [
+    "Your review. Open **\u2753 Help \u2192 \ud83e\udded Tutorials** and start *Load and",
     "verify a dataset* \u2014 the four steps and their spotlights were verified end to end",
     "in a real browser (each target outlined, no spurious \"Show me\" button), but the",
     "copy is a judgement call and it is the thing you asked to improve. Worth deciding:",
     "whether five outcomes are still the right set now that the Data page exists, and",
     "whether *Explore a corpus question* (two steps) is too thin beside the others.",
-    "A sixth flow would be a registry entry, not new machinery.",
-    "",
-    "**Background (technical).** Extends the replayable `tour.py` framework rather than",
+    "A sixth flow would be a registry entry, not new machinery."
+   ],
+   "background": [
+    "Extends the replayable `tour.py` framework rather than",
     "adding a second help system. `TUTORIALS` is the registry; a step declares its",
     "selector, required view/subtab, body and optionality.",
     "`tests/test_tour.py::test_every_use_case_selector_has_a_container` pins every",
@@ -10897,18 +11329,21 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Do not show the upload screen's large-dataset prompt to install and",
-    "run Scanpath Studio locally when the app is already being used locally.",
-    "",
-    "**What was done.** Added `is_loopback_url` as the shared URL classifier and",
+   "request": [
+    "Do not show the upload screen's large-dataset prompt to install and",
+    "run Scanpath Studio locally when the app is already being used locally."
+   ],
+   "whatWasDone": [
+    "Added `is_loopback_url` as the shared URL classifier and",
     "show the install/run-local prompt only for non-loopback sessions. The ordinary",
-    "upload instruction remains visible in both local and hosted runs.",
-    "",
-    "**What's left.** Review the Upload screen in a local launch and in the hosted demo:",
-    "the tip should be absent locally and present only on the hosted page.",
-    "",
-    "**Background (technical).** `persistence.py` already uses loopback URLs for",
+    "upload instruction remains visible in both local and hosted runs."
+   ],
+   "whatsLeft": [
+    "Review the Upload screen in a local launch and in the hosted demo:",
+    "the tip should be absent locally and present only on the hosted page."
+   ],
+   "background": [
+    "`persistence.py` already uses loopback URLs for",
     "local-session persistence. The new pure helper lets `wizard.py` reuse that browser-facing",
     "signal without treating `SCANPATH_STUDIO_PERSIST` overrides as a claim that a hosted",
     "deployment is local. Focused persistence tests (16) plus Ruff and formatting checks pass."
@@ -10927,18 +11362,21 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Make the annotation note's Save & restore reference clickable and take",
-    "the user to the sidebar panel.",
-    "",
-    "**What was done.** Replaced the passive panel reference with an **💾 Open",
+   "request": [
+    "Make the annotation note's Save & restore reference clickable and take",
+    "the user to the sidebar panel."
+   ],
+   "whatWasDone": [
+    "Replaced the passive panel reference with an **💾 Open",
     "Save & restore** action. Clicking it expands the Save & restore panel and opens",
-    "a collapsed sidebar before scrolling the panel into view.",
-    "",
-    "**What's left.** Review the action from an annotation: it should open the sidebar",
-    "Save & restore panel directly, with no change to the annotation itself.",
-    "",
-    "**Background (technical).** The annotation editor sets `_open_save_restore`;",
+    "a collapsed sidebar before scrolling the panel into view."
+   ],
+   "whatsLeft": [
+    "Review the action from an annotation: it should open the sidebar",
+    "Save & restore panel directly, with no change to the annotation itself."
+   ],
+   "background": [
+    "The annotation editor sets `_open_save_restore`;",
     "`tabs._render_save_restore_expander` consumes it as the expander's `expanded` state",
     "and runs a same-origin iframe helper that clicks Streamlit's sidebar-expand control",
     "when needed. Ruff/format checks pass. The broader AppTest is presently blocked by the",
@@ -10959,12 +11397,8 @@ window.TRACKER = {
    "group": "Validation",
    "subgroup": "",
    "archived": false,
-   "decisions": [
-    "**The letter-position inconsistency** the audit found: `measures.py` and `preprocessing.py` measure from the raw word `x`, while `aggregation.py` measures from the #BUG-11-corrected left edge. Align both on the corrected edge (**this changes reported landing positions**), or document the difference as intentional? Either answer should become its own BUG item.",
-    "**Stamp the register version into exports?** `REGISTER_VERSION` exists, but nothing writes it into `export.manifest()` yet — it would let an exported bundle name the methodology it was produced under, at the cost of changing the export wire format."
-   ],
-   "body": [
-    "**Request.** Perform a complete audit of computations across Scanpath Studio so",
+   "request": [
+    "Perform a complete audit of computations across Scanpath Studio so",
     "the user can see what is calculated, verify that each calculation is correct, and",
     "read a clear written methodology rather than infer behavior from the code. The output",
     "must distinguish imported values, scientific calculations, data-cleaning decisions,",
@@ -10972,9 +11406,10 @@ window.TRACKER = {
     "each result can support.",
     "",
     "Your scoping: *\"the full plan is a bit of an overkill for my needs. It is more for",
-    "internal usage.\"* \u2014 with per-decision answers recorded below.",
-    "",
-    "**What was done.** [`computations.py`](scanpath_studio/computations.py) is the",
+    "internal usage.\"* \u2014 with per-decision answers recorded below."
+   ],
+   "whatWasDone": [
+    "[`computations.py`](scanpath_studio/computations.py) is the",
     "register: **64 entries** across normalization/inference, assignment/classification,",
     "preprocessing, the reading measures, aggregation and statistics, similarity, unit",
     "and coordinate conversion, and display/export transforms. Each carries a stable id,",
@@ -11005,35 +11440,32 @@ window.TRACKER = {
     "immediately \u2014 it caught three drifts in my own first draft (two renamed functions",
     "and two alignment algorithms I had missed).",
     "",
-    "**Two inconsistencies are recorded, not silently fixed** (step 6). (1) The",
-    "saccade-amplitude units \u2014 filed as #BUG-25 and fixed there, on your instruction;",
-    "the register entry `fix.saccade_amplitude` documents the outcome. (2) The",
-    "letter-position formulas: [`measures.py`](scanpath_studio/measures.py:799) and",
-    "[`preprocessing.py`](scanpath_studio/preprocessing.py:604) measure from the **raw**",
-    "word `x`, while [`aggregation.py`](scanpath_studio/aggregation.py:1168) measures",
-    "from the **#BUG-11-corrected** left edge. That is recorded on `geom.word_box_bounds`",
-    "and is left as a finding, because an audit must not move scientific results under a",
-    "documentation diff. **It wants its own item and your call** \u2014 see *What's left*.",
-    "",
-    "**What's left.** Your review \u2014 this is a *read it* item, which is the point: you",
+    "**Two inconsistencies were recorded rather than silently fixed** (step 6), and both",
+    "have since been fixed under their own item on your instruction: the",
+    "saccade-amplitude units as #BUG-25, and the letter-position scale as #BUG-27. The",
+    "register entries `fix.saccade_amplitude`, `geom.word_box_bounds` and the new",
+    "`geom.word_char_advance` document both outcomes. That separation was the point of",
+    "step 6 \u2014 an audit must not move scientific results under a documentation diff."
+   ],
+   "whatsLeft": [
+    "Your review \u2014 this is a *read it* item, which is the point: you",
     "said you wanted to go over the computations first. Start at",
-    "[docs/computations.md](docs/computations.md)'s summary table. Three things to look",
-    "for. **(a) Anything missing** \u2014 the scope rule was \"derives or semantically changes",
-    "a user-visible value\"; pure layout and byte-preserving I/O are out. **(b) Anything",
-    "whose formula is wrong or whose status is too generous** \u2014 I set every status by",
-    "hand and deliberately erred low, but a formula I paraphrased from a docstring",
-    "rather than from the arithmetic is the likeliest error class. **(c) The",
-    "letter-position finding** \u2014 decide whether to align the two paths on the corrected",
-    "edge (changes results) or document the difference as intentional; either way it",
-    "should become its own BUG item rather than living inside this one.",
+    "[docs/computations.md](docs/computations.md)'s summary table (**65 entries** now).",
+    "Two things to look for. **(a) Anything missing** \u2014 the scope rule was \"derives or",
+    "semantically changes a user-visible value\"; pure layout and byte-preserving I/O are",
+    "out. **(b) Anything whose formula is wrong or whose status is too generous** \u2014 I set",
+    "every status by hand and deliberately erred low, but a formula I paraphrased from a",
+    "docstring rather than from the arithmetic is the likeliest error class, and that is",
+    "exactly how #BUG-27 was found.",
     "",
-    "Not done, by your decision: tier-B verification (#VAL-4 stays on hold), and per-measure",
-    "help anchors in the UI. Deferred as smaller follow-ups: stamping the register version",
-    "into `export.manifest()` (`REGISTER_VERSION` exists and is exported from the module,",
-    "but nothing writes it into a bundle yet \u2014 it changes the export wire format, so it",
-    "wants a deliberate call), and the *Metadata* view #DATA-20 milestone 9 describes.",
-    "",
-    "**Background (technical).** All six open decisions are settled \u2014 five by you, one by",
+    "Not done, by your decision: tier-B verification (#VAL-4 stays on hold), per-measure",
+    "help anchors in the UI, and stamping the register version into `export.manifest()`",
+    "(*\"I don't think that is needed\"* \u2014 `REGISTER_VERSION` still exists and the docs page",
+    "prints it, so it stays cheap to add if an exported bundle ever needs to name its",
+    "methodology). Deferred: the *Metadata* view #DATA-20 milestone 9 describes."
+   ],
+   "background": [
+    "All eight open decisions are settled \u2014 six by you, two by",
     "me on your \"not sure\".",
     "",
     "**(1) Register format \u2014 a Python module.** You were unsure; I picked",
@@ -11051,22 +11483,35 @@ window.TRACKER = {
     "",
     "**(4) The two found inconsistencies.** Per *\"I updated BUG-25 implementation notes.",
     "Follow it and fix that via BUG-25.\"* Done for saccade amplitude; the letter-position",
-    "one is recorded and raised above.",
+    "one became #BUG-27 \u2014 see (7).",
     "",
     "**(5) Register version stamping.** You said the question wasn't clear, so: the",
     "worry was that adding a field to the export manifest changes the export wire format,",
-    "which by house rules would need the four-surface treatment. Call made \u2014 the register",
-    "carries `REGISTER_VERSION` and the docs page prints it, but nothing writes it into",
-    "an export yet. Cheap to add later, and it is a deliberate choice rather than an",
-    "oversight.",
+    "which by house rules would need the four-surface treatment. Asked again in round 2",
+    "and answered *\"I don't think that is needed\"* \u2014 so nothing writes it into a bundle.",
+    "`REGISTER_VERSION` stays in the module and on the docs page.",
     "",
     "**(6) UI anchoring \u2014 the shallow end.** Per *\"sounds big and not necessary, I think",
     "we can skip these link anchors.\"* One **\ud83d\udd2c Methodology \u2197** link in \u2753 Help, no help",
     "icon per measure picker.",
     "",
+    "**(7) The letter-position finding \u2014 fixed as #BUG-27, but not the way the question",
+    "framed it.** You answered *\"I think use the corrected, not sure\"*. Taken literally",
+    "that would have measured letters from the #BUG-11-corrected AOI edge, which sits half",
+    "an advance left of the first glyph \u2014 a fixation on the word's first letter would have",
+    "started reporting ~1.5 instead of 1.0. Working the arithmetic showed the real defect",
+    "was the *denominator*, not the origin: `width / len(text)` divides a box of `n + 1`",
+    "advances by `n` characters. Fixing that makes the two accessors exactly half an",
+    "advance apart by construction, which settles the inconsistency you were asking about",
+    "without introducing a half-letter bias. Your \"not sure\" is why I went with the",
+    "arithmetic over the literal instruction; full reasoning in #BUG-27.",
+    "",
+    "**(8) The register version, again \u2014 no.** See (5); this was the second half of the",
+    "round-2 pair and it is now closed rather than deferred.",
+    "",
     "Related: #VAL-4 (reference comparison, on hold), #PRE-4, #ENG-37 (coverage \u2014 which",
     "proves code ran, not that it is right; this register is the other half), #BUG-25,",
-    "#BUG-11."
+    "#BUG-27, #BUG-11."
    ]
   },
   {
@@ -11082,15 +11527,16 @@ window.TRACKER = {
    "group": "Validation",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Prove that a researcher can complete the real OneStop workflow from end",
+   "request": [
+    "Prove that a researcher can complete the real OneStop workflow from end",
     "to end: start with a fresh session, upload the supported full OneStop files, verify the",
     "parsed data, inspect representative scanpaths, and finish a corpus-wide figures-only",
     "export. Execute the workflow by following the user tutorials verbatim once those",
     "tutorials are added; a step that cannot be followed is a product or documentation gap,",
-    "not something the validator should silently work around.",
-    "",
-    "**Background (technical).** This is an external acceptance run, not an AppTest or the",
+    "not something the validator should silently work around."
+   ],
+   "background": [
+    "This is an external acceptance run, not an AppTest or the",
     "bundled demo. Record the app version, OneStop source/files, browser/platform, normalized",
     "participant/trial/word/fixation counts, and selected trial IDs. Inspect scanpaths across",
     "multiple participants and texts for readable stimulus geometry, plausible fixations, and",
@@ -11116,14 +11562,15 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Tighten the spacing and visual alignment in the single-trial selection",
+   "request": [
+    "Tighten the spacing and visual alignment in the single-trial selection",
     "bar so the **Filter by** controls sit more naturally with the trial picker, and the",
     "child-screen selector for multipart trials reads as part of the same row family. The",
     "visual goal is a calmer rhythm: the filters, the selected trial, and the screen sub-trial",
-    "should all line up without a jarring gap or offset.",
-    "",
-    "**What was done.** Two passes, and the second one is the item. The first (2026-08-11)",
+    "should all line up without a jarring gap or offset."
+   ],
+   "whatWasDone": [
+    "Two passes, and the second one is the item. The first (2026-08-11)",
     "tuned the *filter* row; the second (2026-08-12) rebuilt the multipart **screen**",
     "navigator onto the trial picker's grammar — selectbox, scrubbing `st.select_slider`",
     "(`single_screen_pos`, showing `N of M · <screen id>`), and ◀ ▶ moved into a",
@@ -11147,9 +11594,10 @@ window.TRACKER = {
     "its own Narrow-by row (`NARROW_BY_GRID` is shared with A's, so those line up too).",
     "**The ➕ Add data button joined `railbtn_*`**, which it never had: it was a 40 px",
     "`width=\"stretch\"` rectangle beside 27 px pills — the one trigger in the four rows that",
-    "missed UX-27's shared shape, and on its own the reason that row was the tallest.",
-    "",
-    "**What's left.** Your review — it is a visual judgement. Worth checking: (a) the four",
+    "missed UX-27's shared shape, and on its own the reason that row was the tallest."
+   ],
+   "whatsLeft": [
+    "Your review — it is a visual judgement. Worth checking: (a) the four",
     "rows' left edges and track boundaries at a **narrow** window and a wide one (the grid is",
     "in weights, so it should hold at any width, but the two Narrow-by multiselects lost",
     "~55 px each to the alignment and \"All participants\" is the longest placeholder);",
@@ -11158,9 +11606,10 @@ window.TRACKER = {
     "but it is a change; (c) the multipart screen row on MultiplEYE, and a single-screen",
     "trial, which shows the dropdown alone; (d) Compare mode, where B's row now has a third",
     "track. Measured after the change: all four rows start at x=80, tracks break at 409/425",
-    "and 980/996, and every right-hand cluster ends at 1200.",
-    "",
-    "**Background (technical).** The original diagnosis in this item (and my first reading",
+    "and 980/996, and every right-hand cluster ends at 1200."
+   ],
+   "background": [
+    "The original diagnosis in this item (and my first reading",
     "of it) blamed mismatched column weights across the stacked rows. That was wrong, and",
     "the correction is the useful part: `styles.py` already right-packs **every**",
     "`railbtn_*` cluster (`justify-content: flex-end` plus `flex: 0 0 auto; width: auto` on",
@@ -11196,11 +11645,12 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** The rail's **📐 Figure & canvas** section is unorganized and long — group",
-    "its parts together the way **👁️ Fixations** already does with ⚙️ *Style* and 🧹 *Filter*.",
-    "",
-    "**What was done.** The section now has the same two-level shape as every layer group:",
+   "request": [
+    "The rail's **📐 Figure & canvas** section is unorganized and long — group",
+    "its parts together the way **👁️ Fixations** already does with ⚙️ *Style* and 🧹 *Filter*."
+   ],
+   "whatWasDone": [
+    "The section now has the same two-level shape as every layer group:",
     "one headline control inline, everything else behind named popovers. **Show full",
     "monitor** stays inline (it is the framing decision, and cheap to reach), and the other",
     "~25 controls moved into four popovers — **🖥️ Screen & geometry** (monitor pixels,",
@@ -11211,9 +11661,10 @@ window.TRACKER = {
     "**🏷️ Title & labels** (Illustration label, EXP-5 title/caption patterns), both built by",
     "`controls.sidebar_controls`. The two `**Canvas & text**` / `**Axes & labels**` bold",
     "captions and the divider between them are gone — the popover names carry that job now.",
-    "The section is five rows instead of roughly twenty-six.",
-    "",
-    "**What's left.** User review, and it is a grouping judgement, so it wants eyes on the",
+    "The section is five rows instead of roughly twenty-six."
+   ],
+   "whatsLeft": [
+    "User review, and it is a grouping judgement, so it wants eyes on the",
     "rail. Worth checking: (a) whether **Show full monitor** is the right control to keep",
     "inline, or whether the section should be all-popovers; (b) whether *Plot background*",
     "belongs under **🔤 Text & fonts** — it is paired there with *Text color* so the two",
@@ -11221,9 +11672,10 @@ window.TRACKER = {
     "**🏷️ Title & labels** popover with *Title & caption on the figure* switched on, where",
     "the two pattern boxes and the *Available fields* list are now inline instead of behind",
     "a second ⚙️ popover; (d) the same panel in **Corpus Analysis**, which shares the canvas",
-    "renderer and therefore also gets the two popovers.",
-    "",
-    "**Background (technical).** Streamlit nests neither expander-in-expander nor",
+    "renderer and therefore also gets the two popovers."
+   ],
+   "background": [
+    "Streamlit nests neither expander-in-expander nor",
     "popover-in-popover, so an expander holding popovers is the only two-level shape",
     "available — the same constraint VIZ-31 worked under. That is what forced the EXP-5",
     "title/caption boxes inline: their old `⚙️ Title & caption` popover would now be a",
@@ -11253,14 +11705,15 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Let the user change a dataset's name *after* the data is uploaded. Today",
+   "request": [
+    "Let the user change a dataset's name *after* the data is uploaded. Today",
     "the name is chosen once, in the wizard's last step, and is then frozen: a dataset added",
     "as the default \"Dataset 3\" — or named in a hurry, or misspelled — keeps that label in",
     "the data-source picker for the rest of the session (and across the recovery-cache",
-    "restore). The only way to fix it is to re-run the whole wizard and upload again.",
-    "",
-    "**What was done.** **Data Inspection** now opens with `**Dataset:** <name>` and an",
+    "restore). The only way to fix it is to re-run the whole wizard and upload again."
+   ],
+   "whatWasDone": [
+    "**Data Inspection** now opens with `**Dataset:** <name>` and an",
     "**✏️ Rename** popover beside it — `tabs._render_dataset_rename`, rendered only when",
     "`_active_stored_dataset()` answers, so a built-in source, the synthetic trial and the",
     "public corpora (whose names the load path dispatches on) show nothing. The popover holds",
@@ -11274,9 +11727,10 @@ window.TRACKER = {
     "and CMP-8's `cmp_dataset`. The cache follows in `persistence.rename_cached_dataset`, which",
     "`os.replace`s the three Parquet files onto the new slug, re-keys `manifest.json` (including",
     "its stored `data_source_choice`) and re-keys this session's reuse bookkeeping. A resolved",
-    "clash is reported (`“X” was already taken.`) rather than applied silently.",
-    "",
-    "**What's left.** User review, on a dataset you added (the control is invisible on the",
+    "clash is reported (`“X” was already taken.`) rather than applied silently."
+   ],
+   "whatsLeft": [
+    "User review, on a dataset you added (the control is invisible on the",
     "demo). Worth checking: (a) the header row — `**Dataset:** <name>` + the popover on the",
     "right, above *Dataset statistics*; (b) that renaming keeps you on the same data rather",
     "than bouncing you to the demo, and that the picker shows `🔒 <new name> (yours)`;",
@@ -11285,9 +11739,10 @@ window.TRACKER = {
     "the same dataset. Deliberately **not** built: delete/duplicate (you said rename only —",
     "removal already lives behind the picker's ➕ popover), and renaming a *non-active*",
     "dataset, which would need its own list UI. **Not browser-verified** — the control needs a",
-    "stored upload, so the checks above are AppTest-level, not eyes-on.",
-    "",
-    "**Background (technical).** Three decisions were settled on your call. The control lives",
+    "stored upload, so the checks above are AppTest-level, not eyes-on."
+   ],
+   "background": [
+    "Three decisions were settled on your call. The control lives",
     "in Data Inspection (not the sidebar picker, not a wizard re-entry) because that page is",
     "already the one about *this dataset*. Rename only. And the cache takes the fast path —",
     "moving the files, not re-encoding them: a dataset's Parquet is named after",
@@ -11325,14 +11780,15 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** MultiplEYE models **one trial per `(stimulus, page)`** — a reader's five",
+   "request": [
+    "MultiplEYE models **one trial per `(stimulus, page)`** — a reader's five",
     "pages of *Lit_Alchemist_4* arrive as five unrelated trials",
     "(`Lit_Alchemist_4__page_01` …), and the **comprehension-question screens** are dropped",
     "entirely. Expose every screen of a trial instead: one trial per *reading of a stimulus*,",
-    "with its pages **and** its question screens as ordered screens you can step through.",
-    "",
-    "**What was done.** Implemented on 2026-08-13 to the spec below. A trial is now one",
+    "with its pages **and** its question screens as ordered screens you can step through."
+   ],
+   "whatWasDone": [
+    "Implemented on 2026-08-13 to the spec below. A trial is now one",
     "reading of a stimulus (`trial_id == text_id`) and its pages are DATA-21 **screens** —",
     "the corpus's own `page` values, ordered by *first fixation onset* rather than by name,",
     "so a reader who went back to page 2 is recorded in the order they actually read.",
@@ -11375,9 +11831,10 @@ window.TRACKER = {
     "`(none)` also gets its own caption wording now (`· not used`). Three tests in",
     "[`tests/test_column_mapping.py`](tests/test_column_mapping.py) — the switch, the",
     "surviving pick, and that a deliberate `(none)` is *not* re-detected within one table;",
-    "the first was mutation-checked against the unfixed code.",
-    "",
-    "**What's left.** Your review, and it is mostly *visual* — the AOI-to-image alignment is",
+    "the first was mutation-checked against the unfixed code."
+   ],
+   "whatsLeft": [
+    "Your review, and it is mostly *visual* — the AOI-to-image alignment is",
     "the claim that can't be settled from a test. Open **Public datasets → MultiplEYE**:",
     "(a) the picker should list 30 trials named `Lit_Alchemist_4`, with no `· page N`",
     "suffixes; (b) the screen navigator should show 11 screens for `001_ZH_CH_1_ET1 /",
@@ -11395,9 +11852,10 @@ window.TRACKER = {
     "multipart rules. Known gap, spun off separately: Corpus Analysis per-text views pool",
     "question-screen words into the reading text's `word_id` space (fixed since, in **BUG-26**).",
     "Re-check the mapping fix while you are there: switch **Bundled Demo → MultiplEYE** and",
-    "confirm *Screen order* arrives on `screen_index` with no manual step.",
-    "",
-    "**Background (technical).** This is only buildable because **DATA-21** shipped: a trial",
+    "confirm *Screen order* arrives on `screen_index` with no manual step."
+   ],
+   "background": [
+    "This is only buildable because **DATA-21** shipped: a trial",
     "already carries an ordered set of `screen_id`s with their own coordinate spaces, and",
     "every consumer honours it — `grouping_columns` keeps measures and saccades from crossing",
     "a screen boundary, `tabs._render_screen_navigator` steps screens beside the trial picker,",
@@ -11449,14 +11907,15 @@ window.TRACKER = {
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Make the automatic column mapping catch vendor-prefixed spellings of a",
+   "request": [
+    "Make the automatic column mapping catch vendor-prefixed spellings of a",
     "name it already knows: a table whose word boxes are `AOI_LEFT` / `AOI_RIGHT` / `AOI_TOP`",
     "/ `AOI_BOTTOM` should map itself the way `IA_LEFT` / `left` already do, instead of landing",
     "the user in the manual column-mapping step. Same for the other families — an `AOI_LABEL`",
-    "text column, an `AOI_ID`, and whatever the equivalent prefix is on the fixation side.",
-    "",
-    "**Background (technical).** Detection is [`data.pick_column`](scanpath_studio/data.py:368):",
+    "text column, an `AOI_ID`, and whatever the equivalent prefix is on the fixation side."
+   ],
+   "background": [
+    "Detection is [`data.pick_column`](scanpath_studio/data.py:368):",
     "it folds every column *and* every candidate through [`_norm_col`](scanpath_studio/data.py:358)",
     "(lowercase, drop non-alphanumerics) and then does an **exact** dict lookup, which is why",
     "`IA_LEFT` == `ia_left` == `Ia-Left` but `AOI_LEFT` (`aoileft`) matches neither `ialeft` nor",
@@ -11643,25 +12102,28 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Inside the plot rail's **👁️ Fixations** and **↗️ Saccades** sections, the",
+   "request": [
+    "Inside the plot rail's **👁️ Fixations** and **↗️ Saccades** sections, the",
     "first control was a toggle labelled **Fixations** / **Saccades** — the section header",
-    "repeated one line below itself. Rename those inner toggles to **Visible**.",
-    "",
-    "**What was done.** The two toggles in",
+    "repeated one line below itself. Rename those inner toggles to **Visible**."
+   ],
+   "whatWasDone": [
+    "The two toggles in",
     "[`controls.sidebar_controls`](scanpath_studio/controls.py:2459) now read **Visible**;",
     "the saccade-class filter's help text, which pointed at \"the **Saccades** toggle",
     "above\", now names it as the ↗️ Saccades **Visible** toggle. Keys",
     "(`global_show_fix` / `global_show_saccades`), help text, gating and every other surface",
-    "are untouched — this is a label change only.",
-    "",
-    "**What's left.** Your review: the two renamed toggles in the rail, and whether the",
+    "are untouched — this is a label change only."
+   ],
+   "whatsLeft": [
+    "Your review: the two renamed toggles in the rail, and whether the",
     "other sections should follow. They were deliberately left alone — 📄 Stimulus holds",
     "**Text** / **Bounding boxes** / **Stimulus image** and 🔥 Overlays holds **Heatmap** /",
     "**Raw gaze data**, so those toggles name distinct layers rather than repeating their",
-    "section, and \"Visible\" would make them ambiguous.",
-    "",
-    "**Background (technical).** The section shape is VIZ-31's `layer toggle → ⚙️ style →",
+    "section, and \"Visible\" would make them ambiguous."
+   ],
+   "background": [
+    "The section shape is VIZ-31's `layer toggle → ⚙️ style →",
     "🧹 filter`; only the two single-layer sections had a toggle that duplicated its",
     "header. Nothing in the wire format moves: the labels are not keys, so share links,",
     "saved configs, the CLI and the headless API are unaffected. Related: **VIZ-31**",
@@ -11681,17 +12143,18 @@ window.TRACKER = {
    "group": "UX & Interaction",
    "subgroup": "",
    "archived": false,
-   "body": [
-    "**Request.** Compact the inner options of the Scanpath visualization rail while",
+   "request": [
+    "Compact the inner options of the Scanpath visualization rail while",
     "keeping them aesthetic. Today every widget stacks **label above field**, so the",
     "👁️ Fixations → ⚙️ Style popover spends well over a screen's height on eight",
     "controls (*Color fixations by*, *Fixation color*, *Marker shape*, *Snap fixations",
     "above words*, *Size*, *Opacity*, *Fixation index*, *Hover fields*) — see the attached",
     "screenshot. Move the field's title to the **left of the field** instead of above it,",
     "and organize the controls better so a section reads as a compact form rather than a",
-    "long scroll.",
-    "",
-    "**What was done.** Three shared helpers in",
+    "long scroll."
+   ],
+   "whatWasDone": [
+    "Three shared helpers in",
     "[`controls.py`](scanpath_studio/controls.py) do the work once: `_labeled(host, kind,",
     "label, …)` builds a `label | field` row from a plain `st.columns([w, 1-w],",
     "gap=\"xsmall\", vertical_alignment=\"center\")` and renders the widget with",
@@ -11725,9 +12188,10 @@ window.TRACKER = {
     "broken when it is where every row in the rail keeps its description. `_row_label` now",
     "emits `data-tip` + `aria-label` and `styles.py`'s `.sps-fhelp::after` opens it in",
     "120 ms — the same feel as the `?` icons Streamlit draws elsewhere, which sit on Base",
-    "Web's 200 ms default.",
-    "",
-    "**What's left.** Your review, on four points the implementer flagged: the 4-option",
+    "Web's 200 ms default."
+   ],
+   "whatsLeft": [
+    "Your review, on four points the implementer flagged: the 4-option",
     "**Saccade line style** segmented control wraps, putting *Dash-dot* alone on a second",
     "line (same total height, but ragged — this is the one place the sanctioned CSS fallback",
     "or a per-row width might earn its keep); a 5-digit heatmap colour range is the tight case",
@@ -11739,9 +12203,10 @@ window.TRACKER = {
     "popover, so on a row near the bottom of a scrolling panel it can be clipped where the",
     "native one never was — the trade taken for the 8× faster open. The rail-level **Palette**",
     "selectbox is deliberately still label-above: the rail is ~150 px wide inside, and",
-    "splitting that row leaves neither half usable.",
-    "",
-    "**Background (technical).** All four open calls were settled on **2026-08-13**.",
+    "splitting that row leaves neither half usable."
+   ],
+   "background": [
+    "All four open calls were settled on **2026-08-13**.",
     "**(1) Scope is the whole rail** — every control, including 📐 Figure & canvas and the",
     "trial-filter panel, not just the ⚙️ Style / 🧹 Filter popovers. **(2) Per-row",
     "`st.columns`**, the simpler of the two routes: no CSS riding on Streamlit's internal",
@@ -11799,17 +12264,18 @@ window.TRACKER = {
    "decisions": [
     "**The nav puts 🗂️ Data last.** Setup comes first in time, but Scanpath and Corpus Analysis are where the work happens and moving them rightwards costs existing aim. Leave it last, or lead with it?"
    ],
-   "body": [
-    "**Request.** Consolidate **⚙️ Configure** and **🔎 Data Inspection** — and whatever",
+   "request": [
+    "Consolidate **⚙️ Configure** and **🔎 Data Inspection** — and whatever",
     "other setup surfaces belong with them — into a single **data management** page, and",
     "say **\"Set up your dataset\"** throughout so it is easier to process. Today the two",
     "halves of one job sit on opposite sides of the app: the source picker, data location",
     "and column mapping live in a menu group at the top, while the dataset's name, its",
     "counts, its raw tables and a *second* column-mapping editor live in a subtab buried",
     "inside the Scanpath view. Someone setting up a dataset has to know both places exist",
-    "and that they are the same task.",
-    "",
-    "**What was done.** A third top-level view, **🗂️ Data** (`constants._VIEW_DATA`,",
+    "and that they are the same task."
+   ],
+   "whatWasDone": [
+    "A third top-level view, **🗂️ Data** (`constants._VIEW_DATA`,",
     "last in `menu._NAV_PAGES`), headed *\"Set up your dataset\"* and holding the whole job",
     "in pipeline order: data source · description · source options · data location · the",
     "add-a-dataset wizard · **Column mapping** · what's in the dataset (name + ✏️ Rename,",
@@ -11826,9 +12292,10 @@ window.TRACKER = {
     "`_render_offpage_setup_notice` from the other views — a signpost with one button, not a",
     "forced `switch_to_view`, which would make the other two views unreachable until the",
     "mapping was fixed. Copy that named the old locations was updated across the app, the",
-    "five in-app tutorials, the FAQ, README and `docs/`.",
-    "",
-    "**What's left.** Your review. Three judgement calls to look at. **(a) The nav puts Data",
+    "five in-app tutorials, the FAQ, README and `docs/`."
+   ],
+   "whatsLeft": [
+    "Your review. Three judgement calls to look at. **(a) The nav puts Data",
     "*last*** — setup comes first in time, but Scanpath and Corpus Analysis are where the",
     "work happens and moving them rightwards costs existing aim; say if you'd rather it led.",
     "**(b) The page is rendered every run and hidden with CSS** when another view is active",
@@ -11850,9 +12317,10 @@ window.TRACKER = {
     "redraw the slot \u2014 visible on every switch into this view. Both bridges (view",
     "switch and post-upload finalize) are now `st.empty()` placeholders holding a",
     "child container, which `.empty()` genuinely clears. Found by opening the page",
-    "in a browser during #UX-52.",
-    "",
-    "**Background (technical).** All six open decisions were settled on **2026-08-12** from",
+    "in a browser during #UX-52."
+   ],
+   "background": [
+    "All six open decisions were settled on **2026-08-12** from",
     "the user's implementation brief. **(1)** It is",
     "a **third top-level view** beside Scanpath and Corpus Analysis — not a page inside the",
     "top menu. **(2)** The nav label is **Data**; *\"Set up your dataset\"* is the page's",
@@ -12000,8 +12468,8 @@ window.TRACKER = {
     "**Trial identity** and **Recording setup** are now `#####` (h5), subordinate to their section. They are the two blocks that carry a *verdict*, so they are the likeliest to read as too quiet — leave, or promote the identity verdict to its own section?",
     "The label-beside-field rows also apply inside the **upload wizard**, since it shares `column_mapping_ui`. Keep them consistent, or leave the wizard label-above?"
    ],
-   "body": [
-    "**Request.** **#UX-51** made the Scanpath plot rail visibly nicer to use \u2014 labels",
+   "request": [
+    "**#UX-51** made the Scanpath plot rail visibly nicer to use \u2014 labels",
     "beside their fields, one shared label column, help folded into the label. Do the",
     "same kind of UX/UI pass on the \ud83d\uddc2\ufe0f **Data** page: make it look and feel designed",
     "rather than assembled.",
@@ -12009,9 +12477,10 @@ window.TRACKER = {
     "Your review of round 1 sent it back with three more: *\"What about 'labels beside",
     "their fields'? and do we really need Screen canvas width and height? or at least",
     "put under an advanced toggle? In general the column mapping can be overwhelming.",
-    "and maybe move \ud83d\udd0e What's in this dataset to the top?\"*",
-    "",
-    "**What was done.** In two rounds.",
+    "and maybe move \ud83d\udd0e What's in this dataset to the top?\"*"
+   ],
+   "whatWasDone": [
+    "In two rounds.",
     "",
     "**Round 1 \u2014 hierarchy.** Four peer sections with one divider",
     "between each, and everything inside a section subordinate to it. Before, five",
@@ -12039,18 +12508,20 @@ window.TRACKER = {
     "dataset actually maps one of them, so a multipart corpus never hides its screen",
     "mapping. **(3) What's in this dataset moved above Column mapping.** On the demo",
     "the mapping section is now 2097 px against 2698 px with the folds open, and the",
-    "page opens on the counts.",
-    "",
-    "**What's left.** Your review, and the decisions above. This is a look-at-it item:",
+    "page opens on the counts."
+   ],
+   "whatsLeft": [
+    "Your review, and the decisions above. This is a look-at-it item:",
     "open \ud83d\uddc2\ufe0f Data and read it top to bottom. Worth knowing that moving the counts above",
     "the mapping deliberately breaks pipeline order \u2014 the counts answer \"did it load,",
     "and is it the right size?\", and the mapping is what you scroll to when the answer",
     "looks wrong. A dataset whose mapping is still *broken* keeps its raw tables in a",
     "slot **below** the editor, so the controls that fix it are never under the tables",
     "they explain. Nothing here is wire format and no `global_*` / `filter_*` key",
-    "moved, so `tests/test_session_key_contract.py` passes untouched.",
-    "",
-    "**Background (technical).** Round 1's four calls were settled on **2026-08-13**:",
+    "moved, so `tests/test_session_key_contract.py` passes untouched."
+   ],
+   "background": [
+    "Round 1's four calls were settled on **2026-08-13**:",
     "scope is the whole page; one scroll with stronger hierarchy rather than a stepper;",
     "native primitives only (`st.columns` / containers / expanders / heading levels \u2014",
     "no CSS was needed); raw and derived tables collapsed by default.",

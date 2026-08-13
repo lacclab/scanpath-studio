@@ -211,10 +211,11 @@
       "updated": "2026-08-03"
     },
     "DATA-20": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
-      "implementationBrief": "1. finish it now.\n2. yes it should be a step in the upload wizard (that should be the main location).\n3. Continue with everything, including this.",
-      "archived": false,
+      "owner": "",
+      "implementationBrief": "",
+      "archived": true,
       "updated": "2026-08-13"
     },
     "DATA-21": {
@@ -248,7 +249,7 @@
     "DATA-25": {
       "status": "Backlog",
       "priority": "Normal",
-      "owner": "Shubi",
+      "owner": "",
       "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-13"
@@ -381,11 +382,11 @@
       "updated": "2026-08-13"
     },
     "ENG-39": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Shubi",
       "implementationBrief": "1. Umm list , currently just with Maya and Shubi. \n2. Maybe a separate claim button, because it is relevant at any stage\n3 + 4 Choose what suites best. My goal is for this to work seamlessy, without any manual work from my side, and without unecessary complications for you when working concurrently with someone else. You can assume that we do best-effort not to conflict specific items, and it is just the two of us (ENG-32 will be the full generalization)",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-13"
     },
     "EXP-3": {

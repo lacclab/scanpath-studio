@@ -7083,17 +7083,15 @@ window.TRACKER = {
    "num": 39,
    "sub": "",
    "title": "Make the tracker work for two people — who has an item, and a state.json that survives a merge",
-   "status": "Review",
-   "note": "Implemented 2026-08-13; pending user review.",
+   "status": "Closed",
+   "note": "Implemented and signed off 2026-08-13.",
    "date": "2026-08-13",
    "added": "2026-08-13",
    "group": "Engineering",
    "subgroup": "",
-   "archived": false,
-   "decisions": [
-    "**Confirm the two names.** `people` in [`data.js`](tracker/data.js) is `[\"Maya\", \"Shubi\"]`, and an owner outside that list is a rejected save. If Maya's git identity is not literally \"Maya\", the auto-guess will miss and she picks her name once from the header — no harm, but worth knowing before she starts.",
-    "**Claim something, then check the Owner filter.** The header shows who the tracker thinks you are; **Claim** on any item puts 👤 on the card. The judgement call to second-guess: claiming is *separate* from status, per your note that it is relevant at any stage — so nothing forces an owner when an item goes `In progress`, and an unclaimed `In progress` item is still possible.",
-    "**`revision` has left `state.json`.** It now lives in a gitignored `tracker/.local.json`, which is the option that needs nothing set up in either clone — the merge driver in (a) would have needed each of you to register it locally with `git config` or it silently does nothing. Reload the tracker once after pulling this. If you would rather keep everything in one file and merge by hand, say so and it goes back."
+   "archived": true,
+   "statusNote": [
+    "**Closed — approved 2026-08-13.**"
    ],
    "request": [
     "A second person is joining the project, working from their own clone and",
@@ -7137,6 +7135,10 @@ window.TRACKER = {
     "Nothing."
    ],
    "background": [
+    "Signed off on the same day it shipped, without the three review checks being",
+    "answered individually — so if Maya's `git config user.name` turns out not to",
+    "contain \"Maya\", the header picker is where she sets it once.",
+    "",
     "**The two concrete gaps.** *(1) Nothing records who has an item.* `In progress`",
     "says the work started; it does not say by whom, so the only way to avoid",
     "picking up something already underway is to ask. An `owner` on the item, shown",

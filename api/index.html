@@ -847,6 +847,8 @@
       
         
       
+        
+      
     
     
     
@@ -1017,6 +1019,17 @@
     <span class="md-ellipsis">
       
         load_sample_data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_participant_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_participant_metadata
       
     </span>
   </a>
@@ -1388,6 +1401,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../computations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Computations & methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../desktop/" class="md-nav__link">
         
   
@@ -1522,10 +1563,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_10" >
         
           
-          <label class="md-nav__link" for="__nav_5_9" id="__nav_5_9_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_10" id="__nav_5_10_label" tabindex="">
             
   
   
@@ -1543,8 +1584,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_9">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1653,10 +1694,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_11" >
         
           
-          <label class="md-nav__link" for="__nav_5_10" id="__nav_5_10_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_11" id="__nav_5_11_label" tabindex="">
             
   
   
@@ -1674,8 +1715,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_10">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_11">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1894,6 +1935,17 @@
     <span class="md-ellipsis">
       
         load_sample_data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.api.load_participant_metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_participant_metadata
       
     </span>
   </a>
@@ -2287,6 +2339,52 @@ looked for, and the columns the table actually has.</p>
         <p>Return the bundled OneStop demo, normalized and ready to plot.</p>
 <p>Three readers' word boxes ship with the package but only two of them have
 fixations, so :func:<code>list_trials</code> reports the two plottable readers.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.api.load_participant_metadata" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.api.load_participant_metadata</span>
+
+
+<a href="#scanpath_studio.api.load_participant_metadata" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_participant_metadata</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="n">TablesLike</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">id_column</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">participants</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">list</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load a participant-level metadata table (DATA-20 milestone 1).</p>
+<p><code>table</code> is a DataFrame or a path/glob to a CSV/TSV/Parquet/Excel file with
+<strong>one row per reader</strong>: an id column plus anything known about them
+(<code>native_language</code>, <code>age</code>, a comprehension score). <code>id_column</code>
+defaults to the first recognised spelling (<code>participant_id</code>, <code>subject</code>,
+<code>RECORDING_SESSION_LABEL</code>, …).</p>
+<p>Pass <code>participants</code> — a normalized frame or a list of ids — to have the
+join validated against the data you actually loaded; the returned object's
+<code>.report</code> then names the readers missing from either side.</p>
+<p>Returns a
+:class:<code>~scanpath_studio.metadata.ParticipantMetadata</code>: the cleaned frame,
+a field registry (name, label, grain, dtype, missingness), and the join
+report. Nothing is broadcast onto the words/fixations frames — use
+:func:<code>scanpath_studio.metadata.project</code> to attach chosen columns to a
+per-trial frame, or <code>.values_for(pid)</code> for one reader.</p>
+<blockquote>
+<blockquote>
+<blockquote>
+<p>words, fixations = load_sample_data()
+meta = load_participant_metadata(
+...     "readers.csv", participants=fixations
+... )  # doctest: +SKIP
+meta.names  # doctest: +SKIP
+('native_language', 'age')</p>
+</blockquote>
+</blockquote>
+</blockquote>
 
 
     </div>

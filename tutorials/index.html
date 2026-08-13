@@ -850,6 +850,8 @@
       
         
       
+        
+      
     
     
     
@@ -1014,6 +1016,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../computations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Computations & methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../desktop/" class="md-nav__link">
         
   
@@ -1145,10 +1175,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_10" >
         
           
-          <label class="md-nav__link" for="__nav_5_9" id="__nav_5_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_10" id="__nav_5_10_label" tabindex="0">
             
   
   
@@ -1166,8 +1196,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_9">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1273,10 +1303,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_11" >
         
           
-          <label class="md-nav__link" for="__nav_5_10" id="__nav_5_10_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_11" id="__nav_5_11_label" tabindex="0">
             
   
   
@@ -1294,8 +1324,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_10">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_11">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1593,13 +1623,23 @@ scientific settings for you.</p>
 <h2 id="load-your-own-data">Load your own data<a class="headerlink" href="#load-your-own-data" title="Permanent link">&para;</a></h2>
 <p><strong>Outcome:</strong> parsed words, fixations, and mappings visibly checked. <em>About 3
 minutes.</em></p>
+<p>Everything below is on the 🗂️ <strong>Data</strong> page, which is laid out in the order the
+pipeline uses it.</p>
 <ol>
-<li>Open <strong>Data source → Add data</strong>, upload either or both reports, and check the
-   proposed mappings. Map <strong>Multipart screens</strong> only when one logical trial has
-   several coordinate spaces.</li>
-<li>Finish setup, choose a trial, and open the 🗂️ <strong>Data</strong> page.</li>
-<li>Check row and trial counts, coordinate ranges, the active mapping, and—when
-   present—the ordered screen catalogue and per-screen canvas sizes.</li>
+<li><strong>📂 Data source</strong> — keep the demo, or use ➕ to add your own tables. Upload
+   either or both reports and check the proposed mappings. Map <strong>Multipart
+   screens</strong> only when one logical trial has several coordinate spaces.</li>
+<li><strong>🔤 Column mapping</strong> — the one thing that decides what every measure
+   downstream is computed from. Rows marked ✨ were auto-detected; override any
+   that guessed wrong.</li>
+<li><strong>🔎 What's in this dataset</strong> — the counts come first, as the quickest check
+   that the mapping worked. The raw and derived tables fold open below them
+   (including, when present, the ordered screen catalogue and per-screen canvas
+   sizes), and <strong>🧾 Trial identity</strong> says whether one trial id really is one
+   reading.</li>
+<li><strong>🧹 Preprocessing</strong> — optional soft exclusion or merging of short fixations,
+   applied before anything is measured. Off by default, and it never discards
+   your original rows.</li>
 </ol>
 <p>The longer data-collection workflow is in <a href="data-collection/">Data collection</a>,
 and every accepted field is in <a href="../data-format/">Data format</a>.</p>
@@ -1625,17 +1665,21 @@ requires words or fixations.</em></p>
    explicit boundary and never draws a cross-screen saccade.</li>
 <li>Open <strong>Export</strong>, download the figure, and include the plot configuration when
    someone else must reproduce it.</li>
+<li>Optionally open <strong>🔗 Share</strong> for a link that carries the exact configuration,
+   or 💾 <strong>Session</strong> to save it (with your annotations) as JSON. The image on its
+   own does not reproduce the figure.</li>
 </ol>
 <p>See <a href="exporting-figures/">Exporting figures</a> for raster, vector, animation, and
 bulk-output details.</p>
 <h2 id="compare-two-readers">Compare two readers<a class="headerlink" href="#compare-two-readers" title="Permanent link">&para;</a></h2>
-<p><strong>Outcome:</strong> comparable same-text scanpaths and similarity scores. <em>About 3
+<p><strong>Outcome:</strong> the other readings of one text side by side, at one scale. <em>About 3
 minutes; requires two readings sharing a text.</em></p>
 <ol>
 <li>Select the reference reading and, for multipart data, the reference screen.</li>
-<li>Open <strong>Comparisons</strong>, choose the grouping field, and compare the grid and
-   ranking. Candidates must share the text and screen, so different coordinate
-   spaces are not overlaid.</li>
+<li>Open <strong>🔬 Comparisons</strong> and choose the grouping field. Candidates must share
+   the text and screen, so different coordinate spaces are not overlaid.
+   Similarity (NLD) scoring ranks them for you when the build has experimental
+   features enabled (<code>SCANPATH_EXPERIMENTAL=1</code>).</li>
 <li>Record the comparison settings with the figure or configuration export.</li>
 </ol>
 <h2 id="explore-the-corpus">Explore the corpus<a class="headerlink" href="#explore-the-corpus" title="Permanent link">&para;</a></h2>

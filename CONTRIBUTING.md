@@ -116,6 +116,14 @@ matter of habit rather than tooling:
   different regions. Have them enumerate their peers and agree on file ownership
   before editing, and keep `tracker/state.json` owned by one session — it is
   user-authored and its status override masks whatever `tracker/data.js` says.
+- **In a shared working tree, `git add <file>` takes the whole file** — including
+  whatever the other session wrote into it since you last looked. `CHANGELOG.md`
+  and `tracker/data.js` are the two everyone touches, so read
+  `git diff --cached` before committing either, and stage with `git add -p` when
+  the file is one you agreed to share. Sweeping someone else's half into your
+  commit isn't destructive, but it lands their work under your message and ahead
+  of the code it describes; if you notice before pushing, say so in the message
+  rather than unpicking it.
 
 ### Docs site
 

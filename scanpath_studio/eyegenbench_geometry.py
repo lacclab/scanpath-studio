@@ -253,3 +253,50 @@ DISPLAY_SPECS: dict[str, DisplaySpec] = {
 def display_spec_for(dataset: str) -> DisplaySpec:
     """The published screen for ``dataset``, or ``DEFAULT_SPEC`` if none is known."""
     return DISPLAY_SPECS.get(str(dataset).lower(), DEFAULT_SPEC)
+
+
+IA_DATA_COLUMN = "CURRENT_FIX_INTEREST_AREA_DATA"
+_BOX_COLUMNS = ["start_x", "start_y", "end_x", "end_y"]
+
+
+def parse_ia_data(series: pd.Series) -> pd.DataFrame:
+    """EyeLink ``[STATIC, RECTANGLE, left, top, right, bottom]`` -> box columns.
+
+    This is the corpus' *real* on-screen word box. EyeGenBench reads it, divides
+    it into a normalised landing position, and discards it; we keep it.
+    """
+    parts = series.astype(str).str.strip("[]").str.split(",", expand=True)
+    if parts.shape[1] < 6:
+        return pd.DataFrame(
+            {c: [float("nan")] * len(series) for c in _BOX_COLUMNS}, index=series.index
+        )
+    out = pd.DataFrame(index=series.index)
+    for name, idx in zip(_BOX_COLUMNS, (2, 3, 4, 5)):
+        out[name] = pd.to_numeric(parts[idx].str.strip(), errors="coerce")
+    return out
+
+
+def extract_eyelink_boxes(
+    frame: pd.DataFrame,
+    *,
+    paragraph_col: str = "unique_paragraph_id",
+    ia_col: str = "ia_index",
+    data_col: str = IA_DATA_COLUMN,
+) -> pd.DataFrame:
+    """One real box per ``(paragraph, interest area)`` found in ``frame``.
+
+    Only interest areas that were *fixated* appear -- the column rides on
+    fixations. `fill_missing_boxes` completes the rest.
+    """
+    if data_col not in frame.columns:
+        return pd.DataFrame(columns=[paragraph_col, ia_col, *_BOX_COLUMNS])
+    boxes = pd.concat(
+        [
+            frame[[paragraph_col, ia_col]].reset_index(drop=True),
+            parse_ia_data(frame[data_col]).reset_index(drop=True),
+        ],
+        axis=1,
+    )
+    boxes = boxes.dropna(subset=_BOX_COLUMNS)
+    boxes = boxes.drop_duplicates(subset=[paragraph_col, ia_col], keep="first")
+    return boxes.sort_values([paragraph_col, ia_col]).reset_index(drop=True)

@@ -111,3 +111,47 @@ def test_chars_per_degree_entries_use_the_measured_width_not_the_ratio():
     # this fails if the formula inverts or silently takes the ratio path.
     assert spec.char_width_px == pytest.approx(12.2693, abs=1e-4)
     assert spec.char_width_px != pytest.approx(spec.font_px * 0.6)
+
+
+def test_parse_ia_data_reads_the_eyelink_rectangle():
+    from scanpath_studio.eyegenbench_geometry import parse_ia_data
+
+    boxes = parse_ia_data(pd.Series(["[STATIC, RECTANGLE, 10, 20, 60, 40]"]))
+    assert boxes.loc[0, "start_x"] == 10
+    assert boxes.loc[0, "start_y"] == 20
+    assert boxes.loc[0, "end_x"] == 60
+    assert boxes.loc[0, "end_y"] == 40
+
+
+def test_parse_ia_data_yields_nan_for_unparseable_rows():
+    from scanpath_studio.eyegenbench_geometry import parse_ia_data
+
+    boxes = parse_ia_data(pd.Series([".", "", None]))
+    assert boxes["start_x"].isna().all()
+
+
+def test_extract_dedupes_repeat_fixations_on_one_interest_area():
+    from scanpath_studio.eyegenbench_geometry import extract_eyelink_boxes
+
+    frame = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1", "p1"],
+            "ia_index": [0, 0, 1],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+        }
+    )
+    boxes = extract_eyelink_boxes(frame)
+    assert len(boxes) == 2
+    assert list(boxes["ia_index"]) == [0, 1]
+    assert boxes.loc[boxes["ia_index"] == 1, "start_x"].item() == 70
+
+
+def test_extract_returns_empty_when_the_column_is_absent():
+    from scanpath_studio.eyegenbench_geometry import extract_eyelink_boxes
+
+    frame = pd.DataFrame({"unique_paragraph_id": ["p1"], "ia_index": [0]})
+    assert extract_eyelink_boxes(frame).empty

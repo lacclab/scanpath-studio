@@ -1,4 +1,5 @@
 import json
+import shutil
 
 import pandas as pd
 import pytest
@@ -80,6 +81,23 @@ def test_present_is_false_when_a_parquet_is_missing(bundle):
 def test_present_is_false_without_a_manifest(bundle):
     (bundle / "manifest.json").unlink()
     assert eyegenbench.eyegenbench_present(bundle, "PoTeC") is False
+
+
+def test_present_with_no_dataset_checks_the_whole_bundle(bundle):
+    assert eyegenbench.eyegenbench_present(bundle) is True
+
+
+def test_present_is_case_insensitive(bundle):
+    assert eyegenbench.eyegenbench_present(bundle, "potec") is True
+    assert eyegenbench.eyegenbench_present(bundle, "POTEC") is True
+
+
+def test_present_is_false_for_a_directory_not_in_the_manifest(bundle):
+    # A directory holding all three Parquet files under a name the manifest
+    # doesn't list -- present() must not say True for a name load() would
+    # reject.
+    shutil.copytree(bundle / "PoTeC", bundle / "GhostCorpus")
+    assert eyegenbench.eyegenbench_present(bundle, "GhostCorpus") is False
 
 
 def test_datasets_lists_the_manifest_entries(bundle):

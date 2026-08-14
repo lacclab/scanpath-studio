@@ -14,7 +14,10 @@ broadcast (paragraph-keyed stimulus-level words vs. reading-keyed fixations
 would never match, silently broadcasting zero word boxes). If the prep
 script carries EyeGenBench's own finer-grained (per-reading) trial identity
 through at all, it must use the column name `eyegenbench_trial_id` instead --
-registered as an opaque passthrough in Task 7.
+registered as an opaque passthrough in Task 7. It must also give repeated
+readings of the same paragraph by the same participant distinct
+`unique_paragraph_id` values: this loader keys `trial_id` on that column
+directly and does not disambiguate repeats itself.
 """
 
 from __future__ import annotations
@@ -45,10 +48,13 @@ EYEGENBENCH_WORD_SCHEMA = dict(
 # `trial` is `unique_paragraph_id`, matching the word schema above -- not
 # EyeGenBench's own (finer-grained, per-reading) `unique_trial_id`. See the
 # module docstring: a raw `unique_trial_id` column would silently override
-# this mapping and break the stimulus-level words broadcast. Trial identity
-# isn't lost -- (participant_id, trial_id=paragraph) identifies a reading,
-# and `data._disambiguate_repeated_readings` still separates repeated
-# readings of the same paragraph by the same participant.
+# this mapping and break the stimulus-level words broadcast. Keying on
+# unique_paragraph_id is what makes that broadcast join work; repeated
+# readings of the same paragraph by the same participant are NOT separated
+# here (`data._disambiguate_repeated_readings` no-ops without a raw
+# TRIAL_INDEX column, which EyeGenBench frames don't carry) -- the prep
+# script is responsible for giving each reading its own paragraph key
+# upstream (Task 8, R17).
 EYEGENBENCH_FIX_SCHEMA = dict(
     participant="unique_participant_id",
     trial="unique_paragraph_id",
@@ -80,20 +86,38 @@ def eyegenbench_datasets(root) -> list:
     return list(eyegenbench_manifest(root).get("datasets", []))
 
 
+def _find_entry(root, dataset: str) -> Optional[dict]:
+    """The manifest entry named ``dataset`` (case-insensitive), or ``None``.
+
+    Shared by every function that resolves a dataset name against the
+    manifest, so the case-insensitive comparison lives in exactly one place.
+    """
+    for entry in eyegenbench_datasets(root):
+        if entry["name"].lower() == str(dataset).lower():
+            return entry
+    return None
+
+
 def eyegenbench_present(root, dataset: Optional[str] = None) -> bool:
     """True when the bundle holds everything a load needs. Path stats only.
 
     Strict on purpose: a lenient check passes a partial tree and then crashes
-    mid-load, whereas a strict one lets the app offer the fix.
+    mid-load, whereas a strict one lets the app offer the fix. That includes
+    resolving ``dataset`` against the manifest first -- a directory holding
+    all three Parquet files under a name absent from the manifest must not
+    read as present, since loading that same name would still raise.
     """
     root = Path(root)
     if not _manifest_path(root).is_file():
         return False
     try:
-        entries = eyegenbench_datasets(root)
+        if dataset is None:
+            names = [e["name"] for e in eyegenbench_datasets(root)]
+        else:
+            entry = _find_entry(root, dataset)
+            names = [] if entry is None else [entry["name"]]
     except (OSError, ValueError):
         return False
-    names = [e["name"] for e in entries] if dataset is None else [dataset]
     if not names:
         return False
     return all(
@@ -104,20 +128,20 @@ def eyegenbench_present(root, dataset: Optional[str] = None) -> bool:
 
 def eyegenbench_monitor(root, dataset: str) -> Tuple[int, int]:
     """The corpus' screen in pixels -- what makes the plot true-to-scale."""
-    for entry in eyegenbench_datasets(root):
-        if entry["name"].lower() == str(dataset).lower():
-            width, height = entry["monitor"]
-            return int(width), int(height)
-    raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
+    entry = _find_entry(root, dataset)
+    if entry is None:
+        raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
+    width, height = entry["monitor"]
+    return int(width), int(height)
 
 
 def _dataset_dir(root, dataset: str) -> Path:
     root = Path(root)
     eyegenbench_manifest(root)  # raises FileNotFoundError with the fix
-    for entry in eyegenbench_datasets(root):
-        if entry["name"].lower() == str(dataset).lower():
-            return root / entry["name"]
-    raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
+    entry = _find_entry(root, dataset)
+    if entry is None:
+        raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
+    return root / entry["name"]
 
 
 def eyegenbench_raw_frames(root, *, dataset: str) -> Tuple[pd.DataFrame, pd.DataFrame]:

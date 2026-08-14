@@ -199,17 +199,14 @@ window.TRACKER = {
    "num": 27,
    "sub": "",
    "title": "EyeGenBench — load all 39 benchmark corpora as one built-in source",
-   "status": "Planned",
-   "note": "Design signed off 2026-08-14; spec in plans/data-27-eyegenbench-datasets.md.",
+   "status": "In progress",
+   "owner": "Shubi",
+   "note": "Design + implementation plan signed off 2026-08-14; executing.",
    "date": "",
    "added": "2026-08-14",
    "group": "Datasets & ingestion",
    "subgroup": "",
    "archived": false,
-   "decisions": [
-    "**Tier-3 default canvas.** A synthesized layout needs *some* screen. 1920×1080 with a 20 px monospace font is the proposal; a corpus-typical 1280×1024 is the alternative. Affects only the 22 datasets with nothing published.",
-    "**Picker grouping.** 39 entries need structure — by language (proposed), by script, or flat alphabetical."
-   ],
    "request": [
     "Load **all** the datasets from [EyeGenBench](https://github.com/EyeBench/EyeGenBench)",
     "into the app. The format of all the datasets should be the same after preprocessing,",
@@ -248,7 +245,38 @@ window.TRACKER = {
     "the local EyeGenBench checkout to `origin/main` (was 253 commits behind).",
     "",
     "`gazebasereading` is out of scope — still a `NotImplementedError` stub upstream,",
-    "so 39 loadable, not 40."
+    "so 39 loadable, not 40.",
+    "",
+    "**Decisions answered 2026-08-14** (user): the tier-3 synthesized canvas is",
+    "**1920×1080, monospace, 20 px** (`eyegenbench_geometry.DEFAULT_SPEC`), and the",
+    "39-entry dataset picker is **grouped by language**",
+    "(`app._eyegenbench_picker_groups`). Both were the plan's proposals; each is a",
+    "one-constant change if we want to revisit.",
+    "",
+    "Also corrected by the user: the EyeGenBench downloads are **not** expected to",
+    "need hours or to hit access restrictions — they work in the EyeGenBench repo.",
+    "The prep script reports per-corpus outcomes regardless.",
+    "",
+    "Implementation plan: [`plans/data-27-eyegenbench-implementation.md`](plans/data-27-eyegenbench-implementation.md) — 14 TDD tasks."
+   ],
+   "whatWasDone": [
+    "Design and implementation plan, both committed on branch",
+    "`data-27-eyegenbench-datasets`: the spec",
+    "([`plans/data-27-eyegenbench-datasets.md`](plans/data-27-eyegenbench-datasets.md))",
+    "and 14 TDD tasks",
+    "([`plans/data-27-eyegenbench-implementation.md`](plans/data-27-eyegenbench-implementation.md)).",
+    "The research behind the geometry tiers is in the spec: `pymovements` ships exact",
+    "screen specs for 11 of the 40 modules, the UZH dataset review table adds",
+    "resolution for 6 more and font/size/spacing for 10, and 22 have nothing",
+    "published — but the raw files EyeGenBench downloads carry the real EyeLink word",
+    "boxes (`CURRENT_FIX_INTEREST_AREA_DATA`), which is the best source of all.",
+    "Code implementation is underway."
+   ],
+   "whatsLeft": [
+    "The 14 plan tasks: the layout engine, the display-parameter table, EyeLink box",
+    "extraction and gap interpolation, tier resolution, the bundle loader,",
+    "`geometry_source` registration, the prep script, the four surfaces (headless API,",
+    "CLI, sidebar source, share links), the docs page, and the corpus sweep."
    ]
   },
   {

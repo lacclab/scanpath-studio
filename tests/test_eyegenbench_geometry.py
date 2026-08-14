@@ -624,3 +624,92 @@ def test_a_dot_row_alongside_a_real_row_still_earns_real_and_is_interpolated():
     # Interpolated, not a copy of the real box and not the malformed row's own
     # (unusable) coordinates (500) either.
     assert interpolated_box["start_x"] not in (real_box["start_x"], 500)
+
+
+def test_a_negative_fractional_ia_index_does_not_earn_the_real_stamp():
+    # -0.5 is doubly invalid: negative (like the -1 case) AND fractional. A
+    # coercion that only checks `>= 0` would keep it (-0.5 >= 0 is False, so
+    # this alone doesn't reproduce the bug) -- the real hazard is int(-0.5)
+    # truncating TOWARD ZERO to 0, landing the malformed row's own raw box at
+    # slot 0 un-interpolated. Assert the box actually placed at slot 0 is the
+    # interpolated one, not the malformed row's raw (900, 950) coordinates.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [-0.5],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 900, 20, 950, 40]"],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert report["paragraphs_without_real_boxes"] == 1
+    assert report["interpolated_fraction"] == 1.0
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+    slot0 = words.loc[words["ia_index"] == 0].iloc[0]
+    assert slot0["start_x"] != 900, (
+        "the malformed row's raw box leaked through un-interpolated"
+    )
+
+
+def test_a_fractional_ia_index_does_not_silently_overwrite_the_genuine_box():
+    # The worst variant: ia_index=0 is a genuine real box at (10, 60);
+    # ia_index=0.9 is bogus and (before validation) truncates to the SAME
+    # slot 0. If both were allowed into the lookup keyed by int(ia_index),
+    # boxes sorted ascending would insert 0 before 0.9 and the dict's
+    # last-write-wins semantics would let the bogus row's box (900, 950)
+    # silently overwrite the measured one -- wrong geometry still labelled
+    # `real`. Assert slot 0 keeps the genuine box.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, 0.9],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 900, 20, 950, 40]",
+            ],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_REAL
+    slot0 = words.loc[words["ia_index"] == 0].iloc[0]
+    assert slot0["start_x"] == 10
+    assert slot0["start_x"] != 900
+    # The bogus 0.9 row contributed nothing: only one real box (index 0), so
+    # half of the paragraph's interest areas were interpolated (slot 1).
+    assert report["interpolated_fraction"] == 0.5
+
+
+def test_a_fractional_ia_index_alone_contributes_no_box():
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [1.7],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 900, 20, 950, 40]"],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert report["paragraphs_without_real_boxes"] == 1
+    assert report["interpolated_fraction"] == 1.0
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+@pytest.mark.parametrize(
+    "bad_ia_index", [".", float("nan"), "abc", -1, -0.5, 0.9, 1.7, 99]
+)
+def test_no_flavour_of_invalid_ia_index_ever_earns_the_real_stamp(bad_ia_index):
+    # One place asserting `_valid_ia_index` and `fill_missing_boxes` agree on
+    # the whole invalid set: EyeGenBench's documented sentinels ("." / NaN),
+    # unparseable text, negative, fractional (negative-and-fractional, and
+    # positive-fractional), and simply past the end (99, for this 2-word
+    # paragraph). None of these may resolve to `real` or raise.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [bad_ia_index],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 900, 20, 950, 40]"],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()

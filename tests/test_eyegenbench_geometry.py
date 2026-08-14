@@ -1,3 +1,11 @@
+"""Tests for EyeGenBench display-parameter geometry.
+
+Validates published display specifications and the layout engine that reconstructs
+word boxes from interest areas when pixel coordinates are unavailable.
+"""
+
+from __future__ import annotations
+
 import pandas as pd
 import pytest
 
@@ -51,3 +59,44 @@ def test_default_spec_is_a_usable_screen():
     words = layout_words(["hello", "world"], DEFAULT_SPEC)
     assert (words["end_x"] <= DEFAULT_SPEC.width_px).all()
     assert isinstance(words, pd.DataFrame)
+
+
+def test_known_corpus_uses_its_published_screen():
+    from scanpath_studio.eyegenbench_geometry import display_spec_for
+
+    spec = display_spec_for("potec")
+    assert (spec.width_px, spec.height_px) == (1680, 1050)
+    assert spec.source.startswith("pymovements")
+
+
+def test_copco_uses_its_paper_reported_font():
+    from scanpath_studio.eyegenbench_geometry import display_spec_for
+
+    spec = display_spec_for("copco")
+    assert (spec.width_px, spec.height_px) == (1920, 1080)
+    assert spec.monospaced is True
+    # Courier 14, double-spaced (Hollenstein et al. 2022).
+    assert spec.line_pitch_px == spec.font_px * 2
+    assert "copco" in spec.source or "paper" in spec.source
+
+
+def test_unknown_corpus_falls_back_to_the_default_screen():
+    from scanpath_studio.eyegenbench_geometry import display_spec_for
+
+    assert display_spec_for("no-such-corpus") is DEFAULT_SPEC
+
+
+def test_lookup_is_case_insensitive():
+    from scanpath_studio.eyegenbench_geometry import display_spec_for
+
+    assert display_spec_for("PoTeC") == display_spec_for("potec")
+
+
+def test_every_spec_cites_a_source_and_is_physically_sane():
+    from scanpath_studio.eyegenbench_geometry import DISPLAY_SPECS
+
+    for name, spec in DISPLAY_SPECS.items():
+        assert spec.source, f"{name} has no citation"
+        assert spec.width_px > 0 and spec.height_px > 0, name
+        assert spec.char_width_px > 0 and spec.line_pitch_px >= spec.font_px, name
+        assert 2 * spec.margin_px < spec.width_px, name

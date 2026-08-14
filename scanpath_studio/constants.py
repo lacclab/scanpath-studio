@@ -411,6 +411,7 @@ DEMO_CHOICE = "Bundled Demo"
 SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_DEFAULT_DIR = "data/PoTeC"
+EYEGENBENCH_DEFAULT_DIR = "data/EyeGenBench"
 MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var

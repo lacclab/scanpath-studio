@@ -518,6 +518,7 @@ FIX_DURATION_CANDIDATES = [
     "CURRENT_FIX_LEN",
     "duration",
     "fixation_duration",
+    "fix_duration",  # EyeGenBench's own harmonized column name (DATA-27)
 ]
 FIX_TIMESTAMP_CANDIDATES = [
     "timestamp_ms",

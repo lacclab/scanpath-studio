@@ -439,20 +439,34 @@ def fill_missing_boxes(
                         )
                     n_filled += k
                 elif R is not None:
-                    # Leading run: advance leftward from R, preserving order
-                    for i in range(k):
-                        start_x = R.start_x - (k - i) * (width + spec.char_width_px)
-                        start_x = max(spec.margin_px, start_x)
-                        out.append(
-                            {
-                                "unique_paragraph_id": paragraph,
-                                "ia_index": run_start + i,
-                                "start_x": start_x,
-                                "start_y": R.start_y,
-                                "end_x": start_x + width,
-                                "end_y": R.end_y,
-                            }
-                        )
+                    # Leading run: divide space from margin_px to R using bracketed formula
+                    available = R.start_x - spec.margin_px
+                    if available > 0:
+                        slot = available / k
+                        for i in range(k):
+                            out.append(
+                                {
+                                    "unique_paragraph_id": paragraph,
+                                    "ia_index": run_start + i,
+                                    "start_x": spec.margin_px + i * slot,
+                                    "start_y": R.start_y,
+                                    "end_x": spec.margin_px + (i + 1) * slot,
+                                    "end_y": R.end_y,
+                                }
+                            )
+                    else:
+                        # No room before R, use zero-width boxes at margin_px
+                        for i in range(k):
+                            out.append(
+                                {
+                                    "unique_paragraph_id": paragraph,
+                                    "ia_index": run_start + i,
+                                    "start_x": spec.margin_px,
+                                    "start_y": R.start_y,
+                                    "end_x": spec.margin_px,
+                                    "end_y": R.end_y,
+                                }
+                            )
                     n_filled += k
                 else:
                     # No anchor: distribute evenly across usable screen width

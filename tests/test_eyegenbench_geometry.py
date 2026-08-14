@@ -283,3 +283,52 @@ def test_fill_no_anchor_creates_distinct_ordered_boxes():
 
     # All boxes should be interpolated (fraction = 1.0)
     assert interpolated == pytest.approx(1.0)
+
+
+def test_fill_leading_run_with_low_room():
+    # Real box at index 2 near margin, leading gaps at 0 and 1 (low room)
+    # With margin_px=10, R.start_x=60, k=2:
+    # available = 60 - 10 = 50, slot = 25
+    # i=0: [10, 35], i=1: [35, 60]
+    boxes = _boxes([["p1", 2, 60, 20, 110, 40]])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
+
+    box0 = filled[filled["ia_index"] == 0].iloc[0]
+    box1 = filled[filled["ia_index"] == 1].iloc[0]
+    box2 = filled[filled["ia_index"] == 2].iloc[0]
+
+    # All three should be distinct
+    assert not (
+        box0["start_x"] == box1["start_x"] and box0["end_x"] == box1["end_x"]
+    ), "Leading gap boxes should not be identical"
+
+    # Should be ordered and fill the space
+    assert box0["start_x"] >= SPEC.margin_px
+    assert box0["end_x"] <= box1["start_x"]
+    assert box1["end_x"] <= box2["start_x"]
+
+    _assert_invariant_within_line(filled)
+    assert interpolated == pytest.approx(2 / 3)
+
+
+def test_fill_leading_run_with_ample_room():
+    # Real box at index 2 far from margin, leading gaps at 0 and 1 (ample room)
+    boxes = _boxes([["p1", 2, 200, 20, 250, 40]])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
+
+    box0 = filled[filled["ia_index"] == 0].iloc[0]
+    box1 = filled[filled["ia_index"] == 1].iloc[0]
+    box2 = filled[filled["ia_index"] == 2].iloc[0]
+
+    # All three should be distinct
+    assert not (box0["start_x"] == box1["start_x"] and box0["end_x"] == box1["end_x"])
+    assert not (box1["start_x"] == box2["start_x"] and box1["end_x"] == box2["end_x"])
+
+    # Should be ordered left-to-right
+    assert box0["start_x"] >= SPEC.margin_px
+    assert box0["end_x"] <= box1["start_x"]
+    assert box1["end_x"] <= box2["start_x"]
+    assert box2["end_x"] >= box2["start_x"]  # box2 is real, should have valid bounds
+
+    _assert_invariant_within_line(filled)
+    assert interpolated == pytest.approx(2 / 3)

@@ -307,62 +307,169 @@ def fill_missing_boxes(
 ) -> tuple[pd.DataFrame, float]:
     """Complete ``boxes`` so every interest area of every paragraph has one.
 
-    Real boxes only cover *fixated* areas. A skipped word is placed on its
-    left neighbour's line, one character-width along; a leading gap is placed
-    back from its right neighbour. Returns ``(filled, interpolated_fraction)``
-    so the manifest can report how much of the geometry is inferred.
+    Real boxes only cover *fixated* areas. Consecutive gaps are filled as runs
+    (maximal consecutive stretches of missing indices):
+
+    - Bracketed on both sides, same line: divide the space evenly between them
+    - Bracketed across a line break: continue rightward from L on L's line
+    - Trailing (L exists, no R): advance rightward from L
+    - Leading (no L, R exists): advance leftward from R, preserving order
+    - No anchor (neither L nor R): distribute evenly across the screen
+
+    Returns ``(filled, interpolated_fraction)`` so the manifest can report
+    how much of the geometry is inferred rather than measured.
     """
     width = spec.char_width_px * 4
-    out, n_filled, n_total = [], 0, 0
+    out = []
+    n_filled = 0
+    n_total = 0
+
     for paragraph, count in ia_counts.items():
         present = boxes[boxes["unique_paragraph_id"] == paragraph]
         by_index = {int(r.ia_index): r for r in present.itertuples()}
         n_total += count
-        last = None
-        for ia_index in range(count):
-            row = by_index.get(ia_index)
-            if row is not None:
-                last = row
+
+        # Process all indices, identifying runs of consecutive missing indices
+        idx = 0
+        while idx < count:
+            if idx in by_index:
+                # Real box: add it as-is
+                row = by_index[idx]
                 out.append(
                     {
                         "unique_paragraph_id": paragraph,
-                        "ia_index": ia_index,
+                        "ia_index": idx,
                         "start_x": row.start_x,
                         "start_y": row.start_y,
                         "end_x": row.end_x,
                         "end_y": row.end_y,
                     }
                 )
-                continue
-            n_filled += 1
-            if last is not None:
-                start_x = last.end_x + spec.char_width_px
-                start_y, end_y = last.start_y, last.end_y
+                idx += 1
             else:
-                nxt = next(
-                    (by_index[i] for i in range(ia_index + 1, count) if i in by_index),
-                    None,
-                )
-                if nxt is None:
-                    start_x, start_y, end_y = (
-                        spec.margin_px,
-                        spec.margin_px,
-                        spec.margin_px + spec.font_px,
-                    )
+                # Start of a run of consecutive missing indices
+                run_start = idx
+                while idx < count and idx not in by_index:
+                    idx += 1
+                run_end = idx - 1
+                k = run_end - run_start + 1
+
+                # Find L (nearest real box before the run)
+                L = None
+                for i in range(run_start - 1, -1, -1):
+                    if i in by_index:
+                        L = by_index[i]
+                        break
+
+                # Find R (nearest real box after the run)
+                R = None
+                for i in range(run_end + 1, count):
+                    if i in by_index:
+                        R = by_index[i]
+                        break
+
+                # Fill the run based on anchor availability and line position
+                if L is not None and R is not None:
+                    if L.start_y == R.start_y:
+                        # Bracketed on both sides, same line
+                        span = R.start_x - L.end_x
+                        if span > 0:
+                            slot = span / k
+                            for i in range(k):
+                                out.append(
+                                    {
+                                        "unique_paragraph_id": paragraph,
+                                        "ia_index": run_start + i,
+                                        "start_x": L.end_x + i * slot,
+                                        "start_y": L.start_y,
+                                        "end_x": L.end_x + (i + 1) * slot,
+                                        "end_y": L.end_y,
+                                    }
+                                )
+                        else:
+                            # Zero or negative span, use zero-width boxes at L.end_x
+                            for i in range(k):
+                                out.append(
+                                    {
+                                        "unique_paragraph_id": paragraph,
+                                        "ia_index": run_start + i,
+                                        "start_x": L.end_x,
+                                        "start_y": L.start_y,
+                                        "end_x": L.end_x,
+                                        "end_y": L.end_y,
+                                    }
+                                )
+                        n_filled += k
+                    else:
+                        # Bracketed but across line break, treat as trailing
+                        for i in range(k):
+                            out.append(
+                                {
+                                    "unique_paragraph_id": paragraph,
+                                    "ia_index": run_start + i,
+                                    "start_x": L.end_x
+                                    + i * (width + spec.char_width_px)
+                                    + spec.char_width_px,
+                                    "start_y": L.start_y,
+                                    "end_x": L.end_x
+                                    + i * (width + spec.char_width_px)
+                                    + spec.char_width_px
+                                    + width,
+                                    "end_y": L.end_y,
+                                }
+                            )
+                        n_filled += k
+                elif L is not None:
+                    # Trailing run: advance rightward from L
+                    for i in range(k):
+                        out.append(
+                            {
+                                "unique_paragraph_id": paragraph,
+                                "ia_index": run_start + i,
+                                "start_x": L.end_x
+                                + i * (width + spec.char_width_px)
+                                + spec.char_width_px,
+                                "start_y": L.start_y,
+                                "end_x": L.end_x
+                                + i * (width + spec.char_width_px)
+                                + spec.char_width_px
+                                + width,
+                                "end_y": L.end_y,
+                            }
+                        )
+                    n_filled += k
+                elif R is not None:
+                    # Leading run: advance leftward from R, preserving order
+                    for i in range(k):
+                        start_x = R.start_x - (k - i) * (width + spec.char_width_px)
+                        start_x = max(spec.margin_px, start_x)
+                        out.append(
+                            {
+                                "unique_paragraph_id": paragraph,
+                                "ia_index": run_start + i,
+                                "start_x": start_x,
+                                "start_y": R.start_y,
+                                "end_x": start_x + width,
+                                "end_y": R.end_y,
+                            }
+                        )
+                    n_filled += k
                 else:
-                    start_x = max(
-                        spec.margin_px, nxt.start_x - width - spec.char_width_px
-                    )
-                    start_y, end_y = nxt.start_y, nxt.end_y
-            out.append(
-                {
-                    "unique_paragraph_id": paragraph,
-                    "ia_index": ia_index,
-                    "start_x": start_x,
-                    "start_y": start_y,
-                    "end_x": start_x + width,
-                    "end_y": end_y,
-                }
-            )
+                    # No anchor: distribute evenly across usable screen width
+                    usable_width = spec.width_px - 2 * spec.margin_px
+                    slot = usable_width / k if k > 0 else 0
+                    for i in range(k):
+                        out.append(
+                            {
+                                "unique_paragraph_id": paragraph,
+                                "ia_index": run_start + i,
+                                "start_x": spec.margin_px + i * slot,
+                                "start_y": spec.margin_px,
+                                "end_x": spec.margin_px + (i + 1) * slot,
+                                "end_y": spec.margin_px + spec.font_px,
+                            }
+                        )
+                    n_filled += k
+
     fraction = (n_filled / n_total) if n_total else 0.0
     return pd.DataFrame(out), fraction

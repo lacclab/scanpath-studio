@@ -183,3 +183,103 @@ def test_fill_handles_a_leading_gap_before_any_real_box():
     first = filled[filled["ia_index"] == 0].iloc[0]
     assert first["end_x"] <= 70
     assert first["start_y"] == 20
+
+
+def _assert_invariant_within_line(filled):
+    """Check that boxes on the same line never invert or overlap."""
+    grouped = filled.groupby("start_y")
+    for line_y, group in grouped:
+        sorted_by_idx = group.sort_values("ia_index")
+        for i in range(len(sorted_by_idx) - 1):
+            curr = sorted_by_idx.iloc[i]
+            nxt = sorted_by_idx.iloc[i + 1]
+            # Next box must start at or after this one ends
+            assert nxt["start_x"] >= curr["end_x"], (
+                f"Overlap on line {line_y}: box {curr['ia_index']} ends at {curr['end_x']}, "
+                f"box {nxt['ia_index']} starts at {nxt['start_x']}"
+            )
+
+
+def test_fill_two_consecutive_gaps_are_distinct_and_ordered():
+    # Real boxes at indices 0 and 3, gaps at 1 and 2
+    boxes = _boxes([["p1", 0, 10, 20, 60, 40], ["p1", 3, 200, 20, 250, 40]])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 4}, SPEC)
+    assert list(filled["ia_index"]) == [0, 1, 2, 3]
+
+    box1 = filled[filled["ia_index"] == 1].iloc[0]
+    box2 = filled[filled["ia_index"] == 2].iloc[0]
+
+    # Both should be between the real boxes
+    assert box1["start_x"] >= 60 and box1["end_x"] <= 200
+    assert box2["start_x"] >= 60 and box2["end_x"] <= 200
+
+    # Should be distinct (not identical)
+    assert not (box1["start_x"] == box2["start_x"] and box1["end_x"] == box2["end_x"])
+
+    # Should be ordered
+    assert box1["start_x"] >= box1["end_x"] - box2["end_x"] + box2["start_x"]
+
+    _assert_invariant_within_line(filled)
+    assert interpolated == pytest.approx(2 / 4)
+
+
+def test_fill_narrow_gap_does_not_exceed_next_real_box():
+    # Real boxes are close together
+    boxes = _boxes([["p1", 0, 10, 20, 60, 40], ["p1", 2, 80, 20, 130, 40]])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
+
+    box1 = filled[filled["ia_index"] == 1].iloc[0]
+    box2 = filled[filled["ia_index"] == 2].iloc[0]
+
+    # Interpolated box's end should not exceed the next real box's start
+    assert box1["end_x"] <= box2["start_x"], (
+        f"Interpolated box end {box1['end_x']} exceeds next real box start {box2['start_x']}"
+    )
+
+    _assert_invariant_within_line(filled)
+
+
+def test_fill_trailing_run_boxes_advance():
+    # Real box at 0, trailing gaps at 1 and 2
+    boxes = _boxes([["p1", 0, 10, 20, 60, 40]])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
+
+    box0 = filled[filled["ia_index"] == 0].iloc[0]
+    box1 = filled[filled["ia_index"] == 1].iloc[0]
+    box2 = filled[filled["ia_index"] == 2].iloc[0]
+
+    # All three should be distinct
+    assert not (box0["start_x"] == box1["start_x"] and box0["end_x"] == box1["end_x"])
+    assert not (box1["start_x"] == box2["start_x"] and box1["end_x"] == box2["end_x"])
+
+    # Trailing boxes should advance rightward
+    assert box1["start_x"] > box0["end_x"]
+    assert box2["start_x"] > box1["end_x"]
+
+    _assert_invariant_within_line(filled)
+    assert interpolated == pytest.approx(2 / 3)
+
+
+def test_fill_no_anchor_creates_distinct_ordered_boxes():
+    # No real boxes at all, count = 3
+    boxes = _boxes([])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
+
+    assert len(filled) == 3
+    assert list(filled["ia_index"]) == [0, 1, 2]
+
+    # All on the same line (margin_px)
+    assert all(filled["start_y"] == SPEC.margin_px)
+    assert all(filled["end_y"] == SPEC.margin_px + SPEC.font_px)
+
+    # All distinct
+    for i in range(len(filled) - 1):
+        curr = filled.iloc[i]
+        nxt = filled.iloc[i + 1]
+        assert not (curr["start_x"] == nxt["start_x"] and curr["end_x"] == nxt["end_x"])
+
+    # Ordered left-to-right
+    _assert_invariant_within_line(filled)
+
+    # All boxes should be interpolated (fraction = 1.0)
+    assert interpolated == pytest.approx(1.0)

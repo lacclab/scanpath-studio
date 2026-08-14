@@ -128,7 +128,6 @@ def test_load_normalizes_and_broadcasts_to_the_reader(bundle):
     assert fixations.loc[0, "duration_ms"] == 200
 
 
-@pytest.mark.xfail(reason="geometry_source registered in Task 7", strict=True)
 def test_geometry_source_survives_normalization(bundle):
     words, fixations = eyegenbench.load_eyegenbench(bundle, dataset="PoTeC")
     assert set(words["geometry_source"]) == {"real"}

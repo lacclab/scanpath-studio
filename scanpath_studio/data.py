@@ -1707,6 +1707,10 @@ WORD_OPTIONAL_FIELDS = [
     # (`stem` / `target` / `distractor_a`… — a per-word facet).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
     ("aoi_block", "aoi_block", "passthrough", "meta"),
+    # DATA-27: which tier the EyeGenBench word boxes came from --
+    # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
+    # reconstructed layout rather than pass it off as the original screen.
+    ("geometry_source", "geometry_source", "passthrough", "meta"),
 ]
 
 FIX_OPTIONAL_FIELDS = [
@@ -1773,6 +1777,15 @@ FIX_OPTIONAL_FIELDS = [
     ("pp_education_level", "pp_education_level", "string", "meta"),
     # DATA-24: which kind of screen a fixation happened on (see the word table).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
+    # DATA-27: which tier the EyeGenBench word boxes came from --
+    # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
+    # reconstructed layout rather than pass it off as the original screen.
+    ("geometry_source", "geometry_source", "passthrough", "meta"),
+    # DATA-27: EyeGenBench's own composite trial id, kept for traceability back to the
+    # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations hardcodes
+    # trial_id from any column with that literal name, which breaks the stimulus-word
+    # broadcast join and yields zero word boxes.
+    ("eyegenbench_trial_id", "eyegenbench_trial_id", "passthrough", "meta"),
 ]
 
 

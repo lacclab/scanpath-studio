@@ -553,3 +553,74 @@ def test_paragraphs_without_real_boxes_counts_every_paragraph_when_there_is_no_r
     assert reconstructed_report["paragraphs_without_real_boxes"] == 1
     _, synthesized_report = resolve_geometry("cfiltsarcasm", TEXTS, None)
     assert synthesized_report["paragraphs_without_real_boxes"] == 1
+
+
+def test_a_dot_sentinel_ia_index_does_not_raise_or_earn_the_real_stamp():
+    # EyeGenBench's own docstrings document "." as a valid CURRENT_FIX_INTEREST_AREA_ID
+    # missing-value sentinel (the same "landed on no interest area" event as the
+    # -1 case above), and we parse the raw file directly rather than EyeGenBench's
+    # coerced frame -- so this is the expected shape, not exotic input. Must
+    # resolve, not raise `ValueError: invalid literal for int() with base 10: '.'`.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": ["."],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 500, 20, 560, 40]"],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert report["paragraphs_without_real_boxes"] == 1
+    assert report["interpolated_fraction"] == 1.0
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_a_nan_ia_index_does_not_raise_or_earn_the_real_stamp():
+    # EyeGenBench's other documented sentinel for the same event, np.nan
+    # itself rather than the string ".". Must resolve, not raise
+    # `ValueError: cannot convert float NaN to integer`.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [float("nan")],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 500, 20, 560, 40]"],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert report["paragraphs_without_real_boxes"] == 1
+    assert report["interpolated_fraction"] == 1.0
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_a_dot_row_alongside_a_real_row_still_earns_real_and_is_interpolated():
+    # One genuinely fixated interest area (ia_index=0, a real box) plus one
+    # that landed on no interest area at all (ia_index="."), same paragraph.
+    # Per Ruling R8 the tier is stamped per PARAGRAPH: p1 contributed a real
+    # box, so the whole paragraph -- and both its rows -- read `real` (this is
+    # the same per-paragraph granularity round 1 already established, not a
+    # new distinction). The "." interest area itself is simply interpolated
+    # like any other gap: it must not raise, must not be treated as its own
+    # real box, and must land somewhere distinct from ia_index 0 (never a
+    # crash, never a guess masquerading as measured geometry).
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, "."],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 500, 20, 560, 40]",
+            ],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert report["paragraphs_without_real_boxes"] == 0
+    assert report["interpolated_fraction"] == 0.5
+    assert (words["geometry_source"] == GEOMETRY_REAL).all()
+    real_box = words.loc[words["ia_index"] == 0].iloc[0]
+    interpolated_box = words.loc[words["ia_index"] == 1].iloc[0]
+    assert real_box["start_x"] == 10
+    # Interpolated, not a copy of the real box and not the malformed row's own
+    # (unusable) coordinates (500) either.
+    assert interpolated_box["start_x"] not in (real_box["start_x"], 500)

@@ -302,13 +302,33 @@ def extract_eyelink_boxes(
     return boxes.sort_values([paragraph_col, ia_col]).reset_index(drop=True)
 
 
+def _numeric_ia_index(series: pd.Series) -> pd.Series:
+    """``ia_index`` as numbers, ``NaN`` for anything that isn't one.
+
+    EyeGenBench's own documented convention for "this fixation landed on no
+    interest area" is ``.`` or ``NaN`` in the raw ``ia_index`` column -- the
+    same event a negative index also encodes, and an equally expected shape in
+    these raw exports, not exotic input. Raw exports can also carry
+    ``ia_index`` as a string, valid or not. Shared by `fill_missing_boxes` and
+    `_paragraphs_with_real_boxes` so the two agree on exactly what counts as a
+    usable index; neither one ever raises on a row this returns ``NaN`` for,
+    and neither one guesses a position for it either.
+    """
+    return pd.to_numeric(series, errors="coerce")
+
+
 def fill_missing_boxes(
     boxes: pd.DataFrame, ia_counts: dict[str, int], spec: DisplaySpec
 ) -> tuple[pd.DataFrame, float]:
     """Complete ``boxes`` so every interest area of every paragraph has one.
 
-    Real boxes only cover *fixated* areas. Consecutive gaps are filled as runs
-    (maximal consecutive stretches of missing indices):
+    Real boxes only cover *fixated* areas. A row whose ``ia_index`` doesn't
+    parse as a number (`_numeric_ia_index`; EyeLink's own sentinel for "landed
+    on no interest area" is ``.`` or ``NaN``) is treated exactly the same as a
+    genuinely unfixated index -- simply absent from the lookup, never a
+    raised error and never a guessed position. Consecutive gaps (including
+    those) are filled as runs (maximal consecutive stretches of missing
+    indices):
 
     - Bracketed on both sides, same line: divide the space evenly between them
     - Bracketed across a line break: continue rightward from L on L's line
@@ -329,7 +349,12 @@ def fill_missing_boxes(
 
     for paragraph, count in ia_counts.items():
         present = boxes[boxes["unique_paragraph_id"] == paragraph]
-        by_index = {int(r.ia_index): r for r in present.itertuples()}
+        ia_index_numeric = _numeric_ia_index(present["ia_index"])
+        by_index = {
+            int(ia): row
+            for ia, row in zip(ia_index_numeric, present.itertuples())
+            if pd.notna(ia)
+        }
         n_total += count
 
         # Process all indices, identifying runs of consecutive missing indices
@@ -506,12 +531,14 @@ def _paragraphs_with_real_boxes(boxes: pd.DataFrame, ia_counts: dict) -> set:
     past the end (a harmonised-text/raw-export mismatch) or negative (EyeLink
     writes ``-1`` for a fixation that landed on no interest area at all -- the
     expected shape for the raw exports this tier exists to serve, not a
-    corner case). Raw exports can also carry ``ia_index`` as a string, so it
-    is normalized numerically first, the same tolerance `fill_missing_boxes`
-    already has internally; anything that fails to parse is treated as out of
-    range rather than raising.
+    corner case). A raw ``ia_index`` that doesn't parse as a number at all --
+    EyeGenBench's own documented convention for that same "no interest area"
+    event is ``.`` or ``NaN`` -- is out of range here for the same reason:
+    `_numeric_ia_index` gives this function and `fill_missing_boxes` the
+    exact same tolerance, so a row neither of them can use is never counted
+    as a contribution and never raises.
     """
-    ia_index = pd.to_numeric(boxes["ia_index"], errors="coerce")
+    ia_index = _numeric_ia_index(boxes["ia_index"])
     counts = boxes["unique_paragraph_id"].map(ia_counts)
     in_range = (ia_index >= 0) & (ia_index < counts)
     return set(boxes.loc[in_range, "unique_paragraph_id"])

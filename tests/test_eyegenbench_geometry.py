@@ -505,3 +505,51 @@ def test_a_raw_box_past_the_end_of_the_word_list_does_not_earn_the_real_stamp():
     assert report["paragraphs_without_real_boxes"] == 1
     assert report["interpolated_fraction"] == 1.0
     assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_a_negative_ia_index_does_not_earn_the_real_stamp():
+    # EyeLink writes -1 for a fixation that landed on no interest area at all
+    # -- the raw-export sentinel, not a corner case, since we parse the raw
+    # file directly rather than EyeGenBench's coerced frame. `fill_missing_boxes`
+    # only ever places indices 0..count-1, so -1 is never used either; every
+    # box actually placed for "p1" is synthesized.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [-1],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 500, 20, 560, 40]"],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert report["paragraphs_without_real_boxes"] == 1
+    assert report["interpolated_fraction"] == 1.0
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_string_typed_ia_index_resolves_without_raising():
+    # Raw CSVs routinely come back with ia_index as an object/string column
+    # rather than integer. This must resolve like the integer-typed fixture in
+    # test_real_geometry_wins_when_ia_data_is_present, not raise.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": ["0", "1"],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+        }
+    )
+    words, report = resolve_geometry("onestop", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert report["paragraphs_without_real_boxes"] == 0
+    assert words.loc[words["ia_index"] == 0, "start_x"].item() == 10
+    assert (words["geometry_source"] == GEOMETRY_REAL).all()
+
+
+def test_paragraphs_without_real_boxes_counts_every_paragraph_when_there_is_no_raw_data():
+    _, reconstructed_report = resolve_geometry("potec", TEXTS, None)
+    assert reconstructed_report["paragraphs_without_real_boxes"] == 1
+    _, synthesized_report = resolve_geometry("cfiltsarcasm", TEXTS, None)
+    assert synthesized_report["paragraphs_without_real_boxes"] == 1

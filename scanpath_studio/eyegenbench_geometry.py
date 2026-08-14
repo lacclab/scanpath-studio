@@ -497,6 +497,26 @@ GEOMETRY_RECONSTRUCTED = "reconstructed"
 GEOMETRY_SYNTHESIZED = "synthesized"
 
 
+def _paragraphs_with_real_boxes(boxes: pd.DataFrame, ia_counts: dict) -> set:
+    """Paragraph ids that contributed at least one real, in-range box.
+
+    A raw ``ia_index`` only "counts" if `fill_missing_boxes` could actually
+    place it -- it only ever considers indices ``0..count-1`` for a paragraph.
+    An index outside that range is silently never used, in either direction:
+    past the end (a harmonised-text/raw-export mismatch) or negative (EyeLink
+    writes ``-1`` for a fixation that landed on no interest area at all -- the
+    expected shape for the raw exports this tier exists to serve, not a
+    corner case). Raw exports can also carry ``ia_index`` as a string, so it
+    is normalized numerically first, the same tolerance `fill_missing_boxes`
+    already has internally; anything that fails to parse is treated as out of
+    range rather than raising.
+    """
+    ia_index = pd.to_numeric(boxes["ia_index"], errors="coerce")
+    counts = boxes["unique_paragraph_id"].map(ia_counts)
+    in_range = (ia_index >= 0) & (ia_index < counts)
+    return set(boxes.loc[in_range, "unique_paragraph_id"])
+
+
 def resolve_geometry(
     dataset: str, text_df: pd.DataFrame, raw_fix_df: pd.DataFrame | None
 ) -> tuple[pd.DataFrame, dict]:
@@ -530,13 +550,7 @@ def resolve_geometry(
     )
     if not boxes.empty:
         words, interpolated_fraction = fill_missing_boxes(boxes, ia_counts, spec)
-        # A real box only "counts" if `fill_missing_boxes` could actually place
-        # it -- it only ever considers indices 0..count-1 for a paragraph, so a
-        # raw ia_index past the end of that paragraph's own word list (a
-        # harmonised-text/raw-export mismatch) is silently never used. Counting
-        # it anyway would stamp `real` on a paragraph that is 100% synthesized.
-        in_range = boxes["ia_index"] < boxes["unique_paragraph_id"].map(ia_counts)
-        paragraphs_with_real_boxes = set(boxes.loc[in_range, "unique_paragraph_id"])
+        paragraphs_with_real_boxes = _paragraphs_with_real_boxes(boxes, ia_counts)
         per_paragraph_source = {
             pid: GEOMETRY_REAL if pid in paragraphs_with_real_boxes else fallback_source
             for pid in ia_counts

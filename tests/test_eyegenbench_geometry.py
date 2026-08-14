@@ -20,6 +20,7 @@ from scanpath_studio.eyegenbench_geometry import (
     DisplaySpec,
     display_spec_for,
     extract_eyelink_boxes,
+    extract_text_df_boxes,
     fill_missing_boxes,
     layout_words,
     parse_ia_data,
@@ -804,3 +805,144 @@ def test_an_oversized_ia_index_does_not_poison_the_genuine_boxes_beside_it():
     assert words.loc[words["ia_index"] == 0, "start_x"].item() == 10
     assert words.loc[words["ia_index"] == 1, "start_x"].item() == 70
     assert (words["geometry_source"] == GEOMETRY_REAL).all()
+
+
+# --- R23/R24: real boxes carried directly on text_df (verified: PoTeC) -----
+#
+# The real EyeGenBench frames are richer than the documented schema: text_df
+# is one row per (paragraph, interest area) -- not one row per paragraph --
+# and (for some corpora) carries its own genuinely measured start_x/start_y/
+# end_x/end_y, and fix_df carries those same four column names too. Both
+# facts, together, are what produced the R24 KeyError and the R23 honesty
+# inversion (synthesizing a layout while real boxes sat unused in the frame).
+
+TEXT_DF_WITH_BOXES = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1", "p1"],
+        "ia_index": [0, 1],
+        "text": ["ab cd", "ab cd"],
+        "text_language": ["en", "en"],
+        "ia_list": [["ab", "cd"], ["ab", "cd"]],
+        "start_x": [10.0, 70.0],
+        "start_y": [20.0, 20.0],
+        "end_x": [60.0, 120.0],
+        "end_y": [40.0, 40.0],
+    }
+)
+
+
+def test_extract_text_df_boxes_returns_empty_when_the_columns_are_absent():
+    assert extract_text_df_boxes(TEXTS).empty
+
+
+def test_place_fixations_uses_the_words_box_even_when_fix_df_has_its_own():
+    """R24 regression: fix_df carrying its own start_x/... must not crash the
+    merge, and the box used for placement must be the words frame's, never
+    fix_df's own (different) values -- which survive untouched as
+    passthrough data on the output.
+    """
+    words = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "start_x": [10.0],
+            "end_x": [60.0],
+            "start_y": [20.0],
+            "end_y": [40.0],
+        }
+    )
+    fix = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "fix_landing_position": [0.5],
+            # fix_df's own (different) box columns -- must be ignored for
+            # placement, and must not raise a KeyError on the merge.
+            "start_x": [999.0],
+            "end_x": [999.0],
+            "start_y": [999.0],
+            "end_y": [999.0],
+        }
+    )
+    placed = place_fixations(fix, words)
+    assert placed.loc[0, "x"] == 35.0  # from the words box: 10 + 0.5 * 50
+    assert placed.loc[0, "y"] == 30.0
+    assert placed.loc[0, "start_x"] == 999.0  # fix_df's own column, untouched
+
+
+def test_resolve_geometry_uses_real_boxes_straight_off_text_df():
+    words, report = resolve_geometry("potec", TEXT_DF_WITH_BOXES, None)
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert report["display_source"] == "eyegenbench:texts"
+    assert report["interpolated_fraction"] == 0.0
+    box0 = words.loc[words["ia_index"] == 0].iloc[0]
+    box1 = words.loc[words["ia_index"] == 1].iloc[0]
+    # Passed through unchanged -- exact coordinates, not just presence.
+    assert (box0["start_x"], box0["end_x"], box0["start_y"], box0["end_y"]) == (
+        10.0,
+        60.0,
+        20.0,
+        40.0,
+    )
+    assert (box1["start_x"], box1["end_x"], box1["start_y"], box1["end_y"]) == (
+        70.0,
+        120.0,
+        20.0,
+        40.0,
+    )
+
+
+def test_text_df_boxes_win_over_raw_eyelink_boxes_when_both_are_present():
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, 1],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 999, 999, 1999, 1999]",
+                "[STATIC, RECTANGLE, 999, 999, 1999, 1999]",
+            ],
+        }
+    )
+    words, report = resolve_geometry("potec", TEXT_DF_WITH_BOXES, raw)
+    assert report["display_source"] == "eyegenbench:texts"
+    box0 = words.loc[words["ia_index"] == 0].iloc[0]
+    assert box0["start_x"] == 10.0  # text_df's box, not the raw EyeLink 999s
+
+
+TEXT_DF_INVALID_BOXES = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1", "p1", "p1"],
+        "ia_index": [0, 1, -1],
+        "text": ["ab cd ef"] * 3,
+        "text_language": ["en"] * 3,
+        "ia_list": [["ab", "cd", "ef"]] * 3,
+        "start_x": [100.0, float("inf"), 5.0],
+        "start_y": [20.0, 20.0, 20.0],
+        "end_x": [50.0, 120.0, 55.0],  # row 0: start_x >= end_x
+        "end_y": [40.0, 40.0, 40.0],
+    }
+)
+
+
+def test_invalid_text_df_boxes_do_not_earn_real_and_fall_back_to_reconstructed():
+    """Three different ways a row can be invalid -- start_x >= end_x, a
+    non-finite coordinate, and a negative ia_index -- and none of them may
+    earn the `real` stamp. With no valid box left, the paragraph falls all
+    the way back to the reconstructed tier.
+    """
+    assert extract_text_df_boxes(TEXT_DF_INVALID_BOXES).empty
+    words, report = resolve_geometry("potec", TEXT_DF_INVALID_BOXES, None)
+    assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
+    assert (words["geometry_source"] == GEOMETRY_RECONSTRUCTED).all()
+
+
+def test_a_corpus_without_text_df_box_columns_resolves_exactly_as_before():
+    """Regression pin (R23): a corpus whose text_df carries no start_x/...
+    columns must resolve byte-identically to the pre-R23 behaviour -- the new
+    highest-priority tier is a no-op for the other 38 corpora.
+    """
+    assert extract_text_df_boxes(TEXTS).empty
+    words, report = resolve_geometry("potec", TEXTS, None)
+    assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
+    assert report["display_source"].startswith("pymovements")
+    assert len(words) == 2

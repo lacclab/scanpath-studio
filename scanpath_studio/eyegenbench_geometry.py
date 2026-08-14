@@ -3,7 +3,7 @@
 EyeGenBench's harmonised output records *which* interest area each fixation
 landed on and *where within it* (a 0-1 offset), but no pixel coordinates and no
 word boxes. Scanpath Studio needs boxes. This module recovers them at the best
-fidelity available -- see `resolve_geometry` for the three tiers.
+fidelity available -- see `resolve_geometry` for the four tiers.
 """
 
 from __future__ import annotations
@@ -302,6 +302,60 @@ def extract_eyelink_boxes(
     return boxes.sort_values([paragraph_col, ia_col]).reset_index(drop=True)
 
 
+_TEXT_DF_BOX_COLUMNS = ["start_x", "start_y", "end_x", "end_y"]
+
+
+def extract_text_df_boxes(
+    text_df: pd.DataFrame,
+    *,
+    paragraph_col: str = "unique_paragraph_id",
+    ia_col: str = "ia_index",
+) -> pd.DataFrame:
+    """One real box per ``(paragraph, interest area)`` straight off ``text_df``.
+
+    Some EyeGenBench corpora (verified: PoTeC) carry EyeLink's own genuinely
+    measured on-screen coordinates directly on the harmonised ``text_df`` --
+    one row per ``(paragraph, interest area)``, each repeating that
+    paragraph's whole ``ia_list``. This is **not** part of EyeGenBench's
+    documented schema (``start_x`` appears in no ``.py``/``.yaml`` in the
+    EyeGenBench source -- it survives only as source-column pass-through), so
+    it is detected here at runtime, per dataset, and never assumed to exist.
+
+    Presence is not trust: a row only contributes a box when its ``ia_index``
+    is a valid finite non-negative whole number (`_valid_ia_index`, the same
+    discipline `extract_eyelink_boxes` uses) *and* the box itself is finite
+    with ``start_x < end_x`` and ``start_y < end_y``. A row failing either
+    check contributes nothing -- never a guessed or truncated position, and
+    never a `real` stamp for coordinates that might turn out to be some other
+    space in a corpus not yet verified.
+    """
+    if not all(c in text_df.columns for c in _TEXT_DF_BOX_COLUMNS):
+        return pd.DataFrame(columns=[paragraph_col, ia_col, *_TEXT_DF_BOX_COLUMNS])
+
+    ia_index = _valid_ia_index(text_df[ia_col])
+    numeric_box = text_df[_TEXT_DF_BOX_COLUMNS].apply(pd.to_numeric, errors="coerce")
+    is_finite = numeric_box.apply(
+        lambda s: (s > float("-inf")) & (s < float("inf"))
+    ).all(axis=1)
+    valid = (
+        ia_index.notna()
+        & is_finite
+        & (numeric_box["start_x"] < numeric_box["end_x"])
+        & (numeric_box["start_y"] < numeric_box["end_y"])
+    )
+
+    out = pd.DataFrame(
+        {
+            paragraph_col: text_df[paragraph_col],
+            ia_col: ia_index,
+            **{c: numeric_box[c] for c in _TEXT_DF_BOX_COLUMNS},
+        }
+    )
+    out = out.loc[valid]
+    out = out.drop_duplicates(subset=[paragraph_col, ia_col], keep="first")
+    return out.sort_values([paragraph_col, ia_col]).reset_index(drop=True)
+
+
 def _valid_ia_index(series: pd.Series) -> pd.Series:
     """``ia_index`` as validated numbers, ``NaN`` for anything invalid.
 
@@ -574,20 +628,38 @@ def resolve_geometry(
 ) -> tuple[pd.DataFrame, dict]:
     """Word boxes for ``dataset``, at the best fidelity available.
 
-    Three tiers, first hit wins: real boxes parsed out of the raw files
-    EyeGenBench downloaded; a layout reconstructed from the corpus' published
-    display parameters; a synthesized layout on default defaults.
+    Four tiers, first hit wins: real boxes read straight off ``text_df``
+    (some corpora, verified: PoTeC, carry EyeLink's own measured coordinates
+    there directly -- see `extract_text_df_boxes`); real boxes parsed out of
+    the raw files EyeGenBench downloaded (`extract_eyelink_boxes`); a layout
+    reconstructed from the corpus' published display parameters; a
+    synthesized layout on default defaults. ``text_df`` boxes win over
+    raw-EyeLink-parsed boxes when both are available -- they are complete,
+    need no parsing of ``CURRENT_FIX_INTEREST_AREA_DATA``, and do not depend
+    on the raw download still being on disk. Neither real source is
+    schema-guaranteed (this is data-dependent, not documented by EyeGenBench),
+    so both are detected at runtime and the raw-EyeLink path stays as the
+    fallback for corpora without ``text_df`` boxes.
+
+    ``text_df`` is one row per ``(paragraph, interest area)`` for corpora that
+    carry boxes this way, each row repeating that paragraph's whole
+    ``ia_list`` -- `dict(zip(text_df["unique_paragraph_id"], text_df["ia_list"]))`
+    below takes the last row per paragraph, which holds the same list either
+    way.
 
     The tier is stamped **per paragraph**, not per dataset: a paragraph that
-    contributed at least one real box is ``real``; a paragraph EyeGenBench's
-    raw file never fixated has no measured geometry of its own and falls back
-    to ``reconstructed`` (a published screen exists) or ``synthesized``
-    (nothing is known) -- even when other paragraphs in the same dataset are
-    real. Stamping a placeholder paragraph as measured would overstate the
-    dataset's fidelity, which is the one thing this function must never do.
+    contributed at least one real box (from either real source) is ``real``;
+    a paragraph with no real box of its own has no measured geometry and
+    falls back to ``reconstructed`` (a published screen exists) or
+    ``synthesized`` (nothing is known) -- even when other paragraphs in the
+    same dataset are real. Stamping a placeholder paragraph as measured would
+    overstate the dataset's fidelity, which is the one thing this function
+    must never do.
 
     ``report["geometry_source"]`` is the tier the dataset as a whole achieved
-    (``real`` if any paragraph is), and ``report["paragraphs_without_real_boxes"]``
+    (``real`` if any paragraph is), ``report["display_source"]`` cites which
+    real source won (``"eyegenbench:texts"``) or the published-display
+    provenance otherwise, and ``report["paragraphs_without_real_boxes"]``
     counts how many paragraphs had to fall back, so the manifest can carry it.
     """
     spec = display_spec_for(dataset)
@@ -597,9 +669,18 @@ def resolve_geometry(
     ia_lists = dict(zip(text_df["unique_paragraph_id"], text_df["ia_list"]))
     ia_counts = {pid: len(ia) for pid, ia in ia_lists.items()}
 
-    boxes = (
-        extract_eyelink_boxes(raw_fix_df) if raw_fix_df is not None else pd.DataFrame()
-    )
+    text_boxes = extract_text_df_boxes(text_df)
+    if not text_boxes.empty:
+        boxes = text_boxes
+        display_source = "eyegenbench:texts"
+    else:
+        boxes = (
+            extract_eyelink_boxes(raw_fix_df)
+            if raw_fix_df is not None
+            else pd.DataFrame()
+        )
+        display_source = spec.source
+
     if not boxes.empty:
         words, interpolated_fraction = fill_missing_boxes(boxes, ia_counts, spec)
         paragraphs_with_real_boxes = _paragraphs_with_real_boxes(boxes, ia_counts)
@@ -638,7 +719,7 @@ def resolve_geometry(
     report = {
         "geometry_source": source,
         "interpolated_fraction": round(float(interpolated_fraction), 4),
-        "display_source": spec.source,
+        "display_source": display_source,
         "paragraphs_without_real_boxes": len(ia_counts)
         - len(paragraphs_with_real_boxes),
     }
@@ -652,10 +733,25 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     (``(fix_x - left) / (right - left)``), so wherever the box is real the
     round trip is lossless. Fixations with no matching box are dropped -- they
     cannot be placed, and a wrong placement is worse than a missing one.
+
+    Some EyeGenBench corpora' ``fix_df`` already carries its own
+    ``start_x``/``start_y``/``end_x``/``end_y`` columns (verified: PoTeC --
+    passthrough source columns, not part of EyeGenBench's documented schema).
+    A plain merge would collide on those names and pandas would suffix both
+    sides (``start_x_x``/``start_x_y``), leaving no column literally named
+    ``start_x`` -- exactly the R24 crash. The box used for placement must
+    always be the **words** frame's box, resolved once and unambiguously by
+    merging the words-side columns in under private names, never whatever
+    ``fix_df`` happened to already carry; ``fix_df``'s own box columns (if
+    any) are left untouched in the output as plain passthrough data.
     """
-    cols = ["unique_paragraph_id", "ia_index", "start_x", "end_x", "start_y", "end_y"]
+    box_cols = ["start_x", "start_y", "end_x", "end_y"]
+    internal = {c: f"_words_{c}" for c in box_cols}
+    words_boxes = words[["unique_paragraph_id", "ia_index", *box_cols]].rename(
+        columns=internal
+    )
     merged = fix_df.merge(
-        words[cols], on=["unique_paragraph_id", "ia_index"], how="inner"
+        words_boxes, on=["unique_paragraph_id", "ia_index"], how="inner"
     )
     if "fix_landing_position" in merged.columns:
         landing = pd.to_numeric(merged["fix_landing_position"], errors="coerce").fillna(
@@ -664,6 +760,10 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     else:
         landing = pd.Series(0.5, index=merged.index)
     landing = landing.clip(0.0, 1.0)
-    merged["x"] = merged["start_x"] + landing * (merged["end_x"] - merged["start_x"])
-    merged["y"] = (merged["start_y"] + merged["end_y"]) / 2.0
+    box_start_x = merged.pop(internal["start_x"])
+    box_end_x = merged.pop(internal["end_x"])
+    box_start_y = merged.pop(internal["start_y"])
+    box_end_y = merged.pop(internal["end_y"])
+    merged["x"] = box_start_x + landing * (box_end_x - box_start_x)
+    merged["y"] = (box_start_y + box_end_y) / 2.0
     return merged

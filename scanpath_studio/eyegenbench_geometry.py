@@ -303,24 +303,38 @@ def extract_eyelink_boxes(
 
 
 def _valid_ia_index(series: pd.Series) -> pd.Series:
-    """``ia_index`` as a nullable nonnegative integer, ``pd.NA`` for the rest.
+    """``ia_index`` as validated numbers, ``NaN`` for anything invalid.
 
-    An interest-area index is a whole number ``>= 0`` -- nothing fractional or
-    negative is ever a valid EyeLink/EyeGenBench index, whatever
-    `pd.to_numeric` manages to parse out of a row. Parses first (handling "."
-    and NaN, EyeGenBench's own documented "landed on no interest area"
-    sentinels, and string-typed columns), then rejects anything that isn't a
-    non-negative whole number: a fractional value like ``0.9`` or ``-0.5`` is
-    exactly as invalid as ``"abc"``, never truncated toward a neighbouring
-    index and never guessed at. Shared by `fill_missing_boxes` and
-    `_paragraphs_with_real_boxes` so the two accept and reject exactly the
-    same set of rows, by construction rather than by convention -- neither
-    one raises on a row this returns ``pd.NA`` for, and neither one guesses a
-    position for it.
+    An interest-area index is a finite whole number ``>= 0`` -- nothing
+    fractional, negative, infinite or NaN is ever a valid EyeLink/EyeGenBench
+    index, whatever `pd.to_numeric` manages to parse out of a row. Parses
+    first (handling "." and NaN, EyeGenBench's own documented "landed on no
+    interest area" sentinels, and string-typed columns), then keeps only
+    finite, non-negative whole numbers: a fractional value like ``0.9`` or
+    ``-0.5`` is exactly as invalid as ``"abc"``, and ``inf`` is exactly as
+    invalid as either -- never truncated, overflowed, or guessed at.
+
+    Deliberately returned as plain (float) numbers, not cast to a
+    fixed-width integer type -- nothing here bounds the magnitude of an
+    otherwise-valid-shaped index; an oversized one (say, larger than any
+    real paragraph could have) is rejected the same way a merely
+    past-the-end one already is, by the existing ``< count`` checks in
+    `fill_missing_boxes` and `_paragraphs_with_real_boxes`. A fixed-width
+    cast over the whole column would instead raise the moment one row
+    exceeded its range, poisoning every genuine box beside it rather than
+    rejecting the one bad row. Only a value already validated here is ever
+    handed to Python's own arbitrary-precision ``int()`` (in
+    `fill_missing_boxes`), where it can no longer overflow anything.
+
+    Shared by `fill_missing_boxes` and `_paragraphs_with_real_boxes` so the
+    two accept and reject exactly the same set of rows, by construction
+    rather than by convention -- neither one raises on a row this returns
+    ``NaN`` for, and neither one guesses a position for it.
     """
     numeric = pd.to_numeric(series, errors="coerce")
-    is_valid_index = (numeric >= 0) & (numeric == numeric.round())
-    return numeric.where(is_valid_index).astype("Int64")
+    is_finite = (numeric > float("-inf")) & (numeric < float("inf"))
+    is_valid_index = is_finite & (numeric >= 0) & (numeric == numeric.round())
+    return numeric.where(is_valid_index)
 
 
 def fill_missing_boxes(
@@ -329,13 +343,16 @@ def fill_missing_boxes(
     """Complete ``boxes`` so every interest area of every paragraph has one.
 
     Real boxes only cover *fixated* areas. A row whose ``ia_index`` isn't a
-    valid non-negative whole number (`_valid_ia_index`; EyeLink's own
+    valid finite non-negative whole number (`_valid_ia_index`; EyeLink's own
     sentinel for "landed on no interest area" is ``.`` or ``NaN``, and a
-    fractional or negative value is exactly as invalid) is treated exactly
-    the same as a genuinely unfixated index -- simply absent from the
-    lookup, never a raised error and never a guessed or truncated position.
-    Consecutive gaps (including those) are filled as runs (maximal
-    consecutive stretches of missing indices):
+    fractional, negative, or infinite value is exactly as invalid) is
+    treated exactly the same as a genuinely unfixated index -- simply absent
+    from the lookup, never a raised error and never a guessed or truncated
+    position. Because `_valid_ia_index` already excludes anything not
+    finite, converting a *validated* value with plain ``int()`` below can
+    never overflow, however large -- it is Python's own arbitrary-precision
+    conversion, not a fixed-width one. Consecutive gaps (including those)
+    are filled as runs (maximal consecutive stretches of missing indices):
 
     - Bracketed on both sides, same line: divide the space evenly between them
     - Bracketed across a line break: continue rightward from L on L's line
@@ -358,7 +375,7 @@ def fill_missing_boxes(
         present = boxes[boxes["unique_paragraph_id"] == paragraph]
         valid_index = _valid_ia_index(present["ia_index"])
         by_index = {
-            ia: row
+            int(ia): row
             for ia, row in zip(valid_index, present.itertuples())
             if pd.notna(ia)
         }
@@ -534,16 +551,17 @@ def _paragraphs_with_real_boxes(boxes: pd.DataFrame, ia_counts: dict) -> set:
 
     A raw ``ia_index`` only "counts" if `fill_missing_boxes` could actually
     place it -- it only ever considers indices ``0..count-1`` for a paragraph,
-    so an index past the end (a harmonised-text/raw-export mismatch) is
-    silently never used, checked here as the remaining upper bound. Every
-    other way an index can be unusable -- negative (EyeLink writes ``-1`` for
-    a fixation that landed on no interest area at all, an expected raw-export
-    shape, not a corner case), fractional, or unparseable (EyeGenBench's own
-    documented convention for that same event is ``.`` or ``NaN``) -- is
-    already rejected by `_valid_ia_index` itself, the same helper
-    `fill_missing_boxes` uses to build its lookup. The two functions accept
-    and reject exactly the same set of rows by construction, so a row neither
-    of them can use is never counted as a contribution and never raises.
+    so an index past the end (a harmonised-text/raw-export mismatch, however
+    large) is silently never used, checked here as the remaining upper bound.
+    Every other way an index can be unusable -- negative (EyeLink writes
+    ``-1`` for a fixation that landed on no interest area at all, an expected
+    raw-export shape, not a corner case), fractional, non-finite, or
+    unparseable (EyeGenBench's own documented convention for that same event
+    is ``.`` or ``NaN``) -- is already rejected by `_valid_ia_index` itself,
+    the same helper `fill_missing_boxes` uses to build its lookup. The two
+    functions accept and reject exactly the same set of rows by construction,
+    so a row neither of them can use is never counted as a contribution and
+    never raises.
     """
     ia_index = _valid_ia_index(boxes["ia_index"])
     counts = boxes["unique_paragraph_id"].map(ia_counts)

@@ -142,3 +142,16 @@ def test_unknown_dataset_raises_value_error(bundle):
 def test_missing_bundle_says_what_to_run(tmp_path):
     with pytest.raises(FileNotFoundError, match="prepare_eyegenbench.py"):
         eyegenbench.eyegenbench_raw_frames(tmp_path, dataset="PoTeC")
+
+
+def test_load_eyegenbench_is_exported_from_the_package_root():
+    import scanpath_studio
+
+    assert "load_eyegenbench" in scanpath_studio.__all__
+    assert callable(scanpath_studio.load_eyegenbench)
+
+
+def test_load_eyegenbench_is_listed_in_dir():
+    import scanpath_studio
+
+    assert "load_eyegenbench" in dir(scanpath_studio)

@@ -6,6 +6,8 @@ word boxes from interest areas when pixel coordinates are unavailable.
 
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 import pytest
 
@@ -713,3 +715,92 @@ def test_no_flavour_of_invalid_ia_index_ever_earns_the_real_stamp(bad_ia_index):
     words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
     assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
     assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def _resolve_with_warnings_as_errors(dataset, text_df, raw_fix_df):
+    """`resolve_geometry`, promoting any warning to an exception.
+
+    Round 3's `.astype("Int64")` emitted a silent `RuntimeWarning: invalid
+    value encountered in cast` alongside its `TypeError` on an oversized
+    ``ia_index`` -- test output must be pristine, not merely non-crashing.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        return resolve_geometry(dataset, text_df, raw_fix_df)
+
+
+def test_an_ia_index_past_int64_range_resolves_without_raising_or_warning():
+    # 2**63 is exactly one past the signed-64-bit range a fixed-width Int64
+    # cast can hold (2**63 - 1 was already fine). Nothing here bounds the
+    # *magnitude* of an otherwise valid-shaped index -- only the existing
+    # `< count` check does, the same one that already rejects a merely
+    # past-the-end value -- so this must resolve like any other oversized
+    # index: no `real` stamp, no exception, no warning.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [2**63],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 900, 20, 950, 40]"],
+        }
+    )
+    words, report = _resolve_with_warnings_as_errors("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_a_huge_float_ia_index_resolves_without_raising_or_warning():
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [1e19],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 900, 20, 950, 40]"],
+        }
+    )
+    words, report = _resolve_with_warnings_as_errors("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_an_infinite_ia_index_resolves_without_raising_or_warning():
+    # Previously OverflowError -- `_valid_ia_index`'s explicit finite check
+    # closes it, the same way the whole-number check closes fractional
+    # values and the >= 0 check closes negative ones.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [float("inf")],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 900, 20, 950, 40]"],
+        }
+    )
+    words, report = _resolve_with_warnings_as_errors("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_an_oversized_ia_index_does_not_poison_the_genuine_boxes_beside_it():
+    # The worst variant round 4 found: two real, well-formed boxes (indices 0
+    # and 1) plus one 2**63 row, all on the same paragraph. A fixed-width
+    # cast over the whole per-paragraph series raises the moment it hits the
+    # huge value -- which would take down BOTH genuine boxes with it, a
+    # harder failure than any earlier round (those mislabelled a paragraph;
+    # this would abort resolving it at all). Assert both real boxes still
+    # resolve with their own coordinates and the oversized row contributes
+    # nothing -- no interpolation needed, since the two real indices (0, 1)
+    # already cover this 2-word paragraph completely.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1", "p1"],
+            "ia_index": [0, 1, 2**63],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+                "[STATIC, RECTANGLE, 900, 20, 950, 40]",
+            ],
+        }
+    )
+    words, report = _resolve_with_warnings_as_errors("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert report["interpolated_fraction"] == 0.0
+    assert words.loc[words["ia_index"] == 0, "start_x"].item() == 10
+    assert words.loc[words["ia_index"] == 1, "start_x"].item() == 70
+    assert (words["geometry_source"] == GEOMETRY_REAL).all()

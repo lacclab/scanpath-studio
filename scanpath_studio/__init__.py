@@ -30,14 +30,16 @@ __all__ = [
     "load_potec",
     "load_multipleye",
     "load_onestop",
+    "load_eyegenbench",
 ]
 __version__ = "0.28.0"
 
-# Public headless API (see api.py / datasets.py). Resolved lazily so
+# Public headless API (see api.py / datasets.py / eyegenbench.py). Resolved lazily so
 # `import scanpath_studio` stays cheap and doesn't pull in pandas/plotly/
 # streamlit until first use.
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
-_API_EXPORTS = frozenset(__all__) - {"__version__", "main"} - _DATASET_EXPORTS
+_EYEGENBENCH_EXPORTS = frozenset({"load_eyegenbench"})
+_API_EXPORTS = frozenset(__all__) - {"__version__", "main"} - _DATASET_EXPORTS - _EYEGENBENCH_EXPORTS
 
 
 def __getattr__(name: str):
@@ -49,6 +51,10 @@ def __getattr__(name: str):
         from . import datasets
 
         return getattr(datasets, name)
+    if name in _EYEGENBENCH_EXPORTS:
+        from . import eyegenbench
+
+        return getattr(eyegenbench, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

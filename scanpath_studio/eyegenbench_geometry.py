@@ -329,7 +329,12 @@ def extract_text_df_boxes(
     never a `real` stamp for coordinates that might turn out to be some other
     space in a corpus not yet verified.
     """
-    if not all(c in text_df.columns for c in _TEXT_DF_BOX_COLUMNS):
+    if not all(c in text_df.columns for c in [ia_col, *_TEXT_DF_BOX_COLUMNS]):
+        # The four box columns alone don't guarantee ia_index is there too --
+        # the brief's own TEXTS fixture is exactly that shape (no ia_index).
+        # Without this check that row indexing below raised KeyError, which
+        # dropped the whole dataset from the manifest instead of falling
+        # through to the reconstructed/synthesized tiers as it must.
         return pd.DataFrame(columns=[paragraph_col, ia_col, *_TEXT_DF_BOX_COLUMNS])
 
     ia_index = _valid_ia_index(text_df[ia_col])

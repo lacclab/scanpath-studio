@@ -835,6 +835,19 @@ def test_extract_text_df_boxes_returns_empty_when_the_columns_are_absent():
     assert extract_text_df_boxes(TEXTS).empty
 
 
+def test_extract_text_df_boxes_falls_through_when_ia_index_is_missing():
+    """Round-3 regression (item 1): the four box columns alone are not enough
+    -- TEXTS (the brief's own fixture) has box-less columns AND no ia_index.
+    A text_df carrying the box columns but not ia_index must resolve to
+    empty (falling through to the existing tiers), not raise KeyError and
+    drop the whole dataset from the manifest.
+    """
+    box_columns_no_ia_index = TEXT_DF_WITH_BOXES.drop(columns=["ia_index"])
+    assert extract_text_df_boxes(box_columns_no_ia_index).empty
+    words, report = resolve_geometry("potec", box_columns_no_ia_index, None)
+    assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
+
+
 def test_place_fixations_uses_the_words_box_even_when_fix_df_has_its_own():
     """R24 regression: fix_df carrying its own start_x/... must not crash the
     merge, and the box used for placement must be the words frame's, never

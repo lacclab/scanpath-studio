@@ -13,9 +13,12 @@ app-native Parquet bundle. Run in a venv that has EyeGenBench installed:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -23,6 +26,8 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from scanpath_studio.eyegenbench_geometry import (  # noqa: E402
+    DEFAULT_SPEC,
+    GEOMETRY_REAL,
     place_fixations,
     resolve_geometry,
 )
@@ -194,6 +199,42 @@ def _disambiguate_repeated_readings(
     return fix_df, words, n_repeated
 
 
+def _resolve_monitor(spec, report: dict, words: pd.DataFrame) -> tuple[list, str]:
+    """The manifest ``monitor`` + ``monitor_source`` (R26).
+
+    A published `DISPLAY_SPECS` entry is itself a measurement -- start there
+    (``monitor_source="published"``). With no published spec (``spec is
+    DEFAULT_SPEC``) and real geometry, there is no published canvas to trust
+    either, so derive one from the real box extent plus the spec's margin
+    instead of asserting the arbitrary 1920x1080 default
+    (``"derived-from-boxes"``). Otherwise there is nothing to go on but the
+    default (``"default"``).
+
+    Either way, the result is expanded to cover the actual box extent if it
+    exceeds the starting value -- the invariant this exists to hold is that
+    the declared monitor always contains every word box, never crops one.
+    Deriving from extent alone (skipping the published-spec case) would be
+    *less* accurate where a real measured screen is wider than its boxes --
+    PoTeC's published 1680x1050 screen holds boxes spanning only 80..1634.
+    """
+    published = spec is not DEFAULT_SPEC
+    if published:
+        width, height = float(spec.width_px), float(spec.height_px)
+        source = "published"
+    elif report.get("geometry_source") == GEOMETRY_REAL:
+        width = float(words["end_x"].max()) + spec.margin_px
+        height = float(words["end_y"].max()) + spec.margin_px
+        source = "derived-from-boxes"
+    else:
+        width, height = float(DEFAULT_SPEC.width_px), float(DEFAULT_SPEC.height_px)
+        source = "default"
+
+    if not words.empty:
+        width = max(width, float(words["end_x"].max()))
+        height = max(height, float(words["end_y"].max()))
+    return [int(round(width)), int(round(height))], source
+
+
 def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root):
     """Write one dataset's bundle and return its manifest entry."""
     from scanpath_studio.eyegenbench_geometry import display_spec_for
@@ -228,6 +269,12 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
     directory = Path(out_root) / name
     directory.mkdir(parents=True, exist_ok=True)
     words.to_parquet(directory / "words.parquet", index=False)
+    # place_fixations only ever adds x/y (R24) -- the words-side box columns
+    # never land here. Some corpora's fix_df already carries its own
+    # start_x/start_y/end_x/end_y as passthrough (see place_fixations); those
+    # DO reach this file, but unregistered in data.FIX_OPTIONAL_FIELDS, so
+    # `load_eyegenbench` silently drops them at normalization -- harmless,
+    # since the words frame is the sole source of truth for geometry.
     fixations.to_parquet(directory / "fixations.parquet", index=False)
     if participant_df is None:
         participant_df = pd.DataFrame({"unique_participant_id": []})
@@ -236,38 +283,101 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
     spec = display_spec_for(dataset)
     languages = sorted(set(text_df["text_language"].astype(str)))
     info = CORPUS_INFO.get(str(dataset).lower(), {})
-    return {
+    monitor, monitor_source = _resolve_monitor(spec, report, words)
+    entry = {
         "name": name,
         "language": ", ".join(languages),
-        "monitor": [spec.width_px, spec.height_px],
-        "n_readers": int(fix_df["unique_participant_id"].nunique()),
-        "n_texts": int(text_df["unique_paragraph_id"].nunique()),
+        "monitor": monitor,
+        # R26: which of the three rules above produced `monitor`, so the
+        # claim is auditable rather than implied.
+        "monitor_source": monitor_source,
+        # Count what was actually written, not the input frames -- a reader
+        # whose every fixation was dropped by place_fixations' inner join
+        # must not still be counted as present in the bundle.
+        "n_readers": int(fixations["unique_participant_id"].nunique()),
+        "n_texts": int(words["unique_paragraph_id"].nunique()),
         "n_fixations": int(len(fixations)),
         # Spec §8: attribution travels with the data into export bundles.
         "license": info.get("license", "unknown - consult the corpus"),
         "citation": info.get("citation", ""),
-        # R5: provenance for how far to trust a reconstructed layout --
-        # true-to-scale when monospaced, not otherwise.
-        "monospaced": spec.monospaced,
         # R17: how many readings were disambiguated by a repeated-reading
         # suffix, so the docs page can be honest about partial coverage.
         "repeated_readings": repeated_readings,
         **report,
     }
+    # R25: `monospaced` describes the *reconstructed*-layout spec, which was
+    # never built for a real-geometry corpus -- PoTeC's real boxes are
+    # plainly proportional ("Ein" is 49px, "zylindrischen" is 197px) even
+    # though its DisplaySpec says monospaced=True. Omit rather than mislead.
+    if entry["geometry_source"] != GEOMETRY_REAL:
+        entry["monospaced"] = spec.monospaced
+    return entry
 
 
 def write_manifest(out_root: Path, entries: list) -> None:
-    """Merge ``entries`` into the manifest, replacing any rerun dataset."""
+    """Merge ``entries`` into the manifest, replacing any rerun dataset.
+
+    Writes atomically (temp file + ``os.replace``) so a run interrupted
+    mid-write can never truncate a manifest that already has good entries in
+    it -- the whole point of writing one dataset at a time (R21) is defeated
+    if the write itself isn't crash-safe.
+    """
     path = Path(out_root) / MANIFEST_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
     existing = json.loads(path.read_text())["datasets"] if path.is_file() else []
     merged = {e["name"]: e for e in existing}
     merged.update({e["name"]: e for e in entries})
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {"datasets": sorted(merged.values(), key=lambda e: e["name"])}, indent=1
-        )
+    payload = json.dumps(
+        {"datasets": sorted(merged.values(), key=lambda e: e["name"])}, indent=1
     )
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=".manifest-", suffix=".json.tmp"
+    )
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(payload)
+        os.replace(tmp_name, path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
+# R22: EyeGenBench's own `download_from_github` clones over `git@github.com:`,
+# which fails wherever GitHub SSH keys aren't set up -- and EyeGenBench
+# swallows git's exit 128 ("Permission denied (publickey)") as "skipping
+# clone", so the failure only surfaces much later as a baffling missing-file
+# error (~30 of the 39 corpora go through that path). These four are
+# process-local git config overrides, restored exactly (including absence)
+# on exit -- they must never touch the user's ~/.gitconfig. The repos are
+# public, so HTTPS needs no credentials; GIT_TERMINAL_PROMPT=0 matters
+# independently, or a private/renamed repo hangs the whole sweep on a
+# username prompt instead of failing fast.
+_GIT_HTTPS_REWRITE_ENV = {
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "url.https://github.com/.insteadOf",
+    "GIT_CONFIG_VALUE_0": "git@github.com:",
+    "GIT_TERMINAL_PROMPT": "0",
+}
+
+
+@contextlib.contextmanager
+def _git_over_https():
+    """Rewrite `git@github.com:` clones to HTTPS for the duration of the block.
+
+    See `_GIT_HTTPS_REWRITE_ENV` above for why. Restores the previous value
+    of each variable on exit -- including its previous *absence*, so this
+    never leaks into anything run after it, in-process or not.
+    """
+    previous = {key: os.environ.get(key) for key in _GIT_HTTPS_REWRITE_ENV}
+    try:
+        os.environ.update(_GIT_HTTPS_REWRITE_ENV)
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def run_prepare_data(dataset: str, eyegenbench_root: Path):
@@ -278,15 +388,14 @@ def run_prepare_data(dataset: str, eyegenbench_root: Path):
     in `<eyegenbench_root>/data/<Name>/`, which is also where we look for the
     interim file that still carries the real interest-area boxes.
     """
-    import os  # noqa: PLC0415
-
     import eyegenbench.data  # noqa: F401, PLC0415 - registers every datamodule
     from eyegenbench.data.utils.load import load_dataset  # noqa: PLC0415
 
     previous = Path.cwd()
     try:
         os.chdir(eyegenbench_root)
-        fix_df, text_df, participant_df = load_dataset(dataset)
+        with _git_over_https():
+            fix_df, text_df, participant_df = load_dataset(dataset)
     finally:
         os.chdir(previous)
 

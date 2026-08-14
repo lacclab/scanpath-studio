@@ -100,3 +100,14 @@ def test_every_spec_cites_a_source_and_is_physically_sane():
         assert spec.width_px > 0 and spec.height_px > 0, name
         assert spec.char_width_px > 0 and spec.line_pitch_px >= spec.font_px, name
         assert 2 * spec.margin_px < spec.width_px, name
+
+
+def test_chars_per_degree_entries_use_the_measured_width_not_the_ratio():
+    from scanpath_studio.eyegenbench_geometry import display_spec_for
+
+    spec = display_spec_for("emtec")
+    # Derived from 1280px / 38.2cm at 60cm with 2.86 chars per degree of visual
+    # angle -- deliberately distinct from the font_px * 0.6 fallback (8.4px), so
+    # this fails if the formula inverts or silently takes the ratio path.
+    assert spec.char_width_px == pytest.approx(12.2693, abs=1e-4)
+    assert spec.char_width_px != pytest.approx(spec.font_px * 0.6)

@@ -39,7 +39,12 @@ __version__ = "0.28.0"
 # streamlit until first use.
 _DATASET_EXPORTS = frozenset({"load_potec", "load_multipleye", "load_onestop"})
 _EYEGENBENCH_EXPORTS = frozenset({"load_eyegenbench"})
-_API_EXPORTS = frozenset(__all__) - {"__version__", "main"} - _DATASET_EXPORTS - _EYEGENBENCH_EXPORTS
+_API_EXPORTS = (
+    frozenset(__all__)
+    - {"__version__", "main"}
+    - _DATASET_EXPORTS
+    - _EYEGENBENCH_EXPORTS
+)
 
 
 def __getattr__(name: str):

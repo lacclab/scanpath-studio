@@ -201,3 +201,6 @@ tracker/.local.json
 
 # Subagent-driven-development scratch (ledger, briefs, review packages).
 .superpowers/
+
+# DATA-27: EyeGenBench preprocessing venv (torch/lightning); never the app venv.
+.venv-eyegenbench/

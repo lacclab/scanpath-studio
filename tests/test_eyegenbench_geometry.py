@@ -12,12 +12,17 @@ import pytest
 from scanpath_studio.eyegenbench_geometry import (
     DEFAULT_SPEC,
     DISPLAY_SPECS,
+    GEOMETRY_REAL,
+    GEOMETRY_RECONSTRUCTED,
+    GEOMETRY_SYNTHESIZED,
     DisplaySpec,
     display_spec_for,
     extract_eyelink_boxes,
     fill_missing_boxes,
     layout_words,
     parse_ia_data,
+    place_fixations,
+    resolve_geometry,
 )
 
 SPEC = DisplaySpec(
@@ -332,3 +337,171 @@ def test_fill_leading_run_with_ample_room():
 
     _assert_invariant_within_line(filled)
     assert interpolated == pytest.approx(2 / 3)
+
+
+TEXTS = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1"],
+        "text": ["ab cd"],
+        "text_language": ["en"],
+        "ia_list": [["ab", "cd"]],
+    }
+)
+
+
+def test_real_geometry_wins_when_ia_data_is_present():
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, 1],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+        }
+    )
+    words, report = resolve_geometry("onestop", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert report["interpolated_fraction"] == 0.0
+    assert words.loc[words["ia_index"] == 0, "start_x"].item() == 10
+    assert (words["geometry_source"] == GEOMETRY_REAL).all()
+
+
+def test_reconstructed_when_no_raw_boxes_but_a_published_screen():
+    words, report = resolve_geometry("potec", TEXTS, None)
+    assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
+    assert report["display_source"].startswith("pymovements")
+    assert len(words) == 2
+
+
+def test_synthesized_when_nothing_is_known():
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, None)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_words_carry_their_interest_area_labels():
+    words, _ = resolve_geometry("potec", TEXTS, None)
+    assert list(words["ia_label"]) == ["ab", "cd"]
+
+
+def test_place_fixations_inverts_the_landing_position_formula():
+    words = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "start_x": [10.0],
+            "end_x": [60.0],
+            "start_y": [20.0],
+            "end_y": [40.0],
+        }
+    )
+    fix = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "fix_landing_position": [0.5],
+        }
+    )
+    placed = place_fixations(fix, words)
+    assert placed.loc[0, "x"] == 35.0  # 10 + 0.5 * 50
+    assert placed.loc[0, "y"] == 30.0  # box vertical centre
+    # Round-trip invariant: recovering the landing position reproduces the input.
+    recovered = (placed.loc[0, "x"] - 10.0) / 50.0
+    assert recovered == pytest.approx(0.5)
+
+
+def test_place_fixations_drops_rows_with_no_matching_box():
+    words = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "start_x": [10.0],
+            "end_x": [60.0],
+            "start_y": [20.0],
+            "end_y": [40.0],
+        }
+    )
+    fix = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p9"],
+            "ia_index": [0, 3],
+            "fix_landing_position": [0.5, 0.5],
+        }
+    )
+    assert len(place_fixations(fix, words)) == 1
+
+
+# Controller addendum, Ruling R8: a paragraph with no measured boxes must not be
+# stamped `real`, even when the raw file DID yield real boxes for a sibling
+# paragraph in the same dataset. `unique_paragraph_id` "p2" never appears in the
+# raw fixture below -- EyeGenBench's raw file has nothing on it at all.
+TEXTS_TWO_PARAGRAPHS = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1", "p2"],
+        "text": ["ab cd", "ef gh"],
+        "text_language": ["en", "en"],
+        "ia_list": [["ab", "cd"], ["ef", "gh"]],
+    }
+)
+
+
+def _raw_boxes_for_p1_only():
+    return pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, 1],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+        }
+    )
+
+
+def test_paragraph_without_real_boxes_falls_back_to_reconstructed():
+    words, report = resolve_geometry(
+        "potec", TEXTS_TWO_PARAGRAPHS, _raw_boxes_for_p1_only()
+    )
+    # Dataset-level tier is the best tier any single paragraph achieved.
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert report["paragraphs_without_real_boxes"] == 1
+    p1_source = words.loc[words["unique_paragraph_id"] == "p1", "geometry_source"]
+    p2_source = words.loc[words["unique_paragraph_id"] == "p2", "geometry_source"]
+    assert (p1_source == GEOMETRY_REAL).all()
+    assert (p2_source == GEOMETRY_RECONSTRUCTED).all()
+
+
+def test_paragraph_without_real_boxes_falls_back_to_synthesized_for_an_unknown_corpus():
+    words, report = resolve_geometry(
+        "cfiltsarcasm", TEXTS_TWO_PARAGRAPHS, _raw_boxes_for_p1_only()
+    )
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert report["paragraphs_without_real_boxes"] == 1
+    p2_source = words.loc[words["unique_paragraph_id"] == "p2", "geometry_source"]
+    assert (p2_source == GEOMETRY_SYNTHESIZED).all()
+
+
+def test_paragraphs_without_real_boxes_is_zero_when_every_paragraph_is_real():
+    _, report = resolve_geometry("onestop", TEXTS, _raw_boxes_for_p1_only())
+    assert report["paragraphs_without_real_boxes"] == 0
+
+
+def test_a_raw_box_past_the_end_of_the_word_list_does_not_earn_the_real_stamp():
+    # `fill_missing_boxes` only ever places indices 0..count-1 for a paragraph,
+    # so an ia_index the raw file recorded past the end of this paragraph's own
+    # 2-word list (a harmonised-text/raw-export mismatch) is never used -- every
+    # box actually placed for "p1" is synthesized. Counting the unused row as a
+    # contribution would stamp `real` on a paragraph that is 100% placeholder.
+    raw = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [5],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 500, 20, 560, 40]"],
+        }
+    )
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert report["paragraphs_without_real_boxes"] == 1
+    assert report["interpolated_fraction"] == 1.0
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()

@@ -313,7 +313,10 @@ def fill_missing_boxes(
     - Bracketed on both sides, same line: divide the space evenly between them
     - Bracketed across a line break: continue rightward from L on L's line
     - Trailing (L exists, no R): advance rightward from L
-    - Leading (no L, R exists): advance leftward from R, preserving order
+    - Leading (no L, R exists): the same bracketed formula, treating
+      ``margin_px`` as a virtual left anchor -- divide the space between it and
+      R evenly (zero-width boxes at ``margin_px`` when there is no room, i.e.
+      ``available <= 0``)
     - No anchor (neither L nor R): distribute evenly across the screen
 
     Returns ``(filled, interpolated_fraction)`` so the manifest can report
@@ -487,3 +490,114 @@ def fill_missing_boxes(
 
     fraction = (n_filled / n_total) if n_total else 0.0
     return pd.DataFrame(out), fraction
+
+
+GEOMETRY_REAL = "real"
+GEOMETRY_RECONSTRUCTED = "reconstructed"
+GEOMETRY_SYNTHESIZED = "synthesized"
+
+
+def resolve_geometry(
+    dataset: str, text_df: pd.DataFrame, raw_fix_df: pd.DataFrame | None
+) -> tuple[pd.DataFrame, dict]:
+    """Word boxes for ``dataset``, at the best fidelity available.
+
+    Three tiers, first hit wins: real boxes parsed out of the raw files
+    EyeGenBench downloaded; a layout reconstructed from the corpus' published
+    display parameters; a synthesized layout on default defaults.
+
+    The tier is stamped **per paragraph**, not per dataset: a paragraph that
+    contributed at least one real box is ``real``; a paragraph EyeGenBench's
+    raw file never fixated has no measured geometry of its own and falls back
+    to ``reconstructed`` (a published screen exists) or ``synthesized``
+    (nothing is known) -- even when other paragraphs in the same dataset are
+    real. Stamping a placeholder paragraph as measured would overstate the
+    dataset's fidelity, which is the one thing this function must never do.
+
+    ``report["geometry_source"]`` is the tier the dataset as a whole achieved
+    (``real`` if any paragraph is), and ``report["paragraphs_without_real_boxes"]``
+    counts how many paragraphs had to fall back, so the manifest can carry it.
+    """
+    spec = display_spec_for(dataset)
+    fallback_source = (
+        GEOMETRY_RECONSTRUCTED if spec is not DEFAULT_SPEC else GEOMETRY_SYNTHESIZED
+    )
+    ia_lists = dict(zip(text_df["unique_paragraph_id"], text_df["ia_list"]))
+    ia_counts = {pid: len(ia) for pid, ia in ia_lists.items()}
+
+    boxes = (
+        extract_eyelink_boxes(raw_fix_df) if raw_fix_df is not None else pd.DataFrame()
+    )
+    if not boxes.empty:
+        words, interpolated_fraction = fill_missing_boxes(boxes, ia_counts, spec)
+        # A real box only "counts" if `fill_missing_boxes` could actually place
+        # it -- it only ever considers indices 0..count-1 for a paragraph, so a
+        # raw ia_index past the end of that paragraph's own word list (a
+        # harmonised-text/raw-export mismatch) is silently never used. Counting
+        # it anyway would stamp `real` on a paragraph that is 100% synthesized.
+        in_range = boxes["ia_index"] < boxes["unique_paragraph_id"].map(ia_counts)
+        paragraphs_with_real_boxes = set(boxes.loc[in_range, "unique_paragraph_id"])
+        per_paragraph_source = {
+            pid: GEOMETRY_REAL if pid in paragraphs_with_real_boxes else fallback_source
+            for pid in ia_counts
+        }
+        words["geometry_source"] = words["unique_paragraph_id"].map(
+            per_paragraph_source
+        )
+        source = GEOMETRY_REAL if paragraphs_with_real_boxes else fallback_source
+        words["line"] = words.groupby("unique_paragraph_id")["start_y"].transform(
+            lambda s: s.rank(method="dense").astype(int) - 1
+        )
+    else:
+        paragraphs_with_real_boxes = set()
+        source = fallback_source
+        interpolated_fraction = 0.0
+        frames = []
+        for paragraph, ia_list in ia_lists.items():
+            laid = layout_words(list(ia_list), spec)
+            laid["unique_paragraph_id"] = paragraph
+            laid = laid.rename(columns={"word_id": "ia_index"})
+            frames.append(laid.drop(columns=["text"]))
+        words = pd.concat(frames, ignore_index=True)
+        words["geometry_source"] = source
+
+    labels = [
+        {"unique_paragraph_id": pid, "ia_index": i, "ia_label": str(label)}
+        for pid, ia_list in ia_lists.items()
+        for i, label in enumerate(ia_list)
+    ]
+    words = words.merge(
+        pd.DataFrame(labels), on=["unique_paragraph_id", "ia_index"], how="left"
+    )
+    report = {
+        "geometry_source": source,
+        "interpolated_fraction": round(float(interpolated_fraction), 4),
+        "display_source": spec.source,
+        "paragraphs_without_real_boxes": len(ia_counts)
+        - len(paragraphs_with_real_boxes),
+    }
+    return words, report
+
+
+def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
+    """Add ``x``/``y`` to fixations from their interest area's box.
+
+    Exactly inverts EyeGenBench's landing-position formula
+    (``(fix_x - left) / (right - left)``), so wherever the box is real the
+    round trip is lossless. Fixations with no matching box are dropped -- they
+    cannot be placed, and a wrong placement is worse than a missing one.
+    """
+    cols = ["unique_paragraph_id", "ia_index", "start_x", "end_x", "start_y", "end_y"]
+    merged = fix_df.merge(
+        words[cols], on=["unique_paragraph_id", "ia_index"], how="inner"
+    )
+    if "fix_landing_position" in merged.columns:
+        landing = pd.to_numeric(merged["fix_landing_position"], errors="coerce").fillna(
+            0.5
+        )
+    else:
+        landing = pd.Series(0.5, index=merged.index)
+    landing = landing.clip(0.0, 1.0)
+    merged["x"] = merged["start_x"] + landing * (merged["end_x"] - merged["start_x"])
+    merged["y"] = (merged["start_y"] + merged["end_y"]) / 2.0
+    return merged

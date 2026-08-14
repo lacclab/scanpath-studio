@@ -300,3 +300,69 @@ def extract_eyelink_boxes(
     boxes = boxes.dropna(subset=_BOX_COLUMNS)
     boxes = boxes.drop_duplicates(subset=[paragraph_col, ia_col], keep="first")
     return boxes.sort_values([paragraph_col, ia_col]).reset_index(drop=True)
+
+
+def fill_missing_boxes(
+    boxes: pd.DataFrame, ia_counts: dict[str, int], spec: DisplaySpec
+) -> tuple[pd.DataFrame, float]:
+    """Complete ``boxes`` so every interest area of every paragraph has one.
+
+    Real boxes only cover *fixated* areas. A skipped word is placed on its
+    left neighbour's line, one character-width along; a leading gap is placed
+    back from its right neighbour. Returns ``(filled, interpolated_fraction)``
+    so the manifest can report how much of the geometry is inferred.
+    """
+    width = spec.char_width_px * 4
+    out, n_filled, n_total = [], 0, 0
+    for paragraph, count in ia_counts.items():
+        present = boxes[boxes["unique_paragraph_id"] == paragraph]
+        by_index = {int(r.ia_index): r for r in present.itertuples()}
+        n_total += count
+        last = None
+        for ia_index in range(count):
+            row = by_index.get(ia_index)
+            if row is not None:
+                last = row
+                out.append(
+                    {
+                        "unique_paragraph_id": paragraph,
+                        "ia_index": ia_index,
+                        "start_x": row.start_x,
+                        "start_y": row.start_y,
+                        "end_x": row.end_x,
+                        "end_y": row.end_y,
+                    }
+                )
+                continue
+            n_filled += 1
+            if last is not None:
+                start_x = last.end_x + spec.char_width_px
+                start_y, end_y = last.start_y, last.end_y
+            else:
+                nxt = next(
+                    (by_index[i] for i in range(ia_index + 1, count) if i in by_index),
+                    None,
+                )
+                if nxt is None:
+                    start_x, start_y, end_y = (
+                        spec.margin_px,
+                        spec.margin_px,
+                        spec.margin_px + spec.font_px,
+                    )
+                else:
+                    start_x = max(
+                        spec.margin_px, nxt.start_x - width - spec.char_width_px
+                    )
+                    start_y, end_y = nxt.start_y, nxt.end_y
+            out.append(
+                {
+                    "unique_paragraph_id": paragraph,
+                    "ia_index": ia_index,
+                    "start_x": start_x,
+                    "start_y": start_y,
+                    "end_x": start_x + width,
+                    "end_y": end_y,
+                }
+            )
+    fraction = (n_filled / n_total) if n_total else 0.0
+    return pd.DataFrame(out), fraction

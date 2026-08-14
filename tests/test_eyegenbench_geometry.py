@@ -15,6 +15,7 @@ from scanpath_studio.eyegenbench_geometry import (
     DisplaySpec,
     display_spec_for,
     extract_eyelink_boxes,
+    fill_missing_boxes,
     layout_words,
     parse_ia_data,
 )
@@ -143,3 +144,42 @@ def test_extract_dedupes_repeat_fixations_on_one_interest_area():
 def test_extract_returns_empty_when_the_column_is_absent():
     frame = pd.DataFrame({"unique_paragraph_id": ["p1"], "ia_index": [0]})
     assert extract_eyelink_boxes(frame).empty
+
+
+def _boxes(rows):
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "unique_paragraph_id",
+            "ia_index",
+            "start_x",
+            "start_y",
+            "end_x",
+            "end_y",
+        ],
+    )
+
+
+def test_fill_inserts_the_gap_between_two_real_boxes():
+    boxes = _boxes([["p1", 0, 10, 20, 60, 40], ["p1", 2, 130, 20, 180, 40]])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
+    assert list(filled["ia_index"]) == [0, 1, 2]
+    gap = filled[filled["ia_index"] == 1].iloc[0]
+    assert gap["start_x"] >= 60 and gap["end_x"] <= 130
+    assert gap["start_y"] == 20 and gap["end_y"] == 40
+    assert interpolated == pytest.approx(1 / 3)
+
+
+def test_fill_is_a_no_op_when_every_area_is_real():
+    boxes = _boxes([["p1", 0, 10, 20, 60, 40], ["p1", 1, 70, 20, 120, 40]])
+    filled, interpolated = fill_missing_boxes(boxes, {"p1": 2}, SPEC)
+    assert len(filled) == 2
+    assert interpolated == 0.0
+
+
+def test_fill_handles_a_leading_gap_before_any_real_box():
+    boxes = _boxes([["p1", 1, 70, 20, 120, 40]])
+    filled, _ = fill_missing_boxes(boxes, {"p1": 2}, SPEC)
+    first = filled[filled["ia_index"] == 0].iloc[0]
+    assert first["end_x"] <= 70
+    assert first["start_y"] == 20

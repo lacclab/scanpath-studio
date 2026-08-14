@@ -164,7 +164,13 @@ def _disambiguate_repeated_readings(
     if len(repeated_keys) == 0:
         return fix_df, words, 0
 
+    # Word rows are stimulus-level (`participant=None` in EYEGENBENCH_WORD_SCHEMA,
+    # broadcast across every reader), so a new paragraph key needs exactly ONE
+    # words-frame copy no matter how many participants share that reading index --
+    # duplicating per participant here would inflate both the words frame and,
+    # via place_fixations' inner join, every fixation on that reading.
     new_paragraph_frames = []
+    seen_keys: set[str] = set()
     n_repeated = 0
     for participant, paragraph in repeated_keys:
         mask = (fix_df["unique_participant_id"] == participant) & (
@@ -175,10 +181,13 @@ def _disambiguate_repeated_readings(
             reading_mask = mask & (fix_df[trial_col] == trial_id)
             new_key = f"{paragraph}__r{rank}"
             fix_df.loc[reading_mask, "unique_paragraph_id"] = new_key
+            n_repeated += 1
+            if new_key in seen_keys:
+                continue
+            seen_keys.add(new_key)
             paragraph_words = words[words["unique_paragraph_id"] == paragraph].copy()
             paragraph_words["unique_paragraph_id"] = new_key
             new_paragraph_frames.append(paragraph_words)
-            n_repeated += 1
 
     if new_paragraph_frames:
         words = pd.concat([words, *new_paragraph_frames], ignore_index=True)
@@ -300,7 +309,7 @@ def main(argv=None) -> int:
     parser.add_argument("--all", action="store_true")
     parser.add_argument(
         "--eyegenbench-root",
-        default="../EyeGenBench/code",
+        default="../../EyeGenBench/code",
         help="Checkout of github.com/EyeBench/EyeGenBench. Raw downloads land "
         "in its data/ directory and are kept, never deleted.",
     )

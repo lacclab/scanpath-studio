@@ -29,6 +29,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from functools import partial
@@ -179,7 +180,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     set_persistence_paused,
 )
-from scanpath_studio.session_keys import PARAM_CORPUS
+from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _build_figure_settings,
@@ -595,6 +596,35 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             f"`{STATE_DIR_ENV_VAR}=…` · same info from a terminal: "
             "`scanpath-studio cache`.",
         )
+
+
+def _render_start_fresh_panel(*, slot=None) -> None:
+    """Render the "🧹 Start fresh" block of the 💾 Session popover (BUG-28).
+
+    Two buttons, both reachable from every view, for the session that has
+    painted itself into a corner: back to the bundled demo (the wedged-dataset
+    case — the source picker is on the 🗂️ Data page, which is precisely where a
+    dataset that won't load leaves nothing usable), and clear the computed
+    cache. Renders **bare** into ``slot``: the popover trigger and the block
+    heading in :mod:`scanpath_studio.menu` are the disclosure.
+    """
+    container = slot if slot is not None else st.container()
+    container.button(
+        DEMO_RESET_LABEL,
+        key="session_load_demo",
+        width="stretch",
+        help=DEMO_RESET_HELP,
+        on_click=load_bundled_demo,
+    )
+    container.button(
+        "🧹 Clear cached computations",
+        key="session_clear_cache",
+        width="stretch",
+        help="Recompute every figure, table and normalization from the data "
+        "already loaded. Nothing is lost — this cache only holds results the "
+        "app can rebuild. The saved session on this computer is untouched.",
+        on_click=clear_computation_cache,
+    )
 
 
 def _arm_about() -> None:
@@ -2104,6 +2134,91 @@ def _stash_active_mapping(table: str, schema: Optional[Dict]) -> None:
     mapping[table] = dict(schema) if schema else None
 
 
+#: Lead of the ``problems`` entry a **rejected** mapping produces, as opposed to
+#: an **incomplete** one. ``_render_unmapped_view`` branches on it to say the
+#: right thing, so keep the two in step.
+MAPPING_FAILURE_LEAD = "This column mapping doesn't work with this data"
+
+
+def mapping_failure_problem(exc: Exception) -> str:
+    """Turn a normalization failure into one more recovery ``problems`` entry.
+
+    Everything the normalize → harmonize pipeline raises is a statement about
+    the column mapping in force — a ``multipart`` identity rule (screen id in
+    only one report, orphan screens, a conflicting canvas), a non-numeric
+    coordinate column, a duplicated trial key. None of them is a reason to stop
+    rendering, and letting one propagate is actively a trap: the panels that
+    would fix the mapping are written *during* the run that dies, and the Data
+    page they live on is hidden while another view is active — so the user is
+    left with a traceback and nothing to click, which is how the app used to
+    wedge on a mapping it had auto-detected itself.
+
+    The exception is logged with its traceback (🐛 Debug panel + terminal) and
+    handed back as a string, so the existing incomplete-mapping recovery path —
+    raw tables, still-editable mapping panels, off-page signpost — carries it.
+    """
+    logging.getLogger("scanpath_studio").exception(
+        "Normalizing with the current column mapping failed."
+    )
+    return f"{MAPPING_FAILURE_LEAD}: {exc}"
+
+
+def reset_column_mapping() -> None:
+    """Drop every ``col_map_*`` key, so the mapping falls back to auto-detection.
+
+    Used both when the monitor-defining source changes (a mapping is keyed to
+    the columns it was made for) and as the escape hatch under a rejected
+    mapping. Safe from an ``on_click`` callback: it runs before the script that
+    re-creates the widgets.
+    """
+    for key in [
+        k
+        for k in list(st.session_state)
+        if isinstance(k, str) and k.startswith(COLUMN_MAPPING_PREFIX)
+    ]:
+        del st.session_state[key]
+
+
+#: Label + tooltip of the "known-good state" button, shared by the off-page
+#: signpost and the 💾 Session menu so the two read as the same action.
+DEMO_RESET_LABEL = "🧪 Load the bundled demo"
+DEMO_RESET_HELP = (
+    "Switches to the demo corpus and re-detects its column mapping. Your "
+    "uploaded datasets stay in the source list."
+)
+
+
+def load_bundled_demo() -> None:
+    """``on_click``: return to the bundled demo with a freshly detected mapping.
+
+    The one button that reaches a known-good state from anywhere, for a session
+    wedged on a dataset it cannot normalize. Three things together, because any
+    two of them leave a way to stay stuck: the source switch (through the
+    pre-widget ``_pending_source_choice`` seam — assigning the picker's value
+    inline is reconciled away by the browser), leaving the wizard the way its
+    own ✕ Cancel does, and dropping the column mapping — which a source *change*
+    already does, but the wedged source is often the demo itself, and then
+    nothing would change without this.
+    """
+    st.session_state["_pending_source_choice"] = DEMO_CHOICE
+    st.session_state["_show_upload_wizard"] = False
+    st.session_state["setup_complete"] = True
+    reset_column_mapping()
+
+
+def clear_computation_cache() -> None:
+    """``on_click``: drop every ``@st.cache_data`` entry for this process.
+
+    The blunt instrument the 💾 Session menu offers beside it. Nothing the app
+    caches is authoritative — every entry is derived from the loaded frames and
+    a key — so the only cost of clearing is recomputing it, which is exactly
+    what someone reaches for when a figure or a table looks stale. It does
+    **not** touch the on-device recovery cache (that is 🗑 Forget saved session,
+    above it) or anything in session state.
+    """
+    st.cache_data.clear()
+
+
 def prepare_data(
     words_df: pd.DataFrame,
     fixations_df: pd.DataFrame,
@@ -2186,9 +2301,19 @@ def prepare_data(
     _stash_active_mapping("words", word_schema if has_words else None)
     _stash_active_mapping("fixations", fix_schema if has_fixations else None)
 
-    words_norm, fixations_norm = _normalize_pair(
-        words_df, word_schema, fixations_df, fix_schema
-    )
+    try:
+        words_norm, fixations_norm = _normalize_pair(
+            words_df, word_schema, fixations_df, fix_schema
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced in-app, never swallowed
+        # A mapping the pipeline *rejects* recovers the same way as one that is
+        # merely incomplete. See `mapping_failure_problem`.
+        st.session_state["_composite_trial_columns"] = None
+        return (
+            empty_words_frame(),
+            empty_fixations_frame(),
+            [mapping_failure_problem(exc)],
+        )
     return words_norm, fixations_norm, problems
 
 
@@ -2217,18 +2342,38 @@ def _render_unmapped_view(
     raw_fixations_df: pd.DataFrame,
     problems: list,
 ) -> None:
-    """Show the raw uploaded data while the column mapping is incomplete.
+    """Show the raw uploaded data while the column mapping isn't usable.
 
-    The uploaded tables (unmodified) are shown so the user can inspect column
-    names and values to fill in the *Column mapping* panels without the app
-    halting.
+    Two different failures land here, and they need different words. A mapping
+    that is **incomplete** asks the user to fill a field in; one the pipeline
+    **rejected** (``MAPPING_FAILURE_LEAD``) already names what is wrong with the
+    combination they have — so it gets the error, the reason, and a one-click
+    way back to the auto-detected mapping, for when the offending pick came from
+    a restored session and editing the panel field by field is a scavenger hunt.
+
+    Either way the uploaded tables (unmodified) are shown below, so the user can
+    inspect column names and values while choosing.
     """
-    st.warning(
-        "**Finish the column mapping to draw scanpaths.** Map the missing "
-        "field(s) in the **Column mapping** section above — the raw data is "
-        "shown below to help you choose. "
-        "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
-    )
+    rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
+    if rejected:
+        for problem in rejected:
+            st.error(problem, icon="🚫")
+        st.caption(
+            "Change the field it names in the **Column mapping** section above, "
+            "or start again from what auto-detection proposes."
+        )
+        st.button(
+            "↩️ Reset to the auto-detected mapping",
+            key="reset_column_mapping",
+            on_click=reset_column_mapping,
+        )
+    else:
+        st.warning(
+            "**Finish the column mapping to draw scanpaths.** Map the missing "
+            "field(s) in the **Column mapping** section above — the raw data is "
+            "shown below to help you choose. "
+            "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
+        )
     if (raw_words_df is None or raw_words_df.empty) and (
         raw_fixations_df is None or raw_fixations_df.empty
     ):
@@ -2277,15 +2422,35 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
     Deliberately *not* a forced `switch_to_view`: bouncing the user back every
     run would make the other two views unreachable until the mapping is fixed,
     and that is a worse trap than an empty page with a signpost.
+
+    The second button is the way out that does **not** go through the page:
+    finishing the setup is the right answer when the dataset is nearly there,
+    but a dataset the pipeline rejects can leave the user with nothing to plot
+    and no appetite for the mapping — and the source picker itself lives on the
+    page they'd rather not visit. See :func:`load_bundled_demo`.
     """
     if data_view:
         return
     st.info(
         "**This dataset isn't set up yet**, so there's nothing to plot. "
-        "Finish it on the 🗂️ **Data** page.",
+        "Finish it on the 🗂️ **Data** page — or start over from the demo.",
         icon="🗂️",
     )
-    st.button("🗂️ Go to Data setup", on_click=_go_data, type="primary")
+    finish, demo = st.columns(2)
+    finish.button(
+        "🗂️ Go to Data setup",
+        on_click=_go_data,
+        type="primary",
+        width="stretch",
+        key="offpage_go_to_setup",
+    )
+    demo.button(
+        DEMO_RESET_LABEL,
+        on_click=load_bundled_demo,
+        width="stretch",
+        key="offpage_load_demo",
+        help=DEMO_RESET_HELP,
+    )
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
@@ -3797,6 +3962,25 @@ def main() -> None:
     seed_debug_mode()  # UX-37: a legacy ?debug=1 link pre-arms the Help toggle.
     menu = render_top_menu(show_debug=debug_enabled())
     _render_about_panel(menu.title)
+    # BUG-28: filled HERE, not in the epilogue with its two neighbours. `main`
+    # returns early on every path where the dataset can't be drawn — the wizard
+    # mid-flight, a mapping that is incomplete or rejected, an empty pool — so
+    # anything filled at the bottom is missing from the 💾 Session popover in
+    # exactly the states these two buttons exist for (which is what the user saw:
+    # a Session menu of headings with no controls under them). This block needs
+    # nothing from the load, so it can be written before it.
+    _render_start_fresh_panel(slot=menu.start_fresh)
+
+    def _fill_recovery_cache_panel() -> None:
+        """Write the 🗄️ Recovery cache block, once, on whichever path we leave by.
+
+        Its neighbour above is filled eagerly, but this one reports what *this
+        run* just persisted, so it has to come after `save_local_state` — which
+        the early returns never reach. Each of them calls this instead, and the
+        epilogue calls it for the ordinary path; exactly one runs per script run,
+        which is what keeps the toggle and the Forget button single widgets.
+        """
+        _render_recovery_cache_panel(app_url, slot=menu.recovery_cache)
 
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
@@ -4042,6 +4226,7 @@ def main() -> None:
         mapping_problems = setup.problems
         if wizard_active:
             _render_offpage_setup_notice(data_view)
+            _fill_recovery_cache_panel()
             return
     elif data_choice == AUTHOR_CHOICE:
         words_df, fixations_df = _render_authoring_source()
@@ -4093,12 +4278,7 @@ def main() -> None:
         # pair of sources already makes.
         source_key = (data_choice, st.session_state.get("public_dataset_choice"))
         if st.session_state.get("_colmap_seeded_for") != source_key:
-            for stale in [
-                k
-                for k in list(st.session_state)
-                if isinstance(k, str) and k.startswith("col_map_")
-            ]:
-                del st.session_state[stale]
+            reset_column_mapping()
             st.session_state["_colmap_seeded_for"] = source_key
         raw_words_df, raw_fixations_df = load_words_and_fixations(
             data_choice,
@@ -4129,6 +4309,7 @@ def main() -> None:
         with unmapped_slot:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         _render_offpage_setup_notice(data_view)
+        _fill_recovery_cache_panel()
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
@@ -4337,6 +4518,7 @@ def main() -> None:
     # filters removed everything.
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
+        _fill_recovery_cache_panel()
         return
 
     # Build trial combinations for selection UI — from fixations normally, then
@@ -4591,8 +4773,10 @@ def main() -> None:
     # this run's save_local_state, or it would report the previous run's cache
     # and read "nothing stored yet" on the run that first stores something —
     # which is exactly why the slot has to be a popover reserved up front rather
-    # than something rendered in place down here.
-    recovery_cache_slot = menu.recovery_cache
+    # than something rendered in place down here. (BUG-28: the early-return paths
+    # fill it themselves — see `_fill_recovery_cache_panel` — since they never
+    # reach this epilogue and so used to leave 🗑 Forget saved session unreachable
+    # in exactly the wedged states someone goes looking for it.)
 
     # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
     # share_renderer passed into render_single_trial_tab), so it builds its deep
@@ -4639,7 +4823,7 @@ def main() -> None:
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
     # …then report on what that just wrote, into the slot reserved above.
-    _render_recovery_cache_panel(app_url, slot=recovery_cache_slot)
+    _fill_recovery_cache_panel()
 
 
 if __name__ == "__main__":

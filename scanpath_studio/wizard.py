@@ -1621,14 +1621,30 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
     # app._normalize_pair sets _composite_trial_columns from the (single-column)
     # trial mapping → None, exactly what the reload branch expects.
-    words_norm, fixations_norm = app._normalize_pair(
-        words_raw if has_words else empty_words_frame(),
-        word_schema,
-        fix_raw,
-        fix_schema,
-        keep_words=keep_words,
-        keep_fix=keep_fix,
-    )
+    try:
+        words_norm, fixations_norm = app._normalize_pair(
+            words_raw if has_words else empty_words_frame(),
+            word_schema,
+            fix_raw,
+            fix_schema,
+            keep_words=keep_words,
+            keep_fix=keep_fix,
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced in-app, never swallowed
+        # A rejected upload is a blocked wizard step, not a dead app — the
+        # uploaders above have to stay on screen for the user to fix the set of
+        # files they dropped in. See app.mapping_failure_problem.
+        problem = app.mapping_failure_problem(exc)
+        if active:
+            body.error(problem)
+        return _UploadResult(
+            empty_words_frame(),
+            empty_fixations_frame(),
+            pd.DataFrame(),
+            words_raw,
+            fix_raw,
+            [problem],
+        )
     filter_fields = ["genre", "session", "is_practice"]
     st.session_state["wizard_filter_fields"] = filter_fields
     schemas = {"words": word_schema, "fixations": fix_schema, "raw_gaze": None}
@@ -2392,14 +2408,34 @@ def _render_data_setup(active: bool) -> _UploadResult:
         else None
     )
     if has_words or has_fix:
-        words_norm, fixations_norm = app._normalize_pair(
-            raw_words,
-            word_schema if has_words else None,
-            raw_fix,
-            fix_schema if has_fix else None,
-            keep_words=keep_words,
-            keep_fix=keep_fix,
-        )
+        try:
+            words_norm, fixations_norm = app._normalize_pair(
+                raw_words,
+                word_schema if has_words else None,
+                raw_fix,
+                fix_schema if has_fix else None,
+                keep_words=keep_words,
+                keep_fix=keep_fix,
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced in-app, never swallowed
+            # The mapping is complete but the pipeline rejects the combination
+            # (see app.mapping_failure_problem). Blocked exactly like an
+            # incomplete one: the wizard stays up, ✅ Add dataset stays off, and
+            # the review step's badge reads from `_wizard_problems_last`.
+            problem = app.mapping_failure_problem(exc)
+            st.session_state["_wizard_problems_last"] = [problem]
+            st.session_state["_composite_trial_columns"] = None
+            if active:
+                s6.error(problem)
+                s6.button("✅ Add dataset", disabled=True, key="wizard_finalize")
+            return _UploadResult(
+                empty_words_frame(),
+                empty_fixations_frame(),
+                pd.DataFrame(),
+                raw_words,
+                raw_fix,
+                [problem],
+            )
     else:
         # Raw-gaze-only dataset — record composite-trial columns from the raw-gaze
         # mapping so the trial picker still offers one selector per component.

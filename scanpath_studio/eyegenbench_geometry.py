@@ -287,6 +287,12 @@ def extract_eyelink_boxes(
 
     Only interest areas that were *fixated* appear -- the column rides on
     fixations. `fill_missing_boxes` completes the rest.
+
+    R28: screen coordinates are non-negative by definition, so a box whose
+    ``start_x``/``start_y`` is negative is malformed data, not a real
+    on-screen position -- it is dropped here rather than earning the `real`
+    stamp. This is the same discipline `extract_text_df_boxes` applies to its
+    own real-box source; both feed the same stamp, so both must guarantee it.
     """
     if data_col not in frame.columns:
         return pd.DataFrame(columns=[paragraph_col, ia_col, *_BOX_COLUMNS])
@@ -298,6 +304,7 @@ def extract_eyelink_boxes(
         axis=1,
     )
     boxes = boxes.dropna(subset=_BOX_COLUMNS)
+    boxes = boxes[(boxes["start_x"] >= 0) & (boxes["start_y"] >= 0)]
     boxes = boxes.drop_duplicates(subset=[paragraph_col, ia_col], keep="first")
     return boxes.sort_values([paragraph_col, ia_col]).reset_index(drop=True)
 
@@ -323,11 +330,15 @@ def extract_text_df_boxes(
 
     Presence is not trust: a row only contributes a box when its ``ia_index``
     is a valid finite non-negative whole number (`_valid_ia_index`, the same
-    discipline `extract_eyelink_boxes` uses) *and* the box itself is finite
-    with ``start_x < end_x`` and ``start_y < end_y``. A row failing either
-    check contributes nothing -- never a guessed or truncated position, and
-    never a `real` stamp for coordinates that might turn out to be some other
-    space in a corpus not yet verified.
+    discipline `extract_eyelink_boxes` uses) *and* the box itself is finite,
+    non-negative (``start_x >= 0`` and ``start_y >= 0`` -- R28: a screen
+    coordinate is non-negative by definition, and since ``start < end`` is
+    already required, a non-negative start also bounds ``end`` -- a box
+    straddling the origin, e.g. ``start_x=-5, end_x=40``, is rejected too, not
+    representable on a 0-origin canvas), with ``start_x < end_x`` and
+    ``start_y < end_y``. A row failing any check contributes nothing -- never
+    a guessed or truncated position, and never a `real` stamp for coordinates
+    that might turn out to be some other space in a corpus not yet verified.
     """
     if not all(c in text_df.columns for c in [ia_col, *_TEXT_DF_BOX_COLUMNS]):
         # The four box columns alone don't guarantee ia_index is there too --
@@ -345,6 +356,8 @@ def extract_text_df_boxes(
     valid = (
         ia_index.notna()
         & is_finite
+        & (numeric_box["start_x"] >= 0)
+        & (numeric_box["start_y"] >= 0)
         & (numeric_box["start_x"] < numeric_box["end_x"])
         & (numeric_box["start_y"] < numeric_box["end_y"])
     )

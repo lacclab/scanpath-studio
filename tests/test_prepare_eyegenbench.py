@@ -186,19 +186,30 @@ TEXT_LARGE_REAL_BOXES = pd.DataFrame(
 )
 
 
+def _assert_monitor_contains_every_box(words: pd.DataFrame, monitor: list) -> None:
+    """The R26/R28 invariant, in full: every word box sits on the declared
+    canvas -- non-negative on both axes, never exceeding the monitor size.
+    """
+    assert (words["start_x"] >= 0).all()
+    assert (words["start_y"] >= 0).all()
+    assert (words["end_x"] <= monitor[0]).all()
+    assert (words["end_y"] <= monitor[1]).all()
+
+
 def test_monitor_is_published_when_a_display_spec_exists(tmp_path):
     """Item 2 / R26, case 1: a published spec is itself a measurement."""
     entry = prep.build_bundle("PoTeC", FIX, TEXTS, PARTS, None, tmp_path)
     assert entry["monitor_source"] == "published"
     assert entry["monitor"] == [1680, 1050]
     words = pd.read_parquet(tmp_path / "PoTeC" / "words.parquet")
-    assert (words["end_x"] <= entry["monitor"][0]).all()
-    assert (words["end_y"] <= entry["monitor"][1]).all()
+    _assert_monitor_contains_every_box(words, entry["monitor"])
 
 
 def test_monitor_is_derived_from_real_boxes_when_no_spec_is_published(tmp_path):
     """Item 2 / R26, case 2: no published spec, real boxes exceeding the
     1920x1080 default -- the monitor must expand to cover them, never crop.
+    Also the R28 "unaffected" pin: these boxes are entirely non-negative, so
+    R28's added rejection must not change this outcome.
     """
     entry = prep.build_bundle(
         "cfiltsarcasm", FIX, TEXT_LARGE_REAL_BOXES, PARTS, None, tmp_path
@@ -207,8 +218,7 @@ def test_monitor_is_derived_from_real_boxes_when_no_spec_is_published(tmp_path):
     assert entry["monitor_source"] == "derived-from-boxes"
     assert entry["monitor"][0] >= 2500
     words = pd.read_parquet(tmp_path / "cfiltsarcasm" / "words.parquet")
-    assert (words["end_x"] <= entry["monitor"][0]).all()
-    assert (words["end_y"] <= entry["monitor"][1]).all()
+    _assert_monitor_contains_every_box(words, entry["monitor"])
 
 
 def test_monitor_falls_back_to_the_default_when_nothing_is_known(tmp_path):
@@ -220,8 +230,40 @@ def test_monitor_falls_back_to_the_default_when_nothing_is_known(tmp_path):
     assert entry["monitor_source"] == "default"
     assert entry["monitor"] == [1920, 1080]
     words = pd.read_parquet(tmp_path / "cfiltsarcasm" / "words.parquet")
-    assert (words["end_x"] <= entry["monitor"][0]).all()
-    assert (words["end_y"] <= entry["monitor"][1]).all()
+    _assert_monitor_contains_every_box(words, entry["monitor"])
+
+
+# A text_df carrying one real (valid, published-screen-exceeding-irrelevant)
+# box and one box with negative coordinates -- reproduces the R28 hole
+# through the full build_bundle pipeline, not just the extractor.
+TEXT_DF_ONE_NEGATIVE_BOX = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1", "p1"],
+        "ia_index": [0, 1],
+        "text": ["ab cd", "ab cd"],
+        "text_language": ["en", "en"],
+        "ia_list": [["ab", "cd"], ["ab", "cd"]],
+        "start_x": [-500.0, 70.0],
+        "start_y": [-80.0, 20.0],
+        "end_x": [60.0, 120.0],
+        "end_y": [40.0, 40.0],
+    }
+)
+
+
+def test_monitor_invariant_holds_when_a_real_box_has_negative_coordinates(tmp_path):
+    """R28 regression, end to end: PoTeC's published 1680x1050 monitor
+    (monitor_source="published") must still contain every box even though
+    one input box carried negative coordinates -- R28 rejects it at
+    extraction, before it can ever violate the invariant `_resolve_monitor`
+    alone could never have held (a monitor origin cannot be negative).
+    """
+    entry = prep.build_bundle(
+        "PoTeC", FIX, TEXT_DF_ONE_NEGATIVE_BOX, PARTS, None, tmp_path
+    )
+    assert entry["monitor_source"] == "published"
+    words = pd.read_parquet(tmp_path / "PoTeC" / "words.parquet")
+    _assert_monitor_contains_every_box(words, entry["monitor"])
 
 
 def test_monospaced_is_omitted_for_real_geometry(tmp_path):

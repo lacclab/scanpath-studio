@@ -154,6 +154,32 @@ def test_extract_returns_empty_when_the_column_is_absent():
     assert extract_eyelink_boxes(frame).empty
 
 
+def test_extract_eyelink_boxes_rejects_a_negative_coordinate_box():
+    """R28: a negative screen coordinate is malformed data, not a real box."""
+    frame = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, -500, -80, 60, 40]"
+            ],
+        }
+    )
+    assert extract_eyelink_boxes(frame).empty
+
+
+def test_extract_eyelink_boxes_rejects_a_box_straddling_the_origin():
+    """R28: not representable on a 0-origin canvas even though end_x > 0."""
+    frame = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, -5, 20, 40, 40]"],
+        }
+    )
+    assert extract_eyelink_boxes(frame).empty
+
+
 def _boxes(rows):
     return pd.DataFrame(
         rows,
@@ -947,6 +973,66 @@ def test_invalid_text_df_boxes_do_not_earn_real_and_fall_back_to_reconstructed()
     words, report = resolve_geometry("potec", TEXT_DF_INVALID_BOXES, None)
     assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
     assert (words["geometry_source"] == GEOMETRY_RECONSTRUCTED).all()
+
+
+TEXT_DF_NEGATIVE_BOX = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1", "p1"],
+        "ia_index": [0, 1],
+        "text": ["ab cd", "ab cd"],
+        "text_language": ["en", "en"],
+        "ia_list": [["ab", "cd"], ["ab", "cd"]],
+        "start_x": [-500.0, 70.0],
+        "start_y": [-80.0, 20.0],
+        "end_x": [60.0, 120.0],
+        "end_y": [40.0, 40.0],
+    }
+)
+
+
+def test_extract_text_df_boxes_rejects_a_negative_coordinate_box():
+    """R28: a negative screen coordinate is malformed data, not a real box."""
+    boxes = extract_text_df_boxes(TEXT_DF_NEGATIVE_BOX)
+    assert list(boxes["ia_index"]) == [1]  # only the valid row survives
+
+
+def test_resolve_geometry_negative_box_is_interpolated_not_used_as_is():
+    """The paragraph still reads `real` overall (ia_index 1's box IS real --
+    same per-paragraph stamping R8/round-1 already established), but the
+    rejected negative box at ia_index 0 must never reach the words frame
+    as-is: `fill_missing_boxes` interpolates it instead, honestly, and the
+    interpolation can never itself produce a negative coordinate.
+    """
+    words, report = resolve_geometry("potec", TEXT_DF_NEGATIVE_BOX, None)
+    assert report["geometry_source"] == GEOMETRY_REAL
+    assert (words["geometry_source"] == GEOMETRY_REAL).all()
+    assert report["interpolated_fraction"] > 0.0
+    # The rejected negative box's own coordinates never reach the words frame.
+    assert not (words["start_x"] < 0).any()
+    assert not (words["start_y"] < 0).any()
+
+
+TEXT_DF_ORIGIN_STRADDLING_BOX = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1", "p1"],
+        "ia_index": [0, 1],
+        "text": ["ab cd", "ab cd"],
+        "text_language": ["en", "en"],
+        "ia_list": [["ab", "cd"], ["ab", "cd"]],
+        "start_x": [-5.0, 70.0],
+        "start_y": [20.0, 20.0],
+        "end_x": [40.0, 120.0],  # row 0: start_x < end_x, but start_x < 0
+        "end_y": [40.0, 40.0],
+    }
+)
+
+
+def test_extract_text_df_boxes_rejects_a_box_straddling_the_origin():
+    """R28: start_x=-5 < end_x=40 passes the shape check but is still not
+    representable on a 0-origin canvas -- must be rejected all the same.
+    """
+    boxes = extract_text_df_boxes(TEXT_DF_ORIGIN_STRADDLING_BOX)
+    assert list(boxes["ia_index"]) == [1]
 
 
 def test_a_corpus_without_text_df_box_columns_resolves_exactly_as_before():

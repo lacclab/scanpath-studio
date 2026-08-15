@@ -338,12 +338,43 @@ def test_a_harmonised_label_reaches_the_benchmark_loader_not_the_native_corpus(
     )
     assert not words.empty and not fixations.empty
 
-    # And the bootstrap placeholder is a place to type a path, not a corpus, so
-    # it is never offered as a comparison source.
     monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
     names = [name for name, _ready, _why in compare_source.secondary_dataset_options()]
     assert label in names
+
+
+def test_the_bootstrap_placeholder_is_never_offered_as_a_comparison_source(
+    tmp_path, monkeypatch
+):
+    """The `setup_only` skip in `secondary_dataset_options`, actually pinned.
+
+    N3: the version of this assertion that lived in the dispatch test above ran
+    with a corpus discovered — and with one discovered the placeholder is not in
+    the registry at all, so "it isn't in the options" held whether or not
+    `setup_only` was honoured. The state that can fail is the *empty* bundle
+    directory, which is the only state the placeholder exists in: it is a place
+    to type a path, not a dataset, so compare mode must skip it rather than
+    offer the user a source B that would load the demo.
+    """
+    from scanpath_studio import app, compare_source
+
+    empty = tmp_path / "no-bundle-here"
+    empty.mkdir()
+    for module in (app, compare_source):
+        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(empty))
+    monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+    app._cached_eyegenbench_datasets.clear()
+
+    registry = app.public_dataset_registry()
+    assert app.BENCHMARK_SETUP_CHOICE in registry, (
+        "premise: with nothing discovered the placeholder IS in the registry, "
+        "so the enumeration has something to skip"
+    )
+    names = [name for name, _ready, _why in compare_source.secondary_dataset_options()]
     assert app.BENCHMARK_SETUP_CHOICE not in names
+    # The built-ins are still offered, so this isn't passing by enumerating
+    # nothing at all.
+    assert set(app.PUBLIC_DATASET_REGISTRY) <= set(names)
 
 
 def test_the_two_potec_entries_get_distinguishable_unready_hints(bundle, monkeypatch):
@@ -449,3 +480,116 @@ def test_the_description_qualifies_partial_geometry_like_the_badge_does():
     # M11: with `n_texts` absent, prefer the vaguer claim to the confident one.
     unknown_total = {"geometry_source": "real", "paragraphs_without_real_boxes": 3}
     assert "some but not all" in app.geometry_badge(unknown_total)
+
+
+def test_the_cli_and_the_picker_resolve_the_same_screen(bundle, tmp_path, monkeypatch):
+    """I3 where the two surfaces meet (N6).
+
+    `declared_monitor` exists so one corpus cannot render at the manifest's
+    invented 1920x1080 through `cli render --eyegenbench` while the app renders
+    it at data extents. Only the app half was pinned, so a CLI regression — the
+    shape this bug had for a whole task — would not have failed anything. This
+    drives the real `render` command and compares the canvas it passes to the
+    figure builder against the registry entry the picker builds from the same
+    manifest row.
+    """
+    from scanpath_studio import api, app, cli
+
+    manifest = json.loads((bundle / "manifest.json").read_text())
+    row = manifest["datasets"][0]
+
+    def _cli_canvas():
+        seen = {}
+
+        def _spy(*_args, **kwargs):
+            import plotly.graph_objects as go
+
+            seen["canvas"] = kwargs.get("canvas_size")
+            return go.Figure()
+
+        monkeypatch.setattr(api, "plot_scanpath", _spy)
+        assert (
+            cli.main(
+                [
+                    "render",
+                    "--eyegenbench",
+                    str(bundle),
+                    "--eyegenbench-dataset",
+                    "PoTeC",
+                    "--participant",
+                    "r1",
+                    "--trial",
+                    "p1",
+                    "--out",
+                    str(tmp_path / f"{len(seen)}.html"),
+                ]
+            )
+            is None
+        )
+        return seen["canvas"]
+
+    def _picker_monitor():
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+        app._cached_eyegenbench_datasets.clear()
+        entry = app.public_dataset_registry()[app.benchmark_corpus_label("PoTeC")]
+        return entry.get("monitor")
+
+    # 1. A corpus that documents its screen: both surfaces snap to it.
+    row["monitor_source"] = "paper"
+    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    assert _cli_canvas() == (1680, 1050)
+    assert _picker_monitor() == (1680, 1050)
+
+    # 2. A corpus that documents nothing: the manifest's 1920x1080 is the
+    # pipeline's invented default, so neither surface may adopt it. `None`
+    # canvas is the CLI's "no canvas given" path — the figure falls back to the
+    # data's own extents, exactly as the app does with no `monitor` on the entry.
+    row["monitor_source"] = "default"
+    row["monitor"] = [1920, 1080]
+    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    assert _cli_canvas() is None
+    assert _picker_monitor() is None
+
+
+def test_a_malformed_count_does_not_take_the_picker_down(bundle, monkeypatch):
+    """N1: the registry build reads manifest counts, so they must not raise.
+
+    `_benchmark_description` runs for every discovered corpus while the picker
+    builds its option list, and it reads `paragraphs_without_real_boxes` and
+    `n_texts`. A bare `int()` on a hand-edited manifest (`"n_texts": "many"`)
+    raised `ValueError` straight out of the enumeration — the same crash class
+    as the nameless row, on the same path, reintroduced one level up.
+    """
+    from scanpath_studio import app
+
+    manifest = json.loads((bundle / "manifest.json").read_text())
+    manifest["datasets"][0].update(
+        {
+            "geometry_source": "real",
+            "n_texts": "many",
+            "n_readers": [1, 2],
+            "paragraphs_without_real_boxes": 3,
+        }
+    )
+    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    app._cached_eyegenbench_datasets.clear()
+
+    entry = app.public_dataset_registry()[app.benchmark_corpus_label("PoTeC")]
+    # Unreadable counts drop out of the caption rather than crashing or
+    # printing garbage…
+    assert "many" not in entry["size"] and "text" not in entry["size"]
+    # …and the geometry claim degrades to the vaguer honest wording, never to
+    # the confident "measured word boxes." R34 forbids.
+    assert "some but not all texts" in entry["description"]
+    assert "some but not all texts" in app.geometry_badge(
+        {
+            "geometry_source": "real",
+            "n_texts": "many",
+            "paragraphs_without_real_boxes": 3,
+        }
+    )
+    # An unreadable *missing* count is likewise unknown coverage, not full.
+    assert "some but not all texts" in app.geometry_badge(
+        {"geometry_source": "real", "n_texts": 12, "paragraphs_without_real_boxes": "?"}
+    )

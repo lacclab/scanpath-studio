@@ -102,6 +102,33 @@ def entry_name(entry) -> str:
     return str(entry.get("name") or "").strip()
 
 
+def entry_count(entry, key: str) -> Optional[int]:
+    """A manifest row's integer count field: the number, ``0``, or ``None``.
+
+    The same rule as `entry_name`, for the count fields (`n_texts`,
+    `n_readers`, `n_fixations`, `paragraphs_without_real_boxes`): a manifest is
+    data from a file on disk, and a bare ``int(entry.get(key))`` raises
+    `ValueError`/`TypeError` on ``"many"``, ``[1]`` or any other shape a hand
+    edit can produce — outside the catch every caller guards with, and now on
+    the path that builds a picker entry for every discovered corpus (N1).
+
+    ``0`` when the field is absent or blank — *not recorded* is a known
+    quantity for a count, and every reader treats it as none. ``None`` when the
+    value is there but isn't a number, so a caller can tell "no missing texts"
+    from "the missing-text count is unreadable" and word its claim accordingly
+    rather than asserting the confident one.
+    """
+    if not isinstance(entry, dict):
+        return None
+    raw = entry.get(key)
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _find_entry(root, dataset: str) -> Optional[dict]:
     """The manifest entry named ``dataset`` (case-insensitive), or ``None``.
 

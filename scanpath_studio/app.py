@@ -1411,15 +1411,15 @@ def discovered_benchmark_datasets() -> tuple:
     before anything is in a position to report a load failure to the user (the
     corpus' own loader does that, with the directory input right beside it).
     """
+    from scanpath_studio.eyegenbench import entry_name
+
     try:
         entries = _cached_eyegenbench_datasets(_eyegenbench_root_from_state())
     except _MANIFEST_ERRORS:
         return ()
-    return tuple(
-        entry
-        for entry in entries
-        if isinstance(entry, dict) and str(entry.get("name") or "").strip()
-    )
+    # `entry_name` owns the "a row with no usable name is skipped" rule (N5);
+    # spelling it again here is how the two would drift.
+    return tuple(entry for entry in entries if entry_name(entry))
 
 
 # geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /
@@ -1447,16 +1447,25 @@ def _geometry_coverage_note(entry) -> str:
     ``n_texts`` is missing from no real manifest, but when it is the note goes
     vague rather than silent (M11): "some texts aren't measured" is worse copy
     than a count and a better claim than a confident, possibly-wrong "Real".
+
+    The counts are read through `eyegenbench.entry_count`, which is also what
+    keeps a hand-mangled manifest from raising out of the *picker build* — this
+    runs for every discovered corpus via `_benchmark_description` (N1). An
+    unreadable count lands in the same vaguer wording as an absent one: it is
+    the R34-honest answer either way, and it is never worth taking the source
+    list down over a typo in a number.
     """
+    from scanpath_studio.eyegenbench import entry_count
+
     if str(entry.get("geometry_source") or "").strip() != "real":
         return ""
-    missing = int(entry.get("paragraphs_without_real_boxes") or 0)
-    if missing <= 0:
+    missing = entry_count(entry, "paragraphs_without_real_boxes")
+    if missing is not None and missing <= 0:
         return ""
-    total = int(entry.get("n_texts") or 0)
+    total = entry_count(entry, "n_texts")
     covered = (
         f"measured word boxes for {max(total - missing, 0)} of {total} texts"
-        if total > 0
+        if missing is not None and total
         else "measured word boxes for some but not all texts"
     )
     return f"{covered}; the rest fall back to reconstructed layout"
@@ -1518,18 +1527,21 @@ def _benchmark_short_name(name: str) -> str:
 
 
 def _benchmark_size_caption(entry) -> str:
-    """``"84 readers · 55 texts · 219,556 fixations"`` from a manifest entry."""
+    """``"84 readers · 55 texts · 219,556 fixations"`` from a manifest entry.
+
+    Counts that don't parse are simply left out of the caption — via the same
+    `entry_count` the geometry note reads, rather than a second hand-rolled
+    ``try`` (N1).
+    """
+    from scanpath_studio.eyegenbench import entry_count
+
     parts = []
     for key, singular in (
         ("n_readers", "reader"),
         ("n_texts", "text"),
         ("n_fixations", "fixation"),
     ):
-        try:
-            count = int(entry.get(key) or 0)
-        except (TypeError, ValueError):
-            continue
-        if count:
+        if count := entry_count(entry, key):
             parts.append(f"{count:,} {singular}{'' if count == 1 else 's'}")
     return " · ".join(parts)
 
@@ -2571,15 +2583,22 @@ def render_sidebar_data_source(host=None) -> str:
         st.session_state["data_source_choice"] = corpus or entries[0]
 
     # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
-    # errors on an option that is no longer in the list. The bootstrap entry gets
-    # its own landing: it disappears *because it succeeded*, so falling back to
-    # `entries[0]` (the demo) would answer a user who just pointed the app at a
-    # bundle by taking them somewhere else entirely — and, since the demo renders
-    # no directory input, would drop them straight back out of the corpora they
-    # just found. Land on the first corpus that appeared instead.
-    if st.session_state.get("data_source_choice") not in entries:
+    # errors on an option that is no longer in the list. Anything that *was* a
+    # benchmark entry gets its own landing, in preference to `entries[0]` (the
+    # demo): the bootstrap placeholder disappears precisely *because* it
+    # succeeded, so sending the user who just supplied a bundle path somewhere
+    # else entirely answers them with a non-answer — and, the demo rendering no
+    # directory input, drops them straight back out of the corpora they found.
+    # The same reasoning covers a stale *corpus* label (the bundle directory was
+    # repointed, or that corpus was removed from it): another prepared corpus is
+    # a better answer than the demo whenever one is reachable (N2).
+    stale = str(st.session_state.get("data_source_choice") or "")
+    if stale not in entries:
+        was_benchmark = stale == BENCHMARK_SETUP_CHOICE or stale.endswith(
+            BENCHMARK_LABEL_SUFFIX
+        )
         healed = ""
-        if st.session_state.get("data_source_choice") == BENCHMARK_SETUP_CHOICE:
+        if was_benchmark:
             healed = next(
                 (
                     label

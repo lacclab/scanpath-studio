@@ -1184,18 +1184,32 @@ class TestUnmappedRawDataView:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
-        # R32 canary (M13): the app path must auto-detect a benchmark corpus'
-        # schema. The pre-Task-11R version of this test compared the mapping
-        # before and after the switch, which `_colmap_seeded_for` made obsolete
-        # (both corpora share one schema, so there is nothing to re-seed) — but
-        # the *seeding* assertion it carried is independent of that and still
-        # earns its keep: it fails the moment the detection stops resolving.
-        colmap = {
+        # R32 canary (M13/N4): the app path must auto-detect a benchmark
+        # corpus' schema. The pre-Task-11R test compared the mapping before and
+        # after the switch, which `_colmap_seeded_for` made obsolete (both
+        # corpora share one schema, so there is nothing to re-seed); the
+        # seeding assertion that replaced it asserted only that *some*
+        # `col_map_words_*` key existed, which `column_mapping_ui` creates
+        # (index 0, `persist_state="session"`) whenever the panel renders at
+        # all — so it pinned "the mapping panel rendered", not "detection
+        # resolved". The three fields R32 is actually about are on the
+        # fixations side, and what matters is the *value*: unresolved, each
+        # falls back to `(none)` and every reader collapses into one synthetic
+        # id, with no error anywhere to say so.
+        assert {
             k: v
             for k, v in at.session_state.filtered_state.items()
-            if isinstance(k, str) and k.startswith("col_map_words")
+            if k
+            in (
+                "col_map_fix_participant",
+                "col_map_fix_fixation_id",
+                "col_map_fix_word_id",
+            )
+        } == {
+            "col_map_fix_participant": "unique_participant_id",
+            "col_map_fix_fixation_id": "fix_index",
+            "col_map_fix_word_id": "ia_index",
         }
-        assert colmap, "expected the words column mapping to be seeded"
 
         # Narrow to one PoTeC-only text.
         text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
@@ -1315,6 +1329,50 @@ class TestUnmappedRawDataView:
         picker.set_value(label).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == label
+        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+    def test_repointing_the_bundle_lands_on_a_corpus_not_on_the_demo(
+        self, monkeypatch, tmp_path
+    ):
+        """N2: healing a stale *corpus* label, not just the placeholder.
+
+        The selected corpus can stop existing without anything going wrong —
+        the user points the directory input at a second bundle, or rebuilds one
+        without that corpus. The selection is then invalid and the generic
+        healing sends it to `entries[0]`, the bundled demo. That is the same
+        non-answer C1's second half exists to prevent: the user asked for a
+        different bundle and got the demo, when a prepared corpus from the
+        bundle they just named was right there.
+        """
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        first = tmp_path / "first-bundle"
+        _write_benchmark_corpus(first, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
+        _write_benchmark_manifest(
+            first, [{"name": "PoTeC", "language": "de", "monitor": [1680, 1050]}]
+        )
+        second = tmp_path / "second-bundle"
+        _write_benchmark_corpus(second, "Provo", paragraphs=("Provo_a", "Provo_b"))
+        _write_benchmark_manifest(
+            second, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(first))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # Repoint at the other bundle: "PoTeC — harmonised…" is now a label for
+        # a corpus that isn't there.
+        dir_input = [t for t in at.text_input if t.key == "eyegenbench_dir"][0]
+        dir_input.set_value(str(second)).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == app.benchmark_corpus_label(
+            "Provo"
+        )
         text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
         assert set(text_ms.options) == {"Provo_a", "Provo_b"}
 

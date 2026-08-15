@@ -796,7 +796,7 @@ git commit -m "DATA-27: three-tier geometry resolution and fixation placement"
 
 **Interfaces:**
 - Consumes: nothing from `eyegenbench_geometry` at runtime (the bundle is already built).
-- Produces: `EYEGENBENCH_WORD_SCHEMA`, `EYEGENBENCH_FIX_SCHEMA`; `eyegenbench_manifest(root) -> dict`; `eyegenbench_datasets(root) -> list[dict]`; `eyegenbench_present(root, dataset=None) -> bool`; `eyegenbench_monitor(root, dataset) -> tuple[int, int]`; `eyegenbench_raw_frames(root, *, dataset) -> tuple[pd.DataFrame, pd.DataFrame]`; `load_eyegenbench(root, *, dataset) -> tuple[pd.DataFrame, pd.DataFrame]`; `load_eyegenbench_participants(root, dataset) -> pd.DataFrame`.
+- Produces: `EYEGENBENCH_WORD_SCHEMA`, `EYEGENBENCH_FIX_SCHEMA`; `eyegenbench_manifest(root) -> dict`; `eyegenbench_datasets(root) -> list[dict]`; `eyegenbench_present(root, dataset=None) -> bool`; `eyegenbench_monitor(root, dataset) -> tuple[int, int] | None` (Task 11R/I3: `None` when the manifest records only `monitor_source: "default"`, the pipeline's invented screen — the shared rule is `declared_monitor(entry)`, which the app's registry entry and `cli render --eyegenbench` both read); `eyegenbench_raw_frames(root, *, dataset) -> tuple[pd.DataFrame, pd.DataFrame]`; `load_eyegenbench(root, *, dataset) -> tuple[pd.DataFrame, pd.DataFrame]`; `load_eyegenbench_participants(root, dataset) -> pd.DataFrame`.
 
 Word tables are **stimulus-level** (`participant=None`), which `data.broadcast_stimulus_words` expands across readers — exactly as PoTeC's word AOIs work.
 
@@ -1003,13 +1003,26 @@ def eyegenbench_present(root, dataset: Optional[str] = None) -> bool:
     )
 
 
-def eyegenbench_monitor(root, dataset: str) -> Tuple[int, int]:
-    """The corpus' screen in pixels -- what makes the plot true-to-scale."""
-    for entry in eyegenbench_datasets(root):
-        if entry["name"].lower() == str(dataset).lower():
-            width, height = entry["monitor"]
-            return int(width), int(height)
-    raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
+def declared_monitor(entry) -> Optional[Tuple[int, int]]:
+    """The row's screen when the corpus documents one; `None` otherwise.
+
+    Task 11R/I3: `monitor_source: "default"` is the pipeline's invented
+    1920x1080 for a corpus that documents no screen, and neither surface may
+    snap a canvas to it. One rule, read by the app's registry entry and by the
+    CLI, or the same corpus renders at two different scales.
+    """
+    monitor = entry.get("monitor")
+    if not monitor or entry.get("monitor_source") == "default":
+        return None
+    return int(monitor[0]), int(monitor[1])
+
+
+def eyegenbench_monitor(root, dataset: str) -> Optional[Tuple[int, int]]:
+    """The corpus' documented screen in pixels, or `None`."""
+    entry = _find_entry(root, dataset)
+    if entry is None:
+        raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
+    return declared_monitor(entry)
 
 
 def _dataset_dir(root, dataset: str) -> Path:

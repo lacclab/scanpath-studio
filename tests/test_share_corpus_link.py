@@ -369,8 +369,12 @@ class TestAmbiguousSlugsResolveToNeither:
         assert {corpus_slug(label, registry[label]) for label in both} == {
             "harmonised-zuco-1"
         }, "premise: the two names slug alike"
+        # The load-bearing pin: the slug BOTH corpora claim resolves to neither
+        # of them. Asserting a raw display name resolves to `None` would look
+        # like a second vector but prove nothing — `"ZuCo 1"` slugifies to
+        # `"zuco-1"`, which never matches the registered `"harmonised-zuco-1"`
+        # with or without this guard, so it would pass on unfixed code too.
         assert corpus_choice_for_slug("harmonised-zuco-1") is None
-        assert corpus_choice_for_slug("ZuCo 1") is None
 
     def test_a_name_with_nothing_sluggable_in_it_is_not_shareable(
         self, tmp_path, monkeypatch

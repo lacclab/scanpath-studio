@@ -1184,6 +1184,19 @@ class TestUnmappedRawDataView:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
+        # R32 canary (M13): the app path must auto-detect a benchmark corpus'
+        # schema. The pre-Task-11R version of this test compared the mapping
+        # before and after the switch, which `_colmap_seeded_for` made obsolete
+        # (both corpora share one schema, so there is nothing to re-seed) — but
+        # the *seeding* assertion it carried is independent of that and still
+        # earns its keep: it fails the moment the detection stops resolving.
+        colmap = {
+            k: v
+            for k, v in at.session_state.filtered_state.items()
+            if isinstance(k, str) and k.startswith("col_map_words")
+        }
+        assert colmap, "expected the words column mapping to be seeded"
+
         # Narrow to one PoTeC-only text.
         text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
         assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
@@ -1206,23 +1219,45 @@ class TestUnmappedRawDataView:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["filter_text_id"] == ["PoTeC_a"]
 
-    def test_benchmark_bootstrap_entry_disappears_once_a_corpus_is_discovered(
+    def test_a_bundle_at_a_non_default_path_becomes_reachable_and_stays(
         self, monkeypatch, tmp_path
     ):
-        """R39: with zero corpora discovered there must still be somewhere to
-        type the bundle's path.
+        """R39 end to end: type a path, pick the corpus, keep it.
 
-        Discovery reads a directory the user can change at runtime, so a bundle
-        at a non-default path yields no corpora, hence no entries — and therefore
-        nowhere to point the app at it. Exactly one placeholder entry carries the
-        directory input until a corpus exists, then gets out of the way.
+        The bootstrap entry exists for exactly one job — a bundle that is *not*
+        at `EYEGENBENCH_DEFAULT_DIR` must be reachable, since discovery reads a
+        directory the user can change at runtime and an undiscovered bundle
+        yields no entries and so nowhere to type its path. The first cut of the
+        entry shipped non-functional and passed its test anyway, because the
+        test asserted the directory input *existed* and never typed into it
+        (C1): the typed path survived exactly one run. Discovery then succeeded,
+        the placeholder dropped out of the registry, the healing step sent the
+        user to the bundled demo, the demo renders no directory input — so
+        Streamlit dropped the `eyegenbench_dir` key at end of run and the next
+        run rediscovered nothing. The corpora flickered in for one rerun,
+        forever.
+
+        So this drives the whole flow: type → the corpus appears → **select
+        it** → it is still selected, still loaded, and still there after a
+        detour to another source. Everything before the last step passes on the
+        bug in at least one of its halves; the run *after* each selection is
+        what fails on it.
         """
         from scanpath_studio import app
+        from scanpath_studio.constants import AUTHOR_CHOICE
 
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
-        root = tmp_path / "bundle"
-        root.mkdir()
-        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        # The premise: the app's default location is empty and the bundle is
+        # somewhere else entirely. Nothing is discoverable until it is typed in.
+        default_dir = tmp_path / "default-location"
+        default_dir.mkdir()
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(default_dir))
+        root = tmp_path / "elsewhere" / "bundle"
+        _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
+        _write_benchmark_manifest(
+            root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
+        )
+        label = app.benchmark_corpus_label("Provo")
 
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.BENCHMARK_SETUP_CHOICE
@@ -1231,27 +1266,57 @@ class TestUnmappedRawDataView:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
         assert "🌐 Harmonised benchmark corpora — set up" in picker.options
-        # It renders the shared directory input, so a bundle elsewhere is
-        # reachable at all.
+        assert "🌐 Provo" not in picker.options
+
+        # 1. The user types the bundle's real path into the placeholder's input.
         dir_inputs = [t for t in at.text_input if t.key == "eyegenbench_dir"]
         assert dir_inputs, "expected the bundle directory input"
+        dir_inputs[0].set_value(str(root)).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        assert "🌐 Provo" in picker.options, "the corpus must appear once found"
+        # The placeholder disappears *because it succeeded*, so healing must not
+        # bounce the user out to the demo — that answers "here is my bundle"
+        # with somewhere else entirely, and (the demo drawing no directory
+        # input) throws the bundle location away on the way out.
+        assert at.session_state["data_source_choice"] == label
 
-        # Once a corpus is discoverable the placeholder is gone and the corpus
-        # itself is the entry.
-        _write_benchmark_corpus(root, "Provo")
-        _write_benchmark_manifest(
-            root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
-        )
-        at2 = _make_apptest()
-        at2.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
-        at2.run(timeout=60)
-        assert not at2.exception, f"Streamlit exceptions: {at2.exception}"
-        picker = [s for s in at2.selectbox if s.key == "data_source_picker"][0]
+        # 2. The user picks the corpus in the picker, through the real widget.
+        picker.set_value(label).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # 3. The run after the selection — the one that used to lose the path.
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["eyegenbench_dir"] == str(root)
+        assert at.session_state["data_source_choice"] == label
+        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
         assert "🌐 Provo" in picker.options
-        assert app.BENCHMARK_SETUP_CHOICE not in [
-            *picker.options,
-            *app.public_dataset_registry(),
-        ]
+        # The placeholder is offered only while nothing is discovered, and the
+        # options are checked rather than `public_dataset_registry()` because
+        # the bundle's location lives in *this app run's* session state — a
+        # registry built out here, outside the run, cannot see it.
+        assert not any("set up" in option for option in picker.options)
+        # …and the corpus is genuinely loaded, not merely named in the picker.
+        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+        # 4. A detour to another source and back. The directory input renders
+        # only while a benchmark corpus is selected, so this is the run on which
+        # Streamlit drops an ordinary widget key — `persist_state="session"` on
+        # the shared `_dataset_dir_input` is what keeps the bundle findable.
+        picker.set_value(AUTHOR_CHOICE).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [t for t in at.text_input if t.key == "eyegenbench_dir"], (
+            "premise: another source renders no bundle directory input"
+        )
+        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        assert "🌐 Provo" in picker.options, "the bundle location must survive"
+        picker.set_value(label).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == label
+        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
 
     def test_benchmark_reader_count_matches_the_headless_loader(
         self, monkeypatch, tmp_path

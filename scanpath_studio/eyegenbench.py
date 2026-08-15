@@ -86,6 +86,22 @@ def eyegenbench_datasets(root) -> list:
     return list(eyegenbench_manifest(root).get("datasets", []))
 
 
+def entry_name(entry) -> str:
+    """A manifest row's dataset name, or ``""`` when it hasn't got one.
+
+    A row is data from a file on disk, so it can be malformed. Reading the name
+    as ``entry["name"]`` raised `KeyError` — outside the `(FileNotFoundError,
+    ValueError, OSError)` triple every caller guards with, so **one** nameless
+    row ordered before a valid one took the whole app down through whichever
+    surface looked at the manifest next (M7 / I2). Nameless rows are unusable
+    by definition — nothing can address them — so every reader skips them here
+    rather than each remembering to catch a third exception type.
+    """
+    if not isinstance(entry, dict):
+        return ""
+    return str(entry.get("name") or "").strip()
+
+
 def _find_entry(root, dataset: str) -> Optional[dict]:
     """The manifest entry named ``dataset`` (case-insensitive), or ``None``.
 
@@ -93,7 +109,7 @@ def _find_entry(root, dataset: str) -> Optional[dict]:
     manifest, so the case-insensitive comparison lives in exactly one place.
     """
     for entry in eyegenbench_datasets(root):
-        if entry["name"].lower() == str(dataset).lower():
+        if (name := entry_name(entry)) and name.lower() == str(dataset).lower():
             return entry
     return None
 
@@ -112,10 +128,10 @@ def eyegenbench_present(root, dataset: Optional[str] = None) -> bool:
         return False
     try:
         if dataset is None:
-            names = [e["name"] for e in eyegenbench_datasets(root)]
+            names = [n for e in eyegenbench_datasets(root) if (n := entry_name(e))]
         else:
             entry = _find_entry(root, dataset)
-            names = [] if entry is None else [entry["name"]]
+            names = [] if entry is None else [entry_name(entry)]
     except (OSError, ValueError):
         return False
     if not names:
@@ -126,13 +142,43 @@ def eyegenbench_present(root, dataset: Optional[str] = None) -> bool:
     )
 
 
-def eyegenbench_monitor(root, dataset: str) -> Tuple[int, int]:
-    """The corpus' screen in pixels -- what makes the plot true-to-scale."""
+def declared_monitor(entry) -> Optional[Tuple[int, int]]:
+    """A manifest row's screen when the corpus actually documents one (I3).
+
+    ``monitor_source: "default"`` marks `eyegenbench_geometry.py`'s generic
+    guess for a corpus that documents no screen at all -- 1920x1080, invented.
+    Snapping a canvas to an invented screen presents a made-up geometry as the
+    corpus', so both surfaces decline it: ``None`` means "no declared screen",
+    and the caller falls back to the data's own extents.
+
+    **The rule lives here, once.** The app reads it building each corpus'
+    registry entry and the CLI reads it resolving ``--eyegenbench``'s canvas;
+    duplicating the condition is how the same corpus came to render at two
+    different scales depending on which surface asked.
+    """
+    if not isinstance(entry, dict):
+        return None
+    monitor = entry.get("monitor")
+    if not monitor or entry.get("monitor_source") == "default":
+        return None
+    try:
+        return int(monitor[0]), int(monitor[1])
+    except (IndexError, KeyError, TypeError, ValueError):
+        return None
+
+
+def eyegenbench_monitor(root, dataset: str) -> Optional[Tuple[int, int]]:
+    """The corpus' documented screen in pixels, or ``None`` (I3).
+
+    ``None`` when the manifest records no screen for this corpus, or only the
+    invented default one -- see `declared_monitor`. A `ValueError` still means
+    the *dataset* isn't in the bundle, which is a different failure and stays
+    loud.
+    """
     entry = _find_entry(root, dataset)
     if entry is None:
         raise ValueError(f"{dataset!r} is not in the bundle at {root!s}")
-    width, height = entry["monitor"]
-    return int(width), int(height)
+    return declared_monitor(entry)
 
 
 def _dataset_dir(root, dataset: str) -> Path:

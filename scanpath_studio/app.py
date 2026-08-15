@@ -937,6 +937,16 @@ def _dataset_dir_input(
         value=st.session_state.get(dir_key, default_dir),
         help=dir_help,
         key=dir_key,
+        # A typed path must survive a run in which this input doesn't render —
+        # Streamlit drops an unrendered widget's key at end of run (BUG-15 /
+        # ENG-36), and *every* one of these inputs renders only while its own
+        # corpus is the selected source. The benchmark bootstrap entry made that
+        # fatal (it vanishes the moment the path it was given succeeds, so the
+        # path was lost and the corpora disappeared again on the next run — R39
+        # shipped non-functional); for the other corpora it silently forgot a
+        # hand-typed location as soon as the user looked at another source. One
+        # rule here rather than one call site remembering and three forgetting.
+        persist_state="session",
     )
     # Vertical-align the button with the input (past its label).
     browse_col.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
@@ -1425,6 +1435,33 @@ _EYEGENBENCH_GEOMETRY_BADGES = {
 }
 
 
+def _geometry_coverage_note(entry) -> str:
+    """How much of a ``real`` corpus is actually measured, or ``""`` (R34).
+
+    The single source for that qualifier: the badge and the picker description
+    print it in the same panel, one line apart, so two spellings of the rule is
+    how one of them ends up claiming uniform geometry the other has just denied
+    (M8). Empty when the corpus is uniform, or when the tier is one that already
+    says *no* measured boxes.
+
+    ``n_texts`` is missing from no real manifest, but when it is the note goes
+    vague rather than silent (M11): "some texts aren't measured" is worse copy
+    than a count and a better claim than a confident, possibly-wrong "Real".
+    """
+    if str(entry.get("geometry_source") or "").strip() != "real":
+        return ""
+    missing = int(entry.get("paragraphs_without_real_boxes") or 0)
+    if missing <= 0:
+        return ""
+    total = int(entry.get("n_texts") or 0)
+    covered = (
+        f"measured word boxes for {max(total - missing, 0)} of {total} texts"
+        if total > 0
+        else "measured word boxes for some but not all texts"
+    )
+    return f"{covered}; the rest fall back to reconstructed layout"
+
+
 def geometry_badge(entry) -> str:
     """The one-line geometry-provenance badge for a manifest entry (R34).
 
@@ -1447,14 +1484,8 @@ def geometry_badge(entry) -> str:
     badge = _EYEGENBENCH_GEOMETRY_BADGES.get(source)
     if badge is None:
         return f"Screen geometry: {source}"
-    missing = int(entry.get("paragraphs_without_real_boxes") or 0)
-    total = int(entry.get("n_texts") or 0)
-    if source == "real" and missing > 0 and total > 0:
-        return (
-            "✅ **Real** screen geometry — measured word boxes for "
-            f"{max(total - missing, 0)} of {total} texts; the rest fall back to "
-            "reconstructed layout."
-        )
+    if note := _geometry_coverage_note(entry):
+        return f"✅ **Real** screen geometry — {note}."
     return badge
 
 
@@ -1513,15 +1544,21 @@ def _benchmark_description(entry, *, harmonised_overlap: bool) -> str:
     name = str(entry["name"])
     lead = (
         f"{name}, re-derived by the EyeGenBench pipeline into the benchmark's "
-        "common schema — the same corpus as the native entry above, prepared for "
-        "cross-corpus comparison rather than for the publisher's own geometry."
+        f"common schema — the same corpus as this app's own {name} entry, "
+        "prepared for cross-corpus comparison rather than for the publisher's "
+        "own geometry."
         if harmonised_overlap
         else f"{name} — a public reading corpus harmonised by the EyeGenBench "
         "pipeline to one common schema and prepared locally."
     )
     tail = []
     if source := str(entry.get("geometry_source") or "").strip():
-        tail.append(f"Screen geometry: {source}")
+        # Same qualifier as the badge rendered beside this (M8) — a bare
+        # "Screen geometry: real" next to "measured word boxes for 9 of 12
+        # texts" is the overclaim R34 exists to prevent, one line away from
+        # the fix.
+        note = _geometry_coverage_note(entry)
+        tail.append(f"Screen geometry: {source}" + (f" — {note}" if note else ""))
     if license_ := str(entry.get("license") or "").strip():
         tail.append(f"License: {license_}")
     if citation := str(entry.get("citation") or "").strip():
@@ -1677,8 +1714,11 @@ def _benchmark_registry_entries() -> dict:
     corpus that documents no screen, and declaring it here would make the canvas
     snap to it as though it were measured (the registry has no "declared but not
     authoritative" tier — a declared monitor *is* the authoritative one). Without
-    it the canvas falls back to data extents, which is the honest answer.
+    it the canvas falls back to data extents, which is the honest answer. The
+    condition itself is `eyegenbench.declared_monitor`, which the CLI reads too.
     """
+    from scanpath_studio.eyegenbench import declared_monitor
+
     entries: dict = {}
     for entry in discovered_benchmark_datasets():
         name = str(entry["name"])
@@ -1695,11 +1735,12 @@ def _benchmark_registry_entries() -> dict:
             # sniffing the label, and it is the natural slug for Task 12's wire
             # format.
             benchmark_dataset=name,
-            geometry_source=entry.get("geometry_source"),
         )
-        monitor = entry.get("monitor")
-        if monitor and entry.get("monitor_source") != "default":
-            spec["monitor"] = (int(monitor[0]), int(monitor[1]))
+        # The one screen-honesty rule, shared with the CLI (`cli.render
+        # --eyegenbench`) so the same corpus can't render at an invented
+        # 1920×1080 on one surface and at data extents on the other — I3.
+        if monitor := declared_monitor(entry):
+            spec["monitor"] = monitor
         entries[benchmark_corpus_label(name)] = spec
     return entries
 
@@ -1733,11 +1774,6 @@ def public_dataset_registry() -> dict:
             setup_only=True,
         )
     return registry
-
-
-def _public_dataset_label(label: str) -> str:
-    """The picker display text for a registry entry (its short name, if any)."""
-    return public_dataset_registry().get(label, {}).get("short", label)
 
 
 def _load_public_dataset(
@@ -2535,9 +2571,24 @@ def render_sidebar_data_source(host=None) -> str:
         st.session_state["data_source_choice"] = corpus or entries[0]
 
     # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
-    # errors on an option that is no longer in the list.
+    # errors on an option that is no longer in the list. The bootstrap entry gets
+    # its own landing: it disappears *because it succeeded*, so falling back to
+    # `entries[0]` (the demo) would answer a user who just pointed the app at a
+    # bundle by taking them somewhere else entirely — and, since the demo renders
+    # no directory input, would drop them straight back out of the corpora they
+    # just found. Land on the first corpus that appeared instead.
     if st.session_state.get("data_source_choice") not in entries:
-        st.session_state["data_source_choice"] = entries[0]
+        healed = ""
+        if st.session_state.get("data_source_choice") == BENCHMARK_SETUP_CHOICE:
+            healed = next(
+                (
+                    label
+                    for label, spec in registry.items()
+                    if spec.get("benchmark_dataset")
+                ),
+                "",
+            )
+        st.session_state["data_source_choice"] = healed or entries[0]
     choice = st.session_state["data_source_choice"]
 
     # Publish what the main-view picker renders from. It runs inside the tab,
@@ -2596,6 +2647,11 @@ def render_data_source_picker(host=None) -> None:
     registry = public_dataset_registry()
 
     def _entry_label(token: str) -> str:
+        # Reads the `registry` snapshot resolved just above rather than calling
+        # `public_dataset_registry()` per token: discovery depends on a directory
+        # the user can change, so one run must format its options against one
+        # snapshot (which is also why the old `_public_dataset_label` helper,
+        # which built its own, had no business being called from here — M6).
         tag = kinds.get(token, "")
         if token in registry:
             name = registry[token].get("short", token)

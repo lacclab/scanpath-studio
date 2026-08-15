@@ -1161,6 +1161,11 @@ def render(argv: List[str]) -> None:
             words, fixations = load_eyegenbench(
                 args.eyegenbench, dataset=args.eyegenbench_dataset
             )
+            # `eyegenbench_monitor` answers None for a corpus whose manifest
+            # only carries the invented default screen, so `render` falls back
+            # to the data's own extents there — the same call the app's picker
+            # entry makes (I3). Before this the CLI drew those corpora at
+            # 1920x1080 while the app drew them at data extents.
             canvas = canvas or eyegenbench_monitor(
                 args.eyegenbench, args.eyegenbench_dataset
             )

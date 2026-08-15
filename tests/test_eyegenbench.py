@@ -303,3 +303,149 @@ def test_language_codes_render_as_display_names():
     # away the one piece of real information there is.
     assert language_display("xx") == "xx"
     assert language_display("") == ""
+
+
+def test_a_harmonised_label_reaches_the_benchmark_loader_not_the_native_corpus(
+    bundle, monkeypatch
+):
+    """I4: `compare_source` must dispatch on the entry, never on the label text.
+
+    PoTeC ships both natively and harmonised, so the harmonised entry's label
+    *contains* `_POTEC_LABEL_HINT` — a plain substring test that would send it
+    to `datasets.load_potec`, i.e. to a different corpus in a different
+    directory, with no error anywhere. Today the `benchmark_dataset` branch sits
+    above the hints at all three sites; this pins the ordering, because the
+    failure it prevents is silent (compare scanpath B would simply be someone
+    else's data) and would leave the suite green.
+    """
+    from scanpath_studio import app, compare_source, datasets
+
+    for module in (app, compare_source):
+        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    label = app.benchmark_corpus_label("PoTeC")
+
+    root, kwargs = compare_source._public_location(label)
+    assert kwargs == {"dataset": "PoTeC"}
+    assert root == str(bundle), "resolved PoTeC's *native* directory, not the bundle"
+
+    def _native_loader_must_not_run(*_args, **_kwargs):
+        raise AssertionError("a harmonised label reached the native PoTeC loader")
+
+    monkeypatch.setattr(datasets, "load_potec", _native_loader_must_not_run)
+    monkeypatch.setattr(datasets, "load_multipleye", _native_loader_must_not_run)
+    words, fixations = compare_source._load_public_frames.__wrapped__(
+        label, root, tuple(sorted(kwargs.items()))
+    )
+    assert not words.empty and not fixations.empty
+
+    # And the bootstrap placeholder is a place to type a path, not a corpus, so
+    # it is never offered as a comparison source.
+    monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+    names = [name for name, _ready, _why in compare_source.secondary_dataset_options()]
+    assert label in names
+    assert app.BENCHMARK_SETUP_CHOICE not in names
+
+
+def test_the_two_potec_entries_get_distinguishable_unready_hints(bundle, monkeypatch):
+    """M12: "Open PoTeC…" named an entry the user couldn't pick out of two."""
+    from scanpath_studio import app, compare_source
+
+    for module in (app, compare_source):
+        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    native = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
+    harmonised = app.benchmark_corpus_label("PoTeC")
+    assert compare_source._short_name(native) != compare_source._short_name(harmonised)
+
+
+def test_a_nameless_manifest_row_before_a_valid_one_does_not_crash(bundle, monkeypatch):
+    """I2: the crash M7 named is reachable from every surface, not just the app.
+
+    A row with no `name` used to raise `KeyError` out of `_find_entry` — outside
+    the `(FileNotFoundError, ValueError, OSError)` triple every caller guards
+    with. The earlier fixture put the nameless row *alone* in the manifest,
+    which is the one arrangement that cannot reach the raise: discovery filters
+    it out and nothing then looks a name up. Ordered before a valid row, it took
+    down the compare-B enumeration and the app with it.
+    """
+    from scanpath_studio import app, compare_source
+
+    (bundle / "manifest.json").write_text(
+        json.dumps(
+            {"datasets": [{"language": "de"}, {"name": "PoTeC", "language": "de"}]}
+        )
+    )
+    assert eyegenbench.entry_name({"language": "de"}) == ""
+    # The name lookups every surface runs, with the malformed row in front.
+    assert eyegenbench.eyegenbench_present(bundle, "PoTeC") is True
+    assert eyegenbench.eyegenbench_present(bundle) is True
+    assert eyegenbench.eyegenbench_monitor(bundle, "PoTeC") is None
+
+    for module in (app, compare_source):
+        monkeypatch.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+    app._cached_eyegenbench_datasets.clear()
+    label = app.benchmark_corpus_label("PoTeC")
+    # Discovery drops the unusable row and keeps the usable one…
+    assert label in app.public_dataset_registry()
+    # …and the compare-B enumeration, which probes *every* registry entry on
+    # every rerun Compare is on, is where the escaping KeyError took the app
+    # down.
+    compare_source._public_ready_cached.clear()
+    ready = dict(
+        (name, ok) for name, ok, _why in compare_source.secondary_dataset_options()
+    )
+    assert ready[label] is True
+
+
+def test_an_invented_default_screen_is_declined_by_both_surfaces(bundle, monkeypatch):
+    """I3: one rule for "does this corpus document a screen?".
+
+    `monitor_source: "default"` is the pipeline's generic 1920x1080 guess for a
+    corpus that documents nothing. The app declines it (the canvas then falls
+    back to data extents, which is honest); the CLI used to accept it, so the
+    same corpus rendered at two different scales depending on the surface.
+    """
+    from scanpath_studio import app
+
+    real = {"monitor": [1680, 1050], "monitor_source": "paper"}
+    invented = {"monitor": [1920, 1080], "monitor_source": "default"}
+    assert eyegenbench.declared_monitor(real) == (1680, 1050)
+    assert eyegenbench.declared_monitor(invented) is None
+    assert eyegenbench.declared_monitor({"monitor_source": "paper"}) is None
+
+    # The CLI's canvas resolution and the picker entry read the same function.
+    manifest = json.loads((bundle / "manifest.json").read_text())
+    manifest["datasets"][0].update(invented)
+    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    assert eyegenbench.eyegenbench_monitor(bundle, "PoTeC") is None
+    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    app._cached_eyegenbench_datasets.clear()
+    entry = app.public_dataset_registry()[app.benchmark_corpus_label("PoTeC")]
+    assert "monitor" not in entry
+
+
+def test_the_description_qualifies_partial_geometry_like_the_badge_does():
+    """M8/M11: the caption beside the badge must not re-make the claim R34 bans."""
+    from scanpath_studio import app
+
+    mixed = {
+        "name": "Provo",
+        "geometry_source": "real",
+        "n_texts": 12,
+        "paragraphs_without_real_boxes": 3,
+    }
+    description = app._benchmark_description(mixed, harmonised_overlap=False)
+    assert "Screen geometry: real —" in description
+    assert "measured word boxes for 9 of 12 texts" in description
+    # Nothing is "above" anything in a searchable picker (M10).
+    overlap = app._benchmark_description(mixed, harmonised_overlap=True)
+    assert "entry above" not in overlap
+    assert "this app's own Provo entry" in overlap
+    # Full coverage keeps the short form on both surfaces.
+    full = dict(mixed, paragraphs_without_real_boxes=0)
+    assert "Screen geometry: real." in app._benchmark_description(
+        full, harmonised_overlap=False
+    )
+    # M11: with `n_texts` absent, prefer the vaguer claim to the confident one.
+    unknown_total = {"geometry_source": "real", "paragraphs_without_real_boxes": 3}
+    assert "some but not all" in app.geometry_badge(unknown_total)

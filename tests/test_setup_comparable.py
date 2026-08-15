@@ -138,7 +138,9 @@ def test_reason_is_a_complete_sentence():
     assert reason.endswith(".")
 
 
-def test_a_public_corpus_reports_its_declared_monitor_not_its_data_extents():
+def test_a_public_corpus_reports_its_declared_monitor_not_its_data_extents(
+    tmp_path, monkeypatch
+):
     """Regression: the gate refused exactly the pairs CMP-11 exists to allow.
 
     `app.resolve_source_monitor` recognised a public corpus only via
@@ -148,7 +150,16 @@ def test_a_public_corpus_reports_its_declared_monitor_not_its_data_extents():
     rounded data extents as an ESTIMATED canvas. Cosmetic before CMP-11 (only
     the split panels' `canvas_b` read it); load-bearing once `setups_comparable`
     gates the overlay on the canvas.
+
+    Reads `public_dataset_registry()`, not the static dict (M14): since DATA-27
+    a *prepared benchmark corpus* is a peer entry reached by its own label, and
+    the dict answers for the three built-ins only — so the static read left the
+    entries most likely to break this uncovered. The bundle is written here
+    because the suite deliberately pins discovery at an empty directory, so a
+    benchmark entry exists only for a test that builds one.
     """
+    import json
+
     import pandas as pd
 
     from scanpath_studio import app
@@ -163,15 +174,53 @@ def test_a_public_corpus_reports_its_declared_monitor_not_its_data_extents():
     )
     fixations = pd.DataFrame({"x": [120.0, 220.0], "y": [70.0, 70.0]})
 
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "manifest.json").write_text(
+        json.dumps(
+            {
+                "datasets": [
+                    {
+                        "name": "Provo",
+                        "language": "en",
+                        "monitor": [1600, 900],
+                        "monitor_source": "paper",
+                    },
+                    # No documented screen: the manifest's 1920x1080 is invented,
+                    # so this corpus must declare no monitor at all and fall
+                    # through to its data extents.
+                    {
+                        "name": "Guessed",
+                        "language": "en",
+                        "monitor": [1920, 1080],
+                        "monitor_source": "default",
+                    },
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+
+    registry = app.public_dataset_registry()
     declared = {
         label: spec["monitor"]
-        for label, spec in app.PUBLIC_DATASET_REGISTRY.items()
+        for label, spec in registry.items()
         if spec.get("monitor")
     }
     assert declared, "no public corpus declares a monitor — test is vacuous"
+    assert app.benchmark_corpus_label("Provo") in declared, (
+        "a prepared benchmark corpus must be covered by this check too"
+    )
     for label, monitor in declared.items():
         width, height, authoritative = app.resolve_source_monitor(
             label, words, fixations
         )
         assert (width, height) == tuple(monitor), label
         assert authoritative is True, label
+
+    # The other half of the same rule: an invented screen is not a declared one.
+    width, height, authoritative = app.resolve_source_monitor(
+        app.benchmark_corpus_label("Guessed"), words, fixations
+    )
+    assert authoritative is False
+    assert (width, height) != (1920, 1080)

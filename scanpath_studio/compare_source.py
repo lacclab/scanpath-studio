@@ -149,15 +149,33 @@ def _public_ready(label: str) -> Tuple[bool, str]:
     same call for the same reason). Location changes bust the key.
     """
     root, kwargs = _public_location(label)
-    return _public_ready_cached(label, root, tuple(sorted(kwargs.items())))
+    return _public_ready_cached(
+        label, root, tuple(sorted(kwargs.items())), _short_name(label)
+    )
+
+
+def _short_name(label: str) -> str:
+    """What to call this corpus in a disabled entry's hint.
+
+    The registry's own ``short`` name, not the label's prefix: two entries can
+    share one prefix — the native and the harmonised PoTeC both split to
+    ``"PoTeC"`` — so a prefix-derived hint told the user to go and open one of
+    two entries it couldn't tell apart (M12).
+    """
+    from scanpath_studio import app
+
+    spec = app.public_dataset_registry().get(label) or {}
+    return str(spec.get("short") or "").strip() or label.split(" — ")[0]
 
 
 @st.cache_data(show_spinner=False)
-def _public_ready_cached(label: str, root: str, options: tuple) -> Tuple[bool, str]:
+def _public_ready_cached(
+    label: str, root: str, options: tuple, short: str = ""
+) -> Tuple[bool, str]:
     from scanpath_studio import datasets
 
     kwargs = dict(options)
-    short = label.split(" — ")[0]
+    short = short or label.split(" — ")[0]
     if not root:
         return False, f"{short} isn't loadable as a comparison dataset."
     hint = f"Open {short} as the main dataset once to set its location."
@@ -182,7 +200,14 @@ def _public_ready_cached(label: str, root: str, options: tuple) -> Tuple[bool, s
             present = bool(sessions)
         else:
             return False, f"{short} isn't loadable as a comparison dataset."
-    except (OSError, ValueError):
+    except (OSError, ValueError, KeyError):
+        # `KeyError` because a manifest row is data from a file on disk and can
+        # be malformed — a row with no `name` used to escape this catch and take
+        # the whole app down through the compare-B enumeration, which runs over
+        # *every* registry entry on every rerun Compare is on (I2). The nameless
+        # row is now skipped at the source too (`eyegenbench.entry_name`); this
+        # is the belt to that braces, since the same catch covers four loaders'
+        # readiness probes and only one of them has been hardened.
         present = False
     return (True, "") if present else (False, hint)
 

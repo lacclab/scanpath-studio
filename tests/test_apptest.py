@@ -935,11 +935,13 @@ class TestUnmappedRawDataView:
                             "name": "PoTeC",
                             "language": "German",
                             "monitor": [1680, 1050],
+                            "geometry_source": "real",
                         },
                         {
                             "name": "Provo",
                             "language": "English",
                             "monitor": [1920, 1080],
+                            "geometry_source": "reconstructed",
                         },
                     ]
                 }
@@ -961,12 +963,19 @@ class TestUnmappedRawDataView:
         # on English/Provo, the first sorted language.
         assert language.value == "English"
         assert corpus.options == ["Provo"]
+        # The manifest's per-corpus geometry_source is badged next to the
+        # picker, not just claimed in the registry description (R29 follow-up:
+        # a user must be able to tell real from reconstructed geometry).
+        captions = " ".join(c.value for c in at.caption)
+        assert "Reconstructed" in captions
 
         language.set_value("German").run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         corpus = [s for s in at.selectbox if s.label == "Corpus"][0]
         assert corpus.options == ["PoTeC"]
         assert corpus.value == "PoTeC"
+        captions = " ".join(c.value for c in at.caption)
+        assert "Real" in captions
 
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
         """Selecting a public dataset snaps the canvas to its registered monitor,

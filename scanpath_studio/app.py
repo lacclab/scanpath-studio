@@ -1368,6 +1368,19 @@ def _cached_eyegenbench_raw_frames(
     return eyegenbench_raw_frames(root, dataset=dataset)
 
 
+# geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /
+# _RECONSTRUCTED / _SYNTHESIZED (that module owns the tiering; not touched
+# here). Surfaced next to the Corpus picker so a user can tell which they're
+# looking at rather than trusting the registry description's blanket claim.
+_EYEGENBENCH_GEOMETRY_BADGES = {
+    "real": "✅ **Real** screen geometry — measured word boxes.",
+    "reconstructed": "🛠️ **Reconstructed** geometry — no measured boxes for "
+    "this corpus; derived from its documented display setup.",
+    "synthesized": "🧪 **Synthesized** geometry — no measured boxes or "
+    "documented display setup; a default layout was assumed.",
+}
+
+
 def _eyegenbench_picker_groups(entries) -> dict:
     """Manifest entries -> ``{language: [dataset name, ...]}`` for the picker.
 
@@ -1469,6 +1482,15 @@ def _load_eyegenbench_source(
     )
     if not dataset:
         return load_sample_data()
+    geometry_source = next(
+        (e.get("geometry_source") for e in entries if e["name"] == dataset), None
+    )
+    if geometry_source:
+        opt.caption(
+            _EYEGENBENCH_GEOMETRY_BADGES.get(
+                geometry_source, f"Screen geometry: {geometry_source}"
+            )
+        )
     try:
         return _cached_eyegenbench_raw_frames(root, dataset)
     except (FileNotFoundError, ValueError, OSError) as exc:

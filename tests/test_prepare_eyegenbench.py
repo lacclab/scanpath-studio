@@ -276,9 +276,14 @@ def test_n_readers_excludes_a_reader_whose_every_fixation_was_dropped(tmp_path):
     assert entry["n_readers"] == 1
 
 
-def test_n_texts_counts_the_written_words_frame(tmp_path):
-    """Item 5b: `n_texts` reflects `words.parquet`, incl. R17's per-reading
-    paragraph keys -- text_df alone (still just "p1") would undercount it.
+def test_n_texts_counts_distinct_texts_not_reading_instances(tmp_path):
+    """R27 regression: one text, read twice by each of 2 readers.
+
+    R17 gives the 2nd reading its own `p1__r2` paragraph key so it keeps its
+    own geometry in `words.parquet` -- but that key is a reading instance,
+    not a new text. `n_texts` must strip the suffix before counting: the
+    corpus has exactly one distinct text, and `repeated_readings` (2) already
+    carries the reading count separately.
     """
     fix = pd.concat(
         [_two_readings("r1", "r1t1", "r1t2"), _two_readings("r2", "r2t1", "r2t2")],
@@ -291,7 +296,20 @@ def test_n_texts_counts_the_written_words_frame(tmp_path):
     entry = prep.build_bundle("PoTeC", fix, TEXTS, parts, None, tmp_path)
 
     words = pd.read_parquet(tmp_path / "PoTeC" / "words.parquet")
-    assert entry["n_texts"] == words["unique_paragraph_id"].nunique() == 2
+    assert words["unique_paragraph_id"].nunique() == 2  # "p1" and "p1__r2"
+    assert entry["n_texts"] == 1
+    assert entry["repeated_readings"] == 2
+
+
+def test_n_texts_is_unaffected_when_there_are_no_repeated_readings(tmp_path):
+    """A corpus with no repeated readings must not be touched by the R27
+    suffix-stripping -- n_texts still equals the plain distinct-paragraph
+    count, and repeated_readings stays 0.
+    """
+    entry = prep.build_bundle("PoTeC", FIX, TEXTS, PARTS, None, tmp_path)
+
+    assert entry["n_texts"] == 1
+    assert entry["repeated_readings"] == 0
 
 
 def test_write_manifest_is_atomic_and_leaves_the_original_on_failure(

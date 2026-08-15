@@ -16,6 +16,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -131,6 +132,13 @@ def _canonical_name(dataset: str) -> str:
         if name.lower() == str(dataset).lower():
             return name
     return str(dataset)
+
+
+# The exact suffix R17 writes for the 2nd+ reading of a repeated paragraph
+# (see `_disambiguate_repeated_readings` below) -- anchored to the end of the
+# string so a genuine paragraph id that merely contains something similar is
+# never stripped.
+_REPEATED_READING_SUFFIX = re.compile(r"__r\d+$")
 
 
 def _disambiguate_repeated_readings(
@@ -295,7 +303,18 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
         # whose every fixation was dropped by place_fixations' inner join
         # must not still be counted as present in the bundle.
         "n_readers": int(fixations["unique_participant_id"].nunique()),
-        "n_texts": int(words["unique_paragraph_id"].nunique()),
+        # R27: n_texts must count DISTINCT TEXTS, not reading instances -- R17
+        # gives a repeated reading its own `__r<n>` paragraph key so it keeps
+        # its own geometry, but that key is not a new text. Strip the exact
+        # suffix before counting; `repeated_readings` already carries the
+        # reading count, so conflating the two would double-report it as more
+        # texts than the corpus actually has.
+        "n_texts": int(
+            words["unique_paragraph_id"]
+            .astype(str)
+            .str.replace(_REPEATED_READING_SUFFIX, "", regex=True)
+            .nunique()
+        ),
         "n_fixations": int(len(fixations)),
         # Spec §8: attribution travels with the data into export bundles.
         "license": info.get("license", "unknown - consult the corpus"),

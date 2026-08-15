@@ -155,3 +155,49 @@ def test_load_eyegenbench_is_listed_in_dir():
     import scanpath_studio
 
     assert "load_eyegenbench" in dir(scanpath_studio)
+
+
+def test_cli_accepts_the_eyegenbench_input(bundle, tmp_path):
+    from scanpath_studio import cli
+
+    out = tmp_path / "fig.png"
+    # The bundle's trial identity is `unique_paragraph_id` ("p1") -- see
+    # eyegenbench.EYEGENBENCH_FIX_SCHEMA's module docstring for why the
+    # finer-grained `eyegenbench_trial_id` passthrough column ("t1") is not
+    # what defines trial_id after normalization.
+    code = cli.main(
+        [
+            "render",
+            "--eyegenbench",
+            str(bundle),
+            "--eyegenbench-dataset",
+            "PoTeC",
+            "--participant",
+            "r1",
+            "--trial",
+            "p1",
+            "--out",
+            str(out),
+        ]
+    )
+    assert code is None
+    assert out.is_file()
+
+
+def test_cli_rejects_eyegenbench_combined_with_sample(bundle):
+    from scanpath_studio import cli
+
+    # `render`'s "exactly one input" guard is a plain `raise SystemExit(msg)`
+    # (not routed through argparse's `parser.error`), so -- like the sibling
+    # check at tests/test_cli.py:564 -- the message lives on the exception,
+    # not on stderr.
+    with pytest.raises(SystemExit, match="exactly one input"):
+        cli.main(["render", "--sample", "--eyegenbench", str(bundle)])
+
+
+def test_cli_requires_a_dataset_name_with_eyegenbench(bundle, capsys):
+    from scanpath_studio import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["render", "--eyegenbench", str(bundle), "--out", "x.png"])
+    assert "--eyegenbench-dataset" in capsys.readouterr().err

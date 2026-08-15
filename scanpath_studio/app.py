@@ -1397,6 +1397,62 @@ def _eyegenbench_picker_groups(entries) -> dict:
     return {key: sorted(value) for key, value in sorted(groups.items())}
 
 
+def _eyegenbench_reconcile_selection(groups: dict) -> None:
+    """Settle ``eyegenbench_language`` / ``eyegenbench_dataset`` session state
+    against ``groups``, without rendering anything.
+
+    R31: `_load_eyegenbench_source` performs this exact settle right before
+    its own Language/Corpus selectboxes, but `_activate_data_source` (the
+    trial-filter source_key) and `resolve_source_monitor` (R30) both need the
+    *settled* value and run earlier in `main`'s pipeline than the loader — a
+    language-driven corpus switch (no direct edit of the Corpus widget itself)
+    would otherwise leave `eyegenbench_dataset` holding last run's stale value
+    for those earlier readers, missing the filter reset / canvas re-snap for
+    exactly one rerun. Calling this from all three call sites keeps them
+    looking at the same settled value; it is idempotent, so the loader's own
+    call is a no-op once this has already run.
+
+    ``eyegenbench_dataset`` is the wire-format key a deep link seeds (Task 12)
+    — the language filter follows it, not the other way around, so a restored
+    link lands on the right corpus without the user re-picking the language.
+    Language is re-derived only when unset/stale (first call, or the bundle
+    changed underfoot), so a manual language pick later in the session
+    survives its own rerun instead of snapping back every time.
+    """
+    languages = list(groups)
+    if not languages:
+        return
+    if st.session_state.get("eyegenbench_language") not in languages:
+        seed_dataset = st.session_state.get("eyegenbench_dataset")
+        language = next(
+            (lang for lang, names in groups.items() if seed_dataset in names),
+            languages[0],
+        )
+        st.session_state["eyegenbench_language"] = language
+    language = st.session_state["eyegenbench_language"]
+    names = groups.get(language, [])
+    if st.session_state.get("eyegenbench_dataset") not in names:
+        st.session_state["eyegenbench_dataset"] = names[0] if names else None
+
+
+def _eyegenbench_groups_from_state() -> dict:
+    """This run's ``{language: [name, ...]}`` groups, or ``{}`` on any failure.
+
+    Shared by `_activate_data_source` and `resolve_source_monitor`'s R30 path
+    (via `_eyegenbench_reconcile_selection`) — both need the manifest read
+    before the loader runs, and both must degrade to a no-op (never raise)
+    when the bundle is absent or unreadable, since neither is the place that
+    reports a load failure to the user (the loader already does that).
+    """
+    from scanpath_studio.eyegenbench import eyegenbench_datasets
+
+    try:
+        entries = eyegenbench_datasets(_eyegenbench_root_from_state())
+    except (FileNotFoundError, ValueError, OSError):
+        return {}
+    return _eyegenbench_picker_groups(entries)
+
+
 def _load_eyegenbench_source(
     options_host=None, location_host=None
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -1445,35 +1501,24 @@ def _load_eyegenbench_source(
         return load_sample_data()
 
     groups = _eyegenbench_picker_groups(entries)
-    languages = list(groups)
     opt.caption(
         f"{len(entries)} corpus{'es' if len(entries) != 1 else ''} available "
         "in this bundle."
     )
 
-    # `eyegenbench_dataset` is the wire-format key a deep link seeds (Task 12) —
-    # the language filter follows it, not the other way around, so a restored
-    # link lands on the right corpus without the user re-picking the language.
-    # Re-derived only when the current language is unset/stale (first render,
-    # or the bundle changed underfoot), so a manual language pick later in the
-    # session survives its own rerun instead of snapping back every time.
-    if st.session_state.get("eyegenbench_language") not in languages:
-        seed_dataset = st.session_state.get("eyegenbench_dataset")
-        language = next(
-            (lang for lang, names in groups.items() if seed_dataset in names),
-            languages[0],
-        )
-        st.session_state["eyegenbench_language"] = language
+    # R31: idempotent — a no-op here whenever `_activate_data_source` (or
+    # `resolve_source_monitor`) already settled the selection earlier this
+    # run; see `_eyegenbench_reconcile_selection`'s docstring for why all three
+    # call it rather than each re-deriving it inline.
+    _eyegenbench_reconcile_selection(groups)
     language = opt.selectbox(
         "Language",
-        options=languages,
+        options=list(groups),
         key="eyegenbench_language",
         persist_state="session",
         help="Corpora are grouped by language to stay navigable as the bundle grows.",
     )
     names = groups.get(language, [])
-    if st.session_state.get("eyegenbench_dataset") not in names:
-        st.session_state["eyegenbench_dataset"] = names[0] if names else None
     dataset = opt.selectbox(
         "Corpus",
         options=names,
@@ -3466,7 +3511,37 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
         st.session_state.pop("_share_selection", None)
         st.session_state["_share_selection_source"] = data_choice
 
-    source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    # R31: same defect class as R30's canvas fix — EyeGenBench's
+    # `public_dataset_choice` alone doesn't change on a PoTeC→Provo switch (it's
+    # always `EYEGENBENCH_CHOICE`), so trial filters must key on the picker's own
+    # `eyegenbench_dataset` too. Without it, a filter narrowed to a PoTeC-only
+    # text value rode straight into Provo — no trial there could satisfy it, and
+    # nothing said why the pool went empty. This also earns the existing
+    # per-source stash/restore behaviour per corpus for free (switch away,
+    # switch back, filters return), matching every other source.
+    #
+    # This function runs *before* `_load_eyegenbench_source` in main()'s
+    # pipeline, so on a language-driven corpus switch (the user edited the
+    # Language widget, not the Corpus widget directly) `eyegenbench_dataset`
+    # still holds last run's value at this point — the loader hasn't
+    # re-derived it yet. Settling it here first (idempotent, see
+    # `_eyegenbench_reconcile_selection`) is what makes source_key below see
+    # *this* run's actual corpus instead of missing the reset for one rerun.
+    effective_public_choice = (
+        st.session_state.get("public_dataset_choice")
+        if data_choice == PUBLIC_DATASETS_CHOICE
+        else data_choice
+    )
+    if effective_public_choice == EYEGENBENCH_CHOICE:
+        _eyegenbench_reconcile_selection(_eyegenbench_groups_from_state())
+
+    source_key = (
+        data_choice,
+        st.session_state.get("public_dataset_choice"),
+        st.session_state.get("eyegenbench_dataset")
+        if st.session_state.get("public_dataset_choice") == EYEGENBENCH_CHOICE
+        else None,
+    )
     if st.session_state.get("_filters_for") == source_key:
         return preprocessing
 
@@ -3862,6 +3937,14 @@ def main() -> None:
         # into one stimulus-level trial. Clearing on source change lets each
         # corpus auto-detect its own mapping; same-source reruns (and restores)
         # keep their keys. Mirrors the canvas re-seed in render_sidebar_canvas_controls.
+        #
+        # R31: deliberately NOT keyed on `eyegenbench_dataset` the way the canvas
+        # (R30) and trial-filter (`_activate_data_source`) source_keys are. Every
+        # EyeGenBench corpus shares one harmonised schema, so re-proposing the
+        # mapping on a PoTeC→Provo switch would be pointless and would discard a
+        # user's own override — unlike the canvas (each corpus has its own real
+        # screen) and filters (each corpus has its own trial values), where
+        # switching corpus is exactly the change that must invalidate them.
         source_key = (data_choice, st.session_state.get("public_dataset_choice"))
         if st.session_state.get("_colmap_seeded_for") != source_key:
             for stale in [

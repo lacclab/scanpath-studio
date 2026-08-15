@@ -1113,6 +1113,209 @@ class TestUnmappedRawDataView:
             at3.session_state["global_canvas_height"],
         ) == (1920, 1080)
 
+    def test_eyegenbench_corpus_switch_resets_trial_filters_not_column_mapping(
+        self, monkeypatch, tmp_path
+    ):
+        """R31: same defect class as R30's canvas fix. `_activate_data_source`
+        keyed its trial-filter stash on `(data_choice, public_dataset_choice)`,
+        and for EyeGenBench `public_dataset_choice` never changes on a
+        PoTeC→Provo switch (it's always `EYEGENBENCH_CHOICE`) — so a filter
+        narrowed to a PoTeC-only text value rode straight into Provo, where no
+        trial could satisfy it, silently emptying the pool. Assert: (1) switching
+        corpus clears the filter, (2) switching back restores it (the existing
+        stash/restore every other source already gets), (3) the column mapping —
+        deliberately excluded from this fix, since every corpus shares one
+        harmonised schema — is untouched by the same switch.
+
+        Narrows by **text**, not participant: `PARTICIPANT_CANDIDATES` in
+        data.py has no entry for EyeGenBench's `unique_participant_id`, so
+        auto-detection collapses every reader to the single synthetic
+        `SYNTHETIC_PARTICIPANT` id regardless of corpus (verified against the
+        real bundle too — a pre-existing, unrelated gap; see the report/reply).
+        Text narrowing sidesteps it: `unique_paragraph_id` auto-detects fine
+        (`TRIAL_CANDIDATES` already lists it) and lands on canonical `text_id`.
+        """
+        import json
+
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "eyegenbench"
+
+        def _write_corpus(name: str, paragraphs: list) -> None:
+            ds = root / name
+            ds.mkdir(parents=True)
+            n = len(paragraphs)
+            pd.DataFrame(
+                {
+                    "unique_paragraph_id": [p for p in paragraphs for _ in (0, 1)],
+                    "ia_index": [0, 1] * n,
+                    "ia_label": ["ab", "cd"] * n,
+                    "line": [0, 0] * n,
+                    "start_x": [10.0, 70.0] * n,
+                    "end_x": [60.0, 120.0] * n,
+                    "start_y": [20.0, 20.0] * n,
+                    "end_y": [40.0, 40.0] * n,
+                }
+            ).to_parquet(ds / "words.parquet")
+            pd.DataFrame(
+                {
+                    "eyegenbench_trial_id": [
+                        f"t_{p}" for p in paragraphs for _ in (0, 1)
+                    ],
+                    "unique_participant_id": ["r1"] * (2 * n),
+                    "unique_paragraph_id": [p for p in paragraphs for _ in (0, 1)],
+                    "fix_index": [0, 1] * n,
+                    "ia_index": [0, 1] * n,
+                    "fix_duration": [200, 180] * n,
+                    "x": [35.0, 95.0] * n,
+                    "y": [30.0, 30.0] * n,
+                }
+            ).to_parquet(ds / "fixations.parquet")
+            pd.DataFrame(
+                {"unique_participant_id": ["r1"], "participant_language": ["xx"]}
+            ).to_parquet(ds / "participants.parquet")
+
+        _write_corpus("PoTeC", ["PoTeC_a", "PoTeC_b"])
+        _write_corpus("Provo", ["Provo_a", "Provo_b"])
+        (root / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "datasets": [
+                        {
+                            "name": "PoTeC",
+                            "language": "German",
+                            "monitor": [1680, 1050],
+                        },
+                        {
+                            "name": "Provo",
+                            "language": "English",
+                            "monitor": [1920, 1080],
+                        },
+                    ]
+                }
+            )
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = app.EYEGENBENCH_CHOICE
+        at.session_state["eyegenbench_language"] = "German"
+        at.session_state["eyegenbench_dataset"] = "PoTeC"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        colmap_before = {
+            k: v
+            for k, v in at.session_state.filtered_state.items()
+            if isinstance(k, str) and k.startswith("col_map_words")
+        }
+        assert colmap_before, "expected the words column mapping to be seeded"
+
+        # Narrow to one PoTeC-only text.
+        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
+        text_ms.set_value(["PoTeC_a"])
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["filter_text_id"] == ["PoTeC_a"]
+
+        # 1. Switching corpus clears the (now-impossible-for-Provo) filter.
+        language = [s for s in at.selectbox if s.label == "Language"][0]
+        language.set_value("English").run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        corpus = [s for s in at.selectbox if s.label == "Corpus"][0]
+        assert corpus.value == "Provo"
+        assert at.session_state["filter_text_id"] == []
+        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+        # 3. The column mapping is untouched by the corpus switch — same keys,
+        # same values, unlike a switch between genuinely different schemas.
+        colmap_after_switch = {
+            k: v
+            for k, v in at.session_state.filtered_state.items()
+            if isinstance(k, str) and k.startswith("col_map_words")
+        }
+        assert colmap_after_switch == colmap_before
+
+        # 2. Switching back restores PoTeC's own stashed filter. Re-fetch the
+        # Language element — it was rebuilt by the run above; reusing the
+        # stale reference makes AppTest raise on the next `set_value`.
+        language = [s for s in at.selectbox if s.label == "Language"][0]
+        language.set_value("German").run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        corpus = [s for s in at.selectbox if s.label == "Corpus"][0]
+        assert corpus.value == "PoTeC"
+        assert at.session_state["filter_text_id"] == ["PoTeC_a"]
+
+    def test_switching_public_dataset_sources_still_clears_filters(self, monkeypatch):
+        """R31 pin: ordinary cross-source switching (not within one EyeGenBench
+        source) must behave exactly as before the fix — a filter set under one
+        registry corpus does not survive a switch to a different one."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        words = pd.DataFrame(
+            {
+                "trial_id": ["t1", "t1"],
+                "text_id": ["t1", "t1"],
+                "word_idx": [0, 1],
+                "word": ["a", "b"],
+                "left": [100.0, 140.0],
+                "right": [140.0, 180.0],
+                "top": [50.0, 50.0],
+                "bottom": [80.0, 80.0],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2", "p2"],
+                "trial_id": ["t1", "t1", "t1", "t1"],
+                "x": [110.0, 150.0, 110.0, 150.0],
+                "y": [60.0, 60.0, 60.0, 60.0],
+                "duration": [200.0, 180.0, 200.0, 180.0],
+                "word_idx": [0, 1, 0, 1],
+            }
+        )
+        potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
+        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        for key in (potec_key, mpe_key):
+            monkeypatch.setitem(
+                app.PUBLIC_DATASET_REGISTRY[key],
+                "loader",
+                lambda *_slots: (words, fixations),
+            )
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = potec_key
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        part = [m for m in at.multiselect if m.key == "filter_participants"][0]
+        part.set_value(["p1"])
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["filter_participants"] == ["p1"]
+
+        # Mirrors a real click on the flat source picker: `data_source_choice`
+        # carries the concrete registry label directly (DATA-9), not
+        # `PUBLIC_DATASETS_CHOICE` — that constant only appears pre-healing, on
+        # a legacy/first-ever selection, which the first run above already
+        # resolved away. Leaving it unset here would let `render_sidebar_
+        # data_source`'s healing step re-publish the *old* `public_dataset_choice`
+        # from the stale `data_source_choice`, masking the switch entirely.
+        at.session_state["data_source_choice"] = mpe_key
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["public_dataset_choice"] == mpe_key
+        assert at.session_state["filter_participants"] == []
+
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
         """Selecting a public dataset snaps the canvas to its registered monitor,
         even when a previous source left a stale canvas in session state.

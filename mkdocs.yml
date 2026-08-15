@@ -84,6 +84,7 @@ nav:
       - Public corpora:
           - OneStop: onestop.md
           - MultiplEYE: multipleye.md
+          - Harmonised benchmark corpora: benchmark-corpora.md
       - Development:
           - Contributing a dataset: contributing-a-dataset.md
           - Architecture: architecture.md

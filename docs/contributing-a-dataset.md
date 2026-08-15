@@ -174,11 +174,17 @@ applies — the picker entry is one surface out of four:
   [`docs/api.md`](api.md).
 - **CLI** — a `--<corpus> DIR` flag in `render`'s input group, added to the
   exactly-one-input check so it can't be combined with `--sample`.
-- **Deep link / Share** — register the source in `_SHAREABLE_SOURCES` and any
-  per-corpus options in `_apply_url_preset` / `_build_share_query`. Only OneStop
-  does this today. Skipping it works, but a shared link can't reopen your corpus.
+- **Deep link / Share** — you get this for free: `?source=corpus&corpus=<slug>`
+  names any entry `public_dataset_registry()` returns, slugged from the entry's
+  `short` (a corpus discovered from a manifest uses its manifest name under a
+  `harmonised-` prefix). Check that your `short` slugifies to something no other
+  entry claims — a slug two entries would answer to is dropped from both rather
+  than resolved to a guess, and then neither is shareable. Register the source in
+  `_SHAREABLE_SOURCES` only if it needs its **own** token, and add any per-corpus
+  options (OneStop's variant / regime / parts) to `_apply_url_preset` /
+  `_build_share_query`.
 
-Then add a docs page under **Datasets** describing the corpus and the modelling
+Then add a docs page under **Public corpora** describing the corpus and the modelling
 decisions your adapter makes ([OneStop](onestop.md) and
 [MultiplEYE](multipleye.md) are the templates), and list it in `mkdocs.yml`'s
 `nav:` — a page that isn't in the nav still builds, but nothing links to it.

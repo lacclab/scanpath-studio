@@ -7,7 +7,8 @@ from your own experiment.
 
 - **Bundled demo:** immediate, small, and suitable for learning the interface.
 - **Public corpus:** choose the corpus and local data directory; download when
-  prompted.
+  prompted. Corpora prepared from a local benchmark bundle appear here too, one
+  entry each — see [Harmonised benchmark corpora](../benchmark-corpora.md).
 - **➕ Add data:** upload or select your own files and map their columns.
 
 Run locally or use the desktop app for sensitive participant data.

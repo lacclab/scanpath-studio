@@ -433,6 +433,7 @@ def _preserve_composite_columns(
 # conventions — no ALL_CAPS / snake_case twins of the same name needed.
 PARTICIPANT_CANDIDATES = [
     "participant_id",
+    "unique_participant_id",  # EyeGenBench's own harmonized column name (DATA-27)
     "subject_id",
     "participant",
     "recording_session_label",
@@ -533,10 +534,12 @@ FIX_FIXATION_ID_CANDIDATES = [
     "CURRENT_FIX_INDEX",
     "CURRENT_FIX_NUM",
     "fixation_index",
+    "fix_index",  # EyeGenBench's own harmonized column name (DATA-27)
 ]
 FIX_WORD_ID_CANDIDATES = [
     "word_id",
     "IA_ID",
+    "ia_index",  # EyeGenBench's own harmonized column name (DATA-27)
     "CURRENT_FIX_INTEREST_AREA_ID",
     "CURRENT_FIX_INTEREST_AREA_INDEX",
     "word_index_in_text",

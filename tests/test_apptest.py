@@ -1127,12 +1127,19 @@ class TestUnmappedRawDataView:
         deliberately excluded from this fix, since every corpus shares one
         harmonised schema — is untouched by the same switch.
 
-        Narrows by **text**, not participant: `PARTICIPANT_CANDIDATES` in
-        data.py has no entry for EyeGenBench's `unique_participant_id`, so
-        auto-detection collapses every reader to the single synthetic
-        `SYNTHETIC_PARTICIPANT` id regardless of corpus (verified against the
-        real bundle too — a pre-existing, unrelated gap; see the report/reply).
-        Text narrowing sidesteps it: `unique_paragraph_id` auto-detects fine
+        Narrows by **text**, not participant: this fixture gives every corpus
+        exactly one reader (`r1`), so it can't exercise reader counts either
+        way. `PARTICIPANT_CANDIDATES` in data.py now lists
+        `unique_participant_id` and auto-detects it correctly — DATA-27 R32
+        fixed this feature's own defect (auto-detection previously matched
+        none of `unique_participant_id`/`fix_index`/`ia_index`, silently
+        collapsing every reader into one synthetic id and discarding the
+        corpus' own fixation→word assignment; not the pre-existing unrelated
+        gap an earlier draft of this docstring claimed). See
+        `test_eyegenbench_reader_count_matches_the_headless_loader` below for
+        the multi-reader regression pin. Text narrowing here is just the
+        cheapest way to exercise the filter-reset behaviour this test is
+        actually about: `unique_paragraph_id` auto-detects fine
         (`TRIAL_CANDIDATES` already lists it) and lands on canonical `text_id`.
         """
         import json
@@ -1251,6 +1258,124 @@ class TestUnmappedRawDataView:
         corpus = [s for s in at.selectbox if s.label == "Corpus"][0]
         assert corpus.value == "PoTeC"
         assert at.session_state["filter_text_id"] == ["PoTeC_a"]
+
+    def test_eyegenbench_reader_count_matches_the_headless_loader(
+        self, monkeypatch, tmp_path
+    ):
+        """DATA-27 R32 — the headline regression pin.
+
+        `_load_eyegenbench_source` returns *raw, pre-normalization* frames per
+        the `PUBLIC_DATASET_REGISTRY` contract, and `prepare_data` then
+        auto-detects a schema for them with `data.py`'s candidate lists —
+        `eyegenbench.load_eyegenbench` (the headless API/CLI path) instead
+        uses the explicit `EYEGENBENCH_FIX_SCHEMA`. Before R32 those two paths
+        disagreed on three fields (`participant`/`fixation_id`/`word_id`), and
+        with `participant` unresolved every reader collapsed into one
+        synthetic id — so the *same bundle* loaded as N readers headlessly but
+        just 1 in the app, with no error anywhere to say so.
+
+        Round 2's fixture (`test_eyegenbench_corpus_switch_resets_trial_filters_
+        not_column_mapping` above) used a single reader (`r1`), which is
+        exactly why it couldn't see this: 1 reader either way looks identical
+        whether or not `participant` resolved. This fixture uses three.
+        """
+        import json
+
+        import pandas as pd
+
+        from scanpath_studio import app, eyegenbench
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "eyegenbench"
+        readers = ["r1", "r2", "r3"]
+        paragraphs = ["p1", "p2"]
+
+        ds = root / "BSC"
+        ds.mkdir(parents=True)
+        pd.DataFrame(
+            {
+                "unique_paragraph_id": [p for p in paragraphs for _ in (0, 1)],
+                "ia_index": [0, 1] * len(paragraphs),
+                "ia_label": ["ab", "cd"] * len(paragraphs),
+                "line": [0, 0] * len(paragraphs),
+                "start_x": [10.0, 70.0] * len(paragraphs),
+                "end_x": [60.0, 120.0] * len(paragraphs),
+                "start_y": [20.0, 20.0] * len(paragraphs),
+                "end_y": [40.0, 40.0] * len(paragraphs),
+            }
+        ).to_parquet(ds / "words.parquet")
+        rows = [
+            (reader, paragraph, fix_idx)
+            for reader in readers
+            for paragraph in paragraphs
+            for fix_idx in (0, 1)
+        ]
+        pd.DataFrame(
+            {
+                "unique_participant_id": [r for r, _, _ in rows],
+                "unique_paragraph_id": [p for _, p, _ in rows],
+                "fix_index": [i for _, _, i in rows],
+                "ia_index": [i for _, _, i in rows],
+                "fix_duration": [200, 180] * (len(readers) * len(paragraphs)),
+                "x": [35.0, 95.0] * (len(readers) * len(paragraphs)),
+                "y": [30.0, 30.0] * (len(readers) * len(paragraphs)),
+            }
+        ).to_parquet(ds / "fixations.parquet")
+        pd.DataFrame(
+            {
+                "unique_participant_id": readers,
+                "participant_language": ["en"] * len(readers),
+            }
+        ).to_parquet(ds / "participants.parquet")
+        (root / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "datasets": [
+                        {
+                            "name": "BSC",
+                            "language": "English",
+                            "monitor": [1920, 1080],
+                        }
+                    ]
+                }
+            )
+        )
+
+        # Headless path: eyegenbench.load_eyegenbench uses EYEGENBENCH_FIX_SCHEMA
+        # directly, so this is the ground truth the app must match.
+        _, headless_fixations = eyegenbench.load_eyegenbench(root, dataset="BSC")
+        headless_reader_count = headless_fixations["participant_id"].nunique()
+        assert headless_reader_count == 3
+
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = app.EYEGENBENCH_CHOICE
+        at.session_state["eyegenbench_language"] = "English"
+        at.session_state["eyegenbench_dataset"] = "BSC"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # `render_narrow_by` only renders the Participant multiselect when it
+        # would offer more than one choice (`controls.py`: `if len(parts) >
+        # 1`) — so a widget lookup that assumes it always renders would raise
+        # `IndexError` on the very failure this test exists to catch, instead
+        # of reporting it. Absent means "the app resolved exactly 1 reader".
+        participant_matches = [
+            m for m in at.multiselect if m.key == "filter_participants"
+        ]
+        if participant_matches:
+            app_reader_count = len(participant_matches[0].options)
+            app_readers = set(participant_matches[0].options)
+        else:
+            app_reader_count = 1
+            app_readers = None
+        assert app_reader_count == headless_reader_count, (
+            f"app auto-detected {app_reader_count} reader(s) but the headless "
+            f"loader (the ground-truth explicit schema) resolves {headless_reader_count} "
+            "— the app's auto-detection disagrees with EYEGENBENCH_FIX_SCHEMA"
+        )
+        assert app_readers == set(readers)
 
     def test_switching_public_dataset_sources_still_clears_filters(self, monkeypatch):
         """R31 pin: ordinary cross-source switching (not within one EyeGenBench

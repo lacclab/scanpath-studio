@@ -53,7 +53,8 @@ def bundle(tmp_path):
                 "datasets": [
                     {
                         "name": "PoTeC",
-                        "language": "German",
+                        # The real manifest records an ISO code, not a name.
+                        "language": "de",
                         "geometry_source": "real",
                         "monitor": [1680, 1050],
                         "n_readers": 1,
@@ -203,22 +204,102 @@ def test_cli_requires_a_dataset_name_with_eyegenbench(bundle, capsys):
     assert "--eyegenbench-dataset" in capsys.readouterr().err
 
 
-def test_registry_lists_eyegenbench():
+def test_registry_lists_each_prepared_corpus_as_its_own_entry(bundle, monkeypatch):
+    """Task 11R: a prepared corpus is a top-level entry, not a nested choice."""
     from scanpath_studio import app
 
-    # R29: the registry key is the shared EYEGENBENCH_CHOICE constant (no
-    # hard-coded corpus count baked into the label — see constants.py).
-    entry = app.PUBLIC_DATASET_REGISTRY[app.EYEGENBENCH_CHOICE]
-    assert entry["short"] == "EyeGenBench"
+    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    registry = app.public_dataset_registry()
+    label = app.benchmark_corpus_label("PoTeC")
+    assert label in registry
+    # "EyeGenBench" is provenance — the pipeline that harmonises these corpora,
+    # and one being extracted into its own repository. It belongs in the
+    # description, never in an entry label.
+    assert "EyeGenBench" not in label
+    entry = registry[label]
+    # PoTeC ships natively here too, so this copy says which one it is — by the
+    # property that differs, not by the vendor's name.
+    assert entry["short"] == "PoTeC (harmonised benchmark)"
+    assert entry["language"] == "German"  # 'de' → a display name (R35)
+    assert entry["monitor"] == (1680, 1050)
+    assert entry["benchmark_dataset"] == "PoTeC"
     assert callable(entry["loader"])
-    assert entry["link"].startswith("https://github.com/EyeBench")
+    assert "EyeGenBench" in entry["description"]
+    # The static built-ins stay exactly as they are; the function composes.
+    assert set(app.PUBLIC_DATASET_REGISTRY) <= set(registry)
+    # The bootstrap entry is only for when nothing is discovered.
+    assert app.BENCHMARK_SETUP_CHOICE not in registry
 
 
-def test_picker_groups_datasets_by_language():
+def test_registry_offers_one_setup_entry_when_nothing_is_discovered(
+    tmp_path, monkeypatch
+):
+    """R39: with no corpora there is nowhere to type the bundle path, so exactly
+    one placeholder entry carries the directory input."""
     from scanpath_studio import app
 
-    groups = app._eyegenbench_picker_groups(
-        [{"name": "PoTeC", "language": "de"}, {"name": "Provo", "language": "en"}]
+    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(tmp_path / "absent"))
+    registry = app.public_dataset_registry()
+    assert app.BENCHMARK_SETUP_CHOICE in registry
+    assert not any(spec.get("benchmark_dataset") for spec in registry.values())
+
+
+def test_a_manifest_entry_with_no_name_does_not_crash_discovery(bundle, monkeypatch):
+    """M7: reading a nameless entry raises `KeyError`, which escapes the
+    (FileNotFoundError, ValueError, OSError) catch and took the app down."""
+    from scanpath_studio import app
+
+    (bundle / "manifest.json").write_text(
+        json.dumps({"datasets": [{"language": "de"}]})
     )
-    assert groups["de"] == ["PoTeC"]
-    assert groups["en"] == ["Provo"]
+    monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
+    assert app.discovered_benchmark_datasets() == ()
+    assert app.BENCHMARK_SETUP_CHOICE in app.public_dataset_registry()
+
+
+def test_geometry_badge_never_claims_uniformly_real_geometry():
+    """R34: `geometry_source` is the best tier *any* paragraph reached, so a
+    corpus with one measured text in a thousand is scalar-"real". The scalar
+    keeps that meaning (the per-word column refines it, and changing it would
+    ripple into the manifest contract, the CLI and the API) — the *rendering* is
+    what must not imply uniformity."""
+    from scanpath_studio import app
+
+    mixed = {
+        "geometry_source": "real",
+        "n_texts": 55,
+        "paragraphs_without_real_boxes": 5,
+    }
+    assert "measured word boxes for 50 of 55 texts" in app.geometry_badge(mixed)
+    full = {
+        "geometry_source": "real",
+        "n_texts": 55,
+        "paragraphs_without_real_boxes": 0,
+    }
+    assert app.geometry_badge(full).endswith("measured word boxes.")
+    assert "of 55" not in app.geometry_badge(full)
+    # A reconstructed corpus already says it has no measured boxes at all —
+    # which is exactly what its (always non-zero) count means.
+    reconstructed = {
+        "geometry_source": "reconstructed",
+        "n_texts": 452,
+        "paragraphs_without_real_boxes": 452,
+    }
+    assert "Reconstructed" in app.geometry_badge(reconstructed)
+    assert app.geometry_badge({}) == ""
+
+
+def test_language_codes_render_as_display_names():
+    """R35: the manifest's `language` is an ISO code, and the picker shows it."""
+    from scanpath_studio.constants import language_display
+
+    # Verified against the real prepared bundle's manifest.
+    assert language_display("zh") == "Chinese"  # BSC
+    assert language_display("da") == "Danish"  # CopCo
+    assert language_display("en") == "English"  # Provo, ZuCo1
+    # A multilingual corpus records several codes in one field (MECO, celer).
+    assert language_display("en,de,ru") == "English, German, Russian"
+    # An unknown code renders as itself — never "Unknown", which would throw
+    # away the one piece of real information there is.
+    assert language_display("xx") == "xx"
+    assert language_display("") == ""

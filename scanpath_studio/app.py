@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import os
 import re
+from functools import partial
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Tuple
 
@@ -55,6 +56,9 @@ from scanpath_studio.constants import (
     _VIEW_DATA,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
+    BENCHMARK_LABEL_SUFFIX,
+    BENCHMARK_SETUP_CHOICE,
+    BENCHMARK_SHORT_SUFFIX,
     CITATION,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
@@ -62,7 +66,6 @@ from scanpath_studio.constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
-    EYEGENBENCH_CHOICE,
     EYEGENBENCH_DEFAULT_DIR,
     FONT_FAMILY,
     MULTIPLEYE_BUNDLE_CHOICE,
@@ -79,6 +82,7 @@ from scanpath_studio.constants import (
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
     WORD_LABEL_COLOR,
+    language_display,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -1368,10 +1372,50 @@ def _cached_eyegenbench_raw_frames(
     return eyegenbench_raw_frames(root, dataset=dataset)
 
 
+# A malformed manifest (an entry with no `name`, a `datasets` value that isn't a
+# list of objects) must degrade to "no corpora discovered", not crash the app:
+# `KeyError` is in here because it escapes the usual IO triple and every
+# discovery site reads entry keys (M7).
+_MANIFEST_ERRORS = (FileNotFoundError, ValueError, OSError, KeyError)
+
+
+@st.cache_data(show_spinner=False)
+def _cached_eyegenbench_datasets(root: str) -> tuple:
+    """Cached manifest entries for a bundle directory (M8).
+
+    Discovery now runs on **every** picker build and every `compare_source`
+    enumeration, once per corpus in the bundle — where the old single-source
+    shape read the manifest only while that one source was selected. Same
+    convention as `_cached_multipleye_inventory`: keyed on the resolved root, so
+    pointing the directory input somewhere else busts it.
+    """
+    from scanpath_studio.eyegenbench import eyegenbench_datasets
+
+    return tuple(eyegenbench_datasets(root))
+
+
+def discovered_benchmark_datasets() -> tuple:
+    """Manifest entries for the prepared bundle, or ``()`` when there is none.
+
+    Never raises: the picker calls this while building its option list, long
+    before anything is in a position to report a load failure to the user (the
+    corpus' own loader does that, with the directory input right beside it).
+    """
+    try:
+        entries = _cached_eyegenbench_datasets(_eyegenbench_root_from_state())
+    except _MANIFEST_ERRORS:
+        return ()
+    return tuple(
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and str(entry.get("name") or "").strip()
+    )
+
+
 # geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /
 # _RECONSTRUCTED / _SYNTHESIZED (that module owns the tiering; not touched
-# here). Surfaced next to the Corpus picker so a user can tell which they're
-# looking at rather than trusting the registry description's blanket claim.
+# here). Surfaced on each corpus' entry so a user can tell which they're looking
+# at rather than trusting a blanket claim in the description.
 _EYEGENBENCH_GEOMETRY_BADGES = {
     "real": "✅ **Real** screen geometry — measured word boxes.",
     "reconstructed": "🛠️ **Reconstructed** geometry — no measured boxes for "
@@ -1381,165 +1425,194 @@ _EYEGENBENCH_GEOMETRY_BADGES = {
 }
 
 
-def _eyegenbench_picker_groups(entries) -> dict:
-    """Manifest entries -> ``{language: [dataset name, ...]}`` for the picker.
+def geometry_badge(entry) -> str:
+    """The one-line geometry-provenance badge for a manifest entry (R34).
 
-    Grouped by language (the user's call, DATA-27) so the corpus list stays
-    navigable regardless of how many entries the local bundle holds — a
-    failed/skipped corpus deliberately gets no manifest entry, so the count
-    varies bundle to bundle and is never assumed here.
+    `eyegenbench_geometry.py` promotes a whole corpus to ``real`` when **any**
+    paragraph has measured word boxes — the scalar means *best tier achieved*,
+    and it keeps that meaning (the per-word column already refines it, and
+    changing it would ripple into the manifest contract, the CLI and the API).
+    What must not happen is a *rendering* that implies uniformity: a corpus with
+    one measured text in a thousand would otherwise read as "✅ Real — measured
+    word boxes". So whenever ``paragraphs_without_real_boxes`` is non-zero the
+    real badge says how many texts it actually covers, and plain "Real" is
+    reserved for full coverage.
+
+    The reconstructed / synthesized badges need no such qualifier: they already
+    say *no* measured boxes, which is exactly what a non-zero count means there.
     """
-    groups: dict = {}
-    for entry in entries:
-        groups.setdefault(str(entry.get("language") or "Unknown"), []).append(
-            entry["name"]
+    source = str(entry.get("geometry_source") or "").strip()
+    if not source:
+        return ""
+    badge = _EYEGENBENCH_GEOMETRY_BADGES.get(source)
+    if badge is None:
+        return f"Screen geometry: {source}"
+    missing = int(entry.get("paragraphs_without_real_boxes") or 0)
+    total = int(entry.get("n_texts") or 0)
+    if source == "real" and missing > 0 and total > 0:
+        return (
+            "✅ **Real** screen geometry — measured word boxes for "
+            f"{max(total - missing, 0)} of {total} texts; the rest fall back to "
+            "reconstructed layout."
         )
-    return {key: sorted(value) for key, value in sorted(groups.items())}
+    return badge
 
 
-def _eyegenbench_reconcile_selection(groups: dict) -> None:
-    """Settle ``eyegenbench_language`` / ``eyegenbench_dataset`` session state
-    against ``groups``, without rendering anything.
+def benchmark_corpus_label(name: str) -> str:
+    """The registry key for a prepared corpus named ``name``."""
+    return f"{name}{BENCHMARK_LABEL_SUFFIX}"
 
-    R31: `_load_eyegenbench_source` performs this exact settle right before
-    its own Language/Corpus selectboxes, but `_activate_data_source` (the
-    trial-filter source_key) and `resolve_source_monitor` (R30) both need the
-    *settled* value and run earlier in `main`'s pipeline than the loader — a
-    language-driven corpus switch (no direct edit of the Corpus widget itself)
-    would otherwise leave `eyegenbench_dataset` holding last run's stale value
-    for those earlier readers, missing the filter reset / canvas re-snap for
-    exactly one rerun. Calling this from all three call sites keeps them
-    looking at the same settled value; it is idempotent, so the loader's own
-    call is a no-op once this has already run.
 
-    ``eyegenbench_dataset`` is the wire-format key a deep link seeds (Task 12)
-    — the language filter follows it, not the other way around, so a restored
-    link lands on the right corpus without the user re-picking the language.
-    Language is re-derived only when unset/stale (first call, or the bundle
-    changed underfoot), so a manual language pick later in the session
-    survives its own rerun instead of snapping back every time.
+def _benchmark_short_name(name: str) -> str:
+    """The picker's display name for a prepared corpus.
+
+    PoTeC and OneStop ship **both** natively in this app and in the benchmark
+    set, and the user wants both kept: the harmonised versions are what make
+    cross-corpus comparison possible, which is the point of a harmonised suite.
+    They are distinguished by the property that actually differs — one is the
+    publisher's own release, the other a re-derived harmonisation — rather than
+    by naming the pipeline (which is being extracted into its own repository, so
+    anything user-visible carrying its name would need renaming later).
+
+    The overlap is computed against the static built-ins rather than hard-coded,
+    so adding a native corpus that a bundle also carries disambiguates itself.
     """
-    languages = list(groups)
-    if not languages:
-        return
-    if st.session_state.get("eyegenbench_language") not in languages:
-        seed_dataset = st.session_state.get("eyegenbench_dataset")
-        language = next(
-            (lang for lang, names in groups.items() if seed_dataset in names),
-            languages[0],
-        )
-        st.session_state["eyegenbench_language"] = language
-    language = st.session_state["eyegenbench_language"]
-    names = groups.get(language, [])
-    if st.session_state.get("eyegenbench_dataset") not in names:
-        st.session_state["eyegenbench_dataset"] = names[0] if names else None
+    natives = {
+        str(spec.get("short") or "").lower()
+        for spec in PUBLIC_DATASET_REGISTRY.values()
+    }
+    if name.lower() in natives:
+        return f"{name}{BENCHMARK_SHORT_SUFFIX}"
+    return name
 
 
-def _eyegenbench_groups_from_state() -> dict:
-    """This run's ``{language: [name, ...]}`` groups, or ``{}`` on any failure.
+def _benchmark_size_caption(entry) -> str:
+    """``"84 readers · 55 texts · 219,556 fixations"`` from a manifest entry."""
+    parts = []
+    for key, singular in (
+        ("n_readers", "reader"),
+        ("n_texts", "text"),
+        ("n_fixations", "fixation"),
+    ):
+        try:
+            count = int(entry.get(key) or 0)
+        except (TypeError, ValueError):
+            continue
+        if count:
+            parts.append(f"{count:,} {singular}{'' if count == 1 else 's'}")
+    return " · ".join(parts)
 
-    Shared by `_activate_data_source` and `resolve_source_monitor`'s R30 path
-    (via `_eyegenbench_reconcile_selection`) — both need the manifest read
-    before the loader runs, and both must degrade to a no-op (never raise)
-    when the bundle is absent or unreadable, since neither is the place that
-    reports a load failure to the user (the loader already does that).
+
+def _benchmark_description(entry, *, harmonised_overlap: bool) -> str:
+    """The one-line description under a prepared corpus' picker entry.
+
+    Carries the provenance ("EyeGenBench" belongs here, not in the label) and —
+    for a corpus this app also ships natively — the fidelity difference, which is
+    the whole reason both are offered.
     """
-    from scanpath_studio.eyegenbench import eyegenbench_datasets
+    name = str(entry["name"])
+    lead = (
+        f"{name}, re-derived by the EyeGenBench pipeline into the benchmark's "
+        "common schema — the same corpus as the native entry above, prepared for "
+        "cross-corpus comparison rather than for the publisher's own geometry."
+        if harmonised_overlap
+        else f"{name} — a public reading corpus harmonised by the EyeGenBench "
+        "pipeline to one common schema and prepared locally."
+    )
+    tail = []
+    if source := str(entry.get("geometry_source") or "").strip():
+        tail.append(f"Screen geometry: {source}")
+    if license_ := str(entry.get("license") or "").strip():
+        tail.append(f"License: {license_}")
+    if citation := str(entry.get("citation") or "").strip():
+        tail.append(citation)
+    return lead + (" " + ". ".join(tail) + "." if tail else "")
 
-    try:
-        entries = eyegenbench_datasets(_eyegenbench_root_from_state())
-    except (FileNotFoundError, ValueError, OSError):
-        return {}
-    return _eyegenbench_picker_groups(entries)
 
+def _benchmark_dir_input(loc) -> str:
+    """The shared bundle-directory input, rendered by every benchmark entry.
 
-def _load_eyegenbench_source(
-    options_host=None, location_host=None
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Sidebar controls + loader for the EyeGenBench corpus data source.
-
-    EyeGenBench bundles many harmonised corpora under one local directory
-    (built by ``scripts/prepare_eyegenbench.py``, not downloadable from here),
-    so this source adds a **Language** / **Corpus** picker on top of the usual
-    directory + Expected-files + access-status controls, then wraps
-    ``eyegenbench.eyegenbench_raw_frames`` for the chosen corpus. The returned
-    raw frames go through the same normalization as an upload.
-
-    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots (the
-    Language/Corpus picker above, the data location below); default to their
-    own containers when called standalone.
+    One session key (`eyegenbench_dir`) across all of them: the corpora live in
+    one prepared bundle, so pointing any entry somewhere else moves them all —
+    and it is what keeps the location changeable once the bootstrap entry has
+    disappeared.
     """
-    from scanpath_studio.eyegenbench import eyegenbench_datasets, eyegenbench_present
-
-    opt = options_host if options_host is not None else st.container()
-    loc = location_host if location_host is not None else st.container()
-    root = _dataset_dir_input(
+    return _dataset_dir_input(
         loc,
         default_dir=EYEGENBENCH_DEFAULT_DIR,
-        dir_help="Folder holding a prepared EyeGenBench bundle. Build one with "
+        dir_help="Folder holding a prepared benchmark bundle. Build one with "
         "`python scripts/prepare_eyegenbench.py --all` — there is no download "
         "from here.",
         structure_md=_EYEGENBENCH_STRUCTURE_MD,
         key_prefix="eyegenbench",
     )
+
+
+def _load_benchmark_setup_source(
+    options_host=None, location_host=None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """The bootstrap entry, offered only while **zero** corpora are discovered.
+
+    Without it the setup is unreachable: discovery reads a directory the user can
+    change at runtime, so a bundle at a non-default path yields no corpora, no
+    entries — and therefore nowhere to type the path. This one placeholder
+    renders the same directory input and *Expected files* note every corpus entry
+    does, and disappears as soon as the manifest resolves.
+    """
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
+    root = _benchmark_dir_input(loc)
+    _dataset_access_status(
+        loc,
+        root=root,
+        present=False,
+        key_prefix="eyegenbench",
+        label="Harmonised benchmark corpora",
+    )
+    opt.info(
+        "No prepared corpora found here yet. Build a bundle with "
+        "`python scripts/prepare_eyegenbench.py --all`, then point the folder "
+        "below at it — each prepared corpus then appears as its own data source."
+    )
+    return load_sample_data()
+
+
+def _load_benchmark_source(
+    options_host=None, location_host=None, *, dataset: str = ""
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Location controls + loader for **one** prepared benchmark corpus.
+
+    A peer of `_load_potec_source` / `_load_multipleye_source`: one entry, one
+    corpus, no sub-picker. The returned raw frames go through the same
+    normalization as an upload, so the Column-mapping panels still appear.
+    """
+    from scanpath_studio.eyegenbench import eyegenbench_present
+
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
+    root = _benchmark_dir_input(loc)
+    try:
+        present = eyegenbench_present(root, dataset)
+    except _MANIFEST_ERRORS:
+        present = False
     ready = _dataset_access_status(
         loc,
         root=root,
-        present=eyegenbench_present(root),
+        present=present,
         key_prefix="eyegenbench",
-        label=EYEGENBENCH_CHOICE,
+        label=f"{dataset} (harmonised benchmark)",
     )
     if not ready:
         return load_sample_data()
-    try:
-        entries = eyegenbench_datasets(root)
-    except (FileNotFoundError, ValueError, OSError) as exc:
-        loc.error(f"Couldn't read the EyeGenBench manifest at `{root}`: {exc}")
-        return load_sample_data()
-    if not entries:
-        opt.warning("This EyeGenBench bundle has no prepared corpora yet.")
-        return load_sample_data()
-
-    groups = _eyegenbench_picker_groups(entries)
-    opt.caption(
-        f"{len(entries)} corpus{'es' if len(entries) != 1 else ''} available "
-        "in this bundle."
+    entry = next(
+        (e for e in discovered_benchmark_datasets() if e["name"] == dataset), None
     )
-
-    # R31: idempotent — a no-op here whenever `_activate_data_source` (or
-    # `resolve_source_monitor`) already settled the selection earlier this
-    # run; see `_eyegenbench_reconcile_selection`'s docstring for why all three
-    # call it rather than each re-deriving it inline.
-    _eyegenbench_reconcile_selection(groups)
-    language = opt.selectbox(
-        "Language",
-        options=list(groups),
-        key="eyegenbench_language",
-        persist_state="session",
-        help="Corpora are grouped by language to stay navigable as the bundle grows.",
-    )
-    names = groups.get(language, [])
-    dataset = opt.selectbox(
-        "Corpus",
-        options=names,
-        key="eyegenbench_dataset",
-        persist_state="session",
-    )
-    if not dataset:
-        return load_sample_data()
-    geometry_source = next(
-        (e.get("geometry_source") for e in entries if e["name"] == dataset), None
-    )
-    if geometry_source:
-        opt.caption(
-            _EYEGENBENCH_GEOMETRY_BADGES.get(
-                geometry_source, f"Screen geometry: {geometry_source}"
-            )
-        )
+    if entry and (badge := geometry_badge(entry)):
+        opt.caption(badge)
     try:
         return _cached_eyegenbench_raw_frames(root, dataset)
-    except (FileNotFoundError, ValueError, OSError) as exc:
-        loc.error(f"Couldn't load EyeGenBench corpus '{dataset}' from `{root}`: {exc}")
+    except _MANIFEST_ERRORS as exc:
+        loc.error(f"Couldn't load '{dataset}' from `{root}`: {exc}")
         return pd.DataFrame(), pd.DataFrame()
 
 
@@ -1587,28 +1660,84 @@ PUBLIC_DATASET_REGISTRY: dict = {
         "/ feedback). Downloaded from OSF, or read from a LaCC lab export.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
     ),
-    EYEGENBENCH_CHOICE: dict(
-        loader=_load_eyegenbench_source,
-        # R30: generic fallback ONLY — used when no corpus is resolvable yet
-        # (bundle absent, or before the picker has a valid selection). Once a
-        # corpus is chosen, `resolve_source_monitor` reads its real monitor +
-        # `monitor_source` from the manifest via `_eyegenbench_effective_monitor`
-        # instead of this fixed placeholder.
-        monitor=(1920, 1080),
-        short="EyeGenBench",
-        language="Multilingual",
-        size="corpus count depends on your local bundle — see the picker",
-        description="The EyeGenBench benchmark suite, harmonised to one schema. "
-        "Screen geometry is recovered per corpus and badged real / "
-        "reconstructed / synthesized.",
-        link="https://github.com/EyeBench/EyeGenBench",
-    ),
 }
+
+
+def _benchmark_registry_entries() -> dict:
+    """One registry entry per prepared benchmark corpus (R36).
+
+    Built from the local bundle's manifest, so it varies with the directory the
+    user points at — which is why the registry as a whole had to become a
+    function. Each entry has the same shape as the static built-ins above
+    (`short` / `language` / `size` / `description` / `link` / `monitor`) and is
+    presented identically: one 🌐 entry in the flat picker, nothing nested.
+
+    ``monitor`` is **omitted** when the manifest's ``monitor_source`` is
+    ``default`` — that value is `eyegenbench_geometry.py`'s generic guess for a
+    corpus that documents no screen, and declaring it here would make the canvas
+    snap to it as though it were measured (the registry has no "declared but not
+    authoritative" tier — a declared monitor *is* the authoritative one). Without
+    it the canvas falls back to data extents, which is the honest answer.
+    """
+    entries: dict = {}
+    for entry in discovered_benchmark_datasets():
+        name = str(entry["name"])
+        short = _benchmark_short_name(name)
+        spec = dict(
+            loader=partial(_load_benchmark_source, dataset=name),
+            short=short,
+            language=language_display(entry.get("language")),
+            size=_benchmark_size_caption(entry),
+            description=_benchmark_description(entry, harmonised_overlap=short != name),
+            link="https://github.com/EyeBench/EyeGenBench",
+            # Marks the entry as coming from a prepared bundle, and names the
+            # corpus inside it. `compare_source` dispatches on this rather than
+            # sniffing the label, and it is the natural slug for Task 12's wire
+            # format.
+            benchmark_dataset=name,
+            geometry_source=entry.get("geometry_source"),
+        )
+        monitor = entry.get("monitor")
+        if monitor and entry.get("monitor_source") != "default":
+            spec["monitor"] = (int(monitor[0]), int(monitor[1]))
+        entries[benchmark_corpus_label(name)] = spec
+    return entries
+
+
+def public_dataset_registry() -> dict:
+    """Every public corpus on offer: the static built-ins ∪ discovered corpora.
+
+    `PUBLIC_DATASET_REGISTRY` stays the literal home of the three built-ins, whose
+    entries are fixed at import time. The prepared benchmark corpora can't be:
+    they depend on a bundle directory the user can change mid-session, so they
+    are composed in here and every consumer calls this instead of reading the
+    dict. Discovery is cached (`_cached_eyegenbench_datasets`), so calling it
+    several times a run costs one manifest read.
+    """
+    registry = dict(PUBLIC_DATASET_REGISTRY)
+    discovered = _benchmark_registry_entries()
+    registry.update(discovered)
+    if not discovered:
+        # R39: with nothing discovered there is no entry, so there would be
+        # nowhere to type the bundle's path. Exactly one placeholder carries the
+        # directory input until a corpus exists.
+        registry[BENCHMARK_SETUP_CHOICE] = dict(
+            loader=_load_benchmark_setup_source,
+            short="Harmonised benchmark corpora — set up",
+            language="Multilingual",
+            size="not set up yet",
+            description="Public reading corpora harmonised to one schema by the "
+            "EyeGenBench pipeline. Build a bundle locally and point this at it; "
+            "each prepared corpus then appears as its own data source.",
+            link="https://github.com/EyeBench/EyeGenBench",
+            setup_only=True,
+        )
+    return registry
 
 
 def _public_dataset_label(label: str) -> str:
     """The picker display text for a registry entry (its short name, if any)."""
-    return PUBLIC_DATASET_REGISTRY.get(label, {}).get("short", label)
+    return public_dataset_registry().get(label, {}).get("short", label)
 
 
 def _load_public_dataset(
@@ -1623,11 +1752,12 @@ def _load_public_dataset(
     render into ``options_host`` / ``location_host`` (the DATA-9 ordered group).
     Returns raw, pre-normalization frames.
     """
+    registry = public_dataset_registry()
     chosen = st.session_state.get("public_dataset_choice")
-    if chosen not in PUBLIC_DATASET_REGISTRY:
-        chosen = next(iter(PUBLIC_DATASET_REGISTRY))
+    if chosen not in registry:
+        chosen = next(iter(registry))
         st.session_state["public_dataset_choice"] = chosen
-    spec = PUBLIC_DATASET_REGISTRY[chosen]
+    spec = registry[chosen]
     desc = description_host if description_host is not None else st.container()
     facts = " · ".join(f for f in (spec.get("language"), spec.get("size")) if f)
     if facts:
@@ -1646,19 +1776,19 @@ def _public_dataset_monitor(data_choice: str) -> Optional[Tuple[int, int]]:
     doesn't declare a monitor (canvas then defaults to data extents)."""
     if data_choice != PUBLIC_DATASETS_CHOICE:
         return None
-    spec = PUBLIC_DATASET_REGISTRY.get(
+    spec = public_dataset_registry().get(
         st.session_state.get("public_dataset_choice", "")
     )
     return spec.get("monitor") if spec else None
 
 
 def _eyegenbench_root_from_state() -> str:
-    """The EyeGenBench bundle directory the picker is currently pointed at.
+    """The prepared-bundle directory the picker is currently pointed at.
 
     Mirrors `_dataset_dir_input`'s own resolution (the S2 branch included) so
-    this agrees with what `_load_eyegenbench_source` read earlier in the same
-    run, without threading the resolved root through session state as a
-    second copy of the truth."""
+    discovery agrees with what a corpus' loader reads later in the same run,
+    without threading the resolved root through session state as a second copy
+    of the truth."""
     if not local_filesystem_enabled():
         return (
             str(data_root())
@@ -1668,66 +1798,6 @@ def _eyegenbench_root_from_state() -> str:
     return _resolve_data_dir(
         st.session_state.get("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR)
     )
-
-
-def _eyegenbench_selected_monitor() -> Optional[Tuple[int, int, bool]]:
-    """R30: the selected EyeGenBench corpus' own manifest monitor, or ``None``.
-
-    EyeGenBench is one source fronting many corpora with different real
-    screens — unlike PoTeC/MultiplEYE/OneStop, which are one screen per
-    source — so the registry's single declared ``monitor`` can't stand in for
-    all of them the way it can there. Reads the picker's own session state
-    (`eyegenbench_dataset`, written by `_load_eyegenbench_source` earlier in
-    the same run) and looks the chosen corpus up in the manifest directly —
-    cheap (no Parquet read).
-
-    ``authoritative`` follows the manifest's own honesty tier
-    (``monitor_source``, from `scripts/prepare_eyegenbench.py`): ``published``
-    (a documented real screen) and ``derived-from-boxes`` (a real extent from
-    measured word boxes) are both trustworthy; ``default`` is
-    `eyegenbench_geometry.py`'s 1920x1080 guess for when neither is
-    available, and snapping the canvas to it as though it were measured would
-    be the same overclaim the picker's geometry-source badge exists to
-    prevent, one layer up — so it is deliberately NOT authoritative.
-
-    Returns ``None`` when no corpus is resolvable yet (bundle absent, or
-    nothing selected) — the caller then falls through to the registry's
-    generic placeholder.
-    """
-    from scanpath_studio.eyegenbench import eyegenbench_datasets
-
-    dataset = st.session_state.get("eyegenbench_dataset")
-    if not dataset:
-        return None
-    try:
-        entries = eyegenbench_datasets(_eyegenbench_root_from_state())
-    except (FileNotFoundError, ValueError, OSError):
-        return None
-    entry = next((e for e in entries if e.get("name") == dataset), None)
-    if entry is None or not entry.get("monitor"):
-        return None
-    width, height = entry["monitor"]
-    authoritative = entry.get("monitor_source") in ("published", "derived-from-boxes")
-    return int(width), int(height), authoritative
-
-
-def _eyegenbench_effective_monitor(
-    data_choice: Optional[str],
-) -> Optional[Tuple[int, int, bool]]:
-    """`_eyegenbench_selected_monitor`, reached the same two ways
-    `_public_dataset_monitor` is: via the flat ``Public datasets`` picker
-    (``PUBLIC_DATASETS_CHOICE`` + ``public_dataset_choice``) or directly by
-    registry label (CMP-8's compare source B). ``None`` when EyeGenBench
-    isn't the effective source for ``data_choice``.
-    """
-    effective = (
-        st.session_state.get("public_dataset_choice")
-        if data_choice == PUBLIC_DATASETS_CHOICE
-        else data_choice
-    )
-    if effective != EYEGENBENCH_CHOICE:
-        return None
-    return _eyegenbench_selected_monitor()
 
 
 def _dataset_font(words: pd.DataFrame) -> Tuple[Optional[float], Optional[str]]:
@@ -2432,10 +2502,14 @@ def render_sidebar_data_source(host=None) -> str:
     for name in uploaded:
         entries.append(name)
         kinds[name] = "🔒"
-    if public_datasets_enabled():
-        for label in PUBLIC_DATASET_REGISTRY:
-            entries.append(label)
-            kinds[label] = "🌐"
+    # DATA-27 (Task 11R): every prepared benchmark corpus is in here as its own
+    # 🌐 entry, exactly like the built-ins — `public_dataset_registry()` composes
+    # the two. Resolved once and reused below so the whole run agrees on one
+    # snapshot of a registry that depends on a directory the user can change.
+    registry = public_dataset_registry() if public_datasets_enabled() else {}
+    for label in registry:
+        entries.append(label)
+        kinds[label] = "🌐"
     # UX-37: the ground-truth trial is offered **while debug mode is on** (the
     # ❓ Help toggle), rather than only via `?source=synthetic` — a URL the About
     # note and the docs had to spell out, which is the hidden-behind-a-param
@@ -2456,12 +2530,8 @@ def render_sidebar_data_source(host=None) -> str:
     # corpus was remembered, preserving the old "Public datasets → first corpus".
     if st.session_state.get("data_source_choice") == PUBLIC_DATASETS_CHOICE:
         corpus = st.session_state.get("public_dataset_choice")
-        if corpus not in PUBLIC_DATASET_REGISTRY:
-            corpus = (
-                next(iter(PUBLIC_DATASET_REGISTRY), None)
-                if public_datasets_enabled()
-                else None
-            )
+        if corpus not in registry:
+            corpus = next(iter(registry), None)
         st.session_state["data_source_choice"] = corpus or entries[0]
 
     # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
@@ -2480,7 +2550,7 @@ def render_sidebar_data_source(host=None) -> str:
     # Resolve a public-corpus token back to the canonical PUBLIC_DATASETS_CHOICE so
     # every downstream consumer (load dispatch, monitor, filter/col-map reset keys)
     # is unchanged; the chosen corpus rides public_dataset_choice as before.
-    if public_datasets_enabled() and choice in PUBLIC_DATASET_REGISTRY:
+    if choice in registry:
         st.session_state["public_dataset_choice"] = choice
         return PUBLIC_DATASETS_CHOICE
     return choice
@@ -2523,10 +2593,12 @@ def render_data_source_picker(host=None) -> None:
     kinds: Dict[str, str] = dict(st.session_state.get("_data_source_kinds") or {})
     uploaded = list(st.session_state.get("_data_source_uploaded") or [])
 
+    registry = public_dataset_registry()
+
     def _entry_label(token: str) -> str:
         tag = kinds.get(token, "")
-        if token in PUBLIC_DATASET_REGISTRY:
-            name = _public_dataset_label(token)
+        if token in registry:
+            name = registry[token].get("short", token)
         elif token in uploaded:
             name = f"{token} (yours)"
         else:
@@ -2608,13 +2680,6 @@ def resolve_source_monitor(
     # (Dell U2715H, 2560x1440).
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
-    # R30: EyeGenBench fronts many corpora with different real screens, so its
-    # per-corpus manifest monitor overrides the registry's fixed placeholder
-    # whenever a corpus is actually resolvable — checked before the generic
-    # public-dataset paths below, which would otherwise always answer with the
-    # placeholder for this source.
-    if (monitor := _eyegenbench_effective_monitor(data_choice)) is not None:
-        return monitor
     if (monitor := _public_dataset_monitor(data_choice)) is not None:
         return monitor[0], monitor[1], True
     # A public corpus reached by its own registry *label* rather than through the
@@ -2627,7 +2692,7 @@ def resolve_source_monitor(
     # panels' `canvas_b` read it); load-bearing now that `setups_comparable` gates
     # the overlay on the canvas, since it refused the very pairs CMP-11 exists to
     # allow — and it also made A's resolution scan the whole corpus per rerun.
-    if declared := (PUBLIC_DATASET_REGISTRY.get(data_choice) or {}).get("monitor"):
+    if declared := (public_dataset_registry().get(data_choice) or {}).get("monitor"):
         return int(declared[0]), int(declared[1]), True
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
         # MultiplEYE server bundle = the same native MultiplEYE export as the
@@ -2718,7 +2783,7 @@ def active_setup_snapshot(
         # A public corpus reached by its own label (the DATA-3 OneStop source)
         # rather than through the `Public datasets` picker still declares a
         # monitor in the registry.
-        or bool((PUBLIC_DATASET_REGISTRY.get(choice) or {}).get("monitor"))
+        or bool((public_dataset_registry().get(choice) or {}).get("monitor"))
     )
     if declared:
         return capture_setup_snapshot(
@@ -2786,20 +2851,12 @@ def seed_canvas_state(
     # canvas edits and plot-config restores within the same source are preserved
     # (the key is unchanged, so the snap doesn't re-fire).
     #
-    # R30: EyeGenBench's `public_dataset_choice` alone doesn't change when the
-    # user switches corpus *inside* that one source (it's always
-    # `EYEGENBENCH_CHOICE`), so the picker's own `eyegenbench_dataset` selection
-    # rides along in the key too — otherwise a PoTeC→Provo switch would resolve
-    # the right monitor (`resolve_source_monitor` reads it fresh every run) but
-    # never actually re-fire the snap, leaving the canvas on whichever corpus was
-    # selected first.
-    source_key = (
-        data_choice,
-        st.session_state.get("public_dataset_choice"),
-        st.session_state.get("eyegenbench_dataset")
-        if st.session_state.get("public_dataset_choice") == EYEGENBENCH_CHOICE
-        else None,
-    )
+    # DATA-27 (Task 11R): `public_dataset_choice` is a correct per-corpus key on
+    # its own again, now that every prepared benchmark corpus is its own registry
+    # entry — the extra `eyegenbench_dataset` component R30 needed (when one
+    # source fronted many corpora and this key never changed between them) is
+    # gone with the source that made it necessary.
+    source_key = (data_choice, st.session_state.get("public_dataset_choice"))
     if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
         source_key
     ):
@@ -3511,37 +3568,13 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
         st.session_state.pop("_share_selection", None)
         st.session_state["_share_selection_source"] = data_choice
 
-    # R31: same defect class as R30's canvas fix — EyeGenBench's
-    # `public_dataset_choice` alone doesn't change on a PoTeC→Provo switch (it's
-    # always `EYEGENBENCH_CHOICE`), so trial filters must key on the picker's own
-    # `eyegenbench_dataset` too. Without it, a filter narrowed to a PoTeC-only
-    # text value rode straight into Provo — no trial there could satisfy it, and
-    # nothing said why the pool went empty. This also earns the existing
-    # per-source stash/restore behaviour per corpus for free (switch away,
-    # switch back, filters return), matching every other source.
-    #
-    # This function runs *before* `_load_eyegenbench_source` in main()'s
-    # pipeline, so on a language-driven corpus switch (the user edited the
-    # Language widget, not the Corpus widget directly) `eyegenbench_dataset`
-    # still holds last run's value at this point — the loader hasn't
-    # re-derived it yet. Settling it here first (idempotent, see
-    # `_eyegenbench_reconcile_selection`) is what makes source_key below see
-    # *this* run's actual corpus instead of missing the reset for one rerun.
-    effective_public_choice = (
-        st.session_state.get("public_dataset_choice")
-        if data_choice == PUBLIC_DATASETS_CHOICE
-        else data_choice
-    )
-    if effective_public_choice == EYEGENBENCH_CHOICE:
-        _eyegenbench_reconcile_selection(_eyegenbench_groups_from_state())
-
-    source_key = (
-        data_choice,
-        st.session_state.get("public_dataset_choice"),
-        st.session_state.get("eyegenbench_dataset")
-        if st.session_state.get("public_dataset_choice") == EYEGENBENCH_CHOICE
-        else None,
-    )
+    # The trial-filter stash is keyed per *corpus*: a filter narrowed to a value
+    # only one corpus has (a text id, a reader) must not ride into the next one,
+    # where no trial can satisfy it and nothing says why the pool went empty.
+    # `public_dataset_choice` alone is enough for that again — every corpus,
+    # prepared benchmark ones included, is its own registry entry — so the extra
+    # `eyegenbench_dataset` component R31 needed is gone (DATA-27 Task 11R).
+    source_key = (data_choice, st.session_state.get("public_dataset_choice"))
     if st.session_state.get("_filters_for") == source_key:
         return preprocessing
 
@@ -3938,13 +3971,10 @@ def main() -> None:
         # corpus auto-detect its own mapping; same-source reruns (and restores)
         # keep their keys. Mirrors the canvas re-seed in render_sidebar_canvas_controls.
         #
-        # R31: deliberately NOT keyed on `eyegenbench_dataset` the way the canvas
-        # (R30) and trial-filter (`_activate_data_source`) source_keys are. Every
-        # EyeGenBench corpus shares one harmonised schema, so re-proposing the
-        # mapping on a PoTeC→Provo switch would be pointless and would discard a
-        # user's own override — unlike the canvas (each corpus has its own real
-        # screen) and filters (each corpus has its own trial values), where
-        # switching corpus is exactly the change that must invalidate them.
+        # Two harmonised benchmark corpora share one schema, so switching between
+        # them re-proposes a mapping that auto-detects to the same thing — the
+        # cost of one key covering every corpus, and the same trade every other
+        # pair of sources already makes.
         source_key = (data_choice, st.session_state.get("public_dataset_choice"))
         if st.session_state.get("_colmap_seeded_for") != source_key:
             for stale in [

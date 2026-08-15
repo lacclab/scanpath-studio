@@ -28,6 +28,7 @@ import streamlit as st
 
 from .constants import (
     DEMO_CHOICE,
+    EYEGENBENCH_DEFAULT_DIR,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_LACCLAB_DEFAULT_DIR,
     ONESTOP_PUBLIC_CHOICE,
@@ -95,8 +96,18 @@ def _public_location(label: str) -> Tuple[str, dict]:
     regime / parts, MultiplEYE's fixation source) — the same session keys the
     sidebar widgets own, read rather than re-rendered.
     """
-    from scanpath_studio import datasets
+    from scanpath_studio import app, datasets
 
+    # DATA-27 (Task 11R): a prepared benchmark corpus is one registry entry that
+    # names the corpus inside the bundle, so it dispatches on `benchmark_dataset`
+    # — **before** the label-substring branches below, which a harmonised
+    # "PoTeC …" / "OneStop …" label would otherwise match and send to the native
+    # loader.
+    spec = app.public_dataset_registry().get(label) or {}
+    if dataset := spec.get("benchmark_dataset"):
+        return _resolved_dir("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR), {
+            "dataset": dataset,
+        }
     if label == ONESTOP_PUBLIC_CHOICE:
         variant = str(st.session_state.get("onestop_variant") or "public")
         default = (
@@ -151,7 +162,11 @@ def _public_ready_cached(label: str, root: str, options: tuple) -> Tuple[bool, s
         return False, f"{short} isn't loadable as a comparison dataset."
     hint = f"Open {short} as the main dataset once to set its location."
     try:
-        if label == ONESTOP_PUBLIC_CHOICE:
+        if dataset := kwargs.get("dataset"):
+            from scanpath_studio.eyegenbench import eyegenbench_present
+
+            present = eyegenbench_present(root, dataset)
+        elif label == ONESTOP_PUBLIC_CHOICE:
             present = datasets.onestop_present(
                 root,
                 regime=kwargs["regime"],
@@ -204,7 +219,12 @@ def secondary_dataset_options(
     options.append((SYNTHETIC_CHOICE, True, ""))
     if app.public_datasets_enabled():
         options.extend(
-            (label, *_public_ready(label)) for label in app.PUBLIC_DATASET_REGISTRY
+            (label, *_public_ready(label))
+            for label, spec in app.public_dataset_registry().items()
+            # The bootstrap entry (offered only while no benchmark corpus is
+            # discovered) is a place to type a directory, not a dataset — there
+            # is nothing to compare against.
+            if not spec.get("setup_only")
         )
     return [option for option in options if option[0] != exclude]
 
@@ -222,6 +242,10 @@ def _load_public_frames(
     from scanpath_studio import datasets
 
     kwargs = dict(options)
+    if dataset := kwargs.get("dataset"):
+        from scanpath_studio.eyegenbench import load_eyegenbench
+
+        return load_eyegenbench(root, dataset=dataset)
     if label == ONESTOP_PUBLIC_CHOICE:
         return datasets.load_onestop(
             root,
@@ -307,7 +331,7 @@ def load_secondary_dataset(name: Optional[str]) -> Optional[SecondaryDataset]:
     else:
         from scanpath_studio import app
 
-        if name in app.PUBLIC_DATASET_REGISTRY:
+        if name in app.public_dataset_registry():
             # Re-check readiness directly rather than rebuilding the whole option
             # list: that would re-sweep *every* corpus' filesystem a second time
             # on the very rerun a cross-dataset pick already costs the most.

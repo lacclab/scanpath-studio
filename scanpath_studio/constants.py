@@ -412,14 +412,100 @@ SYNTHETIC_CHOICE = "Synthetic test trial"
 PUBLIC_DATASETS_CHOICE = "Public datasets"
 POTEC_DEFAULT_DIR = "data/PoTeC"
 EYEGENBENCH_DEFAULT_DIR = "data/EyeGenBench"
-# DATA-27: the registry label for the EyeGenBench data source, used as both the
-# `PUBLIC_DATASET_REGISTRY` key (app.py) and the `_SHAREABLE_SOURCES` key
-# (url_state.py) — defined once here so the two use sites can't drift (a
-# mismatch would silently stop share links from reopening the corpus). No
-# fixed corpus count: a failed/skipped corpus deliberately gets no manifest
-# entry, so the true count is read from the local bundle's manifest at load
-# time (the picker's caption), never hard-coded into this label.
-EYEGENBENCH_CHOICE = "EyeGenBench — harmonised reading corpora"
+# DATA-27 (Task 11R): every prepared benchmark corpus is its own top-level entry
+# in the flat data-source picker, exactly like PoTeC / MultiplEYE / OneStop —
+# there is no "EyeGenBench" source fronting them. Two consequences live in these
+# constants:
+#
+# 1. **"EyeGenBench" is provenance, not a source.** It names the pipeline that
+#    harmonises the corpora and is being extracted into its own repository, so
+#    it appears in descriptions and help strings only — never in an entry label.
+# 2. A corpus entry's label is built from its manifest name (`app.py`), so the
+#    only fixed label here is the **bootstrap** entry: when zero corpora are
+#    discovered there is nowhere to type the bundle path, so exactly one
+#    placeholder entry renders the directory input + prep instructions. It
+#    disappears as soon as a corpus is discoverable.
+BENCHMARK_SETUP_CHOICE = "Harmonised benchmark corpora — set up a local bundle"
+# The suffix that distinguishes a harmonised corpus from a *native* entry for the
+# same corpus (PoTeC, OneStop ship both ways). Applied by property — the
+# harmonised copy is re-derived and its geometry may be weaker — never by vendor
+# name; see consequence 1 above.
+BENCHMARK_SHORT_SUFFIX = " (harmonised benchmark)"
+# The registry-key suffix. Keys must be unique across the whole registry, and a
+# native entry's key is `"<Corpus> — <full name>"`, so this shape can't collide.
+BENCHMARK_LABEL_SUFFIX = " — harmonised benchmark corpus"
+
+# DATA-27 R35: a benchmark manifest records `language` as an **ISO 639-1 code**
+# ('zh', 'da', 'en', …), not a name, and the picker shows it to a reader. A small
+# explicit table beats a dependency for a field this narrow; unknown codes fall
+# back to the code itself (never "Unknown" — the code is real information, and
+# inventing a placeholder for it loses that).
+LANGUAGE_NAMES = {
+    "ar": "Arabic",
+    "bg": "Bulgarian",
+    "ca": "Catalan",
+    "cs": "Czech",
+    "da": "Danish",
+    "de": "German",
+    "el": "Greek",
+    "en": "English",
+    "es": "Spanish",
+    "et": "Estonian",
+    "eu": "Basque",
+    "fa": "Persian",
+    "fi": "Finnish",
+    "fr": "French",
+    "ga": "Irish",
+    "he": "Hebrew",
+    "hi": "Hindi",
+    "hr": "Croatian",
+    "hu": "Hungarian",
+    "id": "Indonesian",
+    "is": "Icelandic",
+    "it": "Italian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "lt": "Lithuanian",
+    "lv": "Latvian",
+    "mk": "Macedonian",
+    "ml": "Malayalam",
+    "nl": "Dutch",
+    "no": "Norwegian",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ro": "Romanian",
+    "ru": "Russian",
+    "sk": "Slovak",
+    "sl": "Slovenian",
+    "sq": "Albanian",
+    "sr": "Serbian",
+    "sv": "Swedish",
+    "ta": "Tamil",
+    "th": "Thai",
+    "tr": "Turkish",
+    "uk": "Ukrainian",
+    "ur": "Urdu",
+    "vi": "Vietnamese",
+    "zh": "Chinese",
+}
+
+
+def language_display(value) -> str:
+    """An ISO language code (or comma-joined list of them) as display names.
+
+    A multilingual corpus records several codes in one field (`"en,de,ru"` — MECO,
+    celer), so each part is mapped and the list re-joined. An unrecognised code
+    renders as itself: it still identifies the language to anyone who knows it,
+    which "Unknown" does not. A blank/absent value gives ``""`` so the caller can
+    drop the caption rather than print an empty label.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parts = [part.strip() for part in text.split(",") if part.strip()]
+    return ", ".join(LANGUAGE_NAMES.get(part.lower(), part) for part in parts)
+
+
 MULTIPLEYE_DEFAULT_DIR = "data/MultiplEYE_ZH_CH_Zurich_1_2025"
 ONESTOP_CHOICE = "OneStop server bundle"
 # Public OneStop (OSF download-on-demand) — distinct from the env-var

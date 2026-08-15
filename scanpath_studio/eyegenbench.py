@@ -1,10 +1,14 @@
-"""Loader for EyeGenBench bundles -- 39 harmonised reading corpora.
+"""Loader for a local bundle of harmonised reading corpora.
 
 EyeGenBench (https://github.com/EyeBench/EyeGenBench) harmonises many public
 eye-tracking-while-reading corpora into one schema, but discards screen
 geometry. `scripts/prepare_eyegenbench.py` runs their pipeline, recovers the
 geometry, and writes the bundle this module reads. See
-`docs/eyegenbench.md` and `plans/data-27-eyegenbench-datasets.md`.
+`docs/benchmark-corpora.md` and `plans/data-27-eyegenbench-datasets.md`.
+
+The pipeline can *load* 39 corpora; a bundle holds however many the user
+prepared, which is fewer -- some publishers require manual acquisition. Read
+the manifest for what is actually there rather than assuming a count.
 
 Bundle contract for `fixations.parquet`: it must NOT carry a column literally
 named `unique_trial_id`. `data.normalize_fixations` hard-codes that exact

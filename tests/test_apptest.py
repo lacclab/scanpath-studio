@@ -977,6 +977,142 @@ class TestUnmappedRawDataView:
         captions = " ".join(c.value for c in at.caption)
         assert "Real" in captions
 
+    def test_eyegenbench_monitor_resolves_per_corpus_not_the_registry_placeholder(
+        self, monkeypatch, tmp_path
+    ):
+        """R30: EyeGenBench fronts many corpora on different real screens (unlike
+        PoTeC/MultiplEYE/OneStop, one screen per source), so the canvas must snap
+        to the *selected corpus'* manifest monitor rather than the registry's
+        fixed 1920x1080 placeholder — and `authoritative` must follow the
+        manifest's own `monitor_source` honesty tier: `published` /
+        `derived-from-boxes` are trustworthy, `default` is an invented guess and
+        must not be treated as measured (the same overclaim the geometry-source
+        badge exists to prevent, one layer up)."""
+        import json
+
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "eyegenbench"
+        # name -> (language, monitor, monitor_source)
+        corpora = {
+            "PoTeC": ("German", [1680, 1050], "published"),
+            "Provo": ("English", [1920, 1200], "derived-from-boxes"),
+            "Guessed": ("French", [1920, 1080], "default"),
+        }
+        # Real EyeGenBench-shaped frames (matches eyegenbench.EYEGENBENCH_WORD_
+        # SCHEMA / _FIX_SCHEMA, and tests/test_eyegenbench.py's `bundle` fixture)
+        # — a trivial single-column frame would fail schema mapping, and `main()`
+        # returns early on an unmapped source (see `_render_unmapped_view`)
+        # without ever reaching the canvas-seeding this test checks.
+        words = pd.DataFrame(
+            {
+                "unique_paragraph_id": ["p1", "p1"],
+                "ia_index": [0, 1],
+                "ia_label": ["ab", "cd"],
+                "line": [0, 0],
+                "start_x": [10.0, 70.0],
+                "end_x": [60.0, 120.0],
+                "start_y": [20.0, 20.0],
+                "end_y": [40.0, 40.0],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "eyegenbench_trial_id": ["t1", "t1"],
+                "unique_participant_id": ["r1", "r1"],
+                "unique_paragraph_id": ["p1", "p1"],
+                "fix_index": [0, 1],
+                "ia_index": [0, 1],
+                "fix_duration": [200, 180],
+                "x": [35.0, 95.0],
+                "y": [30.0, 30.0],
+            }
+        )
+        participants = pd.DataFrame(
+            {"unique_participant_id": ["r1"], "participant_language": ["de"]}
+        )
+        for name in corpora:
+            ds = root / name
+            ds.mkdir(parents=True)
+            words.to_parquet(ds / "words.parquet")
+            fixations.to_parquet(ds / "fixations.parquet")
+            participants.to_parquet(ds / "participants.parquet")
+        (root / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "datasets": [
+                        {
+                            "name": name,
+                            "language": lang,
+                            "monitor": monitor,
+                            "monitor_source": source,
+                        }
+                        for name, (lang, monitor, source) in corpora.items()
+                    ]
+                }
+            )
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        # 1. The selected corpus' own monitor reaches the canvas, not the
+        # registry's fixed 1920x1080 placeholder.
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = app.EYEGENBENCH_CHOICE
+        at.session_state["eyegenbench_language"] = "German"
+        at.session_state["eyegenbench_dataset"] = "PoTeC"
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert (
+            at.session_state["global_canvas_width"],
+            at.session_state["global_canvas_height"],
+        ) == (1680, 1050)
+
+        # 2. Switching the selected corpus changes the resolved monitor.
+        language = [s for s in at.selectbox if s.label == "Language"][0]
+        language.set_value("English").run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        corpus = [s for s in at.selectbox if s.label == "Corpus"][0]
+        assert corpus.value == "Provo"
+        assert (
+            at.session_state["global_canvas_width"],
+            at.session_state["global_canvas_height"],
+        ) == (1920, 1200)
+
+        # 3. `authoritative` follows `monitor_source`: an invented ("default")
+        # screen must NOT snap the canvas the way published/derived-from-boxes
+        # do above — a stale canvas from a *different* source is left alone.
+        at2 = _make_apptest()
+        at2.session_state["global_canvas_width"] = 1234
+        at2.session_state["global_canvas_height"] = 999
+        at2.session_state["_canvas_seeded_for"] = ("something", "else", None)
+        at2.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at2.session_state["public_dataset_choice"] = app.EYEGENBENCH_CHOICE
+        at2.session_state["eyegenbench_language"] = "French"
+        at2.session_state["eyegenbench_dataset"] = "Guessed"
+        at2.run(timeout=60)
+        assert not at2.exception, f"Streamlit exceptions: {at2.exception}"
+        assert (
+            at2.session_state["global_canvas_width"],
+            at2.session_state["global_canvas_height"],
+        ) == (1234, 999)
+
+        # 4. Nothing selected / bundle absent still degrades safely: falls back
+        # to the registry's generic placeholder rather than raising.
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(tmp_path / "absent"))
+        at3 = _make_apptest()
+        at3.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at3.session_state["public_dataset_choice"] = app.EYEGENBENCH_CHOICE
+        at3.run(timeout=60)
+        assert not at3.exception, f"Streamlit exceptions: {at3.exception}"
+        assert (
+            at3.session_state["global_canvas_width"],
+            at3.session_state["global_canvas_height"],
+        ) == (1920, 1080)
+
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
         """Selecting a public dataset snaps the canvas to its registered monitor,
         even when a previous source left a stale canvas in session state.

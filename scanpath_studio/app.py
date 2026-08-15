@@ -1544,10 +1544,11 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     EYEGENBENCH_CHOICE: dict(
         loader=_load_eyegenbench_source,
-        # A generic default: the real per-corpus monitor lives in the manifest
-        # (`eyegenbench_monitor`), but resolving it into the canvas per selected
-        # corpus is not wired up by this task — see the app.py note at
-        # `resolve_source_monitor`.
+        # R30: generic fallback ONLY — used when no corpus is resolvable yet
+        # (bundle absent, or before the picker has a valid selection). Once a
+        # corpus is chosen, `resolve_source_monitor` reads its real monitor +
+        # `monitor_source` from the manifest via `_eyegenbench_effective_monitor`
+        # instead of this fixed placeholder.
         monitor=(1920, 1080),
         short="EyeGenBench",
         language="Multilingual",
@@ -1604,6 +1605,84 @@ def _public_dataset_monitor(data_choice: str) -> Optional[Tuple[int, int]]:
         st.session_state.get("public_dataset_choice", "")
     )
     return spec.get("monitor") if spec else None
+
+
+def _eyegenbench_root_from_state() -> str:
+    """The EyeGenBench bundle directory the picker is currently pointed at.
+
+    Mirrors `_dataset_dir_input`'s own resolution (the S2 branch included) so
+    this agrees with what `_load_eyegenbench_source` read earlier in the same
+    run, without threading the resolved root through session state as a
+    second copy of the truth."""
+    if not local_filesystem_enabled():
+        return (
+            str(data_root())
+            if data_root()
+            else _resolve_data_dir(EYEGENBENCH_DEFAULT_DIR)
+        )
+    return _resolve_data_dir(
+        st.session_state.get("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR)
+    )
+
+
+def _eyegenbench_selected_monitor() -> Optional[Tuple[int, int, bool]]:
+    """R30: the selected EyeGenBench corpus' own manifest monitor, or ``None``.
+
+    EyeGenBench is one source fronting many corpora with different real
+    screens — unlike PoTeC/MultiplEYE/OneStop, which are one screen per
+    source — so the registry's single declared ``monitor`` can't stand in for
+    all of them the way it can there. Reads the picker's own session state
+    (`eyegenbench_dataset`, written by `_load_eyegenbench_source` earlier in
+    the same run) and looks the chosen corpus up in the manifest directly —
+    cheap (no Parquet read).
+
+    ``authoritative`` follows the manifest's own honesty tier
+    (``monitor_source``, from `scripts/prepare_eyegenbench.py`): ``published``
+    (a documented real screen) and ``derived-from-boxes`` (a real extent from
+    measured word boxes) are both trustworthy; ``default`` is
+    `eyegenbench_geometry.py`'s 1920x1080 guess for when neither is
+    available, and snapping the canvas to it as though it were measured would
+    be the same overclaim the picker's geometry-source badge exists to
+    prevent, one layer up — so it is deliberately NOT authoritative.
+
+    Returns ``None`` when no corpus is resolvable yet (bundle absent, or
+    nothing selected) — the caller then falls through to the registry's
+    generic placeholder.
+    """
+    from scanpath_studio.eyegenbench import eyegenbench_datasets
+
+    dataset = st.session_state.get("eyegenbench_dataset")
+    if not dataset:
+        return None
+    try:
+        entries = eyegenbench_datasets(_eyegenbench_root_from_state())
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+    entry = next((e for e in entries if e.get("name") == dataset), None)
+    if entry is None or not entry.get("monitor"):
+        return None
+    width, height = entry["monitor"]
+    authoritative = entry.get("monitor_source") in ("published", "derived-from-boxes")
+    return int(width), int(height), authoritative
+
+
+def _eyegenbench_effective_monitor(
+    data_choice: Optional[str],
+) -> Optional[Tuple[int, int, bool]]:
+    """`_eyegenbench_selected_monitor`, reached the same two ways
+    `_public_dataset_monitor` is: via the flat ``Public datasets`` picker
+    (``PUBLIC_DATASETS_CHOICE`` + ``public_dataset_choice``) or directly by
+    registry label (CMP-8's compare source B). ``None`` when EyeGenBench
+    isn't the effective source for ``data_choice``.
+    """
+    effective = (
+        st.session_state.get("public_dataset_choice")
+        if data_choice == PUBLIC_DATASETS_CHOICE
+        else data_choice
+    )
+    if effective != EYEGENBENCH_CHOICE:
+        return None
+    return _eyegenbench_selected_monitor()
 
 
 def _dataset_font(words: pd.DataFrame) -> Tuple[Optional[float], Optional[str]]:
@@ -2484,6 +2563,13 @@ def resolve_source_monitor(
     # (Dell U2715H, 2560x1440).
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
+    # R30: EyeGenBench fronts many corpora with different real screens, so its
+    # per-corpus manifest monitor overrides the registry's fixed placeholder
+    # whenever a corpus is actually resolvable — checked before the generic
+    # public-dataset paths below, which would otherwise always answer with the
+    # placeholder for this source.
+    if (monitor := _eyegenbench_effective_monitor(data_choice)) is not None:
+        return monitor
     if (monitor := _public_dataset_monitor(data_choice)) is not None:
         return monitor[0], monitor[1], True
     # A public corpus reached by its own registry *label* rather than through the
@@ -2654,7 +2740,21 @@ def seed_canvas_state(
     # session would keep the old monitor and render the corpus off-scale. Manual
     # canvas edits and plot-config restores within the same source are preserved
     # (the key is unchanged, so the snap doesn't re-fire).
-    source_key = (data_choice, st.session_state.get("public_dataset_choice"))
+    #
+    # R30: EyeGenBench's `public_dataset_choice` alone doesn't change when the
+    # user switches corpus *inside* that one source (it's always
+    # `EYEGENBENCH_CHOICE`), so the picker's own `eyegenbench_dataset` selection
+    # rides along in the key too — otherwise a PoTeC→Provo switch would resolve
+    # the right monitor (`resolve_source_monitor` reads it fresh every run) but
+    # never actually re-fire the snap, leaving the canvas on whichever corpus was
+    # selected first.
+    source_key = (
+        data_choice,
+        st.session_state.get("public_dataset_choice"),
+        st.session_state.get("eyegenbench_dataset")
+        if st.session_state.get("public_dataset_choice") == EYEGENBENCH_CHOICE
+        else None,
+    )
     if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
         source_key
     ):

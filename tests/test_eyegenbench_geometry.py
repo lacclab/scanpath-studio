@@ -180,6 +180,43 @@ def test_extract_eyelink_boxes_rejects_a_box_straddling_the_origin():
     assert extract_eyelink_boxes(frame).empty
 
 
+def test_extract_eyelink_boxes_returns_empty_when_paragraph_col_is_absent():
+    """R33: `paragraph_col` is indexed alongside `ia_col` and must be guarded
+    the same way `data_col` already is -- mirroring the discipline
+    `extract_text_df_boxes` established (R23/R28)."""
+    frame = pd.DataFrame(
+        {
+            "ia_index": [0],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 10, 20, 60, 40]"],
+        }
+    )
+    assert extract_eyelink_boxes(frame).empty
+
+
+def test_extract_eyelink_boxes_returns_empty_when_ia_col_is_absent():
+    """R33: same as above, for `ia_col`."""
+    frame = pd.DataFrame(
+        {
+            "unique_paragraph_id": ["p1"],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 10, 20, 60, 40]"],
+        }
+    )
+    assert extract_eyelink_boxes(frame).empty
+
+
+def test_extract_eyelink_boxes_returns_empty_when_both_harmonised_columns_are_absent():
+    """R33 -- the actual onestop shape: an un-prefixed `paragraph_id` and no
+    interest-area index column at all, alongside the raw EyeLink data
+    column."""
+    frame = pd.DataFrame(
+        {
+            "paragraph_id": ["p1"],
+            "CURRENT_FIX_INTEREST_AREA_DATA": ["[STATIC, RECTANGLE, 10, 20, 60, 40]"],
+        }
+    )
+    assert extract_eyelink_boxes(frame).empty
+
+
 def _boxes(rows):
     return pd.DataFrame(
         rows,
@@ -394,6 +431,31 @@ def test_real_geometry_wins_when_ia_data_is_present():
     assert report["interpolated_fraction"] == 0.0
     assert words.loc[words["ia_index"] == 0, "start_x"].item() == 10
     assert (words["geometry_source"] == GEOMETRY_REAL).all()
+
+
+def test_resolve_geometry_falls_through_when_raw_frame_lacks_harmonised_ia_columns():
+    """R33 headline: the actual onestop failure. Its raw EyeLink export
+    carries `CURRENT_FIX_INTEREST_AREA_DATA` (so `run_prepare_data` picks it
+    as the raw tier's data source) but neither `unique_paragraph_id` nor
+    `ia_index` -- it has an un-prefixed `paragraph_id` and no interest-area
+    index at all, because it is the untouched EyeLink export rather than a
+    harmonised frame. `extract_eyelink_boxes` must not raise `KeyError`
+    indexing those two unguarded columns; `resolve_geometry` must fall
+    through to the next tier (no published screen for "onestop" -> the
+    synthesized tier) and stamp `geometry_source` accordingly rather than
+    sinking the whole corpus."""
+    raw = pd.DataFrame(
+        {
+            "paragraph_id": ["p1", "p1"],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+        }
+    )
+    words, report = resolve_geometry("onestop", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
 
 
 def test_reconstructed_when_no_raw_boxes_but_a_published_screen():

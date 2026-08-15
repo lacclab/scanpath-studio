@@ -293,8 +293,20 @@ def extract_eyelink_boxes(
     on-screen position -- it is dropped here rather than earning the `real`
     stamp. This is the same discipline `extract_text_df_boxes` applies to its
     own real-box source; both feed the same stamp, so both must guarantee it.
+
+    R33: the raw-EyeLink tier is an optional upgrade (tier 1 of 4). All three
+    columns this function indexes -- ``paragraph_col``, ``ia_col`` and
+    ``data_col`` -- must be present before any of them is read; when one is
+    missing this returns the empty, correctly-columned frame so
+    `resolve_geometry` falls through to the next tier instead of raising.
+    Verified against a real corpus: onestop's raw EyeLink export carries
+    ``CURRENT_FIX_INTEREST_AREA_DATA`` but neither ``unique_paragraph_id`` nor
+    ``ia_index`` (an un-prefixed ``paragraph_id`` and no interest-area index
+    at all) -- a hard skip here used to drop the entire corpus from the
+    catalogue behind a one-line log entry, when the bundle the reconstructed/
+    synthesized tiers would have produced is perfectly good.
     """
-    if data_col not in frame.columns:
+    if not {paragraph_col, ia_col, data_col} <= set(frame.columns):
         return pd.DataFrame(columns=[paragraph_col, ia_col, *_BOX_COLUMNS])
     boxes = pd.concat(
         [

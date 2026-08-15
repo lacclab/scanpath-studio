@@ -881,6 +881,7 @@ class TestUnmappedRawDataView:
             "ONESTOP_PUBLIC_DEFAULT_DIR",
             "POTEC_DEFAULT_DIR",
             "MULTIPLEYE_DEFAULT_DIR",
+            "EYEGENBENCH_DEFAULT_DIR",
         ):
             monkeypatch.setattr(app, const, str(tmp_path / const.lower()))
         for label in app.PUBLIC_DATASET_REGISTRY:
@@ -904,6 +905,68 @@ class TestUnmappedRawDataView:
         assert any("Download" in b.label for b in at.button), (
             "expected a Download button"
         )
+
+    def test_eyegenbench_picker_groups_by_language_and_switches_corpus(
+        self, monkeypatch, tmp_path
+    ):
+        """The EyeGenBench source's Language/Corpus picker renders both
+        selectboxes, groups the manifest's corpora by language, and switching
+        the language narrows the corpus options — the cascading-select logic
+        `_load_eyegenbench_source` builds on top of the shared directory +
+        access-status controls other public corpora don't need."""
+        import json
+
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "eyegenbench"
+        for name, lang in (("PoTeC", "German"), ("Provo", "English")):
+            ds = root / name
+            ds.mkdir(parents=True)
+            for table in ("words", "fixations", "participants"):
+                pd.DataFrame({"x": [0]}).to_parquet(ds / f"{table}.parquet")
+        (root / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "datasets": [
+                        {
+                            "name": "PoTeC",
+                            "language": "German",
+                            "monitor": [1680, 1050],
+                        },
+                        {
+                            "name": "Provo",
+                            "language": "English",
+                            "monitor": [1920, 1080],
+                        },
+                    ]
+                }
+            )
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = app.EYEGENBENCH_CHOICE
+        at.run(timeout=60)
+
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        language = [s for s in at.selectbox if s.label == "Language"][0]
+        corpus = [s for s in at.selectbox if s.label == "Corpus"][0]
+        assert set(language.options) == {"German", "English"}
+        # Groups sort alphabetically (_eyegenbench_picker_groups): default lands
+        # on English/Provo, the first sorted language.
+        assert language.value == "English"
+        assert corpus.options == ["Provo"]
+
+        language.set_value("German").run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        corpus = [s for s in at.selectbox if s.label == "Corpus"][0]
+        assert corpus.options == ["PoTeC"]
+        assert corpus.value == "PoTeC"
 
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
         """Selecting a public dataset snaps the canvas to its registered monitor,

@@ -62,6 +62,8 @@ from scanpath_studio.constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
+    EYEGENBENCH_CHOICE,
+    EYEGENBENCH_DEFAULT_DIR,
     FONT_FAMILY,
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
@@ -746,6 +748,21 @@ columns to map:
 `reading_measures/` and `participant_data.csv` (optional) enrich the load.
 """
 
+_EYEGENBENCH_STRUCTURE_MD = """\
+**Expected layout** — a bundle built by
+`python scripts/prepare_eyegenbench.py --all` (or any subset of corpora). No
+download here: build the bundle locally, then point this at where it wrote
+the files.
+```
+<dir>/
+├─ manifest.json              # one entry per prepared corpus
+└─ <corpus name>/              # e.g. PoTeC, Provo, …
+   ├─ words.parquet
+   ├─ fixations.parquet
+   └─ participants.parquet
+```
+"""
+
 
 def _onestop_structure_md(regime: str, parts: list, variant: str) -> str:
     """Expected-files note for the OneStop public source (regime/parts/variant)."""
@@ -1337,6 +1354,128 @@ def _load_onestop_public_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
+@st.cache_data(show_spinner="Loading EyeGenBench…")
+def _cached_eyegenbench_raw_frames(
+    root: str, dataset: str
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached raw ``(words, fixations)`` for one EyeGenBench corpus.
+
+    Cached on ``(root, dataset)`` so re-runs (toggling viz controls) don't
+    re-read the Parquet files. Keyed on plain strings, not the manifest entry
+    dict, so the cache survives an unrelated manifest re-read."""
+    from scanpath_studio.eyegenbench import eyegenbench_raw_frames
+
+    return eyegenbench_raw_frames(root, dataset=dataset)
+
+
+def _eyegenbench_picker_groups(entries) -> dict:
+    """Manifest entries -> ``{language: [dataset name, ...]}`` for the picker.
+
+    Grouped by language (the user's call, DATA-27) so the corpus list stays
+    navigable regardless of how many entries the local bundle holds — a
+    failed/skipped corpus deliberately gets no manifest entry, so the count
+    varies bundle to bundle and is never assumed here.
+    """
+    groups: dict = {}
+    for entry in entries:
+        groups.setdefault(str(entry.get("language") or "Unknown"), []).append(
+            entry["name"]
+        )
+    return {key: sorted(value) for key, value in sorted(groups.items())}
+
+
+def _load_eyegenbench_source(
+    options_host=None, location_host=None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Sidebar controls + loader for the EyeGenBench corpus data source.
+
+    EyeGenBench bundles many harmonised corpora under one local directory
+    (built by ``scripts/prepare_eyegenbench.py``, not downloadable from here),
+    so this source adds a **Language** / **Corpus** picker on top of the usual
+    directory + Expected-files + access-status controls, then wraps
+    ``eyegenbench.eyegenbench_raw_frames`` for the chosen corpus. The returned
+    raw frames go through the same normalization as an upload.
+
+    ``options_host`` / ``location_host`` are the DATA-9 sidebar sub-slots (the
+    Language/Corpus picker above, the data location below); default to their
+    own containers when called standalone.
+    """
+    from scanpath_studio.eyegenbench import eyegenbench_datasets, eyegenbench_present
+
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
+    root = _dataset_dir_input(
+        loc,
+        default_dir=EYEGENBENCH_DEFAULT_DIR,
+        dir_help="Folder holding a prepared EyeGenBench bundle. Build one with "
+        "`python scripts/prepare_eyegenbench.py --all` — there is no download "
+        "from here.",
+        structure_md=_EYEGENBENCH_STRUCTURE_MD,
+        key_prefix="eyegenbench",
+    )
+    ready = _dataset_access_status(
+        loc,
+        root=root,
+        present=eyegenbench_present(root),
+        key_prefix="eyegenbench",
+        label=EYEGENBENCH_CHOICE,
+    )
+    if not ready:
+        return load_sample_data()
+    try:
+        entries = eyegenbench_datasets(root)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        loc.error(f"Couldn't read the EyeGenBench manifest at `{root}`: {exc}")
+        return load_sample_data()
+    if not entries:
+        opt.warning("This EyeGenBench bundle has no prepared corpora yet.")
+        return load_sample_data()
+
+    groups = _eyegenbench_picker_groups(entries)
+    languages = list(groups)
+    opt.caption(
+        f"{len(entries)} corpus{'es' if len(entries) != 1 else ''} available "
+        "in this bundle."
+    )
+
+    # `eyegenbench_dataset` is the wire-format key a deep link seeds (Task 12) —
+    # the language filter follows it, not the other way around, so a restored
+    # link lands on the right corpus without the user re-picking the language.
+    # Re-derived only when the current language is unset/stale (first render,
+    # or the bundle changed underfoot), so a manual language pick later in the
+    # session survives its own rerun instead of snapping back every time.
+    if st.session_state.get("eyegenbench_language") not in languages:
+        seed_dataset = st.session_state.get("eyegenbench_dataset")
+        language = next(
+            (lang for lang, names in groups.items() if seed_dataset in names),
+            languages[0],
+        )
+        st.session_state["eyegenbench_language"] = language
+    language = opt.selectbox(
+        "Language",
+        options=languages,
+        key="eyegenbench_language",
+        persist_state="session",
+        help="Corpora are grouped by language to stay navigable as the bundle grows.",
+    )
+    names = groups.get(language, [])
+    if st.session_state.get("eyegenbench_dataset") not in names:
+        st.session_state["eyegenbench_dataset"] = names[0] if names else None
+    dataset = opt.selectbox(
+        "Corpus",
+        options=names,
+        key="eyegenbench_dataset",
+        persist_state="session",
+    )
+    if not dataset:
+        return load_sample_data()
+    try:
+        return _cached_eyegenbench_raw_frames(root, dataset)
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        loc.error(f"Couldn't load EyeGenBench corpus '{dataset}' from `{root}`: {exc}")
+        return pd.DataFrame(), pd.DataFrame()
+
+
 # Registry behind the "Public datasets" source: label → loader (renders its own
 # sidebar options and returns raw, pre-normalization frames), the corpus'
 # presentation-monitor size (canvas default for true-to-scale rendering; None to
@@ -1380,6 +1519,21 @@ PUBLIC_DATASET_REGISTRY: dict = {
         "repeated) and seven trial parts (title / question / paragraph / answers "
         "/ feedback). Downloaded from OSF, or read from a LaCC lab export.",
         link="https://github.com/lacclab/OneStop-Eye-Movements",
+    ),
+    EYEGENBENCH_CHOICE: dict(
+        loader=_load_eyegenbench_source,
+        # A generic default: the real per-corpus monitor lives in the manifest
+        # (`eyegenbench_monitor`), but resolving it into the canvas per selected
+        # corpus is not wired up by this task — see the app.py note at
+        # `resolve_source_monitor`.
+        monitor=(1920, 1080),
+        short="EyeGenBench",
+        language="Multilingual",
+        size="corpus count depends on your local bundle — see the picker",
+        description="The EyeGenBench benchmark suite, harmonised to one schema. "
+        "Screen geometry is recovered per corpus and badged real / "
+        "reconstructed / synthesized.",
+        link="https://github.com/EyeBench/EyeGenBench",
     ),
 }
 

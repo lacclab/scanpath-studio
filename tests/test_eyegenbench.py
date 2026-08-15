@@ -201,3 +201,24 @@ def test_cli_requires_a_dataset_name_with_eyegenbench(bundle, capsys):
     with pytest.raises(SystemExit):
         cli.main(["render", "--eyegenbench", str(bundle), "--out", "x.png"])
     assert "--eyegenbench-dataset" in capsys.readouterr().err
+
+
+def test_registry_lists_eyegenbench():
+    from scanpath_studio import app
+
+    # R29: the registry key is the shared EYEGENBENCH_CHOICE constant (no
+    # hard-coded corpus count baked into the label — see constants.py).
+    entry = app.PUBLIC_DATASET_REGISTRY[app.EYEGENBENCH_CHOICE]
+    assert entry["short"] == "EyeGenBench"
+    assert callable(entry["loader"])
+    assert entry["link"].startswith("https://github.com/EyeBench")
+
+
+def test_picker_groups_datasets_by_language():
+    from scanpath_studio import app
+
+    groups = app._eyegenbench_picker_groups(
+        [{"name": "PoTeC", "language": "de"}, {"name": "Provo", "language": "en"}]
+    )
+    assert groups["de"] == ["PoTeC"]
+    assert groups["en"] == ["Provo"]

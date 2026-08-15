@@ -44,9 +44,9 @@ description carries its licence and citation. If the bundle isn't where you
 pointed, the app says so and keeps the bundled demo loaded rather than failing.
 
 With **no** corpora discovered the picker offers a single entry,
-*Harmonised benchmark corpora — set up a local bundle*, which exists only to
-carry the directory input; it disappears as soon as a bundle is found. As with
-every public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all.
+*🌐 Harmonised benchmark corpora — set up*, which exists only to carry the
+directory input; it disappears as soon as a bundle is found. As with every
+public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all.
 
 Two corpora ship **both** natively and harmonised — PoTeC and OneStop — and both
 entries are kept on purpose. The harmonised copy is labelled
@@ -215,6 +215,13 @@ One corpus at a time is prepared and recorded, and a corpus that fails is skippe
 with its reason printed rather than taking the sweep down.
 
 ## The other surfaces
+
+**Comparisons.** A prepared corpus can also be the *second* scanpath in a
+cross-dataset comparison, chosen in the Comparisons subtab's own dataset picker
+rather than the main data-source one. It reads the same bundle from the same
+directory, so a corpus you can open as your main dataset is a corpus you can
+compare against. Note the share link carries only the corpus you opened as the
+main dataset — the comparison's second corpus does not travel on it.
 
 **Deep link / Share.** A share link names the corpus, never its data:
 `?source=corpus&corpus=<slug>`. This one token covers every public corpus —

@@ -34,7 +34,6 @@ default threshold.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Tuple
 
 #: Bumped when an entry's *meaning* changes (a formula, a unit, a default), not
 #: when prose is edited. Exported alongside results so a bundle can name the
@@ -51,7 +50,7 @@ CATEGORY_SIMILARITY = "Similarity"
 CATEGORY_GEOMETRY = "Unit / coordinate conversion"
 CATEGORY_DISPLAY = "Display / export transformation"
 
-CATEGORIES: Tuple[str, ...] = (
+CATEGORIES: tuple[str, ...] = (
     CATEGORY_IMPORTED,
     CATEGORY_NORMALIZATION,
     CATEGORY_ASSIGNMENT,
@@ -68,7 +67,7 @@ STATUS_PARTIAL = "Partially verified"
 STATUS_UNVERIFIED = "Unverified"
 STATUS_CONVENTION = "Intentional convention"
 
-STATUSES: Tuple[str, ...] = (
+STATUSES: tuple[str, ...] = (
     STATUS_VERIFIED,
     STATUS_PARTIAL,
     STATUS_UNVERIFIED,
@@ -94,8 +93,8 @@ class Computation:
     tiers: str = ""
     status: str = STATUS_UNVERIFIED
     reference: str = ""
-    consumers: Tuple[str, ...] = field(default_factory=tuple)
-    tests: Tuple[str, ...] = field(default_factory=tuple)
+    consumers: tuple[str, ...] = field(default_factory=tuple)
+    tests: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def module(self) -> str:
@@ -114,7 +113,7 @@ _CORPUS = "Corpus Analysis"
 _INSPECT = "Data Inspection"
 
 
-REGISTER: Tuple[Computation, ...] = (
+REGISTER: tuple[Computation, ...] = (
     # ------------------------------------------------------------------
     # Normalization / inference
     # ------------------------------------------------------------------
@@ -1324,7 +1323,7 @@ REGISTER: Tuple[Computation, ...] = (
 BY_ID = {entry.id: entry for entry in REGISTER}
 
 
-def entries_in(category: str) -> Tuple[Computation, ...]:
+def entries_in(category: str) -> tuple[Computation, ...]:
     """Every register entry in one category, in declaration order."""
     return tuple(entry for entry in REGISTER if entry.category == category)
 

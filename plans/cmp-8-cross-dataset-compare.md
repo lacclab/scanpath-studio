@@ -129,7 +129,7 @@ class SetupSnapshot:
     scale_text_to_boxes: bool
 
     @property
-    def dpi(self) -> float: ...          # dpi_from_width(canvas_width, monitor_width_mm)
+    def dpi(self) -> float: ...  # dpi_from_width(canvas_width, monitor_width_mm)
     @property
     def px_per_degree(self) -> float: ...  # pixels_per_degree(...)
 
@@ -185,11 +185,11 @@ only fires for authoritative built-ins). Land §1 on its own if CMP-8 stalls.
 ```python
 @dataclass(frozen=True)
 class SecondaryDataset:
-    name: str                 # display name, also the compare-label prefix
-    words: pd.DataFrame       # normalized
-    fixations: pd.DataFrame   # normalized
-    combos: pd.DataFrame      # its own build_combo_options output
-    setup: SetupSnapshot      # §1
+    name: str  # display name, also the compare-label prefix
+    words: pd.DataFrame  # normalized
+    fixations: pd.DataFrame  # normalized
+    combos: pd.DataFrame  # its own build_combo_options output
+    setup: SetupSnapshot  # §1
 ```
 
 ```python
@@ -236,6 +236,7 @@ Qualify **only in the throwaway compare frames**:
 
 ```python
 _COMPARE_DATASET_SEP = " · "
+
 
 def _qualify_for_compare(frame: pd.DataFrame, dataset: str) -> pd.DataFrame:
     """Copy `frame` with `participant_id` prefixed by the dataset name and a

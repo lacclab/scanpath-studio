@@ -23,7 +23,7 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
 from time import perf_counter
-from typing import Any, Deque, Dict, List
+from typing import Any
 
 import streamlit as st
 
@@ -74,7 +74,7 @@ def timed(what: str, level: int = logging.INFO, **fields: Any):
     start = perf_counter()
     try:
         yield
-    except Exception as exc:  # noqa: BLE001 - re-raised below
+    except Exception as exc:  # re-raised below
         logging.getLogger("scanpath_studio").warning(
             "%s failed after %.0f ms%s: %s",
             what,
@@ -120,7 +120,7 @@ def log_state_change(state_key: str, value: Any, what: str, **fields: Any) -> No
     log_event(what, **fields)
 
 
-def _buffer() -> Deque[Dict[str, Any]]:
+def _buffer() -> deque[dict[str, Any]]:
     """The session-scoped ring buffer of captured log records."""
     buf = st.session_state.get(_BUFFER_KEY)
     if buf is None:
@@ -266,14 +266,14 @@ def render_debug_toggle(host=None) -> None:
     )
 
 
-def _state_snapshot() -> List[Dict[str, str]]:
+def _state_snapshot() -> list[dict[str, str]]:
     """A few high-signal facts about what's currently loaded, best-effort.
 
     Reads optional session-state keys defensively — missing keys are simply
     omitted so this never crashes regardless of app state.
     """
     ss = st.session_state
-    rows: List[Dict[str, str]] = []
+    rows: list[dict[str, str]] = []
 
     def add(label: str, value: Any) -> None:
         if value is not None:

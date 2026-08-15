@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -68,7 +67,7 @@ class SecondaryDataset:
     fixations: pd.DataFrame
     combos: pd.DataFrame
     setup: SetupSnapshot
-    composite_trial_columns: Tuple[str, ...] = field(default=())
+    composite_trial_columns: tuple[str, ...] = field(default=())
 
 
 def _resolved_dir(key: str, default_dir: str) -> str:
@@ -88,7 +87,7 @@ def _resolved_dir(key: str, default_dir: str) -> str:
     return app._resolve_data_dir(raw)
 
 
-def _public_location(label: str) -> Tuple[str, dict]:
+def _public_location(label: str) -> tuple[str, dict]:
     """``(root, loader kwargs)`` for a `PUBLIC_DATASET_REGISTRY` label.
 
     The kwargs are the *user's current* source options (OneStop's variant /
@@ -124,7 +123,7 @@ def _public_location(label: str) -> Tuple[str, dict]:
     return "", {}
 
 
-def _public_ready(label: str) -> Tuple[bool, str]:
+def _public_ready(label: str) -> tuple[bool, str]:
     """Whether a public corpus can be loaded *silently*, and why not if it can't.
 
     Uses the existing readiness helpers — `datasets.potec_present` /
@@ -142,7 +141,7 @@ def _public_ready(label: str) -> Tuple[bool, str]:
 
 
 @st.cache_data(show_spinner=False)
-def _public_ready_cached(label: str, root: str, options: tuple) -> Tuple[bool, str]:
+def _public_ready_cached(label: str, root: str, options: tuple) -> tuple[bool, str]:
     from scanpath_studio import datasets
 
     kwargs = dict(options)
@@ -173,7 +172,7 @@ def _public_ready_cached(label: str, root: str, options: tuple) -> Tuple[bool, s
 
 
 def secondary_dataset_options(
-    *, exclude: Optional[str] = None
+    *, exclude: str | None = None
 ) -> list[tuple[str, bool, str]]:
     """Every source compare mode could draw B from: ``(name, ready, why_not)``.
 
@@ -212,7 +211,7 @@ def secondary_dataset_options(
 @st.cache_data(show_spinner="Loading comparison dataset…")
 def _load_public_frames(
     label: str, root: str, options: tuple
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized frames for a public corpus, keyed on its location + options.
 
     Goes through the `datasets.load_*` entry points (which normalize internally
@@ -235,7 +234,7 @@ def _load_public_frames(
 
 
 @st.cache_data(show_spinner="Loading comparison dataset…")
-def _load_builtin_frames(name: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _load_builtin_frames(name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized frames for the bundled demo / synthetic trial.
 
     Both are small and packaged, so caching the *normalized* result here is the
@@ -290,7 +289,7 @@ def snapshot_for(
 _snapshot_for = snapshot_for
 
 
-def load_secondary_dataset(name: Optional[str]) -> Optional[SecondaryDataset]:
+def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
     """Load one comparison source by name, or ``None`` when there is nothing to load.
 
     ``None`` / `THIS_DATASET` / an unready name all return ``None`` — the caller

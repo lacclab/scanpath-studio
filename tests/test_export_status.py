@@ -298,7 +298,7 @@ def _static_export_app():
 
 def test_static_result_stays_ready_across_rerun(monkeypatch):
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
-    import scanpath_studio.tabs as tabs
+    from scanpath_studio import tabs
 
     def fake_render(*args, status_callback=None, **kwargs):
         if status_callback:
@@ -324,7 +324,7 @@ def test_static_result_stays_ready_across_rerun(monkeypatch):
 
 def test_static_missing_browser_hint_is_not_duplicated(monkeypatch):
     AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
-    import scanpath_studio.tabs as tabs
+    from scanpath_studio import tabs
 
     def missing_browser(*args, **kwargs):
         raise RuntimeError(animation_export.CHROME_INSTALL_HINT)

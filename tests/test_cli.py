@@ -112,7 +112,7 @@ def test_render_explicit_trial_with_flags(tmp_path):
 
 def test_render_forwards_saccade_styling(tmp_path, monkeypatch):
     # The --saccade-* flags must reach the figure builder via plot_scanpath.
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured = {}
 
@@ -144,7 +144,7 @@ def test_render_forwards_saccade_styling(tmp_path, monkeypatch):
 def test_render_forwards_saccade_color_by_type(tmp_path, monkeypatch):
     # --saccade-color-by-type flips the mode; --saccade-type-color overrides a
     # class colour and implies the mode (VIZ-8).
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured = {}
 
@@ -172,7 +172,7 @@ def test_render_forwards_saccade_color_by_type(tmp_path, monkeypatch):
 
 def test_render_forwards_heatmap_norm(tmp_path, monkeypatch):
     # --heatmap-norm log reaches the figure builder as "Log" (VIZ-3).
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured = {}
 
@@ -190,7 +190,7 @@ def test_render_forwards_heatmap_norm(tmp_path, monkeypatch):
 
 def test_render_forwards_linear_reading_flags(tmp_path, monkeypatch):
     # VIZ-9: --saccade-arcs / --snap-fixations reach the figure builder.
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured = {}
 
@@ -230,7 +230,7 @@ def test_render_saccade_type_color_rejects_bad_class(tmp_path):
 
 def test_render_animate_forwards_saccade_styling(tmp_path, monkeypatch):
     # The animation builder honors the saccade trio too, so --animate forwards it.
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured = {}
 
@@ -303,7 +303,7 @@ def test_render_trial_only_resolves_matching_participant(tmp_path, capsys):
     import scanpath_studio as sps
 
     combos = sps.list_trials(*sps.load_sample_data())
-    pid, tid = combos.iloc[-1]
+    _pid, tid = combos.iloc[-1]
     out_file = tmp_path / "x.html"
     cli.main(["render", "--sample", "-t", tid, "-o", str(out_file)])
     assert out_file.is_file()
@@ -430,7 +430,7 @@ def test_render_separable_layers(tmp_path, monkeypatch):
     # to avoid Kaleido/Chrome; assert the CLI targets the right dir + format.
     from pathlib import Path
 
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured = {}
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: Path(path))
@@ -452,7 +452,7 @@ def test_render_separable_layers_skips_html(tmp_path, monkeypatch, capsys):
     # A non-image output (or --animate) can't be split into vector layers.
     from pathlib import Path
 
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     called = []
     monkeypatch.setattr(api, "save_figure", lambda fig, path, **k: Path(path))

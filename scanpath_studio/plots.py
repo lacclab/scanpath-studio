@@ -6,9 +6,10 @@ import base64
 import copy
 import math
 import struct
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import MISSING, dataclass, fields, replace
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -78,83 +79,83 @@ class FigureSettings:
     show_order: bool = True
     show_saccades: bool = True
     show_heatmap: bool = False
-    color_by: Optional[str] = UNIFORM_COLOR_FIELD
-    heatmap_metric: Optional[str] = None
+    color_by: str | None = UNIFORM_COLOR_FIELD
+    heatmap_metric: str | None = None
     show_saccade_arrows: bool = False
     heatmap_style: str = "Word boxes"
     heatmap_norm: str = "Linear"
     duration_mass_sigma_chars: float = 1.0
-    marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
-    order_font_size: Optional[int] = 10
+    marker_size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
+    order_font_size: int | None = 10
     order_font_color: str = "#111111"
     show_colorbars: bool = False
-    fixation_color_range: Optional[Tuple[float, float]] = None
-    heatmap_range: Optional[Tuple[float, float]] = None
+    fixation_color_range: tuple[float, float] | None = None
+    heatmap_range: tuple[float, float] | None = None
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE
     heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE
     show_raw_gaze: bool = False
     critical_span_style: str = "Mark text"
-    highlight_column: Optional[str] = "is_in_aspan"
+    highlight_column: str | None = "is_in_aspan"
     saccade_color: str = SACCADE_COLOR
     saccade_style: str = "solid"
     saccade_width: float = DEFAULT_SACCADE_WIDTH
     saccade_color_mode: str = "Uniform"
-    saccade_class_colors: Optional[dict] = None
+    saccade_class_colors: dict | None = None
     saccade_type_legend: bool = True
-    saccade_classes: Optional[Iterable[str]] = None
+    saccade_classes: Iterable[str] | None = None
     saccade_render_mode: str = "Straight"
     fixation_snap_to_word: bool = False
     hollow_fixations: bool = False
     fixation_opacity: float = 1.0
-    fixation_color: Optional[str] = DEFAULT_FIXATION_COLOR
+    fixation_color: str | None = DEFAULT_FIXATION_COLOR
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL
     text_color: str = WORD_LABEL_COLOR
     highlight_text_color: str = HIGHLIGHTED_TEXT_COLOR
-    background_color: Optional[str] = None
+    background_color: str | None = None
     color_by_line: bool = False
-    fixation_flags: Optional[dict] = None
+    fixation_flags: dict | None = None
     span_border_color: str = "#000000"
     colorbar_orientation: str = "Vertical"
     colorbar_tickangle: int = 0
     colorbar_tickfont_size: int = 12
     line_spacing: float = DEFAULT_LINE_SPACING
     scale_text_to_boxes: bool = True
-    background_image: Optional[str] = None
-    background_image_size: Optional[Tuple[float, float]] = None
-    background_image_origin: Optional[Tuple[float, float]] = None
+    background_image: str | None = None
+    background_image_size: tuple[float, float] | None = None
+    background_image_origin: tuple[float, float] | None = None
     background_image_opacity: float = 1.0
     fit_to_monitor: bool = False
     show_coordinate_grid: bool = False
-    coordinate_grid_spacing: Optional[float] = None
-    word_heatmap_col: Optional[str] = None
-    word_heatmap_title: Optional[str] = None
-    word_hover_measure: Optional[str] = "total_fixation_duration_ms"
-    word_hover_fields: Optional[Sequence[str]] = None
-    fixation_hover_fields: Optional[Sequence[str]] = None
+    coordinate_grid_spacing: float | None = None
+    word_heatmap_col: str | None = None
+    word_heatmap_title: str | None = None
+    word_hover_measure: str | None = "total_fixation_duration_ms"
+    word_hover_fields: Sequence[str] | None = None
+    fixation_hover_fields: Sequence[str] | None = None
     show_connectors: bool = False
-    connector_y: Optional[Sequence[float]] = None
-    illustration_reasons: Optional[Sequence[str]] = None
+    connector_y: Sequence[float] | None = None
+    illustration_reasons: Sequence[str] | None = None
     playback_speed: float = 1.0
     label_a: str = "Scanpath A"
     label_b: str = "Scanpath B"
     show_legend: bool = False
     autoplay: bool = True
-    anim_grid_step_ms: Optional[float] = None
-    anim_max_frames: Optional[int] = None
-    trial_labels: Optional[Tuple[str, str]] = None
+    anim_grid_step_ms: float | None = None
+    anim_max_frames: int | None = None
+    trial_labels: tuple[str, str] | None = None
     layout: str = "overlay"
-    style_a: Optional[dict] = None
-    style_b: Optional[dict] = None
+    style_a: dict | None = None
+    style_b: dict | None = None
     # CMP-8 §4 — scanpath B's own screen, honoured *only* by
     # `_make_split_comparison_figure` (side-by-side / stacked). `None` means "the
     # same screen as A", which is every same-dataset comparison and so leaves
     # every existing figure byte-identical. Overlay never needs these: CMP-11
     # lets a cross-dataset pair overlay only when both screens are equal, so
     # there is no second canvas for it to reconcile.
-    canvas_b: Optional[Tuple[int, int]] = None
-    background_image_b: Optional[str] = None
-    background_image_size_b: Optional[Tuple[float, float]] = None
-    background_image_origin_b: Optional[Tuple[float, float]] = None
+    canvas_b: tuple[int, int] | None = None
+    background_image_b: str | None = None
+    background_image_size_b: tuple[float, float] | None = None
+    background_image_origin_b: tuple[float, float] | None = None
     # CMP-11 — which reading supplies the stimulus layer (word boxes + labels)
     # on an OVERLAY: "both" (the default, and byte-identical to pre-CMP-11),
     # "a", or "b". Two datasets' AOIs coincide only when the text is identical,
@@ -166,10 +167,10 @@ class FigureSettings:
     @classmethod
     def from_mapping(
         cls,
-        settings: Optional["FigureSettings | Mapping[str, Any]"] = None,
+        settings: FigureSettings | Mapping[str, Any] | None = None,
         /,
         **overrides: Any,
-    ) -> "FigureSettings":
+    ) -> FigureSettings:
         """Build settings from another instance or a plain option mapping."""
         valid = {field.name for field in fields(cls)}
         unknown = sorted(set(overrides) - valid)
@@ -184,7 +185,7 @@ class FigureSettings:
         values.update(overrides)
         return cls(**values)
 
-    def with_overrides(self, **overrides: Any) -> "FigureSettings":
+    def with_overrides(self, **overrides: Any) -> FigureSettings:
         """Return a copy with the named settings replaced."""
         return self.from_mapping(self, **overrides)
 
@@ -207,7 +208,7 @@ class FigureSettings:
 
 
 def _sample_colorscale_colors(
-    values, colorscale: str, cmin: Optional[float], cmax: Optional[float]
+    values, colorscale: str, cmin: float | None, cmax: float | None
 ) -> object:
     """Map numeric values to concrete CSS colours via a named Plotly colorscale.
 
@@ -264,12 +265,10 @@ def _make_hollow(marker: dict) -> dict:
 def _compute_axis_ranges(
     canvas_width: int,
     canvas_height: int,
-    *frames_with_xy: Tuple[Optional[pd.DataFrame], str, str],
+    *frames_with_xy: tuple[pd.DataFrame | None, str, str],
     word_frames: Iterable[pd.DataFrame] = (),
     fit_to_monitor: bool = False,
-) -> Tuple[
-    list, list, Optional[float], Optional[float], Optional[float], Optional[float]
-]:
+) -> tuple[list, list, float | None, float | None, float | None, float | None]:
     """Compute padded x/y ranges from any number of (frame, x_col, y_col) tuples.
 
     word_frames contribute box-extent bounds: x, x+width and y, y+height.
@@ -368,10 +367,10 @@ def coordinate_grid_ticks(
     x_range: Sequence[float],
     y_range: Sequence[float],
     *,
-    spacing: Optional[float] = None,
+    spacing: float | None = None,
     rendered_width: int = 900,
     rendered_height: int = 650,
-    monitor_bounds: Optional[tuple[float, float, float, float]] = None,
+    monitor_bounds: tuple[float, float, float, float] | None = None,
 ) -> CoordinateGridTicks:
     """Return screen-X/Y grid ticks without changing either visible range.
 
@@ -463,7 +462,7 @@ def _apply_coordinate_grid_axes(
     yaxis: dict,
     *,
     show: bool,
-    spacing: Optional[float],
+    spacing: float | None,
     x_range: Sequence[float],
     y_range: Sequence[float],
     rendered_width: int,
@@ -499,7 +498,7 @@ def _fit_display_size(
     x_range: list,
     y_range: list,
     spatial_axes: bool,
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Return (width, height) for `fig.update_layout` so the plot fits onscreen.
 
     With `scaleanchor="x", scaleratio=1` the plot domain shrinks to the data
@@ -516,14 +515,14 @@ def _fit_display_size(
     if x_span <= 0 or y_span <= 0:
         return canvas_width, canvas_height
     aspect = x_span / y_span
-    w, h = canvas_width, int(round(canvas_width / aspect))
+    w, h = canvas_width, round(canvas_width / aspect)
     # Shrink (preserving aspect) until both dims fit the viewport caps.
     if h > _DISPLAY_MAX_HEIGHT:
         h = _DISPLAY_MAX_HEIGHT
-        w = int(round(h * aspect))
+        w = round(h * aspect)
     if w > _DISPLAY_MAX_WIDTH:
         w = _DISPLAY_MAX_WIDTH
-        h = int(round(w / aspect))
+        h = round(w / aspect)
     return max(w, 100), max(h, 100)
 
 
@@ -676,7 +675,7 @@ def _latin_advance(words: pd.DataFrame) -> float:
     return _CJK_LATIN_ASPECT if wide >= 0.3 * len(text) else _MONO_ASPECT
 
 
-def _line_pitch(words: pd.DataFrame) -> Optional[float]:
+def _line_pitch(words: pd.DataFrame) -> float | None:
     """Median line-to-line distance (data px) of the word boxes.
 
     The true-to-scale font budget is a fraction of the *line pitch* (the gap
@@ -701,7 +700,7 @@ def _line_pitch(words: pd.DataFrame) -> Optional[float]:
     return box_h if box_h and box_h > 0 else None
 
 
-def _width_fit_font(words: pd.DataFrame) -> Optional[float]:
+def _width_fit_font(words: pd.DataFrame) -> float | None:
     """Largest font (data px) at which every word still fits its box width.
 
     Word boxes hug the rendered text, so a word's box width equals the sum of its
@@ -802,10 +801,10 @@ _QUALITATIVE_PALETTE = [
 
 
 def _resolve_marker_colors(
-    color_data: Optional[pd.Series],
+    color_data: pd.Series | None,
     is_numeric_color: bool,
     uniform_color: str = DEFAULT_FIXATION_COLOR,
-) -> Tuple[object, list]:
+) -> tuple[object, list]:
     """Return (marker_color, category_legend) for the fixation scatter trace.
 
     - Numeric color_data is passed straight through (Plotly maps it via colorscale).
@@ -830,7 +829,7 @@ def _resolve_marker_colors(
     return marker_color, legend
 
 
-def _marker_symbol(symbol: Optional[str]) -> str:
+def _marker_symbol(symbol: str | None) -> str:
     """A ``marker.symbol`` Plotly will accept.
 
     The VIZ-15 glyph shapes (♥) aren't in Plotly's symbol enum — the static
@@ -843,7 +842,7 @@ def _marker_symbol(symbol: Optional[str]) -> str:
 
 
 def _compute_marker_sizes(
-    durations: pd.Series, size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
+    durations: pd.Series, size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE
 ) -> np.ndarray:
     """Map fixation durations to marker sizes by linear interpolation."""
     durations = pd.to_numeric(durations, errors="coerce").fillna(0)
@@ -864,7 +863,7 @@ _ARCH_SAMPLES = 20
 
 def _arch_control_point(
     x0: float, y0: float, x1: float, y1: float, frac: float
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Control point of the quadratic Bézier arch drawn between two fixations.
 
     Single source of truth for the arch geometry: ``_arch_points`` samples the
@@ -876,7 +875,7 @@ def _arch_control_point(
 
 def _arch_points(
     x0: float, y0: float, x1: float, y1: float, frac: float, n: int = _ARCH_SAMPLES
-) -> Tuple[list, list]:
+) -> tuple[list, list]:
     """Sample a quadratic Bézier arch from (x0,y0) to (x1,y1), bulging upward.
 
     Screen y grows downward, so the control point is *above* the chord (smaller
@@ -919,7 +918,7 @@ def _arch_apex_y(x0: float, y0: float, x1: float, y1: float, frac: float) -> flo
 
 
 def _extend_segment(
-    xs: list, ys: list, x0, y0, x1, y1, arch_frac: Optional[float]
+    xs: list, ys: list, x0, y0, x1, y1, arch_frac: float | None
 ) -> None:
     """Append one saccade segment (straight, or an arch when ``arch_frac``) to the
     None-separated ``xs``/``ys`` accumulators."""
@@ -936,8 +935,8 @@ def _saccade_segments(
     fix_df: pd.DataFrame,
     x_col: str,
     y_col: str,
-    arch_frac: Optional[float] = None,
-) -> Tuple[list, list]:
+    arch_frac: float | None = None,
+) -> tuple[list, list]:
     """Return concatenated x/y arrays separated by None for a single saccade trace.
 
     ``arch_frac`` (VIZ-9) draws each segment as an upward arc instead of a straight
@@ -961,7 +960,7 @@ def _saccade_segments_by_class(
     x_col: str,
     y_col: str,
     classes: pd.Series,
-    arch_frac: Optional[float] = None,
+    arch_frac: float | None = None,
 ) -> dict:
     """Group saccade segments by reading class → ``{class: (xs, ys)}`` (VIZ-8).
 
@@ -1036,7 +1035,7 @@ _ARROW_ARCH_T = 0.5
 
 def _arch_point_and_tangent(
     x0: float, y0: float, x1: float, y1: float, frac: float, t: float = _ARROW_ARCH_T
-) -> Tuple[float, float, float, float]:
+) -> tuple[float, float, float, float]:
     """Point on the drawn arch at Bézier parameter ``t``, plus the curve's tangent.
 
     Evaluates the very curve ``_arch_points`` samples (same
@@ -1062,8 +1061,8 @@ def _saccade_arrow_rows(
     fix_df: pd.DataFrame,
     x_col: str,
     y_col: str,
-    arch_frac: Optional[float] = None,
-) -> Tuple[list, list, list, list]:
+    arch_frac: float | None = None,
+) -> tuple[list, list, list, list]:
     """:func:`_saccade_arrow_markers` plus each arrowhead's saccade index.
 
     Returns ``(mid_x, mid_y, angle_deg, segment_index)``. Arrowheads are dropped
@@ -1117,8 +1116,8 @@ def _saccade_arrow_markers(
     fix_df: pd.DataFrame,
     x_col: str,
     y_col: str,
-    arch_frac: Optional[float] = None,
-) -> Tuple[list, list, list]:
+    arch_frac: float | None = None,
+) -> tuple[list, list, list]:
     """Arrowhead position + rotation for each saccade, for a marker trace.
 
     Returns (mid_x, mid_y, angle_deg) with one entry per consecutive-fixation
@@ -1263,7 +1262,7 @@ def _shape_layer_tag(layer: str) -> str:
     return f"{_LAYER_SHAPE_TAG}{layer}"
 
 
-def _shape_layer(shape) -> Optional[str]:
+def _shape_layer(shape) -> str | None:
     """Layer of a tagged shape, or None for an untagged one."""
     name = getattr(shape, "name", None) or ""
     if name.startswith(_LAYER_SHAPE_TAG):
@@ -1295,7 +1294,7 @@ def _trace_layer(trace) -> str:
     return "fixations"
 
 
-def split_scanpath_layers(fig: go.Figure) -> Dict[str, go.Figure]:
+def split_scanpath_layers(fig: go.Figure) -> dict[str, go.Figure]:
     """Split a `make_scanpath_figure` result into one figure per visible layer.
 
     Returns ``{layer_name: figure}`` in bottom-to-top draw order, keeping only the
@@ -1311,7 +1310,7 @@ def split_scanpath_layers(fig: go.Figure) -> Dict[str, go.Figure]:
     if fig.layout.images:
         present.add("stimulus_image")
 
-    out: Dict[str, go.Figure] = {}
+    out: dict[str, go.Figure] = {}
     for layer in SCANPATH_LAYER_ORDER:
         if layer not in present:
             continue
@@ -1355,8 +1354,8 @@ def _hover_payload(
     frame: pd.DataFrame,
     fields: Sequence[str],
     *,
-    line_display: Optional[pd.Series] = None,
-) -> tuple[Optional[np.ndarray], str]:
+    line_display: pd.Series | None = None,
+) -> tuple[np.ndarray | None, str]:
     """Plotly customdata + template for a user-selected field list (VIZ-26)."""
     valid = [
         field
@@ -1385,13 +1384,13 @@ def _add_word_label_trace(
     words: pd.DataFrame,
     base_font_size: int,
     font_family: str,
-    row: Optional[int] = None,
-    col: Optional[int] = None,
-    highlight_column: Optional[str] = None,
+    row: int | None = None,
+    col: int | None = None,
+    highlight_column: str | None = None,
     text_color: str = WORD_LABEL_COLOR,
     highlight_text_color: str = _CRITICAL_TEXT_COLOR,
-    word_hover_measure: Optional[str] = None,
-    word_hover_fields: Optional[Sequence[str]] = None,
+    word_hover_measure: str | None = None,
+    word_hover_fields: Sequence[str] | None = None,
 ) -> None:
     if words.empty or "text" not in words.columns:
         return
@@ -1476,7 +1475,7 @@ _IMAGE_MIME = {
 }
 
 
-def _image_to_data_uri(src: Optional[str]) -> Optional[str]:
+def _image_to_data_uri(src: str | None) -> str | None:
     """A ``data:`` URI for an image path, or pass through an existing one.
 
     Returns None for a missing / unreadable file so the background-image layer
@@ -1495,7 +1494,7 @@ def _image_to_data_uri(src: Optional[str]) -> Optional[str]:
     return f"data:{mime};base64," + base64.b64encode(raw).decode("ascii")
 
 
-def _png_pixel_size(src: Optional[str]) -> Optional[Tuple[int, int]]:
+def _png_pixel_size(src: str | None) -> tuple[int, int] | None:
     """(width, height) of a PNG from its header, without Pillow; None otherwise."""
     if not src:
         return None
@@ -1511,11 +1510,11 @@ def _png_pixel_size(src: Optional[str]) -> Optional[Tuple[int, int]]:
 
 
 def _background_image_spec(
-    background_image: Optional[str],
-    background_image_size: Optional[Tuple[float, float]],
-    background_image_origin: Optional[Tuple[float, float]],
+    background_image: str | None,
+    background_image_size: tuple[float, float] | None,
+    background_image_origin: tuple[float, float] | None,
     background_image_opacity: float = 1.0,
-) -> Optional[dict]:
+) -> dict | None:
     """The ``layout.image`` dict for the stimulus-page background (VIZ-4).
 
     The rendered page sits at data coordinates ``(origin_x, origin_y)`` →
@@ -1552,13 +1551,13 @@ def _background_image_spec(
 
 def _add_background_image(
     fig: go.Figure,
-    background_image: Optional[str],
-    background_image_size: Optional[Tuple[float, float]],
-    background_image_origin: Optional[Tuple[float, float]],
+    background_image: str | None,
+    background_image_size: tuple[float, float] | None,
+    background_image_origin: tuple[float, float] | None,
     background_image_opacity: float = 1.0,
     *,
-    row: Optional[int] = None,
-    col: Optional[int] = None,
+    row: int | None = None,
+    col: int | None = None,
 ) -> bool:
     """Add the stimulus-page background image to ``fig``; True when one was added.
 
@@ -1590,11 +1589,11 @@ def _add_saccade_layer(
     width: float,
     style: str,
     show_arrows: bool,
-    saccade_classes: Optional[pd.Series] = None,
+    saccade_classes: pd.Series | None = None,
     color_by_class: bool = True,
-    class_colors: Optional[dict] = None,
+    class_colors: dict | None = None,
     class_legend: bool = True,
-    visible_classes: Optional[Iterable[str]] = None,
+    visible_classes: Iterable[str] | None = None,
     render_mode: str = "Straight",
     two_way: bool = False,
 ) -> bool:
@@ -1764,7 +1763,7 @@ def _add_saccade_layer(
 
 
 def _add_raw_gaze_layer(
-    fig: go.Figure, raw_gaze: Optional[pd.DataFrame], *, show_raw_gaze: bool
+    fig: go.Figure, raw_gaze: pd.DataFrame | None, *, show_raw_gaze: bool
 ) -> bool:
     """Add the raw-gaze sample-point scatter (time-coloured when available).
 
@@ -1823,10 +1822,10 @@ _FIX_FLAG_LABELS = {
 def _fixation_flag_masks(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
-    flags: Optional[dict],
+    flags: dict | None,
     *,
     spatial_axes: bool = True,
-) -> Dict[str, pd.Series]:
+) -> dict[str, pd.Series]:
     """Boolean mask per PRE-2 fixation-flag category, over ``fixations``' index.
 
     ``{"short": …, "long": …, "oob": …}``, or ``{}`` when nothing is flagged.
@@ -1859,7 +1858,7 @@ def _fixation_flag_masks(
 def _discard_flagged_fixations(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
-    flags: Optional[dict],
+    flags: dict | None,
     *,
     spatial_axes: bool = True,
 ) -> pd.DataFrame:
@@ -1884,7 +1883,7 @@ def _render_scanpath_figure(
     fixations: pd.DataFrame,
     *,
     settings: FigureSettings,
-    raw_gaze: Optional[pd.DataFrame] = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> go.Figure:
     canvas_width = settings.canvas_width
     canvas_height = settings.canvas_height
@@ -2601,9 +2600,7 @@ def _render_scanpath_figure(
     return fig
 
 
-def add_illustration_label(
-    fig: go.Figure, reasons: Optional[Sequence[str]]
-) -> go.Figure:
+def add_illustration_label(fig: go.Figure, reasons: Sequence[str] | None) -> go.Figure:
     """Stamp a figure and its metadata when it is schematic or transformed."""
     reasons = [str(reason) for reason in (reasons or []) if reason]
     if not reasons:
@@ -2660,12 +2657,12 @@ def _add_word_level_heatmap(
     *,
     x_field: str,
     y_field: str,
-    weights: Optional[pd.Series],
+    weights: pd.Series | None,
     heatmap_colorscale: str,
-    heatmap_range: Optional[Tuple[float, float]],
+    heatmap_range: tuple[float, float] | None,
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
-    colorbar_style: Optional[dict] = None,
+    colorbar_style: dict | None = None,
 ) -> None:
     # Pull the fixation coordinates (and optional weights) into numpy arrays once,
     # then test box membership per word against the arrays. Same O(words × fix)
@@ -2711,10 +2708,10 @@ def _add_word_measure_heatmap(
     measure: str,
     *,
     heatmap_colorscale: str,
-    heatmap_range: Optional[Tuple[float, float]],
+    heatmap_range: tuple[float, float] | None,
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
-    colorbar_style: Optional[dict] = None,
+    colorbar_style: dict | None = None,
 ) -> None:
     """Word-box heatmap from a pre-aggregated per-word measure column.
 
@@ -2744,11 +2741,11 @@ def _draw_word_value_heatmap(
     word_values: list,
     *,
     heatmap_colorscale: str,
-    heatmap_range: Optional[Tuple[float, float]],
+    heatmap_range: tuple[float, float] | None,
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
     colorbar_title: str,
-    colorbar_style: Optional[dict] = None,
+    colorbar_style: dict | None = None,
 ) -> None:
     from plotly.colors import sample_colorscale
 
@@ -2826,12 +2823,12 @@ def _add_density_heatmap(
     x_max: float,
     y_min: float,
     y_max: float,
-    weights: Optional[pd.Series],
+    weights: pd.Series | None,
     heatmap_colorscale: str,
-    heatmap_range: Optional[Tuple[float, float]],
+    heatmap_range: tuple[float, float] | None,
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
-    colorbar_style: Optional[dict] = None,
+    colorbar_style: dict | None = None,
 ) -> None:
     # A 40×40 count/duration grid drawn as a go.Heatmap (rather than
     # go.Histogram2d) so the colour mapping can go through _apply_heatmap_norm
@@ -2887,7 +2884,7 @@ def _add_density_heatmap(
 
 def _gaussian_kernel_1d(sigma: float) -> np.ndarray:
     """Normalized 1-D Gaussian kernel, truncated at 3 sigma."""
-    radius = max(1, int(round(sigma * 3)))
+    radius = max(1, round(sigma * 3))
     offsets = np.arange(-radius, radius + 1)
     kernel = np.exp(-(offsets**2) / (2.0 * sigma * sigma))
     return kernel / kernel.sum()
@@ -2927,13 +2924,13 @@ def _add_interpolated_heatmap(
     x_max: float,
     y_min: float,
     y_max: float,
-    weights: Optional[pd.Series],
+    weights: pd.Series | None,
     heatmap_colorscale: str,
     show_colorbars: bool,
     heatmap_norm: str = "Linear",
-    colorbar_style: Optional[dict] = None,
-    sigma_px: Optional[float] = None,
-    title: Optional[str] = None,
+    colorbar_style: dict | None = None,
+    sigma_px: float | None = None,
+    title: str | None = None,
 ) -> None:
     """Smooth, word-box-independent fixation heatmap (Gaussian-interpolated).
 
@@ -2962,7 +2959,7 @@ def _add_interpolated_heatmap(
     x_span = max(x_max - x_min, 1.0)
     y_span = max(y_max - y_min, 1.0)
     nx = _INTERP_GRID
-    ny = max(10, int(round(_INTERP_GRID * y_span / x_span)))
+    ny = max(10, round(_INTERP_GRID * y_span / x_span))
     x_edges = np.linspace(x_min, x_max, nx + 1)
     y_edges = np.linspace(y_min, y_max, ny + 1)
     # histogram2d returns shape (nx, ny); transpose so rows index y, cols index x
@@ -3227,7 +3224,7 @@ _AUTOPLAY_META_FLAG = "scanpath_autoplay"
 _AUTOPLAY_META_DURATION = "scanpath_frame_duration_ms"
 
 
-def animation_autoplay_frame_duration(fig) -> Optional[int]:
+def animation_autoplay_frame_duration(fig) -> int | None:
     """The per-frame duration (ms) for an autoplay kickoff, or ``None``.
 
     Returns ``None`` for a static figure, an animation built with
@@ -3418,8 +3415,8 @@ def _render_scanpath_animation(
     fixations: pd.DataFrame,
     *,
     settings: FigureSettings,
-    fixations_b: Optional[pd.DataFrame] = None,
-    words_b: Optional[pd.DataFrame] = None,
+    fixations_b: pd.DataFrame | None = None,
+    words_b: pd.DataFrame | None = None,
 ) -> go.Figure:
     """Frame-by-frame scanpath replay on a real reading-time clock.
 
@@ -4178,7 +4175,7 @@ def _resolve_trial_display_name(
     participant: str,
     trial_id: str,
     trial_words: pd.DataFrame,
-    trial_labels: Optional[Tuple[str, str]],
+    trial_labels: tuple[str, str] | None,
     idx: int,
 ) -> str:
     if trial_labels is not None and len(trial_labels) > idx:
@@ -4200,9 +4197,9 @@ def _resolve_trial_display_name(
 
 def _comparison_scanpath_style(
     idx: int,
-    override: Optional[dict] = None,
+    override: dict | None = None,
     *,
-    default_marker_size_range: Tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
+    default_marker_size_range: tuple[int, int] = DEFAULT_MARKER_SIZE_RANGE,
 ) -> dict:
     """Resolve the per-scanpath style for a comparison trace.
 
@@ -4236,16 +4233,16 @@ def _add_comparison_fixation_trace(
     show_saccades: bool = True,
     show_saccade_arrows: bool = False,
     show_order: bool = True,
-    order_font_size: Optional[int] = None,
+    order_font_size: int | None = None,
     show_legend: bool = False,
-    color_by: Optional[str] = None,
+    color_by: str | None = None,
     colorscale: str = DEFAULT_FIXATION_COLORSCALE,
-    color_range: Optional[Tuple[float, float]] = None,
+    color_range: tuple[float, float] | None = None,
     show_colorbar: bool = False,
-    colorbar_style: Optional[dict] = None,
+    colorbar_style: dict | None = None,
     fixation_symbol: str = DEFAULT_FIXATION_SYMBOL,
-    row: Optional[int] = None,
-    col: Optional[int] = None,
+    row: int | None = None,
+    col: int | None = None,
 ) -> None:
     """Add one scanpath's saccades + fixation markers to a comparison figure.
 
@@ -4288,7 +4285,7 @@ def _add_comparison_fixation_trace(
 
     # Comparison figures always draw straight connectors (no Arc mode here); bind
     # it once so the segments and the arrowheads can never disagree (BUG-9).
-    arch_frac: Optional[float] = None
+    arch_frac: float | None = None
     if show_saccades and len(trial_fix) > 1:
         sx, sy = _saccade_segments(trial_fix, "x", "y", arch_frac)
         if sx:
@@ -4401,7 +4398,7 @@ def _add_comparison_fixation_trace(
 
 
 def _comparison_metric_colorbar(
-    fixations: pd.DataFrame, color_by: Optional[str], show_colorbars: bool
+    fixations: pd.DataFrame, color_by: str | None, show_colorbars: bool
 ) -> bool:
     """Whether a comparison figure will actually draw a metric colorbar.
 
@@ -4440,7 +4437,7 @@ def _comparison_word_heatmap_data(
     trial_specs: Sequence[dict],
     *,
     metric: str,
-    heatmap_range: Optional[Tuple[float, float]],
+    heatmap_range: tuple[float, float] | None,
     heatmap_norm: str,
 ) -> tuple[list[dict[str, float]], float, float, str]:
     """Per-trial word values and one shared transformed colour range (CMP-7)."""
@@ -4487,9 +4484,9 @@ def _comparison_heatmap_shapes(
     heatmap_norm: str,
     z_min: float,
     z_max: float,
-    half: Optional[str] = None,
-    xref: Optional[str] = None,
-    yref: Optional[str] = None,
+    half: str | None = None,
+    xref: str | None = None,
+    yref: str | None = None,
 ) -> list[dict]:
     """Tint full word boxes or their left/right half on a shared scale."""
     if words.empty or not values:
@@ -4565,12 +4562,12 @@ def _comparison_heatmap_colorbar_trace(
 def _make_split_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    trial_a: Tuple[str, str],
-    trial_b: Tuple[str, str],
+    trial_a: tuple[str, str],
+    trial_b: tuple[str, str],
     *,
     settings: FigureSettings,
     orientation: str,
-    styles: Optional[Tuple[dict, dict]] = None,
+    styles: tuple[dict, dict] | None = None,
 ) -> go.Figure:
     """Two-panel comparison, either horizontal (side-by-side) or vertical (stacked).
 
@@ -4969,7 +4966,7 @@ def _make_split_comparison_figure(
     return fig
 
 
-def _compare_stimulus_sides(value: Optional[str]) -> Tuple[bool, bool]:
+def _compare_stimulus_sides(value: str | None) -> tuple[bool, bool]:
     """``compare_stimulus`` → ``(draw A's stimulus, draw B's)`` (CMP-11).
 
     Tolerant of an unrecognised value on purpose: this reads a share-link param
@@ -4987,8 +4984,8 @@ def _compare_stimulus_sides(value: Optional[str]) -> Tuple[bool, bool]:
 def _render_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    trial_a: Tuple[str, str],
-    trial_b: Tuple[str, str],
+    trial_a: tuple[str, str],
+    trial_b: tuple[str, str],
     *,
     settings: FigureSettings,
 ) -> go.Figure:
@@ -5379,7 +5376,7 @@ def make_fixation_duration_histogram(
     base_font_size: int,
     font_family: str,
     bins: int = 30,
-    overlay_words: Optional[pd.DataFrame] = None,
+    overlay_words: pd.DataFrame | None = None,
     height: int = 320,
 ) -> go.Figure:
     """Histogram of fixation durations, optionally with overlaid summary stats."""
@@ -5477,8 +5474,8 @@ def make_metric_convergence_figure(
     base_font_size: int,
     font_family: str,
     height: int = 340,
-    y_range: Tuple[float, float] = (0.0, 1.02),
-    highlight_x_range: Optional[Tuple[float, float]] = None,
+    y_range: tuple[float, float] = (0.0, 1.02),
+    highlight_x_range: tuple[float, float] | None = None,
 ) -> go.Figure:
     """Line chart of a metric (one line per model) over a cumulative x axis.
 
@@ -5713,7 +5710,7 @@ def make_small_multiples_figure(
     canvas_width: int,
     base_font_size: int,
     font_family: str,
-    cohort: Optional[pd.DataFrame] = None,
+    cohort: pd.DataFrame | None = None,
     max_panels: int = 12,
     panel_height: int = 110,
 ) -> go.Figure:
@@ -5809,8 +5806,8 @@ def make_word_matrix_heatmap(
     font_family: str,
     value_col: str = "value",
     colorscale: str = DEFAULT_HEATMAP_COLORSCALE,
-    row_order: Optional[Iterable] = None,
-    height: Optional[int] = None,
+    row_order: Iterable | None = None,
+    height: int | None = None,
 ) -> go.Figure:
     """Word × {reader|group} heatmap (AN-2, AN-22).
 
@@ -5866,7 +5863,7 @@ def make_word_profile_figure(
     base_font_size: int,
     font_family: str,
     spread_label: str = "SD",
-    colors: Optional[Sequence[str]] = None,
+    colors: Sequence[str] | None = None,
     height: int = 380,
 ) -> go.Figure:
     """Cohort word profile(s): mean line + shaded spread band (AN-3 / AN-15).
@@ -6109,7 +6106,7 @@ def make_distribution_figure(
     base_font_size: int,
     font_family: str,
     kind: str = "violin",
-    colors: Optional[Sequence[str]] = None,
+    colors: Sequence[str] | None = None,
     height: int = 380,
 ) -> go.Figure:
     """Overlaid metric distributions — one violin/box per group (AN-7/14/18)."""
@@ -6409,7 +6406,7 @@ def make_difference_profile_figure(
     canvas_width: int,
     base_font_size: int,
     font_family: str,
-    colors: Optional[Sequence[str]] = None,
+    colors: Sequence[str] | None = None,
     height: int = 380,
 ) -> go.Figure:
     """Per-word A−B difference profile, diverging color + zero line (AN-19)."""
@@ -6473,10 +6470,10 @@ def _setting_names(excluded: Iterable[str]) -> tuple[str, ...]:
 
 
 def _resolve_figure_settings(
-    settings: Optional[FigureSettings | Mapping[str, Any]],
+    settings: FigureSettings | Mapping[str, Any] | None,
     overrides: Mapping[str, Any],
     *,
-    legacy_defaults: Optional[Mapping[str, Any]] = None,
+    legacy_defaults: Mapping[str, Any] | None = None,
 ) -> FigureSettings:
     """Resolve a settings object while preserving old builder-only defaults."""
     if settings is None and legacy_defaults:
@@ -6566,8 +6563,8 @@ def make_scanpath_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    settings: Optional[FigureSettings | Mapping[str, Any]] = None,
-    raw_gaze: Optional[pd.DataFrame] = None,
+    settings: FigureSettings | Mapping[str, Any] | None = None,
+    raw_gaze: pd.DataFrame | None = None,
     **overrides: Any,
 ) -> go.Figure:
     """Build a static scanpath from one shared rendering-settings object.
@@ -6589,9 +6586,9 @@ def make_scanpath_animation(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    settings: Optional[FigureSettings | Mapping[str, Any]] = None,
-    fixations_b: Optional[pd.DataFrame] = None,
-    words_b: Optional[pd.DataFrame] = None,
+    settings: FigureSettings | Mapping[str, Any] | None = None,
+    fixations_b: pd.DataFrame | None = None,
+    words_b: pd.DataFrame | None = None,
     **overrides: Any,
 ) -> go.Figure:
     """Build an animated replay from the shared rendering settings."""
@@ -6618,10 +6615,10 @@ def make_scanpath_animation(
 def make_comparison_figure(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    trial_a: Tuple[str, str],
-    trial_b: Tuple[str, str],
+    trial_a: tuple[str, str],
+    trial_b: tuple[str, str],
     *,
-    settings: Optional[FigureSettings | Mapping[str, Any]] = None,
+    settings: FigureSettings | Mapping[str, Any] | None = None,
     **overrides: Any,
 ) -> go.Figure:
     """Build a two-scanpath comparison from the shared rendering settings."""

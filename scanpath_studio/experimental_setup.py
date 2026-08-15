@@ -22,9 +22,10 @@ printing a number computed from a default.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Any, Mapping, Optional
+from typing import Any
 
 # Defaults duplicated from ``constants.py`` rather than imported: this module is
 # the pure bottom of the dependency graph and must stay importable on its own.
@@ -150,7 +151,7 @@ class SetupSnapshot:
         }
 
     @property
-    def dpi(self) -> Optional[float]:
+    def dpi(self) -> float | None:
         """Horizontal DPI, or ``None`` when the physical size was skipped.
 
         A DPI computed from a default monitor width is a guess wearing a
@@ -164,7 +165,7 @@ class SetupSnapshot:
             return None
 
     @property
-    def px_per_degree(self) -> Optional[float]:
+    def px_per_degree(self) -> float | None:
         """Pixels per degree of visual angle, or ``None`` when skipped."""
         if self.geometry_provenance is Provenance.SKIPPED:
             return None
@@ -180,7 +181,7 @@ class SetupSnapshot:
         """``(width, height)`` — the shape the figure builders take."""
         return (int(self.canvas_width), int(self.canvas_height))
 
-    def stimulus_font_px(self, font_pt: float) -> Optional[float]:
+    def stimulus_font_px(self, font_pt: float) -> float | None:
         """Convert a point size through this setup's DPI, or ``None`` if skipped."""
         dpi = self.dpi
         if dpi is None:
@@ -194,7 +195,7 @@ class SetupSnapshot:
         """Every group carries a real provenance (the wizard's Add-dataset gate)."""
         return all(isinstance(p, Provenance) for p in self.provenance.values())
 
-    def with_provenance(self, **groups: Provenance) -> "SetupSnapshot":
+    def with_provenance(self, **groups: Provenance) -> SetupSnapshot:
         """Copy with one or more groups' provenance replaced."""
         return replace(
             self, **{f"{group}_provenance": p for group, p in groups.items()}
@@ -220,10 +221,10 @@ class SetupSnapshot:
     @classmethod
     def from_dict(
         cls,
-        payload: Optional[Mapping[str, Any]],
+        payload: Mapping[str, Any] | None,
         *,
-        fallback: Optional["SetupSnapshot"] = None,
-    ) -> "SetupSnapshot":
+        fallback: SetupSnapshot | None = None,
+    ) -> SetupSnapshot:
         """Read a snapshot back, degrading rather than raising.
 
         ``fallback`` is required by the read path on purpose: a stored dataset or
@@ -276,7 +277,7 @@ class SetupSnapshot:
         )
 
 
-def _coerce_provenance(value: Any) -> Optional[Provenance]:
+def _coerce_provenance(value: Any) -> Provenance | None:
     """A ``Provenance`` from a wire string, or ``None`` when unrecognised."""
     if isinstance(value, Provenance):
         return value
@@ -379,7 +380,7 @@ def format_provenance_param(snapshot: SetupSnapshot) -> str:
     )
 
 
-def parse_provenance_param(value: Optional[str]) -> dict[str, Provenance]:
+def parse_provenance_param(value: str | None) -> dict[str, Provenance]:
     """Parse ``setup_prov`` into ``{group: Provenance}``.
 
     Tolerant by contract — it reads a URL a stranger may have edited: unknown

@@ -36,9 +36,9 @@ at the `step_panel` call sites in ``wizard.py``.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Mapping, Optional
 
 import streamlit as st
 
@@ -118,7 +118,7 @@ def badge(status: StepStatus) -> str:
     return _BADGES.get(status, _BADGES[StepStatus.TODO])
 
 
-def first_incomplete(statuses: Mapping[str, StepStatus]) -> Optional[str]:
+def first_incomplete(statuses: Mapping[str, StepStatus]) -> str | None:
     """Id of the first step that still wants attention, or ``None`` when the
     wizard is fully answered.
 

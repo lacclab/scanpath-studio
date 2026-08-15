@@ -34,7 +34,7 @@ AppTest = streamlit_testing.AppTest
 SYNTHETIC_SOURCE = "Synthetic test trial"
 
 
-def _make_apptest(*, synthetic: bool = False) -> "AppTest":
+def _make_apptest(*, synthetic: bool = False) -> AppTest:
     """Build an AppTest for the app.
 
     Booting the bundled demo renders every tab over a large dataset (~5s).
@@ -380,7 +380,7 @@ class TestAppLaunches:
         assert total > 1, "expected several trials in the demo"
 
         # Narrowing by participant shrinks the trial pool feeding the picker.
-        part = [m for m in at.multiselect if m.key == "filter_participants"][0]
+        part = next(m for m in at.multiselect if m.key == "filter_participants")
         part.set_value([part.options[0]])
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -396,14 +396,14 @@ class TestAppLaunches:
         at.run(timeout=30)
         text_ms = [m for m in at.multiselect if m.key == "filter_text_id"]
         assert text_ms, "Narrow-by text multiselect missing"
-        trial_box = [s for s in at.selectbox if s.key == "single_trial_id"][0]
+        trial_box = next(s for s in at.selectbox if s.key == "single_trial_id")
         total = len(trial_box.options)
         text_ms[0].set_value([text_ms[0].options[0]])
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         narrowed = len(
-            [s for s in at.selectbox if s.key == "single_trial_id"][0].options
+            next(s for s in at.selectbox if s.key == "single_trial_id").options
         )
         assert 0 < narrowed < total, (
             f"text narrowing didn't shrink pool ({narrowed}/{total})"
@@ -670,12 +670,12 @@ class TestDatasetRename:
         return at
 
     def _rename(self, at, old, typed):
-        [t for t in at.text_input if t.key == f"dataset_rename_{old}"][0].set_value(
+        next(t for t in at.text_input if t.key == f"dataset_rename_{old}").set_value(
             typed
         )
         pin_data_view(at)
         at.run(timeout=90)
-        [b for b in at.button if b.key == f"dataset_rename_apply_{old}"][0].click()
+        next(b for b in at.button if b.key == f"dataset_rename_apply_{old}").click()
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -859,7 +859,7 @@ class TestUnmappedRawDataView:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         # The flat picker carries the corpus token; selecting it resolves to the
         # public source with the corpus on public_dataset_choice.
-        source = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        source = next(s for s in at.selectbox if s.key == "data_source_picker")
         assert source.value == potec_key
         assert at.session_state["public_dataset_choice"] == potec_key
 
@@ -1230,7 +1230,7 @@ class TestColumnMappingBoxWidget:
         from scanpath_studio.controls import BOX_FORMAT_ORIGIN
 
         at = AppTest.from_function(_box_mapping_script).run(timeout=30)
-        box_radio = [r for r in at.radio if r.key == "col_map_words_box_format"][0]
+        box_radio = next(r for r in at.radio if r.key == "col_map_words_box_format")
         box_radio.set_value(BOX_FORMAT_ORIGIN)
         at.run(timeout=30)
 
@@ -1465,7 +1465,7 @@ class TestSetupWizard:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Finalize with defaults (keep detected optional fields, drop unclaimed),
         # then confirm the stored frame is actually thinned.
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         words = at.session_state["_datasets"][at.session_state["data_source_choice"]][
@@ -1487,7 +1487,7 @@ class TestSetupWizard:
         answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -1620,13 +1620,13 @@ class TestSetupWizard:
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         # Real flow: enter the wizard via the button (picker already rendered).
-        [b for b in at.button if b.key == "add_data_btn"][0].click()
+        next(b for b in at.button if b.key == "add_data_btn").click()
         at.run(timeout=60)
         # Entering the wizard resets its widgets, so the setup step must be
         # answered *after* that click, not before it.
         answer_setup_step(at)
         at.run(timeout=60)
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         name = at.session_state["data_source_choice"]
@@ -1650,7 +1650,7 @@ class TestSetupWizard:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         answer_setup_step(at)
         at.run(timeout=60)
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         stored = dict(at.session_state["_datasets"])
         name = at.session_state["data_source_choice"]
@@ -1842,7 +1842,7 @@ class TestSetupWizard:
             "participant_id",
             "paragraph_id",
         }
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         stored = dict(at.session_state["_datasets"])
         name = at.session_state["data_source_choice"]
@@ -2745,12 +2745,12 @@ class TestRecordingSetupGate(TestSetupWizard):
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
         at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
         at.run(timeout=60)
-        assert [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+        assert next(b for b in at.button if b.key == "wizard_finalize").disabled
 
         answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+        assert not next(b for b in at.button if b.key == "wizard_finalize").disabled
 
     def test_the_answers_ride_into_the_stored_dataset(self, monkeypatch):
         """The provenance travels with the dataset, not just the wizard — that is
@@ -2761,7 +2761,7 @@ class TestRecordingSetupGate(TestSetupWizard):
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         answer_setup_step(at)
         at.run(timeout=60)
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -2789,9 +2789,9 @@ class TestRecordingSetupGate(TestSetupWizard):
         at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+        assert not next(b for b in at.button if b.key == "wizard_finalize").disabled
 
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         entry = at.session_state["_datasets"][at.session_state["data_source_choice"]]
         assert entry["setup"]["provenance"]["screen"] == "estimated"

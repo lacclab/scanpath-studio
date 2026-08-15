@@ -91,9 +91,9 @@ import scanpath_studio as sps
 words, fixations = sps.load_onestop(
     "data/OneStop",
     regime="ordinary",
-    parts=["Paragraph"],          # any subset of the seven parts
-    variant="public",              # or "lacclab" for a local export
-    download=True,                 # public variant only
+    parts=["Paragraph"],  # any subset of the seven parts
+    variant="public",  # or "lacclab" for a local export
+    download=True,  # public variant only
 )
 fig = sps.plot_scanpath(words, fixations, canvas_size=(2560, 1440))
 ```

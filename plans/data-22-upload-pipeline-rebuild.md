@@ -76,10 +76,11 @@ dataframes; `wizard.py` keeps the step bodies and finalize.
 
 ```python
 class StepStatus(Enum):
-    DONE = "done"        # ✅ satisfied
-    ACTION = "action"    # ⚠️ required and currently blocked
-    TODO = "todo"        # ⬜ required, not started
+    DONE = "done"  # ✅ satisfied
+    ACTION = "action"  # ⚠️ required and currently blocked
+    TODO = "todo"  # ⬜ required, not started
     OPTIONAL = "optional"  # ➖ optional, untouched
+
 
 @dataclass(frozen=True)
 class WizardStep:
@@ -89,13 +90,24 @@ class WizardStep:
     caption: str
     required: bool
 
+
 STEPS: tuple[WizardStep, ...] = (
-    WizardStep("data",     1, "Your data",         "The tables you exported",             True),
-    WizardStep("identity", 2, "Trials & readers",  "Which columns identify a trial",      True),
-    WizardStep("geometry", 3, "Fixations & text",  "Where the eyes landed, where words are", True),
-    WizardStep("setup",    4, "Recording setup",   "The screen and font it was recorded on", True),
-    WizardStep("fields",   5, "Extra fields",      "What else to carry along",            False),
-    WizardStep("review",   6, "Name & add",        "Check it over and add the dataset",   True),
+    WizardStep("data", 1, "Your data", "The tables you exported", True),
+    WizardStep(
+        "identity", 2, "Trials & readers", "Which columns identify a trial", True
+    ),
+    WizardStep(
+        "geometry",
+        3,
+        "Fixations & text",
+        "Where the eyes landed, where words are",
+        True,
+    ),
+    WizardStep(
+        "setup", 4, "Recording setup", "The screen and font it was recorded on", True
+    ),
+    WizardStep("fields", 5, "Extra fields", "What else to carry along", False),
+    WizardStep("review", 6, "Name & add", "Check it over and add the dataset", True),
 )
 ```
 
@@ -164,14 +176,15 @@ The module is 30 lines of pure math today; it grows the pure model. No Streamlit
 
 ```python
 class Provenance(StrEnum):
-    MEASURED  = "measured"   # user knows the values, or the corpus declares them
+    MEASURED = "measured"  # user knows the values, or the corpus declares them
     ESTIMATED = "estimated"  # derived from the uploaded data
-    ASSUMED   = "assumed"    # a named default
-    SKIPPED   = "skipped"    # declined; everything derived from it is hidden
+    ASSUMED = "assumed"  # a named default
+    SKIPPED = "skipped"  # declined; everything derived from it is hidden
+
 
 @dataclass(frozen=True)
 class SetupAnswer:
-    group: str                    # "screen" | "geometry" | "text"
+    group: str  # "screen" | "geometry" | "text"
     choice: str
     provenance: Provenance
     values: dict[str, float | str]

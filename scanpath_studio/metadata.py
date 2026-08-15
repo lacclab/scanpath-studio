@@ -35,8 +35,8 @@ written here do not have to change shape when they arrive.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -44,7 +44,7 @@ import pandas as pd
 # Source columns that plausibly hold the reader id, most explicit first. Shares
 # the spirit of `data.pick_column`'s candidate lists: first hit wins, and the
 # user can always override the guess in the UI.
-PARTICIPANT_ID_CANDIDATES: Tuple[str, ...] = (
+PARTICIPANT_ID_CANDIDATES: tuple[str, ...] = (
     "participant_id",
     "participant",
     "subject_id",
@@ -107,11 +107,11 @@ class JoinReport:
     "3 unmatched" is not actionable, "``p07``, ``p12``, ``p31``" is.
     """
 
-    matched: Tuple[str, ...] = ()
-    only_in_table: Tuple[str, ...] = ()
-    only_in_data: Tuple[str, ...] = ()
-    duplicated: Tuple[str, ...] = ()
-    conflicting: Tuple[str, ...] = ()
+    matched: tuple[str, ...] = ()
+    only_in_table: tuple[str, ...] = ()
+    only_in_data: tuple[str, ...] = ()
+    duplicated: tuple[str, ...] = ()
+    conflicting: tuple[str, ...] = ()
 
     @property
     def is_clean(self) -> bool:
@@ -134,22 +134,22 @@ class ParticipantMetadata:
     """
 
     frame: pd.DataFrame
-    fields: Tuple[MetadataField, ...]
+    fields: tuple[MetadataField, ...]
     source_name: str
     id_column: str
     report: JoinReport = JoinReport()
 
     @property
-    def names(self) -> Tuple[str, ...]:
+    def names(self) -> tuple[str, ...]:
         return tuple(field.name for field in self.fields)
 
-    def field(self, name: str) -> Optional[MetadataField]:
+    def field(self, name: str) -> MetadataField | None:
         for candidate in self.fields:
             if candidate.name == name:
                 return candidate
         return None
 
-    def values_for(self, participant_id) -> Dict[str, object]:
+    def values_for(self, participant_id) -> dict[str, object]:
         """Every registered value for one reader (missing ids give ``{}``)."""
         if self.frame.empty:
             return {}
@@ -181,7 +181,7 @@ class ParticipantMetadata:
         return self.frame.set_index("participant_id")[name]
 
 
-def active() -> Optional["ParticipantMetadata"]:
+def active() -> ParticipantMetadata | None:
     """The participant table attached to this session, or ``None``.
 
     Lives here rather than in the UI layer so the pure consumers
@@ -197,7 +197,7 @@ def active() -> Optional["ParticipantMetadata"]:
         return None
 
 
-def participant_ids(*frames: Optional[pd.DataFrame]) -> List[str]:
+def participant_ids(*frames: pd.DataFrame | None) -> list[str]:
     """Every distinct reader id across the given frames, as sorted strings."""
     found: set = set()
     for frame in frames:
@@ -207,7 +207,7 @@ def participant_ids(*frames: Optional[pd.DataFrame]) -> List[str]:
     return sorted(found)
 
 
-def infer_participant_id_column(frame: pd.DataFrame) -> Optional[str]:
+def infer_participant_id_column(frame: pd.DataFrame) -> str | None:
     """Best guess at the reader-id column, or ``None`` when nothing fits."""
     if frame is None or frame.empty:
         return None
@@ -262,7 +262,7 @@ def build_participant_metadata(
     id_column: str,
     *,
     source_name: str = "participant metadata",
-    participants: Optional[Iterable] = None,
+    participants: Iterable | None = None,
 ) -> ParticipantMetadata:
     """Validate a raw participant table into a registry + clean frame.
 
@@ -289,7 +289,7 @@ def build_participant_metadata(
     duplicated = tuple(
         sorted(set(work.loc[work["participant_id"].duplicated(), "participant_id"]))
     )
-    conflicting: List[str] = []
+    conflicting: list[str] = []
     if duplicated:
         for pid, group in work[work["participant_id"].isin(duplicated)].groupby(
             "participant_id", sort=True
@@ -302,7 +302,7 @@ def build_participant_metadata(
     work = work[~work["participant_id"].isin(conflicting_set)]
     work = work.drop_duplicates(subset=["participant_id"], keep="first")
 
-    fields: List[MetadataField] = []
+    fields: list[MetadataField] = []
     clean = pd.DataFrame({"participant_id": work["participant_id"].to_numpy()})
     for column in value_columns:
         dtype = _classify(work[column])
@@ -371,10 +371,10 @@ def rejoin(
 
 
 def participants_matching(
-    metadata: Optional[ParticipantMetadata],
-    selections: Optional[Dict[str, Sequence]] = None,
-    ranges: Optional[Dict[str, Tuple[float, float]]] = None,
-) -> Optional[set]:
+    metadata: ParticipantMetadata | None,
+    selections: dict[str, Sequence] | None = None,
+    ranges: dict[str, tuple[float, float]] | None = None,
+) -> set | None:
     """Reader ids satisfying every metadata constraint, or ``None`` for "any".
 
     Returning ``None`` rather than "all ids" is deliberate: an empty constraint
@@ -421,9 +421,9 @@ def participants_matching(
 
 
 def project(
-    metadata: Optional[ParticipantMetadata],
+    metadata: ParticipantMetadata | None,
     frame: pd.DataFrame,
-    columns: Optional[Iterable[str]] = None,
+    columns: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Left-join chosen metadata columns onto a **small** participant-keyed frame.
 
@@ -453,7 +453,7 @@ def project(
     return out
 
 
-def options_for(metadata: Optional[ParticipantMetadata], name: str) -> List[str]:
+def options_for(metadata: ParticipantMetadata | None, name: str) -> list[str]:
     """Sorted distinct values of a categorical field, for a multiselect.
 
     Built from :attr:`ParticipantMetadata.joined_frame` — the loaded readers
@@ -466,8 +466,8 @@ def options_for(metadata: Optional[ParticipantMetadata], name: str) -> List[str]
 
 
 def bounds_for(
-    metadata: Optional[ParticipantMetadata], name: str
-) -> Optional[Tuple[float, float]]:
+    metadata: ParticipantMetadata | None, name: str
+) -> tuple[float, float] | None:
     """``(min, max)`` of a numeric field, or ``None`` when it has no range."""
     if metadata is None or metadata.frame.empty or name not in metadata.frame.columns:
         return None
@@ -491,7 +491,7 @@ def bounds_for(
 # -----------------------------------------------------------------------------
 
 
-def to_payload(metadata: Optional[ParticipantMetadata]) -> Optional[dict]:
+def to_payload(metadata: ParticipantMetadata | None) -> dict | None:
     if metadata is None or metadata.frame.empty:
         return None
     return {
@@ -502,7 +502,7 @@ def to_payload(metadata: Optional[ParticipantMetadata]) -> Optional[dict]:
     }
 
 
-def from_payload(payload: Optional[dict]) -> Optional[ParticipantMetadata]:
+def from_payload(payload: dict | None) -> ParticipantMetadata | None:
     if not payload or not payload.get("records"):
         return None
     frame = pd.DataFrame(payload["records"])

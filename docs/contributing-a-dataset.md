@@ -71,9 +71,15 @@ omit them to let auto-detection run.
 
     ```python
     POTEC_WORD_SCHEMA = dict(
-        participant=None, trial="text_id", word_id="aoi", text="word",
-        line="line", left="start_x", right="end_x",
-        top="start_y", bottom="end_y",
+        participant=None,
+        trial="text_id",
+        word_id="aoi",
+        text="word",
+        line="line",
+        left="start_x",
+        right="end_x",
+        top="start_y",
+        bottom="end_y",
     )
     ```
 
@@ -98,8 +104,8 @@ metadata, a stimulus image path, a genre facet — needs a row in
 `data.WORD_OPTIONAL_FIELDS` / `FIX_OPTIONAL_FIELDS`:
 
 ```python
-("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),
-("comprehension_questions", "comprehension_questions", "passthrough", "meta"),
+(("stimulus_font_px", "stimulus_font_px", "numeric", "meta"),)
+(("comprehension_questions", "comprehension_questions", "passthrough", "meta"),)
 ```
 
 Skip this and your enrichment work vanishes between the loader and the first

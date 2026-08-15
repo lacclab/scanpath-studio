@@ -28,8 +28,8 @@ be unit-tested against the hand-traced :mod:`scanpath_studio.synthetic` trial.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -149,7 +149,7 @@ def aoi_sequence(
     words: pd.DataFrame,
     *,
     nearest_within_px: float = 50.0,
-) -> List[int]:
+) -> list[int]:
     """Temporal sequence of fixated word ids (out-of-text fixations dropped).
 
     Fixations are read in ``timestamp_ms`` order when that column is present
@@ -178,7 +178,7 @@ class ScanpathMetric:
     label: str
     description: str
     lower_is_better: bool
-    fn: Optional[Callable[[dict, dict], float]]
+    fn: Callable[[dict, dict], float] | None
 
 
 def _nld_metric(reference: dict, generated: dict) -> float:
@@ -188,7 +188,7 @@ def _nld_metric(reference: dict, generated: dict) -> float:
 # Metric 1 is real (NLD); 2-4 are placeholders with the standard scanpath
 # metrics they're earmarked for, so plugging in a real implementation is just
 # swapping ``fn=None`` for the function.
-METRICS: List[ScanpathMetric] = [
+METRICS: list[ScanpathMetric] = [
     ScanpathMetric(
         key="nld",
         label="NLD",
@@ -246,7 +246,7 @@ def _context(fixations: pd.DataFrame, words: pd.DataFrame) -> dict:
 
 def compute_similarity_table(
     reference_fixations: pd.DataFrame,
-    model_fixations: Dict[str, pd.DataFrame],
+    model_fixations: dict[str, pd.DataFrame],
     words: pd.DataFrame,
 ) -> pd.DataFrame:
     """Score every model scanpath against the reference, one row per model.
@@ -265,7 +265,7 @@ def compute_similarity_table(
     rows = []
     for name, fix in model_fixations.items():
         generated_ctx = _context(fix, words)
-        row: Dict[str, object] = {"Model": name}
+        row: dict[str, object] = {"Model": name}
         for metric in METRICS:
             if metric.fn is None:
                 row[metric.label] = np.nan
@@ -284,14 +284,14 @@ def compute_similarity_table(
 # -----------------------------------------------------------------------------
 
 
-def _eval_indices(n: int, max_points: int) -> List[int]:
+def _eval_indices(n: int, max_points: int) -> list[int]:
     """Up to ``max_points`` prefix lengths in 1..n (all of them when n is small),
     always including 1 and n. Keeps the convergence sweep fast on long trials."""
     if n <= 0:
         return []
     if n <= max_points:
         return list(range(1, n + 1))
-    return sorted({int(round(v)) for v in np.linspace(1, n, max_points)})
+    return sorted({round(v) for v in np.linspace(1, n, max_points)})
 
 
 def nld_by_fixation_index(
@@ -300,7 +300,7 @@ def nld_by_fixation_index(
     words: pd.DataFrame,
     *,
     max_points: int = 80,
-) -> Tuple[List[int], List[float]]:
+) -> tuple[list[int], list[float]]:
     """NLD between the first-*k*-fixations prefixes of the two scanpaths, vs k.
 
     For each prefix length k the reference and model are each truncated to their
@@ -337,7 +337,7 @@ def nld_by_time(
     words: pd.DataFrame,
     *,
     max_points: int = 80,
-) -> Tuple[List[float], List[float]]:
+) -> tuple[list[float], list[float]]:
     """NLD between the prefixes up to elapsed reading time t, vs t in seconds.
 
     Both scanpaths are rebased to their first fixation; at each sample time the
@@ -357,7 +357,7 @@ def nld_by_time(
         return [], []
     if len(times) > max_points:
         picks = np.linspace(0, len(times) - 1, max_points)
-        times = sorted({times[int(round(i))] for i in picks})
+        times = sorted({times[round(i)] for i in picks})
     xs, nlds = [], []
     for t in times:
         ref_seq = [int(w) for w, o in zip(ref_w, ref_on) if o <= t and pd.notna(w)]

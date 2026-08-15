@@ -29,7 +29,6 @@ import difflib
 import logging
 from copy import deepcopy
 from pathlib import Path
-from typing import Optional, Tuple, Union
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -75,9 +74,9 @@ from .plots import (  # noqa: E402
     COMPARISON_FIGURE_OPTIONS,
     STATIC_FIGURE_OPTIONS,
     FigureSettings,
-    make_comparison_figure,
     animation_autoplay_frame_duration,
     animation_autoplay_post_script,
+    make_comparison_figure,
     make_difference_profile_figure,
     make_distribution_figure,
     make_scanpath_animation,
@@ -88,7 +87,7 @@ from .plots import (  # noqa: E402
 
 
 def build_authored_scanpath(
-    text: str, events: Optional[pd.DataFrame] = None, **layout_options
+    text: str, events: pd.DataFrame | None = None, **layout_options
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build normalized word/fixation frames from hand-authored reading events.
 
@@ -104,7 +103,7 @@ def build_authored_scanpath(
 
 
 def load_authored_scanpath(
-    source: Union[str, Path],
+    source: str | Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load an authoring JSON path (or payload), including schema-1 migration."""
     from .authoring import parse_authoring_document
@@ -122,8 +121,8 @@ def load_authored_scanpath(
     )
 
 
-TableLike = Union[pd.DataFrame, str, Path]
-TablesLike = Union[TableLike, "list[TableLike]"]
+TableLike = pd.DataFrame | str | Path
+TablesLike = TableLike | list["TableLike"]
 
 # The headless "canonical" rendering — every core layer on. (The interactive app
 # instead starts minimal: word boxes / heatmap / fixation-index off by default —
@@ -327,7 +326,7 @@ def _schema_skeleton(kind: str, schema: dict) -> str:
     return "{" + items + "}"
 
 
-def _schema_columns(schema: dict) -> "list[tuple[str, str]]":
+def _schema_columns(schema: dict) -> list[tuple[str, str]]:
     """``(schema key, column name)`` for every column a mapping names.
 
     Multi-column (composite) mappings — the trial / participant / text id may be
@@ -518,15 +517,15 @@ def _require_normalized(frame, label: str) -> pd.DataFrame:
 
 
 def load_scanpath_data(
-    words: Optional[TablesLike] = None,
-    fixations: Optional[TablesLike] = None,
+    words: TablesLike | None = None,
+    fixations: TablesLike | None = None,
     *,
-    word_schema: Optional[dict] = None,
-    fix_schema: Optional[dict] = None,
-    trial_parts_manifest: Optional[dict] = None,
-    image_root: Optional[Union[str, Path]] = None,
+    word_schema: dict | None = None,
+    fix_schema: dict | None = None,
+    trial_parts_manifest: dict | None = None,
+    image_root: str | Path | None = None,
     image_pattern: str = "{text_id}.png",
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load and normalize a words/IA table and/or a fixations table.
 
     ``words`` / ``fixations`` may be DataFrames, paths to ``.csv`` / ``.tsv``
@@ -608,8 +607,8 @@ def load_scanpath_data(
 def load_participant_metadata(
     table: TablesLike,
     *,
-    id_column: Optional[str] = None,
-    participants: Optional[Union[pd.DataFrame, list]] = None,
+    id_column: str | None = None,
+    participants: pd.DataFrame | list | None = None,
 ):
     """Load a participant-level metadata table (DATA-20 milestone 1).
 
@@ -656,7 +655,7 @@ def load_participant_metadata(
     )
 
 
-def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
+def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return the bundled OneStop demo, normalized and ready to plot.
 
     Three readers' word boxes ship with the package but only two of them have
@@ -698,7 +697,7 @@ def preprocess_data(
     short_threshold_ms: float = 80.0,
     merge_distance_chars: float = 1.0,
     discard_blink_adjacent: bool = False,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Apply the optional preprocessing stage and return words/fixations/QA."""
     if not enabled:
         return words, fixations, pd.DataFrame()
@@ -729,8 +728,8 @@ def analysis_tables(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    pixels_per_degree: Optional[float] = None,
-    raw_gaze: Optional[pd.DataFrame] = None,
+    pixels_per_degree: float | None = None,
+    raw_gaze: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Full measure family used by EXP-3 bulk/headless exports."""
     from .measures import assign_fixations_to_words, enrich_fixations
@@ -767,8 +766,8 @@ def analysis_tables(
 def alignment_sensitivity(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    methods: Tuple[str, ...] = ("attach", "slice", "consensus"),
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    methods: tuple[str, ...] = ("attach", "slice", "consensus"),
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Word-measure sensitivity and correction QA across line algorithms.
 
     PRE-21: a derived surface of vertical drift correction, so it is gated with
@@ -792,7 +791,7 @@ def plot_corpus_figure(
     measure_label: str = "Value",
     series_col: str = "series",
     value_col: str = "value",
-    colors: Optional[Tuple[str, ...]] = None,
+    colors: tuple[str, ...] | None = None,
     canvas_width: int = 1000,
     base_font_size: int = 14,
     font_family: str = FONT_FAMILY,
@@ -872,8 +871,8 @@ def list_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.DataFrame:
 def list_parts(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participant: Optional[str] = None,
-    trial: Optional[str] = None,
+    participant: str | None = None,
+    trial: str | None = None,
 ) -> pd.DataFrame:
     """Ordered screens in multipart data, optionally narrowed to one parent.
 
@@ -894,11 +893,11 @@ def list_parts(
 def _resolve_trial(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participant: Optional[str],
-    trial: Optional[str],
+    participant: str | None,
+    trial: str | None,
     *,
     default_first: bool = False,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """Resolve to one (participant_id, trial_id), validating what was given.
 
     A nonexistent participant/trial always raises — naming which of the two ids
@@ -972,9 +971,9 @@ def _value_hint(combos: pd.DataFrame, column: str, wanted, limit: int = 5) -> st
 def _select_trial(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participant: Optional[str],
-    trial: Optional[str],
-) -> Tuple[pd.DataFrame, pd.DataFrame, str, str]:
+    participant: str | None,
+    trial: str | None,
+) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
     pid, tid = _resolve_trial(words, fixations, participant, trial)
     trial_words, trial_fixations = _data.filter_data(
         words, fixations, {"participants": [pid], "trials": [tid]}
@@ -994,10 +993,10 @@ def _select_trial(
 def _select_part(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participant: Optional[str],
-    trial: Optional[str],
-    screen: Optional[str],
-) -> Tuple[pd.DataFrame, pd.DataFrame, str, str, Optional[str]]:
+    participant: str | None,
+    trial: str | None,
+    screen: str | None,
+) -> tuple[pd.DataFrame, pd.DataFrame, str, str, str | None]:
     """Resolve one logical trial and, for multipart data, exactly one screen."""
     trial_words, trial_fixations, pid, tid = _select_trial(
         words, fixations, participant, trial
@@ -1183,7 +1182,7 @@ def _apply_drift_correction(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     settings: dict,
-    method: Optional[str],
+    method: str | None,
     connectors: bool,
     explicit: dict,
 ) -> pd.DataFrame:
@@ -1231,17 +1230,17 @@ def _apply_drift_correction(
 def plot_scanpath(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participant: Optional[str] = None,
-    trial: Optional[str] = None,
+    participant: str | None = None,
+    trial: str | None = None,
     *,
-    screen: Optional[str] = None,
-    canvas_size: Optional[Tuple[int, int]] = None,
+    screen: str | None = None,
+    canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
-    raw_gaze: Optional[pd.DataFrame] = None,
-    drift_correction: Optional[str] = None,
+    raw_gaze: pd.DataFrame | None = None,
+    drift_correction: str | None = None,
     drift_connectors: bool = False,
-    fix_index_range: Optional[Tuple[int, int]] = None,
+    fix_index_range: tuple[int, int] | None = None,
     illustration: bool = False,
     illustration_label: str = "auto",
     title: str = "",
@@ -1376,16 +1375,16 @@ def plot_scanpath(
 def animate_scanpath(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participant: Optional[str] = None,
-    trial: Optional[str] = None,
+    participant: str | None = None,
+    trial: str | None = None,
     *,
-    screen: Optional[str] = None,
-    canvas_size: Optional[Tuple[int, int]] = None,
+    screen: str | None = None,
+    canvas_size: tuple[int, int] | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
     playback_speed: float = 1.0,
     autoplay: bool = True,
-    fix_index_range: Optional[Tuple[int, int]] = None,
+    fix_index_range: tuple[int, int] | None = None,
     title: str = "",
     caption: str = "",
     **animation_overrides,
@@ -1473,8 +1472,8 @@ def animate_scanpath(
 def render_parent_trial(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participant: Optional[str] = None,
-    trial: Optional[str] = None,
+    participant: str | None = None,
+    trial: str | None = None,
     *,
     animate: bool = False,
     transition_mode: str = "instant",
@@ -1545,8 +1544,8 @@ _COMPARE_LAYOUTS = {
 
 
 def _compare_setup(
-    setup: Optional[SetupSnapshot],
-    canvas_size: Optional[Tuple[int, int]],
+    setup: SetupSnapshot | None,
+    canvas_size: tuple[int, int] | None,
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
@@ -1582,24 +1581,24 @@ def _compare_setup(
 def compare_scanpaths(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    trial_a: Tuple[str, str],
-    trial_b: Tuple[str, str],
+    trial_a: tuple[str, str],
+    trial_b: tuple[str, str],
     *,
-    words_b: Optional[pd.DataFrame] = None,
-    fixations_b: Optional[pd.DataFrame] = None,
+    words_b: pd.DataFrame | None = None,
+    fixations_b: pd.DataFrame | None = None,
     dataset_b: str = "Dataset B",
     layout: str = "overlay",
     compare_stimulus: str = "both",
-    setup: Optional[SetupSnapshot] = None,
-    setup_b: Optional[SetupSnapshot] = None,
-    canvas_size: Optional[Tuple[int, int]] = None,
-    labels: Optional[Tuple[str, str]] = None,
-    style_a: Optional[dict] = None,
-    style_b: Optional[dict] = None,
+    setup: SetupSnapshot | None = None,
+    setup_b: SetupSnapshot | None = None,
+    canvas_size: tuple[int, int] | None = None,
+    labels: tuple[str, str] | None = None,
+    style_a: dict | None = None,
+    style_b: dict | None = None,
     base_font_size: int = 16,
     font_family: str = FONT_FAMILY,
-    fix_index_range: Optional[Tuple[int, int]] = None,
-    drift_correction: Optional[str] = None,
+    fix_index_range: tuple[int, int] | None = None,
+    drift_correction: str | None = None,
     title: str = "",
     caption: str = "",
     **figure_overrides,
@@ -1753,11 +1752,11 @@ def compare_scanpaths(
 
 def save_figure(
     fig: go.Figure,
-    path: Union[str, Path],
+    path: str | Path,
     *,
     scale: int = 2,
-    width: Optional[int] = None,
-    height: Optional[int] = None,
+    width: int | None = None,
+    height: int | None = None,
 ) -> Path:
     """Save a figure by extension: ``.html`` (interactive, browser-free) or
     ``.png``/``.svg``/``.pdf`` (static via Kaleido — needs a Chrome/Chromium;
@@ -1802,12 +1801,12 @@ def save_figure(
 
 def save_figure_layers(
     fig: go.Figure,
-    directory: Union[str, Path],
+    directory: str | Path,
     *,
     fmt: str = "svg",
     scale: int = 2,
-    width: Optional[int] = None,
-    height: Optional[int] = None,
+    width: int | None = None,
+    height: int | None = None,
 ) -> dict:
     """Split a scanpath figure into its layers and save one file per layer (VIZ-5).
 

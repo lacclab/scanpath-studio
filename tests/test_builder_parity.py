@@ -166,7 +166,7 @@ def _labels(fig):
 
 
 def _trail(fig):
-    return [t for t in fig.data if t.name == "Scanpath A"][0]
+    return next(t for t in fig.data if t.name == "Scanpath A")
 
 
 def _markers(fig):
@@ -180,7 +180,7 @@ def _frame_trace(fig, frame, base_index):
 
 
 def _trace_index(fig, name):
-    return [i for i, t in enumerate(fig.data) if t.name == name][0]
+    return next(i for i, t in enumerate(fig.data) if t.name == name)
 
 
 def _t_half_apex(x0, y0, x1, y1, frac):
@@ -250,7 +250,9 @@ class TestAnimationParity:
             _anim(color_by="duration_ms", show_colorbars=True)
         ).marker.colorbar
         static = _static(show_colorbars=True)
-        static_cb = [t for t in static.data if t.name == "Fixations"][0].marker.colorbar
+        static_cb = next(
+            t for t in static.data if t.name == "Fixations"
+        ).marker.colorbar
         assert anim_cb.thickness == static_cb.thickness
         assert anim_cb.tickfont.size == static_cb.tickfont.size
         assert anim_cb.tickangle == static_cb.tickangle
@@ -632,7 +634,7 @@ class TestArcHeadroom:
         y1 = 270.0
         fig = self._figure(y1)
         top = min(fig.layout.yaxis.range)
-        saccades = [t for t in fig.data if t.name == "saccades"][0]
+        saccades = next(t for t in fig.data if t.name == "saccades")
         drawn_apex = float(np.nanmin([v for v in saccades.y if v is not None]))
         assert top <= drawn_apex  # the apex sits inside the view
         # …and the old t=0.5 estimate sat BELOW the real peak, so the reservation

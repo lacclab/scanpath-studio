@@ -26,7 +26,6 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from typing import Optional
 
 import pandas as pd
 import pytest
@@ -77,8 +76,8 @@ def _boot(
     *,
     synthetic: bool = False,
     timeout: int = 60,
-    subtab: Optional[str] = None,
-    view: Optional[str] = None,
+    subtab: str | None = None,
+    view: str | None = None,
 ) -> AppTest:
     """Boot the app. ``synthetic=True`` picks the 6-word synthetic trial (one
     trial, no raw gaze) instead of the bundled demo.
@@ -102,9 +101,9 @@ def _boot(
 
 def _rerun(
     at: AppTest,
-    subtab: Optional[str] = None,
+    subtab: str | None = None,
     timeout: int = 60,
-    view: Optional[str] = None,
+    view: str | None = None,
 ) -> AppTest:
     """Rerun, re-asserting the open subtab/view — an interaction can drop it."""
     if subtab:
@@ -130,7 +129,7 @@ def _trial_ids(at: AppTest) -> list[str]:
     return [str(o).removeprefix("★ ").strip() for o in box[0].options]
 
 
-def _metric(at: AppTest, label: str) -> Optional[str]:
+def _metric(at: AppTest, label: str) -> str | None:
     for m in at.metric:
         if m.label == label:
             return m.value
@@ -528,7 +527,7 @@ class TestBulkExportFlow:
         at.run(timeout=60)
         _clean(at, "after switching the export scope:")
         assert _trial_ids(at) == pool, "the scope radio must not change the pool"
-        [b for b in at.button if b.label == "Build export"][0].click()
+        next(b for b in at.button if b.label == "Build export").click()
         at.run(timeout=120)
         _clean(at, "after building the whole-dataset export:")
 

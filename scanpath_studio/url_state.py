@@ -12,7 +12,6 @@ import copy
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode
 
 import pandas as pd
@@ -21,18 +20,6 @@ import streamlit as st
 from scanpath_studio.html_embed import embed_html_iframe
 
 from .annotations import restore_records
-from .experimental_setup import format_provenance_param, parse_provenance_param
-from .session_keys import (
-    COMPARE_LAYOUT_PARAM,
-    COMPARE_PARAM,
-    COMPARE_SOURCE_PARAM,
-    COMPARE_SOURCE_STATE_KEY,
-    COMPARE_STIMULUS_PARAM,
-    PENDING_COMPARE_STATE_KEY,
-    SETUP_PROVENANCE_PARAM,
-    SETUP_PROVENANCE_STATE_KEY,
-    SINGLE_COMPARE_TOGGLE,
-)
 from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
@@ -65,6 +52,18 @@ from .controls import (
     color_field_options,
     numeric_field_options,
     palette_state,
+)
+from .experimental_setup import format_provenance_param, parse_provenance_param
+from .session_keys import (
+    COMPARE_LAYOUT_PARAM,
+    COMPARE_PARAM,
+    COMPARE_SOURCE_PARAM,
+    COMPARE_SOURCE_STATE_KEY,
+    COMPARE_STIMULUS_PARAM,
+    PENDING_COMPARE_STATE_KEY,
+    SETUP_PROVENANCE_PARAM,
+    SETUP_PROVENANCE_STATE_KEY,
+    SINGLE_COMPARE_TOGGLE,
 )
 
 # URL query-param → session_state key map for the deep-link API. Used by
@@ -179,7 +178,7 @@ _SHARE_IDENTITY_MODES = [
 ]
 
 
-def _share_identity_flags(mode: Optional[str]) -> Tuple[bool, bool]:
+def _share_identity_flags(mode: str | None) -> tuple[bool, bool]:
     """``mode`` → ``(include_participant, include_trial)`` for the link builder."""
     if mode == _SHARE_IDENTITY_TRIAL:
         return False, True
@@ -426,7 +425,7 @@ _SHAREABLE_SOURCES = {
 }
 
 
-def _source_choice_for_param(value) -> Optional[str]:
+def _source_choice_for_param(value) -> str | None:
     """Invert `_SHAREABLE_SOURCES`: a ``?source=``-style token → the data choice.
 
     Used by CMP-8's `cmp_source`, which names scanpath **B's** corpus in the
@@ -460,7 +459,7 @@ def _apply_url_palette(qp) -> None:
             st.session_state.setdefault(state_key, value)
 
 
-def _apply_url_preset() -> Optional[str]:
+def _apply_url_preset() -> str | None:
     """Read `st.query_params` and preset Streamlit session state for deep links.
 
     Returns the URL-requested `source` ("onestop"/"demo"/"upload") or `None`.
@@ -721,7 +720,7 @@ _PLOT_CONFIG_MIGRATIONS = {
 }
 
 
-def _migrate_plot_config(config: dict) -> Tuple[dict, Optional[str]]:
+def _migrate_plot_config(config: dict) -> tuple[dict, str | None]:
     """Upgrade an uploaded plot-config dict to the current schema.
 
     Returns ``(config, note)``. ``config`` is a **deep** copy stamped with the
@@ -839,7 +838,7 @@ def _apply_url_trial_selection(combos: pd.DataFrame) -> None:
 PENDING_TRIAL_KEY = "_pending_trial_selection"
 
 
-def request_trial(participant: Optional[str], trial_id: Optional[str]) -> None:
+def request_trial(participant: str | None, trial_id: str | None) -> None:
     """Ask the app to open ``trial_id`` in the Scanpath view (ENG-36).
 
     Called from a *callback* — the reader/trial tables in Corpus Analysis have a
@@ -925,7 +924,7 @@ class _RestoreContext:
         return value if isinstance(value, dict) else {}
 
     @staticmethod
-    def number(value) -> Optional[float]:
+    def number(value) -> float | None:
         try:
             return float(value)
         except (TypeError, ValueError):
@@ -958,7 +957,7 @@ class _RestoreContext:
 
 def _restore_plot_config(
     config: dict, combos: pd.DataFrame, fixations: pd.DataFrame
-) -> Tuple[int, list]:
+) -> tuple[int, list]:
     """Seed session_state from an uploaded plot-config dict so the sidebar
     widgets render with the saved settings. Returns ``(applied, skipped)`` where
     ``skipped`` lists human-readable labels that didn't fit the current data.
@@ -1680,7 +1679,7 @@ def _build_share_query(
     *,
     include_participant: bool = True,
     include_trial: bool = True,
-) -> Tuple[str, list]:
+) -> tuple[str, list]:
     """Build the deep-link query string that reproduces the current view.
 
     Reads the resolved trial selection and visualization settings back out of
@@ -1701,7 +1700,7 @@ def _build_share_query(
     ``?``; the copy widget composes it onto the live origin client-side.
     """
 
-    params: Dict[str, str] = {}
+    params: dict[str, str] = {}
     caveats: list = []
 
     source = _SHAREABLE_SOURCES.get(data_choice)

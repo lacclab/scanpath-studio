@@ -22,9 +22,10 @@ import logging
 import os
 import tempfile
 import threading
+from collections.abc import MutableMapping
 from datetime import datetime
 from pathlib import Path
-from typing import Any, MutableMapping, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -63,7 +64,7 @@ def is_loopback_url(url: str = "") -> bool:
     return host in {"localhost", "127.0.0.1", "::1"}
 
 
-def persistence_enabled(url: str = "", environ: Optional[dict] = None) -> bool:
+def persistence_enabled(url: str = "", environ: dict | None = None) -> bool:
     """Return whether disk persistence is safe for this process.
 
     ``SCANPATH_STUDIO_PERSIST=1`` explicitly enables it and ``=0`` disables it.
@@ -79,7 +80,7 @@ def persistence_enabled(url: str = "", environ: Optional[dict] = None) -> bool:
     return is_loopback_url(url)
 
 
-def state_directory(environ: Optional[dict] = None) -> Path:
+def state_directory(environ: dict | None = None) -> Path:
     env = os.environ if environ is None else environ
     configured = str(env.get(STATE_DIR_ENV_VAR, "")).strip()
     if configured:
@@ -144,7 +145,7 @@ def _state_fingerprint(session: MutableMapping[str, Any]) -> str:
 
 def _atomic_parquet(frame: pd.DataFrame, destination: Path) -> None:
     """Write one frame without exposing a partial Parquet file to readers."""
-    temporary: Optional[Path] = None
+    temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
             dir=destination.parent,
@@ -163,7 +164,7 @@ def _atomic_parquet(frame: pd.DataFrame, destination: Path) -> None:
 
 def _atomic_text(source: str, destination: Path) -> None:
     """Atomically replace a UTF-8 text file using a unique sibling temporary."""
-    temporary: Optional[Path] = None
+    temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
             "w",
@@ -208,7 +209,7 @@ def _manifest_for(
                     datasets[name] = {
                         **entry,
                         "rows": {
-                            frame_key: int(len(payload[frame_key]))
+                            frame_key: len(payload[frame_key])
                             for frame_key in _FRAME_KEYS
                             if isinstance(payload.get(frame_key), pd.DataFrame)
                         },
@@ -228,7 +229,7 @@ def _manifest_for(
                 filename = f"{slug}-{frame_key}.parquet"
                 _atomic_parquet(frame, frames_dir / filename)
                 frame_files[frame_key] = f"datasets/{filename}"
-                frame_rows[frame_key] = int(len(frame))
+                frame_rows[frame_key] = len(frame)
             # ``rows`` is reporting-only (cache_status / the in-app panel say how
             # much is stored without opening the Parquet files). The restore path
             # reads ``frames`` alone, so an older manifest without it still loads.
@@ -357,7 +358,7 @@ def rename_cached_dataset(
     session: MutableMapping[str, Any],
     old: str,
     new: str,
-    root: Optional[Path] = None,
+    root: Path | None = None,
 ) -> bool:
     """Follow a dataset rename (DATA-23) through the cache instead of rewriting it.
 
@@ -454,7 +455,7 @@ def set_persistence_paused(session, paused: bool) -> None:
         session.pop(_LAST_FINGERPRINT_KEY, None)
 
 
-def clear_local_state(session=None, root: Optional[Path] = None) -> None:
+def clear_local_state(session=None, root: Path | None = None) -> None:
     """Delete the stored cache and forget what this session had written.
 
     The in-memory datasets are deliberately left alone — this removes the copy
@@ -493,10 +494,10 @@ def human_size(num_bytes: int) -> str:
 
 
 def cache_status(
-    root: Optional[Path] = None,
+    root: Path | None = None,
     *,
     url: str = "",
-    environ: Optional[dict] = None,
+    environ: dict | None = None,
 ) -> dict:
     """Describe the on-device recovery cache — the whole read-only surface.
 

@@ -29,8 +29,8 @@ browser renders each frame in a fraction of a second.
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from time import perf_counter
-from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 import plotly.graph_objects as go
@@ -38,7 +38,7 @@ import plotly.graph_objects as go
 from .export_status import ExportStage, StatusCallback, emit_status
 
 # The interactive formats live elsewhere; these are the rasterized clip formats.
-VIDEO_FORMATS: Tuple[str, ...] = ("gif", "mp4")
+VIDEO_FORMATS: tuple[str, ...] = ("gif", "mp4")
 
 _MIME = {"gif": "image/gif", "mp4": "video/mp4"}
 
@@ -80,7 +80,7 @@ CHROME_INSTALL_HINT = (
 )
 
 
-def chromium_browser_path() -> Optional[str]:
+def chromium_browser_path() -> str | None:
     """Return the browser path Kaleido would use, without launching it.
 
     ``Chromium.find_browser`` is Choreographer's complete discovery path: it
@@ -116,7 +116,7 @@ def mime_for(fmt: str) -> str:
     return _MIME[fmt.lower()]
 
 
-def _elapsed_labels(fig: go.Figure, n_frames: int) -> List[str]:
+def _elapsed_labels(fig: go.Figure, n_frames: int) -> list[str]:
     """Per-frame "elapsed reading time" labels, lifted from the slider steps.
 
     ``_animation_time_slider`` already computes one ``"X.Xs"`` label per frame, so
@@ -157,7 +157,7 @@ def _static_base(fig: go.Figure) -> go.Figure:
     return base
 
 
-def _select_frames(n: int, max_frames: Optional[int]) -> List[int]:
+def _select_frames(n: int, max_frames: int | None) -> list[int]:
     """Indices of frames to render, evenly downsampled to ``max_frames``.
 
     Returns ``range(n)`` unchanged when no cap applies. Downsampling keeps the
@@ -167,7 +167,7 @@ def _select_frames(n: int, max_frames: Optional[int]) -> List[int]:
     """
     if max_frames is None or max_frames <= 0 or n <= max_frames:
         return list(range(n))
-    return sorted(set(int(round(i)) for i in np.linspace(0, n - 1, max_frames)))
+    return sorted({round(i) for i in np.linspace(0, n - 1, max_frames)})
 
 
 def render_png_frames(
@@ -175,9 +175,9 @@ def render_png_frames(
     *,
     scale: float = 1.0,
     show_elapsed: bool = True,
-    frame_indices: Optional[List[int]] = None,
-    progress_callback: Optional[ProgressCallback] = None,
-) -> Tuple[List[bytes], Tuple[int, int]]:
+    frame_indices: list[int] | None = None,
+    progress_callback: ProgressCallback | None = None,
+) -> tuple[list[bytes], tuple[int, int]]:
     """Rasterize the animation's frames to PNG bytes via one persistent Kaleido browser.
 
     Returns ``(png_bytes_per_frame, (width, height))``. ``frame_indices`` selects a
@@ -218,7 +218,7 @@ def render_png_frames(
     except Exception:
         cold_fallback = True
 
-    pngs: List[bytes] = []
+    pngs: list[bytes] = []
     try:
         for done, k in enumerate(indices, start=1):
             frame = frames[k]
@@ -274,20 +274,20 @@ def render_png_frames(
     return pngs, (width, height)
 
 
-def _load_rgb_frames(pngs: List[bytes]) -> List["np.ndarray"]:
+def _load_rgb_frames(pngs: list[bytes]) -> list[np.ndarray]:
     from PIL import Image
 
     return [np.asarray(Image.open(io.BytesIO(b)).convert("RGB")) for b in pngs]
 
 
-def encode_gif(pngs: List[bytes], frame_duration_ms: float, *, loop: int = 0) -> bytes:
+def encode_gif(pngs: list[bytes], frame_duration_ms: float, *, loop: int = 0) -> bytes:
     """Encode PNG frames into an animated GIF with a uniform per-frame delay."""
     from PIL import Image
 
     if not pngs:
         raise AnimationExportError("No frames to encode.")
     imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in pngs]
-    duration = max(int(round(frame_duration_ms)), _GIF_MIN_FRAME_MS)
+    duration = max(round(frame_duration_ms), _GIF_MIN_FRAME_MS)
     buf = io.BytesIO()
     imgs[0].save(
         buf,
@@ -302,7 +302,7 @@ def encode_gif(pngs: List[bytes], frame_duration_ms: float, *, loop: int = 0) ->
     return buf.getvalue()
 
 
-def encode_mp4(pngs: List[bytes], frame_duration_ms: float) -> bytes:
+def encode_mp4(pngs: list[bytes], frame_duration_ms: float) -> bytes:
     """Encode PNG frames into an H.264 MP4 whose runtime matches the on-screen Play.
 
     The on-screen Play shows every frame for ``frame_duration_ms``. An MP4 plays at
@@ -324,6 +324,9 @@ def encode_mp4(pngs: List[bytes], frame_duration_ms: float) -> bytes:
 
     dt_ms = 1000.0 / _MP4_FPS
 
+    # Deliberately not a context manager: `delete=False` plus an immediate
+    # close is how you reserve a path for ffmpeg to write. A `with` block
+    # would delete the file before the encoder ever opened it.
     tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
     tmp.close()
     try:
@@ -349,7 +352,7 @@ def encode_mp4(pngs: List[bytes], frame_duration_ms: float) -> bytes:
                     pad = (h % 2, w % 2)
                 if pad[0] or pad[1]:
                     arr = np.pad(arr, ((0, pad[0]), (0, pad[1]), (0, 0)), mode="edge")
-                target_total = int(round((i + 1) * frame_duration_ms / dt_ms))
+                target_total = round((i + 1) * frame_duration_ms / dt_ms)
                 reps = max(1, target_total - emitted)
                 emitted += reps
                 for _ in range(reps):
@@ -379,9 +382,9 @@ def export_animation(
     frame_duration_ms: float,
     scale: float = 1.0,
     show_elapsed: bool = True,
-    max_frames: Optional[int] = None,
-    progress_callback: Optional[ProgressCallback] = None,
-    status_callback: Optional[StatusCallback] = None,
+    max_frames: int | None = None,
+    progress_callback: ProgressCallback | None = None,
+    status_callback: StatusCallback | None = None,
 ) -> bytes:
     """Render a scanpath-animation figure to GIF or MP4 bytes.
 

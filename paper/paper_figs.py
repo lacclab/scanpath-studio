@@ -97,7 +97,7 @@ def replay_fig(words, fixations):
     t0 = tf["timestamp_ms"].iloc[0]
     frames = []
     for frac in (0.33, 0.66, 1.0):
-        k = max(2, int(round(n * frac)))
+        k = max(2, round(n * frac))
         keep = set(tf["order_in_trial"].iloc[:k])
         sub = fixations[
             ~((fixations.participant_id == pid) & (fixations.trial_id == tid))

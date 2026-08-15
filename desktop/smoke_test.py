@@ -26,7 +26,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from launcher import _free_port  # noqa: E402
+from launcher import _free_port
 
 BOOT_TIMEOUT_S = 180.0
 SELFCHECK_TIMEOUT_S = 300.0

@@ -17,7 +17,7 @@ from scanpath_studio.alignment import ALGORITHMS
 
 def _spy_static(monkeypatch, *, wrap_real: bool = False) -> dict:
     """Capture the kwargs (and optionally the figure) of `api.plot_scanpath`."""
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured: dict = {}
     real_plot = api.plot_scanpath
@@ -150,7 +150,7 @@ def test_render_drift_connectors_without_algorithm_warns(tmp_path, monkeypatch, 
 def test_render_animate_warns_drift_is_ignored(tmp_path, monkeypatch, capsys):
     """animate_scanpath takes no drift parameters — say so instead of silently
     dropping them (the VIZ-21 table: PRE-3 is static-only)."""
-    import scanpath_studio.api as api
+    from scanpath_studio import api
 
     captured: dict = {}
 

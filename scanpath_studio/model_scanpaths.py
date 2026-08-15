@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -107,7 +106,7 @@ def _seed(trial_id: object, model_index: int, nonce: int) -> int:
     Uses md5 rather than the builtin ``hash`` because ``hash`` of a str is salted
     per process, which would make scanpaths non-reproducible across reruns.
     """
-    raw = f"{trial_id}|{model_index}|{nonce}".encode("utf-8")
+    raw = f"{trial_id}|{model_index}|{nonce}".encode()
     return int(hashlib.md5(raw).hexdigest()[:8], 16)
 
 
@@ -169,7 +168,7 @@ def generate_model_scanpath(
     *,
     model_index: int,
     reference_trial_id: object,
-    text_id: Optional[object] = None,
+    text_id: object | None = None,
     nonce: int = 0,
 ) -> pd.DataFrame:
     """One model's synthetic scanpath over ``words``, in canonical fixation form.
@@ -264,9 +263,9 @@ def generate_model_scanpaths(
     *,
     n_models: int = DEFAULT_N_MODELS,
     reference_trial_id: object,
-    text_id: Optional[object] = None,
+    text_id: object | None = None,
     nonce: int = 0,
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """Generate ``n_models`` synthetic scanpaths over ``words``.
 
     Returns an insertion-ordered ``{model_name: fixations_df}`` (Python dicts

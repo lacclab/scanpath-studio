@@ -29,8 +29,6 @@ The fixations dataframe is also enriched with:
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 import pandas as pd
 
@@ -190,7 +188,7 @@ def word_box_bounds(
     words: pd.DataFrame,
     *,
     layout: pd.DataFrame | None = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """``(x0, y0, x1, y1)`` AOI edges with the mid-space correction applied.
 
     **The** accessor for word-box geometry: anything that tests a point against a

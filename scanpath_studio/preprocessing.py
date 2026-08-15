@@ -7,8 +7,9 @@ functions to the UI, CLI, public API, and bulk export.
 
 from __future__ import annotations
 
+import itertools
 import math
-from typing import Mapping, Optional, Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -167,7 +168,7 @@ def preprocess_fixations(
     fixations: pd.DataFrame,
     words: pd.DataFrame,
     *,
-    settings: Optional[Mapping] = None,
+    settings: Mapping | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run the optional PRE-1 stage and return ``(fixations, QA report)``.
 
@@ -486,7 +487,7 @@ def character_grid(words: pd.DataFrame) -> pd.DataFrame:
             # BUG-27: one advance, not `width / len(text)` — on a tiling corpus
             # the latter stretches the glyph row across the trailing padding, so
             # every character box after the first sat progressively too far right.
-            char_width = advances.get(word.Index, float(getattr(word, "width")))
+            char_width = advances.get(word.Index, float(word.width))
             rtl = bool(getattr(word, "right_to_left", False))
             for physical_offset in range(len(text)):
                 logical_offset = (
@@ -588,7 +589,7 @@ def duration_mass_table(
 
 
 def _word_letter_geometry(
-    words: Optional[pd.DataFrame], keys: Sequence[str]
+    words: pd.DataFrame | None, keys: Sequence[str]
 ) -> dict[tuple, tuple[float, float, float, bool]]:
     """``(identity…, word_id) -> (x, glyph run, character advance, right_to_left)``.
 
@@ -615,7 +616,7 @@ def _word_letter_geometry(
     has_text = "text" in words
     counts = word_char_counts(words) if has_text else None
     advances = word_char_advance(words, chars=counts) if has_text else None
-    rtl = words["right_to_left"] if "right_to_left" in words else None
+    rtl = words.get("right_to_left", None)
     geometry: dict[tuple, tuple[float, float, float, bool]] = {}
     for position, word_id in enumerate(ids.to_numpy()):
         if pd.isna(word_id):
@@ -663,9 +664,9 @@ def _letter_position_in_word(
 def saccade_table(
     fixations: pd.DataFrame,
     *,
-    pixels_per_degree: Optional[float] = None,
-    raw_gaze: Optional[pd.DataFrame] = None,
-    words: Optional[pd.DataFrame] = None,
+    pixels_per_degree: float | None = None,
+    raw_gaze: pd.DataFrame | None = None,
+    words: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Materialize one row per saccade with geometry and visual-angle units."""
     if fixations.empty:
@@ -686,7 +687,7 @@ def saccade_table(
         identity = identity if isinstance(identity, tuple) else (identity,)
         chunk = chunk.sort_values("timestamp_ms")
         records = chunk.to_dict("records")
-        for start, end in zip(records, records[1:]):
+        for start, end in itertools.pairwise(records):
             dx, dy = float(end["x"] - start["x"]), float(end["y"] - start["y"])
             distance = math.hypot(dx, dy)
             start_duration = pd.to_numeric(start.get("duration_ms", 0), errors="coerce")

@@ -117,6 +117,13 @@ def entry_count(entry, key: str) -> Optional[int]:
     value is there but isn't a number, so a caller can tell "no missing texts"
     from "the missing-text count is unreadable" and word its claim accordingly
     rather than asserting the confident one.
+
+    **Never write ``entry_count(...) or 0``.** It collapses `None` into `0` and
+    so reads an unreadable count as *nothing missing* — which is precisely how
+    a corpus with unknown coverage gets badged a confident "Real", the
+    overclaim R34 exists to prevent. Test the two cases apart (``if count :=
+    entry_count(...)`` is fine — it drops both, which is right when the value is
+    only being formatted), or handle `None` explicitly.
     """
     if not isinstance(entry, dict):
         return None

@@ -268,3 +268,64 @@ def answer_setup_step(at, *, screen=None, geometry=None, text=None):
     at.session_state[_SETUP_MODE_KEYS["geometry"]] = geometry or _GEOM_DEFAULT
     at.session_state[_SETUP_MODE_KEYS["text"]] = text or _TEXT_DEFAULT
     return at
+
+
+def _write_benchmark_corpus(
+    root, name: str, *, readers=("r1",), paragraphs=("p1",)
+) -> None:
+    """Write one prepared benchmark corpus (DATA-27) under ``root/<name>/``.
+
+    The frames match `eyegenbench.EYEGENBENCH_WORD_SCHEMA` / `_FIX_SCHEMA` —
+    trivial single-column frames fail schema mapping, and `main()` returns early
+    on an unmapped source (`_render_unmapped_view`) without reaching most of what
+    these tests assert on.
+    """
+    import pandas as pd
+
+    directory = root / name
+    directory.mkdir(parents=True)
+    n = len(paragraphs)
+    pd.DataFrame(
+        {
+            "unique_paragraph_id": [p for p in paragraphs for _ in (0, 1)],
+            "ia_index": [0, 1] * n,
+            "ia_label": ["ab", "cd"] * n,
+            "line": [0, 0] * n,
+            "start_x": [10.0, 70.0] * n,
+            "end_x": [60.0, 120.0] * n,
+            "start_y": [20.0, 20.0] * n,
+            "end_y": [40.0, 40.0] * n,
+        }
+    ).to_parquet(directory / "words.parquet")
+    rows = [
+        (reader, paragraph, fix_index)
+        for reader in readers
+        for paragraph in paragraphs
+        for fix_index in (0, 1)
+    ]
+    pd.DataFrame(
+        {
+            "eyegenbench_trial_id": [f"t_{p}" for _, p, _ in rows],
+            "unique_participant_id": [r for r, _, _ in rows],
+            "unique_paragraph_id": [p for _, p, _ in rows],
+            "fix_index": [i for _, _, i in rows],
+            "ia_index": [i for _, _, i in rows],
+            "fix_duration": [200 if i == 0 else 180 for _, _, i in rows],
+            "x": [35.0 if i == 0 else 95.0 for _, _, i in rows],
+            "y": [30.0 for _ in rows],
+        }
+    ).to_parquet(directory / "fixations.parquet")
+    pd.DataFrame(
+        {
+            "unique_participant_id": list(readers),
+            "participant_language": ["xx"] * len(readers),
+        }
+    ).to_parquet(directory / "participants.parquet")
+
+
+def _write_benchmark_manifest(root, entries) -> None:
+    """Write the bundle manifest. ``entries`` are real manifest rows — in
+    particular ``language`` is an **ISO code** ('de'), never a name."""
+    import json
+
+    (root / "manifest.json").write_text(json.dumps({"datasets": list(entries)}))

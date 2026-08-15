@@ -210,6 +210,36 @@ PARAM_ONESTOP_PARTS = "onestop_parts"
 # Legacy inverse of `show_order`, still parsed so pre-Share links keep working.
 PARAM_HIDE_FIXATION_NUMBERS = "hide_fixation_numbers"
 
+# DATA-27 (Task 12): every public corpus on the deep link.
+#
+# `?source=corpus` says the data source is one entry of
+# `app.public_dataset_registry()` — the built-in public corpora **and** each
+# corpus discovered in the local harmonised bundle, which is a catalogue that
+# varies per machine and so cannot have one `?source=` token each. `?corpus=`
+# names which, by a slug of the entry's *stable identifier* (a prepared corpus'
+# manifest name, a built-in's registry `short`) — never of its display label,
+# which is copy and will be reworded.
+#
+# `onestop_public` keeps its own token and is emitted in preference to this pair
+# for the corpus it names, so links written before this existed keep resolving.
+PARAM_CORPUS = "corpus"
+
+# The bundle *directory* is deliberately NOT here and never goes in a link: it is
+# a local filesystem path, so putting it on the wire would leak the sender's
+# directory layout to the recipient (and name a path that means nothing on their
+# machine). A link names the corpus; where the recipient keeps their bundle is
+# theirs to say. `eyegenbench_dir` therefore stays an ordinary session key.
+
+# Where `?source=` lands. Written by `app.main`'s source dispatch — every
+# `?source=` token has resolved to `data_source_choice` there since long before
+# this file existed, and `?source=corpus` adds `public_dataset_choice` (the
+# corpus behind the picker's collapse of any registry label to
+# `PUBLIC_DATASETS_CHOICE`). Pinned here because a link writes them; they are
+# **not** in `URL_SEEDED_STATE_KEYS`, which is specifically what
+# `url_state._apply_url_preset` seeds.
+DATA_SOURCE_CHOICE = "data_source_choice"
+PUBLIC_DATASET_CHOICE = "public_dataset_choice"
+
 # DATA-22 §7 surface 2: how the recording setup's three groups came to be known,
 # as `screen:assumed,geom:skipped,text:measured`. Metadata *about* the settings a
 # link already carries — it takes no input and changes no figure, so it stops at
@@ -410,18 +440,26 @@ URL_SELECTION_PARAMS = frozenset(
         PARAM_ONESTOP_VARIANT,
         PARAM_ONESTOP_REGIME,
         PARAM_ONESTOP_PARTS,
+        PARAM_CORPUS,
         COMPARE_PARAM,
         COMPARE_SOURCE_PARAM,
     }
 )
+
+# Session keys `app.main`'s `?source=` dispatch writes when a link names a data
+# source. Separate from `URL_SEEDED_STATE_KEYS` because they are seeded there,
+# after `_apply_url_preset` has returned the token — see PARAM_CORPUS above.
+URL_SOURCE_STATE_KEYS = frozenset({DATA_SOURCE_CHOICE, PUBLIC_DATASET_CHOICE})
 
 # Params the reader accepts and the writer emits only *when there is something to
 # say* — as opposed to `SHARE_QUERY_PARAMS`, which every fully-populated session
 # emits. `setup_prov` is absent for a corpus that never declared a recording
 # setup, and an absent badge is the honest outcome there: emitting
 # "assumed,assumed,assumed" would manufacture a claim the sender never made.
+# `corpus` is absent for every source that is not a public corpus, and for the
+# one public corpus that still travels under its own older token.
 URL_OPTIONAL_PARAMS = frozenset(
-    {SETUP_PROVENANCE_PARAM, COMPARE_PARAM, COMPARE_SOURCE_PARAM}
+    {SETUP_PROVENANCE_PARAM, COMPARE_PARAM, COMPARE_SOURCE_PARAM, PARAM_CORPUS}
 )
 
 # The exact key set of `url_state._URL_PRESETS` — every param a deep link can

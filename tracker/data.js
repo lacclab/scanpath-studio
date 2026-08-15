@@ -283,10 +283,13 @@ window.TRACKER = {
     "Code implementation is underway."
    ],
    "whatsLeft": [
-    "The 14 plan tasks: the layout engine, the display-parameter table, EyeLink box",
-    "extraction and gap interpolation, tier resolution, the bundle loader,",
-    "`geometry_source` registration, the prep script, the four surfaces (headless API,",
-    "CLI, sidebar source, share links), the docs page, and the corpus sweep."
+    "The remaining plan tasks. Done so far: the layout engine, the display-parameter",
+    "table, EyeLink box extraction and gap interpolation, tier resolution, the bundle",
+    "loader, `geometry_source` registration, the prep script, and three of the four",
+    "surfaces — headless API, CLI, and the data-source picker (one entry per prepared",
+    "corpus) plus the deep link / Share (`?source=corpus&corpus=<slug>`, one generic",
+    "token spanning every registry corpus, built-in and prepared alike).",
+    "Left: the docs page, the changelog, and the corpus sweep."
    ]
   },
   {

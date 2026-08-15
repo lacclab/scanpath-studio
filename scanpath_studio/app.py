@@ -179,6 +179,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     set_persistence_paused,
 )
+from scanpath_studio.session_keys import PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _build_figure_settings,
@@ -202,6 +203,7 @@ from scanpath_studio.tour import (
     render_use_case_tutorial,
 )
 from scanpath_studio.url_state import (
+    CORPUS_SOURCE_TOKEN,
     _active_view,
     _apply_pending_trial_selection,
     _apply_uploaded_plot_config,
@@ -210,6 +212,7 @@ from scanpath_studio.url_state import (
     _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
     _render_share_body,
+    corpus_choice_for_slug,
 )
 
 # NOTE: ``scanpath_studio.wizard`` is imported lazily inside the two functions
@@ -3740,6 +3743,32 @@ def main() -> None:
         # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
         # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
         st.session_state.setdefault("data_source_choice", ONESTOP_PUBLIC_CHOICE)
+    elif url_source == CORPUS_SOURCE_TOKEN and public_datasets_enabled():
+        # DATA-27 (Task 12): `?source=corpus&corpus=<slug>` names ONE entry of
+        # `public_dataset_registry()` — a built-in public corpus or a locally
+        # prepared one, identically. Writing the registry label into
+        # `data_source_choice` is what the picker's healing path expects; it
+        # collapses the label back to PUBLIC_DATASETS_CHOICE and re-stashes it on
+        # `public_dataset_choice`, which is seeded here too so the corpus is
+        # already resolved for anything that reads it before the picker runs.
+        slug = str(st.query_params.get(PARAM_CORPUS) or "")
+        corpus_choice = corpus_choice_for_slug(slug)
+        if corpus_choice:
+            st.session_state.setdefault("data_source_choice", corpus_choice)
+            st.session_state.setdefault("public_dataset_choice", corpus_choice)
+        elif slug:
+            # The common case, not an edge case: the recipient has no prepared
+            # bundle, or a different subset of one. Say which corpus was named
+            # and leave the picker exactly where it was — never wedge it, and
+            # never silently open a different corpus.
+            st.warning(
+                f"This link opens the corpus `{slug}`, which isn't available "
+                "here. If it is a harmonised benchmark corpus, prepare a local "
+                "bundle containing it and point the benchmark data directory "
+                "(⚙️ Configure → the corpus' *Data directory*) at it; otherwise "
+                "pick the corpus in **Data source**. The link's view settings "
+                "still apply to whatever you open."
+            )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
 

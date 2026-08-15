@@ -39,6 +39,12 @@ trial only, or settings only.
 A link never contains the fixation or word tables. Built-in data can be reopened
 from the URL; a recipient of an uploaded-data link must load the same dataset.
 
+Public corpora travel too: the link names the corpus (`?source=corpus&corpus=…`)
+rather than its data. For a harmonised benchmark corpus the recipient needs their
+own prepared bundle containing it — the Share panel says which corpus the link
+names, and opening a link for a corpus that isn't available leaves the data
+source where it was instead of switching to a different one.
+
 ## Save and restore work
 
 **💾 Save & restore** downloads a JSON configuration containing the view,

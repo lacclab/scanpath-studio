@@ -30,6 +30,7 @@ from urllib.parse import parse_qs
 
 import pytest
 
+from scanpath_studio.constants import BENCHMARK_SETUP_CHOICE
 from tests.conftest import (
     APP_SCRIPT,
     _write_benchmark_corpus,
@@ -231,8 +232,16 @@ class TestSlugs:
 
         Discovery reads the manifest, so the corpus directories need not exist
         for the registry to list them — which is what makes the *whole real
-        catalogue* affordable as a fixture.
+        catalogue* affordable as a fixture. (The suite pins discovery at an
+        empty directory, so the bundle a test wants must be written by the test.)
+
+        The expectation is derived from `public_dataset_registry()` itself rather
+        than from a count of the snapshot above: `registry_corpus_slugs` drops
+        every slug two entries would claim, so "each corpus that isn't the setup
+        placeholder still has a slug" **is** the uniqueness assertion, and it
+        keeps meaning that as the catalogue grows.
         """
+        from scanpath_studio import app
         from scanpath_studio.url_state import registry_corpus_slugs
 
         monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
@@ -247,15 +256,17 @@ class TestSlugs:
         )
         _pin_bundle(monkeypatch, root)
 
-        slugs = registry_corpus_slugs()
-        assert len(slugs) == len(_REAL_MANIFEST_CORPORA) + 3, (
-            "expected one slug per prepared corpus plus the three built-ins: "
-            f"{sorted(slugs.values())}"
-        )
-        duplicates = {
-            slug for slug in slugs.values() if list(slugs.values()).count(slug) > 1
+        registry = app.public_dataset_registry()
+        nameable = {
+            label for label, spec in registry.items() if not spec.get("setup_only")
         }
-        assert not duplicates, f"two registry entries share a slug: {duplicates}"
+        # Premise: the catalogue under test really is the whole real one.
+        assert len(nameable) >= len(_REAL_MANIFEST_CORPORA)
+        assert set(registry_corpus_slugs()) == nameable, (
+            "a corpus lost its slug — `registry_corpus_slugs` drops any slug two "
+            "entries would answer to, so these are the colliding ones: "
+            f"{sorted(nameable - set(registry_corpus_slugs()))}"
+        )
 
     def test_the_bootstrap_placeholder_is_not_a_corpus(self, tmp_path, monkeypatch):
         """With zero corpora discovered the registry offers one placeholder that
@@ -284,6 +295,127 @@ class TestSlugs:
         assert corpus_choice_for_slug(None) is None
 
 
+class TestAmbiguousSlugsResolveToNeither:
+    """Avoiding the known collision is not the same as detecting an unknown one.
+
+    The namespace prefix keeps native PoTeC and harmonised PoTeC apart, and that
+    is the only collision today's catalogue has. It gives the scheme no way to
+    *notice* another one — and the resolver iterates the registry with the
+    built-ins first, so an undetected collision would resolve to whichever entry
+    came first: silently, and to the wrong corpus. Refusing to answer costs the
+    recipient one link; answering wrongly opens the wrong data.
+
+    Each test below asserts the pair resolves to **neither** entry, not merely
+    that something was reported.
+    """
+
+    def test_a_builtin_short_beginning_with_the_namespace_collides(
+        self, tmp_path, monkeypatch
+    ):
+        """The `harmonised-` prefix is a convention, not a reserved word.
+
+        A built-in corpus whose `short` is "Harmonised Foo" slugs exactly like a
+        prepared corpus named "Foo" — the brief named this vector explicitly.
+        """
+        from scanpath_studio import app
+        from scanpath_studio.url_state import corpus_choice_for_slug, corpus_slug
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "EyeGenBench"
+        _write_benchmark_corpus(root, "Foo")
+        _write_benchmark_manifest(root, [{"name": "Foo", "language": "en"}])
+        _pin_bundle(monkeypatch, root)
+        # A hypothetical future built-in. `public_dataset_registry()` copies the
+        # static dict at call time, so adding an entry to it is enough.
+        monkeypatch.setitem(
+            app.PUBLIC_DATASET_REGISTRY,
+            "Harmonised Foo — a native corpus that happens to be named this way",
+            dict(loader=lambda *a, **k: None, short="Harmonised Foo"),
+        )
+
+        registry = app.public_dataset_registry()
+        clashing = [
+            label
+            for label, spec in registry.items()
+            if corpus_slug(label, spec) == "harmonised-foo"
+        ]
+        assert len(clashing) == 2, f"premise: two entries slug alike, got {clashing}"
+        assert corpus_choice_for_slug("harmonised-foo") is None, (
+            "an ambiguous slug resolved to one of the two corpora that claim it"
+        )
+
+    def test_names_differing_only_in_punctuation_collide(self, tmp_path, monkeypatch):
+        """`_slugify_corpus` is not injective, and near-identical corpus names
+        are the norm in this catalogue (MECOL1W1/…/MECOL2W2, ZuCo1/ZuCo2)."""
+        from scanpath_studio import app
+        from scanpath_studio.url_state import corpus_choice_for_slug, corpus_slug
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "EyeGenBench"
+        for name in ("ZuCo-1", "ZuCo 1"):
+            _write_benchmark_corpus(root, name)
+        _write_benchmark_manifest(
+            root,
+            [
+                {"name": "ZuCo-1", "language": "en"},
+                {"name": "ZuCo 1", "language": "en"},
+            ],
+        )
+        _pin_bundle(monkeypatch, root)
+
+        registry = app.public_dataset_registry()
+        both = {app.benchmark_corpus_label(n) for n in ("ZuCo-1", "ZuCo 1")}
+        assert both <= set(registry), "premise: both corpora are registry entries"
+        assert {corpus_slug(label, registry[label]) for label in both} == {
+            "harmonised-zuco-1"
+        }, "premise: the two names slug alike"
+        assert corpus_choice_for_slug("harmonised-zuco-1") is None
+        assert corpus_choice_for_slug("ZuCo 1") is None
+
+    def test_a_name_with_nothing_sluggable_in_it_is_not_shareable(
+        self, tmp_path, monkeypatch
+    ):
+        """A non-Latin manifest name slugifies to nothing.
+
+        Emitting the bare namespace prefix for it would be doubly wrong: every
+        such corpus would share the one slug, and none of them could ever
+        round-trip, because the reader re-slugifies its input and the trailing
+        hyphen is stripped. Not shareable is the honest answer — the entry still
+        works everywhere else, and the link falls back to the "can't be rebuilt"
+        caveat.
+        """
+        from scanpath_studio import app
+        from scanpath_studio.url_state import corpus_choice_for_slug, corpus_slug
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "EyeGenBench"
+        for name in ("日本語コーパス", "Корпус"):
+            _write_benchmark_corpus(root, name)
+        _write_benchmark_manifest(
+            root,
+            [
+                {"name": "日本語コーパス", "language": "ja"},
+                {"name": "Корпус", "language": "ru"},
+            ],
+        )
+        _pin_bundle(monkeypatch, root)
+
+        registry = app.public_dataset_registry()
+        labels = [app.benchmark_corpus_label(n) for n in ("日本語コーパス", "Корпус")]
+        assert set(labels) <= set(registry), "premise: both are registry entries"
+        for label in labels:
+            assert corpus_slug(label, registry[label]) == ""
+        assert corpus_choice_for_slug("harmonised-") is None
+        assert corpus_choice_for_slug("harmonised") is None
+
+        # And the writer refuses too, rather than emitting a slug that names two
+        # corpora and resolves to neither.
+        parsed, caveats = _share(labels[0])
+        assert "corpus" not in parsed
+        assert "source" not in parsed
+        assert len(caveats) == 1, caveats
+
+
 def _share_app():
     """Build the Share query for whatever corpus the test selected."""
     import streamlit as st
@@ -292,6 +424,12 @@ def _share_app():
     from scanpath_studio.url_state import _build_share_query
 
     st.session_state["_share_selection"] = {"participant_id": "p1", "trial_id": "t1"}
+    # DATA-3's three public-OneStop options are set for *every* corpus this
+    # helper shares, not just OneStop: they are what proves the block that emits
+    # them is reached — and, for the other corpora, that it is not.
+    st.session_state["onestop_variant"] = "public"
+    st.session_state["onestop_regime"] = "repeated"
+    st.session_state["onestop_parts"] = ["Paragraph", "Title"]
     query, caveats = _build_share_query(PUBLIC_DATASETS_CHOICE)
     st.session_state["_query"] = query
     st.session_state["_caveats"] = caveats
@@ -329,18 +467,107 @@ class TestShareEmitsTheCorpus:
         assert parsed["corpus"] == ["potec"]
         assert caveats == []
 
-    def test_public_onestop_keeps_its_own_older_token(self, bundle):
-        """R42: a corpus reachable by both tokens still emits the older one.
+    def test_public_onestop_keeps_its_own_older_token_and_its_three_options(
+        self, bundle
+    ):
+        """R42: a corpus reachable by both tokens still emits the older one —
+        **with** the variant / regime / parts that make that token worth keeping.
 
-        `?source=onestop_public` (+ variant / regime / parts) has been in links
-        since DATA-3. The generic token is additive; it must not retire that
-        branch, or every link already written stops carrying the corpus slice.
+        `?source=onestop_public` (+ its three options) has been in links since
+        DATA-3. The generic token is additive; it must not retire that branch, or
+        every link already written stops carrying the corpus slice.
+
+        The three options are the point of this test, and they are asserted on
+        the path the **app** takes: `data_choice` is `PUBLIC_DATASETS_CHOICE` and
+        only `public_dataset_choice` says which corpus it is. The picker collapses
+        every registry label before the Share panel sees it, so
+        `data_choice == ONESTOP_PUBLIC_CHOICE` is never true in the running app —
+        which is why the emitting block matches the *resolved* corpus too, and
+        why a test that passes the label in directly proves nothing about it.
         """
         from scanpath_studio.constants import ONESTOP_PUBLIC_CHOICE
 
         parsed, _ = _share(ONESTOP_PUBLIC_CHOICE)
         assert parsed["source"] == ["onestop_public"]
         assert "corpus" not in parsed
+        assert parsed["onestop_variant"] == ["public"]
+        assert parsed["onestop_regime"] == ["repeated"]
+        assert parsed["onestop_parts"] == ["Paragraph,Title"]
+
+    def test_the_onestop_options_ride_only_with_that_corpus(self, bundle):
+        """The same three keys are set for every corpus this helper shares, so
+        the assertion above would pass on a block that fired unconditionally."""
+        from scanpath_studio import app
+
+        parsed, _ = _share(app.benchmark_corpus_label("Provo"))
+        assert "onestop_variant" not in parsed
+        assert "onestop_regime" not in parsed
+        assert "onestop_parts" not in parsed
+
+
+def _share_panel_app():
+    """Render the Share subtab's body for whatever corpus is selected."""
+    from scanpath_studio.constants import PUBLIC_DATASETS_CHOICE
+    from scanpath_studio.url_state import _render_share_body
+
+    _render_share_body(PUBLIC_DATASETS_CHOICE)
+
+
+class TestTheFrozenLinkFollowsTheCorpus:
+    def test_switching_corpus_invalidates_the_frozen_share_link(self, bundle):
+        """The link is frozen against *setting* changes on purpose — not against
+        a change of corpus.
+
+        Before this task a stale link named a different **kind** of source, which
+        reads as obviously wrong ("this data source can't be rebuilt"). Now every
+        public corpus shares one kind, so a stale link opens a specific, wrong
+        corpus and the caveat names a corpus the user is no longer looking at.
+        """
+        from scanpath_studio import app
+
+        potec = app.benchmark_corpus_label("PoTeC")
+        provo = app.benchmark_corpus_label("Provo")
+
+        at = AppTest.from_function(_share_panel_app)
+        at.session_state["public_dataset_choice"] = potec
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        query, caveats = at.session_state["_share_query_frozen"]
+        assert parse_qs(query)["corpus"] == ["harmonised-potec"]
+        assert any("PoTeC" in note for note in caveats), caveats
+
+        # Switch the picker to another corpus and come back to Share, without
+        # pressing 🔄 Refresh link — as a user moving between subtabs does.
+        at.session_state["public_dataset_choice"] = provo
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        query, caveats = at.session_state["_share_query_frozen"]
+        assert parse_qs(query)["corpus"] == ["harmonised-provo"], (
+            "the panel handed out a link naming the previously selected corpus"
+        )
+        assert not any("PoTeC" in note for note in caveats), caveats
+
+    def test_a_setting_change_still_does_not_rewrite_the_link(self, bundle):
+        """The other half: the freeze itself survives. A link the user is about
+        to paste must not silently change under an unrelated control."""
+        from scanpath_studio import app
+
+        at = AppTest.from_function(_share_panel_app)
+        at.session_state["public_dataset_choice"] = app.benchmark_corpus_label("Provo")
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        before, _ = at.session_state["_share_query_frozen"]
+
+        at.session_state["global_show_words"] = not st_value_of(at, "global_show_words")
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        after, _ = at.session_state["_share_query_frozen"]
+        assert after == before, "the link rebuilt without a Refresh"
+
+
+def st_value_of(at, key: str, default=True):
+    """A session value an AppTest may or may not have set yet."""
+    return at.session_state[key] if key in at.session_state else default
 
 
 @pytest.mark.timeout(180)
@@ -414,9 +641,39 @@ class TestRoundTripThroughTheApp:
             else ""
         )
         assert "ZuCo1" not in str(selected_corpus)
-        assert any("harmonised-zuco1" in w.value for w in at.warning), (
+        named = [w.value for w in at.warning if "harmonised-zuco1" in w.value]
+        assert named, (
             "the recipient was not told which corpus the link named: "
             f"{[w.value for w in at.warning]}"
+        )
+        # …and the remedy names something the recipient can actually click. The
+        # bundle-directory input renders *inside* a benchmark corpus entry, so
+        # "point the data directory at it" is only reachable after picking one in
+        # Data source — with no bundle at all, the setup placeholder.
+        assert "Data source" in named[0], named
+        assert BENCHMARK_SETUP_CHOICE in named[0], named
+
+    def test_a_corpus_link_is_not_silent_when_public_datasets_are_off(
+        self, bundle, monkeypatch
+    ):
+        """A build with the corpora switched off can't open one either — but the
+        recipient still has to be told the link named a corpus, rather than
+        watching it do nothing at all."""
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "0")
+
+        control = AppTest.from_file(APP_SCRIPT)
+        control.run(timeout=60)
+        assert not control.exception, control.exception
+        before = control.session_state["data_source_choice"]
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.query_params["source"] = "corpus"
+        at.query_params["corpus"] = "harmonised-provo"
+        at.run(timeout=60)
+        assert not at.exception, at.exception
+        assert at.session_state["data_source_choice"] == before
+        assert any("harmonised-provo" in w.value for w in at.warning), (
+            f"silent no-op: {[w.value for w in at.warning]}"
         )
 
     def test_an_old_public_onestop_link_still_resolves_with_its_variant(self, bundle):

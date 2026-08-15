@@ -3743,31 +3743,43 @@ def main() -> None:
         # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
         # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
         st.session_state.setdefault("data_source_choice", ONESTOP_PUBLIC_CHOICE)
-    elif url_source == CORPUS_SOURCE_TOKEN and public_datasets_enabled():
+    elif url_source == CORPUS_SOURCE_TOKEN:
         # DATA-27 (Task 12): `?source=corpus&corpus=<slug>` names ONE entry of
         # `public_dataset_registry()` — a built-in public corpus or a locally
         # prepared one, identically. Writing the registry label into
-        # `data_source_choice` is what the picker's healing path expects; it
-        # collapses the label back to PUBLIC_DATASETS_CHOICE and re-stashes it on
-        # `public_dataset_choice`, which is seeded here too so the corpus is
-        # already resolved for anything that reads it before the picker runs.
+        # `data_source_choice` is all the picker's healing path needs: it accepts
+        # the label as an entry and collapses it back to PUBLIC_DATASETS_CHOICE,
+        # re-stashing it on `public_dataset_choice` itself. Seeding that key here
+        # as well would be a second copy of the same answer — and a `setdefault`
+        # of it is dead anyway, since a recovery-cached value (the only case
+        # where seeding could matter) is exactly what `setdefault` won't replace.
+        #
+        # The resolution is gated on the feature flag, but the *message* is not:
+        # a build with public datasets switched off can't open the corpus either,
+        # and saying nothing at all would leave the recipient with a link that
+        # silently did nothing.
         slug = str(st.query_params.get(PARAM_CORPUS) or "")
-        corpus_choice = corpus_choice_for_slug(slug)
+        corpus_choice = (
+            corpus_choice_for_slug(slug) if public_datasets_enabled() else None
+        )
         if corpus_choice:
             st.session_state.setdefault("data_source_choice", corpus_choice)
-            st.session_state.setdefault("public_dataset_choice", corpus_choice)
         elif slug:
             # The common case, not an edge case: the recipient has no prepared
             # bundle, or a different subset of one. Say which corpus was named
             # and leave the picker exactly where it was — never wedge it, and
-            # never silently open a different corpus.
+            # never silently open a different corpus. The remedy names what is
+            # actually clickable: the bundle directory input renders *inside* a
+            # benchmark corpus entry, so it can only be reached by selecting one
+            # of those entries first (with no bundle at all, that is the single
+            # "set up a local bundle" entry the registry offers in their place).
             st.warning(
                 f"This link opens the corpus `{slug}`, which isn't available "
-                "here. If it is a harmonised benchmark corpus, prepare a local "
-                "bundle containing it and point the benchmark data directory "
-                "(⚙️ Configure → the corpus' *Data directory*) at it; otherwise "
-                "pick the corpus in **Data source**. The link's view settings "
-                "still apply to whatever you open."
+                "here. To get it, open **Data source** and select a harmonised "
+                f"benchmark corpus — or **{BENCHMARK_SETUP_CHOICE}** if you have "
+                "none yet — then point its *Data directory* at a prepared bundle "
+                "containing this corpus. The link's view settings still apply to "
+                "whatever you open."
             )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)

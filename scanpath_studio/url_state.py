@@ -484,23 +484,46 @@ def _slugify_corpus(value: str) -> str:
 
 
 def corpus_slug(label: str, spec) -> str:
-    """The ``?corpus=`` slug for one `public_dataset_registry()` entry.
+    """The ``?corpus=`` slug for one `public_dataset_registry()` entry, or ``""``.
 
-    ``""`` for an entry that is not a corpus at all — the bootstrap placeholder
-    the registry offers while **zero** corpora are discovered exists to carry a
-    directory input, so there is nothing for a link to reopen.
+    Empty for an entry a link cannot name:
+
+    * the bootstrap placeholder the registry offers while **zero** corpora are
+      discovered — it exists to carry a directory input, so there is nothing to
+      reopen;
+    * an identifier with nothing sluggable in it. A manifest ``name`` written in
+      a non-Latin script slugifies to ``""``, and returning the bare namespace
+      prefix for it would give *every* such corpus the same slug **and** one the
+      reader can never match (it re-slugifies its input, which strips the
+      trailing hyphen). Not shareable is honest, and is already a supported
+      state; a slug naming several corpora is the failure this scheme exists to
+      prevent.
     """
     if spec.get("setup_only"):
         return ""
     # `benchmark_dataset` is the manifest `name`, put on the spec by Task 11R
     # precisely as the stable identifier for this wire format.
     if dataset := str(spec.get("benchmark_dataset") or "").strip():
-        return _PREPARED_CORPUS_SLUG_PREFIX + _slugify_corpus(dataset)
+        slug = _slugify_corpus(dataset)
+        return f"{_PREPARED_CORPUS_SLUG_PREFIX}{slug}" if slug else ""
     return _slugify_corpus(str(spec.get("short") or label))
 
 
 def registry_corpus_slugs() -> Dict[str, str]:
-    """``registry label -> slug`` for every corpus on offer right now.
+    """``registry label -> slug`` for every corpus a link can name right now.
+
+    A slug **two** entries would claim is dropped from both — so it is neither
+    emitted nor resolvable, and the link degrades onto the existing "doesn't move
+    the picker" path. The namespace prefix stops the collision this catalogue is
+    known to have (PoTeC and OneStop each ship natively *and* harmonised) from
+    arising at all, but avoidance is not detection, and three ways in remain:
+    `_slugify_corpus` is not injective (``ZuCo-1`` and ``ZuCo 1`` slug alike, and
+    near-identical names are the norm here — ``MECOL1W1``/``MECOL1W2``/
+    ``MECOL2W1``/``MECOL2W2``, ``ZuCo1``/``ZuCo2``); nothing reserves the prefix
+    against a future built-in whose ``short`` is "Harmonised Foo"; and a bundle
+    can hold two corpora whose names differ only in punctuation. Refusing to
+    answer costs the recipient one link. Picking a winner opens the wrong
+    corpus, silently, which is the worst failure this feature can have.
 
     Reads `app.public_dataset_registry()` — the *function*, never the static
     `PUBLIC_DATASET_REGISTRY` dict, which answers for the three built-ins only.
@@ -508,19 +531,20 @@ def registry_corpus_slugs() -> Dict[str, str]:
     """
     from scanpath_studio.app import public_dataset_registry
 
-    slugs = {}
+    claimed: Dict[str, list] = {}
     for label, spec in public_dataset_registry().items():
         if slug := corpus_slug(label, spec):
-            slugs[label] = slug
-    return slugs
+            claimed.setdefault(slug, []).append(str(label))
+    return {labels[0]: slug for slug, labels in claimed.items() if len(labels) == 1}
 
 
 def corpus_choice_for_slug(value) -> Optional[str]:
     """A ``?corpus=`` slug → its registry label, or ``None``.
 
-    ``None`` covers both "this reader's bundle doesn't hold that corpus" (the
-    common case — the recipient has no bundle, or a different subset of one) and
-    an unknown slug, and both degrade the same way `_source_choice_for_param`
+    ``None`` covers "this reader's bundle doesn't hold that corpus" (the common
+    case — the recipient has no bundle, or a different subset of one), an unknown
+    slug, and a slug two entries would answer to (`registry_corpus_slugs` has
+    already dropped that one). All degrade the way `_source_choice_for_param`
     does: the link simply doesn't move the picker. Never guess a near match — a
     slug resolving to the wrong corpus opens the wrong data silently.
     """
@@ -1827,7 +1851,7 @@ def _build_share_query(
     # DATA-27 (Task 12): which public corpus this is, if any. Resolved only when
     # the choice isn't already a token of its own, so the ordinary sources never
     # pay for a registry lookup. `corpus_label` is the *registry label*, which is
-    # what the picker collapsed away — see `_selected_corpus_label`.
+    # what the picker collapsed away — see `_selected_corpus`.
     corpus_label, corpus_spec = ("", {}) if source else _selected_corpus(data_choice)
     if corpus_label and not source:
         # A corpus reachable by both tokens keeps emitting the older one:
@@ -1835,8 +1859,13 @@ def _build_share_query(
         # since DATA-3, and those links must keep resolving unchanged. The new
         # generic token is additive, never a replacement.
         source = _SHAREABLE_SOURCES.get(corpus_label)
+    # Read through `registry_corpus_slugs`, not `corpus_slug` directly, so a slug
+    # another entry would also answer to is never emitted: the reader refuses it,
+    # and a link the recipient cannot resolve is worse than no link at all.
     corpus_slug_out = (
-        corpus_slug(corpus_label, corpus_spec) if corpus_label and not source else ""
+        registry_corpus_slugs().get(corpus_label, "")
+        if corpus_label and not source
+        else ""
     )
     if source:
         params["source"] = source
@@ -2108,14 +2137,24 @@ def _render_share_body(data_choice: str) -> None:
         type="primary",
         help="Rebuild the link from the current trial + settings.",
     )
-    stale = st.session_state.get("_share_query_identity") != mode
+    # What the frozen link is allowed to go stale *against*: the view settings, on
+    # purpose (tweaking a control must not silently rewrite a link the user is
+    # about to paste). Not the data source, and — DATA-27 — not the corpus within
+    # it. Before this task a stale `?source=` named a different *kind* of source,
+    # which reads as obviously wrong; now every public corpus shares one kind, so
+    # a stale link would confidently open a *different corpus* of the same kind,
+    # with a caveat naming the corpus the user is no longer looking at. That is
+    # the silent-wrong-corpus failure this feature is most careful about, so the
+    # freeze is keyed on the selection as well as the identity mode.
+    identity = (mode, data_choice, st.session_state.get(PUBLIC_DATASET_CHOICE))
+    stale = st.session_state.get("_share_query_identity") != identity
     if refresh or stale or st.session_state.get("_share_query_frozen") is None:
         st.session_state["_share_query_frozen"] = _build_share_query(
             data_choice,
             include_participant=include_participant,
             include_trial=include_trial,
         )
-        st.session_state["_share_query_identity"] = mode
+        st.session_state["_share_query_identity"] = identity
     query, caveats = st.session_state["_share_query_frozen"]
     for note in caveats:
         st.caption("⚠️ " + note)

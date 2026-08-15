@@ -117,6 +117,18 @@ def _spec(
 # Published display parameters, best source first: pymovements dataset YAMLs ->
 # the UZH dataset review table -> the corpus' own paper. Anything not listed
 # here falls back to DEFAULT_SPEC and is stamped `synthesized`.
+#
+# R49/R50 -- the entry bar is a PUBLISHED parameter, not a plausible one. An
+# entry here upgrades a corpus from `synthesized` to `reconstructed`, i.e. from
+# "this geometry is invented" to "this geometry follows the corpus' own
+# reported screen"; a plausible-but-unsourced entry makes an invented layout
+# indistinguishable from a sourced one, which is the single thing the tier
+# system exists to prevent. So: no modal/mean screen for a multi-site corpus
+# (each site's readers would be laid out on another site's screen), no
+# borrowing a sibling corpus' apparatus, no filling a missing pixel resolution
+# from the hardware of the era. Where a value comes from somewhere other than
+# the corpus' own paper (e.g. a monitor datasheet for a model the paper names),
+# `source` says so rather than presenting it as a paper value.
 DISPLAY_SPECS: dict[str, DisplaySpec] = {
     "potec": _spec(
         1680, 1050, 20, source="pymovements:potec", width_cm=47.5, distance_cm=65
@@ -246,7 +258,138 @@ DISPLAY_SPECS: dict[str, DisplaySpec] = {
     "cuentos": _spec(1920, 1080, 24, source="uzh", distance_cm=55),
     "zuco1": _spec(1920, 1080, 20, source="paper:Hollenstein2018", mono=False),
     "zuco2": _spec(1920, 1080, 20, source="paper:Hollenstein2020", mono=False),
-    "mecol2w2": _spec(1920, 1080, 21, source="uzh + paper:MECO-L2-W2"),
+    # R49 -- OneStop publishes more of its layout than any other corpus here:
+    # monitor, display area, both viewing distances, the letter cell in px and
+    # the line pitch in px (Berzak et al. 2025, Sci Data 12:1995,
+    # doi:10.1038/s41597-025-06272-2, Methods -> Apparatus). Two judgement
+    # calls, both choices *between* published numbers rather than inventions:
+    #
+    #  * `distance_cm=75.0`. The paper gives eye level as 750 mm from the top
+    #    of the display area and 795 mm from its bottom, so a scalar has to
+    #    pick an end. 75.0 is the right one twice over: the text starts at
+    #    y=186 px, near the top, and it is the only end at which the paper's
+    #    other two published figures agree -- 0.34 deg per letter at 75 cm
+    #    reproduces the published 19 px letter cell (19.1 px), where 79.5 cm
+    #    would give 20.2 px, 6% wide.
+    #  * `margin_px=368` reproduces the published *text column* (2560 - 2*368 =
+    #    1824 px = 96 characters) rather than the published *left edge* (300
+    #    px). `_spec`'s margin model is symmetric and OneStop's layout is not
+    #    (left 300, column 1824, right 436), so only one of the two survives.
+    #    Column width is what `layout_words` actually consumes -- it decides
+    #    where lines wrap -- so matching it puts every word on the right line,
+    #    at the cost of shifting the whole block 68 px right.
+    #
+    # `double_spaced=True` is not an assumption here: 38 x 2 = 76 px is exactly
+    # the "triple spacing (76 px)" the paper reports. This entry is also the
+    # single sourced home for the 2560x1440 that app.py / cli.py / datasets.py
+    # pin for the *native* OneStop corpus; those sites now cite it.
+    "onestop": _spec(
+        2560,
+        1440,
+        38,  # published letter cell 19 px x 38 px (25 pt at this screen's 109 ppi)
+        source=(
+            "paper:Berzak2025-OneStop"
+            " (distance_cm=75, the published eye-to-top-of-display;"
+            " margin fits the published 1824 px text column)"
+        ),
+        chars_per_deg=2.94,  # 1 / 0.34 deg per letter, stated
+        distance_cm=75.0,
+        width_cm=59.7,  # 597 mm display area, stated
+        double_spaced=True,
+        margin_px=368,
+    ),
+    # R49 -- Laurinavichyute et al. 2019, Behav Res Methods 51(3):1161-1178,
+    # doi:10.3758/s13428-018-1051-6, Method -> Procedure states the monitor and
+    # resolution, 22 pt Courier New, 90 cm, and 0.29 deg per character.
+    # `font_px=28` converts the published 22 pt at this screen's 92 ppi -- it is
+    # NOT the point size copied into a pixel field. Cross-check: 22 pt Courier
+    # New has a 16.8 px advance at 92 ppi and the published 0.29 deg/char at
+    # 90 cm gives 16.5 px, two independent published routes agreeing to 2%,
+    # which is also what justifies pairing them with the datasheet width.
+    # Single-sentence trials, so nothing about line spacing is published (there
+    # are no line breaks) and `line_pitch_px` only sets box height.
+    "rsc": _spec(
+        1920,
+        1080,
+        28,  # 22 pt at 1920 px / 53.1 cm = 92 ppi
+        source=(
+            "paper:Laurinavichyute2019-RSC"
+            " (width_cm from the ASUS VG248QE datasheet, the model the paper names)"
+        ),
+        chars_per_deg=3.45,  # 1 / 0.29 deg per character, stated
+        distance_cm=90,
+        width_cm=53.1,
+    ),
+    # R49 -- Yan, Pan & Kliegl 2025, Behav Res Methods 57(2):60,
+    # doi:10.3758/s13428-024-02523-z, Apparatus. BSC-II's apparatus does NOT
+    # carry over from `bsc` above and the asymmetry between the two entries is
+    # real, not a gap: BSC was a 19" CRT at 1024x768 / 43 cm / 0.75 chars per
+    # degree, BSC-II a 24.5" LCD at 1920x1080 / 70 cm / 0.909. Inheriting BSC's
+    # numbers would have been wrong by ~2x in px per degree.
+    # A Song-font CJK glyph cell is square, so the published 1.1 deg per
+    # character IS the font size (~48 px); the harmonised interest areas are
+    # words, and `layout_words` multiplies per-character, so the per-character
+    # width is the correct thing to hand it.
+    "bscii": _spec(
+        1920,
+        1080,
+        48,  # square CJK cell = the published character width
+        source=(
+            "paper:YanPanKliegl2025-BSCII"
+            " (width_cm from the BenQ ZOWIE XL2546K datasheet, the model the"
+            " paper names)"
+        ),
+        chars_per_deg=0.909,  # 1 / 1.1 deg per character, stated
+        distance_cm=70,
+        width_cm=53.8,
+    ),
+    # R50 -- `mecol2w2` USED to be here as
+    # `_spec(1920, 1080, 21, source="uzh + paper:MECO-L2-W2")`. It was removed
+    # after both of its cited sources were re-read, and neither contains it:
+    #
+    #  * Kuperman et al. 2025 (SSLA, doi:10.1017/S0272263125000105), Procedure:
+    #    "A mono-spaced font (Consolas) was used, with a size generally ranging
+    #    from 20 to 22 points (given variation in screen size and resolution at
+    #    different testing sites) and 1.5 line spacing. In accordance with
+    #    their local experimental setup, the German site in Zurich used a
+    #    smaller font size of 10 with a lower resolution of 1280 x 1024. ... For
+    #    further specifications of the screen, font size, presentation settings,
+    #    and apparatus at each participating site, see supplementary material
+    #    S2." The string "1920" does not occur in the paper at all; the only
+    #    resolution it prints is one site's exception.
+    #  * The UZH review row for "MECO L2 2nd Wave" has `Resolution: null` and
+    #    puts a LINK to those same supplementary materials in its `Monitor` and
+    #    eye-to-screen-distance cells -- the curators' way of writing "per
+    #    site".
+    #
+    # So 1920x1080 was corpus-level for no site in particular, and `font_px=21`
+    # was the midpoint of a 20-22 **pt** range used as **px** -- a unit error
+    # on its own terms, and one that ignored both the range and the 10 pt site.
+    # Falling back to `synthesized` is a user-visible downgrade and the correct
+    # direction: an unsourced `reconstructed` is worse than an honest
+    # `synthesized`, because the user cannot tell it is a guess.
+    #
+    # Decided the same way for both MECO L2 waves, which share sites, protocol
+    # and materials -- `mecol2w1` gets no entry either, and neither do
+    # `mecol1w1` / `mecol1w2`. Wave 1 of L1 states outright that "maintaining
+    # an identical font size, distance from the screen, and screen resolution
+    # was unfeasible"; Wave 2 of L1 tabulates 16 different screens (Table 10,
+    # Siegelman et al. 2025). These corpora have no corpus-level screen to
+    # publish. Per-lab geometry would need a per-site table, not a per-corpus
+    # one; the site code is recoverable from the data if that is ever built.
+    #
+    # `psc2` is deliberately absent too, and it is the easiest one to "fix"
+    # wrongly. A complete apparatus IS published for the PSC2 sentences
+    # (1280x960, Courier New 24 pt, 14 px/letter, 60 cm; Laubrock & Kliegl
+    # 2015, Front Psychol 6:1432) -- but for the 32-reader ORAL reading
+    # experiment, which is already in this table above as `eyevoicespan`. The
+    # corpus shipped as `psc2` is a 149-reader SILENT reading collection whose
+    # only cited document (Heister, Wuerzner & Kliegl 2012) has no methods
+    # section at all. Same lab, same materials, probably the same room -- which
+    # is exactly why copying it across would be invisibly wrong: the two
+    # corpora would become indistinguishable here, and nothing in the data
+    # would reveal the error. Pinned by
+    # `tests/test_eyegenbench_geometry.py::test_psc2_stays_synthesized_...`.
 }
 
 

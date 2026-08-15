@@ -1729,7 +1729,11 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     ONESTOP_PUBLIC_CHOICE: dict(
         loader=_load_onestop_public_source,
-        monitor=(2560, 1440),  # OneStop presentation monitor (full-screen px coords)
+        # OneStop presentation monitor (full-screen px coords). Sourced in
+        # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,
+        # Sci Data 12:1995, Methods → Apparatus, which states the Dell U2715H
+        # at 2560 px × 1440 px over a 597 mm × 336 mm display area.
+        monitor=(2560, 1440),
         short="OneStop",
         language="English (L1)",
         # Verified against the OneStop docs (lacclab.github.io/OneStop-Eye-Movements
@@ -2920,7 +2924,8 @@ def resolve_source_monitor(
     canvas on the *previous* source's monitor.
     """
     # OneStop server bundle + bundled demo share the same experimental setup
-    # (Dell U2715H, 2560x1440).
+    # (Dell U2715H, 2560x1440) — cited once in
+    # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`.
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
     if (monitor := _public_dataset_monitor(data_choice)) is not None:
@@ -3071,8 +3076,10 @@ def seed_canvas_state(
         text true-to-scale: see `plots._word_label_font_px`.
     """
     # OneStop server bundle + bundled demo share the same experimental setup
-    # (Dell U2715H, 2560x1440). Data-derived extents undershoot — text only
-    # fills part of the screen — so hard-default to the real monitor here.
+    # (Dell U2715H, 2560x1440 — cited in
+    # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`). Data-derived extents
+    # undershoot — text only fills part of the screen — so hard-default to the
+    # real monitor here.
     # ``monitor_is_authoritative`` = the source declares a real presentation
     # monitor (OneStop/demo or a public-dataset registry entry), so the canvas
     # should snap to it rather than to data-derived extents.

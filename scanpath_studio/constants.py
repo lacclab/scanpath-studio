@@ -51,6 +51,10 @@ def similarity_enabled() -> bool:
 # font name or stack if you want the exact experiment font.
 FONT_FAMILY = "monospace"
 
+# The demo corpus' own presentation monitor, so a figure with no declared
+# canvas still renders true-to-scale. Sourced once, in
+# `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` (Berzak et al. 2025, Sci Data
+# 12:1995 — Dell U2715H, 2560 px × 1440 px over 597 mm × 336 mm).
 DEFAULT_FIGURE_SIZE = (2560, 1440)
 
 # Reading text is drawn true-to-scale: one line of text fills ``1/line_spacing``

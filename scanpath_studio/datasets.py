@@ -689,7 +689,9 @@ def load_onestop(
             words, fixations, canvas_size=(2560, 1440)
         )
 
-    OneStop's presentation monitor was 2560×1440 (Dell U2715H); pass that as
+    OneStop's presentation monitor was 2560×1440 (Dell U2715H) — the citation
+    lives in :data:`scanpath_studio.eyegenbench_geometry.DISPLAY_SPECS`'s
+    ``"onestop"`` entry (Berzak et al. 2025, Methods → Apparatus); pass that as
     ``canvas_size`` to :func:`scanpath_studio.plot_scanpath` for true-to-scale
     rendering. The reports already match the bundled demo's schema, so this reuses
     the generic auto-detect → normalize path (no OneStop-specific column mapping).

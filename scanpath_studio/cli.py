@@ -1129,7 +1129,8 @@ def render(argv: List[str]) -> None:
 
     if args.sample:
         words, fixations = api.load_sample_data()
-        canvas = canvas or (2560, 1440)  # OneStop monitor
+        # OneStop monitor — cited in eyegenbench_geometry.DISPLAY_SPECS["onestop"].
+        canvas = canvas or (2560, 1440)
     elif args.authoring:
         try:
             words, fixations = api.load_authored_scanpath(args.authoring)
@@ -1186,7 +1187,9 @@ def render(argv: List[str]) -> None:
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
-        canvas = canvas or (2560, 1440)  # OneStop monitor (Dell U2715H)
+        # OneStop monitor (Dell U2715H) — cited once in
+        # eyegenbench_geometry.DISPLAY_SPECS["onestop"] (Berzak et al. 2025).
+        canvas = canvas or (2560, 1440)
     elif args.source == "multipleye":
         from .datasets import MULTIPLEYE_MONITOR
 

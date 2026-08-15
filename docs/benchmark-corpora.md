@@ -51,11 +51,11 @@ public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all.
 Two corpora ship **both** natively and harmonised — PoTeC and OneStop — and both
 entries are kept on purpose. The harmonised copy is labelled
 *(harmonised benchmark)* in the picker. They are not interchangeable: the
-harmonised OneStop, for instance, has no documented screen in the benchmark's
-metadata and lays its text out on defaults, while this app's own OneStop entry
-declares the corpus's 2560×1440 presentation monitor. Pick the publisher's
-release to study that corpus; pick the harmonised one to compare it with the
-other 29.
+benchmark discards screen geometry, so the harmonised OneStop's word boxes are
+a *reconstruction* of the corpus's published layout rather than the measured
+coordinates the publisher's release carries — same screen (2560×1440), boxes
+placed by a wrapping model instead of by EyeLink. Pick the publisher's release
+to study that corpus; pick the harmonised one to compare it with the other 29.
 
 ## The catalogue
 
@@ -64,6 +64,16 @@ generated from `data/EyeGenBench/manifest.json`, which is the authoritative
 record of what a bundle holds; your own bundle's manifest is the authority for
 your machine. Languages are the ISO codes the manifest records — the picker
 renders them as names (`de` → German).
+
+!!! note "Four rows are behind the code"
+
+    The **Geometry** and **Declared screen** columns are written into the
+    manifest when a corpus is prepared, so they show what the bundle this table
+    was generated from was built with. Since then, published display parameters
+    were added for **OneStop**, **RSC** and **BSCII** (`synthesized` →
+    `reconstructed`) and removed from **MECOL2W2** (`reconstructed` →
+    `synthesized`, its screen having turned out to be per-site rather than
+    corpus-level). Those four change the next time they are prepared.
 
 | Corpus | Language(s) | Readers | Texts | Fixations | Geometry | Declared screen |
 | --- | --- | ---: | ---: | ---: | --- | --- |
@@ -143,7 +153,20 @@ Studio recovers it during preparation. Recovery has four tiers, first hit wins:
 
 The first two collapse into `geometry_source: real` in the manifest, the third
 into `reconstructed`, the fourth into `synthesized`. Today's catalogue: **1 real**
-(PoTeC), **18 reconstructed**, **11 synthesized**.
+(PoTeC), **20 reconstructed**, **9 synthesized** — the four rows noted above the
+table reach those tiers when they are next prepared.
+
+Tier 3 requires a **published** parameter, not a plausible one. A corpus whose
+screen was never documented at corpus level stays `synthesized` even when a
+number would be easy to guess — a plausible-but-unsourced reconstruction is
+indistinguishable on screen from a sourced one, which defeats the point of
+labelling the tier at all. That is why the MECO waves stay synthesized (each
+site used its own screen; Wave 1 of MECO L1 says a common font size, viewing
+distance and resolution were "unfeasible"), why Reading Brain and OASST-ETC do
+(they publish physical geometry but not the pixel resolution), and why PSC2
+does: a complete apparatus is published for those sentences, but for the
+*oral*-reading experiment that ships separately as Eye-voice span, not for the
+silent-reading collection under `PSC2`.
 
 Real boxes only exist for interest areas somebody actually fixated, so gaps
 inside an otherwise-measured paragraph are interpolated from their neighbours and

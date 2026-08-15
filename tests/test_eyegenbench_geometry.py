@@ -118,6 +118,165 @@ def test_chars_per_degree_entries_use_the_measured_width_not_the_ratio():
     assert spec.char_width_px != pytest.approx(spec.font_px * 0.6)
 
 
+def test_onestop_reconstructs_its_published_layout():
+    """R49 -- Berzak et al. 2025 (Sci Data 12:1995), Methods -> Apparatus.
+
+    Every number here is quoted by the paper, so each assertion is a check that
+    `_spec`'s model reproduces a published figure rather than a plausible one:
+    the Dell U2715H's 2560x1440 over a 597 mm display area, the 19 px x 38 px
+    letter cell, and the 76 px ("triple") line pitch. The character width is
+    the interesting one -- it comes out of the visual-angle path (0.34 deg per
+    letter at the published 75 cm eye-to-top-of-display) and has to land on the
+    independently published 19 px, which is what makes 75 the defensible end of
+    the paper's 75.0/79.5 cm pair.
+    """
+    spec = display_spec_for("onestop")
+    assert (spec.width_px, spec.height_px) == (2560, 1440)
+    assert spec.font_px == 38
+    assert spec.monospaced is True
+    assert spec.line_pitch_px == 76  # published "triple spacing (76 px)"
+    assert spec.char_width_px == pytest.approx(19, rel=0.01)  # published 19 px cell
+    # 2560 - 2*368 = 1824 px, the published text-column width (96 characters).
+    assert spec.width_px - 2 * spec.margin_px == 1824
+    assert "Berzak2025" in spec.source
+
+
+def test_onestop_is_reconstructed_not_synthesized():
+    _, report = resolve_geometry("onestop", TEXTS, None)
+    assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
+    assert display_spec_for("onestop") is not DEFAULT_SPEC
+
+
+def test_rsc_reconstructs_its_published_layout():
+    """R49 -- Laurinavichyute et al. 2019, Method -> Procedure.
+
+    `font_px` is the assertion that matters: the paper publishes *22 points*,
+    and 28 px is that converted at the screen's own 92 ppi. A regression that
+    dropped the conversion would leave 22 here -- the same points-as-pixels
+    mistake R50 removed from `mecol2w2`.
+    """
+    spec = display_spec_for("rsc")
+    assert (spec.width_px, spec.height_px) == (1920, 1080)
+    assert spec.font_px == 28
+    assert spec.font_px != 22  # not the published POINT size used as pixels
+    assert spec.monospaced is True
+    # 0.29 deg per character at 90 cm on a 53.1 cm-wide panel.
+    assert spec.char_width_px == pytest.approx(16.46, abs=0.05)
+    assert spec.char_width_px != pytest.approx(spec.font_px * 0.6)
+    assert "Laurinavichyute2019" in spec.source
+
+
+def test_bscii_does_not_inherit_the_bsc_apparatus():
+    """R49 -- Yan, Pan & Kliegl 2025, Apparatus.
+
+    BSC-II is a different lab setup a decade after BSC, not the same one: a
+    24.5" LCD at 1920x1080 / 70 cm / 0.909 characters per degree, against BSC's
+    19" CRT at 1024x768 / 43 cm / 0.75. Inheriting BSC's numbers would have
+    been wrong by ~2x in pixels per degree (21 vs 44) -- and would have looked
+    perfectly consistent in the table, since the two corpora are the same
+    group's successive Chinese sentence corpora.
+    """
+    spec = display_spec_for("bscii")
+    bsc = display_spec_for("bsc")
+    assert (spec.width_px, spec.height_px) == (1920, 1080)
+    assert (bsc.width_px, bsc.height_px) == (1024, 768)
+    assert spec.char_width_px == pytest.approx(48, rel=0.01)  # 1.1 deg at 70 cm
+    # px per degree = char width x characters per degree; the ~2x gap is the
+    # whole reason the two entries cannot share numbers.
+    assert spec.char_width_px * 0.909 == pytest.approx(43.6, abs=0.5)
+    assert bsc.char_width_px * 0.75 == pytest.approx(21.3, abs=0.5)
+    # A Song-font CJK cell is square, so the character width IS the font size.
+    assert spec.font_px == pytest.approx(spec.char_width_px, rel=0.01)
+    assert "YanPanKliegl2025" in spec.source
+
+
+@pytest.mark.parametrize("dataset", ["onestop", "rsc", "bscii"])
+def test_the_three_published_corpora_leave_the_synthesized_tier(dataset):
+    _, report = resolve_geometry(dataset, TEXTS, None)
+    assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
+    assert report["display_source"] == display_spec_for(dataset).source
+
+
+def test_psc2_stays_synthesized_because_the_published_setup_is_another_experiment():
+    """R49's trap, pinned so nobody "fixes" it.
+
+    A complete apparatus IS published for the PSC2 sentences -- 1280x960,
+    Courier New 24 pt, 14 px per letter, 60 cm (Laubrock & Kliegl 2015) -- but
+    it belongs to the 32-reader ORAL reading experiment, which is already in
+    this table as `eyevoicespan`. The corpus shipped as `psc2` is a 149-reader
+    SILENT reading collection whose only cited document has no methods section
+    at all. Copying those numbers across would be confidently, invisibly wrong:
+    the two corpora would become indistinguishable here and nothing in the data
+    would reveal it. If you arrived at this test holding the eye-voice-span
+    paper, that paper is the reason the entry is absent, not the reason to add
+    it.
+    """
+    assert display_spec_for("psc2") is DEFAULT_SPEC
+    _, report = resolve_geometry("psc2", TEXTS, None)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+    # The tell: psc2 must not silently acquire eyevoicespan's screen.
+    assert display_spec_for("psc2") != display_spec_for("eyevoicespan")
+    assert (
+        display_spec_for("eyevoicespan").width_px,
+        display_spec_for("eyevoicespan").height_px,
+    ) == (1280, 960)
+
+
+@pytest.mark.parametrize(
+    "dataset",
+    [
+        # R50: both MECO L2 waves -- same sites, same protocol, same materials,
+        # so they are decided together. `mecol2w2` used to carry
+        # `_spec(1920, 1080, 21, ...)`; neither of its two cited sources
+        # contains that screen. The SSLA Wave 2 paper never prints "1920", says
+        # font size ranges 20-22 *points* "given variation in screen size and
+        # resolution at different testing sites", names one site (Zurich) at
+        # 10 pt and 1280x1024, and defers the rest to supplementary S2; the UZH
+        # review row has a null resolution and a LINK to those same
+        # supplementary materials where a monitor would go.
+        "mecol2w1",
+        "mecol2w2",
+        # R49: MECO L1 is multi-lab by construction too -- Wave 1 states that a
+        # common font size, viewing distance and resolution were "unfeasible",
+        # Wave 2 tabulates 16 different screens.
+        "mecol1w1",
+        "mecol1w2",
+        # R49: partial (physical geometry but no pixel resolution and no font
+        # size for readingbrain; a monitor's physical size and nothing else for
+        # oasstetc), or nothing published at all.
+        "readingbrain",
+        "readingbrainl2",
+        "oasstetc",
+        "adegbts",
+    ],
+)
+def test_corpora_with_no_published_corpus_level_screen_stay_synthesized(dataset):
+    """A corpus whose screen is per-site, partial, or unpublished stays
+    `synthesized`, and that is the tier doing its job -- it tells the user the
+    geometry is invented. A plausible-but-unsourced `reconstructed` is worse
+    than an honest `synthesized`, because the user cannot tell it is a guess.
+    """
+    assert display_spec_for(dataset) is DEFAULT_SPEC
+    _, report = resolve_geometry(dataset, TEXTS, None)
+    assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
+
+
+def test_no_spec_reads_a_point_size_as_a_pixel_size():
+    """R50's unit error, generalised.
+
+    `font_px` is pixels. Points are not pixels: at a reading-study screen
+    density a point is ~1.3 px, so a point size copied into this field renders
+    the text ~25% small and, through `line_pitch_px`, packs the lines the same
+    way. The removed `mecol2w2` entry carried `font_px=21` -- the midpoint of a
+    published *20-22 pt* range. There is no way to detect the mistake from the
+    number alone, so what this pins is the shape of the table: every entry that
+    quotes a point size in its comment converts it, and 8 px is below anything
+    a legible reading stimulus was ever rendered at.
+    """
+    for name, spec in DISPLAY_SPECS.items():
+        assert spec.font_px >= 12, f"{name}: font_px={spec.font_px} looks like points"
+
+
 def test_parse_ia_data_reads_the_eyelink_rectangle():
     boxes = parse_ia_data(pd.Series(["[STATIC, RECTANGLE, 10, 20, 60, 40]"]))
     assert boxes.loc[0, "start_x"] == 10
@@ -441,9 +600,15 @@ def test_resolve_geometry_falls_through_when_raw_frame_lacks_harmonised_ia_colum
     index at all, because it is the untouched EyeLink export rather than a
     harmonised frame. `extract_eyelink_boxes` must not raise `KeyError`
     indexing those two unguarded columns; `resolve_geometry` must fall
-    through to the next tier (no published screen for "onestop" -> the
-    synthesized tier) and stamp `geometry_source` accordingly rather than
-    sinking the whole corpus."""
+    through to the next tier and stamp `geometry_source` accordingly rather
+    than sinking the whole corpus.
+
+    R49 changed *which* tier that is for onestop -- the corpus now has a
+    published screen, so the fall-through lands on `reconstructed` rather than
+    `synthesized`. The property under test is unchanged: no raise, and no
+    `real` stamp for a raw frame that contributed no box. A spec-less corpus
+    given the identical frame still falls all the way to `synthesized`, which
+    is what keeps this a fall-through test rather than a tier-name test."""
     raw = pd.DataFrame(
         {
             "paragraph_id": ["p1", "p1"],
@@ -454,6 +619,10 @@ def test_resolve_geometry_falls_through_when_raw_frame_lacks_harmonised_ia_colum
         }
     )
     words, report = resolve_geometry("onestop", TEXTS, raw)
+    assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
+    assert (words["geometry_source"] == GEOMETRY_RECONSTRUCTED).all()
+
+    words, report = resolve_geometry("cfiltsarcasm", TEXTS, raw)
     assert report["geometry_source"] == GEOMETRY_SYNTHESIZED
     assert (words["geometry_source"] == GEOMETRY_SYNTHESIZED).all()
 

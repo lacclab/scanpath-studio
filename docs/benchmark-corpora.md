@@ -1,6 +1,6 @@
 # Harmonised benchmark corpora
 
-Thirty public eye-tracking-while-reading corpora, re-derived into one common
+Thirty-one public eye-tracking-while-reading corpora, re-derived into one common
 schema by the [EyeGenBench](https://github.com/EyeBench/EyeGenBench) pipeline,
 prepared into a local bundle and offered in Scanpath Studio. They are what makes
 cross-corpus comparison practical: the same columns, the same trial model and the
@@ -55,61 +55,60 @@ benchmark discards screen geometry, so the harmonised OneStop's word boxes are
 a *reconstruction* of the corpus's published layout rather than the measured
 coordinates the publisher's release carries — same screen (2560×1440), boxes
 placed by a wrapping model instead of by EyeLink. Pick the publisher's release
-to study that corpus; pick the harmonised one to compare it with the other 29.
+to study that corpus; pick the harmonised one to compare it with the other 30.
 
 ## The catalogue
 
-Thirty corpora, ~13.9 million fixations, 21,894 distinct texts. This table is
+Thirty-one corpora, ~14.0 million fixations, 22,255 distinct texts. This table is
 generated from `data/EyeGenBench/manifest.json`, which is the authoritative
 record of what a bundle holds; your own bundle's manifest is the authority for
 your machine. Languages are the ISO codes the manifest records — the picker
 renders them as names (`de` → German).
 
-!!! note "Four rows are behind the code"
+!!! note "Geometry is stamped at preparation time"
 
     The **Geometry** and **Declared screen** columns are written into the
-    manifest when a corpus is prepared, so they show what the bundle this table
-    was generated from was built with. Since then, published display parameters
-    were added for **OneStop**, **RSC** and **BSCII** (`synthesized` →
-    `reconstructed`) and removed from **MECOL2W2** (`reconstructed` →
-    `synthesized`, its screen having turned out to be per-site rather than
-    corpus-level). Those four change the next time they are prepared.
+    manifest when a corpus is prepared, not read live, so a corpus keeps the
+    tier it was built with until it is prepared again. If you change a corpus'
+    entry in `eyegenbench_geometry.DISPLAY_SPECS`, rerun the prep script for
+    that corpus or the bundle will keep reporting the old tier.
 
 | Corpus | Language(s) | Readers | Texts | Fixations | Geometry | Declared screen |
 | --- | --- | ---: | ---: | ---: | --- | --- |
 | ADEGBTS | `zh` | 50 | 100 | 1,070,289 | synthesized | — |
 | BSC | `zh` | 60 | 150 | 92,701 | reconstructed | 1024×768 |
-| BSCII | `zh` | 70 | 150 | 82,738 | synthesized | — |
+| BSCII | `zh` | 70 | 150 | 82,738 | reconstructed | 1920×1080 |
 | ChineseReading | `zh` | 1,718 | 8,982 | 1,334,563 | reconstructed | 1024×768 |
 | CoLAGaze | `en` | 36 | 306 | 9,552 | reconstructed | 1280×1024 |
 | CopCo | `da` | 57 | 452 | 359,788 | reconstructed | 1920×1080 |
 | Cuentos | `es` | 113 | 31 | 233,738 | reconstructed | 1920×1080 |
 | EMTeC | `en` | 107 | 588 | 413,885 | reconstructed | 1280×1024 |
 | EyeVoiceSpan | `de` | 63 | 144 | 108,971 | reconstructed | 1280×960 |
-| GGTG | `en` | 23 | 80 | 46,429 | reconstructed | 1100×900 |
 | Gaze4Hate | `de` | 43 | 90 | 46,102 | reconstructed | 2560×1440 |
+| GGTG | `en` | 23 | 80 | 46,429 | reconstructed | 1100×900 |
 | IITBHGC | `en` | 5 | 500 | 155,327 | reconstructed | 1920×1080 |
 | InteRead | `en` | 50 | 28 | 235,097 | reconstructed | 1920×1080 |
 | MECOL1W1 | `de, el, en, es, fi, he, it, ko, nl, no, ru, tr` | 528 | 144 | 1,087,905 | synthesized | — |
 | MECOL1W2 | `da, de, en, es, eu, hi, is, no, pt, ru, sr, tr` | 577 | 144 | 1,782,491 | synthesized | — |
 | MECOL2W1 | `en` | 542 | 12 | 1,221,387 | synthesized | — |
-| MECOL2W2 | `en` | 659 | 12 | 1,406,213 | reconstructed | 1920×1080 |
+| MECOL2W2 | `en` | 659 | 12 | 1,406,213 | synthesized | — |
 | OASSTETC | `en` | 24 | 656 | 51,841 | synthesized | — |
-| OneStop | `en` | 360 | 345 | 2,259,082 | synthesized | — |
+| OneStop | `en` | 360 | 345 | 2,259,082 | reconstructed | 2560×1440 |
+| PoTeC | `de` | 75 | 12 | 404,420 | real | 1680×1050 |
+| Provo | `en` | 84 | 55 | 219,556 | reconstructed | 1600×900 |
 | PSC2 | `de` | 149 | 144 | 71,830 | synthesized | — |
 | PSR | `fa` | 60 | 99 | 107,821 | reconstructed | 1024×768 |
-| PoTeC | `de` | 75 | 12 | 404,420 | **real** | 1680×1050 |
-| Provo | `en` | 84 | 55 | 219,556 | reconstructed | 1600×900 |
-| RSC | `ru` | 114 | 144 | 171,535 | synthesized | — |
 | RaCCooNS | `nl` | 37 | 6,506 | 108,933 | reconstructed | 1920×1080 |
 | ReadingBrain | `en` | 52 | 148 | 94,839 | synthesized | — |
 | ReadingBrainL2 | `en` | 56 | 148 | 126,743 | synthesized | — |
+| RSC | `ru` | 114 | 144 | 171,535 | reconstructed | 1920×1080 |
 | SBSAT | `en` | 49 | 22 | 121,025 | reconstructed | 1024×768 |
+| UCLCorpus | `en` | 43 | 361 | 94,736 | synthesized | — |
 | ZuCo1 | `en` | 12 | 1,039 | 266,193 | reconstructed | 1920×1080 |
 | ZuCo2 | `en` | 18 | 663 | 247,394 | reconstructed | 1920×1080 |
 
 Six carry an explicit CC-BY-4.0 licence (CopCo, OneStop, PoTeC, Provo, ZuCo1,
-ZuCo2). The other 24 read *unknown — consult the corpus*: the bundle does not
+ZuCo2). The other 25 read *unknown — consult the corpus*: the bundle does not
 guess a licence it cannot verify, and neither should you. Three carry repeated
 readings of the same text by the same reader (OneStop, ZuCo1, ZuCo2); each
 reading gets its own trial rather than being merged into one scanpath.
@@ -117,8 +116,8 @@ reading gets its own trial rather than being merged into one scanpath.
 ### What is not in the bundle
 
 The pipeline exposes **39** loadable corpora (a 40th, `gazebasereading`, is an
-unimplemented stub upstream). Thirty prepare and ship. The remaining nine are two
-distinct situations, neither of them "broken":
+unimplemented stub upstream). Thirty-one prepare and ship. The remaining eight
+are two distinct situations, neither of them "broken":
 
 **Seven need manual acquisition** — EyeGenBench declares no automatic download
 for them, because the publisher gates access:
@@ -131,10 +130,14 @@ expects them and rerun the prep script for that corpus. The script's own
 `[skip] <corpus>: …` line names the exact path it looked for, which is the fastest
 way to find out where that is.
 
-**Two were only blocked on disk space** — `uclcorpus` and `etdd70`. Nothing is
-wrong with either; the sweep stopped on its own free-space guard
-(`Only 3.7 GB free; need 15 GB`) before reaching them. Free some space and rerun,
-and they prepare with no code change.
+**One fails inside the pipeline's own downloader** — `etdd70`. It is fetched from
+Zenodo through `zenodo_get`, and the request dies on a bare `assert
+isinstance(request.stream, SyncByteStream)` in `httpx`'s sync transport, reached
+via `httpx_retries`. A bare `assert` carries no message, which is why the prep
+script's summary reports it as `[skip] etdd70:` with nothing after the colon.
+Nothing in Scanpath Studio is involved, and no amount of disk or rerunning helps:
+it needs a compatible `httpx` / `httpx_retries` pair in the prep environment, or
+the corpus fetched by hand.
 
 ## Where the word boxes come from
 
@@ -153,8 +156,7 @@ Studio recovers it during preparation. Recovery has four tiers, first hit wins:
 
 The first two collapse into `geometry_source: real` in the manifest, the third
 into `reconstructed`, the fourth into `synthesized`. Today's catalogue: **1 real**
-(PoTeC), **20 reconstructed**, **9 synthesized** — the four rows noted above the
-table reach those tiers when they are next prepared.
+(PoTeC), **20 reconstructed**, **10 synthesized**.
 
 Tier 3 requires a **published** parameter, not a plausible one. A corpus whose
 screen was never documented at corpus level stays `synthesized` even when a
@@ -188,8 +190,8 @@ are a plausible rendering of the text, not the one the reader saw. PoTeC is
 uniformly measured (no text falls back), so the qualifier does not currently fire
 for any corpus in the catalogue.
 
-**A corpus with no documented screen declares no monitor at all.** Eleven of the
-thirty document no display, and the fallback layout is drawn on a generic
+**A corpus with no documented screen declares no monitor at all.** Ten of the
+thirty-one document no display, and the fallback layout is drawn on a generic
 1920×1080 — an invented number. Declaring it as the corpus's screen would present
 a made-up geometry as a measurement, so the app declines: those entries carry no
 monitor, and the canvas falls back to the data's own extents. `eyegenbench.declared_monitor`

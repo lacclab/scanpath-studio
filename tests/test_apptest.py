@@ -971,12 +971,18 @@ class TestUnmappedRawDataView:
 
         picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
         options = list(picker.options)
-        # Each corpus is its own entry, tagged 🌐 like every other public corpus…
-        assert "🌐 Provo" in options
+        # Each corpus is its own entry, tagged 🌐 like every other public corpus,
+        # and — while DATA-27 is on main unfinished — marked (WIP).
+        assert "🌐 Provo (WIP)" in options
         # …and the one that also ships natively keeps both, distinguished by the
         # property that differs rather than by the pipeline's name.
-        assert "🌐 PoTeC (harmonised benchmark)" in options
+        assert "🌐 PoTeC (harmonised benchmark) (WIP)" in options
+        # The control case, and the reason the marker is keyed on the entry's
+        # `benchmark_dataset` rather than on its label: the NATIVE PoTeC is
+        # finished work and must stay unmarked. A substring test on the label
+        # would mark it too, and this assertion is what would catch that.
         assert "🌐 PoTeC" in options
+        assert "🌐 PoTeC (WIP)" not in options
         assert not any("EyeGenBench" in option for option in options), (
             "the pipeline's name is provenance, not a source — it must not "
             f"appear in an entry label: {options}"
@@ -1220,8 +1226,11 @@ class TestUnmappedRawDataView:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
-        assert "🌐 Harmonised benchmark corpora — set up" in picker.options
-        assert "🌐 Provo" not in picker.options
+        assert "🌐 Harmonised benchmark corpora — set up (WIP)" in picker.options
+        # The *marked* form, deliberately: asserting "🌐 Provo" is absent would
+        # now pass whether or not the corpus is listed, since a listed one reads
+        # "🌐 Provo (WIP)".
+        assert "🌐 Provo (WIP)" not in picker.options
 
         # 1. The user types the bundle's real path into the placeholder's input.
         dir_inputs = [t for t in at.text_input if t.key == "eyegenbench_dir"]
@@ -1229,7 +1238,7 @@ class TestUnmappedRawDataView:
         dir_inputs[0].set_value(str(root)).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
-        assert "🌐 Provo" in picker.options, "the corpus must appear once found"
+        assert "🌐 Provo (WIP)" in picker.options, "the corpus must appear once found"
         # The placeholder disappears *because it succeeded*, so healing must not
         # bounce the user out to the demo — that answers "here is my bundle"
         # with somewhere else entirely, and (the demo drawing no directory
@@ -1246,7 +1255,7 @@ class TestUnmappedRawDataView:
         assert at.session_state["eyegenbench_dir"] == str(root)
         assert at.session_state["data_source_choice"] == label
         picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
-        assert "🌐 Provo" in picker.options
+        assert "🌐 Provo (WIP)" in picker.options
         # The placeholder is offered only while nothing is discovered, and the
         # options are checked rather than `public_dataset_registry()` because
         # the bundle's location lives in *this app run's* session state — a
@@ -1266,7 +1275,7 @@ class TestUnmappedRawDataView:
             "premise: another source renders no bundle directory input"
         )
         picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
-        assert "🌐 Provo" in picker.options, "the bundle location must survive"
+        assert "🌐 Provo (WIP)" in picker.options, "the bundle location must survive"
         picker.set_value(label).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == label

@@ -438,6 +438,14 @@ BENCHMARK_SHORT_SUFFIX = " (harmonised benchmark)"
 # The registry-key suffix. Keys must be unique across the whole registry, and a
 # native entry's key is `"<Corpus> — <full name>"`, so this shape can't collide.
 BENCHMARK_LABEL_SUFFIX = " — harmonised benchmark corpus"
+# DATA-27 ships to main unfinished, so every harmonised corpus wears this in the
+# source picker. It is **display only** — appended by `app._entry_label` at
+# render time, never stored on the entry. Putting it on the registry key or on
+# `short` would change the picker's stored `data_source_choice` value and (for a
+# built-in) the `?corpus=` slug, so removing it later would break links and saved
+# configs written while it was up; as a formatting step it costs one line to
+# delete. Nothing derives identity from it.
+BENCHMARK_WIP_SUFFIX = " (WIP)"
 
 # DATA-27 R35: a benchmark manifest records `language` as an **ISO 639-1 code**
 # ('zh', 'da', 'en', …), not a name, and the picker shows it to a reader. A small

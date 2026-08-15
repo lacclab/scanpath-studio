@@ -60,6 +60,7 @@ from scanpath_studio.constants import (
     BENCHMARK_LABEL_SUFFIX,
     BENCHMARK_SETUP_CHOICE,
     BENCHMARK_SHORT_SUFFIX,
+    BENCHMARK_WIP_SUFFIX,
     CITATION,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
@@ -1536,6 +1537,21 @@ def benchmark_corpus_label(name: str) -> str:
     return f"{name}{BENCHMARK_LABEL_SUFFIX}"
 
 
+def spec_is_benchmark(spec) -> bool:
+    """True for a registry entry this feature owns: a prepared corpus or the
+    bootstrap placeholder.
+
+    Dispatches on the entry's own fields — `benchmark_dataset` (set by
+    `_benchmark_registry_entries`) and `setup_only` — the same discriminator
+    `compare_source.secondary_dataset_options` uses, and deliberately **not** on
+    the label's text: PoTeC and OneStop each ship natively *and* harmonised, so a
+    substring test on the label would sweep the native entries in too.
+    """
+    if not isinstance(spec, dict):
+        return False
+    return bool(spec.get("benchmark_dataset") or spec.get("setup_only"))
+
+
 def _benchmark_short_name(name: str) -> str:
     """The picker's display name for a prepared corpus.
 
@@ -2846,6 +2862,14 @@ def render_data_source_picker(host=None) -> None:
         tag = kinds.get(token, "")
         if token in registry:
             name = registry[token].get("short", token)
+            # DATA-27 is on main before it is finished, so every harmonised
+            # corpus says so where the user picks it. Formatting only: the
+            # entry's key, its `short`, and its share slug are untouched, so
+            # dropping the suffix later invalidates no link and no saved config.
+            # Keyed on `benchmark_dataset` / `setup_only` rather than on the
+            # label's text, so a native corpus of the same name is unaffected.
+            if spec_is_benchmark(registry[token]):
+                name = f"{name}{BENCHMARK_WIP_SUFFIX}"
         elif token in uploaded:
             name = f"{token} (yours)"
         else:

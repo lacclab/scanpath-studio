@@ -47,6 +47,15 @@ EYEGENBENCH_WORD_SCHEMA = dict(
     right="end_x",
     top="start_y",
     bottom="end_y",
+    # Declared absent, not merely omitted. A prepared corpus is single-screen by
+    # contract -- the prep script writes one coordinate space per paragraph --
+    # but the frames carry the publisher's leftover columns through, and some
+    # corpora (Provo, SBSAT) keep a `page`. Auto-detection finds it on the
+    # fixations and not here, and `multipart.validate_matching_parts` then
+    # rejects the pair outright ("Multipart identity is present in only one
+    # report"). Saying `None` on BOTH schemas is what stops a leftover column
+    # being read as a screen identity that this bundle does not have.
+    screen_id=None,
 )
 
 # `trial` is `unique_paragraph_id`, matching the word schema above -- not
@@ -67,6 +76,7 @@ EYEGENBENCH_FIX_SCHEMA = dict(
     y="y",
     fixation_id="fix_index",
     word_id="ia_index",
+    screen_id=None,  # see EYEGENBENCH_WORD_SCHEMA
 )
 
 

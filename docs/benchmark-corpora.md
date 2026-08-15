@@ -22,7 +22,9 @@ recovery below possible: it reads the raw files the pipeline downloaded.
 ## Using a corpus
 
 1. Open 🗂️ **Data → Data source** and pick a corpus. Each prepared corpus is one
-   🌐 entry under its own name (*Provo*, *ZuCo1*, …).
+   🌐 entry under its own name (*Provo (WIP)*, *ZuCo1 (WIP)*, …). The **(WIP)**
+   marker is there because this feature ships to main unfinished; it is display
+   only, and nothing about the corpus depends on it.
 2. Set **Data directory** to your bundle (default `data/EyeGenBench`). One
    directory serves every corpus, so pointing any entry somewhere else moves them
    all. The *Expected files* panel shows the layout it looks for:
@@ -44,13 +46,14 @@ description carries its licence and citation. If the bundle isn't where you
 pointed, the app says so and keeps the bundled demo loaded rather than failing.
 
 With **no** corpora discovered the picker offers a single entry,
-*🌐 Harmonised benchmark corpora — set up*, which exists only to carry the
+*🌐 Harmonised benchmark corpora — set up (WIP)*, which exists only to carry the
 directory input; it disappears as soon as a bundle is found. As with every
 public corpus, `SCANPATH_PUBLIC_DATASETS=0` hides them all.
 
 Two corpora ship **both** natively and harmonised — PoTeC and OneStop — and both
 entries are kept on purpose. The harmonised copy is labelled
-*(harmonised benchmark)* in the picker. They are not interchangeable: the
+*(harmonised benchmark)* in the picker (so: *PoTeC (harmonised benchmark) (WIP)*
+beside the native *PoTeC*). They are not interchangeable: the
 benchmark discards screen geometry, so the harmonised OneStop's word boxes are
 a *reconstruction* of the corpus's published layout rather than the measured
 coordinates the publisher's release carries — same screen (2560×1440), boxes

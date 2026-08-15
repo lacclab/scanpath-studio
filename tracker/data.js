@@ -312,8 +312,23 @@ window.TRACKER = {
     "pixels.",
     "",
     "**Every harmonised corpus reads (WIP) in the picker**, since this ships to main",
-    "unfinished. Display-only (`app._entry_label`) — the stored choice, the `?corpus=`",
-    "slug and saved configs are untouched, so dropping the marker later breaks no link."
+    "unfinished. Display-only (`app.picker_name_for`) — the stored choice, the",
+    "`?corpus=` slug and saved configs are untouched, so dropping the marker later",
+    "breaks no link. It reaches the Comparisons *Compare with* picker too, or a user",
+    "could load a corpus as scanpath B without ever seeing the marker.",
+    "",
+    "**The whole-branch review caught a real one, and it was app-only.** The app was",
+    "the single surface that re-guessed a prepared corpus' column mapping instead of",
+    "using its published schema, and the prepared frames carry the publisher's ~190",
+    "original columns through: EMTeC's leftover `TRIAL_ID` outranked",
+    "`unique_paragraph_id` on the fixations, so the word boxes joined on nothing and",
+    "the corpus opened with **zero word boxes, silently** — only the words frame was",
+    "empty, so the empty-pool guard never fired. Provo and SBSAT's leftover `page`",
+    "read as a multipart screen on one frame only and were unopenable. All three were",
+    "always correct on the CLI, in the API and as comparison dataset B; two surfaces",
+    "disagreeing about one corpus was the tell. `prepare_data` now takes the corpus'",
+    "declared schema and lets detection fill only what the corpus is silent about.",
+    "Verified by sweeping all 31 prepared corpora through the app's own path."
    ],
    "whatsLeft": [
     "The whole-branch review."

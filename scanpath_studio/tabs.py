@@ -1015,6 +1015,10 @@ def _render_compare_dataset_picker() -> Optional[SecondaryDataset]:
     corpus whose location has never been set) also returns ``None``, after
     saying why: silently falling back would look like the picker was ignored.
     """
+    # Lazy, like every other `app` reach from this module: app imports tabs, so
+    # a module-level import would close the cycle.
+    from scanpath_studio.app import mark_wip_if_benchmark as _mark_wip_if_benchmark
+
     options = secondary_dataset_options(
         exclude=st.session_state.get("data_source_choice")
     )
@@ -1042,7 +1046,9 @@ def _render_compare_dataset_picker() -> Optional[SecondaryDataset]:
         # in the label and explains itself below once picked — offered but
         # honest, rather than absent and mysterious.
         format_func=lambda name: (
-            name if ready_by_name.get(name, True) else f"{name} (needs setup)"
+            _mark_wip_if_benchmark(name)
+            if ready_by_name.get(name, True)
+            else f"{_mark_wip_if_benchmark(name)} (needs setup)"
         ),
         help="Which dataset scanpath B comes from. Other datasets keep their own "
         "screen geometry, so each panel is drawn to its own monitor.",

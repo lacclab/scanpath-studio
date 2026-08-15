@@ -1537,6 +1537,43 @@ def benchmark_corpus_label(name: str) -> str:
     return f"{name}{BENCHMARK_LABEL_SUFFIX}"
 
 
+def picker_name_for(choice: str, registry: Optional[dict] = None) -> str:
+    """Exactly the name the **Data source** picker renders for ``choice``.
+
+    Anything that tells a user to "select X" must quote this, not the registry
+    key. The two differ: the picker shows the entry's `short`, and now a (WIP)
+    marker on top of it, so the bootstrap entry's key reads *"Harmonised
+    benchmark corpora — set up a local bundle"* while the list actually offers
+    *"Harmonised benchmark corpora — set up (WIP)"*. A remedy naming a string
+    that appears nowhere in the list is worse than no remedy — the reader hunts
+    for it and concludes the app is broken.
+
+    Pass ``registry`` when formatting a list of options: discovery depends on a
+    directory the user can change, so one run must format every option against
+    **one** snapshot (M6). Re-resolving per option lets an option's rendered text
+    change underneath a widget mid-run, and Streamlit finds the selected value's
+    formatted form no longer among its own options.
+    """
+    spec = (registry if registry is not None else public_dataset_registry()).get(choice)
+    if spec is None:
+        return choice
+    name = str(spec.get("short") or choice)
+    return f"{name}{BENCHMARK_WIP_SUFFIX}" if spec_is_benchmark(spec) else name
+
+
+def mark_wip_if_benchmark(choice: str) -> str:
+    """``choice`` with the (WIP) marker when it names a harmonised corpus.
+
+    The marker has to reach **every** picker that offers these corpora, not just
+    the data-source one: Comparisons' *Compare with* selectbox can load a corpus
+    as scanpath B, and a user who only ever meets it there would publish a
+    comparison against an unfinished feature without being told. Display-only in
+    both places, and the same predicate decides both.
+    """
+    spec = public_dataset_registry().get(choice)
+    return f"{choice}{BENCHMARK_WIP_SUFFIX}" if spec_is_benchmark(spec) else choice
+
+
 def spec_is_benchmark(spec) -> bool:
     """True for a registry entry this feature owns: a prepared corpus or the
     bootstrap placeholder.
@@ -1602,7 +1639,9 @@ def _benchmark_description(entry, *, harmonised_overlap: bool) -> str:
     for a corpus this app also ships natively — the fidelity difference, which is
     the whole reason both are offered.
     """
-    name = str(entry["name"])
+    from scanpath_studio.eyegenbench import entry_name
+
+    name = entry_name(entry)
     lead = (
         f"{name}, re-derived by the EyeGenBench pipeline into the benchmark's "
         f"common schema — the same corpus as this app's own {name} entry, "
@@ -1684,7 +1723,7 @@ def _load_benchmark_source(
     corpus, no sub-picker. The returned raw frames go through the same
     normalization as an upload, so the Column-mapping panels still appear.
     """
-    from scanpath_studio.eyegenbench import eyegenbench_present
+    from scanpath_studio.eyegenbench import entry_name, eyegenbench_present
 
     opt = options_host if options_host is not None else st.container()
     loc = location_host if location_host is not None else st.container()
@@ -1698,12 +1737,18 @@ def _load_benchmark_source(
         root=root,
         present=present,
         key_prefix="eyegenbench",
-        label=f"{dataset} (harmonised benchmark)",
+        # The name the picker shows for this corpus, not a hand-built one. The
+        # "(harmonised benchmark)" suffix is added only when a native entry of
+        # the same name exists (`_benchmark_short_name`), so hardcoding it here
+        # made the empty-state call Provo "Provo (harmonised benchmark)" while
+        # the picker called it "Provo (WIP)" — two names, neither matching.
+        label=picker_name_for(benchmark_corpus_label(dataset)),
     )
     if not ready:
         return load_sample_data()
     entry = next(
-        (e for e in discovered_benchmark_datasets() if e["name"] == dataset), None
+        (e for e in discovered_benchmark_datasets() if entry_name(e) == dataset),
+        None,
     )
     if entry and (badge := geometry_badge(entry)):
         opt.caption(badge)
@@ -1782,11 +1827,11 @@ def _benchmark_registry_entries() -> dict:
     it the canvas falls back to data extents, which is the honest answer. The
     condition itself is `eyegenbench.declared_monitor`, which the CLI reads too.
     """
-    from scanpath_studio.eyegenbench import declared_monitor
+    from scanpath_studio.eyegenbench import declared_monitor, entry_name
 
     entries: dict = {}
     for entry in discovered_benchmark_datasets():
-        name = str(entry["name"])
+        name = entry_name(entry)
         short = _benchmark_short_name(name)
         spec = dict(
             loader=partial(_load_benchmark_source, dataset=name),
@@ -2239,11 +2284,57 @@ def clear_computation_cache() -> None:
     st.cache_data.clear()
 
 
+def _apply_declared_schema(proposed: dict, declared: Optional[dict]) -> dict:
+    """Auto-detection, overridden by whatever the source *declares* it knows.
+
+    Auto-detection guesses a mapping from column names, which is right for an
+    upload and wrong for a corpus whose schema is a published contract. The
+    declared mapping wins for every field it names — including a field it names
+    as ``None``, which is a positive statement that the source has no such
+    column and is what clears a leftover the detector would otherwise seize on.
+    Fields the source says nothing about keep their detected value, so optional
+    passthroughs (linguistic features, EyeLink measures) still arrive.
+    """
+    if not declared:
+        return proposed
+    return {**proposed, **declared}
+
+
+def declared_schemas_for(data_choice: str) -> Tuple[Optional[dict], Optional[dict]]:
+    """The ``(word, fix)`` schemas the selected source publishes, or ``(None, None)``.
+
+    A prepared benchmark corpus has a **known** schema — the prep script wrote
+    it — and every other surface already loads one through it
+    (`eyegenbench.load_eyegenbench`, so `render --eyegenbench`, the headless API
+    and Comparisons' dataset B all agree). The app was the one surface that
+    re-guessed instead, and the guess is wrong on real bundles: the prepared
+    frames carry the publisher's ~190 leftover columns through, so EMTeC's
+    fixations detect `trial="TRIAL_ID"` against the words' `unique_paragraph_id`
+    and broadcast **zero** word boxes — silently, since only the words frame
+    ends up empty and the empty-pool guard never fires.
+    """
+    if data_choice != PUBLIC_DATASETS_CHOICE:
+        return None, None
+    spec = public_dataset_registry().get(
+        st.session_state.get("public_dataset_choice", "")
+    )
+    if not spec or not spec.get("benchmark_dataset"):
+        return None, None
+    from scanpath_studio.eyegenbench import (
+        EYEGENBENCH_FIX_SCHEMA,
+        EYEGENBENCH_WORD_SCHEMA,
+    )
+
+    return dict(EYEGENBENCH_WORD_SCHEMA), dict(EYEGENBENCH_FIX_SCHEMA)
+
+
 def prepare_data(
     words_df: pd.DataFrame,
     fixations_df: pd.DataFrame,
     allow_override: bool,
     mapping_host=None,
+    declared_word_schema: Optional[dict] = None,
+    declared_fix_schema: Optional[dict] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
@@ -2271,7 +2362,9 @@ def prepare_data(
     problems: list = []
 
     if has_words:
-        word_proposed = propose_word_schema(words_df)
+        word_proposed = _apply_declared_schema(
+            propose_word_schema(words_df), declared_word_schema
+        )
         if allow_override:
             word_schema = column_mapping_ui(
                 words_df,
@@ -2292,7 +2385,9 @@ def prepare_data(
             problems.append("Words/IA: " + "; ".join(word_problems))
 
     if has_fixations:
-        fix_proposed = propose_fix_schema(fixations_df)
+        fix_proposed = _apply_declared_schema(
+            propose_fix_schema(fixations_df), declared_fix_schema
+        )
         if allow_override:
             fix_schema = column_mapping_ui(
                 fixations_df,
@@ -2861,15 +2956,14 @@ def render_data_source_picker(host=None) -> None:
         # which built its own, had no business being called from here — M6).
         tag = kinds.get(token, "")
         if token in registry:
-            name = registry[token].get("short", token)
-            # DATA-27 is on main before it is finished, so every harmonised
-            # corpus says so where the user picks it. Formatting only: the
-            # entry's key, its `short`, and its share slug are untouched, so
-            # dropping the suffix later invalidates no link and no saved config.
-            # Keyed on `benchmark_dataset` / `setup_only` rather than on the
-            # label's text, so a native corpus of the same name is unaffected.
-            if spec_is_benchmark(registry[token]):
-                name = f"{name}{BENCHMARK_WIP_SUFFIX}"
+            # `picker_name_for` is the single definition of what this list shows
+            # — the entry's `short` plus, while DATA-27 is unfinished on main, a
+            # (WIP) marker. Formatting only: the entry's key, its `short` and
+            # its share slug are untouched, so dropping the marker later
+            # invalidates no link and no saved config. Anything that tells the
+            # user to "select X" reads it too, so the two cannot drift. The
+            # snapshot is passed in for the M6 reason above it.
+            name = picker_name_for(token, registry)
         elif token in uploaded:
             name = f"{token} (yours)"
         else:
@@ -3972,7 +4066,8 @@ def main() -> None:
             st.warning(
                 f"This link opens the corpus `{slug}`, which isn't available "
                 "here. To get it, open **Data source** and select a harmonised "
-                f"benchmark corpus — or **{BENCHMARK_SETUP_CHOICE}** if you have "
+                f"benchmark corpus — or **{picker_name_for(BENCHMARK_SETUP_CHOICE)}** "
+                "if you have "
                 "none yet — then point its *Data directory* at a prepared bundle "
                 "containing this corpus. The link's view settings still apply to "
                 "whatever you open."
@@ -4320,6 +4415,7 @@ def main() -> None:
             options_host=source_options_slot,
             location_host=data_location_slot,
         )
+        declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
             raw_fixations_df,
@@ -4330,6 +4426,11 @@ def main() -> None:
             allow_override=(data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)),
             # Mode A of the Data page's one Column mapping section (DATA-26).
             mapping_host=mapping_body_slot,
+            # A prepared benchmark corpus publishes its schema; auto-detection
+            # must not re-guess it from the publisher's leftover columns. The
+            # panels stay editable — this only changes what they start at.
+            declared_word_schema=declared_word_schema,
+            declared_fix_schema=declared_fix_schema,
         )
         mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
     if mapping_problems:

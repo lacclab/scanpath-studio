@@ -904,6 +904,79 @@ class TestUnmappedRawDataView:
             "expected a Download button"
         )
 
+    def test_a_publisher_leftover_column_does_not_hijack_the_benchmark_schema(
+        self, tmp_path, monkeypatch
+    ):
+        """A prepared corpus loads by its DECLARED schema, not by auto-detection.
+
+        The bug this pins shipped through a whole branch review because every
+        fixture wrote an idealized frame carrying only the harmonised columns.
+        Real prepared frames carry the publisher's ~190 columns through, and the
+        detector prefers some of them:
+
+        * EMTeC ships `TRIAL_ID`, which outranks `unique_paragraph_id` on the
+          fixations. The words still key on `unique_paragraph_id`, so
+          `broadcast_stimulus_words` joins **nothing** — zero word boxes, no
+          stimulus, no word-level measure, and **no error**, because only the
+          words frame ends up empty and `main`'s empty-pool guard needs all
+          three. The figure still draws 400k fixations over blank space.
+        * Provo and SBSAT ship `page`, which reads as a multipart screen id on
+          the fixations only, and `multipart.validate_matching_parts` then
+          rejects the pair outright.
+
+        Both are app-only: `load_eyegenbench` passes the explicit schemas, so
+        the CLI, the headless API and Comparisons' dataset B were always right —
+        which is the tell. Two surfaces disagreeing about one corpus is the
+        signature this plan has now hit five times.
+        """
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "bundle"
+        # Both real hijackers at once, on one corpus.
+        _write_benchmark_corpus(
+            root,
+            "Provo",
+            paragraphs=("Provo_a", "Provo_b"),
+            fix_leftovers={"TRIAL_ID": "hijack", "page": 1},
+        )
+        _write_benchmark_manifest(
+            root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The loud half: `page` must not be read as a screen id.
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        assert not any(
+            "column mapping doesn't work" in str(w.value) for w in at.warning
+        )
+
+        # The silent half, and the one that matters. "No exception" passes on the
+        # zero-boxes bug — that is exactly how it survived a review — so assert on
+        # the mapping actually used, which is the mechanism itself.
+        mapping = at.session_state["_active_column_mapping"] or {}
+        fix_map = mapping.get("fixations") or {}
+        word_map = mapping.get("words") or {}
+        assert fix_map.get("trial") == "unique_paragraph_id", (
+            "the fixations' leftover TRIAL_ID hijacked the trial mapping; the "
+            "words key on unique_paragraph_id, so the broadcast joins NOTHING "
+            f"and the corpus draws with zero word boxes. Got: {fix_map.get('trial')!r}"
+        )
+        assert fix_map.get("trial") == word_map.get("trial"), (
+            "words and fixations must key on the same trial column or they cannot join"
+        )
+        # `page` is a leftover, not a screen: this bundle is single-screen by
+        # contract, and a screen id on one frame only is rejected outright.
+        assert not fix_map.get("screen_id"), fix_map.get("screen_id")
+        assert not word_map.get("screen_id"), word_map.get("screen_id")
+
+        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
     def test_each_prepared_benchmark_corpus_is_its_own_picker_entry(
         self, monkeypatch, tmp_path
     ):

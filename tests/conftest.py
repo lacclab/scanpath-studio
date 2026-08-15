@@ -271,7 +271,7 @@ def answer_setup_step(at, *, screen=None, geometry=None, text=None):
 
 
 def _write_benchmark_corpus(
-    root, name: str, *, readers=("r1",), paragraphs=("p1",)
+    root, name: str, *, readers=("r1",), paragraphs=("p1",), fix_leftovers=None
 ) -> None:
     """Write one prepared benchmark corpus (DATA-27) under ``root/<name>/``.
 
@@ -279,6 +279,16 @@ def _write_benchmark_corpus(
     trivial single-column frames fail schema mapping, and `main()` returns early
     on an unmapped source (`_render_unmapped_view`) without reaching most of what
     these tests assert on.
+
+    ``fix_leftovers`` is a ``{column: value}`` mapping stamped onto every
+    fixation row, and it exists because the idealized default hid two real bugs
+    for a whole branch. A real prepared corpus carries the **publisher's** ~190
+    columns through beside the harmonised ones, and the app's auto-detection
+    seizes on them: EMTeC ships a `TRIAL_ID` that outranks `unique_paragraph_id`
+    (so the words broadcast to zero rows, silently), and Provo/SBSAT ship a
+    `page` that reads as a multipart screen on the fixations only (so the pair
+    is rejected outright). Pass the leftovers when a test needs the shape the
+    bundle actually has rather than the shape the schema describes.
     """
     import pandas as pd
 
@@ -303,7 +313,7 @@ def _write_benchmark_corpus(
         for paragraph in paragraphs
         for fix_index in (0, 1)
     ]
-    pd.DataFrame(
+    fixations = pd.DataFrame(
         {
             "eyegenbench_trial_id": [f"t_{p}" for _, p, _ in rows],
             "unique_participant_id": [r for r, _, _ in rows],
@@ -314,7 +324,10 @@ def _write_benchmark_corpus(
             "x": [35.0 if i == 0 else 95.0 for _, _, i in rows],
             "y": [30.0 for _ in rows],
         }
-    ).to_parquet(directory / "fixations.parquet")
+    )
+    for column, value in (fix_leftovers or {}).items():
+        fixations[column] = value
+    fixations.to_parquet(directory / "fixations.parquet")
     pd.DataFrame(
         {
             "unique_participant_id": list(readers),

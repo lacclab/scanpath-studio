@@ -7240,6 +7240,75 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "ENG-40",
+   "prefix": "ENG",
+   "num": 40,
+   "sub": "",
+   "title": "The tracker server could not read its own files on a Hebrew-locale Windows machine",
+   "status": "Review",
+   "note": "",
+   "date": "",
+   "added": "2026-08-16",
+   "group": "Engineering",
+   "subgroup": "",
+   "archived": false,
+   "owner": "Maya",
+   "request": [
+    "Run `tracker/server.py`."
+   ],
+   "whatWasDone": [
+    "The server started and served the page, but **every** request to",
+    "`/tracker/api/state` died with `UnicodeDecodeError: 'charmap' codec can't decode",
+    "byte 0x9c`, so the tracker rendered the raw `data.js` catalogue with none of the",
+    "state layered on top — no status overrides, no owners, no created items, and",
+    "nothing saveable.",
+    "",
+    "**Cause.** `Path.read_text()` with no `encoding=` uses the process' *locale*",
+    "codec. On this machine that is cp1255 (Hebrew), not UTF-8, so the first em dash",
+    "or emoji in the tracker files — of which the write-ups are full — is an",
+    "undecodable byte. It is invisible on macOS and on CI, where the locale codec",
+    "already is UTF-8; only a non-UTF-8-locale Windows clone hits it.",
+    "",
+    "Pinned `encoding=\"utf-8\"` on every text read/write of `data.js`, `state.json`",
+    "and `.local.json` in [`server.py`](tracker/server.py) — `_known_item_ids`,",
+    "`_known_groups`, `_known_people`, `_read_state`, `_read_local`, `_write_local`.",
+    "The atomic save path already passed it, so saves were fine; reads were not.",
+    "",
+    "`tests/test_tracker_server.py` had the same bare reads and so failed 9 of its 26",
+    "tests here for the identical reason — pinned those too. 26/26 pass now, and",
+    "`ruff check` / `ruff format --check` are clean across the repo."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "decisions": [
+    "Review: the fix is mechanical (`encoding=\"utf-8\"` on six reads plus a write in",
+    "`server.py`, seven in the test file) — worth a look that I have not missed a",
+    "call site, and worth deciding whether the same audit should run over the rest of",
+    "the repo (see *Background*).",
+    "Worth a follow-up item to sweep the app's own `read_text` / `write_text` /",
+    "`open()` calls for the same bug, or leave it until someone trips over one?"
+   ],
+   "background": [
+    "**Not audited beyond the tracker.** This fix covers `tracker/server.py` and its",
+    "test only, because that is what was in the way of running the server. The same",
+    "latent bug can exist anywhere in `scanpath_studio/` that reads or writes text",
+    "without an explicit encoding — annotation JSON import/export, the recovery cache",
+    "manifest and saved plot configs are the obvious candidates, all of which can",
+    "carry non-ASCII. Nobody has looked; hence the second decision above.",
+    "",
+    "**Why CI would not have caught it.** GitHub Actions runs a UTF-8 locale, so the",
+    "bare reads decode correctly there. A `PYTHONUTF8=1` / `-X utf8` leg, or simply",
+    "never relying on the locale codec, is what keeps this from recurring — Python",
+    "3.15 makes UTF-8 mode the default, which will fix it by attrition, but not for",
+    "anyone on 3.11–3.14.",
+    "",
+    "**Anchors.** The traceback surfaced at `server.py` `_read_state` via",
+    "`SimpleHTTPRequestHandler.do_GET`. Related: #ENG-39, which introduced",
+    "`.local.json` and `_read_local` / `_write_local`."
+   ]
+  },
+  {
    "id": "ENG-39",
    "prefix": "ENG",
    "num": 39,

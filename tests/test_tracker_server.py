@@ -21,7 +21,7 @@ TRACKER_DIR = Path(__file__).parents[1] / "tracker"
 
 
 def _load_catalog() -> dict:
-    source = (TRACKER_DIR / "data.js").read_text()
+    source = (TRACKER_DIR / "data.js").read_text(encoding="utf-8")
     payload = source.split("window.TRACKER = ", 1)[1].strip().removesuffix(";")
     return json.loads(payload)
 
@@ -49,7 +49,7 @@ def test_every_item_belongs_to_a_declared_group() -> None:
 
 
 def test_decision_callout_renders_numbered_list() -> None:
-    source = (TRACKER_DIR / "index.html").read_text()
+    source = (TRACKER_DIR / "index.html").read_text(encoding="utf-8")
 
     assert '<ol>${decisions.map(d => `<li>${inline(d)}</li>`).join("")}</ol>' in source
     assert ".decisions ol" in source
@@ -70,7 +70,7 @@ ALIASES = {
 def _open_items() -> list[dict]:
     """Every catalogue + UI-created item that is not archived or Closed."""
     catalog = _load_catalog()
-    state = json.loads((TRACKER_DIR / "state.json").read_text())
+    state = json.loads((TRACKER_DIR / "state.json").read_text(encoding="utf-8"))
     items = []
     for item in [*catalog["items"], *state.get("createdItems", [])]:
         edit = state.get("items", {}).get(item["id"], {})
@@ -230,7 +230,7 @@ def test_validated_state_never_carries_the_revision_counter() -> None:
 
 
 def test_state_file_is_free_of_the_revision_counter() -> None:
-    state = json.loads((TRACKER_DIR / "state.json").read_text())
+    state = json.loads((TRACKER_DIR / "state.json").read_text(encoding="utf-8"))
 
     assert "revision" not in state, (
         "tracker/state.json still carries `revision` — it belongs in the "
@@ -239,14 +239,14 @@ def test_state_file_is_free_of_the_revision_counter() -> None:
 
 
 def test_local_state_file_is_gitignored() -> None:
-    ignored = (Path(__file__).parents[1] / ".gitignore").read_text()
+    ignored = (Path(__file__).parents[1] / ".gitignore").read_text(encoding="utf-8")
 
     assert "tracker/.local.json" in ignored
 
 
 def test_every_status_offers_a_directed_transition() -> None:
     """Each status names the moves it actually makes, as buttons (ENG-38)."""
-    source = (TRACKER_DIR / "index.html").read_text()
+    source = (TRACKER_DIR / "index.html").read_text(encoding="utf-8")
     block = source.split("const TRANSITIONS = {", 1)[1].split("};", 1)[0]
 
     for status in SERVER.STATUSES:
@@ -341,7 +341,7 @@ def test_write_state_is_valid_json(
 
     SERVER._write_state(state)
 
-    assert json.loads(state_file.read_text()) == state
+    assert json.loads(state_file.read_text(encoding="utf-8")) == state
 
 
 def test_revision_counter_lives_outside_the_repository(

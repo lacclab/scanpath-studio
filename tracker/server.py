@@ -85,12 +85,17 @@ STATE_LOCK = threading.Lock()
 
 def _known_item_ids() -> set[str]:
     return set(
-        re.findall(r'"id"\s*:\s*"([A-Z]{2,4}-\d+[a-z]?)"', DATA_FILE.read_text())
+        re.findall(
+            r'"id"\s*:\s*"([A-Z]{2,4}-\d+[a-z]?)"',
+            DATA_FILE.read_text(encoding="utf-8"),
+        )
     )
 
 
 def _known_groups() -> set[str]:
-    return set(re.findall(r'"group"\s*:\s*"([^"]+)"', DATA_FILE.read_text()))
+    return set(
+        re.findall(r'"group"\s*:\s*"([^"]+)"', DATA_FILE.read_text(encoding="utf-8"))
+    )
 
 
 def _known_people() -> list[str]:
@@ -100,7 +105,9 @@ def _known_people() -> list[str]:
     *Unassigned* filter can be honest about, and a typo'd owner is then a
     rejected save instead of a third person who does not exist.
     """
-    match = re.search(r'"people"\s*:\s*\[([^\]]*)\]', DATA_FILE.read_text())
+    match = re.search(
+        r'"people"\s*:\s*\[([^\]]*)\]', DATA_FILE.read_text(encoding="utf-8")
+    )
     return re.findall(r'"([^"]+)"', match.group(1)) if match else []
 
 
@@ -215,19 +222,21 @@ def _validate_state(value: Any) -> dict[str, Any]:
 
 
 def _read_state() -> dict[str, Any]:
-    return _validate_state(json.loads(STATE_FILE.read_text()))
+    return _validate_state(json.loads(STATE_FILE.read_text(encoding="utf-8")))
 
 
 def _read_local() -> dict[str, Any]:
     try:
-        value = json.loads(LOCAL_FILE.read_text())
+        value = json.loads(LOCAL_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
 
 
 def _write_local(local: dict[str, Any]) -> None:
-    LOCAL_FILE.write_text(f"{json.dumps(local, indent=2, ensure_ascii=False)}\n")
+    LOCAL_FILE.write_text(
+        f"{json.dumps(local, indent=2, ensure_ascii=False)}\n", encoding="utf-8"
+    )
 
 
 def _read_revision() -> int:

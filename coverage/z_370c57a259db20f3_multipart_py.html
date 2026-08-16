@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for scanpath_studio/multipart.py: 78%</title>
+    <title>Coverage for scanpath_studio/multipart.py: 79%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_4667309f.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>scanpath_studio<span class="sep">/</span>multipart.py</b>:
-            <span class="pc_cov">78%</span>
+            <span class="pc_cov">79%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">180 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">141<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">39<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">142<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">38<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_370c57a259db20f3_persistence_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-16 06:10 +0000
+            created at 2026-08-16 06:45 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -240,10 +240,10 @@
     <p class="run"><span class="n"><a id="t158" href="#t158">158</a></span><span class="t">    <span class="key">if</span> <span class="key">not</span> <span class="nam">has_screen_identity</span><span class="op">(</span><span class="nam">words</span><span class="op">)</span> <span class="key">and</span> <span class="key">not</span> <span class="nam">has_screen_identity</span><span class="op">(</span><span class="nam">fixations</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t159" href="#t159">159</a></span><span class="t">        <span class="key">return</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t160" href="#t160">160</a></span><span class="t">    <span class="key">if</span> <span class="nam">has_screen_identity</span><span class="op">(</span><span class="nam">words</span><span class="op">)</span> <span class="op">!=</span> <span class="nam">has_screen_identity</span><span class="op">(</span><span class="nam">fixations</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t161" href="#t161">161</a></span><span class="t">        <span class="key">raise</span> <span class="nam">ValueError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t162" href="#t162">162</a></span><span class="t">            <span class="str">&quot;Multipart identity is present in only one report; map screen_id in &quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t163" href="#t163">163</a></span><span class="t">            <span class="str">&quot;both words and fixations, or omit it from both.&quot;</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis mis2 show_mis"><span class="n"><a id="t164" href="#t164">164</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t161" href="#t161">161</a></span><span class="t">        <span class="key">raise</span> <span class="nam">ValueError</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t162" href="#t162">162</a></span><span class="t">            <span class="str">&quot;Multipart identity is present in only one report; map screen_id in &quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t163" href="#t163">163</a></span><span class="t">            <span class="str">&quot;both words and fixations, or omit it from both.&quot;</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t164" href="#t164">164</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t165" href="#t165">165</a></span><span class="t">    <span class="nam">word_parts</span> <span class="op">=</span> <span class="nam">set</span><span class="op">(</span><span class="nam">map</span><span class="op">(</span><span class="nam">tuple</span><span class="op">,</span> <span class="nam">words</span><span class="op">[</span><span class="nam">list</span><span class="op">(</span><span class="nam">PART_KEY</span><span class="op">)</span><span class="op">]</span><span class="op">.</span><span class="nam">drop_duplicates</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">to_numpy</span><span class="op">(</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t166" href="#t166">166</a></span><span class="t">    <span class="nam">fixation_parts</span> <span class="op">=</span> <span class="nam">set</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t167" href="#t167">167</a></span><span class="t">        <span class="nam">map</span><span class="op">(</span><span class="nam">tuple</span><span class="op">,</span> <span class="nam">fixations</span><span class="op">[</span><span class="nam">list</span><span class="op">(</span><span class="nam">PART_KEY</span><span class="op">)</span><span class="op">]</span><span class="op">.</span><span class="nam">drop_duplicates</span><span class="op">(</span><span class="op">)</span><span class="op">.</span><span class="nam">to_numpy</span><span class="op">(</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -394,7 +394,7 @@
             <a class="nav" href="z_370c57a259db20f3_persistence_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.15.4">coverage.py v7.15.4</a>,
-            created at 2026-08-16 06:10 +0000
+            created at 2026-08-16 06:45 +0000
         </p>
     </div>
 </footer>

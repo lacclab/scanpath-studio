@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://lacclab.github.io/scanpath-studio/contributing-a-dataset/">
       
       
-        <link rel="prev" href="../multipleye/">
+        <link rel="prev" href="../benchmark-corpora/">
       
       
         <link rel="next" href="../architecture/">
@@ -1162,6 +1162,8 @@
       
         
       
+        
+      
     
     
     
@@ -1253,6 +1255,34 @@
     
   
     MultiplEYE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-corpora/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harmonised benchmark corpora
   
 
     
@@ -1906,9 +1936,10 @@ data.</p>
 <p><strong>6. The presentation monitor</strong> as a constant — <code>POTEC_MONITOR = (1680, 1050)</code>.
 It's what makes the plot true-to-scale.</p>
 <h2 id="wiring-it-into-the-app">Wiring it into the app<a class="headerlink" href="#wiring-it-into-the-app" title="Permanent link">&para;</a></h2>
-<p>Two additions to <code>app.py</code>: a sidebar loader <code>_load_&lt;corpus&gt;_source(...)</code> that
-renders the corpus' controls and returns raw frames, and one entry in
-<code>PUBLIC_DATASET_REGISTRY</code>:</p>
+<p>Two additions to <code>app.py</code>: a loader <code>_load_&lt;corpus&gt;_source(...)</code> that renders the
+corpus' controls and returns raw frames, and one entry in
+<code>PUBLIC_DATASET_REGISTRY</code> — the literal home of the corpora that are fixed at
+import time:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="s2">&quot;PoTeC — Potsdam Textbook Corpus&quot;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">loader</span><span class="o">=</span><span class="n">_load_potec_source</span><span class="p">,</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">monitor</span><span class="o">=</span><span class="p">(</span><span class="mi">1680</span><span class="p">,</span> <span class="mi">1050</span><span class="p">),</span>          <span class="c1"># DELL P2210 — the canvas snaps to this</span>
@@ -1920,6 +1951,21 @@ renders the corpus' controls and returns raw frames, and one entry in
 <a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">link</span><span class="o">=</span><span class="s2">&quot;https://github.com/DiLi-Lab/PoTeC&quot;</span><span class="p">,</span>
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">),</span>
 </code></pre></div>
+<p>Each entry is <strong>one top-level source in the picker</strong>, tagged 🌐 and searchable
+beside the demo and the uploads — there is no category to nest under and no
+sub-picker inside an entry. A corpus that ships in several variants gets several
+entries, told apart by the property that actually differs.</p>
+<p><strong>Read the registry through <code>public_dataset_registry()</code>, never the dict.</strong> That
+function is what every consumer calls: it returns the static entries above
+<em>plus</em> one entry per corpus discovered at runtime (each prepared corpus in a
+local benchmark bundle is composed in there, since it depends on a directory the
+user can change mid-session). The dict answers for the fixed corpora only, so a
+consumer reading it directly silently ignores everything discovered — the reason
+to touch <code>PUBLIC_DATASET_REGISTRY</code> by name is to <em>add</em> an entry to it, as above.
+A corpus discovered from a manifest declares <code>monitor</code> only when the manifest
+records a real one; an invented default must not snap the canvas, and
+<code>eyegenbench.declared_monitor(entry)</code> is the single rule the app and the CLI both
+apply.</p>
 <p>Use the shared helpers in the loader so every corpus looks the same:
 <code>_dataset_dir_input</code> (the directory box, folder-picker button, and <em>Expected
 files</em> tree — write yours as a <code>_&lt;CORPUS&gt;_STRUCTURE_MD</code> constant) and
@@ -1936,11 +1982,17 @@ applies — the picker entry is one surface out of four:</p>
   <a href="../api/"><code>docs/api.md</code></a>.</li>
 <li><strong>CLI</strong> — a <code>--&lt;corpus&gt; DIR</code> flag in <code>render</code>'s input group, added to the
   exactly-one-input check so it can't be combined with <code>--sample</code>.</li>
-<li><strong>Deep link / Share</strong> — register the source in <code>_SHAREABLE_SOURCES</code> and any
-  per-corpus options in <code>_apply_url_preset</code> / <code>_build_share_query</code>. Only OneStop
-  does this today. Skipping it works, but a shared link can't reopen your corpus.</li>
+<li><strong>Deep link / Share</strong> — you get this for free: <code>?source=corpus&amp;corpus=&lt;slug&gt;</code>
+  names any entry <code>public_dataset_registry()</code> returns, slugged from the entry's
+  <code>short</code> (a corpus discovered from a manifest uses its manifest name under a
+  <code>harmonised-</code> prefix). Check that your <code>short</code> slugifies to something no other
+  entry claims — a slug two entries would answer to is dropped from both rather
+  than resolved to a guess, and then neither is shareable. Register the source in
+  <code>_SHAREABLE_SOURCES</code> only if it needs its <strong>own</strong> token, and add any per-corpus
+  options (OneStop's variant / regime / parts) to <code>_apply_url_preset</code> /
+  <code>_build_share_query</code>.</li>
 </ul>
-<p>Then add a docs page under <strong>Datasets</strong> describing the corpus and the modelling
+<p>Then add a docs page under <strong>Public corpora</strong> describing the corpus and the modelling
 decisions your adapter makes (<a href="../onestop/">OneStop</a> and
 <a href="../multipleye/">MultiplEYE</a> are the templates), and list it in <code>mkdocs.yml</code>'s
 <code>nav:</code> — a page that isn't in the nav still builds, but nothing links to it.</p>
@@ -2039,7 +2091,7 @@ for the rest of the development setup.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../multipleye/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MultiplEYE">
+          <a href="../benchmark-corpora/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Harmonised benchmark corpora">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2049,7 +2101,7 @@ for the rest of the development setup.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                MultiplEYE
+                Harmonised benchmark corpora
               </div>
             </div>
           </a>

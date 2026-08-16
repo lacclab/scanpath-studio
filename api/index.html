@@ -1069,6 +1069,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.eyegenbench.load_eyegenbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_eyegenbench
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.eyegenbench.eyegenbench_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        eyegenbench_datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1547,6 +1569,8 @@
       
         
       
+        
+      
     
     
     
@@ -1638,6 +1662,34 @@
     
   
     MultiplEYE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-corpora/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harmonised benchmark corpora
   
 
     
@@ -1979,6 +2031,28 @@
     <span class="md-ellipsis">
       
         load_potec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.eyegenbench.load_eyegenbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_eyegenbench
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanpath_studio.eyegenbench.eyegenbench_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        eyegenbench_datasets
       
     </span>
   </a>
@@ -2460,6 +2534,46 @@ fig = scanpath_studio.plot_scanpath(words, fixations)
 <p>The PoTeC monitor was 1680×1050 (DELL P2210, 60 Hz); pass that as
 <code>canvas_size</code> to :func:<code>scanpath_studio.plot_scanpath</code> for true-to-scale
 rendering.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.eyegenbench.load_eyegenbench" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.eyegenbench.load_eyegenbench</span>
+
+
+<a href="#scanpath_studio.eyegenbench.load_eyegenbench" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_eyegenbench</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">dataset</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Load an EyeGenBench corpus as normalized <code>(words, fixations)</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="scanpath_studio.eyegenbench.eyegenbench_datasets" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">scanpath_studio.eyegenbench.eyegenbench_datasets</span>
+
+
+<a href="#scanpath_studio.eyegenbench.eyegenbench_datasets" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">eyegenbench_datasets</span><span class="p">(</span><span class="n">root</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Manifest entries, one per prepared dataset. Cheap -- no Parquet is read.</p>
 
 
     </div>

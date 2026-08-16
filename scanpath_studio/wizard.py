@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, NamedTuple, Optional, Tuple
+from typing import NamedTuple
 
 import pandas as pd
 import streamlit as st
@@ -176,7 +176,7 @@ _RESERVED_SOURCE_NAMES = frozenset(
 )
 
 
-def _safe_dataset_name(name: Optional[str], *, exclude: Optional[str] = None) -> str:
+def _safe_dataset_name(name: str | None, *, exclude: str | None = None) -> str:
     """A non-empty dataset name that collides with neither a built-in source label
     nor an already-stored dataset (suffixed ``(2)``, ``(3)``… rather than silently
     overwriting an existing entry's frames).
@@ -240,7 +240,7 @@ def _remove_dataset(name: str) -> None:
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
 
 
-def rename_dataset(old: str, new: str) -> Optional[str]:
+def rename_dataset(old: str, new: str) -> str | None:
     """Rename a stored dataset (DATA-23). Returns the name it actually took.
 
     The name is the **key** into the ``_datasets`` store, so a rename is a re-key,
@@ -298,7 +298,7 @@ def _enter_add_data_wizard() -> None:
     _reset_wizard_widgets()
 
 
-def _map_section(raw, specs, proposed, prefix, host, keys) -> Dict:
+def _map_section(raw, specs, proposed, prefix, host, keys) -> dict:
     """Render a subset of a table's mapping fields (the wizard renders the core
     fields in grouped, ordered steps). Returns the partial mapping for ``keys``.
 
@@ -321,7 +321,7 @@ def _map_section(raw, specs, proposed, prefix, host, keys) -> Dict:
     )
 
 
-def _default_trial_columns(proposed: Dict, present_cols) -> list:
+def _default_trial_columns(proposed: dict, present_cols) -> list:
     """Default trial-id mapping for the wizard, restricted to ``present_cols`` (the
     columns common to every table).
 
@@ -390,7 +390,7 @@ def _trial_id_values_cached(
     return frozenset(trial_id_series(_raw, _mapping).unique())
 
 
-def _trial_id_values(raw, schema) -> Optional[set]:
+def _trial_id_values(raw, schema) -> set | None:
     """Set of distinct trial-id strings for a raw frame + its trial mapping
     (composite mappings are joined, mirroring ``data.trial_id_series``). ``None``
     when the trial isn't mapped or its columns are absent."""
@@ -410,17 +410,17 @@ def _trial_id_values(raw, schema) -> Optional[set]:
 
 
 @st.cache_data(show_spinner="Detecting columns…")
-def _c_propose_word_schema(_raw, fingerprint: tuple) -> Dict:
+def _c_propose_word_schema(_raw, fingerprint: tuple) -> dict:
     return propose_word_schema(_raw)
 
 
 @st.cache_data(show_spinner="Detecting columns…")
-def _c_propose_fix_schema(_raw, fingerprint: tuple) -> Dict:
+def _c_propose_fix_schema(_raw, fingerprint: tuple) -> dict:
     return propose_fix_schema(_raw)
 
 
 @st.cache_data(show_spinner="Detecting columns…")
-def _c_propose_raw_gaze_schema(_raw, fingerprint: tuple) -> Dict:
+def _c_propose_raw_gaze_schema(_raw, fingerprint: tuple) -> dict:
     return propose_raw_gaze_schema(_raw)
 
 
@@ -436,7 +436,7 @@ def _c_aggregate_char_boxes(_raw, _schema, fingerprint: tuple, key: tuple):
     return aggregate_char_boxes(_raw, _schema)
 
 
-def _schema_key(schema: Optional[Dict]) -> tuple:
+def _schema_key(schema: dict | None) -> tuple:
     """A hashable, order-stable projection of a mapping dict for cache keys."""
     if not schema:
         return ()
@@ -759,7 +759,7 @@ def _distinct_id_count_cached(_raw, _mapping, fingerprint: tuple, key: tuple) ->
     return int(trial_id_series(_raw, _mapping).nunique())
 
 
-def _distinct_id_count(raw, mapping) -> Optional[int]:
+def _distinct_id_count(raw, mapping) -> int | None:
     """Distinct values of a single-column or composite identifier mapping."""
     if raw is None or getattr(raw, "empty", True) or not mapping:
         return None
@@ -829,7 +829,7 @@ def _clean_multiselect_state(key: str, valid) -> None:
             st.session_state[key] = cleaned
 
 
-def wide_frame_warning(n_extra_fields: int, n_rows: int) -> Optional[str]:
+def wide_frame_warning(n_extra_fields: int, n_rows: int) -> str | None:
     """PERF-2 warning for selections large enough to affect rerun latency."""
     if n_extra_fields < 50 and n_extra_fields * max(n_rows, 0) < 5_000_000:
         return None
@@ -879,7 +879,7 @@ def _wizard_reader_ids_cached(_frame, column: str, fingerprint: str) -> list:
     return sorted({str(value) for value in _frame[column].dropna().unique()})
 
 
-def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> Tuple[dict, list]:
+def _wizard_keep_and_filter(tables: list, filter_host, keep_host) -> tuple[dict, list]:
     """Render ONE cross-table *Filter trials by* picker (``filter_host``) and ONE
     *Additional fields to keep* picker (``keep_host``) — instead of duplicating
     both per table, which was confusing.
@@ -1085,7 +1085,7 @@ def _wizard_setup_config() -> dict:
     }
 
 
-def current_setup_section() -> Optional[dict]:
+def current_setup_section() -> dict | None:
     """The ``experimental_setup`` section for a saved config, or ``None``.
 
     Shared by ``_wizard_setup_config`` and ``tabs._build_studio_config`` so both
@@ -1386,7 +1386,7 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
     return snapshot
 
 
-def _restored_setup_snapshot() -> Optional[SetupSnapshot]:
+def _restored_setup_snapshot() -> SetupSnapshot | None:
     """The ``experimental_setup`` section of a restored setup JSON, if any.
 
     Decision (a): a restored setup file **does** pre-answer step 4 — it recorded
@@ -1685,7 +1685,7 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
-def _wizard_statuses() -> Dict[str, wizard_shell.StepStatus]:
+def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
     """Each step's badge, derived from session state alone.
 
     Deliberately cheap and frame-free: it runs at the *top* of the wizard, before
@@ -1750,7 +1750,7 @@ def _render_autodetect_card(host, word_schema, fix_schema, has_words, has_fix) -
     wrong thing. The card tells the user what to confirm; steps 2-3 are where
     they confirm it.
     """
-    checks: list[tuple[str, Optional[str]]] = []
+    checks: list[tuple[str, str | None]] = []
     if has_fix:
         checks += [
             ("Trial id", _mapping_label(fix_schema.get("trial"))),
@@ -1783,7 +1783,7 @@ def _render_autodetect_card(host, word_schema, fix_schema, has_words, has_fix) -
     )
 
 
-def _mapping_label(mapping) -> Optional[str]:
+def _mapping_label(mapping) -> str | None:
     """A human-readable column name for a mapping value (str | list | None)."""
     if not mapping or mapping == NONE_OPTION:
         return None
@@ -1904,7 +1904,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     # === 1 · Your data =======================================================
-    data_step, s1 = step_of("data")
+    _data_step, s1 = step_of("data")
     if active:
         s1.segmented_control(
             "Dataset format",
@@ -2025,12 +2025,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         if not raw_gaze.empty
         else {}
     )
-    word_schema: Dict = {}
-    fix_schema: Dict = {}
+    word_schema: dict = {}
+    fix_schema: dict = {}
     has_words, has_fix = not raw_words.empty, not raw_fix.empty
 
     # === 2 · Trials & readers ================================================
-    identity_step, s2 = step_of("identity")
+    _identity_step, s2 = step_of("identity")
     # Filename derivation must run *before* the identifier pickers so the
     # derived columns are mappable below.
     if (has_words or has_fix) and any(
@@ -2126,7 +2126,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             )
 
     # === 3 · Fixations & text ================================================
-    geometry_step, s3 = step_of("geometry")
+    _geometry_step, s3 = step_of("geometry")
     if has_fix:
         s3.markdown("**Fixations** — where the eyes landed")
         fix_schema.update(
@@ -2249,7 +2249,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     _render_autodetect_card(s1.container(), word_schema, fix_schema, has_words, has_fix)
 
     # === 4 · Recording setup =================================================
-    setup_step, s4 = step_of("setup")
+    _setup_step, s4 = step_of("setup")
     restored_setup = _restored_setup_snapshot()
     if restored_setup is not None:
         _apply_restored_setup(restored_setup)
@@ -2277,7 +2277,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         wizard_shell.continue_button(s_readers, readers_step, label="Continue →")
 
     # === 6 · Extra fields ====================================================
-    fields_step, s5 = step_of("fields")
+    _fields_step, s5 = step_of("fields")
     s5.caption(
         "*Filter trials by* becomes a value picker in the Narrow-by panel; "
         "*Additional fields to keep* are the columns you can colour, sort and "
@@ -2294,7 +2294,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     st.session_state["wizard_filter_fields"] = list(filter_fields)
 
     # === 6 · Name & add ======================================================
-    review_step, s6 = step_of("review")
+    _review_step, s6 = step_of("review")
     if active:
         st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
         s6.text_input(
@@ -2323,7 +2323,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
         if blocked:
             s6.markdown("**Still to do**")
-            reasons: Dict[str, list] = {}
+            reasons: dict[str, list] = {}
             if problems:
                 reasons["geometry"] = list(problems)
             if setup_blockers:

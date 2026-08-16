@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
@@ -43,7 +43,7 @@ def annotation_markers(participant_id, trial_id) -> str:
 
 def build_combo_options(
     fixations: pd.DataFrame,
-) -> Tuple[pd.DataFrame, list[str], Dict[str, Tuple[str, str]]]:
+) -> tuple[pd.DataFrame, list[str], dict[str, tuple[str, str]]]:
     """Build participant/trial/text combinations for selection UI.
 
     Returns:
@@ -60,8 +60,8 @@ def build_combo_options(
 
 def build_combo_options_for(
     fixations: pd.DataFrame,
-    composite_cols: Tuple[str, ...] = (),
-) -> Tuple[pd.DataFrame, list[str], Dict[str, Tuple[str, str]]]:
+    composite_cols: tuple[str, ...] = (),
+) -> tuple[pd.DataFrame, list[str], dict[str, tuple[str, str]]]:
     """`build_combo_options` for a frame that is **not** the active dataset.
 
     CMP-8 §2: a comparison source has its own composite-trial columns, so the
@@ -79,9 +79,9 @@ def build_combo_options_for(
 @st.cache_data(show_spinner="Building trial list…")
 def _build_combo_options_cached(
     _fixations: pd.DataFrame,
-    composite_cols: Tuple[str, ...],
+    composite_cols: tuple[str, ...],
     cache_key,
-) -> Tuple[pd.DataFrame, list[str], Dict[str, Tuple[str, str]]]:
+) -> tuple[pd.DataFrame, list[str], dict[str, tuple[str, str]]]:
     fixations = _fixations
     trial_col = (
         "unique_trial_id" if "unique_trial_id" in fixations.columns else "trial_id"
@@ -153,7 +153,7 @@ def _build_combo_options_cached(
 
 
 @st.cache_data(show_spinner=False)
-def _trial_positions(_frame: pd.DataFrame, cache_key) -> Dict[Tuple[str, str], object]:
+def _trial_positions(_frame: pd.DataFrame, cache_key) -> dict[tuple[str, str], object]:
     """Map ``(participant_id, trial_id)`` → positional row indices.
 
     Built once per frame (cached on its fingerprint) so extracting a single
@@ -298,8 +298,8 @@ def _trial_sort_column_allowed(column: object) -> bool:
 
 
 def _effective_trial_field(
-    frame: Optional[pd.DataFrame], trial_field: str, picker_ids: set[str]
-) -> Optional[str]:
+    frame: pd.DataFrame | None, trial_field: str, picker_ids: set[str]
+) -> str | None:
     """Find the frame column that names the picker's effective trial ids."""
     if frame is None or frame.empty:
         return None
@@ -339,11 +339,11 @@ def _looks_like_free_text(series: pd.Series) -> bool:
 
 
 def _trial_level_columns_from_frame(
-    frame: Optional[pd.DataFrame],
+    frame: pd.DataFrame | None,
     trial_field: str,
     picker_ids: set[str],
     participants: set[str],
-) -> Dict[str, pd.Series]:
+) -> dict[str, pd.Series]:
     """Discover one scalar value per active trial directly from one source table.
 
     Grouping includes participant identity, preventing repeated plain trial ids
@@ -366,7 +366,7 @@ def _trial_level_columns_from_frame(
     if "participant_id" in scoped.columns and identity != "participant_id":
         group_cols.insert(0, "participant_id")
     grouped = scoped.groupby(group_cols, sort=False, dropna=False)
-    discovered: Dict[str, pd.Series] = {}
+    discovered: dict[str, pd.Series] = {}
     for col in scoped.columns:
         if col == identity or not _trial_sort_column_allowed(col):
             continue
@@ -399,15 +399,15 @@ def _trial_level_columns_from_frame(
 
 
 def _merge_trial_level_sources(
-    sources: Iterable[Dict[str, pd.Series]],
-) -> Dict[str, pd.Series]:
+    sources: Iterable[dict[str, pd.Series]],
+) -> dict[str, pd.Series]:
     """Merge compatible metadata sources; omit cross-table disagreements."""
-    by_column: Dict[str, list[pd.Series]] = {}
+    by_column: dict[str, list[pd.Series]] = {}
     for source in sources:
         for col, series in source.items():
             by_column.setdefault(col, []).append(series)
 
-    merged: Dict[str, pd.Series] = {}
+    merged: dict[str, pd.Series] = {}
     for col, series_list in by_column.items():
         combined = pd.Series(dtype=object)
         conflict = False
@@ -429,11 +429,11 @@ def _merge_trial_level_sources(
 @st.cache_data(show_spinner=False)
 def _trial_level_sort_columns_cached(
     _combos: pd.DataFrame,
-    _words: Optional[pd.DataFrame],
-    _fixations: Optional[pd.DataFrame],
+    _words: pd.DataFrame | None,
+    _fixations: pd.DataFrame | None,
     trial_field: str,
     cache_key,
-) -> Dict[str, pd.Series]:
+) -> dict[str, pd.Series]:
     """Cached metadata discovery over the participant-scoped picker frames."""
     del cache_key  # explicit hash input for the underscore-prefixed frames
     if _combos is None or _combos.empty or trial_field not in _combos.columns:
@@ -462,9 +462,9 @@ def _trial_level_sort_columns_cached(
 def _trial_level_sort_columns(
     combos: pd.DataFrame,
     trial_field: str,
-    words: Optional[pd.DataFrame],
-    fixations: Optional[pd.DataFrame],
-) -> Dict[str, pd.Series]:
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+) -> dict[str, pd.Series]:
     return _trial_level_sort_columns_cached(
         combos,
         words,
@@ -502,9 +502,9 @@ def trial_sort_keys(
     combos: pd.DataFrame,
     trial_field: str,
     *,
-    words: Optional[pd.DataFrame] = None,
-    fixations: Optional[pd.DataFrame] = None,
-) -> Dict[str, pd.Series]:
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+) -> dict[str, pd.Series]:
     """Available sort keys (UX-10): label → Series indexed by trial id.
 
     Offers a computed stat only when the frame it needs is present, and a column
@@ -512,7 +512,7 @@ def trial_sort_keys(
     fixations, or combo frame. This deliberately discovers metadata before the
     lossy combo projection can discard it.
     """
-    keys: Dict[str, pd.Series] = {}
+    keys: dict[str, pd.Series] = {}
     # This rank was captured before build_combo_options' canonical sort.
     if (
         combos is not None
@@ -549,11 +549,11 @@ def trial_sort_keys(
 
 
 def sort_trial_options(
-    options: List[str],
-    key_series: Optional[pd.Series],
+    options: list[str],
+    key_series: pd.Series | None,
     *,
     descending: bool = False,
-) -> List[str]:
+) -> list[str]:
     """Order ``options`` (trial ids) by ``key_series``, ties broken by id.
 
     Trials the key doesn't cover sort last regardless of direction — an unranked
@@ -617,9 +617,9 @@ def _render_trial_sort_popover(
     trial_field: str,
     key_prefix: str,
     *,
-    words: Optional[pd.DataFrame],
-    fixations: Optional[pd.DataFrame],
-) -> Tuple[Optional[pd.Series], bool, str]:
+    words: pd.DataFrame | None,
+    fixations: pd.DataFrame | None,
+) -> tuple[pd.Series | None, bool, str]:
     """The ⇅ sort control beside the trial picker (UX-10).
 
     Lives in a popover rather than inline: the picker row is already a selectbox,
@@ -689,7 +689,7 @@ def compare_step_linked() -> bool:
     )
 
 
-def step_within(options: List[str], state_key: str, delta: int) -> Optional[int]:
+def step_within(options: list[str], state_key: str, delta: int) -> int | None:
     """Move ``state_key``'s selection ``delta`` places within ``options``.
 
     Clamped to the ends, and clamped *independently* of any other picker — the
@@ -711,7 +711,7 @@ def step_within(options: List[str], state_key: str, delta: int) -> Optional[int]
     return new_pos
 
 
-def at_list_end(options: List[str], state_key: str, delta: int) -> bool:
+def at_list_end(options: list[str], state_key: str, delta: int) -> bool:
     """True when ``state_key``'s selection cannot move ``delta`` within ``options``.
 
     Used to decide whether a step button is dead. An unknown list answers
@@ -763,9 +763,9 @@ def _select_trial_none_mode(
     key_prefix: str,
     picker_host=None,
     *,
-    words: Optional[pd.DataFrame] = None,
-    fixations: Optional[pd.DataFrame] = None,
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+) -> tuple[str | None, str | None, str | None]:
     """The trial picker: a **selectbox + scrubbing slider + ◀ ▶ step buttons + a ⇅
     sort popover**, all on one row. The slider thumb shows ``index/TOTAL · id``
     (index first). The pool is narrowed upstream (the "Narrow by" multiselects +
@@ -794,7 +794,7 @@ def _select_trial_none_mode(
     # Populated once the ⇅ popover has rendered (below), and read by the option
     # labels — so an active ordering is *visible* in the picker itself rather than
     # only inside the popover that set it.
-    sort_values: Dict[str, str] = {}
+    sort_values: dict[str, str] = {}
 
     def _option_label(value: str) -> str:
         marks = annotation_markers(trial_to_pid.get(value), value)
@@ -972,9 +972,9 @@ def select_trial(
     key_prefix: str = "",
     picker_host=None,
     *,
-    words: Optional[pd.DataFrame] = None,
-    fixations: Optional[pd.DataFrame] = None,
-) -> Tuple[Optional[str], Optional[str], str, Optional[str]]:
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+) -> tuple[str | None, str | None, str, str | None]:
     """Pick a specific trial from the (already-narrowed) pool.
 
     There are no Browse-by modes anymore, and no per-mapping variants either: the
@@ -1032,7 +1032,7 @@ def select_trial(
 
 def compute_trial_stats(
     trial_words: pd.DataFrame, trial_fixations: pd.DataFrame
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compute summary statistics for a single trial."""
     total_time = None
     if "trial_dwell_time_ms" in trial_words.columns:
@@ -1052,8 +1052,8 @@ def compute_trial_stats(
     return dict(
         total_reading_time_ms=total_time,
         total_reading_time_s=total_time / 1000.0,
-        word_count=int(len(trial_words)),
-        fixation_count=int(len(trial_fixations)),
+        word_count=len(trial_words),
+        fixation_count=len(trial_fixations),
     )
 
 
@@ -1151,7 +1151,7 @@ def _compare_option_label(
 def friendly_trial_label(
     participant_id: str,
     trial_id: str,
-    text_id: Optional[str],
+    text_id: str | None,
     existing_labels: set[str],
     prefix: str = "",
 ) -> str:
@@ -1190,10 +1190,10 @@ def build_comparison_options(
     selection_mode: str,
     primary_participant: str,
     primary_trial: str,
-    primary_text: Optional[str],
+    primary_text: str | None,
     *,
     cross_dataset: bool = False,
-) -> list[Tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str]]:
     """Build a prioritized list of comparison-trial options.
 
     Returns ``(participant_id, trial_id, label, markers)`` tuples, where
@@ -1255,7 +1255,7 @@ def build_comparison_options(
     )
 
     used_labels: set[str] = set()
-    options: list[Tuple[str, str, str, str]] = []
+    options: list[tuple[str, str, str, str]] = []
     for r in rows:
         label = _compare_option_label(
             r["participant_id"], r["trial_id"], r["markers"], used_labels
@@ -1321,7 +1321,7 @@ def unqualify_for_export(frame: pd.DataFrame, participant: str) -> pd.DataFrame:
 
 def align_compare_columns(
     a: pd.DataFrame, b: pd.DataFrame
-) -> Tuple[pd.DataFrame, pd.DataFrame, frozenset]:
+) -> tuple[pd.DataFrame, pd.DataFrame, frozenset]:
     """Reindex two frames onto their column **union**, and report shared numerics.
 
     A bare ``pd.concat`` of frames with disjoint columns warns and churns dtypes

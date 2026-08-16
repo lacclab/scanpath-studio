@@ -27,8 +27,6 @@ Pure functions, no Streamlit.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 import pandas as pd
 from scipy.cluster.vq import kmeans2
@@ -202,7 +200,7 @@ def _segment(fixation_XY: np.ndarray, line_Y: np.ndarray, word_XY) -> np.ndarray
     assignment = np.zeros(n, dtype=int)
     diff_X = np.diff(fixation_XY[:, 0])
     # The m-1 largest return sweeps (most negative Δx) mark the line changes.
-    line_change_indices = set(int(i) for i in np.argsort(diff_X)[: m - 1])
+    line_change_indices = {int(i) for i in np.argsort(diff_X)[: m - 1]}
     current_line_i = 0
     for fixation_i in range(n):
         assignment[fixation_i] = min(current_line_i, m - 1)
@@ -583,7 +581,7 @@ def assign_lines(
     fixation_XY: np.ndarray,
     line_Y: np.ndarray,
     *,
-    word_XY: Optional[np.ndarray] = None,
+    word_XY: np.ndarray | None = None,
     method: str = "attach",
 ) -> np.ndarray:
     """Assign each fixation a line index in ``[0, len(line_Y))``.

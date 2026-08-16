@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import glob
 import hashlib
-import importlib.resources as resources
 import io
 import logging
 import os
@@ -12,8 +11,9 @@ import uuid
 import weakref
 import zipfile
 from collections import OrderedDict
+from collections.abc import Iterable, Sequence
+from importlib import resources
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -96,7 +96,7 @@ def reset_fingerprint_memo() -> None:
     getattr(_FINGERPRINT_MEMO, "cache", {}).clear()
 
 
-def frame_fingerprint(df: Optional[pd.DataFrame]) -> tuple:
+def frame_fingerprint(df: pd.DataFrame | None) -> tuple:
     """Cheap, content-sensitive identity for a DataFrame.
 
     Used as an *explicit* ``@st.cache_data`` key for functions that take an
@@ -161,7 +161,7 @@ def frame_fingerprint(df: Optional[pd.DataFrame]) -> tuple:
 def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
     """The actual hash behind :func:`frame_fingerprint`, memo aside."""
     cols = tuple(map(str, df.columns))
-    n = int(len(df))
+    n = len(df)
 
     def _hash(sample: pd.DataFrame) -> str:
         try:
@@ -210,7 +210,7 @@ def _compute_frame_fingerprint(df: pd.DataFrame) -> tuple:
 ONESTOP_DATA_DIR_ENV = "ONESTOP_DATA_DIR"
 
 
-def onestop_data_dir() -> Optional[Path]:
+def onestop_data_dir() -> Path | None:
     """Resolved value of `$ONESTOP_DATA_DIR`, or `None` if unset/blank."""
     raw = os.environ.get(ONESTOP_DATA_DIR_ENV, "").strip()
     return Path(raw) if raw else None
@@ -231,7 +231,7 @@ def onestop_full_bundle_exists() -> bool:
     ).exists()
 
 
-def _onestop_shard_paths(base: Path, pid: str) -> Tuple[Path, Path]:
+def _onestop_shard_paths(base: Path, pid: str) -> tuple[Path, Path]:
     """Resolved per-participant shard paths under `<base>/by_pid/`."""
     pid = pid.strip().lower()
     return (
@@ -240,7 +240,7 @@ def _onestop_shard_paths(base: Path, pid: str) -> Tuple[Path, Path]:
     )
 
 
-def onestop_data_provenance(participant: Optional[str] = None) -> dict:
+def onestop_data_provenance(participant: str | None = None) -> dict:
     """Where the currently-loaded OneStop data came from, for the Raw Data tab.
 
     Parses `ONESTOP_DATA_DIR` (typically `…/onestop_<cohort>/reports/<source>/<date>/full/`)
@@ -298,8 +298,8 @@ def onestop_data_provenance(participant: Optional[str] = None) -> dict:
 
 @st.cache_data(show_spinner="Loading OneStop lacclab export…")
 def load_onestop_server_bundle(
-    participant: Optional[str] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    participant: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load OneStop lacclab IA + fixation reports from `$ONESTOP_DATA_DIR`.
 
     Fast path — when `participant` is given and per-pid shards exist under
@@ -365,14 +365,14 @@ def _norm_col(name) -> str:
     return re.sub(r"[^a-z0-9]", "", str(name).lower())
 
 
-def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> Optional[str]:
+def pick_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     """Return the first matching column name from a candidate list.
 
     Matching is case- and separator-insensitive (see ``_norm_col``). Candidate
     order is still priority order — the first candidate with any match wins (so
     EyeLink names keep beating Gazepoint), and among equally-normalized columns
     the leftmost one wins."""
-    lookup: Dict[str, str] = {}
+    lookup: dict[str, str] = {}
     for col in df.columns:
         lookup.setdefault(_norm_col(col), col)
     for name in candidates:
@@ -554,7 +554,7 @@ RAW_GAZE_TIMESTAMP_CANDIDATES = [
 ]
 
 
-def propose_word_schema(words: pd.DataFrame) -> Dict[str, Optional[str]]:
+def propose_word_schema(words: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for words/IA data without erroring."""
     return dict(
         participant=pick_column(words, PARTICIPANT_CANDIDATES),
@@ -578,7 +578,7 @@ def propose_word_schema(words: pd.DataFrame) -> Dict[str, Optional[str]]:
     )
 
 
-def propose_fix_schema(fixations: pd.DataFrame) -> Dict[str, Optional[str]]:
+def propose_fix_schema(fixations: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for fixations data without erroring.
 
     pass_index / saccade_type / saccade_amplitude / eye are not schema fields —
@@ -603,7 +603,7 @@ def propose_fix_schema(fixations: pd.DataFrame) -> Dict[str, Optional[str]]:
     )
 
 
-def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Dict[str, Optional[str]]:
+def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str | None]:
     """Return a candidate column mapping for raw gaze data without erroring."""
     return dict(
         participant=pick_column(raw_gaze, PARTICIPANT_CANDIDATES),
@@ -617,7 +617,7 @@ def propose_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Dict[str, Optional[str]]:
     )
 
 
-def validate_word_schema(schema: Dict[str, Optional[str]]) -> list:
+def validate_word_schema(schema: dict[str, str | None]) -> list:
     """Return a list of human-readable problems with a words/IA schema.
 
     Participant ID is optional: word/AoI tables without one are treated as
@@ -640,7 +640,7 @@ def validate_word_schema(schema: Dict[str, Optional[str]]) -> list:
     return problems
 
 
-def validate_fix_schema(schema: Dict[str, Optional[str]]) -> list:
+def validate_fix_schema(schema: dict[str, str | None]) -> list:
     """Return a list of human-readable problems with a fixations schema.
 
     X/Y coordinates are optional when a Word/IA ID is mapped: AOI-sequence
@@ -665,7 +665,7 @@ def validate_fix_schema(schema: Dict[str, Optional[str]]) -> list:
     return problems
 
 
-def validate_raw_gaze_schema(schema: Dict[str, Optional[str]]) -> list:
+def validate_raw_gaze_schema(schema: dict[str, str | None]) -> list:
     """Return a list of human-readable problems with a raw gaze schema."""
     problems = []
     # Participant optional — single anonymous reader when absent.
@@ -690,7 +690,7 @@ SOURCE_FILE_COLUMN = "source_file"
 # `split_source_file` (file_part_1, file_part_2, …).
 FILE_PART_PREFIX = "file_part_"
 
-TablesInput = Union[str, os.PathLike, object, List]
+TablesInput = str | os.PathLike | object | list
 
 
 def split_source_file(
@@ -775,7 +775,7 @@ def source_file_regex_collisions(df: pd.DataFrame, pattern: str) -> list:
 
 
 def aggregate_char_boxes(
-    df: pd.DataFrame, schema: Dict[str, Optional[str]]
+    df: pd.DataFrame, schema: dict[str, str | None]
 ) -> pd.DataFrame:
     """Collapse character-level AOI rows into one bounding box per word.
 
@@ -865,9 +865,9 @@ def _read_by_extension(buf, name: str) -> pd.DataFrame:
 
 
 def _tag_and_concat(
-    frames: List[pd.DataFrame],
-    labels: List[str],
-    source_column: Optional[str],
+    frames: list[pd.DataFrame],
+    labels: list[str],
+    source_column: str | None,
     *,
     always_tag: bool = False,
 ) -> pd.DataFrame:
@@ -915,7 +915,7 @@ def _format_bytes(n: float) -> str:
     return f"{n:.1f} GB"
 
 
-def _check_zip_limits(infos: List[zipfile.ZipInfo]) -> None:
+def _check_zip_limits(infos: list[zipfile.ZipInfo]) -> None:
     """Reject an archive that would decompress past the DATA-16 limits.
 
     Checks the *declared* sizes (``ZipInfo.file_size``) before a single member is
@@ -1054,7 +1054,7 @@ def expand_table_inputs(inputs: TablesInput) -> list:
 
 
 def read_tables(
-    inputs: TablesInput, source_column: Optional[str] = SOURCE_FILE_COLUMN
+    inputs: TablesInput, source_column: str | None = SOURCE_FILE_COLUMN
 ) -> pd.DataFrame:
     """Read one or many tabular files and concatenate them into one frame.
 
@@ -1115,7 +1115,7 @@ def _resolve_sample_image_paths(df: pd.DataFrame) -> pd.DataFrame:
 
 def resolve_stimulus_image_paths(
     frame: pd.DataFrame,
-    root: Union[str, os.PathLike],
+    root: str | os.PathLike,
     pattern: str = "{text_id}.png",
     *,
     require_exists: bool = True,
@@ -1167,7 +1167,7 @@ def resolve_stimulus_image_paths(
 
 
 @st.cache_data
-def load_sample_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
+def load_sample_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load bundled demo IA and fixation tables (prefer Parquet).
 
     The tables ship per-trial stimulus-image references (``image_path`` +
@@ -1193,7 +1193,7 @@ def load_sample_raw_gaze() -> pd.DataFrame:
     return _load_bundled("raw_gaze")
 
 
-def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Optional[Dict[str, str]]:
+def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> dict[str, str] | None:
     """Infer schema for raw millisecond-level gaze data."""
     schema = propose_raw_gaze_schema(raw_gaze)
     problems = validate_raw_gaze_schema(schema)
@@ -1203,7 +1203,7 @@ def infer_raw_gaze_schema(raw_gaze: pd.DataFrame) -> Optional[Dict[str, str]]:
     return schema
 
 
-def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.DataFrame:
+def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: dict[str, str]) -> pd.DataFrame:
     """Normalize raw gaze data to canonical column names."""
     df = pd.DataFrame(index=raw_gaze.index)
     if schema.get("participant"):
@@ -1248,7 +1248,7 @@ def normalize_raw_gaze(raw_gaze: pd.DataFrame, schema: Dict[str, str]) -> pd.Dat
     return df
 
 
-def infer_word_schema(words: pd.DataFrame) -> Optional[Dict[str, str]]:
+def infer_word_schema(words: pd.DataFrame) -> dict[str, str] | None:
     schema = propose_word_schema(words)
     problems = validate_word_schema(schema)
     if problems:
@@ -1257,7 +1257,7 @@ def infer_word_schema(words: pd.DataFrame) -> Optional[Dict[str, str]]:
     return schema
 
 
-def infer_fix_schema(fixations: pd.DataFrame) -> Optional[Dict[str, str]]:
+def infer_fix_schema(fixations: pd.DataFrame) -> dict[str, str] | None:
     schema = propose_fix_schema(fixations)
     problems = validate_fix_schema(schema)
     if problems:
@@ -1484,7 +1484,7 @@ def correct_word_id_offset(
 
 def harmonize_frames(
     words: pd.DataFrame, fixations: pd.DataFrame
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cross-frame fixups applied right after normalization.
 
     Broadcast stimulus-level words across participants, reconcile a
@@ -1775,7 +1775,7 @@ FIX_OPTIONAL_FIELDS = [
 ]
 
 
-def _schema_source_columns(schema: Dict) -> set:
+def _schema_source_columns(schema: dict) -> set:
     """Set of raw source column names a normalization schema references."""
     cols: set = set()
     for value in schema.values():
@@ -1791,8 +1791,8 @@ def _schema_source_columns(schema: Dict) -> set:
 def dropped_columns(
     raw: pd.DataFrame,
     *,
-    keep: Optional[set] = None,
-    schema: Optional[Dict] = None,
+    keep: set | None = None,
+    schema: dict | None = None,
 ) -> list:
     """Original source columns discarded during normalization (sorted).
 
@@ -1852,7 +1852,7 @@ def coerce_flag(col: pd.Series) -> pd.Series:
 
 
 def _apply_optional_fields(
-    df: pd.DataFrame, source: pd.DataFrame, registry: list, keep: Optional[set]
+    df: pd.DataFrame, source: pd.DataFrame, registry: list, keep: set | None
 ) -> set:
     """Carry registry-listed optional source columns into ``df`` (renamed +
     dtype-coerced). ``keep`` is ``None`` (carry every detected field — the
@@ -1878,7 +1878,7 @@ def _apply_optional_fields(
 
 
 def _carry_extra_columns(
-    df: pd.DataFrame, source: pd.DataFrame, keep: Optional[set], skip: set
+    df: pd.DataFrame, source: pd.DataFrame, keep: set | None, skip: set
 ) -> None:
     """Carry user-chosen extra ``keep`` source columns through verbatim, skipping
     those already emitted (canonical / registry) or in ``skip``."""
@@ -1889,7 +1889,7 @@ def _carry_extra_columns(
             df[col] = source[col].to_numpy()
 
 
-def categorize_columns(raw: pd.DataFrame, schema: Dict, registry: list) -> Dict:
+def categorize_columns(raw: pd.DataFrame, schema: dict, registry: list) -> dict:
     """Split a raw frame's columns into {mapped, detected_optional, unclaimed}.
 
     ``mapped`` = source columns the schema references; ``detected_optional`` =
@@ -1909,11 +1909,11 @@ def categorize_columns(raw: pd.DataFrame, schema: Dict, registry: list) -> Dict:
 
 
 def compute_keep_columns(
-    schema: Dict,
+    schema: dict,
     *,
-    optional_sources: Optional[Iterable[str]] = None,
-    filter_fields: Optional[Iterable[str]] = None,
-    keep_columns: Optional[Iterable[str]] = None,
+    optional_sources: Iterable[str] | None = None,
+    filter_fields: Iterable[str] | None = None,
+    keep_columns: Iterable[str] | None = None,
 ) -> set:
     """Source columns to retain before normalization (everything else is dropped
     for speed). Union of: schema-mapped sources, always-kept structural columns,
@@ -1935,7 +1935,7 @@ def compute_keep_columns(
 
 
 def _copy_screen_fields(
-    df: pd.DataFrame, source: pd.DataFrame, schema: Dict
+    df: pd.DataFrame, source: pd.DataFrame, schema: dict
 ) -> pd.DataFrame:
     """Copy mapped part identity/metadata and normalize it in one place."""
     fields = (
@@ -1956,7 +1956,7 @@ def _copy_screen_fields(
 
 
 def normalize_words(
-    words: pd.DataFrame, schema: Dict[str, str], *, keep_columns: Optional[set] = None
+    words: pd.DataFrame, schema: dict[str, str], *, keep_columns: set | None = None
 ) -> pd.DataFrame:
     # The explicit index makes scalar assignments (e.g. the stimulus-level
     # participant placeholder) fill every row even when assigned first.
@@ -2032,9 +2032,9 @@ def normalize_words(
 
 def normalize_fixations(
     fixations: pd.DataFrame,
-    schema: Dict[str, str],
+    schema: dict[str, str],
     *,
-    keep_columns: Optional[set] = None,
+    keep_columns: set | None = None,
 ) -> pd.DataFrame:
     # Explicit index so a constant participant placeholder fills every row.
     df = pd.DataFrame(index=fixations.index)
@@ -2136,7 +2136,7 @@ def normalize_fixations(
 # Canonical columns produced by normalize_words / normalize_fixations. Used to
 # build typed empty frames when a dataset ships only one of the two reports,
 # so every downstream consumer can keep selecting columns unconditionally.
-WORDS_CANONICAL_COLUMNS: Dict[str, str] = {
+WORDS_CANONICAL_COLUMNS: dict[str, str] = {
     "participant_id": "object",
     "trial_id": "object",
     "text_id": "object",
@@ -2148,7 +2148,7 @@ WORDS_CANONICAL_COLUMNS: Dict[str, str] = {
     "width": "float64",
     "height": "float64",
 }
-FIX_CANONICAL_COLUMNS: Dict[str, str] = {
+FIX_CANONICAL_COLUMNS: dict[str, str] = {
     "participant_id": "object",
     "trial_id": "object",
     "text_id": "object",
@@ -2181,7 +2181,7 @@ _REMAP_DERIVED_IDS = ("unique_trial_id", "unique_text_id", "unique_paragraph_id"
 
 
 def remap_normalized_frame(
-    frame: pd.DataFrame, schema: Dict[str, Optional[str]], *, kind: str
+    frame: pd.DataFrame, schema: dict[str, str | None], *, kind: str
 ) -> pd.DataFrame:
     """Re-derive an already-normalized frame under a new column mapping.
 
@@ -2243,8 +2243,8 @@ def _union_column_values(
 def filter_data(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    filters: Dict,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    filters: dict,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     # When the participant/trial selection covers the whole frame (the default —
     # any narrowing already happened upstream in filter_trials), skip the two
     # O(n) membership masks entirely; only the optional fixation-level filters
@@ -2291,10 +2291,10 @@ def filter_data(
 def filter_trials(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    participants: Optional[list] = None,
-    metadata: Optional[Dict[str, set]] = None,
-    ranges: Optional[Dict[str, Tuple[float, float]]] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    participants: list | None = None,
+    metadata: dict[str, set] | None = None,
+    ranges: dict[str, tuple[float, float]] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Narrow words + fixations by participant and by trial metadata.
 
     ``metadata`` maps a column name to the set of allowed values (membership).
@@ -2388,7 +2388,7 @@ def filter_to_keys(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     keys: set,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Keep only rows whose (participant_id, trial_id) is in ``keys``.
 
     ``keys`` is a set of ``(str, str)`` tuples. Used to apply annotation-based
@@ -2420,7 +2420,7 @@ def filter_to_keys(
 #: identity/condition fields rather than every column: a per-word or
 #: per-fixation column varies within a trial by design, and scanning them all
 #: would bury the signal in noise.
-_TRIAL_WITNESS_COLUMNS: Tuple[str, ...] = (
+_TRIAL_WITNESS_COLUMNS: tuple[str, ...] = (
     "TRIAL_INDEX",
     "trial_index",
     "trial_num",
@@ -2444,7 +2444,7 @@ _TRIAL_WITNESS_COLUMNS: Tuple[str, ...] = (
 )
 
 
-def trial_identity_key(frame: pd.DataFrame) -> List[str]:
+def trial_identity_key(frame: pd.DataFrame) -> list[str]:
     """The columns that identify one *reading* in ``frame``.
 
     ``screen_id`` joins the key when the frame is multipart, because a screen is
@@ -2458,7 +2458,7 @@ def trial_identity_key(frame: pd.DataFrame) -> List[str]:
 
 def diagnose_trial_identity(
     words: pd.DataFrame, fixations: pd.DataFrame
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Report evidence that one ``trial_id`` covers more than one reading (VAL-7).
 
     Returns a dict with:
@@ -2480,7 +2480,7 @@ def diagnose_trial_identity(
     Pure and read-only: this reports, it never repairs. Empty frames, or frames
     with no id columns, produce an all-clear rather than an error.
     """
-    report: Dict[str, object] = {
+    report: dict[str, object] = {
         "trials": 0,
         "affected_trials": 0,
         "duplicate_word_rows": 0,
@@ -2530,7 +2530,7 @@ def diagnose_trial_identity(
                 lambda s: int(s.size - s.nunique())
             )
             bad = counts[counts > 0]
-            report["repeated_fixation_id_trials"] = int(len(bad))
+            report["repeated_fixation_id_trials"] = len(bad)
             flagged |= {tuple(str(v) for v in _as_tuple(k)) for k in bad.index}
         # (3) A clock that runs backwards mid-reading.
         if len(fkey) >= 2 and "timestamp_ms" in fixations.columns:
@@ -2542,11 +2542,11 @@ def diagnose_trial_identity(
                 lambda s: bool((s.diff() < 0).any())
             )
             bad_clock = drops[drops]
-            report["backwards_clock_trials"] = int(len(bad_clock))
+            report["backwards_clock_trials"] = len(bad_clock)
             flagged |= {tuple(str(v) for v in _as_tuple(k)) for k in bad_clock.index}
 
     # (4) A column that should be constant taking several values.
-    multi: Dict[str, int] = {}
+    multi: dict[str, int] = {}
     for frame in (words, fixations):
         if frame is None or frame.empty:
             continue
@@ -2578,7 +2578,7 @@ def _as_tuple(key) -> tuple:
     return key if isinstance(key, tuple) else (key,)
 
 
-def trial_identity_warning(report: Dict[str, object]) -> Optional[str]:
+def trial_identity_warning(report: dict[str, object]) -> str | None:
     """One line naming the problem and the remedy, or ``None`` when all clear.
 
     The column name is the fix, so it leads whenever there is one — "add it to
@@ -2632,8 +2632,8 @@ def count_trials(words: pd.DataFrame, fixations: pd.DataFrame) -> int:
 def diagnose_filters(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-    steps: Sequence[Tuple],
-) -> List[Dict]:
+    steps: Sequence[tuple],
+) -> list[dict]:
     """Attribute an empty trial pool to the filter(s) that caused it (UX-7).
 
     ``steps`` is ``(label, apply)`` or ``(label, apply, keys)``, where
@@ -2648,7 +2648,7 @@ def diagnose_filters(
     Returns one dict per step: ``{"label", "kept", "dropped", "empties", "keys"}``.
     """
     total = count_trials(words, fixations)
-    report: List[Dict] = []
+    report: list[dict] = []
     for step in steps:
         label, apply = step[0], step[1]
         keys = tuple(step[2]) if len(step) > 2 else ()
@@ -2682,7 +2682,7 @@ def filter_raw_gaze(
 
 def compute_canvas_size(
     words: pd.DataFrame, fixations: pd.DataFrame
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """Estimate canvas size from word boxes and fixation extents.
 
     Returns the smallest power-of-100 dimensions that comfortably enclose the
@@ -2741,7 +2741,7 @@ def compute_word_metrics(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Dat
 
 
 def preprocess_fixation_stage(
-    words: pd.DataFrame, fixations: pd.DataFrame, settings: Dict
+    words: pd.DataFrame, fixations: pd.DataFrame, settings: dict
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cached PRE-1 stage; disabled returns the original fixation object."""
     if not settings.get("enabled"):
@@ -2756,7 +2756,7 @@ def preprocess_fixation_stage(
 
 @st.cache_data(show_spinner="Preprocessing fixations…")
 def _preprocess_fixation_stage_cached(
-    _words: pd.DataFrame, _fixations: pd.DataFrame, settings: Dict, cache_key
+    _words: pd.DataFrame, _fixations: pd.DataFrame, settings: dict, cache_key
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     from .measures import assign_fixations_to_words, enrich_fixations
     from .preprocessing import preprocess_fixations
@@ -2881,7 +2881,7 @@ def _compute_word_metrics_cached(
     return metrics
 
 
-def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict:
+def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> dict:
     """Default ("everything selected") filter dict for the current frames.
 
     Cached on a cheap content fingerprint so the full-column ``unique()`` scans
@@ -2897,7 +2897,7 @@ def default_filters(words: pd.DataFrame, fixations: pd.DataFrame) -> Dict:
 @st.cache_data(show_spinner=False)
 def _default_filters_cached(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
-) -> Dict:
+) -> dict:
     filters = dict(
         participants=_union_column_values(_words, _fixations, "participant_id"),
         trials=_union_column_values(_words, _fixations, "trial_id"),

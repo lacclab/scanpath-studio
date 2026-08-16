@@ -6,8 +6,9 @@ import contextlib
 import html
 import json
 import os
+from collections.abc import Callable
 from dataclasses import replace
-from typing import Any, Callable, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -101,8 +102,6 @@ from scanpath_studio.controls import (
     render_viz_reset,
     sidebar_controls,
 )
-from scanpath_studio.html_embed import embed_html_iframe
-from scanpath_studio.debug_log import timed
 from scanpath_studio.data import (
     compute_word_metrics,
     derive_trial_index,
@@ -115,6 +114,7 @@ from scanpath_studio.data import (
     validate_raw_gaze_schema,
     validate_word_schema,
 )
+from scanpath_studio.debug_log import timed
 from scanpath_studio.export import (
     ComparisonSide,
     ExportOptions,
@@ -132,6 +132,7 @@ from scanpath_studio.export_status import (
     ExportStatus,
     static_export_signature,
 )
+from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.illustration import illustration_reasons, resolve_label_reasons
 from scanpath_studio.multipart import (
     SCREEN_ID,
@@ -141,8 +142,8 @@ from scanpath_studio.multipart import (
     screen_canvas_size,
 )
 from scanpath_studio.plots import (
-    FigureSettings,
     STATIC_FIGURE_OPTIONS,
+    FigureSettings,
     _discard_flagged_fixations,
     _png_pixel_size,
     add_illustration_label,
@@ -245,7 +246,7 @@ def _on_screen_slider() -> None:
     st.session_state["single_screen_id"] = st.session_state["single_screen_pos"]
 
 
-def _render_screen_navigator(catalog: pd.DataFrame) -> Optional[str]:
+def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
     """Select/scrub/step navigator for one logical multipart trial.
 
     **UX-47**: this row carries the same grammar as the trial picker directly
@@ -330,9 +331,7 @@ def _embed_html_iframe(html: str, *, height: int) -> None:
     embed_html_iframe(html, height=height)
 
 
-def _render_true_scale_chart(
-    fig, *, key: str, max_height: Optional[int] = None
-) -> None:
+def _render_true_scale_chart(fig, *, key: str, max_height: int | None = None) -> None:
     """Display a spatial figure true-to-scale, fitted to the column width.
 
     ``st.plotly_chart`` pins the chart width to the column but keeps the layout
@@ -412,7 +411,7 @@ def _render_true_scale_chart(
     _embed_html_iframe(html, height=iframe_height)
 
 
-def _trial_text_id(trial_words: pd.DataFrame) -> Optional[str]:
+def _trial_text_id(trial_words: pd.DataFrame) -> str | None:
     """Best-available text identifier for a trial's words (for same-text checks)."""
     for col in ("unique_text_id", "text_id"):
         if col in trial_words.columns and not trial_words.empty:
@@ -648,16 +647,15 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     )
 
     max_frames = None
-    if n_frames > _ANIM_FRAME_CAP:
-        if st.checkbox(
-            f"Limit to {_ANIM_FRAME_CAP} frames for a faster render",
-            value=True,
-            key="anim_export_limit",
-            help="This reading has many fixations. Capping the rendered frames keeps "
-            "the export quick; the clip's total duration is unchanged (each kept "
-            "frame is held a little longer).",
-        ):
-            max_frames = _ANIM_FRAME_CAP
+    if n_frames > _ANIM_FRAME_CAP and st.checkbox(
+        f"Limit to {_ANIM_FRAME_CAP} frames for a faster render",
+        value=True,
+        key="anim_export_limit",
+        help="This reading has many fixations. Capping the rendered frames keeps "
+        "the export quick; the clip's total duration is unchanged (each kept "
+        "frame is held a little longer).",
+    ):
+        max_frames = _ANIM_FRAME_CAP
 
     render_frames = min(n_frames, max_frames) if max_frames else n_frames
     est_s = render_frames * _ANIM_RENDER_S_PER_FRAME + _ANIM_RENDER_COLD_START_S
@@ -790,7 +788,7 @@ def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
 
 
 def _drift_corrected(
-    fix: pd.DataFrame, words: pd.DataFrame, algorithm: Optional[str]
+    fix: pd.DataFrame, words: pd.DataFrame, algorithm: str | None
 ) -> pd.DataFrame:
     """PRE-3 vertical drift correction for one scanpath, or a true no-op.
 
@@ -816,7 +814,7 @@ def _drift_corrected(
     return corrected
 
 
-def _marked_text_column(viz_settings: dict) -> Optional[str]:
+def _marked_text_column(viz_settings: dict) -> str | None:
     """The critical-span column for builders whose only marking channel is *text*.
 
     ``make_scanpath_figure`` takes both ``highlight_column`` and
@@ -933,7 +931,7 @@ def _cached_scanpath_figure(
     _words: pd.DataFrame,
     _fixations: pd.DataFrame,
     _settings: FigureSettings,
-    _raw_gaze: Optional[pd.DataFrame],
+    _raw_gaze: pd.DataFrame | None,
     fig_key,
 ):
     """Build + cache a static single-trial scanpath figure.
@@ -995,7 +993,7 @@ _COMPARE_IDENTITY_KEY = "_compare_selected_identity"
 _COMPARE_FILTER_PREFIX = "cmp"
 
 
-def _compare_source_name() -> Optional[str]:
+def _compare_source_name() -> str | None:
     """The picked comparison dataset, or ``None`` for "This dataset".
 
     Read straight from the widget key rather than from a loaded source, because
@@ -1006,7 +1004,7 @@ def _compare_source_name() -> Optional[str]:
     return None if not chosen or chosen == THIS_DATASET else str(chosen)
 
 
-def _render_compare_dataset_picker() -> Optional[SecondaryDataset]:
+def _render_compare_dataset_picker() -> SecondaryDataset | None:
     """The **CMP-8 §5.1** dataset picker for scanpath B, plus B's own filters.
 
     Returns the chosen source already narrowed by its own ``cmp``-prefixed filter
@@ -1108,12 +1106,12 @@ def _render_compare_selector(
     selection_mode: str,
     selected_participant: str,
     selected_trial: str,
-    selected_text: Optional[str],
+    selected_text: str | None,
     animate: bool = False,
-    fixations_filtered: Optional[pd.DataFrame] = None,
-    trial_words: Optional[pd.DataFrame] = None,
-    words_filtered: Optional[pd.DataFrame] = None,
-) -> tuple[Optional[str], Optional[str], Optional[SecondaryDataset]]:
+    fixations_filtered: pd.DataFrame | None = None,
+    trial_words: pd.DataFrame | None = None,
+    words_filtered: pd.DataFrame | None = None,
+) -> tuple[str | None, str | None, SecondaryDataset | None]:
     """The compare-trial (B) selector, rendered above the chips (CMP-1).
 
     Mirrors the main trial picker: a ``selectbox`` showing the trial id (+ 📄/👤
@@ -1462,10 +1460,6 @@ def _is_boolish(series: pd.Series) -> bool:
     return bool(vals) and vals <= {
         True,
         False,
-        0,
-        1,
-        0.0,
-        1.0,
         "True",
         "False",
         "true",
@@ -1741,7 +1735,7 @@ def _ordered_words(trial_words: pd.DataFrame) -> pd.DataFrame:
 
 
 def _render_paragraph_with_spans(
-    trial_words: pd.DataFrame, span_bg: Optional[dict] = None
+    trial_words: pd.DataFrame, span_bg: dict | None = None
 ) -> None:
     """Render the stimulus text with each detected span column highlighted.
 
@@ -1794,7 +1788,7 @@ def _span_text(trial_words: pd.DataFrame, mask_col: str) -> str:
     return " ".join(ordered.loc[mask, "text"].astype(str).tolist())
 
 
-def _first_str(df: pd.DataFrame, col: str) -> Optional[str]:
+def _first_str(df: pd.DataFrame, col: str) -> str | None:
     """First non-null value of ``col`` as a string, or None."""
     if col in df.columns:
         vals = df[col].dropna()
@@ -1803,7 +1797,7 @@ def _first_str(df: pd.DataFrame, col: str) -> Optional[str]:
     return None
 
 
-def _first_num(df: pd.DataFrame, col: str) -> Optional[float]:
+def _first_num(df: pd.DataFrame, col: str) -> float | None:
     """First non-null value of ``col`` as a float, or None when absent/empty."""
     if col in df.columns:
         vals = pd.to_numeric(df[col], errors="coerce").dropna()
@@ -1812,7 +1806,7 @@ def _first_num(df: pd.DataFrame, col: str) -> Optional[float]:
     return None
 
 
-def _first_bool(df: pd.DataFrame, col: str) -> Optional[bool]:
+def _first_bool(df: pd.DataFrame, col: str) -> bool | None:
     """First non-null value of ``col`` as a bool, or None when absent/empty."""
     if col in df.columns:
         vals = df[col].dropna()
@@ -1823,7 +1817,7 @@ def _first_bool(df: pd.DataFrame, col: str) -> Optional[bool]:
 
 def _span_fixated_note(
     trial_words: pd.DataFrame,
-    trial_fixations: Optional[pd.DataFrame],
+    trial_fixations: pd.DataFrame | None,
     mask_col: str,
 ) -> str:
     """Inline HTML note: was the span fixated, and for how long?
@@ -1896,7 +1890,7 @@ def _render_trial_header(
 def _render_paragraph_panel(
     trial_words: pd.DataFrame,
     *,
-    trial_fixations: Optional[pd.DataFrame] = None,
+    trial_fixations: pd.DataFrame | None = None,
     expanded: bool = True,
     bare: bool = False,
 ) -> None:
@@ -2004,7 +1998,7 @@ def _span_summary_html(col: str, span_str: str, bg: str, note: str) -> str:
 
 def _in_text_fixation_value(
     trial_words: pd.DataFrame, trial_fixations: pd.DataFrame
-) -> Optional[str]:
+) -> str | None:
     """Concise "in / total" count of fixations that landed inside a word box.
 
     Replaces the old free-text caption ("All 154 fixations landed inside word
@@ -2068,10 +2062,10 @@ def _build_studio_config(
     font_family: str,
     annotation_records: list,
     column_mapping: dict,
-    data_source: Optional[str],
+    data_source: str | None,
     app_version: str,
     exported_at: str,
-    compare_styles: Optional[list] = None,
+    compare_styles: list | None = None,
 ) -> dict:
     """Build the "💾 Save & restore" JSON config dict (pure — no Streamlit).
 
@@ -2511,7 +2505,7 @@ _CROSS_DATASET_SAFE_METRICS = frozenset(
 
 
 def _compare_setups(
-    compare_meta: Optional[dict],
+    compare_meta: dict | None,
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     canvas_width: int,
@@ -2569,11 +2563,11 @@ def _build_compare_meta(
     fixations_filtered: pd.DataFrame,
     selected_participant: str,
     selected_trial: str,
-    compare_participant: Optional[str],
-    compare_trial: Optional[str],
-    selected_screen: Optional[str] = None,
-    source: Optional[SecondaryDataset] = None,
-) -> Optional[dict]:
+    compare_participant: str | None,
+    compare_trial: str | None,
+    selected_screen: str | None = None,
+    source: SecondaryDataset | None = None,
+) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active.
 
@@ -2643,7 +2637,7 @@ def _build_compare_meta(
     }
 
 
-def _first_text_id(words: pd.DataFrame) -> Optional[str]:
+def _first_text_id(words: pd.DataFrame) -> str | None:
     """The text id of a single-trial frame, for a trial A's combos can't answer for."""
     for col in ("unique_text_id", "text_id"):
         if col in words.columns and not words.empty:
@@ -2681,15 +2675,15 @@ _ANIM_QUALITY_PRESETS = {
 def _render_anim_info_box(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
-    words_b: Optional[pd.DataFrame],
-    fixations_b: Optional[pd.DataFrame],
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None,
     selected_participant: str,
     selected_trial: str,
-    compare_participant: Optional[str],
-    compare_trial: Optional[str],
+    compare_participant: str | None,
+    compare_trial: str | None,
     playback_speed: float,
-    grid_step_ms: Optional[float] = None,
-    max_frames: Optional[int] = None,
+    grid_step_ms: float | None = None,
+    max_frames: int | None = None,
 ) -> float:
     """Render the animation reading-time / playback info box (+ overlay caveats),
     shown in the side panel under the Animate toggle. Returns the playback
@@ -2792,7 +2786,7 @@ def _apply_title_caption(
     trial_fixations: pd.DataFrame,
     participant: str,
     trial: str,
-    combo_row: Optional[dict] = None,
+    combo_row: dict | None = None,
 ) -> None:
     """EXP-5: stamp the rail's title/caption pattern onto ``fig``.
 
@@ -2844,10 +2838,10 @@ DEFAULT_COMPARE_LABEL_PATTERN = "{participant_id} · {trial_id}"
 
 def _resolve_compare_label(
     idx: int,
-    participant: Optional[str],
-    trial: Optional[str],
-    trial_words: Optional[pd.DataFrame],
-    trial_fixations: Optional[pd.DataFrame],
+    participant: str | None,
+    trial: str | None,
+    trial_words: pd.DataFrame | None,
+    trial_fixations: pd.DataFrame | None,
 ) -> str:
     """UX-31: the A/B legend label for compare scanpath ``idx`` (0 or 1).
 
@@ -2871,12 +2865,12 @@ def _resolve_compare_label(
 def _build_and_render_animation(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
-    words_b: Optional[pd.DataFrame],
-    fixations_b: Optional[pd.DataFrame],
+    words_b: pd.DataFrame | None,
+    fixations_b: pd.DataFrame | None,
     selected_participant: str,
     selected_trial: str,
-    compare_participant: Optional[str],
-    compare_trial: Optional[str],
+    compare_participant: str | None,
+    compare_trial: str | None,
     *,
     settings: FigureSettings,
     viz_settings: dict,
@@ -3047,8 +3041,8 @@ def _render_export_panel(
     *,
     animate: bool,
     save_slug: str,
-    playback_ms: Optional[float],
-    file_stem: Optional[str],
+    playback_ms: float | None,
+    file_stem: str | None,
     combos: pd.DataFrame,
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
@@ -3063,7 +3057,7 @@ def _render_export_panel(
     viz_settings: dict,
     line_spacing: float,
     scale_text_to_boxes: bool,
-    compare_export: Optional[tuple] = None,
+    compare_export: tuple | None = None,
 ) -> None:
     """Consolidated Export subtab: the currently-viewed figure on top, then a
     bulk multi-trial export below.
@@ -3258,7 +3252,7 @@ def _chip_color(col: str, value_str: str) -> str:
 def _render_trial_condition_chips(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
-    participant: Optional[str],
+    participant: str | None,
     fields,
 ) -> list[tuple[str, str]]:
     """Render the ``Field = Value`` chip strip above the plot — the trial's
@@ -3283,7 +3277,7 @@ def _render_trial_condition_chips(
     when the user has no summary chips selected."""
     primary: list[tuple[str, str]] = []  # identity + conditions (inline)
     summary: list[tuple[str, str]] = []  # computed stats (inside "More")
-    summary_lookup: Optional[dict] = None  # computed once, only if a summary chip
+    summary_lookup: dict | None = None  # computed once, only if a summary chip
     for col in fields or []:
         # Virtual summary fields (reading time / counts) — always trial-level,
         # computed once from `_summary_rows`; routed to the "More" disclosure.
@@ -3359,17 +3353,17 @@ def render_single_trial_tab(
     canvas_height: int,
     base_font_size: int,
     font_family: str,
-    raw_gaze: Optional[pd.DataFrame] = None,
+    raw_gaze: pd.DataFrame | None = None,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
-    combos_all: Optional[pd.DataFrame] = None,
-    words_all: Optional[pd.DataFrame] = None,
-    fixations_all: Optional[pd.DataFrame] = None,
-    share_renderer: Optional[Callable[[], None]] = None,
+    combos_all: pd.DataFrame | None = None,
+    words_all: pd.DataFrame | None = None,
+    fixations_all: pd.DataFrame | None = None,
+    share_renderer: Callable[[], None] | None = None,
     # UX-25: renders the data-source picker into the "Filter by" row's first
     # column. Passed by ``app.main`` (which owns the source list + wizard hooks).
-    data_source_renderer: Optional[Callable[[object], None]] = None,
-    canvas_renderer: Optional[Callable[[Any], None]] = None,
+    data_source_renderer: Callable[[object], None] | None = None,
+    canvas_renderer: Callable[[Any], None] | None = None,
 ) -> None:
     """Render the main Scanpath Visualization screen (static + animated).
 
@@ -3880,7 +3874,7 @@ def render_single_trial_tab(
     # styles (cmp*_ keys) are already seeded — the A/B swatches then match the
     # figure exactly (CMP-3). Only shown when Compare is on.
     compare_participant, compare_trial = None, None
-    compare_source: Optional[SecondaryDataset] = None
+    compare_source: SecondaryDataset | None = None
     # Layout comes from the rail's Compare-config popover via session_state; an
     # animated comparison always co-animates on one clock, so force overlay then.
     # CMP-11: the cross-dataset *resolve* is NOT done here. It needs B's screen,
@@ -4093,7 +4087,7 @@ def render_single_trial_tab(
     # CMP-8 §3: two corpora rarely ship the same columns, and a bare concat of
     # disjoint frames warns and churns dtypes — align onto the union first. The
     # shared numeric set feeds the §5.4 metric gate below.
-    shared_numeric: Optional[frozenset[str]] = None
+    shared_numeric: frozenset[str] | None = None
     if comparing and compare_meta is not None:
         words_a, words_b, _ = _align_compare_columns(trial_words, compare_meta["words"])
         fix_a, fix_b, shared_fix = _align_compare_columns(
@@ -4413,14 +4407,13 @@ def render_single_trial_tab(
         tab_align = by_label.get(SUBTAB_LINE_ASSIGNMENT)
         tab_export = by_label[SUBTAB_EXPORT]
         tab_share = by_label[SUBTAB_SHARE]
-    with tab_annot:
-        with st.container(key="tutorial_annotations"):
-            render_trial_annotations(
-                selected_participant,
-                selected_trial,
-                screen_id=selected_screen,
-                bare=True,
-            )
+    with tab_annot, st.container(key="tutorial_annotations"):
+        render_trial_annotations(
+            selected_participant,
+            selected_trial,
+            screen_id=selected_screen,
+            bare=True,
+        )
     with tab_stim:
         _render_paragraph_panel(trial_words, trial_fixations=trial_fixations, bare=True)
     with tab_compare:
@@ -4498,15 +4491,14 @@ def render_single_trial_tab(
                     compare_export=compare_export_sides,
                 )
 
-    with tab_share:
-        # The former header Share popover, now a subtab. app.main passes the
-        # renderer (it owns the deep-link builder + data source). Keyed wrapper →
-        # the spotlight target for the publication-figure tutorial (UX-40).
-        with st.container(key="tutorial_share"):
-            if share_renderer is not None:
-                share_renderer()
-            else:
-                st.caption("Sharing is unavailable in this context.")
+    # The former header Share popover, now a subtab. app.main passes the
+    # renderer (it owns the deep-link builder + data source). Keyed wrapper →
+    # the spotlight target for the publication-figure tutorial (UX-40).
+    with tab_share, st.container(key="tutorial_share"):
+        if share_renderer is not None:
+            share_renderer()
+        else:
+            st.caption("Sharing is unavailable in this context.")
 
     # Save & restore (plot config + annotations) is rendered by app.main on every
     # view (it must stay reachable when a non-Scanpath view is active), sourcing
@@ -4655,7 +4647,7 @@ def _render_comparison_figure(
     fixations_filtered: pd.DataFrame,
     selected_participant: str,
     selected_trial: str,
-    selected_text: Optional[str],
+    selected_text: str | None,
     compare_participant: str,
     compare_trial: str,
     settings: FigureSettings,
@@ -4663,8 +4655,8 @@ def _render_comparison_figure(
     layout: str = "overlay",
     compare_stimulus: str = "both",
     fix_index_range=None,
-    compare_meta: Optional[dict] = None,
-    shared_numeric: Optional[frozenset[str]] = None,
+    compare_meta: dict | None = None,
+    shared_numeric: frozenset[str] | None = None,
     setup_note: str = "",
 ):
     """Render comparison figure for two trials.
@@ -4697,7 +4689,7 @@ def _render_comparison_figure(
     # whole frame is fine — make_comparison_figure only extracts the two trials.
     fixations_filtered = _slice_fix_range(fixations_filtered, fix_index_range)
 
-    def _lookup_text_id(participant_id: str, trial_id: str) -> Optional[str]:
+    def _lookup_text_id(participant_id: str, trial_id: str) -> str | None:
         match = combos[
             (combos["participant_id"] == participant_id)
             & (combos["trial_id"] == trial_id)
@@ -4991,7 +4983,7 @@ def _pretty_col(col: str) -> str:
 
 def _measure_picker(
     words, fixations, *, key, host=None, per_word_only=False, label="Measure"
-) -> Optional["Measure"]:
+) -> Measure | None:
     """The shared measure picker (AN-23) — TFD default, only present columns."""
     host = host or st
     ms = available_measures(words, fixations, per_word_only=per_word_only)
@@ -5059,7 +5051,7 @@ _OPEN_TRIAL_LABEL = ":material/open_in_new: Open"
 
 
 def _render_trials_with_open_button(
-    trials: pd.DataFrame, participant: Optional[str], *, key: str
+    trials: pd.DataFrame, participant: str | None, *, key: str
 ) -> None:
     """A per-trial summary table whose rows open the trial (ENG-36).
 
@@ -5157,7 +5149,7 @@ _FILTER_SET_FIELDS = (
 _META_FIELD_PREFIX = "meta:"
 
 
-def _meta_field_name(option: str) -> Optional[str]:
+def _meta_field_name(option: str) -> str | None:
     """The metadata field behind a picker option, or ``None`` for a real column."""
     if isinstance(option, str) and option.startswith(_META_FIELD_PREFIX):
         return option[len(_META_FIELD_PREFIX) :]
@@ -5380,7 +5372,7 @@ def _warn_word_only_group_fields(host, fixations, *specs) -> None:
         )
 
 
-def _text_column(frame: pd.DataFrame) -> Optional[str]:
+def _text_column(frame: pd.DataFrame) -> str | None:
     """Canonical text/passage id column, if any."""
     for col in ("unique_text_id", "text_id", "unique_paragraph_id", "paragraph_id"):
         if col in frame.columns:
@@ -5399,7 +5391,7 @@ def render_corpus_analysis_tab(
     viz_settings: dict,
     line_spacing: float = DEFAULT_LINE_SPACING,
     scale_text_to_boxes: bool = True,
-    canvas_renderer: Optional[Callable[[Any], None]] = None,
+    canvas_renderer: Callable[[Any], None] | None = None,
 ) -> None:
     """Corpus Analysis tab — question-oriented analysis sections.
 
@@ -5565,7 +5557,7 @@ def _participant_picker(words, fixations, *, key, host=None, label="Reader"):
     return None
 
 
-def _percentile(series: pd.Series, value) -> Optional[float]:
+def _percentile(series: pd.Series, value) -> float | None:
     s = pd.to_numeric(series, errors="coerce").dropna()
     if s.empty or value is None or pd.isna(value):
         return None
@@ -6945,7 +6937,7 @@ def _n_readings(fix: pd.DataFrame) -> int:
     readings into one "generation"; the panels say so instead of drawing the
     concatenation as if it were one scanpath."""
     if {"participant_id", "trial_id"} <= set(fix.columns):
-        return int(len(fix[["participant_id", "trial_id"]].drop_duplicates()))
+        return len(fix[["participant_id", "trial_id"]].drop_duplicates())
     return 1
 
 
@@ -7385,7 +7377,7 @@ def render_multiple_comparison_tab(
 # -----------------------------------------------------------------------------
 
 
-def _render_raw_table(df: pd.DataFrame, caption: Optional[str] = None) -> None:
+def _render_raw_table(df: pd.DataFrame, caption: str | None = None) -> None:
     """Render one of the raw Data Inspection tables, whole.
 
     ``lazy=True`` (ENG-36 — Streamlit 1.61) replaced a hand-rolled pager: a
@@ -7787,7 +7779,7 @@ _REMAP_VALIDATORS = {
 }
 
 
-def _active_stored_dataset() -> Optional[tuple]:
+def _active_stored_dataset() -> tuple | None:
     """``(name, entry)`` for the active source when it's a stored upload, else
     ``None`` — gates the editable remap form to stored datasets only."""
     name = st.session_state.get("data_source_choice")
@@ -8040,7 +8032,7 @@ def _render_dataset_rename() -> None:
         getattr(st, kind)(message)
 
 
-def _remap_proposed(schema: Optional[dict], frame_columns, canon: dict) -> dict:
+def _remap_proposed(schema: dict | None, frame_columns, canon: dict) -> dict:
     """Seed the remap editor from the stored schema: each field the dataset had
     mapped → its canonical column (present in the now-normalized frame), else
     ``None``. The word box (canon ``_WORD_REMAP_CANON``) always seeds its four
@@ -8410,7 +8402,7 @@ def _c_derived_tables(
     words_fingerprint,
     fixations_fingerprint,
     raw_gaze_fingerprint,
-    pixels_per_degree_value: Optional[float],
+    pixels_per_degree_value: float | None,
 ) -> dict:
     """The six PRE-11/12/15/19 + AN-30 derived tables, built once per dataset.
 

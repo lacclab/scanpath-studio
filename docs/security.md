@@ -390,12 +390,13 @@ middle of the frame is never sampled. This is not a probabilistic hash collision
 — it is structural:
 
 ```python
-a = pd.DataFrame({"participant_id": [f"p{i}" for i in range(300)],
-                  "duration_ms": list(range(300))})
+a = pd.DataFrame(
+    {"participant_id": [f"p{i}" for i in range(300)], "duration_ms": list(range(300))}
+)
 b = a.copy()
-b.loc[150, "duration_ms"] = 999999      # one cell, in the middle
+b.loc[150, "duration_ms"] = 999999  # one cell, in the middle
 
-frame_fingerprint(a) == frame_fingerprint(b)   # -> True
+frame_fingerprint(a) == frame_fingerprint(b)  # -> True
 ```
 
 Any table of **129 rows or more** whose change falls outside the first and last

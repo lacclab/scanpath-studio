@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import math
 import re
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -27,7 +27,6 @@ from .constants import (
     DEFAULT_SACCADE_WIDTH,
     DEMO_CHOICE,
     FIXATION_SYMBOLS,
-    drift_correction_enabled,
     HIGHLIGHTED_TEXT_COLOR,
     OUT_OF_TEXT_COLOR,
     PALETTES,
@@ -42,6 +41,7 @@ from .constants import (
     UNIFORM_COLOR_FIELD,
     WORD_LABEL_COLOR,
     compare_palette_color,
+    drift_correction_enabled,
     palette_settings,
 )
 from .data import frame_fingerprint
@@ -110,7 +110,7 @@ def _plain(text: str) -> str:
     return _MD_MARKS.sub("", text).strip()
 
 
-def _row_label(host, label: str, help: Optional[str]) -> None:
+def _row_label(host, label: str, help: str | None) -> None:
     """Render one row's title into its own (left) column — see the UX-51 note.
 
     ``help`` folds into the title's own hover tooltip rather than getting a `?`
@@ -145,8 +145,8 @@ def _labeled(
     kind: str,
     label: str,
     *,
-    display: Optional[str] = None,
-    help: Optional[str] = None,
+    display: str | None = None,
+    help: str | None = None,
     **kwargs,
 ):
     """Render one control as a ``label | field`` row; return the widget's value.
@@ -223,7 +223,7 @@ def _shadow_key_missing(*keys: str) -> bool:
 _INT_NUMBER_FORMATS = frozenset({"%d", "%u", "%i"})
 
 
-def _number_box_format(fmt: Optional[str], *values) -> Optional[str]:
+def _number_box_format(fmt: str | None, *values) -> str | None:
     """Adapt a slider's ``format`` for the number box beside it.
 
     ``st.number_input`` renders a yellow "value below has type float, but format
@@ -245,14 +245,14 @@ def _numeric_slider(
     min_value,
     max_value,
     step=None,
-    slider_format: Optional[str] = None,
-    number_format: Optional[str] = None,
-    help: Optional[str] = None,
+    slider_format: str | None = None,
+    number_format: str | None = None,
+    help: str | None = None,
     disabled: bool = False,
     on_change=None,
-    persist_state: Optional[str] = None,
+    persist_state: str | None = None,
     label_left: bool = False,
-    display: Optional[str] = None,
+    display: str | None = None,
 ) -> None:
     """A single-value slider plus a number box bound to the same setting.
 
@@ -328,14 +328,14 @@ def _range_slider(
     min_value,
     max_value,
     step=None,
-    slider_format: Optional[str] = None,
-    number_format: Optional[str] = None,
-    help: Optional[str] = None,
+    slider_format: str | None = None,
+    number_format: str | None = None,
+    help: str | None = None,
     disabled: bool = False,
     on_change=None,
-    persist_state: Optional[str] = None,
+    persist_state: str | None = None,
     label_left: bool = False,
-    display: Optional[str] = None,
+    display: str | None = None,
 ) -> None:
     """A two-handle range slider plus min/max number boxes, all on one line.
 
@@ -408,7 +408,7 @@ _UPLOAD_IMAGE_MIME = {
 }
 
 
-def _uploaded_image_data_uri(uploaded) -> Optional[str]:
+def _uploaded_image_data_uri(uploaded) -> str | None:
     """Base64 ``data:`` URI for a Streamlit ``UploadedFile`` image, or ``None``.
 
     Cached in session state keyed by the file's id so a multi-MB screenshot is
@@ -470,7 +470,7 @@ def _mode_gate(
     )
 
 
-def _gated_help(base: Optional[str], reason: str) -> Optional[str]:
+def _gated_help(base: str | None, reason: str) -> str | None:
     """Prefix ``reason`` (from :func:`_mode_gate`) onto a control's help text."""
     if not reason:
         return base
@@ -665,7 +665,7 @@ def _render_fixclass_category(
     key_prefix: str,
     label: str,
     *,
-    threshold_label: Optional[str] = None,
+    threshold_label: str | None = None,
     disabled: bool = False,
     reason: str = "",
 ) -> None:
@@ -752,7 +752,7 @@ def _render_fixation_cleaning(*, disabled: bool = False, reason: str = "") -> No
         )
 
 
-def _collect_fixation_flags() -> Dict:
+def _collect_fixation_flags() -> dict:
     """Build the ``fixation_flags`` dict the figure builder consumes from the
     ``global_fixclass_*`` session keys (PRE-2). One entry per category; ``oob`` has
     no threshold."""
@@ -835,7 +835,7 @@ _ILLUSTRATION_OVERRIDE_KEYS = (
 )
 _PRE_ILLUSTRATION_STATE = "_quick_view_pre_illustration"
 
-_VIEW_PRESETS: Dict[str, Dict[str, object]] = {
+_VIEW_PRESETS: dict[str, dict[str, object]] = {
     "scanpath": {
         "global_show_fix": True,
         "global_show_saccades": True,
@@ -941,7 +941,7 @@ def _apply_view_preset(name: str) -> None:
         ss[key] = value
 
 
-def _active_quick_view() -> Optional[str]:
+def _active_quick_view() -> str | None:
     """Return the quick-view preset whose owned values match current state.
 
     Illustration is deliberately checked before Scanpath: its layer set is a
@@ -969,7 +969,7 @@ _PALETTE_STATE_KEYS = {
 }
 
 
-def palette_state(name: str) -> Dict:
+def palette_state(name: str) -> dict:
     """The ``session_state`` writes that applying palette ``name`` performs."""
     settings = palette_settings(name)
     state = {
@@ -1006,7 +1006,7 @@ def _palette_match_key(value):
     return value.lower() if isinstance(value, str) and value.startswith("#") else value
 
 
-def _active_palette() -> Optional[str]:
+def _active_palette() -> str | None:
     """Which palette the live colour keys match, or ``None`` once customized.
 
     The VIZ-12 rule applied to VIZ-18: a palette is one-way (it writes the
@@ -1074,7 +1074,7 @@ _TRIAL_MAPPING_HELP = (
 # ``data.normalize_words``, so the returned schema still carries all eight keys.
 BOX_FORMAT_EDGES = "Edges"
 BOX_FORMAT_ORIGIN = "Origin + size"
-_BOX_SUBFIELDS: Dict[str, List[tuple]] = {
+_BOX_SUBFIELDS: dict[str, list[tuple]] = {
     BOX_FORMAT_EDGES: [
         ("left", "Box left"),
         ("right", "Box right"),
@@ -1091,7 +1091,7 @@ _BOX_SUBFIELDS: Dict[str, List[tuple]] = {
 _ALL_BOX_KEYS = [key for fields in _BOX_SUBFIELDS.values() for key, _ in fields]
 
 
-def _default_box_format(proposed: Dict[str, Optional[str]]) -> str:
+def _default_box_format(proposed: dict[str, str | None]) -> str:
     """Which box encoding to show first, from what auto-detect found.
 
     Edges if all four edge columns were detected, else origin+size if those four
@@ -1119,7 +1119,7 @@ _ADVANCED_MAPPING_KEYS = frozenset(
     }
 )
 
-WORD_FIELD_SPECS: List[Dict] = [
+WORD_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
@@ -1196,7 +1196,7 @@ WORD_FIELD_SPECS: List[Dict] = [
     },
 ]
 
-FIX_FIELD_SPECS: List[Dict] = [
+FIX_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
@@ -1303,7 +1303,7 @@ FIX_FIELD_SPECS: List[Dict] = [
     # with no UI to undo); saccade_amplitude is recomputed from X/Y by measures.
 ]
 
-RAW_GAZE_FIELD_SPECS: List[Dict] = [
+RAW_GAZE_FIELD_SPECS: list[dict] = [
     {
         "key": "participant",
         "label": "Participant ID",
@@ -1359,14 +1359,14 @@ RAW_GAZE_FIELD_SPECS: List[Dict] = [
 
 def _assemble_mapping(
     df: pd.DataFrame,
-    field_specs: List[Dict],
-    proposed: Dict[str, Optional[str]],
-    only_keys: Optional[List[str]],
+    field_specs: list[dict],
+    proposed: dict[str, str | None],
+    only_keys: list[str] | None,
     *,
-    pick: Callable[..., Optional[str]],
-    pick_box_format: Callable[[Dict], str],
-    pick_multi: Callable[..., List[str]],
-) -> Dict[str, Optional[str]]:
+    pick: Callable[..., str | None],
+    pick_box_format: Callable[[dict], str],
+    pick_multi: Callable[..., list[str]],
+) -> dict[str, str | None]:
     """Build the schema dict, deferring every *choice* to the caller.
 
     The **shape** of a mapping — which keys exist, that a ``kind: "box"`` field
@@ -1380,7 +1380,7 @@ def _assemble_mapping(
     as the app quietly normalizing under a different mapping than the one the
     user can see.
     """
-    mapping: Dict[str, Optional[str]] = {}
+    mapping: dict[str, str | None] = {}
     for spec in field_specs:
         key = spec["key"]
         # When ``only_keys`` is given, handle just that subset (the wizard
@@ -1425,9 +1425,9 @@ def _mapped_columns_key(state_key_prefix: str) -> str:
     return f"_mapped_columns_{state_key_prefix}"
 
 
-def _mapping_state_keys(state_key_prefix: str, field_specs: List[Dict]) -> List[str]:
+def _mapping_state_keys(state_key_prefix: str, field_specs: list[dict]) -> list[str]:
     """Every session key the mapping widgets for ``field_specs`` write."""
-    keys: List[str] = []
+    keys: list[str] = []
     for spec in field_specs:
         if spec.get("kind") == "box":
             keys.append(f"{state_key_prefix}_box_format")
@@ -1438,7 +1438,7 @@ def _mapping_state_keys(state_key_prefix: str, field_specs: List[Dict]) -> List[
 
 
 def forget_mapping_for_other_table(
-    df: pd.DataFrame, state_key_prefix: str, field_specs: List[Dict]
+    df: pd.DataFrame, state_key_prefix: str, field_specs: list[dict]
 ) -> None:
     """Drop a stored mapping that was made for a *different* table (DATA-24).
 
@@ -1479,11 +1479,14 @@ def forget_mapping_for_other_table(
         stored = st.session_state.get(key)
         if isinstance(stored, str) and stored != NONE_OPTION and stored in columns:
             continue
-        if isinstance(stored, (list, tuple)):
-            # The multi-capable Trial ID. Keep a composite whose every component
-            # survived; a partial one is not a mapping the user can have meant.
-            if stored and all(column in columns for column in stored):
-                continue
+        # The multi-capable Trial ID. Keep a composite whose every component
+        # survived; a partial one is not a mapping the user can have meant.
+        if (
+            isinstance(stored, (list, tuple))
+            and stored
+            and all(column in columns for column in stored)
+        ):
+            continue
         # The box *format* is a property of the table (which four columns it
         # has), not a preference, so it is re-derived from the new proposal.
         st.session_state.pop(key, None)
@@ -1492,10 +1495,10 @@ def forget_mapping_for_other_table(
 def resolve_column_mapping(
     df: pd.DataFrame,
     state_key_prefix: str,
-    field_specs: List[Dict],
-    proposed: Dict[str, Optional[str]],
-    only_keys: Optional[List[str]] = None,
-) -> Dict[str, Optional[str]]:
+    field_specs: list[dict],
+    proposed: dict[str, str | None],
+    only_keys: list[str] | None = None,
+) -> dict[str, str | None]:
     """The mapping :func:`column_mapping_ui` *would* return, without rendering it.
 
     **DATA-26.** The column-mapping editor used to live in a menu popover, which
@@ -1519,7 +1522,7 @@ def resolve_column_mapping(
     forget_mapping_for_other_table(df, state_key_prefix, field_specs)
     columns = set(df.columns)
 
-    def _stored(field_key: str) -> Optional[str]:
+    def _stored(field_key: str) -> str | None:
         value = st.session_state.get(f"{state_key_prefix}_{field_key}")
         if value == NONE_OPTION:
             return None
@@ -1529,14 +1532,14 @@ def resolve_column_mapping(
         fallback = proposed.get(field_key)
         return fallback if fallback in columns else None
 
-    def _pick(field_key: str, _label, _help=None) -> Optional[str]:
+    def _pick(field_key: str, _label, _help=None) -> str | None:
         return _stored(field_key)
 
     def _pick_box_format(_spec) -> str:
         fmt = st.session_state.get(f"{state_key_prefix}_box_format")
         return fmt if fmt in _BOX_SUBFIELDS else _default_box_format(proposed)
 
-    def _pick_multi(spec, default, _label) -> List[str]:
+    def _pick_multi(spec, default, _label) -> list[str]:
         stored = st.session_state.get(f"{state_key_prefix}_{spec['key']}")
         if isinstance(stored, (list, tuple)):
             valid = [c for c in stored if c in columns]
@@ -1559,16 +1562,16 @@ def column_mapping_ui(
     df: pd.DataFrame,
     table_label: str,
     state_key_prefix: str,
-    field_specs: List[Dict],
-    proposed: Dict[str, Optional[str]],
+    field_specs: list[dict],
+    proposed: dict[str, str | None],
     expand_on_problem: bool = True,
-    problems: Optional[List[str]] = None,
+    problems: list[str] | None = None,
     container=None,
     use_expander: bool = True,
-    only_keys: Optional[List[str]] = None,
+    only_keys: list[str] | None = None,
     header: bool = True,
     detected_label: str = "auto-detected",
-) -> Dict[str, Optional[str]]:
+) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
     Renders in the sidebar by default; pass ``container`` (e.g. a main-area
@@ -1594,7 +1597,7 @@ def column_mapping_ui(
     # asks for a subset (`only_keys`) — that is the wizard, which already groups
     # these fields into its own ordered steps (DATA-22).
     group_advanced = only_keys is None
-    hosts: Dict[str, object] = {}
+    hosts: dict[str, object] = {}
 
     def _host_for(field_key: str):
         """The container a field's row renders into (main, or Advanced)."""
@@ -1617,7 +1620,7 @@ def column_mapping_ui(
         _row_label(label_col, field_label, help_text)
         return field_col, note_col
 
-    def _selectbox(field_key: str, field_label: str, help_text=None) -> Optional[str]:
+    def _selectbox(field_key: str, field_label: str, help_text=None) -> str | None:
         default = proposed.get(field_key)
         index = options.index(default) if default in options else 0
         field_col, note_col = _row(field_key, field_label, help_text)
@@ -1701,7 +1704,7 @@ def column_mapping_ui(
                 "empty otherwise."
             )
 
-        def _render_box_format(spec: Dict) -> str:
+        def _render_box_format(spec: dict) -> str:
             fmt_key = f"{state_key_prefix}_box_format"
             if fmt_key not in st.session_state:
                 # Seed via session state (no `index=`) so it survives reruns
@@ -1722,7 +1725,7 @@ def column_mapping_ui(
                 persist_state="session",
             )
 
-        def _render_multi(spec: Dict, default, label: str) -> List[str]:
+        def _render_multi(spec: dict, default, label: str) -> list[str]:
             state_key = f"{state_key_prefix}_{spec['key']}"
             proposed_default = [default] if default in df.columns else []
             stored = st.session_state.get(state_key)
@@ -1804,7 +1807,7 @@ def data_dictionary_help_text() -> str:
 # Field-option helpers — shared by the sidebar selectors and the plot-config
 # restore path (`app._restore_plot_config`) so both agree on what's valid for
 # the current data.
-def color_field_options(trial_fixations: pd.DataFrame) -> List[str]:
+def color_field_options(trial_fixations: pd.DataFrame) -> list[str]:
     """Columns offered in the 'Color fixations by' selector — a preferred order
     intersected with what's present, falling back to ``['duration_ms']``."""
     preferred_color_fields = [
@@ -1838,8 +1841,8 @@ def color_field_options(trial_fixations: pd.DataFrame) -> List[str]:
 
 
 def hover_field_options(
-    frame: Optional[pd.DataFrame], *, words: bool = False
-) -> List[str]:
+    frame: pd.DataFrame | None, *, words: bool = False
+) -> list[str]:
     """Scalar columns that can be added to a VIZ-26 hover tooltip."""
     if frame is None or frame.empty:
         return []
@@ -1869,14 +1872,14 @@ def hover_field_options(
     available = list(frame.columns)
     if words and {"x", "y", "height"} <= set(frame.columns):
         available.append("line_idx")  # geometry-derived in plots._add_word_label_trace
-    result: List[str] = []
+    result: list[str] = []
     for column in [*preferred, *available]:
         if column in available and column != "image_path" and column not in result:
             result.append(column)
     return result
 
 
-def numeric_field_options(trial_fixations: pd.DataFrame) -> List[str]:
+def numeric_field_options(trial_fixations: pd.DataFrame) -> list[str]:
     """Numeric columns offered as X/Y axis fields."""
     return [
         col
@@ -1891,7 +1894,7 @@ def numeric_field_options(trial_fixations: pd.DataFrame) -> List[str]:
 _PREFERRED_HIGHLIGHT_FIELDS = ["is_in_aspan", "is_in_dspan"]
 
 
-def highlight_column_options(words: Optional[pd.DataFrame]) -> List[str]:
+def highlight_column_options(words: pd.DataFrame | None) -> list[str]:
     """Boolean word columns offered in the 'Highlight words by' selector.
 
     The OneStop answer/distractor spans lead, followed by any other boolean
@@ -1942,7 +1945,7 @@ def _clamp_range(state_key: str, lo: float, hi: float) -> None:
     st.session_state[state_key] = (min(a, b), max(a, b))
 
 
-def _clamped_pair(val, lo: float, hi: float) -> Optional[tuple]:
+def _clamped_pair(val, lo: float, hi: float) -> tuple | None:
     """Pure twin of ``_clamp_range``: clamp a stored ``(min, max)`` into ``[lo,
     hi]`` and return it, or ``None`` for a malformed/missing value — WITHOUT
     touching session_state. Used by ``_collect_viz_settings`` (the non-rendering
@@ -1989,8 +1992,8 @@ def render_pattern_input(
     key: str,
     fields: dict,
     *,
-    help: Optional[str] = None,
-    placeholder: Optional[str] = None,
+    help: str | None = None,
+    placeholder: str | None = None,
     label_left: bool = False,
 ) -> str:
     """A pattern text box with live validation and a rendered preview.
@@ -2216,7 +2219,7 @@ def _collect_compare_styles() -> tuple[dict, dict]:
     return styles[0], styles[1]
 
 
-def _fix_range_max(fixations: Optional[pd.DataFrame]) -> int:
+def _fix_range_max(fixations: pd.DataFrame | None) -> int:
     """Highest 1-based fixation index in ``fixations`` (0 when none)."""
     if (
         fixations is None
@@ -2228,7 +2231,7 @@ def _fix_range_max(fixations: Optional[pd.DataFrame]) -> int:
     return int(top) if pd.notna(top) else 0
 
 
-def _fix_range_trial_key(fixations: Optional[pd.DataFrame]) -> Optional[tuple]:
+def _fix_range_trial_key(fixations: pd.DataFrame | None) -> tuple | None:
     """Identity of the trial the window slider is sizing, or ``None`` if unclear.
 
     Used only to notice a *trial change*; a frame that isn't a single trial (or
@@ -2248,7 +2251,7 @@ def _fix_range_trial_key(fixations: Optional[pd.DataFrame]) -> Optional[tuple]:
     return tuple(parts) or None
 
 
-def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
+def _render_fix_range_slider(fixations: pd.DataFrame | None) -> None:
     """Render the VIZ-7 fixation-index window slider (``single_fix_range``).
 
     The slider value persists across trial changes (which shift ``max_fix``), so
@@ -2352,8 +2355,8 @@ def _render_fix_range_slider(fixations: Optional[pd.DataFrame]) -> None:
 def _seed_viz_state(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
-    words: Optional[pd.DataFrame],
-) -> tuple[List[str], List[str], List[str]]:
+    words: pd.DataFrame | None,
+) -> tuple[list[str], list[str], list[str]]:
     """Seed every viz widget's session_state default (pure — renders nothing).
 
     Both ``sidebar_controls`` (which renders the widgets) and
@@ -2439,11 +2442,11 @@ def _seed_viz_state(
 
 def _collect_viz_settings(
     trial_fixations: pd.DataFrame,
-    words: Optional[pd.DataFrame],
+    words: pd.DataFrame | None,
     *,
-    numeric_fields: Optional[List[str]] = None,
-    highlight_options: Optional[List[str]] = None,
-) -> Dict:
+    numeric_fields: list[str] | None = None,
+    highlight_options: list[str] | None = None,
+) -> dict:
     """Build the viz-settings dict from session_state (pure — renders nothing).
 
     The single source of truth for the dict the figure builders consume, so the
@@ -2675,8 +2678,8 @@ def _collect_viz_settings(
 def viz_settings_from_state(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
-    words: Optional[pd.DataFrame] = None,
-) -> Dict:
+    words: pd.DataFrame | None = None,
+) -> dict:
     """Resolve the viz-settings dict from session_state WITHOUT rendering widgets.
 
     Used by the views that consume the settings but don't host the controls — the
@@ -2699,10 +2702,10 @@ def corpus_style_controls(
     trial_fixations: pd.DataFrame,
     base_font_size: int,
     *,
-    words: Optional[pd.DataFrame] = None,
+    words: pd.DataFrame | None = None,
     host=None,
     canvas_renderer=None,
-) -> Dict:
+) -> dict:
     """Focused, shared-key styling controls for Corpus Analysis (AN-29).
 
     Corpus figures intentionally expose only the palette channels they consume;
@@ -2790,10 +2793,10 @@ def sidebar_controls(
     host=None,
     has_raw_gaze: bool = False,
     has_stimulus_image: bool = False,
-    words: Optional[pd.DataFrame] = None,
-    fix_range_fixations: Optional[pd.DataFrame] = None,
+    words: pd.DataFrame | None = None,
+    fix_range_fixations: pd.DataFrame | None = None,
     canvas_renderer=None,
-) -> Dict:
+) -> dict:
     """Render the visualization controls and return the resolved settings dict.
 
     Layout (VIZ-31 / UX-44 — grouped so the rail reads by category):
@@ -4082,7 +4085,7 @@ def sidebar_controls(
 @st.cache_data(show_spinner=False)
 def _participant_options(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
-) -> List[str]:
+) -> list[str]:
     return sorted(
         set(_words["participant_id"].dropna().astype(str))
         | set(_fixations["participant_id"].dropna().astype(str))
@@ -4090,7 +4093,7 @@ def _participant_options(
 
 
 @st.cache_data(show_spinner=False)
-def _column_unique_strs(_df: pd.DataFrame, column: str, cache_key) -> List[str]:
+def _column_unique_strs(_df: pd.DataFrame, column: str, cache_key) -> list[str]:
     if column not in _df.columns:
         return []
     # Drop missing values, including the literal "nan" a string-coerced optional
@@ -4193,7 +4196,7 @@ def _bool_metadata_filter(
 
 def _bool_filter_narrowing(
     col: str, df: pd.DataFrame, true_label: str, false_label: str, key: str
-) -> Optional[set]:
+) -> set | None:
     """The set of raw bool values to keep for a boolean metadata column, read
     from its widget key — or None when absent / fewer than two classes / the user
     kept everything (no narrowing). The read-side twin of ``_bool_metadata_filter``."""
@@ -4248,7 +4251,7 @@ _DEFAULT_FILTER_FIELDS = [
 ]
 
 
-_EMPTY_TRIAL_FILTERS: Dict = {
+_EMPTY_TRIAL_FILTERS: dict = {
     "participants": None,
     "metadata": {},
     # UX-49: column → (lo, hi) for the numeric trial-level range filters. Kept
@@ -4273,7 +4276,7 @@ _EMPTY_TRIAL_FILTERS: Dict = {
 FILTER_PREFIXES: tuple = ("", "cmp")
 
 
-def read_trial_filters(prefix: str = "") -> Dict:
+def read_trial_filters(prefix: str = "") -> dict:
     """The trial-filter selections to apply this run.
 
     ``prefix`` scopes the whole filter layer to one instance (CMP-8 §5.2). The
@@ -4471,12 +4474,12 @@ def _trial_level_columns(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
     return level
 
 
-def _chip_field_options(words, fixations, trial_level: set) -> List[str]:
+def _chip_field_options(words, fixations, trial_level: set) -> list[str]:
     """Pickable chip fields: participant + a text id + the data's *trial-level*
     columns + the computed summary fields. Non-trial-level columns (per-word /
     per-fixation) are intentionally excluded — a single chip value for them would
     be misleading."""
-    cols: List[str] = []
+    cols: list[str] = []
 
     def add(c: str) -> None:
         if c and c not in cols:
@@ -4508,7 +4511,7 @@ def _chip_option_label(col: str) -> str:
     return col.replace("_", " ").strip().capitalize()
 
 
-def _default_chip_fields(available: List[str]) -> List[str]:
+def _default_chip_fields(available: list[str]) -> list[str]:
     text_col = next((c for c in _CHIP_TEXT_ID_COLS if c in available), None)
     wanted = (
         ["participant_id"]
@@ -4555,8 +4558,8 @@ def render_trial_chip_picker(
 
     # Display labels must be unique to stay invertible: some fields humanize to the
     # same text (e.g. two text-id columns both read "Text"), so disambiguate.
-    label_to_key: Dict[str, str] = {}
-    key_to_label: Dict[str, str] = {}
+    label_to_key: dict[str, str] = {}
+    key_to_label: dict[str, str] = {}
     for key in available:
         base = _chip_option_label(key)
         label = base if base not in label_to_key else f"{base} ({key})"
@@ -4731,7 +4734,7 @@ def _range_filter_key(col: str, prefix: str = "") -> str:
 
 def _numeric_filter_fields(
     words: pd.DataFrame, fixations: pd.DataFrame
-) -> Dict[str, tuple]:
+) -> dict[str, tuple]:
     """UX-49: which of the offered filter fields render as a *range*, and over what.
 
     Maps column → ``(frame, lo, hi)``. The set of columns the panel offers does
@@ -4746,7 +4749,7 @@ def _numeric_filter_fields(
     values**: fewer, and there is no range to pick.
     """
     trial_level = cached_trial_level_columns(words, fixations)
-    fields: Dict[str, tuple] = {}
+    fields: dict[str, tuple] = {}
     for col in _filter_fields_for(words, fixations):
         if col not in trial_level:
             continue
@@ -4864,8 +4867,8 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
     attached = active_participant_metadata()
     if attached is None or not attached.fields:
         return None, ()
-    selections: Dict[str, list] = {}
-    ranges: Dict[str, tuple] = {}
+    selections: dict[str, list] = {}
+    ranges: dict[str, tuple] = {}
     keys: list = []
     for field in attached.fields:
         key = metadata_filter_key(field.name, prefix)
@@ -4890,7 +4893,7 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
 
 def _compute_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
-) -> Dict:
+) -> dict:
     """Derive the narrowing filter result from the live filter-widget values.
 
     Reads the widget keys (filter_participants / filter_<col> / filter_favorites /
@@ -4900,7 +4903,7 @@ def _compute_trial_filters(
     it also runs at the end of that function for no-change runs. Only narrowing
     selections feed the result.
     """
-    result: Dict = {
+    result: dict = {
         "participants": None,
         "metadata": {},
         "ranges": {},
@@ -5079,7 +5082,7 @@ def render_narrow_by(
 
 def render_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = "", host=None
-) -> Dict:
+) -> dict:
     """Render the trial-filter controls into ``host`` and persist the selections.
 
     Lets the user narrow the trial pool by participant and by categorical

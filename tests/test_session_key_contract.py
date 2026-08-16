@@ -126,7 +126,7 @@ def test_share_param_groups_match_frozen_mappings(group):
     param → session-key mapping is compared as a whole (a rewiring that keeps
     both names alive would round-trip the wrong value).
     """
-    import scanpath_studio.url_state as url_state
+    from scanpath_studio import url_state
 
     live = dict(getattr(url_state, f"_{group}"))
     frozen = dict(getattr(sk, group))
@@ -255,8 +255,8 @@ def test_deep_link_seeds_frozen_state_keys():
         sk.PARAM_TRIAL_ID: "t1",
         sk.PARAM_TAB: "animation",
         sk.PARAM_HIDE_FIXATION_NUMBERS: "1",
-        sk.PARAM_ONESTOP_VARIANT: list(ONESTOP_VARIANT_LABELS)[0],
-        sk.PARAM_ONESTOP_REGIME: list(ONESTOP_REGIME_LABELS)[0],
+        sk.PARAM_ONESTOP_VARIANT: next(iter(ONESTOP_VARIANT_LABELS)),
+        sk.PARAM_ONESTOP_REGIME: next(iter(ONESTOP_REGIME_LABELS)),
         sk.PARAM_ONESTOP_PARTS: ",".join(list(ONESTOP_PART_LABELS)[:2]),
         # CMP-8 §7. Both halves are needed: the reader requires `<pid>:<trial>`,
         # and without them the two keys they seed (`single_compare_toggle`,
@@ -356,8 +356,8 @@ def _share_query_app():
         "compare": {"participant_id": "p2", "trial_id": "t2"},
     }
     st.session_state[SINGLE_ANIMATE] = True
-    st.session_state[ONESTOP_VARIANT] = list(ONESTOP_VARIANT_LABELS)[0]
-    st.session_state[ONESTOP_REGIME] = list(ONESTOP_REGIME_LABELS)[0]
+    st.session_state[ONESTOP_VARIANT] = next(iter(ONESTOP_VARIANT_LABELS))
+    st.session_state[ONESTOP_REGIME] = next(iter(ONESTOP_REGIME_LABELS))
     st.session_state[ONESTOP_PARTS] = list(ONESTOP_PART_LABELS)[:2]
 
     query, caveats = _build_share_query(ONESTOP_PUBLIC_CHOICE)

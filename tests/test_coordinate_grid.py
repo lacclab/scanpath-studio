@@ -37,9 +37,7 @@ def test_auto_spacing_uses_nice_intervals_and_thins_overlapping_labels():
     ticks = plots.coordinate_grid_ticks(
         [0, 2560], [1440, 0], rendered_width=400, rendered_height=220
     )
-    scaled = ticks.major_spacing / 10 ** int(
-        math.floor(math.log10(ticks.major_spacing))
-    )
+    scaled = ticks.major_spacing / 10 ** math.floor(math.log10(ticks.major_spacing))
     assert scaled in {1.0, 2.0, 5.0, 10.0}
     dense = plots.coordinate_grid_ticks(
         [0, 1000], [500, 0], spacing=10, rendered_width=200, rendered_height=100

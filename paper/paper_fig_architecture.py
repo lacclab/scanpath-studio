@@ -9,6 +9,7 @@ Run from the app repo:  cd app && uv run python paper/paper_fig_architecture.py
 
 from __future__ import annotations
 
+import itertools
 import os
 from pathlib import Path
 
@@ -92,7 +93,7 @@ def main() -> None:
             BLUE_FILL,
             fs=10.5,
         )
-    for (cx1, w1, _), (cx2, w2, _) in zip(stages, stages[1:]):
+    for (cx1, w1, _), (cx2, w2, _) in itertools.pairwise(stages):
         arrow(ax, (cx1 + w1 / 2, row_y), (cx2 - w2 / 2, row_y))
 
     app_y, cli_y = 3.55, 0.62

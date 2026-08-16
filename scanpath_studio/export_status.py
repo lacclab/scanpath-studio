@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Optional
-
+from typing import Any
 
 EXPORTER_VERSION = "exp6-v1"
 
@@ -29,13 +29,13 @@ class ExportStatus:
 
     stage: ExportStage
     message: str
-    completed: Optional[int] = None
-    total: Optional[int] = None
+    completed: int | None = None
+    total: int | None = None
     elapsed_s: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
-    def fraction(self) -> Optional[float]:
+    def fraction(self) -> float | None:
         if self.completed is None or self.total is None or self.total <= 0:
             return None
         return min(max(self.completed / self.total, 0.0), 1.0)
@@ -45,14 +45,14 @@ StatusCallback = Callable[[ExportStatus], None]
 
 
 def emit_status(
-    callback: Optional[StatusCallback],
+    callback: StatusCallback | None,
     stage: ExportStage,
     message: str,
     *,
-    started_at: Optional[float] = None,
-    completed: Optional[int] = None,
-    total: Optional[int] = None,
-    error: Optional[str] = None,
+    started_at: float | None = None,
+    completed: int | None = None,
+    total: int | None = None,
+    error: str | None = None,
 ) -> ExportStatus:
     """Validate and emit one status while remaining cheap when no UI listens."""
     if (completed is None) != (total is None):

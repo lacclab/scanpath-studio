@@ -12,7 +12,6 @@ does not.
 from __future__ import annotations
 
 import os
-from typing import Tuple
 
 import pandas as pd
 from PIL import Image, ImageSequence
@@ -52,7 +51,7 @@ SHARED = dict(
 )
 
 
-def load_pair() -> Tuple[pd.DataFrame, pd.DataFrame, Tuple[float, float]]:
+def load_pair() -> tuple[pd.DataFrame, pd.DataFrame, tuple[float, float]]:
     words_raw, fix_raw = load_sample_data()
     words = normalize_words(words_raw, infer_word_schema(words_raw))
     fixations = normalize_fixations(fix_raw, infer_fix_schema(fix_raw))

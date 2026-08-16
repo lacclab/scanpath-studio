@@ -14,8 +14,8 @@ import resource
 import statistics
 import time
 import tracemalloc
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Callable
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -43,7 +43,7 @@ class Measurement:
 def _representative_figure(frame_count: int = 0) -> go.Figure:
     fig = go.Figure()
     for index, word in enumerate(
-        "A measured export should stay honest and useful".split()
+        ["A", "measured", "export", "should", "stay", "honest", "and", "useful"]
     ):
         x = 60 + index * 95
         fig.add_shape(

@@ -213,7 +213,7 @@ def test_schema_column_check_accepts_a_composite_trial_mapping():
     words_raw, fix_raw = data_module.load_sample_data()
     schema = api.propose_schema(words_raw, "words")
     schema["trial"] = ["participant_id", "TRIAL_INDEX"]
-    words, fixations = sps.load_scanpath_data(
+    words, _fixations = sps.load_scanpath_data(
         words=words_raw, fixations=fix_raw, word_schema=schema
     )
     assert (

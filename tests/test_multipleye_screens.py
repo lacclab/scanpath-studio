@@ -345,7 +345,7 @@ def test_question_aoi_matches_on_the_int_id_and_the_readers_version(screens_root
     )
     assert aoi["page"].astype(str).str.contains(f"question_{Q1:05d}").any()
 
-    words, fixations = datasets.load_multipleye(screens_root)
+    words, _fixations = datasets.load_multipleye(screens_root)
     for reader in (READER_A, READER_B):
         assert f"question_{Q1}" in set(
             words[words["participant_id"] == reader]["screen_id"]

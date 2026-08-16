@@ -93,6 +93,105 @@ include = ["scanpath_studio"]
     "sample_data/images/*.csv",
 ]
 
+[tool.ruff]
+# Vendored third-party visualisations; not ours to restyle.
+extend-exclude = ["other_vis"]
+
+[tool.ruff.lint]
+# WHY THIS SECTION EXISTS. The repo had no ruff config at all, so `ruff check`
+# ran on whatever that release happened to enable by default. Ruff 0.16 expanded
+# that default from a handful of rules to 413, and CI — which installs ruff
+# unpinned — went from green to 1,678 errors overnight without a line of our
+# code changing. Those rules are adopted rather than reverted; what follows is
+# the short list we decline, each with its reason.
+#
+# Deliberately no `select`: ruff's default set is what we run, and naming whole
+# families instead would enable far more than the default (selecting `S` alone
+# turns on S101 and flags all 4,734 asserts in the test suite). The residual
+# risk is that a future ruff moves the default again — the cheap guard against
+# that is pinning ruff's version in `.github/workflows/ci.yml`, which currently
+# installs it unpinned.
+#
+# These three are named explicitly because the codebase carries `# noqa`
+# directives for them and 0.16 does NOT enable them by default. Leaving them to
+# the default set meant those directives read as "unused", ruff's own `--fix`
+# deleted sixteen of them, and the code then failed under any older ruff that
+# still enables the rule. Naming them keeps the suppressions live and honest:
+# E402 guards `api.py`'s deliberately load-bearing import order, E712 four
+# identity-vs-equality assertions that are testing exactly that distinction, and
+# N802 the `do_GET` / `do_PUT` names that `BaseHTTPRequestHandler` requires.
+extend-select = ["E402", "E712", "N802"]
+ignore = [
+    # `dict(size=12, color="#fff")` is Plotly's own authoring idiom and how its
+    # entire documentation is written; `plots.py` alone has 220 of them nested
+    # inside figure specs. Brace literals there are harder to read and diff, and
+    # would put this codebase at odds with every Plotly example a contributor
+    # will find. This is a style disagreement with the linter, not a defect.
+    "C408",
+    # Broad `except Exception` is deliberate and documented at each site: a
+    # corrupt recovery cache must never stop the app opening (`persistence.py`),
+    # and a single malformed corpus must never take down a 31-corpus catalogue.
+    # The alternative — enumerating every exception a third-party loader can
+    # raise — is the fragile option, not the safe one.
+    "BLE001",
+    # Would have us raise TypeError where the codebase raises ValueError. The
+    # distinction is real but the call sites are user-facing validation where
+    # ValueError is what the app catches and renders; changing them is a
+    # behaviour change dressed as a lint fix.
+    "TRY004",
+    # `except: pass` around best-effort cleanup and optional-feature probes,
+    # each already carrying a comment saying why the failure is ignorable.
+    "S110", "S112",
+    # Naive local timestamps are correct here: these stamp a local recovery
+    # cache and a local tracker, both single-machine by design. Making them
+    # tz-aware would imply a portability this data does not have.
+    "DTZ005", "DTZ006",
+    # Fires on scripts with a shebang that are run via `python <script>`; the
+    # shebang documents the interpreter rather than declaring them executable.
+    "EXE001",
+    # Adjacent strings inside a list/tuple, which is the shape of a missing
+    # comma — so this one was not waved through: all 21 sites were read, and
+    # every one is a long message wrapped across lines, each fragment ending
+    # mid-sentence with a trailing space. Ruff's remedy is to parenthesize them,
+    # which adds a level of brackets to every wrapped message in the tour, the
+    # computations page and the API docstrings without making any of them
+    # clearer. Worth re-checking by hand if it ever starts firing somewhere new.
+    "ISC004",
+    # One site, `animation_export.py`: a NamedTemporaryFile with `delete=False`
+    # and an immediate close, which is how you reserve a path for ffmpeg to
+    # write into. A `with` block would delete the file before the encoder opened
+    # it. Silenced here rather than with a `# noqa`, because SIM115 is enabled by
+    # default in some ruff versions and not others — a directive for it reads as
+    # "unused" on half of them and gets deleted by `--fix`, which is exactly how
+    # sixteen other suppressions were lost during this sweep.
+    "SIM115",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test doubles are plain classes with mutable attributes standing in for
+# Streamlit objects; annotating each as ClassVar documents nothing about a fake.
+# The pytest.raises idioms are the assertion itself, not a useless expression,
+# and `v == v` is the standard NaN filter.
+#
+# SIM401 and RUF019 are the load-bearing pair, and they are here because the
+# first of them broke five tests before it was caught: both rewrite
+# `"k" in x and x["k"]` to `x.get("k")`, which is correct for `st.session_state`
+# but WRONG for `AppTest.session_state` — the testing proxy has no `.get` and
+# raises `AttributeError: get not found in session_state`. The membership form
+# is the only one that works on both, so tests must keep it. They are listed
+# together deliberately: silencing only SIM401 leaves RUF019 to make the same
+# edit under a different number.
+"tests/*" = [
+    "RUF012", "B018", "PLR0124", "PLW0177", "PLW1510", "SIM117", "SIM401",
+    "RUF019",
+]
+# One-off scripts, run by hand and read top to bottom: the closures they define
+# inside loops are called in the same iteration, and their subprocess calls have
+# their return codes inspected directly.
+"benchmarks/*" = ["B023", "PLW1510"]
+"paper/*" = ["B023"]
+"desktop/*" = ["PLW1510"]
+
 [tool.coverage.run]
 source = ["scanpath_studio"]
 # Two one-shot data-prep scripts, deliberately untested and deliberately not

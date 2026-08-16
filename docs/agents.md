@@ -25,10 +25,10 @@ and remove it; see [Privacy](privacy.md#what-happens-to-a-file-you-upload).
 ```python
 import scanpath_studio as sps
 
-words, fixations = sps.load_sample_data()          # bundled OneStop demo
+words, fixations = sps.load_sample_data()  # bundled OneStop demo
 pid, tid = sps.list_trials(words, fixations).iloc[0]
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
-sps.save_figure(fig, "scanpath.html")              # .png/.svg/.pdf need Chrome
+sps.save_figure(fig, "scanpath.html")  # .png/.svg/.pdf need Chrome
 ```
 
 `canvas_size` is the monitor the stimulus was shown on. Pass it whenever you
@@ -124,9 +124,9 @@ here, so both frames come back under one synthetic reader: `list_trials` returns
 
 ```python
 words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")
-words, fixations = sps.load_scanpath_data("ia/*.csv", "fix/*.tsv")     # globs
+words, fixations = sps.load_scanpath_data("ia/*.csv", "fix/*.tsv")  # globs
 words, fixations = sps.load_scanpath_data(words=ia_df, fixations=fix_df)
-words, fixations = sps.load_scanpath_data(fixations="fix.parquet")     # one table
+words, fixations = sps.load_scanpath_data(fixations="fix.parquet")  # one table
 ```
 
 - Accepts DataFrames, paths, glob patterns, or lists of paths
@@ -171,7 +171,7 @@ explicit schema replaces auto-detection wholesale, so it has to be complete:
 ```python
 from scanpath_studio import api
 
-schema = api.propose_schema("ia.csv", "words")   # {field: column or None}
+schema = api.propose_schema("ia.csv", "words")  # {field: column or None}
 schema["trial"] = "para"
 schema["word_id"] = "aoi_number"
 words, fixations = sps.load_scanpath_data("ia.csv", "fix.csv", word_schema=schema)
@@ -183,7 +183,7 @@ words, fixations = sps.load_scanpath_data("ia.csv", "fix.csv", word_schema=schem
 ## Choosing a trial
 
 ```python
-combos = sps.list_trials(words, fixations)     # DataFrame[participant_id, trial_id]
+combos = sps.list_trials(words, fixations)  # DataFrame[participant_id, trial_id]
 ```
 
 `plot_scanpath` / `animate_scanpath` take `participant` and `trial` positionally
@@ -201,9 +201,9 @@ one_reader = combos[combos["participant_id"] == "l37_1129"]
 fig = sps.plot_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
 anim = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=4.0)
 
-sps.save_figure(fig, "out.html")     # interactive, no browser needed
-sps.save_figure(fig, "out.png")      # .png/.svg/.pdf via Kaleido → needs Chrome
-sps.save_figure_layers(fig, "layers/", fmt="svg")   # one file per layer
+sps.save_figure(fig, "out.html")  # interactive, no browser needed
+sps.save_figure(fig, "out.png")  # .png/.svg/.pdf via Kaleido → needs Chrome
+sps.save_figure_layers(fig, "layers/", fmt="svg")  # one file per layer
 ```
 
 - **HTML never needs Chrome.** PNG/SVG/PDF go through Kaleido, which drives a
@@ -221,10 +221,13 @@ change *which fixations are drawn* rather than how:
 
 ```python
 fig = sps.plot_scanpath(
-    words, fixations, pid, tid,
-    fix_index_range=(1, 40),     # only fixations 1–40 (1-based, both inclusive)
-    drift_correction="warp",     # any of alignment.ALGORITHMS
-    drift_connectors=True,       # faint original → corrected line per fixation
+    words,
+    fixations,
+    pid,
+    tid,
+    fix_index_range=(1, 40),  # only fixations 1–40 (1-based, both inclusive)
+    drift_correction="warp",  # any of alignment.ALGORITHMS
+    drift_connectors=True,  # faint original → corrected line per fixation
 )
 ```
 
@@ -248,8 +251,8 @@ replay's subset):
 ```python
 from scanpath_studio import api
 
-api.figure_options()                    # {option: default} for plot_scanpath
-api.figure_options("animation")         # …for animate_scanpath
+api.figure_options()  # {option: default} for plot_scanpath
+api.figure_options("animation")  # …for animate_scanpath
 ```
 
 The defaults below are what a bare `plot_scanpath(words, fixations, pid, tid)`
@@ -304,10 +307,18 @@ measures and exports are untouched). One entry per category, each with a mode of
 
 ```python
 flags = {
-    "short": {"mode": "Highlight", "threshold_ms": 80.0,
-              "symbol": "triangle-up-open", "color": "#ff7f0e"},
-    "long": {"mode": "Off", "threshold_ms": 800.0,
-             "symbol": "square-open", "color": "#9467bd"},
+    "short": {
+        "mode": "Highlight",
+        "threshold_ms": 80.0,
+        "symbol": "triangle-up-open",
+        "color": "#ff7f0e",
+    },
+    "long": {
+        "mode": "Off",
+        "threshold_ms": 800.0,
+        "symbol": "square-open",
+        "color": "#9467bd",
+    },
     "oob": {"mode": "Discard", "symbol": "x", "color": "#d62728"},  # out of text
 }
 fig = sps.plot_scanpath(words, fixations, pid, tid, fixation_flags=flags)
@@ -498,13 +509,16 @@ looping by hand.
 
 ```python
 fig = sps.plot_scanpath(
-    words, fixations, pid, tid,
+    words,
+    fixations,
+    pid,
+    tid,
     canvas_size=(2560, 1440),
     palette="Print / greyscale",
     show_heatmap=False,
     show_order=False,
 )
-paths = sps.save_figure_layers(fig, "fig1_layers", fmt="pdf")   # {layer: Path}
+paths = sps.save_figure_layers(fig, "fig1_layers", fmt="pdf")  # {layer: Path}
 ```
 
 **Compare drift-correction algorithms**
@@ -549,13 +563,17 @@ two `(participant_id, trial_id)` tuples, not per-trial frames:
 from scanpath_studio import plots
 
 fig = plots.make_comparison_figure(
-    words, fixations,
-    ("l37_1129", "l37_1129_2_1_1_Ele_r0"),      # trial A
-    ("l7_1090", "l7_1090_2_1_1_Ele_r0"),        # trial B
-    canvas_width=2560, canvas_height=1440,
-    font_family="Arial", base_font_size=16,
-    layout="overlay",                            # or "side_by_side" / "stacked"
-    trial_labels=("A", "B"), show_legend=True,
+    words,
+    fixations,
+    ("l37_1129", "l37_1129_2_1_1_Ele_r0"),  # trial A
+    ("l7_1090", "l7_1090_2_1_1_Ele_r0"),  # trial B
+    canvas_width=2560,
+    canvas_height=1440,
+    font_family="Arial",
+    base_font_size=16,
+    layout="overlay",  # or "side_by_side" / "stacked"
+    trial_labels=("A", "B"),
+    show_legend=True,
 )
 ```
 
@@ -574,7 +592,7 @@ from scanpath_studio.plots import animation_autoplay_frame_duration
 anim = sps.animate_scanpath(words, fixations, pid, tid, playback_speed=4.0)
 clip = export_animation(
     anim,
-    fmt="mp4",                                                  # or "gif"
+    fmt="mp4",  # or "gif"
     frame_duration_ms=animation_autoplay_frame_duration(anim),  # keeps the speed
 )
 Path("replay.mp4").write_bytes(clip)

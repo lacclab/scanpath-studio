@@ -63,10 +63,10 @@ from scanpath_studio.html_embed import embed_html_iframe
 from scanpath_studio.menu import NAV_SELECTOR
 
 from .constants import (
-    CITATION,
     _VIEW_CORPUS,
     _VIEW_DATA,
     _VIEW_SCANPATH,
+    CITATION,
     drift_correction_enabled,
     similarity_enabled,
 )
@@ -1037,7 +1037,7 @@ def render_tour_replay_button(host=None) -> None:
 
 def build_tutorial_context(words, fixations, combos) -> dict[str, object]:
     """Small, serializable availability snapshot for the tutorial chooser."""
-    n_trials = int(len(combos)) if combos is not None else 0
+    n_trials = len(combos) if combos is not None else 0
     has_words = bool(words is not None and not words.empty)
     has_fixations = bool(fixations is not None and not fixations.empty)
     comparable = False
@@ -1323,15 +1323,14 @@ def render_use_case_tutorial() -> None:
         st.markdown(f"## {tutorial.title}")
         st.markdown(f"**{step.title}**")
         st.markdown(step.body)
-        if not surface_open:
-            if st.button(
-                "Show me / Open this panel",
-                key="tutorial_open_surface",
-                type="primary",
-                width="stretch",
-            ):
-                _open_tutorial_surface(step)
-                st.rerun()
+        if not surface_open and st.button(
+            "Show me / Open this panel",
+            key="tutorial_open_surface",
+            type="primary",
+            width="stretch",
+        ):
+            _open_tutorial_surface(step)
+            st.rerun()
         st.progress(
             (step_index + 1) / len(tutorial.steps),
             text=f"Step {step_index + 1} of {len(tutorial.steps)}",

@@ -95,7 +95,7 @@ Textbook Corpus) exercises that flexible pipeline end to end:
 ```python
 import scanpath_studio as sps
 
-words, fixations = sps.load_potec("data/PoTeC", download=True)   # ~45 MB on first call
+words, fixations = sps.load_potec("data/PoTeC", download=True)  # ~45 MB on first call
 fig = sps.plot_scanpath(words, fixations, "0", "b0", canvas_size=(1680, 1050))
 ```
 
@@ -113,11 +113,13 @@ scanpath-studio render --sample --animate -o replay.html   # animated replay
 ```python
 import scanpath_studio as sps
 
-words, fixations = sps.load_scanpath_data("ia.csv", "fixations.csv")  # paths, globs, or lists; either table optional
+words, fixations = sps.load_scanpath_data(
+    "ia.csv", "fixations.csv"
+)  # paths, globs, or lists; either table optional
 sps.list_trials(words, fixations)
-fig = sps.plot_scanpath(words, fixations, "p1", "t3")     # every layer toggle is a kwarg
-sps.save_figure(fig, "scanpath.png")                       # .html / .png / .svg / .pdf
-measures = sps.compute_word_metrics(words, fixations)      # FFD / FPRT / RPD / TFD …
+fig = sps.plot_scanpath(words, fixations, "p1", "t3")  # every layer toggle is a kwarg
+sps.save_figure(fig, "scanpath.png")  # .html / .png / .svg / .pdf
+measures = sps.compute_word_metrics(words, fixations)  # FFD / FPRT / RPD / TFD …
 ```
 
 HTML export is browser-free; PNG/SVG/PDF/GIF/MP4 go through Kaleido (run

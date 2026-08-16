@@ -31,8 +31,8 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Callable, Dict, Mapping, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -47,6 +47,7 @@ if __package__ is None or __package__ == "":
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
+from scanpath_studio import metadata as metadata_mod
 from scanpath_studio.annotations import (
     filter_keys,
 )
@@ -153,7 +154,6 @@ from scanpath_studio.experimental_setup import (
     font_pt_to_px,
     pixels_per_degree,
 )
-from scanpath_studio import metadata as metadata_mod
 from scanpath_studio.menu import (
     close_open_popovers,
     render_top_menu,
@@ -818,7 +818,7 @@ def local_filesystem_enabled() -> bool:
     return raw not in ("0", "false", "no")
 
 
-def data_root() -> Optional[Path]:
+def data_root() -> Path | None:
     """The configured allow-root for corpus paths, or ``None`` if unset."""
     raw = os.environ.get(DATA_ROOT_ENV, "").strip()
     return Path(raw).expanduser().resolve() if raw else None
@@ -854,7 +854,7 @@ def _resolve_data_dir(root: str) -> str:
     return str(literal)
 
 
-def _pick_directory_dialog() -> Optional[str]:
+def _pick_directory_dialog() -> str | None:
     """Open a native folder picker and return the chosen path, or None.
 
     Only works when the app runs on a machine with a display + tkinter (a
@@ -944,9 +944,9 @@ def _note_dataset_unavailable(
     label: str,
     reason: str,
     action: str,
-    root: Optional[str] = None,
+    root: str | None = None,
     size_hint: str = "",
-    download: Optional[Callable[[str], None]] = None,
+    download: Callable[[str], None] | None = None,
     key_prefix: str = "",
 ) -> None:
     """Record that ``label`` couldn't be loaded, for the main-area empty state."""
@@ -1013,7 +1013,7 @@ def _dataset_access_status(
     *,
     root: str,
     present: bool,
-    download: Optional[Callable[[str], None]] = None,
+    download: Callable[[str], None] | None = None,
     size_hint: str = "",
     key_prefix: str = "",
     label: str = "This dataset",
@@ -1082,7 +1082,7 @@ def _dataset_access_status(
 
 
 @st.cache_data(show_spinner="Loading PoTeC…")
-def _cached_potec_raw_frames(root: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _cached_potec_raw_frames(root: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cached raw PoTeC frames (pre-normalization) — the full corpus.
 
     Returns the same shape as an upload: raw frames the normal
@@ -1096,7 +1096,7 @@ def _cached_potec_raw_frames(root: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 def _load_potec_source(
     options_host=None, location_host=None
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sidebar controls + loader for the PoTeC corpus data source.
 
     PoTeC can't be loaded through the generic Upload flow (trial/word ids live
@@ -1142,7 +1142,7 @@ def _load_potec_source(
 @st.cache_data(show_spinner="Loading MultiplEYE…")
 def _cached_multipleye_raw_frames(
     root: str, fixation_source: str
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cached raw MultiplEYE frames (pre-normalization) — the full session set.
 
     Same shape as an upload — the normal auto-detect → normalize → harmonize
@@ -1157,7 +1157,7 @@ def _cached_multipleye_raw_frames(
 @st.cache_data(show_spinner=False)
 def _cached_multipleye_inventory(
     root: str, fixation_source: str
-) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
     from scanpath_studio.datasets import multipleye_inventory
 
     return multipleye_inventory(root, fixation_source=fixation_source)
@@ -1165,7 +1165,7 @@ def _cached_multipleye_inventory(
 
 def _load_multipleye_source(
     options_host=None, location_host=None
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sidebar controls + loader for the MultiplEYE corpus data source.
 
     MultiplEYE can't be loaded through the generic Upload flow (participant /
@@ -1220,8 +1220,8 @@ def _load_multipleye_source(
 
 @st.cache_data(show_spinner="Loading OneStop…")
 def _cached_onestop_raw_frames(
-    root: str, regime: str, parts: Tuple[str, ...], variant: str
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    root: str, regime: str, parts: tuple[str, ...], variant: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Cached raw OneStop frames (pre-normalization) for a regime + parts + variant.
 
     Cached on (root, regime, parts, variant) so toggling viz controls doesn't
@@ -1244,7 +1244,7 @@ def _onestop_env_default_dir(variant: str) -> str:
 
 def _load_onestop_public_source(
     options_host=None, location_host=None
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sidebar controls + loader for the OneStop corpus (OSF or LaCC lab).
 
     OneStop's interest-area + fixation reports share the bundled demo's schema
@@ -1391,7 +1391,7 @@ def _public_dataset_label(label: str) -> str:
 
 def _load_public_dataset(
     description_host=None, options_host=None, location_host=None
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Dispatch for a "Public datasets" source.
 
     The corpus is chosen in the flat source picker (DATA-9) and rides
@@ -1417,7 +1417,7 @@ def _load_public_dataset(
     return spec["loader"](options_host, location_host)
 
 
-def _public_dataset_monitor(data_choice: str) -> Optional[Tuple[int, int]]:
+def _public_dataset_monitor(data_choice: str) -> tuple[int, int] | None:
     """The selected public corpus' real monitor size, or None.
 
     None when another data source is active, or when the selected dataset
@@ -1430,7 +1430,7 @@ def _public_dataset_monitor(data_choice: str) -> Optional[Tuple[int, int]]:
     return spec.get("monitor") if spec else None
 
 
-def _dataset_font(words: pd.DataFrame) -> Tuple[Optional[float], Optional[str]]:
+def _dataset_font(words: pd.DataFrame) -> tuple[float | None, str | None]:
     """The stimulus typeface ``(font_px, css_family)`` a dataset declares, or
     ``(None, None)``.
 
@@ -1450,7 +1450,7 @@ def _dataset_font(words: pd.DataFrame) -> Tuple[Optional[float], Optional[str]]:
     return float(px.iloc[0]), family
 
 
-def _stimulus_font_install_hint(css_family: Optional[str]) -> Optional[Tuple[str, str]]:
+def _stimulus_font_install_hint(css_family: str | None) -> tuple[str, str] | None:
     """``(primary font name, download URL)`` for a stimulus font's CSS stack.
 
     The overlaid reading text only matches the stimulus image when the exact
@@ -1478,7 +1478,7 @@ def _stimulus_font_install_hint(css_family: Optional[str]) -> Optional[Tuple[str
 @st.cache_data(show_spinner=False)
 def _cached_trial_identity_report(
     _words: pd.DataFrame, _fixations: pd.DataFrame, cache_key
-) -> Dict:
+) -> dict:
     """VAL-7's diagnosis, memoized on the two frames' fingerprints.
 
     It groups the whole corpus by trial several times over, so it must not run
@@ -1490,19 +1490,19 @@ def _cached_trial_identity_report(
 
 @st.cache_data(show_spinner="Loading MultiplEYE server bundle…")
 def _cached_multipleye_server_bundle(
-    participant: Optional[str] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    participant: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     return load_multipleye_server_bundle(participant)
 
 
 def load_words_and_fixations(
     data_choice: str,
-    participant: Optional[str] = None,
+    participant: str | None = None,
     *,
     description_host=None,
     options_host=None,
     location_host=None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load raw word + fixation frames for the **non-upload** data sources.
 
     The Upload source is handled separately by the setup wizard
@@ -1572,7 +1572,7 @@ def load_words_and_fixations(
     return load_sample_data()
 
 
-def _schema_key(schema: Optional[Dict]) -> Optional[tuple]:
+def _schema_key(schema: dict | None) -> tuple | None:
     """Hashable, stable representation of a column-mapping schema dict.
 
     Values may be strings, ``None``, or a list of column names (composite trial
@@ -1589,13 +1589,13 @@ def _schema_key(schema: Optional[Dict]) -> Optional[tuple]:
 @st.cache_data(show_spinner="Normalizing data…")
 def _normalize_pair_cached(
     _words_df: pd.DataFrame,
-    _word_schema: Optional[Dict],
+    _word_schema: dict | None,
     _fixations_df: pd.DataFrame,
-    _fix_schema: Optional[Dict],
+    _fix_schema: dict | None,
     cache_key,
-    _keep_words: Optional[set] = None,
-    _keep_fix: Optional[set] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    _keep_words: set | None = None,
+    _keep_fix: set | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Pure normalize + harmonize, cached on a cheap fingerprint of the inputs.
 
     The raw frames are passed un-hashed (underscore args); ``cache_key`` carries
@@ -1627,12 +1627,12 @@ def _normalize_pair_cached(
 
 def _normalize_pair(
     words_df: pd.DataFrame,
-    word_schema: Optional[Dict],
+    word_schema: dict | None,
     fixations_df: pd.DataFrame,
-    fix_schema: Optional[Dict],
-    keep_words: Optional[set] = None,
-    keep_fix: Optional[set] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    fix_schema: dict | None,
+    keep_words: set | None = None,
+    keep_fix: set | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalize a *validated* (words, fixations) pair to canonical columns and
     run the cross-frame fixups (``harmonize_frames``).
 
@@ -1675,7 +1675,7 @@ def _reset_active_mapping() -> None:
     st.session_state["_active_column_mapping"] = {}
 
 
-def _stash_active_mapping(table: str, schema: Optional[Dict]) -> None:
+def _stash_active_mapping(table: str, schema: dict | None) -> None:
     """Record the schema (field → source column) actually used for ``table`` so
     ``tabs.render_data_inspection_tab`` can show how columns were mapped. ``table``
     is one of ``"words" / "fixations" / "raw_gaze"``."""
@@ -1688,7 +1688,7 @@ def prepare_data(
     fixations_df: pd.DataFrame,
     allow_override: bool,
     mapping_host=None,
-) -> Tuple[pd.DataFrame, pd.DataFrame, list]:
+) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
     When ``allow_override`` is True, render sidebar expanders that let the user
@@ -2118,7 +2118,7 @@ def render_sidebar_data_source(host=None) -> str:
     # PUBLIC_DATASETS_CHOICE (+ public_dataset_choice) so the load path is unchanged.
     uploaded = list(st.session_state.get("_datasets", {}).keys())
     entries: list[str] = []
-    kinds: Dict[str, str] = {}
+    kinds: dict[str, str] = {}
     if onestop_data_dir() is not None:
         entries.append(ONESTOP_CHOICE)
         kinds[ONESTOP_CHOICE] = "🔒"
@@ -2220,7 +2220,7 @@ def render_data_source_picker(host=None) -> None:
     entries = list(st.session_state.get("_data_source_entries") or [])
     if not entries:
         return
-    kinds: Dict[str, str] = dict(st.session_state.get("_data_source_kinds") or {})
+    kinds: dict[str, str] = dict(st.session_state.get("_data_source_kinds") or {})
     uploaded = list(st.session_state.get("_data_source_uploaded") or [])
 
     def _entry_label(token: str) -> str:
@@ -2288,10 +2288,10 @@ def render_data_source_picker(host=None) -> None:
 
 
 def resolve_source_monitor(
-    data_choice: Optional[str],
+    data_choice: str | None,
     words: pd.DataFrame,
     fixations: pd.DataFrame,
-) -> Tuple[int, int, bool]:
+) -> tuple[int, int, bool]:
     """The presentation monitor for a data source: ``(width, height, authoritative)``.
 
     Lifted out of `seed_canvas_state` by **CMP-8 §1** so there is *one* source →
@@ -2349,7 +2349,7 @@ def resolve_source_monitor(
 
 
 def capture_setup_snapshot(
-    provenance: Optional[Mapping[str, Provenance]] = None,
+    provenance: Mapping[str, Provenance] | None = None,
 ) -> SetupSnapshot:
     """The resolved ``global_*`` geometry as a `SetupSnapshot` (CMP-8 §1).
 
@@ -2384,8 +2384,8 @@ def capture_setup_snapshot(
 
 
 def active_setup_snapshot(
-    data_choice: Optional[str] = None,
-) -> Optional[SetupSnapshot]:
+    data_choice: str | None = None,
+) -> SetupSnapshot | None:
     """A source's recorded setup, or ``None`` when it has none.
 
     A stored upload carries the snapshot the wizard captured; a built-in corpus
@@ -2433,8 +2433,8 @@ def active_setup_snapshot(
 def seed_canvas_state(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
-    data_choice: Optional[str] = None,
-) -> Tuple[int, int, int, str, float, bool]:
+    data_choice: str | None = None,
+) -> tuple[int, int, int, str, float, bool]:
     """Resolve the canvas / typography settings without rendering any widget.
 
     Split out of `render_sidebar_canvas_controls` by **VIZ-31**, which moved that
@@ -2593,12 +2593,12 @@ def seed_canvas_state(
 def render_sidebar_canvas_controls(
     words_filtered: pd.DataFrame,
     fixations_filtered: pd.DataFrame,
-    data_choice: Optional[str] = None,
+    data_choice: str | None = None,
     slot=None,
     expanded: bool = False,
     title: str = "Experimental Setup",
     bare: bool = False,
-) -> Tuple[int, int, int, str, float, bool]:
+) -> tuple[int, int, int, str, float, bool]:
     """Render the canvas-geometry, typography and background panel.
 
     These controls let the user match the visualization to the experimental
@@ -2898,8 +2898,8 @@ def _render_authoring_source() -> tuple[pd.DataFrame, pd.DataFrame]:
         authoring_json,
         default_events,
         event_problems,
-        layout_text,
         layout_problems,
+        layout_text,
         parse_authoring_document,
         reconcile_event_table,
         unusable_event_rows,
@@ -3514,7 +3514,7 @@ def main() -> None:
         deep_link_pid = st.session_state.get("single_participant")
     else:
         deep_link_pid = None
-    raw_gaze_df: Optional[pd.DataFrame] = None
+    raw_gaze_df: pd.DataFrame | None = None
     # Did this load already draw the editable pre-normalization mapping panels
     # into the page's Column mapping section? (Mode A — see the dispatch below.)
     mapping_editor_rendered = False

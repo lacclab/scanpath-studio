@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 
-import scanpath_studio.persistence as persistence
+from scanpath_studio import persistence
 from scanpath_studio.persistence import (
     cache_status,
     clear_local_state,

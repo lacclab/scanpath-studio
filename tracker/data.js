@@ -199,7 +199,7 @@ window.TRACKER = {
    "num": 27,
    "sub": "",
    "title": "EyeGenBench — load all 39 benchmark corpora as one built-in source",
-   "status": "In progress",
+   "status": "Review",
    "owner": "Shubi",
    "note": "Design + implementation plan signed off 2026-08-14; executing.",
    "date": "",
@@ -331,7 +331,28 @@ window.TRACKER = {
     "Verified by sweeping all 31 prepared corpora through the app's own path."
    ],
    "whatsLeft": [
-    "The whole-branch review."
+    "Nothing. Two corpora remain unprepared for reasons outside this work:",
+    "`etdd70` dies inside the pipeline's own Zenodo downloader (a bare `assert`",
+    "in `httpx`'s sync transport, which is why the sweep reported an empty error",
+    "for it), and seven more need manual acquisition from their publishers."
+   ],
+   "decisions": [
+    "**Review the branch** — 31 corpora in the source picker, each marked (WIP).",
+    "Worth clicking: pick *EMTeC (WIP)* and confirm the stimulus and word boxes",
+    "draw (it silently loaded zero word boxes until the branch review caught it),",
+    "and *PoTeC (harmonised benchmark) (WIP)* beside the native *PoTeC* to see the",
+    "two kept apart.",
+    "**Is (WIP) the marker you want, and on those entries only?** It is display",
+    "only — the stored choice, the `?corpus=` slug and saved configs are",
+    "untouched, so removing it later breaks no link.",
+    "**Geometry honesty is the judgement call to check.** 1 corpus is `real`, 20",
+    "`reconstructed`, 10 `synthesized`, and a corpus stays `synthesized` unless a",
+    "display parameter can be cited. MECO L2 W2 was *downgraded* on this branch:",
+    "its shipped 1920x1080 appears in neither cited source, and its font size was",
+    "a points value used as pixels.",
+    "**Docs churn inside the ruff commit** (merged from main): 0.16 formats Python",
+    "inside Markdown, so README and four docs pages were rewrapped and one README",
+    "one-liner now spans three lines. Cosmetic, and revertible if you dislike it."
    ]
   },
   {

@@ -17,8 +17,8 @@ CI), and may z-score within reader — see :data:`MEASURES`,
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -61,7 +61,7 @@ def metric_by_trial_index(
 
 
 def metric_by_fixation_index(
-    fixations: pd.DataFrame, metric: str, *, max_index: Optional[int] = None
+    fixations: pd.DataFrame, metric: str, *, max_index: int | None = None
 ) -> pd.DataFrame:
     """Average of ``metric`` per within-trial fixation index (``order_in_trial``).
 
@@ -95,10 +95,10 @@ def metric_by_fixation_index(
 def grouped_metric_values(
     frame: pd.DataFrame,
     metric: str,
-    group_col: Optional[str] = None,
+    group_col: str | None = None,
     *,
     max_groups: int = 12,
-) -> Tuple[Dict[str, np.ndarray], int]:
+) -> tuple[dict[str, np.ndarray], int]:
     """Return ``({group_label: values_array}, n_dropped)`` for histograms.
 
     ``group_col=None`` yields a single ``"All"`` group. Otherwise one entry per
@@ -115,7 +115,7 @@ def grouped_metric_values(
     counts = frame[group_col].value_counts()
     kept = list(counts.index[:max_groups])
     dropped = max(0, len(counts) - len(kept))
-    groups: Dict[str, np.ndarray] = {}
+    groups: dict[str, np.ndarray] = {}
     for g in kept:
         arr = vals[frame[group_col] == g].dropna().to_numpy()
         if arr.size:
@@ -213,7 +213,7 @@ class Measure:
 
 
 # Registry — insertion order is the picker order. TFD is the default.
-MEASURES: Dict[str, Measure] = {
+MEASURES: dict[str, Measure] = {
     m.key: m
     for m in (
         Measure(
@@ -327,7 +327,7 @@ MEASURES: Dict[str, Measure] = {
 }
 
 # Bundled per-word linguistic features (AN-5). label → (column, is_categorical).
-LINGUISTIC_FEATURES: Dict[str, Tuple[str, bool]] = {
+LINGUISTIC_FEATURES: dict[str, tuple[str, bool]] = {
     "GPT-2 surprisal": ("gpt2_surprisal", False),
     "Word frequency (wordfreq)": ("wordfreq_frequency", False),
     "Word length": ("word_length", False),
@@ -337,9 +337,9 @@ LINGUISTIC_FEATURES: Dict[str, Tuple[str, bool]] = {
 
 def available_measures(
     words: pd.DataFrame, fixations: pd.DataFrame, *, per_word_only: bool = False
-) -> List[Measure]:
+) -> list[Measure]:
     """The measures whose backing column is actually present in the data."""
-    out: List[Measure] = []
+    out: list[Measure] = []
     for m in MEASURES.values():
         if per_word_only and not m.per_word:
             continue
@@ -349,7 +349,7 @@ def available_measures(
     return out
 
 
-def available_features(words: pd.DataFrame) -> Dict[str, Tuple[str, bool]]:
+def available_features(words: pd.DataFrame) -> dict[str, tuple[str, bool]]:
     """Linguistic features present in this words frame (AN-5)."""
     if words is None or words.empty:
         return {}
@@ -381,7 +381,7 @@ def bootstrap_ci(
     n_boot: int = 1000,
     ci: float = 95.0,
     seed: int = 0,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Percentile bootstrap CI of the ``agg`` statistic (AN-24 spread option)."""
     arr = np.asarray(values, dtype="float64")
     arr = arr[~np.isnan(arr)]
@@ -425,7 +425,7 @@ def add_normalized_column(
     col: str,
     *,
     by: str = "participant_id",
-    out_col: Optional[str] = None,
+    out_col: str | None = None,
 ) -> pd.DataFrame:
     """Return ``frame`` with ``col`` z-scored within each ``by`` group (AN-25).
 
@@ -464,7 +464,7 @@ def add_normalized_column(
 _ALL_SCREENS = object()
 
 
-def text_screen_options(frame: pd.DataFrame, text_col: str, text_id) -> List[str]:
+def text_screen_options(frame: pd.DataFrame, text_col: str, text_id) -> list[str]:
     """The screens one text is spread over, in reading order (BUG-26).
 
     Empty for a single-screen dataset — which is every corpus without DATA-21
@@ -524,7 +524,7 @@ def _text_subset(
     return sub[screens == wanted]
 
 
-def _first_screen(sub: pd.DataFrame, screens: pd.Series) -> Optional[str]:
+def _first_screen(sub: pd.DataFrame, screens: pd.Series) -> str | None:
     """The lowest-``screen_index`` screen id in ``sub``, else the first seen."""
     if SCREEN_INDEX in sub.columns:
         index = pd.to_numeric(sub[SCREEN_INDEX], errors="coerce")
@@ -800,7 +800,7 @@ def reader_vs_cohort_values(
     measure: Measure,
     *,
     normalize: bool = False,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """``{"This reader": …, "Cohort": …}`` value arrays for a measure (AN-7)."""
     if frame is None or frame.empty or "participant_id" not in frame.columns:
         return {}
@@ -809,7 +809,7 @@ def reader_vs_cohort_values(
     if normalize and not measure.is_rate:
         work = add_normalized_column(work, "_m")
     is_target = work["participant_id"].astype(str) == str(participant_id)
-    out: Dict[str, np.ndarray] = {}
+    out: dict[str, np.ndarray] = {}
     me = work.loc[is_target, "_m"].dropna().to_numpy()
     others = work.loc[~is_target, "_m"].dropna().to_numpy()
     if me.size:
@@ -854,7 +854,7 @@ def _first_present(frame: pd.DataFrame, columns: Sequence[str]):
     return None
 
 
-def _as_accuracy(value) -> Optional[float]:
+def _as_accuracy(value) -> float | None:
     """Coerce common correctness encodings to 0/1 without guessing blanks."""
     if value is None or pd.isna(value):
         return None
@@ -870,7 +870,7 @@ def _as_accuracy(value) -> Optional[float]:
     return None
 
 
-def _run_summary(fixations: pd.DataFrame, n_words: int) -> Dict[str, float]:
+def _run_summary(fixations: pd.DataFrame, n_words: int) -> dict[str, float]:
     """Run/refixation and first-pass/rereading stats for one ordered trial.
 
     A run is a contiguous visit to one word. The first run on each word belongs
@@ -908,7 +908,7 @@ def _run_summary(fixations: pd.DataFrame, n_words: int) -> Dict[str, float]:
     first = runs["visit_index"] == 0
     denominator = n_words or int(runs["word_id"].nunique())
     return {
-        "nrun": int(len(runs)),
+        "nrun": len(runs),
         "first_pass_ms": float(runs.loc[first, "duration_ms"].sum()),
         "rereading_ms": float(runs.loc[~first, "duration_ms"].sum()),
         "refixation_rate": float(
@@ -939,7 +939,10 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
     for identity in keys:
         selected = dict(zip(key_columns, identity))
 
-        def _slice(frame: pd.DataFrame) -> pd.DataFrame:
+        # `selected` bound as a default: the closure is called inside this
+        # same iteration, so late binding is harmless today, but binding it
+        # makes that a property of the code rather than of the call order.
+        def _slice(frame: pd.DataFrame, selected=selected) -> pd.DataFrame:
             if (
                 frame is None
                 or frame.empty
@@ -971,7 +974,7 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
                 fx.get("duration_ms", pd.Series(np.nan, index=fx.index)),
                 errors="coerce",
             )
-            row["n_fixations"] = int(len(fx))
+            row["n_fixations"] = len(fx)
             if duration.notna().any():
                 row["mean_fixation_ms"] = float(duration.mean())
                 row["total_fixation_ms"] = float(duration.sum())
@@ -1038,7 +1041,7 @@ def trial_summary_table(words: pd.DataFrame, fixations: pd.DataFrame) -> pd.Data
 
 def reader_summary(
     words: pd.DataFrame, fixations: pd.DataFrame, participant_id
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Compact reading-profile stats for one reader (AN-8).
 
     WPM, mean fixation duration, fixation count, regression rate, skip rate,
@@ -1047,8 +1050,8 @@ def reader_summary(
     return _summary_row(words, fixations, participant_id)
 
 
-def _summary_row(words, fixations, pid) -> Dict[str, float]:
-    out: Dict[str, float] = {"participant_id": str(pid)}
+def _summary_row(words, fixations, pid) -> dict[str, float]:
+    out: dict[str, float] = {"participant_id": str(pid)}
     fx = (
         fixations[fixations["participant_id"].astype(str) == str(pid)]
         if not fixations.empty and "participant_id" in fixations.columns
@@ -1065,7 +1068,7 @@ def _summary_row(words, fixations, pid) -> Dict[str, float]:
             if {"participant_id", "trial_id"} <= set(fx.columns)
             else 0
         )
-        out["n_fixations"] = int(len(fx))
+        out["n_fixations"] = len(fx)
         if "duration_ms" in fx.columns:
             out["mean_fixation_ms"] = float(
                 pd.to_numeric(fx["duration_ms"], errors="coerce").mean()
@@ -1126,10 +1129,10 @@ def cohort_summary_table(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    participants: Optional[Sequence] = None,
+    participants: Sequence | None = None,
 ) -> pd.DataFrame:
     """One summary row per reader (AN-16 / AN-8 cohort percentiles)."""
-    pids: List = []
+    pids: list = []
     for frame in (fixations, words):
         if frame is not None and not frame.empty and "participant_id" in frame.columns:
             pids = list(pd.unique(frame["participant_id"].astype(str)))
@@ -1147,7 +1150,7 @@ def reader_summary_table(
     words: pd.DataFrame,
     fixations: pd.DataFrame,
     *,
-    participants: Optional[Sequence] = None,
+    participants: Sequence | None = None,
 ) -> pd.DataFrame:
     """First-class per-reader summary table (AN-30).
 
@@ -1265,7 +1268,7 @@ def ensure_fixation_enrichment(
 
 
 def _glyph_span(
-    words: pd.DataFrame, *, layout: Optional[pd.DataFrame] = None
+    words: pd.DataFrame, *, layout: pd.DataFrame | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
     """``(start, run)`` — where the word's glyphs begin and how wide they are.
 
@@ -1298,7 +1301,7 @@ def _glyph_span(
 
 def landing_positions(
     words: pd.DataFrame,
-    fixations: Optional[pd.DataFrame] = None,
+    fixations: pd.DataFrame | None = None,
     *,
     participant_id=None,
     as_fraction: bool = True,
@@ -1445,9 +1448,9 @@ def two_group_values(
     label_a: str = "Group A",
     label_b: str = "Group B",
     normalize: bool = False,
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """``{label_a: values, label_b: values}`` for overlaid distributions (AN-18)."""
-    out: Dict[str, np.ndarray] = {}
+    out: dict[str, np.ndarray] = {}
     a = measure_values(apply_group(frame, spec_a), measure, normalize=normalize)
     b = measure_values(apply_group(frame, spec_b), measure, normalize=normalize)
     if a.size:
@@ -1541,8 +1544,8 @@ def paired_group_summary(
     spread: str = "SEM",
     label_a: str = "Group A",
     label_b: str = "Group B",
-    words: Optional[pd.DataFrame] = None,
-    fixations: Optional[pd.DataFrame] = None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
     normalize: bool = False,
 ) -> pd.DataFrame:
     """Per-measure group means + error for the paired bars (AN-20).
@@ -1587,7 +1590,7 @@ def group_effect_size(
     values_b: np.ndarray,
     *,
     test: str = "Mann–Whitney",
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """Mean difference, Cohen's *d*, and a significance test (AN-21).
 
     ``test`` is ``"Mann–Whitney"`` (rank-sum) or ``"t-test"`` (Welch). Returns a
@@ -1598,7 +1601,7 @@ def group_effect_size(
     a = a[~np.isnan(a)]
     b = np.asarray(values_b, dtype="float64")
     b = b[~np.isnan(b)]
-    out: Dict[str, object] = {
+    out: dict[str, object] = {
         "mean_a": float(np.mean(a)) if a.size else float("nan"),
         "mean_b": float(np.mean(b)) if b.size else float("nan"),
         "n_a": int(a.size),

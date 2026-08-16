@@ -26,7 +26,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from scanpath_studio.eyegenbench_geometry import (  # noqa: E402
+from scanpath_studio.eyegenbench_geometry import (
     DEFAULT_SPEC,
     GEOMETRY_REAL,
     place_fixations,
@@ -124,7 +124,7 @@ def _canonical_name(dataset: str) -> str:
     with no EyeGenBench installation on the test's Python -- working.
     """
     try:
-        from eyegenbench.data.utils.factory import DataModuleFactory  # noqa: PLC0415
+        from eyegenbench.data.utils.factory import DataModuleFactory
     except ImportError:
         return str(dataset)
 
@@ -240,7 +240,7 @@ def _resolve_monitor(spec, report: dict, words: pd.DataFrame) -> tuple[list, str
     if not words.empty:
         width = max(width, float(words["end_x"].max()))
         height = max(height, float(words["end_y"].max()))
-    return [int(round(width)), int(round(height))], source
+    return [round(width), round(height)], source
 
 
 def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root):
@@ -315,7 +315,7 @@ def build_bundle(dataset, fix_df, text_df, participant_df, raw_fix_df, out_root)
             .str.replace(_REPEATED_READING_SUFFIX, "", regex=True)
             .nunique()
         ),
-        "n_fixations": int(len(fixations)),
+        "n_fixations": len(fixations),
         # Spec §8: attribution travels with the data into export bundles.
         "license": info.get("license", "unknown - consult the corpus"),
         "citation": info.get("citation", ""),
@@ -407,8 +407,8 @@ def run_prepare_data(dataset: str, eyegenbench_root: Path):
     in `<eyegenbench_root>/data/<Name>/`, which is also where we look for the
     interim file that still carries the real interest-area boxes.
     """
-    import eyegenbench.data  # noqa: F401, PLC0415 - registers every datamodule
-    from eyegenbench.data.utils.load import load_dataset  # noqa: PLC0415
+    import eyegenbench.data  # noqa: F401 - registers every datamodule
+    from eyegenbench.data.utils.load import load_dataset
 
     previous = Path.cwd()
     try:
@@ -423,7 +423,7 @@ def run_prepare_data(dataset: str, eyegenbench_root: Path):
     for candidate in sorted(interim.glob("*.csv")) if interim.is_dir() else []:
         try:
             head = pd.read_csv(candidate, nrows=0)
-        except Exception:  # noqa: BLE001 - a non-CSV in interim is not fatal
+        except Exception:
             continue
         if "CURRENT_FIX_INTEREST_AREA_DATA" in head.columns:
             raw = pd.read_csv(candidate)
@@ -471,7 +471,7 @@ def main(argv=None) -> int:
         except OutOfDiskError as exc:
             print(f"[stop] {exc}")
             break
-        except Exception as exc:  # noqa: BLE001 - one corpus must not stop the run
+        except Exception as exc:
             skipped.append((name, str(exc)))
             print(f"[skip] {name}: {exc}")
 

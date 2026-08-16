@@ -36,7 +36,7 @@ AppTest = streamlit_testing.AppTest
 SYNTHETIC_SOURCE = "Synthetic test trial"
 
 
-def _make_apptest(*, synthetic: bool = False) -> "AppTest":
+def _make_apptest(*, synthetic: bool = False) -> AppTest:
     """Build an AppTest for the app.
 
     Booting the bundled demo renders every tab over a large dataset (~5s).
@@ -382,7 +382,7 @@ class TestAppLaunches:
         assert total > 1, "expected several trials in the demo"
 
         # Narrowing by participant shrinks the trial pool feeding the picker.
-        part = [m for m in at.multiselect if m.key == "filter_participants"][0]
+        part = next(m for m in at.multiselect if m.key == "filter_participants")
         part.set_value([part.options[0]])
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -398,14 +398,14 @@ class TestAppLaunches:
         at.run(timeout=30)
         text_ms = [m for m in at.multiselect if m.key == "filter_text_id"]
         assert text_ms, "Narrow-by text multiselect missing"
-        trial_box = [s for s in at.selectbox if s.key == "single_trial_id"][0]
+        trial_box = next(s for s in at.selectbox if s.key == "single_trial_id")
         total = len(trial_box.options)
         text_ms[0].set_value([text_ms[0].options[0]])
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         narrowed = len(
-            [s for s in at.selectbox if s.key == "single_trial_id"][0].options
+            next(s for s in at.selectbox if s.key == "single_trial_id").options
         )
         assert 0 < narrowed < total, (
             f"text narrowing didn't shrink pool ({narrowed}/{total})"
@@ -672,12 +672,12 @@ class TestDatasetRename:
         return at
 
     def _rename(self, at, old, typed):
-        [t for t in at.text_input if t.key == f"dataset_rename_{old}"][0].set_value(
+        next(t for t in at.text_input if t.key == f"dataset_rename_{old}").set_value(
             typed
         )
         pin_data_view(at)
         at.run(timeout=90)
-        [b for b in at.button if b.key == f"dataset_rename_apply_{old}"][0].click()
+        next(b for b in at.button if b.key == f"dataset_rename_apply_{old}").click()
         pin_data_view(at)
         at.run(timeout=90)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -857,7 +857,7 @@ class TestUnmappedRawDataView:
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
         # The flat picker carries the corpus token; selecting it resolves to the
         # public source with the corpus on public_dataset_choice.
-        source = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        source = next(s for s in at.selectbox if s.key == "data_source_picker")
         assert source.value == potec_key
         assert at.session_state["public_dataset_choice"] == potec_key
 
@@ -974,7 +974,7 @@ class TestUnmappedRawDataView:
         assert not fix_map.get("screen_id"), fix_map.get("screen_id")
         assert not word_map.get("screen_id"), word_map.get("screen_id")
 
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"Provo_a", "Provo_b"}
 
     def test_each_prepared_benchmark_corpus_is_its_own_picker_entry(
@@ -1042,7 +1042,7 @@ class TestUnmappedRawDataView:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
-        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
         options = list(picker.options)
         # Each corpus is its own entry, tagged 🌐 like every other public corpus,
         # and — while DATA-27 is on main unfinished — marked (WIP).
@@ -1064,7 +1064,7 @@ class TestUnmappedRawDataView:
         assert at.session_state["public_dataset_choice"] == app.benchmark_corpus_label(
             "Provo"
         )
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"Provo_a", "Provo_b"}
         captions = " ".join(c.value for c in at.caption)
         # R35: the manifest's ISO code renders as a display name.
@@ -1081,7 +1081,7 @@ class TestUnmappedRawDataView:
         assert at.session_state["public_dataset_choice"] == app.benchmark_corpus_label(
             "PoTeC"
         )
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
         captions = " ".join(c.value for c in at.caption)
         assert "German" in captions
@@ -1232,7 +1232,7 @@ class TestUnmappedRawDataView:
         }
 
         # Narrow to one PoTeC-only text.
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
         text_ms.set_value(["PoTeC_a"])
         at.run(timeout=60)
@@ -1244,7 +1244,7 @@ class TestUnmappedRawDataView:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["filter_text_id"] == []
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"Provo_a", "Provo_b"}
 
         # 2. Switching back restores PoTeC's own stashed filter.
@@ -1298,7 +1298,7 @@ class TestUnmappedRawDataView:
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
-        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
         assert "🌐 Harmonised benchmark corpora — set up (WIP)" in picker.options
         # The *marked* form, deliberately: asserting "🌐 Provo" is absent would
         # now pass whether or not the corpus is listed, since a listed one reads
@@ -1310,7 +1310,7 @@ class TestUnmappedRawDataView:
         assert dir_inputs, "expected the bundle directory input"
         dir_inputs[0].set_value(str(root)).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
         assert "🌐 Provo (WIP)" in picker.options, "the corpus must appear once found"
         # The placeholder disappears *because it succeeded*, so healing must not
         # bounce the user out to the demo — that answers "here is my bundle"
@@ -1327,7 +1327,7 @@ class TestUnmappedRawDataView:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["eyegenbench_dir"] == str(root)
         assert at.session_state["data_source_choice"] == label
-        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
         assert "🌐 Provo (WIP)" in picker.options
         # The placeholder is offered only while nothing is discovered, and the
         # options are checked rather than `public_dataset_registry()` because
@@ -1335,7 +1335,7 @@ class TestUnmappedRawDataView:
         # registry built out here, outside the run, cannot see it.
         assert not any("set up" in option for option in picker.options)
         # …and the corpus is genuinely loaded, not merely named in the picker.
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"Provo_a", "Provo_b"}
 
         # 4. A detour to another source and back. The directory input renders
@@ -1347,12 +1347,12 @@ class TestUnmappedRawDataView:
         assert not [t for t in at.text_input if t.key == "eyegenbench_dir"], (
             "premise: another source renders no bundle directory input"
         )
-        picker = [s for s in at.selectbox if s.key == "data_source_picker"][0]
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
         assert "🌐 Provo (WIP)" in picker.options, "the bundle location must survive"
         picker.set_value(label).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == label
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"Provo_a", "Provo_b"}
 
     def test_repointing_the_bundle_lands_on_a_corpus_not_on_the_demo(
@@ -1390,13 +1390,13 @@ class TestUnmappedRawDataView:
 
         # Repoint at the other bundle: "PoTeC — harmonised…" is now a label for
         # a corpus that isn't there.
-        dir_input = [t for t in at.text_input if t.key == "eyegenbench_dir"][0]
+        dir_input = next(t for t in at.text_input if t.key == "eyegenbench_dir")
         dir_input.set_value(str(second)).run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["data_source_choice"] == app.benchmark_corpus_label(
             "Provo"
         )
-        text_ms = [m for m in at.multiselect if m.key == "filter_text_id"][0]
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
         assert set(text_ms.options) == {"Provo_a", "Provo_b"}
 
     def test_benchmark_reader_count_matches_the_headless_loader(
@@ -1502,7 +1502,7 @@ class TestUnmappedRawDataView:
         at.session_state["public_dataset_choice"] = potec_key
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        part = [m for m in at.multiselect if m.key == "filter_participants"][0]
+        part = next(m for m in at.multiselect if m.key == "filter_participants")
         part.set_value(["p1"])
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -1846,7 +1846,7 @@ class TestColumnMappingBoxWidget:
         from scanpath_studio.controls import BOX_FORMAT_ORIGIN
 
         at = AppTest.from_function(_box_mapping_script).run(timeout=30)
-        box_radio = [r for r in at.radio if r.key == "col_map_words_box_format"][0]
+        box_radio = next(r for r in at.radio if r.key == "col_map_words_box_format")
         box_radio.set_value(BOX_FORMAT_ORIGIN)
         at.run(timeout=30)
 
@@ -2081,7 +2081,7 @@ class TestSetupWizard:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Finalize with defaults (keep detected optional fields, drop unclaimed),
         # then confirm the stored frame is actually thinned.
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         words = at.session_state["_datasets"][at.session_state["data_source_choice"]][
@@ -2103,7 +2103,7 @@ class TestSetupWizard:
         answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -2236,13 +2236,13 @@ class TestSetupWizard:
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         # Real flow: enter the wizard via the button (picker already rendered).
-        [b for b in at.button if b.key == "add_data_btn"][0].click()
+        next(b for b in at.button if b.key == "add_data_btn").click()
         at.run(timeout=60)
         # Entering the wizard resets its widgets, so the setup step must be
         # answered *after* that click, not before it.
         answer_setup_step(at)
         at.run(timeout=60)
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         name = at.session_state["data_source_choice"]
@@ -2266,7 +2266,7 @@ class TestSetupWizard:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         answer_setup_step(at)
         at.run(timeout=60)
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         stored = dict(at.session_state["_datasets"])
         name = at.session_state["data_source_choice"]
@@ -2458,7 +2458,7 @@ class TestSetupWizard:
             "participant_id",
             "paragraph_id",
         }
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         stored = dict(at.session_state["_datasets"])
         name = at.session_state["data_source_choice"]
@@ -3361,12 +3361,12 @@ class TestRecordingSetupGate(TestSetupWizard):
         at.session_state[_SETUP_MODE_KEYS["screen"]] = _SCREEN_KNOW
         at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
         at.run(timeout=60)
-        assert [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+        assert next(b for b in at.button if b.key == "wizard_finalize").disabled
 
         answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+        assert not next(b for b in at.button if b.key == "wizard_finalize").disabled
 
     def test_the_answers_ride_into_the_stored_dataset(self, monkeypatch):
         """The provenance travels with the dataset, not just the wizard — that is
@@ -3377,7 +3377,7 @@ class TestRecordingSetupGate(TestSetupWizard):
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         answer_setup_step(at)
         at.run(timeout=60)
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
@@ -3405,9 +3405,9 @@ class TestRecordingSetupGate(TestSetupWizard):
         at.session_state[_SETUP_MODE_KEYS["text"]] = "Use a default (16 px)"
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        assert not [b for b in at.button if b.key == "wizard_finalize"][0].disabled
+        assert not next(b for b in at.button if b.key == "wizard_finalize").disabled
 
-        [b for b in at.button if b.key == "wizard_finalize"][0].click()
+        next(b for b in at.button if b.key == "wizard_finalize").click()
         at.run(timeout=60)
         entry = at.session_state["_datasets"][at.session_state["data_source_choice"]]
         assert entry["setup"]["provenance"]["screen"] == "estimated"

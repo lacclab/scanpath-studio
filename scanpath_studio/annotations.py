@@ -14,7 +14,6 @@ tested) and a thin session-backed layer plus the small render helpers used by
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Optional, Set, Tuple
 
 import streamlit as st
 
@@ -31,8 +30,8 @@ PRESET_TAGS = ["To exclude", "Review", "Good example", "Check alignment"]
 # Parent entries use ``(participant_id, trial_id)``; screen entries add a third
 # ``screen_id`` component. Keeping parent keys unchanged preserves filtering and
 # every schema-1 annotation sidecar.
-Key = Tuple[str, ...]
-Entry = Dict[str, object]
+Key = tuple[str, ...]
+Entry = dict[str, object]
 
 
 # ---------------------------------------------------------------------------
@@ -58,9 +57,9 @@ def is_empty_entry(entry: Entry) -> bool:
     )
 
 
-def records_to_store(records: List[dict]) -> Dict[Key, Entry]:
+def records_to_store(records: list[dict]) -> dict[Key, Entry]:
     """Build a ``{(pid, tid): entry}`` store from a list of flat records."""
-    store: Dict[Key, Entry] = {}
+    store: dict[Key, Entry] = {}
     for rec in records or []:
         pid = rec.get("participant_id")
         tid = rec.get("trial_id")
@@ -80,7 +79,7 @@ def records_to_store(records: List[dict]) -> Dict[Key, Entry]:
     return store
 
 
-def store_to_records(store: Dict[Key, Entry]) -> List[dict]:
+def store_to_records(store: dict[Key, Entry]) -> list[dict]:
     """Flatten a store into a sorted list of records for JSON export."""
     records = []
     for key, entry in sorted(store.items()):
@@ -98,14 +97,14 @@ def store_to_records(store: Dict[Key, Entry]) -> List[dict]:
     return records
 
 
-def serialize(store: Dict[Key, Entry]) -> str:
+def serialize(store: dict[Key, Entry]) -> str:
     """Serialize a store to a JSON document string."""
     return json.dumps(
         {"schema": SCHEMA_VERSION, "annotations": store_to_records(store)}, indent=2
     )
 
 
-def deserialize(text: str) -> Dict[Key, Entry]:
+def deserialize(text: str) -> dict[Key, Entry]:
     """Parse a JSON document (object with ``annotations`` or a bare list)."""
     data = json.loads(text)
     if isinstance(data, dict):
@@ -122,12 +121,12 @@ def deserialize(text: str) -> Dict[Key, Entry]:
 # ---------------------------------------------------------------------------
 
 
-def _store() -> Dict[Key, Entry]:
+def _store() -> dict[Key, Entry]:
     return st.session_state.setdefault(ANNOTATIONS_STATE_KEY, {})
 
 
 def get_entry(
-    participant_id: str, trial_id: str, screen_id: Optional[str] = None
+    participant_id: str, trial_id: str, screen_id: str | None = None
 ) -> Entry:
     key = (
         (str(participant_id), str(trial_id), str(screen_id))
@@ -142,9 +141,9 @@ def set_entry(
     trial_id: str,
     *,
     star: bool,
-    tags: List[str],
+    tags: list[str],
     note: str,
-    screen_id: Optional[str] = None,
+    screen_id: str | None = None,
 ) -> None:
     """Upsert an annotation; empty entries are pruned to keep the store small."""
     key = (
@@ -160,20 +159,20 @@ def set_entry(
         store[key] = entry
 
 
-def known_tags() -> List[str]:
+def known_tags() -> list[str]:
     """Preset tags plus any tag used anywhere in the store, sorted."""
-    tags: Set[str] = set(PRESET_TAGS)
+    tags: set[str] = set(PRESET_TAGS)
     for entry in _store().values():
         tags.update(entry.get("tags", []))
     return sorted(tags)
 
 
-def current_records() -> List[dict]:
+def current_records() -> list[dict]:
     """All annotations as a flat record list — for embedding in a saved config."""
     return store_to_records(_store())
 
 
-def restore_records(records: List[dict]) -> int:
+def restore_records(records: list[dict]) -> int:
     """Replace the session annotation store from a record list (e.g. a restored
     config) and clear the per-trial widget state so editors re-seed. Returns the
     number of annotations loaded."""
@@ -209,7 +208,7 @@ def render_trial_annotations(
     participant_id: str,
     trial_id: str,
     *,
-    screen_id: Optional[str] = None,
+    screen_id: str | None = None,
     bare: bool = False,
 ) -> None:
     """Render the per-trial annotations (star / tags / notes).
@@ -297,13 +296,13 @@ def render_trial_annotations(
 
 
 def select_keys(
-    store: Dict[Key, Entry],
-    keys: List[Key],
+    store: dict[Key, Entry],
+    keys: list[Key],
     *,
     favorites_only: bool = False,
-    required_tags: Optional[List[str]] = None,
-    excluded_tags: Optional[List[str]] = None,
-) -> List[Key]:
+    required_tags: list[str] | None = None,
+    excluded_tags: list[str] | None = None,
+) -> list[Key]:
     """Pure core of :func:`filter_keys` — filter ``keys`` against ``store``.
 
     - ``favorites_only``: keep only starred trials.
@@ -312,7 +311,7 @@ def select_keys(
     """
     required = set(required_tags or [])
     excluded = set(excluded_tags or [])
-    out: List[Key] = []
+    out: list[Key] = []
     for key in keys:
         entry = store.get(key)
         tags = set(entry.get("tags", [])) if entry else set()
@@ -328,12 +327,12 @@ def select_keys(
 
 
 def filter_keys(
-    keys: List[Key],
+    keys: list[Key],
     *,
     favorites_only: bool = False,
-    required_tags: Optional[List[str]] = None,
-    excluded_tags: Optional[List[str]] = None,
-) -> List[Key]:
+    required_tags: list[str] | None = None,
+    excluded_tags: list[str] | None = None,
+) -> list[Key]:
     """Session-backed wrapper around :func:`select_keys`."""
     return select_keys(
         _store(),

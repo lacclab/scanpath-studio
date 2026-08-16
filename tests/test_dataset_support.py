@@ -267,7 +267,7 @@ def test_default_filters_fixations_only(tmp_path):
     filters = data_module.default_filters(words, fixations)
     assert filters["participants"] == ["p0"]
     assert filters["trials"] == ["t1"]
-    w, f = data_module.filter_data(words, fixations, filters)
+    _w, f = data_module.filter_data(words, fixations, filters)
     assert len(f) == 3
 
 
@@ -325,7 +325,7 @@ def test_stimulus_words_broadcast_and_aoi_xy(stimulus_words_df, aoi_fixations_df
 
 
 def test_stimulus_words_without_fixations_get_synthetic_participant(stimulus_words_df):
-    words, fixations = sps.load_scanpath_data(words=stimulus_words_df)
+    words, _fixations = sps.load_scanpath_data(words=stimulus_words_df)
     # No fixations to broadcast across → a single anonymous reader.
     assert (words["participant_id"] == data_module.SYNTHETIC_PARTICIPANT).all()
     assert data_module.STIMULUS_WORDS_FLAG not in words.columns
@@ -782,7 +782,7 @@ def test_onestop_lacclab_variant_paths(tmp_path):
     assert datasets_module.onestop_present(
         tmp_path, regime="ordinary", parts=["Paragraph"], variant="lacclab"
     )
-    words, fixations = datasets_module.onestop_raw_frames(
+    words, _fixations = datasets_module.onestop_raw_frames(
         tmp_path, regime="ordinary", parts=["Paragraph"], variant="lacclab"
     )
     assert set(words["part"]) == {"Paragraph"}
@@ -999,7 +999,7 @@ def test_load_multipleye_fixations_source_fallback(multipleye_root):
     # The raw fixations/ files have no word index, and the question_* screen has
     # no question-AOI file / version table here, so it is dropped rather than
     # guessed (3 rows in -> 2 reading-page fixations out).
-    words, fixations = datasets_module.load_multipleye(
+    _words, fixations = datasets_module.load_multipleye(
         multipleye_root, sessions=["001_ZH_CH_1_ET1"], fixation_source="fixations"
     )
     assert fixations["word_id"].isna().all()
@@ -1141,8 +1141,8 @@ def test_load_multipleye_real_sample():
         off_x,
         off_y,
     )
-    pid = sorted(fixations["participant_id"])[0]
-    tid = sorted(fixations["trial_id"])[0]
+    pid = min(fixations["participant_id"])
+    tid = min(fixations["trial_id"])
     fig = sps.plot_scanpath(
         words, fixations, pid, tid, canvas_size=datasets_module.MULTIPLEYE_MONITOR
     )
@@ -1192,7 +1192,7 @@ def test_multipleye_stamps_font_when_config_present(multipleye_root):
     (cfg / "config_zh_ch_demo.py").write_text(
         'FONT_SIZE = 22\nFONT = "fonts/NotoSansMonoCJKsc-VF.ttf"\n', encoding="utf-8"
     )
-    words, fixations = datasets_module.load_multipleye(multipleye_root)
+    words, _fixations = datasets_module.load_multipleye(multipleye_root)
     assert (words["stimulus_font_px"] == 22.0).all()
     assert words["stimulus_font_family"].str.contains("CJK SC").all()
 
@@ -1467,7 +1467,7 @@ def test_multipleye_uploads_prefers_scanpath_over_fixation():
         ignore_index=True,
         sort=False,
     )
-    words, fixations = datasets_module.multipleye_frames_from_uploads(df, None)
+    _words, fixations = datasets_module.multipleye_frames_from_uploads(df, None)
     assert len(fixations) == 1
     assert fixations["word_idx"].notna().all()
 
@@ -1906,9 +1906,7 @@ def test_a_missing_public_corpus_is_offered_but_disabled_never_loaded():
     at.run(timeout=30)
     assert not at.exception, at.exception
 
-    options = dict(
-        (name, (ready, why)) for name, ready, why in at.session_state["_options"]
-    )
+    options = {name: (ready, why) for name, ready, why in at.session_state["_options"]}
     potec = next(name for name in options if "PoTeC" in name)
     ready, why = options[potec]
     assert ready is False

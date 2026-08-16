@@ -20,8 +20,8 @@ origin fails CI regardless of which script emitted it.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -384,7 +384,7 @@ def synthesize_raw_gaze(
     pt: list[float] = []
     n = len(trial)
     for i in range(n):
-        n_dwell = max(1, int(round(durs[i] / RAW_GAZE_SAMPLE_DT_MS)))
+        n_dwell = max(1, round(durs[i] / RAW_GAZE_SAMPLE_DT_MS))
         px.extend(xs[i] + rng.normal(0.0, RAW_GAZE_JITTER_PX, n_dwell))
         py.extend(ys[i] + rng.normal(0.0, RAW_GAZE_JITTER_PX, n_dwell))
         pt.extend(starts[i] + np.linspace(0.0, durs[i], n_dwell))

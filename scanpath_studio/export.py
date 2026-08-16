@@ -33,10 +33,9 @@ import re
 import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from time import perf_counter
-from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -130,14 +129,14 @@ class ExportOptions:
     # the table out of the bundle. Reader attributes are the most re-identifying
     # thing an export can carry, so the opt-out has to be per field rather than
     # all-or-nothing.
-    metadata_fields: Optional[Tuple[str, ...]] = None
+    metadata_fields: tuple[str, ...] | None = None
     # When True, export operates on the whole loaded dataset, ignoring the
     # sidebar "Filter trials" panel; the caller supplies the unfiltered frames.
     export_unfiltered: bool = False
     scope: str = "all"  # "all" | "trial" | "participant" | "text"
-    scope_participant: Optional[str] = None
-    scope_trial: Optional[str] = None
-    scope_text: Optional[str] = None
+    scope_participant: str | None = None
+    scope_trial: str | None = None
+    scope_text: str | None = None
 
     def any_table(self) -> bool:
         return (
@@ -147,13 +146,13 @@ class ExportOptions:
             or self.include_analysis_family
         )
 
-    def table_formats(self) -> List[str]:
+    def table_formats(self) -> list[str]:
         if self.table_format == "both":
             return ["csv", "parquet"]
         return [self.table_format]
 
-    def figure_formats(self) -> List[str]:
-        formats: List[str] = []
+    def figure_formats(self) -> list[str]:
+        formats: list[str] = []
         if self.include_png:
             formats.append("png")
         if self.include_svg:
@@ -164,11 +163,11 @@ class ExportOptions:
             formats.append("html")
         return formats
 
-    def raster_formats(self) -> List[str]:
+    def raster_formats(self) -> list[str]:
         """Figure formats that need Kaleido/Chrome (everything but HTML)."""
         return [f for f in self.figure_formats() if f != "html"]
 
-    def layer_formats(self) -> List[str]:
+    def layer_formats(self) -> list[str]:
         """Formats for the per-layer breakdown (VIZ-5) — the selected non-HTML
         figure formats, or SVG when none was picked (vectors suit Illustrator).
         Empty when separable layers are off."""
@@ -192,7 +191,7 @@ class ExportProgress:
     total_trials: int
     finished_trials: int = 0
     bytes_written: int = 0
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 def _safe_id(text: str) -> str:
@@ -240,7 +239,7 @@ def pattern_fields(
     trial_words: pd.DataFrame,
     trial_fixations: pd.DataFrame,
     settings: dict,
-    combo_row: Optional[dict] = None,
+    combo_row: dict | None = None,
 ) -> dict:
     """Every value a filename / title / caption pattern can substitute.
 
@@ -269,7 +268,7 @@ def pattern_fields(
     return fields
 
 
-def pattern_error(pattern: str, fields: dict) -> Optional[str]:
+def pattern_error(pattern: str, fields: dict) -> str | None:
     """A human message naming any unknown placeholder, or ``None`` if valid.
 
     Validated up front (and shown live in the UI) rather than at export time —
@@ -310,7 +309,7 @@ def render_pattern(
     becomes ``na`` rather than failing the whole export.
     """
 
-    def _sub(match: "re.Match") -> str:
+    def _sub(match: re.Match) -> str:
         name = match.group(1)
         value = fields.get(name, "")
         if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -483,6 +482,7 @@ def _figure_renderer(enabled: bool):
     if enabled:
         try:
             import kaleido
+
             from .animation_export import chromium_browser_path
 
             browser_path = chromium_browser_path()
@@ -525,7 +525,7 @@ def render_static_figure_bytes(
     width: int,
     height: int,
     scale: float,
-    status_callback: Optional[StatusCallback] = None,
+    status_callback: StatusCallback | None = None,
 ) -> bytes:
     """Render one static figure with observable indeterminate job stages."""
     from .animation_export import CHROME_INSTALL_HINT, chrome_available
@@ -581,7 +581,7 @@ def render_static_figure_bytes(
 
 def _drift_corrected_for_figure(
     fix: pd.DataFrame, words: pd.DataFrame, settings: dict
-) -> tuple[pd.DataFrame, Optional[tuple]]:
+) -> tuple[pd.DataFrame, tuple | None]:
     """PRE-3 drift correction for one exported figure (EXP-4 / VIZ-24).
 
     Returns ``(figure_fixations, connector_y)``. When no algorithm is selected
@@ -623,7 +623,7 @@ def _plot_config_dict(
     y_field: str,
     settings: dict,
     *,
-    screen_id: Optional[str] = None,
+    screen_id: str | None = None,
     drift_applied: bool = False,
 ) -> dict:
     selection = {"participant_id": participant, "trial_id": trial}
@@ -708,7 +708,7 @@ def _plot_config_dict(
     }
 
 
-def _setup_section() -> Optional[dict]:
+def _setup_section() -> dict | None:
     """The active source's `SetupSnapshot` as a dict, or ``None``.
 
     Imported lazily and defensively: `bulk_export` also runs headlessly (the CLI
@@ -728,8 +728,8 @@ def _render_scope_picker(
     st,
     combos: pd.DataFrame,
     key_prefix: str,
-    combos_all: Optional[pd.DataFrame] = None,
-) -> tuple[str, Optional[str], Optional[str], Optional[str], bool]:
+    combos_all: pd.DataFrame | None = None,
+) -> tuple[str, str | None, str | None, str | None, bool]:
     """Render the scope radio + dependent selectors.
 
     Returns ``(scope, pid, trial, text, export_unfiltered)``. The whole-dataset
@@ -763,9 +763,9 @@ def _render_scope_picker(
     scope, export_unfiltered = options_map[scope_label]
     active = combos_all if (export_unfiltered and combos_all is not None) else combos
 
-    scope_participant: Optional[str] = None
-    scope_trial: Optional[str] = None
-    scope_text: Optional[str] = None
+    scope_participant: str | None = None
+    scope_trial: str | None = None
+    scope_text: str | None = None
     text_col = (
         "unique_text_id"
         if "unique_text_id" in active.columns
@@ -934,7 +934,7 @@ def render_export_options(
     st_module,
     combos: pd.DataFrame,
     key_prefix: str = "export",
-    combos_all: Optional[pd.DataFrame] = None,
+    combos_all: pd.DataFrame | None = None,
     title_pattern: str = "",
     caption_pattern: str = "",
 ) -> ExportOptions:
@@ -1104,9 +1104,9 @@ def render_export_options(
 def _scope_frame(
     combos: pd.DataFrame,
     scope: str,
-    scope_participant: Optional[str],
-    scope_trial: Optional[str],
-    scope_text: Optional[str],
+    scope_participant: str | None,
+    scope_trial: str | None,
+    scope_text: str | None,
 ) -> pd.DataFrame:
     """Filter combos to the chosen scope (pure helper, no ExportOptions needed)."""
     if scope == "trial" and scope_participant and scope_trial:
@@ -1154,8 +1154,8 @@ class ComparisonSide:
     trial: str
     words: pd.DataFrame
     fixations: pd.DataFrame
-    dataset: Optional[str] = None
-    setup: Optional[dict] = None
+    dataset: str | None = None
+    setup: dict | None = None
 
     @property
     def slug(self) -> str:
@@ -1198,7 +1198,7 @@ def pair_export(
     y_field: str,
     settings: dict,
     options: ExportOptions,
-    status_callback: Optional[StatusCallback] = None,
+    status_callback: StatusCallback | None = None,
 ) -> bytes:
     """Zip one comparison **pair** — figure, manifest, and both scanpaths' tables.
 
@@ -1298,7 +1298,7 @@ def pair_export(
     return buffer.getvalue()
 
 
-def _selected_metadata_columns(frame, fields: Optional[Tuple[str, ...]]):
+def _selected_metadata_columns(frame, fields: tuple[str, ...] | None):
     """``frame`` narrowed to ``fields`` (+ the reader id), or ``None`` to drop it.
 
     ``fields is None`` keeps every column — the default, so nothing changes for
@@ -1344,9 +1344,9 @@ def bulk_export(
     y_field: str,
     settings: dict,
     options: ExportOptions,
-    raw_gaze: Optional[pd.DataFrame] = None,
+    raw_gaze: pd.DataFrame | None = None,
     progress_callback=None,
-    status_callback: Optional[StatusCallback] = None,
+    status_callback: StatusCallback | None = None,
 ) -> tuple[bytes, ExportProgress]:
     """Build a zip archive of selected artifacts and return its bytes.
 
@@ -1391,7 +1391,7 @@ def bulk_export(
 
     readme_lines = [
         "# Bulk export",
-        f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
+        f"Generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
         "",
         f"Authors: {CITATION['authors']}",
         f"Tool: {CITATION['title']}",
@@ -1420,7 +1420,7 @@ def bulk_export(
             "run_config.json",
             json.dumps(
                 {
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "generated_at": datetime.now(UTC).isoformat(),
                     "settings": settings,
                     "preprocessing": settings.get("preprocessing", {}),
                 },
@@ -1455,8 +1455,8 @@ def bulk_export(
     )
     with _figure_renderer(options.needs_kaleido()) as render_figure:
         for combo in units.itertuples(index=False):
-            participant = getattr(combo, "participant_id")
-            trial = getattr(combo, "trial_id")
+            participant = combo.participant_id
+            trial = combo.trial_id
             screen_id = getattr(combo, SCREEN_ID, None)
             screen_index = getattr(combo, SCREEN_INDEX, None)
             screen_slug = (
@@ -1513,9 +1513,9 @@ def bulk_export(
                 combo_row=combo._asdict(),
             )
 
-            def _path(artifact: str, ext: str, _f=fields) -> str:
-                if screen_slug:
-                    artifact = f"screens/{screen_slug}/{artifact}"
+            def _path(artifact: str, ext: str, _f=fields, _slug=screen_slug) -> str:
+                if _slug:
+                    artifact = f"screens/{_slug}/{artifact}"
                 return resolve_export_path(
                     options.path_pattern,
                     _f,

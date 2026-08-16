@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import streamlit as st
-
 
 _HTML = """
 <div class="authoring-toolbar">
@@ -154,7 +153,7 @@ def render_authoring_canvas(
     *,
     canvas_width: int,
     canvas_height: int,
-    selected_fixation_id: Optional[int],
+    selected_fixation_id: int | None,
 ) -> Any:
     """Mount the editor and return its compact ``result.event`` trigger value."""
     word_fields = ["word_id", "text", "line_idx", "x", "y", "width", "height"]

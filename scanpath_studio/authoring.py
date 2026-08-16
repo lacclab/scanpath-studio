@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any
 
 import pandas as pd
-
 
 AUTHORING_SCHEMA = 2
 DEFAULT_LAYOUT = {
@@ -135,7 +135,7 @@ def default_events(words: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _number(value: Any) -> Optional[float]:
+def _number(value: Any) -> float | None:
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -143,7 +143,7 @@ def _number(value: Any) -> Optional[float]:
     return number if math.isfinite(number) else None
 
 
-def _positive_int(value: Any) -> Optional[int]:
+def _positive_int(value: Any) -> int | None:
     number = _number(value)
     if number is None or number <= 0 or not number.is_integer():
         return None
@@ -155,7 +155,7 @@ def event_target_word(event: Mapping[str, Any]) -> int | None:
     return _positive_int(event.get("word_id"))
 
 
-def normalize_event_table(events: Optional[pd.DataFrame]) -> pd.DataFrame:
+def normalize_event_table(events: pd.DataFrame | None) -> pd.DataFrame:
     """Migrate/edit an event table into the stable schema-2 column contract."""
     frame = pd.DataFrame() if events is None else pd.DataFrame(events).copy()
     for column in EVENT_COLUMNS:
@@ -181,7 +181,7 @@ def normalize_event_table(events: Optional[pd.DataFrame]) -> pd.DataFrame:
     return frame
 
 
-def event_problems(words: pd.DataFrame, events: Optional[pd.DataFrame]) -> list[str]:
+def event_problems(words: pd.DataFrame, events: pd.DataFrame | None) -> list[str]:
     """Return actionable structural problems without silently renumbering rows."""
     frame = normalize_event_table(events)
     problems: list[str] = []
@@ -223,8 +223,8 @@ def _structural_problems(events: pd.DataFrame) -> list[str]:
 
 
 def reconcile_event_table(
-    events: Optional[pd.DataFrame], selected_fixation_id: Optional[int] = None
-) -> tuple[pd.DataFrame, Optional[int]]:
+    events: pd.DataFrame | None, selected_fixation_id: int | None = None
+) -> tuple[pd.DataFrame, int | None]:
     """Normalize table edits and preserve selection by stable fixation id."""
     frame = normalize_event_table(events)
     problems = _structural_problems(frame)
@@ -236,11 +236,11 @@ def reconcile_event_table(
 
 
 def apply_authoring_event(
-    events: Optional[pd.DataFrame],
+    events: pd.DataFrame | None,
     event: Mapping[str, Any],
     *,
-    selected_fixation_id: Optional[int] = None,
-) -> tuple[pd.DataFrame, Optional[int]]:
+    selected_fixation_id: int | None = None,
+) -> tuple[pd.DataFrame, int | None]:
     """Apply one compact canvas event keyed by stable ``fixation_id``."""
     frame, selected = reconcile_event_table(events, selected_fixation_id)
     action = str(event.get("type", ""))
@@ -396,7 +396,7 @@ def authoring_json(
     text: str,
     events: pd.DataFrame,
     *,
-    layout: Optional[Mapping[str, int]] = None,
+    layout: Mapping[str, int] | None = None,
 ) -> str:
     """Serialize a schema-2 source document for portable save/restore."""
     layout_value = {**DEFAULT_LAYOUT, **dict(layout or {})}

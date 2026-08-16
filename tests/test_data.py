@@ -741,7 +741,7 @@ class TestFilterData:
                 "trial_id": ["t1"],
             }
         )
-        words_filtered, fixations_filtered = filter_data(
+        _words_filtered, fixations_filtered = filter_data(
             words_df, normalized_fixations_df, filters
         )
         assert all(fixations_filtered["pass_index"] == 1)

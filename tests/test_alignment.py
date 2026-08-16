@@ -107,9 +107,9 @@ def test_correct_snaps_to_line_centers(method):
     assert list(line.index) == list(fixations.index)
 
     # Every snapped y is exactly one of the two line centers.
-    assert set(round(float(y), 1) for y in corrected["y"]) <= _LINE_CENTERS
+    assert {round(float(y), 1) for y in corrected["y"]} <= _LINE_CENTERS
     # Assignments are valid 0-based line indices (only two lines here).
-    assert set(int(v) for v in line.dropna()) <= {0, 1}
+    assert {int(v) for v in line.dropna()} <= {0, 1}
     # The synthetic trial has all-finite coords, so nothing is left unassigned.
     assert line.notna().all()
 
@@ -171,4 +171,4 @@ def test_word_order_methods_run_without_word_xy_arg(method):
     words = make_synthetic_words()
     fixations = make_synthetic_fixations()
     _, line = alignment.correct(fixations, words, method)
-    assert set(int(v) for v in line.dropna()) <= {0, 1}
+    assert {int(v) for v in line.dropna()} <= {0, 1}

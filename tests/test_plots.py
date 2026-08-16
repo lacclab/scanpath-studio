@@ -338,7 +338,7 @@ class TestHeatmapNormalization:
                 normalized_fixations_df,
                 **self._heat_kwargs("Interpolated", norm),
             )
-            t = [t for t in fig.data if t.name == "Fixation heatmap"][0]
+            t = next(t for t in fig.data if t.name == "Fixation heatmap")
             import numpy as np
 
             return np.nan_to_num(np.array(t.z, dtype=float))
@@ -456,7 +456,7 @@ class TestHeatmapNormalization:
                 heatmap_metric=metric,
             ),
         )
-        return [t for t in fig.data if t.name == "Fixation heatmap"][0]
+        return next(t for t in fig.data if t.name == "Fixation heatmap")
 
     def test_density_linear_orientation_and_magnitude(self):
         import numpy as np
@@ -549,7 +549,7 @@ class TestLinearReadingView:
         assert all(x == pytest.approx(50.0) for x in xs)
         assert min(ys) == pytest.approx(0.0, abs=1e-9)
         # Zero-length (refixation): collapses to a single point, no bulge.
-        xs0, ys0 = _arch_points(10.0, 10.0, 10.0, 10.0, 0.28)
+        _xs0, ys0 = _arch_points(10.0, 10.0, 10.0, 10.0, 0.28)
         assert min(ys0) == pytest.approx(10.0) and max(ys0) == pytest.approx(10.0)
         # A NaN endpoint propagates to NaN samples (Plotly skips them).
         xn, _ = _arch_points(float("nan"), 0.0, 100.0, 0.0, 0.28)
@@ -563,8 +563,8 @@ class TestLinearReadingView:
         arc = make_scanpath_figure(
             words, fix, **self._kwargs(saccade_render_mode="Arc")
         )
-        s = [t for t in straight.data if t.name == "saccades"][0]
-        a = [t for t in arc.data if t.name == "saccades"][0]
+        s = next(t for t in straight.data if t.name == "saccades")
+        a = next(t for t in arc.data if t.name == "saccades")
         # One segment: straight = 3 pts (p0, p1, None); arc = many sampled pts.
         assert len(s.x) == 3
         assert len(a.x) > 10
@@ -577,8 +577,8 @@ class TestLinearReadingView:
         snapped = make_scanpath_figure(
             words, fix, **self._kwargs(fixation_snap_to_word=True)
         )
-        raw = [t for t in base.data if t.mode == "markers"][0]
-        snap = [t for t in snapped.data if t.mode == "markers"][0]
+        raw = next(t for t in base.data if t.mode == "markers")
+        snap = next(t for t in snapped.data if t.mode == "markers")
         assert list(raw.x) == [120.0, 320.0]  # raw gaze x (off the word centre)
         assert list(raw.y) == [75.0, 225.0]  # raw gaze y
         # Snapped to each word's top-centre: x = word centre (140/340, NOT the raw
@@ -620,7 +620,7 @@ class TestLinearReadingView:
                 words, fix, **self._kwargs(saccade_render_mode=mode)
             )
             top = min(fig.layout.yaxis.range)  # smallest y = top edge
-            sac = [t for t in fig.data if t.name == "saccades"][0]
+            sac = next(t for t in fig.data if t.name == "saccades")
             apex = float(np.nanmin([v for v in sac.y if v is not None]))
             return top, apex
 
@@ -2126,13 +2126,13 @@ class TestPlotEnhancements:
         # Discarding out-of-bounds fixations removes them from the marker trace
         # (viz-only) without adding a highlight overlay.
         base = self._figure(synthetic_words_df, synthetic_fixations_df)
-        n_base = len([t for t in base.data if t.name == "Fixations"][0].x)
+        n_base = len(next(t for t in base.data if t.name == "Fixations").x)
         fig = self._figure(
             synthetic_words_df,
             synthetic_fixations_df,
             fixation_flags={"oob": {"mode": "Discard"}},
         )
-        n_kept = len([t for t in fig.data if t.name == "Fixations"][0].x)
+        n_kept = len(next(t for t in fig.data if t.name == "Fixations").x)
         assert n_kept == n_base - 1
         assert not any(t.name == "Out of bounds" for t in fig.data)
 

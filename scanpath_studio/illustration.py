@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 
 def illustration_reasons(
     settings: dict,
     *,
-    data_source: Optional[str] = None,
-    fix_index_range: Optional[Sequence[int]] = None,
-    full_fixation_range: Optional[Sequence[int]] = None,
+    data_source: str | None = None,
+    fix_index_range: Sequence[int] | None = None,
+    full_fixation_range: Sequence[int] | None = None,
     synthetic: bool = False,
     raw_gaze_only: bool = False,
 ) -> list[str]:

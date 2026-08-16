@@ -653,7 +653,7 @@ class TestConfigMigration:
 
     def test_migration_chain_walks_each_step(self, monkeypatch):
         # Prove the loop applies migrations in sequence, not just the first step.
-        import scanpath_studio.url_state as url_state
+        from scanpath_studio import url_state
 
         calls = []
 
@@ -676,7 +676,7 @@ class TestConfigMigration:
         assert note is None
 
     def test_missing_migration_step_warns(self, monkeypatch):
-        import scanpath_studio.url_state as url_state
+        from scanpath_studio import url_state
 
         monkeypatch.setattr(url_state, "PLOT_CONFIG_SCHEMA", 5)
         monkeypatch.setattr(url_state, "_PLOT_CONFIG_MIGRATIONS", {})  # no 1->2 step

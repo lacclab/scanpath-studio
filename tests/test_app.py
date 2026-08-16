@@ -51,7 +51,7 @@ class TestBuildComboOptions:
                 "unique_text_id": ["up1", "up1"],
             }
         )
-        combos, labels, label_to_combo = build_combo_options(fixations)
+        combos, _labels, _label_to_combo = build_combo_options(fixations)
         assert "unique_trial_id" in combos.columns or "trial_id" in combos.columns
 
     def test_build_combo_options_with_trial_index(self):
@@ -63,7 +63,7 @@ class TestBuildComboOptions:
                 "TRIAL_INDEX": [1, 2],
             }
         )
-        combos, labels, label_to_combo = build_combo_options(fixations)
+        combos, _labels, _label_to_combo = build_combo_options(fixations)
         assert len(combos) == 2
 
 
@@ -242,7 +242,7 @@ class _FakeSt:
         self.session_state = {}
         self.query_params = {}
 
-    def warning(self, *args, **kwargs):  # noqa: D102 - no-op stand-in
+    def warning(self, *args, **kwargs):  # no-op stand-in
         pass
 
 

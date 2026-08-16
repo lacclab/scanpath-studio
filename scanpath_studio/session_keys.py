@@ -31,8 +31,8 @@ as renaming it — take a new key instead.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Mapping
 
 # ---------------------------------------------------------------------------
 # Visualization settings — the `global_*` keys the sidebar/rail widgets own.

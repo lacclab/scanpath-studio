@@ -125,7 +125,7 @@ def test_auto_detection_agrees_with_our_schemas(bundle):
 def test_load_normalizes_and_broadcasts_to_the_reader(bundle):
     words, fixations = eyegenbench.load_eyegenbench(bundle, dataset="PoTeC")
     assert set(words["participant_id"]) == {"r1"}
-    assert set(["x", "y", "width", "height"]) <= set(words.columns)
+    assert {"x", "y", "width", "height"} <= set(words.columns)
     assert fixations.loc[0, "duration_ms"] == 200
 
 
@@ -422,9 +422,7 @@ def test_a_nameless_manifest_row_before_a_valid_one_does_not_crash(bundle, monke
     # every rerun Compare is on, is where the escaping KeyError took the app
     # down.
     compare_source._public_ready_cached.clear()
-    ready = dict(
-        (name, ok) for name, ok, _why in compare_source.secondary_dataset_options()
-    )
+    ready = {name: ok for name, ok, _why in compare_source.secondary_dataset_options()}
     assert ready[label] is True
 
 

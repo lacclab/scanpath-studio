@@ -189,7 +189,7 @@ def _validate_state(value: Any) -> dict[str, Any]:
             raise ValueError(f"Changes for {item_id} must be an object.")
         extra = set(edit) - set(EDIT_FIELDS)
         if extra:
-            raise ValueError(f"Unsupported field for {item_id}: {sorted(extra)[0]}")
+            raise ValueError(f"Unsupported field for {item_id}: {min(extra)}")
         if "status" in edit and edit["status"] not in STATUSES:
             raise ValueError(f"Invalid status for {item_id}.")
         if "priority" in edit and edit["priority"] not in PRIORITIES:
@@ -322,7 +322,7 @@ class TrackerHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         path = urlsplit(self.path).path
         if path == API_PATH:
             state = {**_read_state(), "revision": _read_revision()}
@@ -344,7 +344,7 @@ class TrackerHandler(SimpleHTTPRequestHandler):
             raise ValueError("Invalid request size.")
         return json.loads(self.rfile.read(length))
 
-    def do_PUT(self) -> None:  # noqa: N802
+    def do_PUT(self) -> None:
         path = urlsplit(self.path).path
         if path not in (API_PATH, WHOAMI_PATH):
             self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found."})

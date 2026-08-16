@@ -456,7 +456,7 @@ def test_fill_two_consecutive_gaps_are_distinct_and_ordered():
 def test_fill_narrow_gap_does_not_exceed_next_real_box():
     # Real boxes are close together
     boxes = _boxes([["p1", 0, 10, 20, 60, 40], ["p1", 2, 80, 20, 130, 40]])
-    filled, interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
+    filled, _interpolated = fill_missing_boxes(boxes, {"p1": 3}, SPEC)
 
     box1 = filled[filled["ia_index"] == 1].iloc[0]
     box2 = filled[filled["ia_index"] == 2].iloc[0]
@@ -1101,7 +1101,7 @@ def test_extract_text_df_boxes_falls_through_when_ia_index_is_missing():
     """
     box_columns_no_ia_index = TEXT_DF_WITH_BOXES.drop(columns=["ia_index"])
     assert extract_text_df_boxes(box_columns_no_ia_index).empty
-    words, report = resolve_geometry("potec", box_columns_no_ia_index, None)
+    _words, report = resolve_geometry("potec", box_columns_no_ia_index, None)
     assert report["geometry_source"] == GEOMETRY_RECONSTRUCTED
 
 

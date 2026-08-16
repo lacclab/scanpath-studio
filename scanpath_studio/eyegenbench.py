@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional, Tuple
 
 import pandas as pd
 
@@ -116,7 +115,7 @@ def entry_name(entry) -> str:
     return str(entry.get("name") or "").strip()
 
 
-def entry_count(entry, key: str) -> Optional[int]:
+def entry_count(entry, key: str) -> int | None:
     """A manifest row's integer count field: the number, ``0``, or ``None``.
 
     The same rule as `entry_name`, for the count fields (`n_texts`,
@@ -150,7 +149,7 @@ def entry_count(entry, key: str) -> Optional[int]:
         return None
 
 
-def _find_entry(root, dataset: str) -> Optional[dict]:
+def _find_entry(root, dataset: str) -> dict | None:
     """The manifest entry named ``dataset`` (case-insensitive), or ``None``.
 
     Shared by every function that resolves a dataset name against the
@@ -162,7 +161,7 @@ def _find_entry(root, dataset: str) -> Optional[dict]:
     return None
 
 
-def eyegenbench_present(root, dataset: Optional[str] = None) -> bool:
+def eyegenbench_present(root, dataset: str | None = None) -> bool:
     """True when the bundle holds everything a load needs. Path stats only.
 
     Strict on purpose: a lenient check passes a partial tree and then crashes
@@ -190,7 +189,7 @@ def eyegenbench_present(root, dataset: Optional[str] = None) -> bool:
     )
 
 
-def declared_monitor(entry) -> Optional[Tuple[int, int]]:
+def declared_monitor(entry) -> tuple[int, int] | None:
     """A manifest row's screen when the corpus actually documents one (I3).
 
     ``monitor_source: "default"`` marks `eyegenbench_geometry.py`'s generic
@@ -215,7 +214,7 @@ def declared_monitor(entry) -> Optional[Tuple[int, int]]:
         return None
 
 
-def eyegenbench_monitor(root, dataset: str) -> Optional[Tuple[int, int]]:
+def eyegenbench_monitor(root, dataset: str) -> tuple[int, int] | None:
     """The corpus' documented screen in pixels, or ``None`` (I3).
 
     ``None`` when the manifest records no screen for this corpus, or only the
@@ -238,7 +237,7 @@ def _dataset_dir(root, dataset: str) -> Path:
     return root / entry["name"]
 
 
-def eyegenbench_raw_frames(root, *, dataset: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def eyegenbench_raw_frames(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) ``(words, fixations)`` frames for ``dataset``."""
     directory = _dataset_dir(root, dataset)
     return (
@@ -247,7 +246,7 @@ def eyegenbench_raw_frames(root, *, dataset: str) -> Tuple[pd.DataFrame, pd.Data
     )
 
 
-def load_eyegenbench(root, *, dataset: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def load_eyegenbench(root, *, dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load an EyeGenBench corpus as normalized ``(words, fixations)``."""
     from .api import load_scanpath_data
 

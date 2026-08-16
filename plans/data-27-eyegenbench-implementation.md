@@ -67,8 +67,14 @@ import pytest
 from scanpath_studio.eyegenbench_geometry import DEFAULT_SPEC, DisplaySpec, layout_words
 
 SPEC = DisplaySpec(
-    width_px=200, height_px=100, font_px=10, char_width_px=10,
-    line_pitch_px=30, monospaced=True, margin_px=10, source="test",
+    width_px=200,
+    height_px=100,
+    font_px=10,
+    char_width_px=10,
+    line_pitch_px=30,
+    monospaced=True,
+    margin_px=10,
+    source="test",
 )
 
 
@@ -232,7 +238,9 @@ The numbers come from the spec's research section. `char_width_px` for a monospa
 
 ```python
 from scanpath_studio.eyegenbench_geometry import (
-    DEFAULT_SPEC, DISPLAY_SPECS, display_spec_for,
+    DEFAULT_SPEC,
+    DISPLAY_SPECS,
+    display_spec_for,
 )
 
 
@@ -278,8 +286,17 @@ Append to `eyegenbench_geometry.py`. Cite every entry; the citation is the point
 
 ```python
 def _spec(
-    width_px, height_px, font_px, *, source, mono=True, chars_per_deg=None,
-    double_spaced=False, distance_cm=None, width_cm=None, margin_px=100,
+    width_px,
+    height_px,
+    font_px,
+    *,
+    source,
+    mono=True,
+    chars_per_deg=None,
+    double_spaced=False,
+    distance_cm=None,
+    width_cm=None,
+    margin_px=100,
 ):
     """Build a DisplaySpec from what a corpus actually reported.
 
@@ -293,10 +310,14 @@ def _spec(
     else:
         char_width = font_px * 0.6
     return DisplaySpec(
-        width_px=width_px, height_px=height_px, font_px=font_px,
+        width_px=width_px,
+        height_px=height_px,
+        font_px=font_px,
         char_width_px=char_width,
         line_pitch_px=font_px * (2.0 if double_spaced else 1.5),
-        monospaced=mono, margin_px=margin_px, source=source,
+        monospaced=mono,
+        margin_px=margin_px,
+        source=source,
     )
 
 
@@ -304,32 +325,85 @@ def _spec(
 # the UZH dataset review table -> the corpus' own paper. Anything not listed
 # here falls back to DEFAULT_SPEC and is stamped `synthesized`.
 DISPLAY_SPECS: dict[str, DisplaySpec] = {
-    "potec": _spec(1680, 1050, 20, source="pymovements:potec", width_cm=47.5, distance_cm=65),
-    "copco": _spec(1920, 1080, 14, source="pymovements:copco + paper:Hollenstein2022",
-                   double_spaced=True, width_cm=59.0, distance_cm=85),
-    "emtec": _spec(1280, 1024, 14, source="pymovements:emtec + uzh", chars_per_deg=2.86,
-                   width_cm=38.2, distance_cm=60),
-    "colagaze": _spec(1280, 1024, 17, source="pymovements:colagaze + uzh", chars_per_deg=2.0,
-                      width_cm=54.37, distance_cm=60),
-    "interead": _spec(1920, 1080, 16, source="pymovements:interead + uzh",
-                      width_cm=52.8, distance_cm=57),
-    "ggtg": _spec(1100, 900, 20, source="pymovements:ggtg + uzh", mono=False,
-                  double_spaced=True, width_cm=31.2, distance_cm=66),
-    "etdd70": _spec(1680, 1050, 20, source="pymovements:etdd70 + uzh", mono=False,
-                    distance_cm=65),
-    "gaze4hate": _spec(2560, 1440, 20, source="pymovements:gaze4hate",
-                       width_cm=59.8, distance_cm=78.0),
-    "raccoons": _spec(1920, 1080, 20, source="pymovements:raccoons",
-                      width_cm=56.8, distance_cm=105.5),
-    "sbsat": _spec(1024, 768, 20, source="pymovements:sb_sat",
-                   width_cm=44.5, distance_cm=70),
-    "provo": _spec(1600, 900, 20, source="paper:LukeChristianson2018", chars_per_deg=3.0,
-                   width_cm=40.0, distance_cm=60),
-    "psr": _spec(1024, 768, 18, source="uzh", chars_per_deg=2.38, distance_cm=73, width_cm=47.0),
-    "eyevoicespan": _spec(1280, 960, 24, source="uzh", chars_per_deg=2.22,
-                          distance_cm=60, width_cm=40.0),
+    "potec": _spec(
+        1680, 1050, 20, source="pymovements:potec", width_cm=47.5, distance_cm=65
+    ),
+    "copco": _spec(
+        1920,
+        1080,
+        14,
+        source="pymovements:copco + paper:Hollenstein2022",
+        double_spaced=True,
+        width_cm=59.0,
+        distance_cm=85,
+    ),
+    "emtec": _spec(
+        1280,
+        1024,
+        14,
+        source="pymovements:emtec + uzh",
+        chars_per_deg=2.86,
+        width_cm=38.2,
+        distance_cm=60,
+    ),
+    "colagaze": _spec(
+        1280,
+        1024,
+        17,
+        source="pymovements:colagaze + uzh",
+        chars_per_deg=2.0,
+        width_cm=54.37,
+        distance_cm=60,
+    ),
+    "interead": _spec(
+        1920,
+        1080,
+        16,
+        source="pymovements:interead + uzh",
+        width_cm=52.8,
+        distance_cm=57,
+    ),
+    "ggtg": _spec(
+        1100,
+        900,
+        20,
+        source="pymovements:ggtg + uzh",
+        mono=False,
+        double_spaced=True,
+        width_cm=31.2,
+        distance_cm=66,
+    ),
+    "etdd70": _spec(
+        1680, 1050, 20, source="pymovements:etdd70 + uzh", mono=False, distance_cm=65
+    ),
+    "gaze4hate": _spec(
+        2560, 1440, 20, source="pymovements:gaze4hate", width_cm=59.8, distance_cm=78.0
+    ),
+    "raccoons": _spec(
+        1920, 1080, 20, source="pymovements:raccoons", width_cm=56.8, distance_cm=105.5
+    ),
+    "sbsat": _spec(
+        1024, 768, 20, source="pymovements:sb_sat", width_cm=44.5, distance_cm=70
+    ),
+    "provo": _spec(
+        1600,
+        900,
+        20,
+        source="paper:LukeChristianson2018",
+        chars_per_deg=3.0,
+        width_cm=40.0,
+        distance_cm=60,
+    ),
+    "psr": _spec(
+        1024, 768, 18, source="uzh", chars_per_deg=2.38, distance_cm=73, width_cm=47.0
+    ),
+    "eyevoicespan": _spec(
+        1280, 960, 24, source="uzh", chars_per_deg=2.22, distance_cm=60, width_cm=40.0
+    ),
     "iitbhgc": _spec(1920, 1080, 20, source="uzh", mono=False, distance_cm=70),
-    "bsc": _spec(1024, 768, 20, source="uzh", chars_per_deg=0.75, distance_cm=43, width_cm=36.0),
+    "bsc": _spec(
+        1024, 768, 20, source="uzh", chars_per_deg=0.75, distance_cm=43, width_cm=36.0
+    ),
     "chinesereading": _spec(1024, 768, 20, source="uzh", distance_cm=58),
     "cuentos": _spec(1920, 1080, 24, source="uzh", distance_cm=55),
     "zuco1": _spec(1920, 1080, 20, source="paper:Hollenstein2018", mono=False),
@@ -458,8 +532,10 @@ def extract_eyelink_boxes(
     if data_col not in frame.columns:
         return pd.DataFrame(columns=[paragraph_col, ia_col, *_BOX_COLUMNS])
     boxes = pd.concat(
-        [frame[[paragraph_col, ia_col]].reset_index(drop=True),
-         parse_ia_data(frame[data_col]).reset_index(drop=True)],
+        [
+            frame[[paragraph_col, ia_col]].reset_index(drop=True),
+            parse_ia_data(frame[data_col]).reset_index(drop=True),
+        ],
         axis=1,
     )
     boxes = boxes.dropna(subset=_BOX_COLUMNS)
@@ -501,8 +577,17 @@ from scanpath_studio.eyegenbench_geometry import fill_missing_boxes
 
 
 def _boxes(rows):
-    return pd.DataFrame(rows, columns=["unique_paragraph_id", "ia_index",
-                                       "start_x", "start_y", "end_x", "end_y"])
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "unique_paragraph_id",
+            "ia_index",
+            "start_x",
+            "start_y",
+            "end_x",
+            "end_y",
+        ],
+    )
 
 
 def test_fill_inserts_the_gap_between_two_real_boxes():
@@ -560,9 +645,14 @@ def fill_missing_boxes(
             if row is not None:
                 last = row
                 out.append(
-                    {"unique_paragraph_id": paragraph, "ia_index": ia_index,
-                     "start_x": row.start_x, "start_y": row.start_y,
-                     "end_x": row.end_x, "end_y": row.end_y}
+                    {
+                        "unique_paragraph_id": paragraph,
+                        "ia_index": ia_index,
+                        "start_x": row.start_x,
+                        "start_y": row.start_y,
+                        "end_x": row.end_x,
+                        "end_y": row.end_y,
+                    }
                 )
                 continue
             n_filled += 1
@@ -570,18 +660,30 @@ def fill_missing_boxes(
                 start_x = last.end_x + spec.char_width_px
                 start_y, end_y = last.start_y, last.end_y
             else:
-                nxt = next((by_index[i] for i in range(ia_index + 1, count)
-                            if i in by_index), None)
+                nxt = next(
+                    (by_index[i] for i in range(ia_index + 1, count) if i in by_index),
+                    None,
+                )
                 if nxt is None:
                     start_x, start_y, end_y = (
-                        spec.margin_px, spec.margin_px, spec.margin_px + spec.font_px)
+                        spec.margin_px,
+                        spec.margin_px,
+                        spec.margin_px + spec.font_px,
+                    )
                 else:
-                    start_x = max(spec.margin_px, nxt.start_x - width - spec.char_width_px)
+                    start_x = max(
+                        spec.margin_px, nxt.start_x - width - spec.char_width_px
+                    )
                     start_y, end_y = nxt.start_y, nxt.end_y
             out.append(
-                {"unique_paragraph_id": paragraph, "ia_index": ia_index,
-                 "start_x": start_x, "start_y": start_y,
-                 "end_x": start_x + width, "end_y": end_y}
+                {
+                    "unique_paragraph_id": paragraph,
+                    "ia_index": ia_index,
+                    "start_x": start_x,
+                    "start_y": start_y,
+                    "end_x": start_x + width,
+                    "end_y": end_y,
+                }
             )
     fraction = (n_filled / n_total) if n_total else 0.0
     return pd.DataFrame(out), fraction
@@ -618,22 +720,33 @@ git commit -m "DATA-27: interpolate boxes for unfixated interest areas"
 
 ```python
 from scanpath_studio.eyegenbench_geometry import (
-    GEOMETRY_REAL, GEOMETRY_RECONSTRUCTED, GEOMETRY_SYNTHESIZED,
-    place_fixations, resolve_geometry,
+    GEOMETRY_REAL,
+    GEOMETRY_RECONSTRUCTED,
+    GEOMETRY_SYNTHESIZED,
+    place_fixations,
+    resolve_geometry,
 )
 
 TEXTS = pd.DataFrame(
-    {"unique_paragraph_id": ["p1"], "text": ["ab cd"],
-     "text_language": ["en"], "ia_list": [["ab", "cd"]]}
+    {
+        "unique_paragraph_id": ["p1"],
+        "text": ["ab cd"],
+        "text_language": ["en"],
+        "ia_list": [["ab", "cd"]],
+    }
 )
 
 
 def test_real_geometry_wins_when_ia_data_is_present():
     raw = pd.DataFrame(
-        {"unique_paragraph_id": ["p1", "p1"], "ia_index": [0, 1],
-         "CURRENT_FIX_INTEREST_AREA_DATA": [
-             "[STATIC, RECTANGLE, 10, 20, 60, 40]",
-             "[STATIC, RECTANGLE, 70, 20, 120, 40]"]}
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, 1],
+            "CURRENT_FIX_INTEREST_AREA_DATA": [
+                "[STATIC, RECTANGLE, 10, 20, 60, 40]",
+                "[STATIC, RECTANGLE, 70, 20, 120, 40]",
+            ],
+        }
     )
     words, report = resolve_geometry("onestop", TEXTS, raw)
     assert report["geometry_source"] == GEOMETRY_REAL
@@ -662,15 +775,21 @@ def test_words_carry_their_interest_area_labels():
 
 def test_place_fixations_inverts_the_landing_position_formula():
     words = pd.DataFrame(
-        {"unique_paragraph_id": ["p1"], "ia_index": [0], "start_x": [10.0],
-         "end_x": [60.0], "start_y": [20.0], "end_y": [40.0]}
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "start_x": [10.0],
+            "end_x": [60.0],
+            "start_y": [20.0],
+            "end_y": [40.0],
+        }
     )
     fix = pd.DataFrame(
         {"unique_paragraph_id": ["p1"], "ia_index": [0], "fix_landing_position": [0.5]}
     )
     placed = place_fixations(fix, words)
-    assert placed.loc[0, "x"] == 35.0   # 10 + 0.5 * 50
-    assert placed.loc[0, "y"] == 30.0   # box vertical centre
+    assert placed.loc[0, "x"] == 35.0  # 10 + 0.5 * 50
+    assert placed.loc[0, "y"] == 30.0  # box vertical centre
     # Round-trip invariant: recovering the landing position reproduces the input.
     recovered = (placed.loc[0, "x"] - 10.0) / 50.0
     assert recovered == pytest.approx(0.5)
@@ -678,12 +797,21 @@ def test_place_fixations_inverts_the_landing_position_formula():
 
 def test_place_fixations_drops_rows_with_no_matching_box():
     words = pd.DataFrame(
-        {"unique_paragraph_id": ["p1"], "ia_index": [0], "start_x": [10.0],
-         "end_x": [60.0], "start_y": [20.0], "end_y": [40.0]}
+        {
+            "unique_paragraph_id": ["p1"],
+            "ia_index": [0],
+            "start_x": [10.0],
+            "end_x": [60.0],
+            "start_y": [20.0],
+            "end_y": [40.0],
+        }
     )
     fix = pd.DataFrame(
-        {"unique_paragraph_id": ["p1", "p9"], "ia_index": [0, 3],
-         "fix_landing_position": [0.5, 0.5]}
+        {
+            "unique_paragraph_id": ["p1", "p9"],
+            "ia_index": [0, 3],
+            "fix_landing_position": [0.5, 0.5],
+        }
     )
     assert len(place_fixations(fix, words)) == 1
 ```
@@ -716,8 +844,7 @@ def resolve_geometry(
     ia_counts = {pid: len(ia) for pid, ia in ia_lists.items()}
 
     boxes = (
-        extract_eyelink_boxes(raw_fix_df) if raw_fix_df is not None
-        else pd.DataFrame()
+        extract_eyelink_boxes(raw_fix_df) if raw_fix_df is not None else pd.DataFrame()
     )
     if not boxes.empty:
         words, interpolated = fill_missing_boxes(boxes, ia_counts, spec)
@@ -743,8 +870,9 @@ def resolve_geometry(
         for pid, ia_list in ia_lists.items()
         for i, label in enumerate(ia_list)
     ]
-    words = words.merge(pd.DataFrame(labels), on=["unique_paragraph_id", "ia_index"],
-                        how="left")
+    words = words.merge(
+        pd.DataFrame(labels), on=["unique_paragraph_id", "ia_index"], how="left"
+    )
     words["geometry_source"] = source
     report = {
         "geometry_source": source,
@@ -763,10 +891,14 @@ def place_fixations(fix_df: pd.DataFrame, words: pd.DataFrame) -> pd.DataFrame:
     cannot be placed, and a wrong placement is worse than a missing one.
     """
     cols = ["unique_paragraph_id", "ia_index", "start_x", "end_x", "start_y", "end_y"]
-    merged = fix_df.merge(words[cols], on=["unique_paragraph_id", "ia_index"], how="inner")
-    landing = pd.to_numeric(
-        merged.get("fix_landing_position", 0.5), errors="coerce"
-    ).fillna(0.5).clip(0.0, 1.0)
+    merged = fix_df.merge(
+        words[cols], on=["unique_paragraph_id", "ia_index"], how="inner"
+    )
+    landing = (
+        pd.to_numeric(merged.get("fix_landing_position", 0.5), errors="coerce")
+        .fillna(0.5)
+        .clip(0.0, 1.0)
+    )
     merged["x"] = merged["start_x"] + landing * (merged["end_x"] - merged["start_x"])
     merged["y"] = (merged["start_y"] + merged["end_y"]) / 2.0
     return merged
@@ -819,27 +951,53 @@ def bundle(tmp_path):
     ds = root / "PoTeC"
     ds.mkdir(parents=True)
     pd.DataFrame(
-        {"unique_paragraph_id": ["p1", "p1"], "ia_index": [0, 1],
-         "ia_label": ["ab", "cd"], "line": [0, 0],
-         "start_x": [10.0, 70.0], "end_x": [60.0, 120.0],
-         "start_y": [20.0, 20.0], "end_y": [40.0, 40.0],
-         "geometry_source": ["real", "real"]}
+        {
+            "unique_paragraph_id": ["p1", "p1"],
+            "ia_index": [0, 1],
+            "ia_label": ["ab", "cd"],
+            "line": [0, 0],
+            "start_x": [10.0, 70.0],
+            "end_x": [60.0, 120.0],
+            "start_y": [20.0, 20.0],
+            "end_y": [40.0, 40.0],
+            "geometry_source": ["real", "real"],
+        }
     ).to_parquet(ds / "words.parquet")
     pd.DataFrame(
-        {"unique_trial_id": ["t1", "t1"], "unique_participant_id": ["r1", "r1"],
-         "unique_paragraph_id": ["p1", "p1"], "fix_index": [0, 1],
-         "ia_index": [0, 1], "fix_duration": [200, 180],
-         "x": [35.0, 95.0], "y": [30.0, 30.0], "geometry_source": ["real", "real"]}
+        {
+            "unique_trial_id": ["t1", "t1"],
+            "unique_participant_id": ["r1", "r1"],
+            "unique_paragraph_id": ["p1", "p1"],
+            "fix_index": [0, 1],
+            "ia_index": [0, 1],
+            "fix_duration": [200, 180],
+            "x": [35.0, 95.0],
+            "y": [30.0, 30.0],
+            "geometry_source": ["real", "real"],
+        }
     ).to_parquet(ds / "fixations.parquet")
     pd.DataFrame(
         {"unique_participant_id": ["r1"], "participant_language": ["de"]}
     ).to_parquet(ds / "participants.parquet")
-    (root / "manifest.json").write_text(json.dumps({
-        "datasets": [{"name": "PoTeC", "language": "German", "geometry_source": "real",
-                      "monitor": [1680, 1050], "n_readers": 1, "n_texts": 1,
-                      "n_fixations": 2, "interpolated_fraction": 0.0,
-                      "display_source": "pymovements:potec"}]
-    }))
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "datasets": [
+                    {
+                        "name": "PoTeC",
+                        "language": "German",
+                        "geometry_source": "real",
+                        "monitor": [1680, 1050],
+                        "n_readers": 1,
+                        "n_texts": 1,
+                        "n_fixations": 2,
+                        "interpolated_fraction": 0.0,
+                        "display_source": "pymovements:potec",
+                    }
+                ]
+            }
+        )
+    )
     return root
 
 
@@ -1049,7 +1207,8 @@ def load_eyegenbench(root, *, dataset: str) -> Tuple[pd.DataFrame, pd.DataFrame]
 
     words, fixations = eyegenbench_raw_frames(root, dataset=dataset)
     return load_scanpath_data(
-        words, fixations,
+        words,
+        fixations,
         word_schema=EYEGENBENCH_WORD_SCHEMA,
         fix_schema=EYEGENBENCH_FIX_SCHEMA,
     )
@@ -1104,10 +1263,10 @@ Expected: FAIL — `KeyError: 'geometry_source'`
 Add to **both** lists, keeping each list's existing formatting:
 
 ```python
-    # DATA-27: which tier the EyeGenBench word boxes came from --
-    # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
-    # reconstructed layout rather than pass it off as the original screen.
-    ("geometry_source", "geometry_source", "passthrough", "meta"),
+# DATA-27: which tier the EyeGenBench word boxes came from --
+# "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
+# reconstructed layout rather than pass it off as the original screen.
+(("geometry_source", "geometry_source", "passthrough", "meta"),)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1153,12 +1312,25 @@ spec = importlib.util.spec_from_file_location("prepare_eyegenbench", SCRIPT)
 prep = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prep)
 
-TEXTS = pd.DataFrame({"unique_paragraph_id": ["p1"], "text": ["ab cd"],
-                      "text_language": ["en"], "ia_list": [["ab", "cd"]]})
-FIX = pd.DataFrame({"unique_trial_id": ["t1", "t1"], "unique_participant_id": ["r1", "r1"],
-                    "unique_paragraph_id": ["p1", "p1"], "fix_index": [0, 1],
-                    "ia_index": [0, 1], "fix_duration": [200, 180],
-                    "fix_landing_position": [0.5, 0.5]})
+TEXTS = pd.DataFrame(
+    {
+        "unique_paragraph_id": ["p1"],
+        "text": ["ab cd"],
+        "text_language": ["en"],
+        "ia_list": [["ab", "cd"]],
+    }
+)
+FIX = pd.DataFrame(
+    {
+        "unique_trial_id": ["t1", "t1"],
+        "unique_participant_id": ["r1", "r1"],
+        "unique_paragraph_id": ["p1", "p1"],
+        "fix_index": [0, 1],
+        "ia_index": [0, 1],
+        "fix_duration": [200, 180],
+        "fix_landing_position": [0.5, 0.5],
+    }
+)
 PARTS = pd.DataFrame({"unique_participant_id": ["r1"], "participant_language": ["de"]})
 
 
@@ -1184,7 +1356,10 @@ def test_build_bundle_places_fixations_inside_their_boxes(tmp_path):
 def test_write_manifest_merges_entries_across_runs(tmp_path):
     prep.write_manifest(tmp_path, [{"name": "A", "monitor": [1, 2]}])
     prep.write_manifest(tmp_path, [{"name": "B", "monitor": [3, 4]}])
-    names = [d["name"] for d in json.loads((tmp_path / "manifest.json").read_text())["datasets"]]
+    names = [
+        d["name"]
+        for d in json.loads((tmp_path / "manifest.json").read_text())["datasets"]
+    ]
     assert sorted(names) == ["A", "B"]
 
 
@@ -1244,12 +1419,45 @@ MANIFEST_NAME = "manifest.json"
 # The 39 loadable EyeGenBench datasets. `gazebasereading` is excluded -- still a
 # NotImplementedError stub upstream.
 DATASETS = [
-    "adegbts", "bsc", "bscii", "celer", "cfiltcoreference", "cfiltessaygrading",
-    "cfiltsarcasm", "cfiltscanpath", "cfiltsentiment", "chinesereading", "colagaze",
-    "copco", "cuentos", "emtec", "etdd70", "eyevoicespan", "gaze4hate", "ggtg",
-    "iitbhgc", "interead", "mecol1w1", "mecol1w2", "mecol2w1", "mecol2w2", "oasstetc",
-    "onestop", "potec", "provo", "psc2", "psr", "raccoons", "readingbrain",
-    "readingbrainl2", "rsc", "sbsat", "uclcorpus", "vqamhug", "zuco1", "zuco2",
+    "adegbts",
+    "bsc",
+    "bscii",
+    "celer",
+    "cfiltcoreference",
+    "cfiltessaygrading",
+    "cfiltsarcasm",
+    "cfiltscanpath",
+    "cfiltsentiment",
+    "chinesereading",
+    "colagaze",
+    "copco",
+    "cuentos",
+    "emtec",
+    "etdd70",
+    "eyevoicespan",
+    "gaze4hate",
+    "ggtg",
+    "iitbhgc",
+    "interead",
+    "mecol1w1",
+    "mecol1w2",
+    "mecol2w1",
+    "mecol2w2",
+    "oasstetc",
+    "onestop",
+    "potec",
+    "provo",
+    "psc2",
+    "psr",
+    "raccoons",
+    "readingbrain",
+    "readingbrainl2",
+    "rsc",
+    "sbsat",
+    "uclcorpus",
+    "vqamhug",
+    "zuco1",
+    "zuco2",
 ]
 
 
@@ -1328,8 +1536,11 @@ def write_manifest(out_root: Path, entries: list) -> None:
     merged = {e["name"]: e for e in existing}
     merged.update({e["name"]: e for e in entries})
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"datasets": sorted(merged.values(),
-                                                   key=lambda e: e["name"])}, indent=1))
+    path.write_text(
+        json.dumps(
+            {"datasets": sorted(merged.values(), key=lambda e: e["name"])}, indent=1
+        )
+    )
 
 
 def run_prepare_data(dataset: str, eyegenbench_root: Path):
@@ -1404,8 +1615,10 @@ def main(argv=None) -> int:
             entry = build_bundle(name, fix, text, parts, raw, out_root)
             write_manifest(out_root, [entry])
             entries.append(entry)
-            print(f"[ok]   {name}: {entry['geometry_source']}, "
-                  f"{entry['n_fixations']} fixations, {entry['n_readers']} readers")
+            print(
+                f"[ok]   {name}: {entry['geometry_source']}, "
+                f"{entry['n_fixations']} fixations, {entry['n_readers']} readers"
+            )
         except OutOfDiskError as exc:
             print(f"[stop] {exc}")
             break
@@ -1518,10 +1731,21 @@ def test_cli_accepts_the_eyegenbench_input(bundle, tmp_path):
     from scanpath_studio import cli
 
     out = tmp_path / "fig.png"
-    code = cli.main([
-        "render", "--eyegenbench", str(bundle), "--eyegenbench-dataset", "PoTeC",
-        "--participant", "r1", "--trial", "t1", "--out", str(out),
-    ])
+    code = cli.main(
+        [
+            "render",
+            "--eyegenbench",
+            str(bundle),
+            "--eyegenbench-dataset",
+            "PoTeC",
+            "--participant",
+            "r1",
+            "--trial",
+            "t1",
+            "--out",
+            str(out),
+        ]
+    )
     assert code == 0
     assert out.is_file()
 
@@ -1720,7 +1944,10 @@ def test_share_query_carries_the_chosen_dataset():
 def test_source_param_inverts_back_to_the_data_choice():
     from scanpath_studio import url_state
 
-    assert url_state._source_choice_for_param("eyegenbench") == url_state.EYEGENBENCH_CHOICE
+    assert (
+        url_state._source_choice_for_param("eyegenbench")
+        == url_state.EYEGENBENCH_CHOICE
+    )
 ```
 
 - [ ] **Step 2: Run test to verify it fails**

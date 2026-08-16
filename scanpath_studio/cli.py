@@ -13,12 +13,11 @@ working.
 from __future__ import annotations
 
 import argparse
-import importlib.resources as resources
 import json
 import os
 import sys
+from importlib import resources
 from pathlib import Path
-from typing import List, Optional
 
 import pandas as pd
 
@@ -34,10 +33,10 @@ from .constants import (
     SACCADE_CLASS_EDITABLE,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
-    drift_correction_enabled,
     SACCADE_DASH_OPTIONS,
     SACCADE_WIDTH_BOUNDS,
     UNIFORM_COLOR_FIELD,
+    drift_correction_enabled,
 )
 
 
@@ -60,7 +59,7 @@ def _drift_algorithm(value: str) -> str:
     return name
 
 
-def _theme_cli_flags() -> List[str]:
+def _theme_cli_flags() -> list[str]:
     """The branded theme as ``--theme.*`` CLI flags (BUG-6).
 
     Streamlit resolves ``.streamlit/config.toml`` relative to the launch
@@ -75,7 +74,7 @@ def _theme_cli_flags() -> List[str]:
     return flags
 
 
-def _max_upload_cli_flags(extra_args) -> List[str]:
+def _max_upload_cli_flags(extra_args) -> list[str]:
     """Raise the per-file upload cap past Streamlit's 200 MB default.
 
     Same reason as the theme above: ``.streamlit/config.toml`` is resolved
@@ -92,7 +91,7 @@ def _max_upload_cli_flags(extra_args) -> List[str]:
     return [f"--server.maxUploadSize={UPLOAD_MAX_SIZE_MB}"]
 
 
-def launch_app(extra_args: List[str]) -> None:
+def launch_app(extra_args: list[str]) -> None:
     """Launch the Streamlit app via ``streamlit run``, forwarding extra args."""
     from streamlit.web import cli as stcli
 
@@ -896,9 +895,9 @@ def _compare_animation_frames(api, args, words, fixations, canvas) -> dict:
 
 
 def _compare_setup_snapshot(
-    canvas: Optional[tuple],
-    monitor_mm: Optional[float],
-    viewing_distance: Optional[float],
+    canvas: tuple | None,
+    monitor_mm: float | None,
+    viewing_distance: float | None,
 ):
     """A `SetupSnapshot` from the CLI's geometry flags, or ``None`` if silent.
 
@@ -935,7 +934,7 @@ def _compare_setup_snapshot(
     )
 
 
-def _parse_canvas(value: Optional[str]) -> Optional[tuple]:
+def _parse_canvas(value: str | None) -> tuple | None:
     if not value:
         return None
     try:
@@ -947,7 +946,7 @@ def _parse_canvas(value: Optional[str]) -> Optional[tuple]:
     return (w, h)
 
 
-def _parse_xy(value: Optional[str]) -> Optional[tuple]:
+def _parse_xy(value: str | None) -> tuple | None:
     """Parse an ``X,Y`` origin (VIZ-4 --stimulus-image-origin) to floats."""
     if not value:
         return None
@@ -961,9 +960,9 @@ def _parse_xy(value: Optional[str]) -> Optional[tuple]:
 
 
 def _load_multipleye_render(
-    export: Optional[str],
-    participant: Optional[str],
-    trial: Optional[str],
+    export: str | None,
+    participant: str | None,
+    trial: str | None,
     *,
     list_only: bool = False,
     include_question_screens: bool = True,
@@ -1062,12 +1061,14 @@ def _load_multipleye_render(
                 f"No MultiplEYE trial_num={trial_num} for session {session!r} "
                 f"(available: {avail})."
             )
-        tid = sorted(match["trial_id"].astype(str).unique())[0]
+        tid = min(match["trial_id"].astype(str).unique())
 
     return words, fixations, pid, tid
 
 
-def render(argv: List[str]) -> None:
+def render(argv: list[str]) -> None:
+    # Bound, not inlined: DATA-27's --eyegenbench branch calls
+    # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
     parser = _render_parser()
     args = parser.parse_args(argv)
     # Validate everything derivable from argv before the (possibly minutes-long
@@ -1670,7 +1671,7 @@ def render(argv: List[str]) -> None:
         )
 
 
-def analyze(argv: List[str]) -> None:
+def analyze(argv: list[str]) -> None:
     """Preprocess data and export the complete EXP-3 analysis family."""
     parser = argparse.ArgumentParser(
         prog="scanpath-studio analyze",
@@ -1746,7 +1747,7 @@ def analyze(argv: List[str]) -> None:
     print(f"Wrote {len(tables)} tables + run_config.json to {destination}")
 
 
-def corpus(argv: List[str]) -> None:
+def corpus(argv: list[str]) -> None:
     """Render a styled corpus figure from a tidy CSV (AN-29)."""
     parser = argparse.ArgumentParser(prog="scanpath-studio corpus")
     parser.add_argument("--input", required=True)
@@ -1775,7 +1776,7 @@ def corpus(argv: List[str]) -> None:
     print(f"Wrote {out}")
 
 
-def cache(argv: List[str]) -> None:
+def cache(argv: list[str]) -> None:
     """Inspect or clear the on-device recovery cache (ENG-30).
 
     The terminal counterpart of the app's 🗄️ Recovery cache panel, so the
@@ -1865,7 +1866,7 @@ Unrecognized arguments are forwarded to `streamlit run` (e.g.
 `scanpath-studio --server.port 8502`)."""
 
 
-def main(argv: Optional[List[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     argv = list(argv) if argv is not None else sys.argv[1:]
     if not argv:
         launch_app([])

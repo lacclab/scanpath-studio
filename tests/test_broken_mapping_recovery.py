@@ -212,9 +212,8 @@ def test_the_multipleye_preset_reports_a_rejected_load_instead_of_dying(monkeypa
     """
     # The one MultiplEYE-shaped upload fixture in the suite; sharing it beats a
     # second hand-built copy of the filename conventions the loader parses.
-    from tests.test_apptest import _mpe_upload_frames
-
     from scanpath_studio import app
+    from tests.test_apptest import _mpe_upload_frames
 
     scan, aoi = _mpe_upload_frames()
     frames = {"mpe_fix": scan, "mpe_aoi": aoi}

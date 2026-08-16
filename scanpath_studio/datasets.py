@@ -36,8 +36,8 @@ import os
 import re
 import urllib.request
 import zipfile
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
 
 import pandas as pd
 
@@ -208,7 +208,7 @@ def _read_potec_ias(root: Path, text_id: str) -> pd.DataFrame:
 def _potec_fixations(
     root: Path,
     texts: Iterable[str],
-    readers: Optional[Iterable] = None,
+    readers: Iterable | None = None,
 ) -> pd.DataFrame:
     """Concatenated per-trial fixation files with reconstructed coordinates.
 
@@ -285,10 +285,10 @@ POTEC_MONITOR = (1680, 1050)
 def potec_raw_frames(
     root,
     *,
-    readers: Optional[Iterable] = None,
-    texts: Optional[Iterable[str]] = None,
+    readers: Iterable | None = None,
+    texts: Iterable[str] | None = None,
     download: bool = False,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) PoTeC ``(words, fixations)`` frames.
 
     Same inputs as :func:`load_potec`, but returns the frames *before* schema
@@ -312,10 +312,10 @@ def potec_raw_frames(
 def load_potec(
     root,
     *,
-    readers: Optional[Iterable] = None,
-    texts: Optional[Iterable[str]] = None,
+    readers: Iterable | None = None,
+    texts: Iterable[str] | None = None,
     download: bool = False,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load PoTeC as normalized ``(words, fixations)`` frames, ready to plot.
 
     ``root`` is a clone of the PoTeC repo (with the eye-tracking data
@@ -388,7 +388,7 @@ _ONESTOP_OSF_URL = "https://osf.io/download/{resource}"
 # screen, the correctness feedback). All share the Paragraph report schema
 # (IA_LEFT/RIGHT/TOP/BOTTOM boxes, IA_LABEL word text, per-word reading measures),
 # so every part renders as a scanpath. Keep the display order = presentation order.
-_ONESTOP_PARTS: Tuple[str, ...] = (
+_ONESTOP_PARTS: tuple[str, ...] = (
     "Title",
     "Question_Preview",
     "Paragraph",
@@ -397,7 +397,7 @@ _ONESTOP_PARTS: Tuple[str, ...] = (
     "QA",
     "Feedback",
 )
-ONESTOP_DEFAULT_PARTS: Tuple[str, ...] = ("Paragraph",)
+ONESTOP_DEFAULT_PARTS: tuple[str, ...] = ("Paragraph",)
 
 # OSF ids for the all-regimes **full** release (every part), from the OneStop
 # repo's download_data_files.py "onestop-full" group. kind → part → OSF id.
@@ -437,7 +437,7 @@ _ONESTOP_REGIMES = {
 ONESTOP_VARIANTS = ("public", "lacclab")
 
 
-def _onestop_osf_resource(kind: str, part: str, regime: str) -> Optional[str]:
+def _onestop_osf_resource(kind: str, part: str, regime: str) -> str | None:
     """OSF id for a (kind, part, regime), or None when not published.
 
     Paragraph is regime-split (four separate downloads); every other part only
@@ -479,7 +479,7 @@ def _onestop_part_paths(
     return _onestop_report_path(root, kind, regime, part)
 
 
-def _normalize_onestop_parts(parts: Optional[Iterable[str]]) -> list:
+def _normalize_onestop_parts(parts: Iterable[str] | None) -> list:
     """Validate + order a requested parts selection (defaults to Paragraph)."""
     if not parts:
         return list(ONESTOP_DEFAULT_PARTS)
@@ -497,7 +497,7 @@ def onestop_present(
     root,
     *,
     regime: str = "ordinary",
-    parts: Optional[Iterable[str]] = None,
+    parts: Iterable[str] | None = None,
     variant: str = "public",
 ) -> bool:
     """True when ``root`` holds the IA + fixation reports for every chosen part.
@@ -516,7 +516,7 @@ def download_onestop(
     root,
     *,
     regime: str = "ordinary",
-    parts: Optional[Iterable[str]] = None,
+    parts: Iterable[str] | None = None,
 ) -> Path:
     """Download a OneStop regime + parts' IA + fixation reports into ``root``.
 
@@ -591,7 +591,7 @@ def _read_onestop_part(
 
 def _fold_onestop_part_into_identity(
     words: pd.DataFrame, fixations: pd.DataFrame, parts: list
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """When >1 part is loaded, prefix the paragraph id with the part.
 
     Every part of a trial shares the same ``paragraph_id`` / ``TRIAL_INDEX``, so
@@ -620,10 +620,10 @@ def onestop_raw_frames(
     root,
     *,
     regime: str = "ordinary",
-    parts: Optional[Iterable[str]] = None,
+    parts: Iterable[str] | None = None,
     variant: str = "public",
     download: bool = False,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) OneStop ``(words, fixations)`` frames.
 
     Reads the interest-area + fixation reports for each chosen ``part`` of
@@ -667,10 +667,10 @@ def load_onestop(
     root,
     *,
     regime: str = "ordinary",
-    parts: Optional[Iterable[str]] = None,
+    parts: Iterable[str] | None = None,
     variant: str = "public",
     download: bool = False,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load OneStop as normalized ``(words, fixations)`` frames, ready to plot.
 
     ``root`` is a folder holding (or to download into, public variant only) the
@@ -783,7 +783,7 @@ def _multipleye_screen_kind(page) -> str:
     return ""
 
 
-def _multipleye_page_number(page) -> Optional[int]:
+def _multipleye_page_number(page) -> int | None:
     """The 1-based page number of a ``page_N`` screen, or None."""
     text = str(page)
     return int(text[5:]) if text.startswith("page_") and text[5:].isdigit() else None
@@ -796,7 +796,7 @@ def _multipleye_page_number(page) -> Optional[int]:
 _MULTIPLEYE_QUESTION_RE = re.compile(r"question_(?P<qid>\d+)(?:_(?P<block>.+))?$")
 
 
-def _multipleye_question_parts(page) -> Optional[Tuple[int, str]]:
+def _multipleye_question_parts(page) -> tuple[int, str] | None:
     """``(question_id, aoi_block)`` for a question screen / AOI page, or None.
 
     ``question_4111`` → ``(4111, "stem")`` (the fixations' name and the AOI's
@@ -813,7 +813,7 @@ def _multipleye_question_screen_id(question_id: int) -> str:
     return f"question_{question_id}"
 
 
-def _multipleye_bare_pid(participant_id) -> Optional[int]:
+def _multipleye_bare_pid(participant_id) -> int | None:
     """The integer pid inside a session string (``001_ZH_CH_1_ET1`` → 1)."""
     head = str(participant_id).split("_", 1)[0]
     return int(head) if head.isdigit() else None
@@ -829,7 +829,7 @@ _MULTIPLEYE_TRIAL_RE = re.compile(
 )
 
 
-def _multipleye_parse_filename(stem: str) -> Optional[dict]:
+def _multipleye_parse_filename(stem: str) -> dict | None:
     """Parse a per-trial file stem into its identity parts, or ``None``."""
     match = _MULTIPLEYE_TRIAL_RE.match(stem)
     return match.groupdict() if match else None
@@ -865,7 +865,7 @@ _FONT_SIZE_RE = re.compile(r"^\s*FONT_SIZE\s*=\s*([0-9]+(?:\.[0-9]+)?)", re.MULT
 _FONT_FILE_RE = re.compile(r"^\s*FONT\s*=\s*[\"']([^\"']+)[\"']", re.MULTILINE)
 
 
-def _multipleye_config_path(root: Path) -> Optional[Path]:
+def _multipleye_config_path(root: Path) -> Path | None:
     """The stimulus-generation config (``stimuli_*/config/config_*.py``), or None."""
     return next(iter(sorted(root.glob("stimuli_*/config/config_*.py"))), None)
 
@@ -874,8 +874,7 @@ def _multipleye_font_css(font_file: str) -> str:
     """CSS font-family stack for a config ``FONT`` path (e.g. a ``.ttf`` filename)."""
     stem = re.sub(r"[^a-z0-9]", "", Path(font_file).stem.lower())
     for drop in _FONT_NAME_DROP:
-        if stem.endswith(drop):
-            stem = stem[: -len(drop)]
+        stem = stem.removesuffix(drop)
     if stem in _MULTIPLEYE_FONT_CSS:
         return _MULTIPLEYE_FONT_CSS[stem]
     # Unknown font: humanise the file stem (spaces at case/digit boundaries) and
@@ -886,7 +885,7 @@ def _multipleye_font_css(font_file: str) -> str:
     return f"'{human}', {tail}" if human else tail
 
 
-def _multipleye_font_config(root: Path) -> Tuple[Optional[float], Optional[str]]:
+def _multipleye_font_config(root: Path) -> tuple[float | None, str | None]:
     """``(font_px, css_font_family)`` from the stimulus config, or ``(None, None)``.
 
     Reads ``FONT_SIZE`` (monitor px the images were rendered at) and ``FONT`` (the
@@ -992,7 +991,7 @@ def _multipleye_word_boxes(aoi_dir: Path, stimuli: Iterable[str]) -> pd.DataFram
 # --- Question screens: layout version → AOI blocks → per-screen word boxes ---
 
 
-def _multipleye_versions_path(root: Path) -> Optional[Path]:
+def _multipleye_versions_path(root: Path) -> Path | None:
     """The answer-layout version table under ``root``, or None."""
     return next(
         iter(sorted(root.glob("stimuli_*/config/stimulus_order_versions_*.csv"))),
@@ -1000,7 +999,7 @@ def _multipleye_versions_path(root: Path) -> Optional[Path]:
     )
 
 
-def _multipleye_layout_versions(frame: Optional[pd.DataFrame]) -> dict:
+def _multipleye_layout_versions(frame: pd.DataFrame | None) -> dict:
     """``{bare pid -> question-image layout version}`` from a versions table.
 
     ``stimulus_order_versions_*.csv`` has one row per ``version_number`` with an
@@ -1052,7 +1051,7 @@ def _multipleye_question_block_order(chars: pd.DataFrame) -> pd.DataFrame:
 
 
 def _multipleye_question_boxes_from_frame(
-    chars: pd.DataFrame, stimulus: str, version: Optional[int]
+    chars: pd.DataFrame, stimulus: str, version: int | None
 ) -> pd.DataFrame:
     """Question-screen word boxes for one stimulus at one answer-layout version.
 
@@ -1113,7 +1112,7 @@ def _multipleye_question_boxes_from_frame(
 
 
 def _stamp_multipleye_fixations(
-    df: pd.DataFrame, info: dict, *, kinds: Tuple[str, ...] = ("reading",)
+    df: pd.DataFrame, info: dict, *, kinds: tuple[str, ...] = ("reading",)
 ) -> pd.DataFrame:
     """Filter to the wanted screen kinds and stamp identity parsed from a filename.
 
@@ -1161,8 +1160,8 @@ def _stamp_multipleye_fixations(
 def _multipleye_fixations(
     root: Path,
     source: str,
-    sessions: Optional[Iterable[str]],
-    stimuli: Optional[Iterable[str]],
+    sessions: Iterable[str] | None,
+    stimuli: Iterable[str] | None,
     *,
     include_question_screens: bool = True,
 ) -> pd.DataFrame:
@@ -1189,7 +1188,7 @@ def _multipleye_fixations(
         else ("reading",)
     )
 
-    def _wanted(path: Path) -> Optional[dict]:
+    def _wanted(path: Path) -> dict | None:
         info = _multipleye_parse_filename(path.stem)
         if info is None:
             return None
@@ -1355,7 +1354,7 @@ _MULTIPLEYE_RM_RE = re.compile(
 )
 
 
-def _multipleye_questions_path(root: Path) -> Optional[Path]:
+def _multipleye_questions_path(root: Path) -> Path | None:
     """The comprehension-questions workbook under ``root``, or None."""
     return next(
         iter(sorted(root.glob("stimuli_*/multipleye_comprehension_questions_*.xlsx"))),
@@ -1363,7 +1362,7 @@ def _multipleye_questions_path(root: Path) -> Optional[Path]:
     )
 
 
-def _multipleye_image_dir(root: Path) -> Optional[Tuple[Path, str]]:
+def _multipleye_image_dir(root: Path) -> tuple[Path, str] | None:
     """``(stimulus-images dir, language tag)`` or None.
 
     The language is read from the directory name (``stimuli_images_zh_ch_1`` →
@@ -1375,7 +1374,7 @@ def _multipleye_image_dir(root: Path) -> Optional[Tuple[Path, str]]:
     return None
 
 
-def _multipleye_question_image_dir(root: Path) -> Optional[Tuple[Path, str]]:
+def _multipleye_question_image_dir(root: Path) -> tuple[Path, str] | None:
     """``(question-images dir, language tag)`` or None.
 
     Holds one ``question_images_version_<N>/`` per answer layout; the images are
@@ -1443,8 +1442,8 @@ def _multipleye_questions_by_stimulus(xlsx_path: Path) -> dict:
 
 
 def _normalize_multipleye_participant_meta(
-    df: Optional[pd.DataFrame],
-) -> Optional[pd.DataFrame]:
+    df: pd.DataFrame | None,
+) -> pd.DataFrame | None:
     """Select + namespace reader-metadata columns from a participant_data frame.
 
     One row per ``(participant_id:Int64, session:str)``; None if the join keys
@@ -1464,7 +1463,7 @@ def _normalize_multipleye_participant_meta(
     return out.rename(columns=keep).drop_duplicates(["participant_id", "session"])
 
 
-def _multipleye_participant_meta(root: Path) -> Optional[pd.DataFrame]:
+def _multipleye_participant_meta(root: Path) -> pd.DataFrame | None:
     """Reader metadata from ``participant_data.csv`` (namespaced ``pp_*``), or None."""
     path = root / "participant_data.csv"
     return (
@@ -1475,7 +1474,7 @@ def _multipleye_participant_meta(root: Path) -> Optional[pd.DataFrame]:
 
 
 def _merge_multipleye_participant_meta(
-    fixations: pd.DataFrame, meta: Optional[pd.DataFrame]
+    fixations: pd.DataFrame, meta: pd.DataFrame | None
 ) -> pd.DataFrame:
     """Left-merge reader metadata onto fixations by ``(int(participant), session)``.
 
@@ -1494,7 +1493,7 @@ def _merge_multipleye_participant_meta(
 
 def _multipleye_read_reading_measures(
     root: Path,
-    sessions: Optional[Iterable[str]],
+    sessions: Iterable[str] | None,
     stim_namemap: dict,
 ) -> pd.DataFrame:
     """Per-(reader, page, word) reading measures, columns renamed to IA_*.
@@ -1538,7 +1537,7 @@ def _multipleye_words_per_reader(
     stim_boxes: pd.DataFrame,
     rm: pd.DataFrame,
     fixations: pd.DataFrame,
-    question_boxes: Optional[pd.DataFrame] = None,
+    question_boxes: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Reading-page boxes per reader, scoped to the screens they actually fixated.
 
@@ -1631,7 +1630,7 @@ def _multipleye_question_word_boxes(
     )
 
 
-def _multipleye_question_aoi_frame(aoi_source, stimulus: str) -> Optional[pd.DataFrame]:
+def _multipleye_question_aoi_frame(aoi_source, stimulus: str) -> pd.DataFrame | None:
     """One stimulus' question-AOI rows, from a directory or an uploaded map."""
     if isinstance(aoi_source, dict):
         return aoi_source.get(stimulus.lower())
@@ -1673,7 +1672,7 @@ def _multipleye_drop_screens_without_boxes(
 
 def _multipleye_apply_screen_order(
     words: pd.DataFrame, fixations: pd.DataFrame, *, by_onset: bool
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Stamp ``screen_index`` (+ the per-screen clock) on both frames.
 
     Ranks only the **included** screens, so the indices stay a contiguous 1..N
@@ -1785,7 +1784,7 @@ def _multipleye_stamp_question_image_path(
 
 
 def _multipleye_stamp_font(
-    df: pd.DataFrame, font_px: Optional[float], family: Optional[str]
+    df: pd.DataFrame, font_px: float | None, family: str | None
 ) -> pd.DataFrame:
     """Stamp the stimulus typeface (``stimulus_font_px`` / ``stimulus_font_family``).
 
@@ -1803,7 +1802,7 @@ def _multipleye_stamp_font(
 
 def multipleye_inventory(
     root, *, fixation_source: str = "scanpaths"
-) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """(sessions, stimuli) available under a MultiplEYE ``root``.
 
     Cheap directory scan (filenames only, no CSV reads) for the app's
@@ -1831,12 +1830,12 @@ def multipleye_inventory(
 def multipleye_raw_frames(
     root,
     *,
-    sessions: Optional[Iterable[str]] = None,
-    stimuli: Optional[Iterable[str]] = None,
+    sessions: Iterable[str] | None = None,
+    stimuli: Iterable[str] | None = None,
     fixation_source: str = "scanpaths",
     attach_reading_measures: bool = True,
     include_question_screens: bool = True,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw (pre-normalization) MultiplEYE ``(words, fixations)`` frames.
 
     Same inputs as :func:`load_multipleye`, but returns the frames *before*
@@ -1948,11 +1947,11 @@ def multipleye_raw_frames(
 def load_multipleye(
     root,
     *,
-    sessions: Optional[Iterable[str]] = None,
-    stimuli: Optional[Iterable[str]] = None,
+    sessions: Iterable[str] | None = None,
+    stimuli: Iterable[str] | None = None,
     fixation_source: str = "scanpaths",
     include_question_screens: bool = True,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load MultiplEYE as normalized ``(words, fixations)`` frames, ready to plot.
 
     ``root`` is a MultiplEYE session set (e.g.
@@ -2005,7 +2004,7 @@ MULTIPLEYE_DATA_DIR_ENV = "MULTIPLEYE_DATA_DIR"
 MULTIPLEYE_BUNDLE_FIXATION_SOURCE = "scanpaths"
 
 
-def multipleye_bundle_dir() -> Optional[Path]:
+def multipleye_bundle_dir() -> Path | None:
     """Resolve the configured MultiplEYE raw-export root, if any."""
     raw = os.environ.get(MULTIPLEYE_DATA_DIR_ENV, "").strip()
     if not raw:
@@ -2017,7 +2016,7 @@ def multipleye_bundle_dir() -> Optional[Path]:
 
 def _resolve_multipleye_session(
     root: Path, participant: str, fixation_source: str
-) -> Optional[str]:
+) -> str | None:
     """Match a case-insensitive deep-link participant to its session id."""
     sessions, _ = multipleye_inventory(root, fixation_source=fixation_source)
     wanted = participant.strip().lower()
@@ -2025,8 +2024,8 @@ def _resolve_multipleye_session(
 
 
 def load_multipleye_server_bundle(
-    participant: Optional[str] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    participant: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load the configured raw MultiplEYE export for the app review source.
 
     A participant narrows the load to its case-insensitively matched session;
@@ -2126,13 +2125,13 @@ def _multipleye_fixations_from_frame(
 
 def multipleye_frames_from_uploads(
     fixations_df: pd.DataFrame,
-    aoi_df: Optional[pd.DataFrame] = None,
+    aoi_df: pd.DataFrame | None = None,
     *,
-    questions_df: Optional[pd.DataFrame] = None,
-    participant_meta_df: Optional[pd.DataFrame] = None,
-    versions_df: Optional[pd.DataFrame] = None,
+    questions_df: pd.DataFrame | None = None,
+    participant_meta_df: pd.DataFrame | None = None,
+    versions_df: pd.DataFrame | None = None,
     include_question_screens: bool = True,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Raw MultiplEYE ``(words, fixations)`` frames from UPLOADED files.
 
     The browser-upload analogue of :func:`multipleye_raw_frames`: identity is
@@ -2221,13 +2220,13 @@ def multipleye_frames_from_uploads(
 
 def load_multipleye_uploads(
     fixations_df: pd.DataFrame,
-    aoi_df: Optional[pd.DataFrame] = None,
+    aoi_df: pd.DataFrame | None = None,
     *,
-    questions_df: Optional[pd.DataFrame] = None,
-    participant_meta_df: Optional[pd.DataFrame] = None,
-    versions_df: Optional[pd.DataFrame] = None,
+    questions_df: pd.DataFrame | None = None,
+    participant_meta_df: pd.DataFrame | None = None,
+    versions_df: pd.DataFrame | None = None,
     include_question_screens: bool = True,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normalized ``(words, fixations)`` from UPLOADED MultiplEYE files.
 
     Like :func:`load_multipleye`, but for in-memory uploaded frames (identity from

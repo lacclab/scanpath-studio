@@ -26,6 +26,7 @@ from scanpath_studio.data import (
     normalize_raw_gaze,
     normalize_words,
     pick_column,
+    propose_fix_schema,
     propose_word_schema,
     reset_fingerprint_memo,
     trial_id_series,
@@ -94,6 +95,53 @@ class TestProposeWordSchemaMatching:
         assert schema["right"] == "IA Right"
         assert schema["top"] == "IA Top"
         assert schema["bottom"] == "IA Bottom"
+
+
+class TestProposeFixSchemaMatching:
+    """propose_fix_schema resolves EyeGenBench's harmonized column names.
+
+    DATA-27 R32: `FIX_FIXATION_ID_CANDIDATES`/`FIX_WORD_ID_CANDIDATES` had no
+    entry for `fix_index`/`ia_index`, and `PARTICIPANT_CANDIDATES` had none for
+    `unique_participant_id` — so the app's auto-detect path (unlike the
+    explicit `EYEGENBENCH_FIX_SCHEMA` the headless loader uses) silently
+    dropped all three fields on every EyeGenBench corpus. See
+    `scanpath_studio/eyegenbench.py::EYEGENBENCH_FIX_SCHEMA`.
+    """
+
+    def test_eyegenbench_columns_resolve_participant_fixation_id_and_word_id(self):
+        df = pd.DataFrame(
+            {
+                "unique_participant_id": ["r1", "r1"],
+                "unique_paragraph_id": ["p1", "p1"],
+                "fix_duration": [200, 180],
+                "x": [35.0, 95.0],
+                "y": [30.0, 30.0],
+                "fix_index": [0, 1],
+                "ia_index": [0, 1],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["participant"] == "unique_participant_id"
+        assert schema["fixation_id"] == "fix_index"
+        assert schema["word_id"] == "ia_index"
+
+    def test_unique_participant_id_outranks_recording_session_label(self):
+        # Provo carries both columns (a coincidental parallel id, per the
+        # brief); `unique_participant_id` is the one EYEGENBENCH_FIX_SCHEMA
+        # names, and it must win regardless of which column exists in a given
+        # corpus. Pin the *priority*, not just presence of either alone.
+        df = pd.DataFrame(
+            {
+                "unique_participant_id": ["r1", "r1"],
+                "RECORDING_SESSION_LABEL": ["session_9", "session_9"],
+                "unique_paragraph_id": ["p1", "p1"],
+                "fix_duration": [200, 180],
+                "x": [35.0, 95.0],
+                "y": [30.0, 30.0],
+            }
+        )
+        schema = propose_fix_schema(df)
+        assert schema["participant"] == "unique_participant_id"
 
 
 class TestDefaultBoxFormat:

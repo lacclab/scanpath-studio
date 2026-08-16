@@ -198,3 +198,9 @@ uv.lock
 # clones, and keeping the counter out of git is what stops tracker/state.json
 # from conflicting on every parallel pull.
 tracker/.local.json
+
+# Subagent-driven-development scratch (ledger, briefs, review packages).
+.superpowers/
+
+# DATA-27: EyeGenBench preprocessing venv (torch/lightning); never the app venv.
+.venv-eyegenbench/

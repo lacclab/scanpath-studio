@@ -29,9 +29,11 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Callable, Mapping
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
@@ -56,6 +58,10 @@ from scanpath_studio.constants import (
     _VIEW_DATA,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
+    BENCHMARK_LABEL_SUFFIX,
+    BENCHMARK_SETUP_CHOICE,
+    BENCHMARK_SHORT_SUFFIX,
+    BENCHMARK_WIP_SUFFIX,
     CITATION,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
@@ -63,6 +69,7 @@ from scanpath_studio.constants import (
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
+    EYEGENBENCH_DEFAULT_DIR,
     FONT_FAMILY,
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
@@ -78,6 +85,7 @@ from scanpath_studio.constants import (
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
     WORD_LABEL_COLOR,
+    language_display,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -173,6 +181,7 @@ from scanpath_studio.persistence import (
     save_local_state,
     set_persistence_paused,
 )
+from scanpath_studio.session_keys import COLUMN_MAPPING_PREFIX, PARAM_CORPUS
 from scanpath_studio.styles import get_app_css
 from scanpath_studio.tabs import (
     _build_figure_settings,
@@ -196,6 +205,7 @@ from scanpath_studio.tour import (
     render_use_case_tutorial,
 )
 from scanpath_studio.url_state import (
+    CORPUS_SOURCE_TOKEN,
     _active_view,
     _apply_pending_trial_selection,
     _apply_uploaded_plot_config,
@@ -204,6 +214,7 @@ from scanpath_studio.url_state import (
     _build_share_query,  # noqa: F401  re-exported for tests
     _go_data,
     _render_share_body,
+    corpus_choice_for_slug,
 )
 
 # NOTE: ``scanpath_studio.wizard`` is imported lazily inside the two functions
@@ -588,6 +599,35 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
         )
 
 
+def _render_start_fresh_panel(*, slot=None) -> None:
+    """Render the "🧹 Start fresh" block of the 💾 Session popover (BUG-28).
+
+    Two buttons, both reachable from every view, for the session that has
+    painted itself into a corner: back to the bundled demo (the wedged-dataset
+    case — the source picker is on the 🗂️ Data page, which is precisely where a
+    dataset that won't load leaves nothing usable), and clear the computed
+    cache. Renders **bare** into ``slot``: the popover trigger and the block
+    heading in :mod:`scanpath_studio.menu` are the disclosure.
+    """
+    container = slot if slot is not None else st.container()
+    container.button(
+        DEMO_RESET_LABEL,
+        key="session_load_demo",
+        width="stretch",
+        help=DEMO_RESET_HELP,
+        on_click=load_bundled_demo,
+    )
+    container.button(
+        "🧹 Clear cached computations",
+        key="session_clear_cache",
+        width="stretch",
+        help="Recompute every figure, table and normalization from the data "
+        "already loaded. Nothing is lost — this cache only holds results the "
+        "app can rebuild. The saved session on this computer is untouched.",
+        on_click=clear_computation_cache,
+    )
+
+
 def _arm_about() -> None:
     """``on_click`` callback for the About button: request the dialog.
 
@@ -744,6 +784,21 @@ columns to map:
    └─ …_comprehension_questions_*.xlsx   (optional)
 ```
 `reading_measures/` and `participant_data.csv` (optional) enrich the load.
+"""
+
+_EYEGENBENCH_STRUCTURE_MD = """\
+**Expected layout** — a bundle built by
+`python scripts/prepare_eyegenbench.py --all` (or any subset of corpora). No
+download here: build the bundle locally, then point this at where it wrote
+the files.
+```
+<dir>/
+├─ manifest.json              # one entry per prepared corpus
+└─ <corpus name>/              # e.g. PoTeC, Provo, …
+   ├─ words.parquet
+   ├─ fixations.parquet
+   └─ participants.parquet
+```
 """
 
 
@@ -916,6 +971,16 @@ def _dataset_dir_input(
         value=st.session_state.get(dir_key, default_dir),
         help=dir_help,
         key=dir_key,
+        # A typed path must survive a run in which this input doesn't render —
+        # Streamlit drops an unrendered widget's key at end of run (BUG-15 /
+        # ENG-36), and *every* one of these inputs renders only while its own
+        # corpus is the selected source. The benchmark bootstrap entry made that
+        # fatal (it vanishes the moment the path it was given succeeds, so the
+        # path was lost and the corpora disappeared again on the next run — R39
+        # shipped non-functional); for the other corpora it silently forgot a
+        # hand-typed location as soon as the user looked at another source. One
+        # rule here rather than one call site remembering and three forgetting.
+        persist_state="session",
     )
     # Vertical-align the button with the input (past its label).
     browse_col.markdown("<div style='height:1.7em'></div>", unsafe_allow_html=True)
@@ -1337,6 +1402,363 @@ def _load_onestop_public_source(
         return pd.DataFrame(), pd.DataFrame()
 
 
+@st.cache_data(show_spinner="Loading EyeGenBench…")
+def _cached_eyegenbench_raw_frames(
+    root: str, dataset: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Cached raw ``(words, fixations)`` for one EyeGenBench corpus.
+
+    Cached on ``(root, dataset)`` so re-runs (toggling viz controls) don't
+    re-read the Parquet files. Keyed on plain strings, not the manifest entry
+    dict, so the cache survives an unrelated manifest re-read."""
+    from scanpath_studio.eyegenbench import eyegenbench_raw_frames
+
+    return eyegenbench_raw_frames(root, dataset=dataset)
+
+
+# A malformed manifest (an entry with no `name`, a `datasets` value that isn't a
+# list of objects) must degrade to "no corpora discovered", not crash the app:
+# `KeyError` is in here because it escapes the usual IO triple and every
+# discovery site reads entry keys (M7).
+_MANIFEST_ERRORS = (FileNotFoundError, ValueError, OSError, KeyError)
+
+
+@st.cache_data(show_spinner=False)
+def _cached_eyegenbench_datasets(root: str) -> tuple:
+    """Cached manifest entries for a bundle directory (M8).
+
+    Discovery now runs on **every** picker build and every `compare_source`
+    enumeration, once per corpus in the bundle — where the old single-source
+    shape read the manifest only while that one source was selected. Same
+    convention as `_cached_multipleye_inventory`: keyed on the resolved root, so
+    pointing the directory input somewhere else busts it.
+    """
+    from scanpath_studio.eyegenbench import eyegenbench_datasets
+
+    return tuple(eyegenbench_datasets(root))
+
+
+def discovered_benchmark_datasets() -> tuple:
+    """Manifest entries for the prepared bundle, or ``()`` when there is none.
+
+    Never raises: the picker calls this while building its option list, long
+    before anything is in a position to report a load failure to the user (the
+    corpus' own loader does that, with the directory input right beside it).
+    """
+    from scanpath_studio.eyegenbench import entry_name
+
+    try:
+        entries = _cached_eyegenbench_datasets(_eyegenbench_root_from_state())
+    except _MANIFEST_ERRORS:
+        return ()
+    # `entry_name` owns the "a row with no usable name is skipped" rule (N5);
+    # spelling it again here is how the two would drift.
+    return tuple(entry for entry in entries if entry_name(entry))
+
+
+# geometry_source values are eyegenbench_geometry.py's GEOMETRY_REAL /
+# _RECONSTRUCTED / _SYNTHESIZED (that module owns the tiering; not touched
+# here). Surfaced on each corpus' entry so a user can tell which they're looking
+# at rather than trusting a blanket claim in the description.
+_EYEGENBENCH_GEOMETRY_BADGES = {
+    "real": "✅ **Real** screen geometry — measured word boxes.",
+    "reconstructed": "🛠️ **Reconstructed** geometry — no measured boxes for "
+    "this corpus; derived from its documented display setup.",
+    "synthesized": "🧪 **Synthesized** geometry — no measured boxes or "
+    "documented display setup; a default layout was assumed.",
+}
+
+
+def _geometry_coverage_note(entry) -> str:
+    """How much of a ``real`` corpus is actually measured, or ``""`` (R34).
+
+    The single source for that qualifier: the badge and the picker description
+    print it in the same panel, one line apart, so two spellings of the rule is
+    how one of them ends up claiming uniform geometry the other has just denied
+    (M8). Empty when the corpus is uniform, or when the tier is one that already
+    says *no* measured boxes.
+
+    ``n_texts`` is missing from no real manifest, but when it is the note goes
+    vague rather than silent (M11): "some texts aren't measured" is worse copy
+    than a count and a better claim than a confident, possibly-wrong "Real".
+
+    The counts are read through `eyegenbench.entry_count`, which is also what
+    keeps a hand-mangled manifest from raising out of the *picker build* — this
+    runs for every discovered corpus via `_benchmark_description` (N1). An
+    unreadable count lands in the same vaguer wording as an absent one: it is
+    the R34-honest answer either way, and it is never worth taking the source
+    list down over a typo in a number.
+    """
+    from scanpath_studio.eyegenbench import entry_count
+
+    if str(entry.get("geometry_source") or "").strip() != "real":
+        return ""
+    missing = entry_count(entry, "paragraphs_without_real_boxes")
+    if missing is not None and missing <= 0:
+        return ""
+    total = entry_count(entry, "n_texts")
+    covered = (
+        f"measured word boxes for {max(total - missing, 0)} of {total} texts"
+        if missing is not None and total
+        else "measured word boxes for some but not all texts"
+    )
+    return f"{covered}; the rest fall back to reconstructed layout"
+
+
+def geometry_badge(entry) -> str:
+    """The one-line geometry-provenance badge for a manifest entry (R34).
+
+    `eyegenbench_geometry.py` promotes a whole corpus to ``real`` when **any**
+    paragraph has measured word boxes — the scalar means *best tier achieved*,
+    and it keeps that meaning (the per-word column already refines it, and
+    changing it would ripple into the manifest contract, the CLI and the API).
+    What must not happen is a *rendering* that implies uniformity: a corpus with
+    one measured text in a thousand would otherwise read as "✅ Real — measured
+    word boxes". So whenever ``paragraphs_without_real_boxes`` is non-zero the
+    real badge says how many texts it actually covers, and plain "Real" is
+    reserved for full coverage.
+
+    The reconstructed / synthesized badges need no such qualifier: they already
+    say *no* measured boxes, which is exactly what a non-zero count means there.
+    """
+    source = str(entry.get("geometry_source") or "").strip()
+    if not source:
+        return ""
+    badge = _EYEGENBENCH_GEOMETRY_BADGES.get(source)
+    if badge is None:
+        return f"Screen geometry: {source}"
+    if note := _geometry_coverage_note(entry):
+        return f"✅ **Real** screen geometry — {note}."
+    return badge
+
+
+def benchmark_corpus_label(name: str) -> str:
+    """The registry key for a prepared corpus named ``name``."""
+    return f"{name}{BENCHMARK_LABEL_SUFFIX}"
+
+
+def picker_name_for(choice: str, registry: dict | None = None) -> str:
+    """Exactly the name the **Data source** picker renders for ``choice``.
+
+    Anything that tells a user to "select X" must quote this, not the registry
+    key. The two differ: the picker shows the entry's `short`, and now a (WIP)
+    marker on top of it, so the bootstrap entry's key reads *"Harmonised
+    benchmark corpora — set up a local bundle"* while the list actually offers
+    *"Harmonised benchmark corpora — set up (WIP)"*. A remedy naming a string
+    that appears nowhere in the list is worse than no remedy — the reader hunts
+    for it and concludes the app is broken.
+
+    Pass ``registry`` when formatting a list of options: discovery depends on a
+    directory the user can change, so one run must format every option against
+    **one** snapshot (M6). Re-resolving per option lets an option's rendered text
+    change underneath a widget mid-run, and Streamlit finds the selected value's
+    formatted form no longer among its own options.
+    """
+    spec = (registry if registry is not None else public_dataset_registry()).get(choice)
+    if spec is None:
+        return choice
+    name = str(spec.get("short") or choice)
+    return f"{name}{BENCHMARK_WIP_SUFFIX}" if spec_is_benchmark(spec) else name
+
+
+def mark_wip_if_benchmark(choice: str) -> str:
+    """``choice`` with the (WIP) marker when it names a harmonised corpus.
+
+    The marker has to reach **every** picker that offers these corpora, not just
+    the data-source one: Comparisons' *Compare with* selectbox can load a corpus
+    as scanpath B, and a user who only ever meets it there would publish a
+    comparison against an unfinished feature without being told. Display-only in
+    both places, and the same predicate decides both.
+    """
+    spec = public_dataset_registry().get(choice)
+    return f"{choice}{BENCHMARK_WIP_SUFFIX}" if spec_is_benchmark(spec) else choice
+
+
+def spec_is_benchmark(spec) -> bool:
+    """True for a registry entry this feature owns: a prepared corpus or the
+    bootstrap placeholder.
+
+    Dispatches on the entry's own fields — `benchmark_dataset` (set by
+    `_benchmark_registry_entries`) and `setup_only` — the same discriminator
+    `compare_source.secondary_dataset_options` uses, and deliberately **not** on
+    the label's text: PoTeC and OneStop each ship natively *and* harmonised, so a
+    substring test on the label would sweep the native entries in too.
+    """
+    if not isinstance(spec, dict):
+        return False
+    return bool(spec.get("benchmark_dataset") or spec.get("setup_only"))
+
+
+def _benchmark_short_name(name: str) -> str:
+    """The picker's display name for a prepared corpus.
+
+    PoTeC and OneStop ship **both** natively in this app and in the benchmark
+    set, and the user wants both kept: the harmonised versions are what make
+    cross-corpus comparison possible, which is the point of a harmonised suite.
+    They are distinguished by the property that actually differs — one is the
+    publisher's own release, the other a re-derived harmonisation — rather than
+    by naming the pipeline (which is being extracted into its own repository, so
+    anything user-visible carrying its name would need renaming later).
+
+    The overlap is computed against the static built-ins rather than hard-coded,
+    so adding a native corpus that a bundle also carries disambiguates itself.
+    """
+    natives = {
+        str(spec.get("short") or "").lower()
+        for spec in PUBLIC_DATASET_REGISTRY.values()
+    }
+    if name.lower() in natives:
+        return f"{name}{BENCHMARK_SHORT_SUFFIX}"
+    return name
+
+
+def _benchmark_size_caption(entry) -> str:
+    """``"84 readers · 55 texts · 219,556 fixations"`` from a manifest entry.
+
+    Counts that don't parse are simply left out of the caption — via the same
+    `entry_count` the geometry note reads, rather than a second hand-rolled
+    ``try`` (N1).
+    """
+    from scanpath_studio.eyegenbench import entry_count
+
+    parts = []
+    for key, singular in (
+        ("n_readers", "reader"),
+        ("n_texts", "text"),
+        ("n_fixations", "fixation"),
+    ):
+        if count := entry_count(entry, key):
+            parts.append(f"{count:,} {singular}{'' if count == 1 else 's'}")
+    return " · ".join(parts)
+
+
+def _benchmark_description(entry, *, harmonised_overlap: bool) -> str:
+    """The one-line description under a prepared corpus' picker entry.
+
+    Carries the provenance ("EyeGenBench" belongs here, not in the label) and —
+    for a corpus this app also ships natively — the fidelity difference, which is
+    the whole reason both are offered.
+    """
+    from scanpath_studio.eyegenbench import entry_name
+
+    name = entry_name(entry)
+    lead = (
+        f"{name}, re-derived by the EyeGenBench pipeline into the benchmark's "
+        f"common schema — the same corpus as this app's own {name} entry, "
+        "prepared for cross-corpus comparison rather than for the publisher's "
+        "own geometry."
+        if harmonised_overlap
+        else f"{name} — a public reading corpus harmonised by the EyeGenBench "
+        "pipeline to one common schema and prepared locally."
+    )
+    tail = []
+    if source := str(entry.get("geometry_source") or "").strip():
+        # Same qualifier as the badge rendered beside this (M8) — a bare
+        # "Screen geometry: real" next to "measured word boxes for 9 of 12
+        # texts" is the overclaim R34 exists to prevent, one line away from
+        # the fix.
+        note = _geometry_coverage_note(entry)
+        tail.append(f"Screen geometry: {source}" + (f" — {note}" if note else ""))
+    if license_ := str(entry.get("license") or "").strip():
+        tail.append(f"License: {license_}")
+    if citation := str(entry.get("citation") or "").strip():
+        tail.append(citation)
+    return lead + (" " + ". ".join(tail) + "." if tail else "")
+
+
+def _benchmark_dir_input(loc) -> str:
+    """The shared bundle-directory input, rendered by every benchmark entry.
+
+    One session key (`eyegenbench_dir`) across all of them: the corpora live in
+    one prepared bundle, so pointing any entry somewhere else moves them all —
+    and it is what keeps the location changeable once the bootstrap entry has
+    disappeared.
+    """
+    return _dataset_dir_input(
+        loc,
+        default_dir=EYEGENBENCH_DEFAULT_DIR,
+        dir_help="Folder holding a prepared benchmark bundle. Build one with "
+        "`python scripts/prepare_eyegenbench.py --all` — there is no download "
+        "from here.",
+        structure_md=_EYEGENBENCH_STRUCTURE_MD,
+        key_prefix="eyegenbench",
+    )
+
+
+def _load_benchmark_setup_source(
+    options_host=None, location_host=None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The bootstrap entry, offered only while **zero** corpora are discovered.
+
+    Without it the setup is unreachable: discovery reads a directory the user can
+    change at runtime, so a bundle at a non-default path yields no corpora, no
+    entries — and therefore nowhere to type the path. This one placeholder
+    renders the same directory input and *Expected files* note every corpus entry
+    does, and disappears as soon as the manifest resolves.
+    """
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
+    root = _benchmark_dir_input(loc)
+    _dataset_access_status(
+        loc,
+        root=root,
+        present=False,
+        key_prefix="eyegenbench",
+        label="Harmonised benchmark corpora",
+    )
+    opt.info(
+        "No prepared corpora found here yet. Build a bundle with "
+        "`python scripts/prepare_eyegenbench.py --all`, then point the folder "
+        "below at it — each prepared corpus then appears as its own data source."
+    )
+    return load_sample_data()
+
+
+def _load_benchmark_source(
+    options_host=None, location_host=None, *, dataset: str = ""
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Location controls + loader for **one** prepared benchmark corpus.
+
+    A peer of `_load_potec_source` / `_load_multipleye_source`: one entry, one
+    corpus, no sub-picker. The returned raw frames go through the same
+    normalization as an upload, so the Column-mapping panels still appear.
+    """
+    from scanpath_studio.eyegenbench import entry_name, eyegenbench_present
+
+    opt = options_host if options_host is not None else st.container()
+    loc = location_host if location_host is not None else st.container()
+    root = _benchmark_dir_input(loc)
+    try:
+        present = eyegenbench_present(root, dataset)
+    except _MANIFEST_ERRORS:
+        present = False
+    ready = _dataset_access_status(
+        loc,
+        root=root,
+        present=present,
+        key_prefix="eyegenbench",
+        # The name the picker shows for this corpus, not a hand-built one. The
+        # "(harmonised benchmark)" suffix is added only when a native entry of
+        # the same name exists (`_benchmark_short_name`), so hardcoding it here
+        # made the empty-state call Provo "Provo (harmonised benchmark)" while
+        # the picker called it "Provo (WIP)" — two names, neither matching.
+        label=picker_name_for(benchmark_corpus_label(dataset)),
+    )
+    if not ready:
+        return load_sample_data()
+    entry = next(
+        (e for e in discovered_benchmark_datasets() if entry_name(e) == dataset),
+        None,
+    )
+    if entry and (badge := geometry_badge(entry)):
+        opt.caption(badge)
+    try:
+        return _cached_eyegenbench_raw_frames(root, dataset)
+    except _MANIFEST_ERRORS as exc:
+        loc.error(f"Couldn't load '{dataset}' from `{root}`: {exc}")
+        return pd.DataFrame(), pd.DataFrame()
+
+
 # Registry behind the "Public datasets" source: label → loader (renders its own
 # sidebar options and returns raw, pre-normalization frames), the corpus'
 # presentation-monitor size (canvas default for true-to-scale rendering; None to
@@ -1368,7 +1790,11 @@ PUBLIC_DATASET_REGISTRY: dict = {
     ),
     ONESTOP_PUBLIC_CHOICE: dict(
         loader=_load_onestop_public_source,
-        monitor=(2560, 1440),  # OneStop presentation monitor (full-screen px coords)
+        # OneStop presentation monitor (full-screen px coords). Sourced in
+        # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]` — Berzak et al. 2025,
+        # Sci Data 12:1995, Methods → Apparatus, which states the Dell U2715H
+        # at 2560 px × 1440 px over a 597 mm × 336 mm display area.
+        monitor=(2560, 1440),
         short="OneStop",
         language="English (L1)",
         # Verified against the OneStop docs (lacclab.github.io/OneStop-Eye-Movements
@@ -1384,9 +1810,80 @@ PUBLIC_DATASET_REGISTRY: dict = {
 }
 
 
-def _public_dataset_label(label: str) -> str:
-    """The picker display text for a registry entry (its short name, if any)."""
-    return PUBLIC_DATASET_REGISTRY.get(label, {}).get("short", label)
+def _benchmark_registry_entries() -> dict:
+    """One registry entry per prepared benchmark corpus (R36).
+
+    Built from the local bundle's manifest, so it varies with the directory the
+    user points at — which is why the registry as a whole had to become a
+    function. Each entry has the same shape as the static built-ins above
+    (`short` / `language` / `size` / `description` / `link` / `monitor`) and is
+    presented identically: one 🌐 entry in the flat picker, nothing nested.
+
+    ``monitor`` is **omitted** when the manifest's ``monitor_source`` is
+    ``default`` — that value is `eyegenbench_geometry.py`'s generic guess for a
+    corpus that documents no screen, and declaring it here would make the canvas
+    snap to it as though it were measured (the registry has no "declared but not
+    authoritative" tier — a declared monitor *is* the authoritative one). Without
+    it the canvas falls back to data extents, which is the honest answer. The
+    condition itself is `eyegenbench.declared_monitor`, which the CLI reads too.
+    """
+    from scanpath_studio.eyegenbench import declared_monitor, entry_name
+
+    entries: dict = {}
+    for entry in discovered_benchmark_datasets():
+        name = entry_name(entry)
+        short = _benchmark_short_name(name)
+        spec = dict(
+            loader=partial(_load_benchmark_source, dataset=name),
+            short=short,
+            language=language_display(entry.get("language")),
+            size=_benchmark_size_caption(entry),
+            description=_benchmark_description(entry, harmonised_overlap=short != name),
+            link="https://github.com/EyeBench/EyeGenBench",
+            # Marks the entry as coming from a prepared bundle, and names the
+            # corpus inside it. `compare_source` dispatches on this rather than
+            # sniffing the label, and it is the natural slug for Task 12's wire
+            # format.
+            benchmark_dataset=name,
+        )
+        # The one screen-honesty rule, shared with the CLI (`cli.render
+        # --eyegenbench`) so the same corpus can't render at an invented
+        # 1920×1080 on one surface and at data extents on the other — I3.
+        if monitor := declared_monitor(entry):
+            spec["monitor"] = monitor
+        entries[benchmark_corpus_label(name)] = spec
+    return entries
+
+
+def public_dataset_registry() -> dict:
+    """Every public corpus on offer: the static built-ins ∪ discovered corpora.
+
+    `PUBLIC_DATASET_REGISTRY` stays the literal home of the three built-ins, whose
+    entries are fixed at import time. The prepared benchmark corpora can't be:
+    they depend on a bundle directory the user can change mid-session, so they
+    are composed in here and every consumer calls this instead of reading the
+    dict. Discovery is cached (`_cached_eyegenbench_datasets`), so calling it
+    several times a run costs one manifest read.
+    """
+    registry = dict(PUBLIC_DATASET_REGISTRY)
+    discovered = _benchmark_registry_entries()
+    registry.update(discovered)
+    if not discovered:
+        # R39: with nothing discovered there is no entry, so there would be
+        # nowhere to type the bundle's path. Exactly one placeholder carries the
+        # directory input until a corpus exists.
+        registry[BENCHMARK_SETUP_CHOICE] = dict(
+            loader=_load_benchmark_setup_source,
+            short="Harmonised benchmark corpora — set up",
+            language="Multilingual",
+            size="not set up yet",
+            description="Public reading corpora harmonised to one schema by the "
+            "EyeGenBench pipeline. Build a bundle locally and point this at it; "
+            "each prepared corpus then appears as its own data source.",
+            link="https://github.com/EyeBench/EyeGenBench",
+            setup_only=True,
+        )
+    return registry
 
 
 def _load_public_dataset(
@@ -1401,11 +1898,12 @@ def _load_public_dataset(
     render into ``options_host`` / ``location_host`` (the DATA-9 ordered group).
     Returns raw, pre-normalization frames.
     """
+    registry = public_dataset_registry()
     chosen = st.session_state.get("public_dataset_choice")
-    if chosen not in PUBLIC_DATASET_REGISTRY:
-        chosen = next(iter(PUBLIC_DATASET_REGISTRY))
+    if chosen not in registry:
+        chosen = next(iter(registry))
         st.session_state["public_dataset_choice"] = chosen
-    spec = PUBLIC_DATASET_REGISTRY[chosen]
+    spec = registry[chosen]
     desc = description_host if description_host is not None else st.container()
     facts = " · ".join(f for f in (spec.get("language"), spec.get("size")) if f)
     if facts:
@@ -1424,10 +1922,28 @@ def _public_dataset_monitor(data_choice: str) -> tuple[int, int] | None:
     doesn't declare a monitor (canvas then defaults to data extents)."""
     if data_choice != PUBLIC_DATASETS_CHOICE:
         return None
-    spec = PUBLIC_DATASET_REGISTRY.get(
+    spec = public_dataset_registry().get(
         st.session_state.get("public_dataset_choice", "")
     )
     return spec.get("monitor") if spec else None
+
+
+def _eyegenbench_root_from_state() -> str:
+    """The prepared-bundle directory the picker is currently pointed at.
+
+    Mirrors `_dataset_dir_input`'s own resolution (the S2 branch included) so
+    discovery agrees with what a corpus' loader reads later in the same run,
+    without threading the resolved root through session state as a second copy
+    of the truth."""
+    if not local_filesystem_enabled():
+        return (
+            str(data_root())
+            if data_root()
+            else _resolve_data_dir(EYEGENBENCH_DEFAULT_DIR)
+        )
+    return _resolve_data_dir(
+        st.session_state.get("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR)
+    )
 
 
 def _dataset_font(words: pd.DataFrame) -> tuple[float | None, str | None]:
@@ -1683,11 +2199,142 @@ def _stash_active_mapping(table: str, schema: dict | None) -> None:
     mapping[table] = dict(schema) if schema else None
 
 
+#: Lead of the ``problems`` entry a **rejected** mapping produces, as opposed to
+#: an **incomplete** one. ``_render_unmapped_view`` branches on it to say the
+#: right thing, so keep the two in step.
+MAPPING_FAILURE_LEAD = "This column mapping doesn't work with this data"
+
+
+def mapping_failure_problem(exc: Exception) -> str:
+    """Turn a normalization failure into one more recovery ``problems`` entry.
+
+    Everything the normalize → harmonize pipeline raises is a statement about
+    the column mapping in force — a ``multipart`` identity rule (screen id in
+    only one report, orphan screens, a conflicting canvas), a non-numeric
+    coordinate column, a duplicated trial key. None of them is a reason to stop
+    rendering, and letting one propagate is actively a trap: the panels that
+    would fix the mapping are written *during* the run that dies, and the Data
+    page they live on is hidden while another view is active — so the user is
+    left with a traceback and nothing to click, which is how the app used to
+    wedge on a mapping it had auto-detected itself.
+
+    The exception is logged with its traceback (🐛 Debug panel + terminal) and
+    handed back as a string, so the existing incomplete-mapping recovery path —
+    raw tables, still-editable mapping panels, off-page signpost — carries it.
+    """
+    logging.getLogger("scanpath_studio").exception(
+        "Normalizing with the current column mapping failed."
+    )
+    return f"{MAPPING_FAILURE_LEAD}: {exc}"
+
+
+def reset_column_mapping() -> None:
+    """Drop every ``col_map_*`` key, so the mapping falls back to auto-detection.
+
+    Used both when the monitor-defining source changes (a mapping is keyed to
+    the columns it was made for) and as the escape hatch under a rejected
+    mapping. Safe from an ``on_click`` callback: it runs before the script that
+    re-creates the widgets.
+    """
+    for key in [
+        k
+        for k in list(st.session_state)
+        if isinstance(k, str) and k.startswith(COLUMN_MAPPING_PREFIX)
+    ]:
+        del st.session_state[key]
+
+
+#: Label + tooltip of the "known-good state" button, shared by the off-page
+#: signpost and the 💾 Session menu so the two read as the same action.
+DEMO_RESET_LABEL = "🧪 Load the bundled demo"
+DEMO_RESET_HELP = (
+    "Switches to the demo corpus and re-detects its column mapping. Your "
+    "uploaded datasets stay in the source list."
+)
+
+
+def load_bundled_demo() -> None:
+    """``on_click``: return to the bundled demo with a freshly detected mapping.
+
+    The one button that reaches a known-good state from anywhere, for a session
+    wedged on a dataset it cannot normalize. Three things together, because any
+    two of them leave a way to stay stuck: the source switch (through the
+    pre-widget ``_pending_source_choice`` seam — assigning the picker's value
+    inline is reconciled away by the browser), leaving the wizard the way its
+    own ✕ Cancel does, and dropping the column mapping — which a source *change*
+    already does, but the wedged source is often the demo itself, and then
+    nothing would change without this.
+    """
+    st.session_state["_pending_source_choice"] = DEMO_CHOICE
+    st.session_state["_show_upload_wizard"] = False
+    st.session_state["setup_complete"] = True
+    reset_column_mapping()
+
+
+def clear_computation_cache() -> None:
+    """``on_click``: drop every ``@st.cache_data`` entry for this process.
+
+    The blunt instrument the 💾 Session menu offers beside it. Nothing the app
+    caches is authoritative — every entry is derived from the loaded frames and
+    a key — so the only cost of clearing is recomputing it, which is exactly
+    what someone reaches for when a figure or a table looks stale. It does
+    **not** touch the on-device recovery cache (that is 🗑 Forget saved session,
+    above it) or anything in session state.
+    """
+    st.cache_data.clear()
+
+
+def _apply_declared_schema(proposed: dict, declared: dict | None) -> dict:
+    """Auto-detection, overridden by whatever the source *declares* it knows.
+
+    Auto-detection guesses a mapping from column names, which is right for an
+    upload and wrong for a corpus whose schema is a published contract. The
+    declared mapping wins for every field it names — including a field it names
+    as ``None``, which is a positive statement that the source has no such
+    column and is what clears a leftover the detector would otherwise seize on.
+    Fields the source says nothing about keep their detected value, so optional
+    passthroughs (linguistic features, EyeLink measures) still arrive.
+    """
+    if not declared:
+        return proposed
+    return {**proposed, **declared}
+
+
+def declared_schemas_for(data_choice: str) -> tuple[dict | None, dict | None]:
+    """The ``(word, fix)`` schemas the selected source publishes, or ``(None, None)``.
+
+    A prepared benchmark corpus has a **known** schema — the prep script wrote
+    it — and every other surface already loads one through it
+    (`eyegenbench.load_eyegenbench`, so `render --eyegenbench`, the headless API
+    and Comparisons' dataset B all agree). The app was the one surface that
+    re-guessed instead, and the guess is wrong on real bundles: the prepared
+    frames carry the publisher's ~190 leftover columns through, so EMTeC's
+    fixations detect `trial="TRIAL_ID"` against the words' `unique_paragraph_id`
+    and broadcast **zero** word boxes — silently, since only the words frame
+    ends up empty and the empty-pool guard never fires.
+    """
+    if data_choice != PUBLIC_DATASETS_CHOICE:
+        return None, None
+    spec = public_dataset_registry().get(
+        st.session_state.get("public_dataset_choice", "")
+    )
+    if not spec or not spec.get("benchmark_dataset"):
+        return None, None
+    from scanpath_studio.eyegenbench import (
+        EYEGENBENCH_FIX_SCHEMA,
+        EYEGENBENCH_WORD_SCHEMA,
+    )
+
+    return dict(EYEGENBENCH_WORD_SCHEMA), dict(EYEGENBENCH_FIX_SCHEMA)
+
+
 def prepare_data(
     words_df: pd.DataFrame,
     fixations_df: pd.DataFrame,
     allow_override: bool,
     mapping_host=None,
+    declared_word_schema: dict | None = None,
+    declared_fix_schema: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list]:
     """Infer schemas and normalize incoming dataframes to canonical column names.
 
@@ -1715,7 +2362,9 @@ def prepare_data(
     problems: list = []
 
     if has_words:
-        word_proposed = propose_word_schema(words_df)
+        word_proposed = _apply_declared_schema(
+            propose_word_schema(words_df), declared_word_schema
+        )
         if allow_override:
             word_schema = column_mapping_ui(
                 words_df,
@@ -1736,7 +2385,9 @@ def prepare_data(
             problems.append("Words/IA: " + "; ".join(word_problems))
 
     if has_fixations:
-        fix_proposed = propose_fix_schema(fixations_df)
+        fix_proposed = _apply_declared_schema(
+            propose_fix_schema(fixations_df), declared_fix_schema
+        )
         if allow_override:
             fix_schema = column_mapping_ui(
                 fixations_df,
@@ -1765,9 +2416,19 @@ def prepare_data(
     _stash_active_mapping("words", word_schema if has_words else None)
     _stash_active_mapping("fixations", fix_schema if has_fixations else None)
 
-    words_norm, fixations_norm = _normalize_pair(
-        words_df, word_schema, fixations_df, fix_schema
-    )
+    try:
+        words_norm, fixations_norm = _normalize_pair(
+            words_df, word_schema, fixations_df, fix_schema
+        )
+    except Exception as exc:
+        # A mapping the pipeline *rejects* recovers the same way as one that is
+        # merely incomplete. See `mapping_failure_problem`.
+        st.session_state["_composite_trial_columns"] = None
+        return (
+            empty_words_frame(),
+            empty_fixations_frame(),
+            [mapping_failure_problem(exc)],
+        )
     return words_norm, fixations_norm, problems
 
 
@@ -1796,18 +2457,38 @@ def _render_unmapped_view(
     raw_fixations_df: pd.DataFrame,
     problems: list,
 ) -> None:
-    """Show the raw uploaded data while the column mapping is incomplete.
+    """Show the raw uploaded data while the column mapping isn't usable.
 
-    The uploaded tables (unmodified) are shown so the user can inspect column
-    names and values to fill in the *Column mapping* panels without the app
-    halting.
+    Two different failures land here, and they need different words. A mapping
+    that is **incomplete** asks the user to fill a field in; one the pipeline
+    **rejected** (``MAPPING_FAILURE_LEAD``) already names what is wrong with the
+    combination they have — so it gets the error, the reason, and a one-click
+    way back to the auto-detected mapping, for when the offending pick came from
+    a restored session and editing the panel field by field is a scavenger hunt.
+
+    Either way the uploaded tables (unmodified) are shown below, so the user can
+    inspect column names and values while choosing.
     """
-    st.warning(
-        "**Finish the column mapping to draw scanpaths.** Map the missing "
-        "field(s) in the **Column mapping** section above — the raw data is "
-        "shown below to help you choose. "
-        "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
-    )
+    rejected = [p for p in problems if p.startswith(MAPPING_FAILURE_LEAD)]
+    if rejected:
+        for problem in rejected:
+            st.error(problem, icon="🚫")
+        st.caption(
+            "Change the field it names in the **Column mapping** section above, "
+            "or start again from what auto-detection proposes."
+        )
+        st.button(
+            "↩️ Reset to the auto-detected mapping",
+            key="reset_column_mapping",
+            on_click=reset_column_mapping,
+        )
+    else:
+        st.warning(
+            "**Finish the column mapping to draw scanpaths.** Map the missing "
+            "field(s) in the **Column mapping** section above — the raw data is "
+            "shown below to help you choose. "
+            "Still needed:\n\n" + "\n".join(f"- {p}" for p in problems)
+        )
     if (raw_words_df is None or raw_words_df.empty) and (
         raw_fixations_df is None or raw_fixations_df.empty
     ):
@@ -1856,15 +2537,35 @@ def _render_offpage_setup_notice(data_view: bool) -> None:
     Deliberately *not* a forced `switch_to_view`: bouncing the user back every
     run would make the other two views unreachable until the mapping is fixed,
     and that is a worse trap than an empty page with a signpost.
+
+    The second button is the way out that does **not** go through the page:
+    finishing the setup is the right answer when the dataset is nearly there,
+    but a dataset the pipeline rejects can leave the user with nothing to plot
+    and no appetite for the mapping — and the source picker itself lives on the
+    page they'd rather not visit. See :func:`load_bundled_demo`.
     """
     if data_view:
         return
     st.info(
         "**This dataset isn't set up yet**, so there's nothing to plot. "
-        "Finish it on the 🗂️ **Data** page.",
+        "Finish it on the 🗂️ **Data** page — or start over from the demo.",
         icon="🗂️",
     )
-    st.button("🗂️ Go to Data setup", on_click=_go_data, type="primary")
+    finish, demo = st.columns(2)
+    finish.button(
+        "🗂️ Go to Data setup",
+        on_click=_go_data,
+        type="primary",
+        width="stretch",
+        key="offpage_go_to_setup",
+    )
+    demo.button(
+        DEMO_RESET_LABEL,
+        on_click=load_bundled_demo,
+        width="stretch",
+        key="offpage_load_demo",
+        help=DEMO_RESET_HELP,
+    )
 
 
 # File types accepted by every upload box. ``zip`` covers single-member
@@ -2132,10 +2833,14 @@ def render_sidebar_data_source(host=None) -> str:
     for name in uploaded:
         entries.append(name)
         kinds[name] = "🔒"
-    if public_datasets_enabled():
-        for label in PUBLIC_DATASET_REGISTRY:
-            entries.append(label)
-            kinds[label] = "🌐"
+    # DATA-27 (Task 11R): every prepared benchmark corpus is in here as its own
+    # 🌐 entry, exactly like the built-ins — `public_dataset_registry()` composes
+    # the two. Resolved once and reused below so the whole run agrees on one
+    # snapshot of a registry that depends on a directory the user can change.
+    registry = public_dataset_registry() if public_datasets_enabled() else {}
+    for label in registry:
+        entries.append(label)
+        kinds[label] = "🌐"
     # UX-37: the ground-truth trial is offered **while debug mode is on** (the
     # ❓ Help toggle), rather than only via `?source=synthetic` — a URL the About
     # note and the docs had to spell out, which is the hidden-behind-a-param
@@ -2156,18 +2861,36 @@ def render_sidebar_data_source(host=None) -> str:
     # corpus was remembered, preserving the old "Public datasets → first corpus".
     if st.session_state.get("data_source_choice") == PUBLIC_DATASETS_CHOICE:
         corpus = st.session_state.get("public_dataset_choice")
-        if corpus not in PUBLIC_DATASET_REGISTRY:
-            corpus = (
-                next(iter(PUBLIC_DATASET_REGISTRY), None)
-                if public_datasets_enabled()
-                else None
-            )
+        if corpus not in registry:
+            corpus = next(iter(registry), None)
         st.session_state["data_source_choice"] = corpus or entries[0]
 
     # Heal a stale/invalid selection (e.g. a removed dataset) so the picker never
-    # errors on an option that is no longer in the list.
-    if st.session_state.get("data_source_choice") not in entries:
-        st.session_state["data_source_choice"] = entries[0]
+    # errors on an option that is no longer in the list. Anything that *was* a
+    # benchmark entry gets its own landing, in preference to `entries[0]` (the
+    # demo): the bootstrap placeholder disappears precisely *because* it
+    # succeeded, so sending the user who just supplied a bundle path somewhere
+    # else entirely answers them with a non-answer — and, the demo rendering no
+    # directory input, drops them straight back out of the corpora they found.
+    # The same reasoning covers a stale *corpus* label (the bundle directory was
+    # repointed, or that corpus was removed from it): another prepared corpus is
+    # a better answer than the demo whenever one is reachable (N2).
+    stale = str(st.session_state.get("data_source_choice") or "")
+    if stale not in entries:
+        was_benchmark = stale == BENCHMARK_SETUP_CHOICE or stale.endswith(
+            BENCHMARK_LABEL_SUFFIX
+        )
+        healed = ""
+        if was_benchmark:
+            healed = next(
+                (
+                    label
+                    for label, spec in registry.items()
+                    if spec.get("benchmark_dataset")
+                ),
+                "",
+            )
+        st.session_state["data_source_choice"] = healed or entries[0]
     choice = st.session_state["data_source_choice"]
 
     # Publish what the main-view picker renders from. It runs inside the tab,
@@ -2180,7 +2903,7 @@ def render_sidebar_data_source(host=None) -> str:
     # Resolve a public-corpus token back to the canonical PUBLIC_DATASETS_CHOICE so
     # every downstream consumer (load dispatch, monitor, filter/col-map reset keys)
     # is unchanged; the chosen corpus rides public_dataset_choice as before.
-    if public_datasets_enabled() and choice in PUBLIC_DATASET_REGISTRY:
+    if choice in registry:
         st.session_state["public_dataset_choice"] = choice
         return PUBLIC_DATASETS_CHOICE
     return choice
@@ -2223,10 +2946,24 @@ def render_data_source_picker(host=None) -> None:
     kinds: dict[str, str] = dict(st.session_state.get("_data_source_kinds") or {})
     uploaded = list(st.session_state.get("_data_source_uploaded") or [])
 
+    registry = public_dataset_registry()
+
     def _entry_label(token: str) -> str:
+        # Reads the `registry` snapshot resolved just above rather than calling
+        # `public_dataset_registry()` per token: discovery depends on a directory
+        # the user can change, so one run must format its options against one
+        # snapshot (which is also why the old `_public_dataset_label` helper,
+        # which built its own, had no business being called from here — M6).
         tag = kinds.get(token, "")
-        if token in PUBLIC_DATASET_REGISTRY:
-            name = _public_dataset_label(token)
+        if token in registry:
+            # `picker_name_for` is the single definition of what this list shows
+            # — the entry's `short` plus, while DATA-27 is unfinished on main, a
+            # (WIP) marker. Formatting only: the entry's key, its `short` and
+            # its share slug are untouched, so dropping the marker later
+            # invalidates no link and no saved config. Anything that tells the
+            # user to "select X" reads it too, so the two cannot drift. The
+            # snapshot is passed in for the M6 reason above it.
+            name = picker_name_for(token, registry)
         elif token in uploaded:
             name = f"{token} (yours)"
         else:
@@ -2305,7 +3042,8 @@ def resolve_source_monitor(
     canvas on the *previous* source's monitor.
     """
     # OneStop server bundle + bundled demo share the same experimental setup
-    # (Dell U2715H, 2560x1440).
+    # (Dell U2715H, 2560x1440) — cited once in
+    # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`.
     if data_choice in (ONESTOP_CHOICE, DEMO_CHOICE):
         return 2560, 1440, True
     if (monitor := _public_dataset_monitor(data_choice)) is not None:
@@ -2320,7 +3058,7 @@ def resolve_source_monitor(
     # panels' `canvas_b` read it); load-bearing now that `setups_comparable` gates
     # the overlay on the canvas, since it refused the very pairs CMP-11 exists to
     # allow — and it also made A's resolution scan the whole corpus per rerun.
-    if declared := (PUBLIC_DATASET_REGISTRY.get(data_choice) or {}).get("monitor"):
+    if declared := (public_dataset_registry().get(data_choice) or {}).get("monitor"):
         return int(declared[0]), int(declared[1]), True
     if data_choice == MULTIPLEYE_BUNDLE_CHOICE:
         # MultiplEYE server bundle = the same native MultiplEYE export as the
@@ -2411,7 +3149,7 @@ def active_setup_snapshot(
         # A public corpus reached by its own label (the DATA-3 OneStop source)
         # rather than through the `Public datasets` picker still declares a
         # monitor in the registry.
-        or bool((PUBLIC_DATASET_REGISTRY.get(choice) or {}).get("monitor"))
+        or bool((public_dataset_registry().get(choice) or {}).get("monitor"))
     )
     if declared:
         return capture_setup_snapshot(
@@ -2456,8 +3194,10 @@ def seed_canvas_state(
         text true-to-scale: see `plots._word_label_font_px`.
     """
     # OneStop server bundle + bundled demo share the same experimental setup
-    # (Dell U2715H, 2560x1440). Data-derived extents undershoot — text only
-    # fills part of the screen — so hard-default to the real monitor here.
+    # (Dell U2715H, 2560x1440 — cited in
+    # `eyegenbench_geometry.DISPLAY_SPECS["onestop"]`). Data-derived extents
+    # undershoot — text only fills part of the screen — so hard-default to the
+    # real monitor here.
     # ``monitor_is_authoritative`` = the source declares a real presentation
     # monitor (OneStop/demo or a public-dataset registry entry), so the canvas
     # should snap to it rather than to data-derived extents.
@@ -2478,6 +3218,12 @@ def seed_canvas_state(
     # session would keep the old monitor and render the corpus off-scale. Manual
     # canvas edits and plot-config restores within the same source are preserved
     # (the key is unchanged, so the snap doesn't re-fire).
+    #
+    # DATA-27 (Task 11R): `public_dataset_choice` is a correct per-corpus key on
+    # its own again, now that every prepared benchmark corpus is its own registry
+    # entry — the extra `eyegenbench_dataset` component R30 needed (when one
+    # source fronted many corpora and this key never changed between them) is
+    # gone with the source that made it necessary.
     source_key = (data_choice, st.session_state.get("public_dataset_choice"))
     if monitor_is_authoritative and st.session_state.get("_canvas_seeded_for") != (
         source_key
@@ -3190,6 +3936,12 @@ def _activate_data_source(data_choice: str, *, preproc_host=None) -> dict:
         st.session_state.pop("_share_selection", None)
         st.session_state["_share_selection_source"] = data_choice
 
+    # The trial-filter stash is keyed per *corpus*: a filter narrowed to a value
+    # only one corpus has (a text id, a reader) must not ride into the next one,
+    # where no trial can satisfy it and nothing says why the pool went empty.
+    # `public_dataset_choice` alone is enough for that again — every corpus,
+    # prepared benchmark ones included, is its own registry entry — so the extra
+    # `eyegenbench_dataset` component R31 needed is gone (DATA-27 Task 11R).
     source_key = (data_choice, st.session_state.get("public_dataset_choice"))
     if st.session_state.get("_filters_for") == source_key:
         return preprocessing
@@ -3281,6 +4033,45 @@ def main() -> None:
         # DATA-3: the public OneStop corpus is shareable. Land on it in the flat
         # picker; _apply_url_preset already seeded onestop_variant/regime/parts.
         st.session_state.setdefault("data_source_choice", ONESTOP_PUBLIC_CHOICE)
+    elif url_source == CORPUS_SOURCE_TOKEN:
+        # DATA-27 (Task 12): `?source=corpus&corpus=<slug>` names ONE entry of
+        # `public_dataset_registry()` — a built-in public corpus or a locally
+        # prepared one, identically. Writing the registry label into
+        # `data_source_choice` is all the picker's healing path needs: it accepts
+        # the label as an entry and collapses it back to PUBLIC_DATASETS_CHOICE,
+        # re-stashing it on `public_dataset_choice` itself. Seeding that key here
+        # as well would be a second copy of the same answer — and a `setdefault`
+        # of it is dead anyway, since a recovery-cached value (the only case
+        # where seeding could matter) is exactly what `setdefault` won't replace.
+        #
+        # The resolution is gated on the feature flag, but the *message* is not:
+        # a build with public datasets switched off can't open the corpus either,
+        # and saying nothing at all would leave the recipient with a link that
+        # silently did nothing.
+        slug = str(st.query_params.get(PARAM_CORPUS) or "")
+        corpus_choice = (
+            corpus_choice_for_slug(slug) if public_datasets_enabled() else None
+        )
+        if corpus_choice:
+            st.session_state.setdefault("data_source_choice", corpus_choice)
+        elif slug:
+            # The common case, not an edge case: the recipient has no prepared
+            # bundle, or a different subset of one. Say which corpus was named
+            # and leave the picker exactly where it was — never wedge it, and
+            # never silently open a different corpus. The remedy names what is
+            # actually clickable: the bundle directory input renders *inside* a
+            # benchmark corpus entry, so it can only be reached by selecting one
+            # of those entries first (with no bundle at all, that is the single
+            # "set up a local bundle" entry the registry offers in their place).
+            st.warning(
+                f"This link opens the corpus `{slug}`, which isn't available "
+                "here. To get it, open **Data source** and select a harmonised "
+                f"benchmark corpus — or **{picker_name_for(BENCHMARK_SETUP_CHOICE)}** "
+                "if you have "
+                "none yet — then point its *Data directory* at a prepared bundle "
+                "containing this corpus. The link's view settings still apply to "
+                "whatever you open."
+            )
     elif url_source == "upload":
         st.session_state.setdefault("_show_upload_wizard", True)
 
@@ -3297,6 +4088,25 @@ def main() -> None:
     seed_debug_mode()  # UX-37: a legacy ?debug=1 link pre-arms the Help toggle.
     menu = render_top_menu(show_debug=debug_enabled())
     _render_about_panel(menu.title)
+    # BUG-28: filled HERE, not in the epilogue with its two neighbours. `main`
+    # returns early on every path where the dataset can't be drawn — the wizard
+    # mid-flight, a mapping that is incomplete or rejected, an empty pool — so
+    # anything filled at the bottom is missing from the 💾 Session popover in
+    # exactly the states these two buttons exist for (which is what the user saw:
+    # a Session menu of headings with no controls under them). This block needs
+    # nothing from the load, so it can be written before it.
+    _render_start_fresh_panel(slot=menu.start_fresh)
+
+    def _fill_recovery_cache_panel() -> None:
+        """Write the 🗄️ Recovery cache block, once, on whichever path we leave by.
+
+        Its neighbour above is filled eagerly, but this one reports what *this
+        run* just persisted, so it has to come after `save_local_state` — which
+        the early returns never reach. Each of them calls this instead, and the
+        epilogue calls it for the ordinary path; exactly one runs per script run,
+        which is what keeps the toggle and the Forget button single widgets.
+        """
+        _render_recovery_cache_panel(app_url, slot=menu.recovery_cache)
 
     # First-visit welcome tour. After the URL presets, so embeds and
     # deep-linked sessions can suppress it — but BEFORE the heavy data/plot
@@ -3542,6 +4352,7 @@ def main() -> None:
         mapping_problems = setup.problems
         if wizard_active:
             _render_offpage_setup_notice(data_view)
+            _fill_recovery_cache_panel()
             return
     elif data_choice == AUTHOR_CHOICE:
         words_df, fixations_df = _render_authoring_source()
@@ -3586,14 +4397,14 @@ def main() -> None:
         # into one stimulus-level trial. Clearing on source change lets each
         # corpus auto-detect its own mapping; same-source reruns (and restores)
         # keep their keys. Mirrors the canvas re-seed in render_sidebar_canvas_controls.
+        #
+        # Two harmonised benchmark corpora share one schema, so switching between
+        # them re-proposes a mapping that auto-detects to the same thing — the
+        # cost of one key covering every corpus, and the same trade every other
+        # pair of sources already makes.
         source_key = (data_choice, st.session_state.get("public_dataset_choice"))
         if st.session_state.get("_colmap_seeded_for") != source_key:
-            for stale in [
-                k
-                for k in list(st.session_state)
-                if isinstance(k, str) and k.startswith("col_map_")
-            ]:
-                del st.session_state[stale]
+            reset_column_mapping()
             st.session_state["_colmap_seeded_for"] = source_key
         raw_words_df, raw_fixations_df = load_words_and_fixations(
             data_choice,
@@ -3604,6 +4415,7 @@ def main() -> None:
             options_host=source_options_slot,
             location_host=data_location_slot,
         )
+        declared_word_schema, declared_fix_schema = declared_schemas_for(data_choice)
         words_df, fixations_df, mapping_problems = prepare_data(
             raw_words_df,
             raw_fixations_df,
@@ -3614,6 +4426,11 @@ def main() -> None:
             allow_override=(data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)),
             # Mode A of the Data page's one Column mapping section (DATA-26).
             mapping_host=mapping_body_slot,
+            # A prepared benchmark corpus publishes its schema; auto-detection
+            # must not re-guess it from the publisher's leftover columns. The
+            # panels stay editable — this only changes what they start at.
+            declared_word_schema=declared_word_schema,
+            declared_fix_schema=declared_fix_schema,
         )
         mapping_editor_rendered = data_choice in (PUBLIC_DATASETS_CHOICE, DEMO_CHOICE)
     if mapping_problems:
@@ -3624,6 +4441,7 @@ def main() -> None:
         with unmapped_slot:
             _render_unmapped_view(raw_words_df, raw_fixations_df, mapping_problems)
         _render_offpage_setup_notice(data_view)
+        _fill_recovery_cache_panel()
         return
 
     # VIZ-14: local/desktop users can attach stimulus screenshots without
@@ -3832,6 +4650,7 @@ def main() -> None:
     # filters removed everything.
     if words_filtered.empty and fixations_filtered.empty and raw_gaze_filtered.empty:
         _render_empty_after_filtering(words_all, fixations_all, trial_filters)
+        _fill_recovery_cache_panel()
         return
 
     # Build trial combinations for selection UI — from fixations normally, then
@@ -4086,8 +4905,10 @@ def main() -> None:
     # this run's save_local_state, or it would report the previous run's cache
     # and read "nothing stored yet" on the run that first stores something —
     # which is exactly why the slot has to be a popover reserved up front rather
-    # than something rendered in place down here.
-    recovery_cache_slot = menu.recovery_cache
+    # than something rendered in place down here. (BUG-28: the early-return paths
+    # fill it themselves — see `_fill_recovery_cache_panel` — since they never
+    # reach this epilogue and so used to leave 🗑 Forget saved session unreachable
+    # in exactly the wedged states someone goes looking for it.)
 
     # Share now lives in the Scanpath view's "🔗 Share" subtab (rendered via the
     # share_renderer passed into render_single_trial_tab), so it builds its deep
@@ -4134,7 +4955,7 @@ def main() -> None:
     # The helper fingerprints the session and is a no-op on unchanged reruns.
     save_local_state(st.session_state, app_url)
     # …then report on what that just wrote, into the slot reserved above.
-    _render_recovery_cache_panel(app_url, slot=recovery_cache_slot)
+    _fill_recovery_cache_panel()
 
 
 if __name__ == "__main__":

@@ -433,6 +433,7 @@ def _preserve_composite_columns(
 # conventions — no ALL_CAPS / snake_case twins of the same name needed.
 PARTICIPANT_CANDIDATES = [
     "participant_id",
+    "unique_participant_id",  # EyeGenBench's own harmonized column name (DATA-27)
     "subject_id",
     "participant",
     "recording_session_label",
@@ -518,6 +519,7 @@ FIX_DURATION_CANDIDATES = [
     "CURRENT_FIX_LEN",
     "duration",
     "fixation_duration",
+    "fix_duration",  # EyeGenBench's own harmonized column name (DATA-27)
 ]
 FIX_TIMESTAMP_CANDIDATES = [
     "timestamp_ms",
@@ -532,10 +534,12 @@ FIX_FIXATION_ID_CANDIDATES = [
     "CURRENT_FIX_INDEX",
     "CURRENT_FIX_NUM",
     "fixation_index",
+    "fix_index",  # EyeGenBench's own harmonized column name (DATA-27)
 ]
 FIX_WORD_ID_CANDIDATES = [
     "word_id",
     "IA_ID",
+    "ia_index",  # EyeGenBench's own harmonized column name (DATA-27)
     "CURRENT_FIX_INTEREST_AREA_ID",
     "CURRENT_FIX_INTEREST_AREA_INDEX",
     "word_index_in_text",
@@ -1706,6 +1710,10 @@ WORD_OPTIONAL_FIELDS = [
     # (`stem` / `target` / `distractor_a`… — a per-word facet).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
     ("aoi_block", "aoi_block", "passthrough", "meta"),
+    # DATA-27: which tier the EyeGenBench word boxes came from --
+    # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
+    # reconstructed layout rather than pass it off as the original screen.
+    ("geometry_source", "geometry_source", "passthrough", "meta"),
 ]
 
 FIX_OPTIONAL_FIELDS = [
@@ -1772,6 +1780,15 @@ FIX_OPTIONAL_FIELDS = [
     ("pp_education_level", "pp_education_level", "string", "meta"),
     # DATA-24: which kind of screen a fixation happened on (see the word table).
     ("screen_kind", "screen_kind", "passthrough", "meta"),
+    # DATA-27: which tier the EyeGenBench word boxes came from --
+    # "real" | "reconstructed" | "synthesized". Carried so the UI can badge a
+    # reconstructed layout rather than pass it off as the original screen.
+    ("geometry_source", "geometry_source", "passthrough", "meta"),
+    # DATA-27: EyeGenBench's own composite trial id, kept for traceability back to the
+    # benchmark. Deliberately NOT named `unique_trial_id` — normalize_fixations hardcodes
+    # trial_id from any column with that literal name, which breaks the stimulus-word
+    # broadcast join and yields zero word boxes.
+    ("eyegenbench_trial_id", "eyegenbench_trial_id", "passthrough", "meta"),
 ]
 
 

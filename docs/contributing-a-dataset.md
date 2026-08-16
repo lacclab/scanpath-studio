@@ -127,9 +127,10 @@ It's what makes the plot true-to-scale.
 
 ## Wiring it into the app
 
-Two additions to `app.py`: a sidebar loader `_load_<corpus>_source(...)` that
-renders the corpus' controls and returns raw frames, and one entry in
-`PUBLIC_DATASET_REGISTRY`:
+Two additions to `app.py`: a loader `_load_<corpus>_source(...)` that renders the
+corpus' controls and returns raw frames, and one entry in
+`PUBLIC_DATASET_REGISTRY` — the literal home of the corpora that are fixed at
+import time:
 
 ```python
 "PoTeC — Potsdam Textbook Corpus": dict(
@@ -143,6 +144,23 @@ renders the corpus' controls and returns raw frames, and one entry in
     link="https://github.com/DiLi-Lab/PoTeC",
 ),
 ```
+
+Each entry is **one top-level source in the picker**, tagged 🌐 and searchable
+beside the demo and the uploads — there is no category to nest under and no
+sub-picker inside an entry. A corpus that ships in several variants gets several
+entries, told apart by the property that actually differs.
+
+**Read the registry through `public_dataset_registry()`, never the dict.** That
+function is what every consumer calls: it returns the static entries above
+*plus* one entry per corpus discovered at runtime (each prepared corpus in a
+local benchmark bundle is composed in there, since it depends on a directory the
+user can change mid-session). The dict answers for the fixed corpora only, so a
+consumer reading it directly silently ignores everything discovered — the reason
+to touch `PUBLIC_DATASET_REGISTRY` by name is to *add* an entry to it, as above.
+A corpus discovered from a manifest declares `monitor` only when the manifest
+records a real one; an invented default must not snap the canvas, and
+`eyegenbench.declared_monitor(entry)` is the single rule the app and the CLI both
+apply.
 
 Use the shared helpers in the loader so every corpus looks the same:
 `_dataset_dir_input` (the directory box, folder-picker button, and *Expected
@@ -162,11 +180,17 @@ applies — the picker entry is one surface out of four:
   [`docs/api.md`](api.md).
 - **CLI** — a `--<corpus> DIR` flag in `render`'s input group, added to the
   exactly-one-input check so it can't be combined with `--sample`.
-- **Deep link / Share** — register the source in `_SHAREABLE_SOURCES` and any
-  per-corpus options in `_apply_url_preset` / `_build_share_query`. Only OneStop
-  does this today. Skipping it works, but a shared link can't reopen your corpus.
+- **Deep link / Share** — you get this for free: `?source=corpus&corpus=<slug>`
+  names any entry `public_dataset_registry()` returns, slugged from the entry's
+  `short` (a corpus discovered from a manifest uses its manifest name under a
+  `harmonised-` prefix). Check that your `short` slugifies to something no other
+  entry claims — a slug two entries would answer to is dropped from both rather
+  than resolved to a guess, and then neither is shareable. Register the source in
+  `_SHAREABLE_SOURCES` only if it needs its **own** token, and add any per-corpus
+  options (OneStop's variant / regime / parts) to `_apply_url_preset` /
+  `_build_share_query`.
 
-Then add a docs page under **Datasets** describing the corpus and the modelling
+Then add a docs page under **Public corpora** describing the corpus and the modelling
 decisions your adapter makes ([OneStop](onestop.md) and
 [MultiplEYE](multipleye.md) are the templates), and list it in `mkdocs.yml`'s
 `nav:` — a page that isn't in the nav still builds, but nothing links to it.

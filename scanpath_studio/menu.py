@@ -103,6 +103,8 @@ class TopMenu:
 
     save_restore: DeltaGenerator
     recovery_cache: DeltaGenerator
+    #: BUG-28's escape hatches — back to the demo, and clear the computed cache.
+    start_fresh: DeltaGenerator
     help: DeltaGenerator
     notices: DeltaGenerator
     #: The page heading's slot — the left half of the row the menu shares.
@@ -303,10 +305,25 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
         "annotations are written to this computer only — nothing is sent "
         "anywhere.",
     )
+    # BUG-28: the two "get me back to something that works" actions, reachable
+    # from every view — the analysis views have no source picker, and a dataset
+    # the pipeline rejects is exactly when the 🗂️ Data page is the last place
+    # the user wants to be sent. Third block of 💾 Session rather than a group of
+    # its own: it answers the same question ("what is kept, and how do I get it
+    # back") from the other end.
+    start_fresh = session.container()
+    start_fresh.divider()
+    start_fresh.markdown("**🧹 Start fresh**")
+    start_fresh.caption(
+        "Back to a known-good state without losing your uploads.",
+        help="Reload the bundled demo with a freshly detected column mapping, "
+        "or recompute everything from the data already loaded.",
+    )
     debug = bar.popover("🐛 Debug") if show_debug else None
     return TopMenu(
         save_restore=save_restore,
         recovery_cache=recovery_cache,
+        start_fresh=start_fresh,
         help=help_,
         notices=st.container(key=NOTICES_KEY),
         title=title_col,

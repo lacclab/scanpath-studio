@@ -23,6 +23,8 @@ from tests.conftest import (
     SUBTAB_EXPORT,
     SUBTAB_KEY,
     SUBTAB_LINE_ASSIGNMENT,
+    _write_benchmark_corpus,
+    _write_benchmark_manifest,
     answer_setup_step,
     pin_data_view,
 )
@@ -788,9 +790,7 @@ class TestUnmappedRawDataView:
         at.run(timeout=30)
         source = [s for s in at.selectbox if s.key == "data_source_picker"]
         assert source, "data source picker not found"
-        shorts = [
-            app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
-        ]
+        shorts = [spec["short"] for spec in app.public_dataset_registry().values()]
         # Options are formatted labels like "🌐 PoTeC".
         assert any(any(s in o for s in shorts) for o in source[0].options)
 
@@ -803,9 +803,7 @@ class TestUnmappedRawDataView:
         at.run(timeout=30)
         source = [s for s in at.selectbox if s.key == "data_source_picker"]
         assert source, "data source picker not found"
-        shorts = [
-            app.PUBLIC_DATASET_REGISTRY[k]["short"] for k in app.PUBLIC_DATASET_REGISTRY
-        ]
+        shorts = [spec["short"] for spec in app.public_dataset_registry().values()]
         assert not any(any(s in o for s in shorts) for o in source[0].options)
 
     def test_potec_source_renders(self, monkeypatch):
@@ -881,9 +879,10 @@ class TestUnmappedRawDataView:
             "ONESTOP_PUBLIC_DEFAULT_DIR",
             "POTEC_DEFAULT_DIR",
             "MULTIPLEYE_DEFAULT_DIR",
+            "EYEGENBENCH_DEFAULT_DIR",
         ):
             monkeypatch.setattr(app, const, str(tmp_path / const.lower()))
-        for label in app.PUBLIC_DATASET_REGISTRY:
+        for label in app.public_dataset_registry():
             at = _make_apptest()
             at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
             at.session_state["public_dataset_choice"] = label
@@ -898,12 +897,629 @@ class TestUnmappedRawDataView:
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
         at.session_state["public_dataset_choice"] = next(
-            k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k
+            k for k in app.public_dataset_registry() if "PoTeC" in k
         )
         at.run(timeout=60)
         assert any("Download" in b.label for b in at.button), (
             "expected a Download button"
         )
+
+    def test_a_publisher_leftover_column_does_not_hijack_the_benchmark_schema(
+        self, tmp_path, monkeypatch
+    ):
+        """A prepared corpus loads by its DECLARED schema, not by auto-detection.
+
+        The bug this pins shipped through a whole branch review because every
+        fixture wrote an idealized frame carrying only the harmonised columns.
+        Real prepared frames carry the publisher's ~190 columns through, and the
+        detector prefers some of them:
+
+        * EMTeC ships `TRIAL_ID`, which outranks `unique_paragraph_id` on the
+          fixations. The words still key on `unique_paragraph_id`, so
+          `broadcast_stimulus_words` joins **nothing** — zero word boxes, no
+          stimulus, no word-level measure, and **no error**, because only the
+          words frame ends up empty and `main`'s empty-pool guard needs all
+          three. The figure still draws 400k fixations over blank space.
+        * Provo and SBSAT ship `page`, which reads as a multipart screen id on
+          the fixations only, and `multipart.validate_matching_parts` then
+          rejects the pair outright.
+
+        Both are app-only: `load_eyegenbench` passes the explicit schemas, so
+        the CLI, the headless API and Comparisons' dataset B were always right —
+        which is the tell. Two surfaces disagreeing about one corpus is the
+        signature this plan has now hit five times.
+        """
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "bundle"
+        # Both real hijackers at once, on one corpus.
+        _write_benchmark_corpus(
+            root,
+            "Provo",
+            paragraphs=("Provo_a", "Provo_b"),
+            fix_leftovers={"TRIAL_ID": "hijack", "page": 1},
+        )
+        _write_benchmark_manifest(
+            root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # The loud half: `page` must not be read as a screen id.
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        assert not any(
+            "column mapping doesn't work" in str(w.value) for w in at.warning
+        )
+
+        # The silent half, and the one that matters. "No exception" passes on the
+        # zero-boxes bug — that is exactly how it survived a review — so assert on
+        # the mapping actually used, which is the mechanism itself.
+        mapping = at.session_state["_active_column_mapping"] or {}
+        fix_map = mapping.get("fixations") or {}
+        word_map = mapping.get("words") or {}
+        assert fix_map.get("trial") == "unique_paragraph_id", (
+            "the fixations' leftover TRIAL_ID hijacked the trial mapping; the "
+            "words key on unique_paragraph_id, so the broadcast joins NOTHING "
+            f"and the corpus draws with zero word boxes. Got: {fix_map.get('trial')!r}"
+        )
+        assert fix_map.get("trial") == word_map.get("trial"), (
+            "words and fixations must key on the same trial column or they cannot join"
+        )
+        # `page` is a leftover, not a screen: this bundle is single-screen by
+        # contract, and a screen id on one frame only is rejected outright.
+        assert not fix_map.get("screen_id"), fix_map.get("screen_id")
+        assert not word_map.get("screen_id"), word_map.get("screen_id")
+
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+    def test_each_prepared_benchmark_corpus_is_its_own_picker_entry(
+        self, monkeypatch, tmp_path
+    ):
+        """DATA-27 R36/R37: every prepared corpus is a top-level source.
+
+        The first cut of this feature offered ONE "EyeGenBench" entry with a
+        Language/Corpus sub-picker nested inside it; the user's call is that each
+        dataset appears separately, and that the pipeline's name is provenance
+        rather than a source (it is being extracted into its own repository, so
+        anything user-visible carrying it would need renaming later). So: one 🌐
+        entry per corpus, indistinguishable in kind from PoTeC / MultiplEYE /
+        OneStop, and no entry label naming the pipeline.
+
+        `PoTeC` ships **both** natively here and in the benchmark set, and both
+        are kept — the harmonised copy is what makes cross-corpus comparison
+        possible. They are told apart by the property that differs (R37), and the
+        geometry badge is per corpus and must not overclaim uniformity (R34).
+        """
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "bundle"
+        # Two texts each: the **Narrow by** Text multiselect only renders when
+        # it would offer more than one choice (`controls.render_narrow_by`), and
+        # it is how this test proves the *selected* corpus is what loaded.
+        _write_benchmark_corpus(root, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
+        _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
+        _write_benchmark_manifest(
+            root,
+            [
+                # `language` is an ISO code in the real manifest, never a name
+                # (verified: BSC → 'zh', CopCo → 'da', Provo → 'en').
+                {
+                    "name": "PoTeC",
+                    "language": "de",
+                    "monitor": [1680, 1050],
+                    "monitor_source": "published",
+                    "n_readers": 75,
+                    "n_texts": 12,
+                    "n_fixations": 250000,
+                    "geometry_source": "real",
+                    # Mixed: measured boxes for 9 of the 12 texts.
+                    "paragraphs_without_real_boxes": 3,
+                },
+                {
+                    "name": "Provo",
+                    "language": "en",
+                    "monitor": [1600, 900],
+                    "monitor_source": "published",
+                    "n_readers": 84,
+                    "n_texts": 55,
+                    "n_fixations": 219556,
+                    "geometry_source": "real",
+                    "paragraphs_without_real_boxes": 0,
+                },
+            ],
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
+        options = list(picker.options)
+        # Each corpus is its own entry, tagged 🌐 like every other public corpus,
+        # and — while DATA-27 is on main unfinished — marked (WIP).
+        assert "🌐 Provo (WIP)" in options
+        # …and the one that also ships natively keeps both, distinguished by the
+        # property that differs rather than by the pipeline's name.
+        assert "🌐 PoTeC (harmonised benchmark) (WIP)" in options
+        # The control case, and the reason the marker is keyed on the entry's
+        # `benchmark_dataset` rather than on its label: the NATIVE PoTeC is
+        # finished work and must stay unmarked. A substring test on the label
+        # would mark it too, and this assertion is what would catch that.
+        assert "🌐 PoTeC" in options
+        assert "🌐 PoTeC (WIP)" not in options
+        assert not any("EyeGenBench" in option for option in options), (
+            "the pipeline's name is provenance, not a source — it must not "
+            f"appear in an entry label: {options}"
+        )
+        # Selecting one loads that corpus (its trials, not another's).
+        assert at.session_state["public_dataset_choice"] == app.benchmark_corpus_label(
+            "Provo"
+        )
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+        captions = " ".join(c.value for c in at.caption)
+        # R35: the manifest's ISO code renders as a display name.
+        assert "English" in captions
+        assert "84 readers" in captions
+        # R34: full coverage → the plain badge.
+        assert "measured word boxes." in captions
+        assert "of 55 texts" not in captions
+
+        # Switching to the other corpus is an ordinary source switch.
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["public_dataset_choice"] == app.benchmark_corpus_label(
+            "PoTeC"
+        )
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
+        captions = " ".join(c.value for c in at.caption)
+        assert "German" in captions
+        # R34: `geometry_source` is the *best tier achieved*, so a corpus with
+        # three unmeasured texts still reads "real" — the rendering must say how
+        # many texts that actually covers rather than implying all of them.
+        assert "measured word boxes for 9 of 12 texts" in captions
+
+    def test_benchmark_canvas_snaps_to_each_corpus_own_monitor(
+        self, monkeypatch, tmp_path
+    ):
+        """R40: each corpus resolves its own monitor from its own manifest row.
+
+        This was R30's defect — one source fronting many corpora meant the
+        registry's single declared monitor stood in for all of them, and the
+        canvas had to be re-snapped from a second session key. With one entry per
+        corpus the registry entry *is* per corpus, so the plain
+        `public_dataset_choice` key carries it.
+
+        The honesty tier survives the simplification: a `monitor_source` of
+        `default` is `eyegenbench_geometry.py`'s generic guess for a corpus that
+        documents no screen, so that entry declares no monitor at all rather than
+        snapping the canvas to an invented one.
+        """
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "bundle"
+        for name in ("PoTeC", "Provo", "Guessed"):
+            _write_benchmark_corpus(root, name)
+        _write_benchmark_manifest(
+            root,
+            [
+                {
+                    "name": "PoTeC",
+                    "language": "de",
+                    "monitor": [1680, 1050],
+                    "monitor_source": "published",
+                },
+                {
+                    "name": "Provo",
+                    "language": "en",
+                    "monitor": [1920, 1200],
+                    "monitor_source": "derived-from-boxes",
+                },
+                {
+                    "name": "Guessed",
+                    "language": "fr",
+                    "monitor": [1920, 1080],
+                    "monitor_source": "default",
+                },
+            ],
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert (
+            at.session_state["global_canvas_width"],
+            at.session_state["global_canvas_height"],
+        ) == (1680, 1050)
+
+        # Switching corpus re-snaps the canvas — for free, from
+        # `public_dataset_choice` alone.
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("Provo")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert (
+            at.session_state["global_canvas_width"],
+            at.session_state["global_canvas_height"],
+        ) == (1920, 1200)
+
+        # An invented ("default") screen must NOT snap the canvas the way the
+        # published / derived-from-boxes ones above do.
+        at2 = _make_apptest()
+        at2.session_state["global_canvas_width"] = 1234
+        at2.session_state["global_canvas_height"] = 999
+        at2.session_state["_canvas_seeded_for"] = ("something", "else")
+        at2.session_state["data_source_choice"] = app.benchmark_corpus_label("Guessed")
+        at2.run(timeout=60)
+        assert not at2.exception, f"Streamlit exceptions: {at2.exception}"
+        assert (
+            at2.session_state["global_canvas_width"],
+            at2.session_state["global_canvas_height"],
+        ) == (1234, 999)
+
+    def test_benchmark_corpus_switch_resets_trial_filters(self, monkeypatch, tmp_path):
+        """R40: switching corpus clears the trial filters and restores them back.
+
+        R31 needed an extra `eyegenbench_dataset` component in
+        `_activate_data_source`'s source key, because `public_dataset_choice` was
+        the same constant for every corpus behind the one source — so a filter
+        narrowed to a PoTeC-only text rode straight into Provo, where no trial
+        could satisfy it and nothing said why the pool went empty. One entry per
+        corpus makes that key correct on its own; this test is R31's, kept, so it
+        proves the simplification is safe rather than a regression.
+        """
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "bundle"
+        _write_benchmark_corpus(root, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
+        _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
+        _write_benchmark_manifest(
+            root,
+            [
+                {"name": "PoTeC", "language": "de", "monitor": [1680, 1050]},
+                {"name": "Provo", "language": "en", "monitor": [1920, 1080]},
+            ],
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+
+        potec = app.benchmark_corpus_label("PoTeC")
+        provo = app.benchmark_corpus_label("Provo")
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = potec
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # R32 canary (M13/N4): the app path must auto-detect a benchmark
+        # corpus' schema. The pre-Task-11R test compared the mapping before and
+        # after the switch, which `_colmap_seeded_for` made obsolete (both
+        # corpora share one schema, so there is nothing to re-seed); the
+        # seeding assertion that replaced it asserted only that *some*
+        # `col_map_words_*` key existed, which `column_mapping_ui` creates
+        # (index 0, `persist_state="session"`) whenever the panel renders at
+        # all — so it pinned "the mapping panel rendered", not "detection
+        # resolved". The three fields R32 is actually about are on the
+        # fixations side, and what matters is the *value*: unresolved, each
+        # falls back to `(none)` and every reader collapses into one synthetic
+        # id, with no error anywhere to say so.
+        assert {
+            k: v
+            for k, v in at.session_state.filtered_state.items()
+            if k
+            in (
+                "col_map_fix_participant",
+                "col_map_fix_fixation_id",
+                "col_map_fix_word_id",
+            )
+        } == {
+            "col_map_fix_participant": "unique_participant_id",
+            "col_map_fix_fixation_id": "fix_index",
+            "col_map_fix_word_id": "ia_index",
+        }
+
+        # Narrow to one PoTeC-only text.
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"PoTeC_a", "PoTeC_b"}
+        text_ms.set_value(["PoTeC_a"])
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["filter_text_id"] == ["PoTeC_a"]
+
+        # 1. Switching corpus clears the (now-impossible-for-Provo) filter.
+        at.session_state["data_source_choice"] = provo
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["filter_text_id"] == []
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+        # 2. Switching back restores PoTeC's own stashed filter.
+        at.session_state["data_source_choice"] = potec
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["filter_text_id"] == ["PoTeC_a"]
+
+    def test_a_bundle_at_a_non_default_path_becomes_reachable_and_stays(
+        self, monkeypatch, tmp_path
+    ):
+        """R39 end to end: type a path, pick the corpus, keep it.
+
+        The bootstrap entry exists for exactly one job — a bundle that is *not*
+        at `EYEGENBENCH_DEFAULT_DIR` must be reachable, since discovery reads a
+        directory the user can change at runtime and an undiscovered bundle
+        yields no entries and so nowhere to type its path. The first cut of the
+        entry shipped non-functional and passed its test anyway, because the
+        test asserted the directory input *existed* and never typed into it
+        (C1): the typed path survived exactly one run. Discovery then succeeded,
+        the placeholder dropped out of the registry, the healing step sent the
+        user to the bundled demo, the demo renders no directory input — so
+        Streamlit dropped the `eyegenbench_dir` key at end of run and the next
+        run rediscovered nothing. The corpora flickered in for one rerun,
+        forever.
+
+        So this drives the whole flow: type → the corpus appears → **select
+        it** → it is still selected, still loaded, and still there after a
+        detour to another source. Everything before the last step passes on the
+        bug in at least one of its halves; the run *after* each selection is
+        what fails on it.
+        """
+        from scanpath_studio import app
+        from scanpath_studio.constants import AUTHOR_CHOICE
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        # The premise: the app's default location is empty and the bundle is
+        # somewhere else entirely. Nothing is discoverable until it is typed in.
+        default_dir = tmp_path / "default-location"
+        default_dir.mkdir()
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(default_dir))
+        root = tmp_path / "elsewhere" / "bundle"
+        _write_benchmark_corpus(root, "Provo", paragraphs=("Provo_a", "Provo_b"))
+        _write_benchmark_manifest(
+            root, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
+        )
+        label = app.benchmark_corpus_label("Provo")
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.BENCHMARK_SETUP_CHOICE
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
+        assert "🌐 Harmonised benchmark corpora — set up (WIP)" in picker.options
+        # The *marked* form, deliberately: asserting "🌐 Provo" is absent would
+        # now pass whether or not the corpus is listed, since a listed one reads
+        # "🌐 Provo (WIP)".
+        assert "🌐 Provo (WIP)" not in picker.options
+
+        # 1. The user types the bundle's real path into the placeholder's input.
+        dir_inputs = [t for t in at.text_input if t.key == "eyegenbench_dir"]
+        assert dir_inputs, "expected the bundle directory input"
+        dir_inputs[0].set_value(str(root)).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
+        assert "🌐 Provo (WIP)" in picker.options, "the corpus must appear once found"
+        # The placeholder disappears *because it succeeded*, so healing must not
+        # bounce the user out to the demo — that answers "here is my bundle"
+        # with somewhere else entirely, and (the demo drawing no directory
+        # input) throws the bundle location away on the way out.
+        assert at.session_state["data_source_choice"] == label
+
+        # 2. The user picks the corpus in the picker, through the real widget.
+        picker.set_value(label).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # 3. The run after the selection — the one that used to lose the path.
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["eyegenbench_dir"] == str(root)
+        assert at.session_state["data_source_choice"] == label
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
+        assert "🌐 Provo (WIP)" in picker.options
+        # The placeholder is offered only while nothing is discovered, and the
+        # options are checked rather than `public_dataset_registry()` because
+        # the bundle's location lives in *this app run's* session state — a
+        # registry built out here, outside the run, cannot see it.
+        assert not any("set up" in option for option in picker.options)
+        # …and the corpus is genuinely loaded, not merely named in the picker.
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+        # 4. A detour to another source and back. The directory input renders
+        # only while a benchmark corpus is selected, so this is the run on which
+        # Streamlit drops an ordinary widget key — `persist_state="session"` on
+        # the shared `_dataset_dir_input` is what keeps the bundle findable.
+        picker.set_value(AUTHOR_CHOICE).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [t for t in at.text_input if t.key == "eyegenbench_dir"], (
+            "premise: another source renders no bundle directory input"
+        )
+        picker = next(s for s in at.selectbox if s.key == "data_source_picker")
+        assert "🌐 Provo (WIP)" in picker.options, "the bundle location must survive"
+        picker.set_value(label).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == label
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+    def test_repointing_the_bundle_lands_on_a_corpus_not_on_the_demo(
+        self, monkeypatch, tmp_path
+    ):
+        """N2: healing a stale *corpus* label, not just the placeholder.
+
+        The selected corpus can stop existing without anything going wrong —
+        the user points the directory input at a second bundle, or rebuilds one
+        without that corpus. The selection is then invalid and the generic
+        healing sends it to `entries[0]`, the bundled demo. That is the same
+        non-answer C1's second half exists to prevent: the user asked for a
+        different bundle and got the demo, when a prepared corpus from the
+        bundle they just named was right there.
+        """
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        first = tmp_path / "first-bundle"
+        _write_benchmark_corpus(first, "PoTeC", paragraphs=("PoTeC_a", "PoTeC_b"))
+        _write_benchmark_manifest(
+            first, [{"name": "PoTeC", "language": "de", "monitor": [1680, 1050]}]
+        )
+        second = tmp_path / "second-bundle"
+        _write_benchmark_corpus(second, "Provo", paragraphs=("Provo_a", "Provo_b"))
+        _write_benchmark_manifest(
+            second, [{"name": "Provo", "language": "en", "monitor": [1600, 900]}]
+        )
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(first))
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("PoTeC")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # Repoint at the other bundle: "PoTeC — harmonised…" is now a label for
+        # a corpus that isn't there.
+        dir_input = next(t for t in at.text_input if t.key == "eyegenbench_dir")
+        dir_input.set_value(str(second)).run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["data_source_choice"] == app.benchmark_corpus_label(
+            "Provo"
+        )
+        text_ms = next(m for m in at.multiselect if m.key == "filter_text_id")
+        assert set(text_ms.options) == {"Provo_a", "Provo_b"}
+
+    def test_benchmark_reader_count_matches_the_headless_loader(
+        self, monkeypatch, tmp_path
+    ):
+        """DATA-27 R32 — the headline regression pin.
+
+        A benchmark corpus' loader returns *raw, pre-normalization* frames per the
+        registry contract, and `prepare_data` then auto-detects a schema for them
+        with `data.py`'s candidate lists — `eyegenbench.load_eyegenbench` (the
+        headless API/CLI path) instead uses the explicit `EYEGENBENCH_FIX_SCHEMA`.
+        Before R32 those two paths disagreed on three fields
+        (`participant`/`fixation_id`/`word_id`), and with `participant`
+        unresolved every reader collapsed into one synthetic id — so the *same
+        bundle* loaded as N readers headlessly but just 1 in the app, with no
+        error anywhere to say so.
+        """
+        from scanpath_studio import app, eyegenbench
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        root = tmp_path / "bundle"
+        readers = ["r1", "r2", "r3"]
+        _write_benchmark_corpus(root, "BSC", readers=readers, paragraphs=("p1", "p2"))
+        _write_benchmark_manifest(
+            root, [{"name": "BSC", "language": "zh", "monitor": [1024, 768]}]
+        )
+
+        # Headless path: eyegenbench.load_eyegenbench uses EYEGENBENCH_FIX_SCHEMA
+        # directly, so this is the ground truth the app must match.
+        _, headless_fixations = eyegenbench.load_eyegenbench(root, dataset="BSC")
+        headless_reader_count = headless_fixations["participant_id"].nunique()
+        assert headless_reader_count == 3
+
+        monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(root))
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.benchmark_corpus_label("BSC")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+
+        # `render_narrow_by` only renders the Participant multiselect when it
+        # would offer more than one choice (`controls.py`: `if len(parts) >
+        # 1`) — so a widget lookup that assumes it always renders would raise
+        # `IndexError` on the very failure this test exists to catch, instead
+        # of reporting it. Absent means "the app resolved exactly 1 reader".
+        participant_matches = [
+            m for m in at.multiselect if m.key == "filter_participants"
+        ]
+        if participant_matches:
+            app_reader_count = len(participant_matches[0].options)
+            app_readers = set(participant_matches[0].options)
+        else:
+            app_reader_count = 1
+            app_readers = None
+        assert app_reader_count == headless_reader_count, (
+            f"app auto-detected {app_reader_count} reader(s) but the headless "
+            f"loader (the ground-truth explicit schema) resolves {headless_reader_count} "
+            "— the app's auto-detection disagrees with EYEGENBENCH_FIX_SCHEMA"
+        )
+        assert app_readers == set(readers)
+
+    def test_switching_public_dataset_sources_still_clears_filters(self, monkeypatch):
+        """R31 pin: ordinary cross-source switching (not within one EyeGenBench
+        source) must behave exactly as before the fix — a filter set under one
+        registry corpus does not survive a switch to a different one."""
+        import pandas as pd
+
+        from scanpath_studio import app
+
+        monkeypatch.setenv("SCANPATH_PUBLIC_DATASETS", "1")
+        words = pd.DataFrame(
+            {
+                "trial_id": ["t1", "t1"],
+                "text_id": ["t1", "t1"],
+                "word_idx": [0, 1],
+                "word": ["a", "b"],
+                "left": [100.0, 140.0],
+                "right": [140.0, 180.0],
+                "top": [50.0, 50.0],
+                "bottom": [80.0, 80.0],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2", "p2"],
+                "trial_id": ["t1", "t1", "t1", "t1"],
+                "x": [110.0, 150.0, 110.0, 150.0],
+                "y": [60.0, 60.0, 60.0, 60.0],
+                "duration": [200.0, 180.0, 200.0, 180.0],
+                "word_idx": [0, 1, 0, 1],
+            }
+        )
+        potec_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "PoTeC" in k)
+        mpe_key = next(k for k in app.PUBLIC_DATASET_REGISTRY if "MultiplEYE" in k)
+        for key in (potec_key, mpe_key):
+            monkeypatch.setitem(
+                app.PUBLIC_DATASET_REGISTRY[key],
+                "loader",
+                lambda *_slots: (words, fixations),
+            )
+
+        at = _make_apptest()
+        at.session_state["data_source_choice"] = app.PUBLIC_DATASETS_CHOICE
+        at.session_state["public_dataset_choice"] = potec_key
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        part = next(m for m in at.multiselect if m.key == "filter_participants")
+        part.set_value(["p1"])
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["filter_participants"] == ["p1"]
+
+        # Mirrors a real click on the flat source picker: `data_source_choice`
+        # carries the concrete registry label directly (DATA-9), not
+        # `PUBLIC_DATASETS_CHOICE` — that constant only appears pre-healing, on
+        # a legacy/first-ever selection, which the first run above already
+        # resolved away. Leaving it unset here would let `render_sidebar_
+        # data_source`'s healing step re-publish the *old* `public_dataset_choice`
+        # from the stale `data_source_choice`, masking the switch entirely.
+        at.session_state["data_source_choice"] = mpe_key
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["public_dataset_choice"] == mpe_key
+        assert at.session_state["filter_participants"] == []
 
     def test_public_dataset_canvas_snaps_to_its_monitor(self, monkeypatch):
         """Selecting a public dataset snaps the canvas to its registered monitor,

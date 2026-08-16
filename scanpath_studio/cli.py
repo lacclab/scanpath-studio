@@ -203,6 +203,18 @@ def _render_parser() -> argparse.ArgumentParser:
         "are text ids (b0–b5, p0–p5).",
     )
     src.add_argument(
+        "--eyegenbench",
+        metavar="DIR",
+        help="EyeGenBench bundle directory (built by "
+        "scripts/prepare_eyegenbench.py). Pick the corpus with "
+        "--eyegenbench-dataset.",
+    )
+    src.add_argument(
+        "--eyegenbench-dataset",
+        metavar="NAME",
+        help="Which EyeGenBench corpus to render, e.g. PoTeC.",
+    )
+    src.add_argument(
         "--onestop",
         metavar="DIR",
         help="Load the OneStop corpus from DIR. For the public variant the "
@@ -1055,7 +1067,10 @@ def _load_multipleye_render(
 
 
 def render(argv: list[str]) -> None:
-    args = _render_parser().parse_args(argv)
+    # Bound, not inlined: DATA-27's --eyegenbench branch calls
+    # `parser.error(...)` further down to reject a missing --eyegenbench-dataset.
+    parser = _render_parser()
+    args = parser.parse_args(argv)
     # Validate everything derivable from argv before the (possibly minutes-long
     # on full corpora) data load.
     if (
@@ -1065,6 +1080,7 @@ def render(argv: list[str]) -> None:
                 bool(args.authoring),
                 bool(args.words or args.fixations),
                 bool(args.potec),
+                bool(args.eyegenbench),
                 bool(args.onestop),
                 bool(args.source),
             ]
@@ -1072,7 +1088,8 @@ def render(argv: list[str]) -> None:
         != 1
     ):
         raise SystemExit(
-            "Provide exactly one input: --sample, --authoring PATH, --potec DIR, --onestop DIR, "
+            "Provide exactly one input: --sample, --authoring PATH, --potec DIR, "
+            "--eyegenbench DIR --eyegenbench-dataset NAME, --onestop DIR, "
             "--source NAME [--export DIR], or your own tables (--words and/or "
             "--fixations; one of them is enough for single-report datasets)."
         )
@@ -1113,7 +1130,8 @@ def render(argv: list[str]) -> None:
 
     if args.sample:
         words, fixations = api.load_sample_data()
-        canvas = canvas or (2560, 1440)  # OneStop monitor
+        # OneStop monitor — cited in eyegenbench_geometry.DISPLAY_SPECS["onestop"].
+        canvas = canvas or (2560, 1440)
     elif args.authoring:
         try:
             words, fixations = api.load_authored_scanpath(args.authoring)
@@ -1136,6 +1154,25 @@ def render(argv: list[str]) -> None:
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
         canvas = canvas or (1680, 1050)  # PoTeC monitor (DELL P2210)
+    elif args.eyegenbench:
+        if not args.eyegenbench_dataset:
+            parser.error("--eyegenbench requires --eyegenbench-dataset NAME")
+        from .eyegenbench import eyegenbench_monitor, load_eyegenbench
+
+        try:
+            words, fixations = load_eyegenbench(
+                args.eyegenbench, dataset=args.eyegenbench_dataset
+            )
+            # `eyegenbench_monitor` answers None for a corpus whose manifest
+            # only carries the invented default screen, so `render` falls back
+            # to the data's own extents there — the same call the app's picker
+            # entry makes (I3). Before this the CLI drew those corpora at
+            # 1920x1080 while the app drew them at data extents.
+            canvas = canvas or eyegenbench_monitor(
+                args.eyegenbench, args.eyegenbench_dataset
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            raise SystemExit(str(exc))
     elif args.onestop:
         from .datasets import load_onestop
 
@@ -1151,7 +1188,9 @@ def render(argv: list[str]) -> None:
             )
         except (ValueError, FileNotFoundError, OSError) as exc:
             raise SystemExit(str(exc))
-        canvas = canvas or (2560, 1440)  # OneStop monitor (Dell U2715H)
+        # OneStop monitor (Dell U2715H) — cited once in
+        # eyegenbench_geometry.DISPLAY_SPECS["onestop"] (Berzak et al. 2025).
+        canvas = canvas or (2560, 1440)
     elif args.source == "multipleye":
         from .datasets import MULTIPLEYE_MONITOR
 

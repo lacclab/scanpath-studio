@@ -39,6 +39,38 @@ def experimental_off(monkeypatch):
 
 
 @pytest.fixture(autouse=True, scope="session")
+def _no_developer_local_benchmark_bundle(tmp_path_factory):
+    """Point benchmark discovery at an empty directory for the whole suite (M16).
+
+    DATA-27 made the public-dataset registry a *function* that enumerates every
+    prepared corpus found under `EYEGENBENCH_DEFAULT_DIR` — which is
+    ``data/EyeGenBench`` inside the repo. A developer who has built a bundle
+    there (or, worse, is building one *while* the suite runs) therefore gets a
+    different registry from CI's, and any test that reasons about the whole
+    registry — how many corpora, which short names, whether an option list
+    contains one — silently changes meaning with the contents of an untracked
+    directory. Pinning it here means a benchmark corpus exists in a test only
+    when that test writes one and points the constant at it, which every
+    DATA-27 test already does (a `monkeypatch.setattr` inside a test wins over
+    this).
+
+    **Every module that binds the name is patched**, not just `app`: each does
+    its own ``from .constants import EYEGENBENCH_DEFAULT_DIR``, so each holds a
+    separate binding and patching `constants` alone reaches none of them. In
+    particular `compare_source` resolves the bundle location independently when
+    it enumerates comparison sources, so an `app`-only patch would leave the
+    compare surface reading the developer's real ``data/EyeGenBench``.
+    """
+    from scanpath_studio import app, compare_source, constants
+
+    empty = tmp_path_factory.mktemp("no-benchmark-bundle")
+    with pytest.MonkeyPatch.context() as mp:
+        for module in (constants, app, compare_source):
+            mp.setattr(module, "EYEGENBENCH_DEFAULT_DIR", str(empty))
+        yield
+
+
+@pytest.fixture(autouse=True, scope="session")
 def _plain_text_cli_output():
     """Pin CLI/argparse output to uncoloured text for the whole run.
 
@@ -236,3 +268,77 @@ def answer_setup_step(at, *, screen=None, geometry=None, text=None):
     at.session_state[_SETUP_MODE_KEYS["geometry"]] = geometry or _GEOM_DEFAULT
     at.session_state[_SETUP_MODE_KEYS["text"]] = text or _TEXT_DEFAULT
     return at
+
+
+def _write_benchmark_corpus(
+    root, name: str, *, readers=("r1",), paragraphs=("p1",), fix_leftovers=None
+) -> None:
+    """Write one prepared benchmark corpus (DATA-27) under ``root/<name>/``.
+
+    The frames match `eyegenbench.EYEGENBENCH_WORD_SCHEMA` / `_FIX_SCHEMA` —
+    trivial single-column frames fail schema mapping, and `main()` returns early
+    on an unmapped source (`_render_unmapped_view`) without reaching most of what
+    these tests assert on.
+
+    ``fix_leftovers`` is a ``{column: value}`` mapping stamped onto every
+    fixation row, and it exists because the idealized default hid two real bugs
+    for a whole branch. A real prepared corpus carries the **publisher's** ~190
+    columns through beside the harmonised ones, and the app's auto-detection
+    seizes on them: EMTeC ships a `TRIAL_ID` that outranks `unique_paragraph_id`
+    (so the words broadcast to zero rows, silently), and Provo/SBSAT ship a
+    `page` that reads as a multipart screen on the fixations only (so the pair
+    is rejected outright). Pass the leftovers when a test needs the shape the
+    bundle actually has rather than the shape the schema describes.
+    """
+    import pandas as pd
+
+    directory = root / name
+    directory.mkdir(parents=True)
+    n = len(paragraphs)
+    pd.DataFrame(
+        {
+            "unique_paragraph_id": [p for p in paragraphs for _ in (0, 1)],
+            "ia_index": [0, 1] * n,
+            "ia_label": ["ab", "cd"] * n,
+            "line": [0, 0] * n,
+            "start_x": [10.0, 70.0] * n,
+            "end_x": [60.0, 120.0] * n,
+            "start_y": [20.0, 20.0] * n,
+            "end_y": [40.0, 40.0] * n,
+        }
+    ).to_parquet(directory / "words.parquet")
+    rows = [
+        (reader, paragraph, fix_index)
+        for reader in readers
+        for paragraph in paragraphs
+        for fix_index in (0, 1)
+    ]
+    fixations = pd.DataFrame(
+        {
+            "eyegenbench_trial_id": [f"t_{p}" for _, p, _ in rows],
+            "unique_participant_id": [r for r, _, _ in rows],
+            "unique_paragraph_id": [p for _, p, _ in rows],
+            "fix_index": [i for _, _, i in rows],
+            "ia_index": [i for _, _, i in rows],
+            "fix_duration": [200 if i == 0 else 180 for _, _, i in rows],
+            "x": [35.0 if i == 0 else 95.0 for _, _, i in rows],
+            "y": [30.0 for _ in rows],
+        }
+    )
+    for column, value in (fix_leftovers or {}).items():
+        fixations[column] = value
+    fixations.to_parquet(directory / "fixations.parquet")
+    pd.DataFrame(
+        {
+            "unique_participant_id": list(readers),
+            "participant_language": ["xx"] * len(readers),
+        }
+    ).to_parquet(directory / "participants.parquet")
+
+
+def _write_benchmark_manifest(root, entries) -> None:
+    """Write the bundle manifest. ``entries`` are real manifest rows — in
+    particular ``language`` is an **ISO code** ('de'), never a name."""
+    import json
+
+    (root / "manifest.json").write_text(json.dumps({"datasets": list(entries)}))

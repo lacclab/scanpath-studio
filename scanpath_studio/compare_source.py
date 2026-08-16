@@ -27,6 +27,7 @@ import streamlit as st
 
 from .constants import (
     DEMO_CHOICE,
+    EYEGENBENCH_DEFAULT_DIR,
     MULTIPLEYE_DEFAULT_DIR,
     ONESTOP_LACCLAB_DEFAULT_DIR,
     ONESTOP_PUBLIC_CHOICE,
@@ -94,8 +95,18 @@ def _public_location(label: str) -> tuple[str, dict]:
     regime / parts, MultiplEYE's fixation source) — the same session keys the
     sidebar widgets own, read rather than re-rendered.
     """
-    from scanpath_studio import datasets
+    from scanpath_studio import app, datasets
 
+    # DATA-27 (Task 11R): a prepared benchmark corpus is one registry entry that
+    # names the corpus inside the bundle, so it dispatches on `benchmark_dataset`
+    # — **before** the label-substring branches below, which a harmonised
+    # "PoTeC …" / "OneStop …" label would otherwise match and send to the native
+    # loader.
+    spec = app.public_dataset_registry().get(label) or {}
+    if dataset := spec.get("benchmark_dataset"):
+        return _resolved_dir("eyegenbench_dir", EYEGENBENCH_DEFAULT_DIR), {
+            "dataset": dataset,
+        }
     if label == ONESTOP_PUBLIC_CHOICE:
         variant = str(st.session_state.get("onestop_variant") or "public")
         default = (
@@ -137,20 +148,42 @@ def _public_ready(label: str) -> tuple[bool, str]:
     same call for the same reason). Location changes bust the key.
     """
     root, kwargs = _public_location(label)
-    return _public_ready_cached(label, root, tuple(sorted(kwargs.items())))
+    return _public_ready_cached(
+        label, root, tuple(sorted(kwargs.items())), _short_name(label)
+    )
+
+
+def _short_name(label: str) -> str:
+    """What to call this corpus in a disabled entry's hint.
+
+    The registry's own ``short`` name, not the label's prefix: two entries can
+    share one prefix — the native and the harmonised PoTeC both split to
+    ``"PoTeC"`` — so a prefix-derived hint told the user to go and open one of
+    two entries it couldn't tell apart (M12).
+    """
+    from scanpath_studio import app
+
+    spec = app.public_dataset_registry().get(label) or {}
+    return str(spec.get("short") or "").strip() or label.split(" — ")[0]
 
 
 @st.cache_data(show_spinner=False)
-def _public_ready_cached(label: str, root: str, options: tuple) -> tuple[bool, str]:
+def _public_ready_cached(
+    label: str, root: str, options: tuple, short: str = ""
+) -> tuple[bool, str]:
     from scanpath_studio import datasets
 
     kwargs = dict(options)
-    short = label.split(" — ")[0]
+    short = short or label.split(" — ")[0]
     if not root:
         return False, f"{short} isn't loadable as a comparison dataset."
     hint = f"Open {short} as the main dataset once to set its location."
     try:
-        if label == ONESTOP_PUBLIC_CHOICE:
+        if dataset := kwargs.get("dataset"):
+            from scanpath_studio.eyegenbench import eyegenbench_present
+
+            present = eyegenbench_present(root, dataset)
+        elif label == ONESTOP_PUBLIC_CHOICE:
             present = datasets.onestop_present(
                 root,
                 regime=kwargs["regime"],
@@ -166,7 +199,14 @@ def _public_ready_cached(label: str, root: str, options: tuple) -> tuple[bool, s
             present = bool(sessions)
         else:
             return False, f"{short} isn't loadable as a comparison dataset."
-    except (OSError, ValueError):
+    except (OSError, ValueError, KeyError):
+        # `KeyError` because a manifest row is data from a file on disk and can
+        # be malformed — a row with no `name` used to escape this catch and take
+        # the whole app down through the compare-B enumeration, which runs over
+        # *every* registry entry on every rerun Compare is on (I2). The nameless
+        # row is now skipped at the source too (`eyegenbench.entry_name`); this
+        # is the belt to that braces, since the same catch covers four loaders'
+        # readiness probes and only one of them has been hardened.
         present = False
     return (True, "") if present else (False, hint)
 
@@ -203,7 +243,12 @@ def secondary_dataset_options(
     options.append((SYNTHETIC_CHOICE, True, ""))
     if app.public_datasets_enabled():
         options.extend(
-            (label, *_public_ready(label)) for label in app.PUBLIC_DATASET_REGISTRY
+            (label, *_public_ready(label))
+            for label, spec in app.public_dataset_registry().items()
+            # The bootstrap entry (offered only while no benchmark corpus is
+            # discovered) is a place to type a directory, not a dataset — there
+            # is nothing to compare against.
+            if not spec.get("setup_only")
         )
     return [option for option in options if option[0] != exclude]
 
@@ -221,6 +266,10 @@ def _load_public_frames(
     from scanpath_studio import datasets
 
     kwargs = dict(options)
+    if dataset := kwargs.get("dataset"):
+        from scanpath_studio.eyegenbench import load_eyegenbench
+
+        return load_eyegenbench(root, dataset=dataset)
     if label == ONESTOP_PUBLIC_CHOICE:
         return datasets.load_onestop(
             root,
@@ -306,7 +355,7 @@ def load_secondary_dataset(name: str | None) -> SecondaryDataset | None:
     else:
         from scanpath_studio import app
 
-        if name in app.PUBLIC_DATASET_REGISTRY:
+        if name in app.public_dataset_registry():
             # Re-check readiness directly rather than rebuilding the whole option
             # list: that would re-sweep *every* corpus' filesystem a second time
             # on the very rerun a cross-dataset pick already costs the most.

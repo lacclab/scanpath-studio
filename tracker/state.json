@@ -99,6 +99,14 @@
       "archived": true,
       "updated": "2026-08-13"
     },
+    "BUG-28": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "Didn't test, closing",
+      "archived": true,
+      "updated": "2026-08-15"
+    },
     "BUG-4": {
       "status": "Backlog",
       "priority": "Normal",
@@ -163,20 +171,20 @@
       "updated": "2026-08-12"
     },
     "DATA-1": {
-      "status": "Backlog",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-13"
+      "archived": true,
+      "updated": "2026-08-15"
     },
     "DATA-10": {
-      "status": "Backlog",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "",
       "implementationBrief": "Use code from eyegenbench",
-      "archived": false,
-      "updated": "2026-08-13"
+      "archived": true,
+      "updated": "2026-08-15"
     },
     "DATA-15": {
       "status": "Backlog",
@@ -779,12 +787,12 @@
       "updated": "2026-08-13"
     },
     "VAL-3": {
-      "status": "Backlog",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "",
       "implementationBrief": "Can be closed by MECO",
-      "archived": false,
-      "updated": "2026-08-13"
+      "archived": true,
+      "updated": "2026-08-15"
     },
     "VAL-4": {
       "status": "On hold",

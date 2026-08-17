@@ -552,6 +552,18 @@ def get_app_css() -> str:
     }
     .st-key-wiz_name_box label p { font-weight: 700; }
 
+    /* UX-53 r15 — the table name at the head of an identity row. It labels the
+       line once so the three field titles beside it need not each repeat it,
+       and it sits on the titles' baseline rather than the controls'. */
+    .sps-id-row-name {
+        font-weight: 700;
+        font-size: 0.9rem;
+        opacity: 0.85;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     /* UX-53 r14 — a dropdown must never cut off a column name. The mapping now
        packs six or eight selects onto one row, so the *control* is narrow by
        design; the open menu must not inherit that. BaseWeb sizes the popover to

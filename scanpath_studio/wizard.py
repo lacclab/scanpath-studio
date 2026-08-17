@@ -519,11 +519,10 @@ def _render_identity_field(
         _seed(key, options, default_cols)
         # Title on the cell's first line, control on its second (UX-53 r14), so
         # the row reads as a line of names over a line of pickers. The title
-        # says which table it maps, since a theme's row holds one picker per
-        # table and "Trial ID" twice would be unreadable.
-        inline_field_label(
-            cell, f"{label} · {table_label}", f"{help_text} ({table_label} table)"
-        )
+        # carries no table name (r15): the rows are now grouped *by* table and
+        # each is labelled once at its head, so repeating it on all three fields
+        # would say the same thing three times.
+        inline_field_label(cell, label, f"{help_text} ({table_label} table)")
         chosen = cell.multiselect(
             f"{label} — {table_label}",
             options=options,
@@ -1660,6 +1659,11 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
+#: `table name | Trial | Participant | Text` — one identity row (UX-53 r15).
+#: The name column is narrow because it holds one short word; the three pickers
+#: split the rest evenly, since a column name is what has to stay readable.
+_ID_ROW_W = (0.13, 0.29, 0.29, 0.29)
+
 #: One line under the *Trials & readers* heading, in place of the paragraph the
 #: step used to carry. UX-53's brief was "display less text".
 _IDENTITY_CAPTION = (
@@ -2042,14 +2046,34 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     if has_words or has_fix:
-        # UX-53 r13: the whole theme on one row. Three identifiers x one picker
-        # per present table, so 6 cells with both tables and 3 with one — each
-        # `label | field`, squeezed, with the labels ellipsising and giving
-        # their full text on hover. The counts go to a full-width strip below:
-        # they are sentences, and a sentence in a sixth of the width is a
-        # column of single words.
-        n_tables = int(has_fix) + int(has_words)
-        id_cells = s2.columns(3 * n_tables, gap="small", vertical_alignment="center")
+        # UX-53 r15: one line per *table* — the Fixations row, then the AOI row —
+        # each holding that table's Trial / Participant / Text pickers. Grouping
+        # by table beats interleaving by field because the two rows are then the
+        # two things being compared: read across a line to see how one table is
+        # identified, down a column to see whether the tables agree.
+        #
+        # A narrow first column names the row, so the field titles need not
+        # repeat it three times. The counts go to a full-width strip below: they
+        # are sentences, and a sentence in a quarter of the width is a column of
+        # single words.
+        id_rows = {}
+        for slug, present, table_label in (
+            ("fix", has_fix, "Fixations"),
+            ("words", has_words, "AOI"),
+        ):
+            if not present:
+                continue
+            row = s2.columns(_ID_ROW_W, gap="small", vertical_alignment="center")
+            row[0].markdown(
+                f'<div class="sps-id-row-name">{table_label}</div>',
+                unsafe_allow_html=True,
+            )
+            id_rows[slug] = row[1:]
+
+        # `_render_identity_field` takes its cells in (fixations, AOI) order.
+        def _cells_for(index: int) -> list:
+            return [id_rows[s][index] for s in ("fix", "words") if s in id_rows]
+
         id_extras = s2.container()
         _wizard_trial_step(
             s2,
@@ -2061,7 +2085,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=id_cells[0:n_tables],
+            cells=_cells_for(0),
             extras_host=id_extras,
         )
         _wizard_participant_text_step(
@@ -2079,7 +2103,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=id_cells[n_tables : 2 * n_tables],
+            cells=_cells_for(1),
             extras_host=id_extras,
         )
         _wizard_participant_text_step(
@@ -2097,7 +2121,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=id_cells[2 * n_tables : 3 * n_tables],
+            cells=_cells_for(2),
             extras_host=id_extras,
         )
         # DATA-21 multipart screens: beside, not inside, the logical trial id.

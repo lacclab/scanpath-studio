@@ -401,14 +401,13 @@ window.TRACKER = {
     "coordinate frame (raw y ~200 px vs. the bundle's 387 px on the same line).",
     "",
     "Needs a re-run of [`prepare_eyegenbench.py`](scripts/prepare_eyegenbench.py) for",
-    "the affected corpora, with the raw downloads still on disk (they are)."
-   ],
-   "decisions": [
-    "**Is OneStop worth the re-prep given it already ships natively?** The app lists",
-    "it twice — native *OneStop* (real geometry) and *OneStop (harmonised benchmark)*",
-    "— so the reconstructed copy is arguably the throwaway one. Fixing it still pays",
-    "off if the same key-name fix promotes other corpora, which is the thing to scope",
-    "first."
+    "the affected corpora, with the raw downloads still on disk (they are).",
+    "",
+    "**Decided 2026-08-17** (user): do it. Asked whether OneStop was worth the re-prep",
+    "given the app also lists it natively — *\"Yes. When eyegenbench will be finalized",
+    "and included all onestop subset, I will be removing the native onestop at one",
+    "point.\"* So the harmonised copy is the one that survives, not the throwaway, and",
+    "its geometry has to be right."
    ]
   },
   {
@@ -468,15 +467,14 @@ window.TRACKER = {
     "this item.",
     "",
     "Not an option: jittering y. It would fabricate the one signal these plots are",
-    "read for."
-   ],
-   "decisions": [
-    "**Scope: chase the real y, or just disclose it?** Recovering it means a",
-    "per-corpus column map, a re-run of",
-    "[`prepare_eyegenbench.py`](scripts/prepare_eyegenbench.py), and #DATA-28 first —",
-    "for maybe 6 corpora. Extending the badge to say \"vertical position is",
-    "reconstructed\" is an afternoon and covers all 31 honestly. Both, or the second",
-    "only?"
+    "read for.",
+    "",
+    "**Decided 2026-08-17** (user): *\"Chase the real y.\"* Asked whether to recover it",
+    "(per-corpus column map + a re-run of",
+    "[`prepare_eyegenbench.py`](scripts/prepare_eyegenbench.py), gated on #DATA-28, for",
+    "~6 corpora) or settle for extending the geometry badge to say the vertical",
+    "position is inferred. Recovery it is — the badge wording is still worth doing for",
+    "the corpora that will never have a real y, but it is no longer the whole answer."
    ]
   },
   {

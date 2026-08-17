@@ -1108,14 +1108,21 @@ def _default_box_format(proposed: dict[str, str | None]) -> str:
 # size. All optional, all inert for an ordinary single-screen corpus, and
 # together they were half the rows in the editor — so they fold into an
 # "Advanced" group instead of padding the list everyone reads.
-_ADVANCED_MAPPING_KEYS = frozenset(
-    {
-        "screen_id",
-        "screen_index",
-        "screen_fixation_id",
-        "canvas_width",
-        "canvas_height",
-    }
+_ADVANCED_MAPPING_KEYS = frozenset({"screen_id", "screen_index"})
+
+#: Mapping keys that are **resolved but never rendered** (UX-53 round 3).
+#:
+#: `screen_fixation_id` and the two `canvas_*` fields are per-screen bookkeeping
+#: that only a multipart export carries, and when it does carry them the column
+#: names are the canonical ones auto-detection already finds. They were three
+#: more rows on a page whose complaint was length, offering a choice nobody
+#: makes. `_assemble_mapping` still puts them in the schema straight from the
+#: proposal, so multipart datasets keep their per-screen canvas and nothing
+#: downstream sees a narrower schema — what is gone is the widget, not the
+#: field. Anything genuinely unmappable this way is a column-name problem, and
+#: `data.py`'s candidate lists are where that gets fixed.
+_HIDDEN_MAPPING_KEYS = frozenset(
+    {"screen_fixation_id", "canvas_width", "canvas_height"}
 )
 
 WORD_FIELD_SPECS: list[dict] = [
@@ -1280,7 +1287,7 @@ FIX_FIELD_SPECS: list[dict] = [
         "required": False,
         "help": "Which word/AOI each fixation landed on. Authoritative when "
         "present (overrides geometric assignment), and supplies the location "
-        "when X/Y are absent.",
+        "when X/Y are absent — for AOI-only data, leave X/Y empty and map this.",
     },
     {
         "key": "canvas_width",
@@ -1386,6 +1393,12 @@ def _assemble_mapping(
         if only_keys is not None and key not in only_keys:
             continue
         default = proposed.get(key)
+        # Resolved from auto-detection, never offered as a row (UX-53). Both
+        # callers share this loop, so the editor and the resolver stay in
+        # agreement — the whole reason `_assemble_mapping` exists.
+        if key in _HIDDEN_MAPPING_KEYS:
+            mapping[key] = default
+            continue
         label = spec["label"] + (" *" if spec.get("required") else "")
         if spec.get("kind") == "box":
             fmt = pick_box_format(spec)

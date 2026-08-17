@@ -14,6 +14,7 @@ avoids an app⇄wizard import cycle.
 
 from __future__ import annotations
 
+import html
 import json
 import re
 from typing import NamedTuple
@@ -1714,6 +1715,28 @@ _IDENTITY_CAPTION = (
 )
 
 
+def _hover_note(host, label: str, note: str, *, link: str = "") -> None:
+    """A short label whose explanation is only on hover (UX-53 round 3).
+
+    The wizard's prose was the bulk of its length, and most of it is read once
+    and never again. This keeps a scannable anchor on the page and puts the
+    sentences behind the same `.sps-fhelp` tooltip the rail's labels use — a CSS
+    one (120 ms), not the browser's native `title=`, which waits about a second
+    and so is unusable for text people actually need.
+    """
+    tail = (
+        f' <a href="{html.escape(link, quote=True)}" target="_blank">↗</a>'
+        if link
+        else ""
+    )
+    host.markdown(
+        f'<div class="sps-wiz-note"><span class="sps-fhelp" '
+        f'data-tip="{html.escape(note, quote=True)}">{html.escape(label)}</span>'
+        f"{tail}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _mark_add_attempted() -> None:
     """Record that **✅ Add dataset** was pressed on a still-incomplete wizard.
 
@@ -1913,10 +1936,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if active:
         st.header("📂 Set up your dataset")
         st.caption(
-            "Upload your tables, then map them — both parts stay filled in as you "
-            "move between them."
-        )
-        st.caption(
             "First time? [Bring your own data ↗]"
             "(https://lacclab.github.io/scanpath-studio/bring-your-own-data/) "
             "covers the minimum your export needs, worked EyeLink and plain-CSV "
@@ -1944,17 +1963,20 @@ def _render_data_setup(active: bool) -> _UploadResult:
             st.session_state["setup_complete"] = False
             st.rerun()
 
-    def step_of(step_id: str):
-        step = wizard_shell.STEPS_BY_ID[step_id]
-        return step, wizard_shell.step_panel(
-            body,
-            step,
-            statuses.get(step_id, wizard_shell.StepStatus.TODO),
-            active=active,
-        )
+    # UX-53 r3: **one** panel. `s1` (uploads + readers) and `s_map` (the mapping
+    # sections + the footer) are two containers inside it purely to fix the
+    # order — the readers section is written long after the mapping schemas
+    # exist, but has to appear beside the uploads it belongs with.
+    panel_host = wizard_shell.step_panel(
+        body,
+        wizard_shell.STEPS[0],
+        statuses.get("setup", wizard_shell.StepStatus.TODO),
+        active=active,
+    )
+    s1 = panel_host.container()
+    s_map = panel_host.container()
 
-    # === 1 · Your data =======================================================
-    _data_step, s1 = step_of("data")
+    # === Your data ===========================================================
     if active:
         s1.segmented_control(
             "Dataset format",
@@ -1978,11 +2000,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # a *conditional* child here shifts the element tree mid-parse and Streamlit
     # leaves a greyed-out ghost of the whole upload group on screen (BUG-2).
     intro = s1.container()
-    intro.caption(
-        "🔒 Your file is parsed on the machine running this app and never sent "
+    _hover_note(
+        intro,
+        "🔒 Parsed locally",
+        "Your file is parsed on the machine running this app and never sent "
         "elsewhere. Local/desktop installs keep a private recovery cache after "
-        "you add the dataset; the hosted demo remains memory-only. "
-        "[Where your data goes ↗](https://lacclab.github.io/scanpath-studio/privacy/)"
+        "you add the dataset; the hosted demo remains memory-only.",
+        link="https://lacclab.github.io/scanpath-studio/privacy/",
     )
     core_uploaded = bool(
         st.session_state.get("col_map_fix_upload")
@@ -2079,10 +2103,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     fix_schema: dict = {}
     has_words, has_fix = not raw_words.empty, not raw_fix.empty
 
-    # === 2 · Map it & add it =================================================
-    # UX-53: one part from here down. Its former steps are `wizard_shell.section`
-    # line titles, so every mapping field is on screen at once.
-    _mapping_step, s_map = step_of("mapping")
+    # === Map it & add it =====================================================
     _wizard_name_header(s_map, active)
 
     s2 = wizard_shell.section(
@@ -2096,7 +2117,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
         SOURCE_FILE_COLUMN in fr.columns for fr in (raw_fix, raw_words) if not fr.empty
     ):
         derive_host = s2.container()
-        derive_host.markdown("**Advanced** — derive ids from the filename")
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
             derive_host,
             raw_words,
@@ -2149,12 +2169,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
             has_fix,
         )
         # DATA-21 multipart screens: beside, not inside, the logical trial id.
+        # The "only for trials made of ordered screens" explanation lives on the
+        # two fields' own tooltips (WORD/FIX_FIELD_SPECS) — UX-53 r3 keeps
+        # descriptive prose off the page.
         screens = s2.container()
-        screens.markdown("**Advanced** — multipart screens")
-        screens.caption(
-            "Map these only when one logical trial contains ordered screens. "
-            "Screen ID must be mapped in both reports; screen order is 1-based."
-        )
         if has_words:
             screens.markdown("**Words / Interest Areas**")
             word_schema.update(
@@ -2186,7 +2204,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 )
             )
 
-    s3 = wizard_shell.section(s_map, "geometry", status=statuses.get("geometry"))
+    s3 = wizard_shell.section(
+        s_map,
+        "geometry",
+        status=statuses.get("geometry"),
+        caption=(
+            "Where the eyes landed and where the words are: fixation x / y / "
+            "duration, and the word id / text / box."
+        ),
+    )
     if has_fix:
         s3.markdown("**Fixations** — where the eyes landed")
         fix_schema.update(
@@ -2199,12 +2225,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 ["x", "y", "duration", "fixation_id"],
             )
         )
-        s3.caption(
-            "Leave X/Y blank for AOI-only data and map the Word/IA ID under "
-            "*Advanced* instead."
-        )
+        # The AOI-only hint now rides the Word/IA ID field's own tooltip
+        # (FIX_FIELD_SPECS), where it is read at the moment it applies.
         advanced_fix = s3.container()
-        advanced_fix.markdown("**Advanced** — more fixation mappings")
         fix_schema.update(
             _map_section(
                 raw_fix,
@@ -2233,7 +2256,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
             )
         )
         words_advanced = s3.container()
-        words_advanced.markdown("**Advanced** — more text mappings")
         word_schema.update(
             _map_section(
                 raw_words,
@@ -2258,13 +2280,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             s3.warning(f"Words/IA — {problem}")
 
     if not raw_gaze.empty:
-        rg_required = not has_words and not has_fix
         rg_host = s3.container()
-        rg_host.markdown(
-            "**Raw gaze overlay**"
-            if rg_required
-            else "**Advanced** — raw gaze overlay mapping"
-        )
+        rg_host.markdown("**Raw gaze overlay**")
         raw_gaze_schema = _map_section(
             raw_gaze,
             RAW_GAZE_FIELD_SPECS,
@@ -2313,7 +2330,16 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # costs two clicks; skipping a wrong one costs the whole dataset.
     _render_autodetect_card(s1.container(), word_schema, fix_schema, has_words, has_fix)
 
-    s4 = wizard_shell.section(s_map, "setup", status=statuses.get("setup"))
+    s4 = wizard_shell.section(
+        s_map,
+        "setup",
+        status=statuses.get("setup"),
+        caption=(
+            "The screen the data was recorded on. Nothing is preselected — say "
+            "whether each value is known, estimated from your data, a named "
+            "default, or skipped, so a default is never read as a measurement."
+        ),
+    )
     restored_setup = _restored_setup_snapshot()
     if restored_setup is not None:
         _apply_restored_setup(restored_setup)
@@ -2327,22 +2353,30 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if active:
         from scanpath_studio.tabs import render_participant_metadata_section
 
-        s_readers = wizard_shell.section(s1, "readers", status=statuses.get("readers"))
-        s_readers.caption(
-            "Optional, and separate from the tables above: one row per **reader**, "
-            "not per trial. Its columns then behave like fields in your data — "
-            "filters, chips, trial sorting, corpus grouping, export."
+        s_readers = wizard_shell.section(
+            s1,
+            "readers",
+            status=statuses.get("readers"),
+            caption=(
+                "Optional, and separate from the tables above: one row per reader, "
+                "not per trial. Its columns then behave like fields in your data — "
+                "filters, chips, trial sorting, corpus grouping, export."
+            ),
         )
         render_participant_metadata_section(
             _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
             host=s_readers.container(),
         )
 
-    s5 = wizard_shell.section(s_map, "fields", status=statuses.get("fields"))
-    s5.caption(
-        "*Filter trials by* becomes a value picker in the Narrow-by panel; "
-        "*Additional fields to keep* are the columns you can colour, sort and "
-        "analyse by later. Fewer columns is faster."
+    s5 = wizard_shell.section(
+        s_map,
+        "fields",
+        status=statuses.get("fields"),
+        caption=(
+            "Filter trials by becomes a value picker in the Narrow-by panel; "
+            "Additional fields to keep are the columns you can colour, sort and "
+            "analyse by later. Fewer columns is faster."
+        ),
     )
     keep_tables: list = []
     if has_words:

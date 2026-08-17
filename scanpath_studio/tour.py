@@ -1639,34 +1639,23 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "📂 Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset in two "
-            "parts: upload them, then say which columns mean what and add it. "
-            "Follow along with **Next** — the wizard opens each part as you go — "
-            "or **Skip** to dive in."
+            "Turn your eye-tracking tables into an interactive dataset on one "
+            "screen: upload them, say which columns mean what, add it. Follow "
+            "along with **Next**, or **Skip** to dive in."
         ),
         "selector": "",
         "step_id": None,
     },
     {
-        "title": "1 · Your data",
+        "title": "Set up your dataset",
         "body": (
-            "Add your **Fixations** and/or **Words / IA** tables — CSV / TSV / "
-            "Parquet, several files or either alone. Optionally attach a "
-            "one-row-per-reader table at the foot.\n\n"
-            "> 💡 Large dataset? Run locally: `pip install scanpath-studio`."
+            "Add your **Fixations** and/or **Words / IA** tables, name it, then "
+            "work down one screen: **Trials & readers**, **Fixations & text**, "
+            "**Recording setup**, **Extra fields**. Anything missing is listed "
+            "above **✅ Add dataset**. 👀"
         ),
-        "selector": ".st-key-wiz_open_data",
-        "step_id": "data",
-    },
-    {
-        "title": "2 · Map it & add it",
-        "body": (
-            "Name it, then work down one screen: **Trials & readers**, "
-            "**Fixations & text**, **Recording setup**, **Extra fields**. "
-            "Anything still missing is listed right above **✅ Add dataset**. 👀"
-        ),
-        "selector": ".st-key-wiz_open_mapping",
-        "step_id": "mapping",
+        "selector": ".st-key-wiz_open_setup",
+        "step_id": "setup",
     },
 ]
 

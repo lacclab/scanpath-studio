@@ -526,7 +526,9 @@ window.TRACKER = {
     "  the map view at the bottom of part 1."
    ],
    "statusNote": [
-    "**Review — implemented 2026-08-17.** All seven asks are built."
+    "**Review — implemented 2026-08-17**, then reworked the same day after",
+    "*\"this is not good enough\"*: one part instead of two, no *Advanced*",
+    "anything, and every line of explanation moved onto hover."
    ],
    "whatWasDone": [
     "**Seven steps became two.**",
@@ -593,7 +595,34 @@ window.TRACKER = {
     "",
     "`CHANGELOG.md`, `AGENTS.md` and",
     "[`scanpath_studio/CLAUDE.md`](scanpath_studio/CLAUDE.md) all describe the",
-    "two-part wizard now."
+    "wizard as it now is.",
+    "",
+    "**Round 3 — after \"this is not good enough\" (2026-08-17):**",
+    "",
+    "**Descriptive text is hover-only.** `wizard_shell.section(caption=…)` no",
+    "longer prints its caption — it rides the heading as a `.sps-fhelp` tooltip,",
+    "the CSS one #UX-51 introduced (120 ms, versus the browser's ~1 s `title=`).",
+    "`wizard._hover_note` does the same for standalone notes, so the privacy",
+    "paragraph is now a **🔒 Parsed locally** chip. Per-field prose moved into the",
+    "widgets' own `help=` — the AOI-only hint now lives on *Word/IA ID*, which is",
+    "the field it is about. A dotted underline marks what is hoverable, since this",
+    "page has no neighbouring `?` icon to imply it.",
+    "",
+    "**One part, not two.** `STEPS` is a single *Set up your dataset*; `s1` and",
+    "`s_map` are containers inside it purely to order uploads before mappings.",
+    "",
+    "**No *Advanced* anything.** All five inline *Advanced* headings and their",
+    "explanations are gone; those fields simply sit last in their section.",
+    "",
+    "**Three fields stop rendering.** `controls._HIDDEN_MAPPING_KEYS` —",
+    "`screen_fixation_id`, `canvas_width`, `canvas_height` — are resolved from",
+    "auto-detection inside `_assemble_mapping` and never drawn. The schema keeps",
+    "its shape, so multipart datasets keep their per-screen canvas; what is gone",
+    "is three widgets nobody set. (This reverses the earlier \"leave the canvas",
+    "fields as they are\" call, on the later instruction.)",
+    "",
+    "255 tests pass across `test_apptest.py`, `test_wizard_helpers.py`,",
+    "`test_metadata.py`, `test_tour.py`, `test_theme.py`."
    ],
    "whatsLeft": [
     "Nothing."

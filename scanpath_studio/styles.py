@@ -493,6 +493,28 @@ def get_app_css() -> str:
         transition-delay: 120ms;
     }
 
+    /* UX-53 round 3 — the wizard's descriptive prose is hover-only, so it reuses
+       the tooltip above. Two adjustments for this context: the carrier is a
+       heading or a short chip rather than a full-width field label, so it hugs
+       its text instead of filling the row; and it needs a visible cue that
+       something is there, which in the rail is supplied by the neighbouring `?`
+       affordance and here is not. */
+    .sps-wiz-section .sps-fhelp,
+    .sps-wiz-note .sps-fhelp {
+        display: inline-block;
+        max-width: none;
+        text-decoration: underline dotted;
+        text-decoration-color: rgba(128, 128, 128, 0.55);
+        text-underline-offset: 3px;
+        cursor: help;
+    }
+    .sps-wiz-note {
+        margin: 0.1rem 0 0.35rem;
+        font-size: 0.86rem;
+        opacity: 0.85;
+    }
+    .sps-wiz-note a { text-decoration: none; }
+
     /* Control rail: a subtle card so it reads as a panel, with a hair more
        breathing room between the stacked toggles than the app-wide gap:0 rule.
        UX-43 gives it its own scroll area exactly as tall as the plot row: the

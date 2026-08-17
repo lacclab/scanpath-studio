@@ -36,6 +36,7 @@ at the `step_panel` call sites in ``wizard.py``.
 
 from __future__ import annotations
 
+import html
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -88,15 +89,16 @@ class WizardStep:
 #: uploads it belongs with, and *Name & add* (the old step 7) became the head and
 #: foot of the combined part: the dataset name on top, validation and
 #: **✅ Add dataset** at the bottom.
+#: UX-53 round 3 — **one** part. Two was still two clicks and two headers for
+#: what is a single continuous job: upload the tables, say what the columns
+#: mean, add it. Everything renders in one flow, ordered by
+#: `wizard._render_data_setup`'s own containers.
 STEPS: tuple[WizardStep, ...] = (
     WizardStep(
-        "data", 1, "Your data", "The tables you exported, and who read them", True
-    ),
-    WizardStep(
-        "mapping",
-        2,
-        "Map it & add it",
-        "Which column is what — then add the dataset",
+        "setup",
+        1,
+        "Set up your dataset",
+        "Upload your tables, map their columns, add it",
         True,
     ),
 )
@@ -207,26 +209,35 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
 
 
 def section(host, section_id: str, *, status: StepStatus | None = None, caption=""):
-    """One topic inside a step, rendered as a **line title** rather than a panel.
+    """One topic, rendered as a **line title** rather than a panel.
 
-    UX-53: the six former steps became sections of one part, and a disclosure per
-    topic was the thing making the page long — you cannot see the mapping you are
-    checking against the mapping you just set. A heading costs one line, always
-    shows its fields, and (unlike the expander it replaces) has no open state to
-    remount, so none of the DATA-19 / DATA-22 collapse hazards apply.
+    UX-53: the former steps became sections, and a disclosure per topic was the
+    thing making the page long — you cannot see the mapping you are checking
+    against the mapping you just set. A heading costs one line, always shows its
+    fields, and (unlike the expander it replaces) has no open state to remount,
+    so none of the DATA-19 / DATA-22 collapse hazards apply.
 
-    Kept deliberately small: a divider, a bold title with an optional status
-    badge, an optional one-line caption, and the container to fill. `####`-style
-    markdown is avoided so this never competes with the page's real headings.
+    Round 3: ``caption`` no longer prints. Explanatory prose is **hover-only** —
+    it rides the heading as a `.sps-fhelp` tooltip (the same CSS mechanism
+    UX-51 uses for the rail's field labels, which beats the browser's native
+    `title=` because that waits ~1s). The words are still there for whoever
+    wants them; they just stop costing a line each on a page whose whole
+    problem was length.
     """
     title = SECTION_TITLES.get(section_id, section_id)
-    host.markdown(
-        f'<div class="sps-wiz-section">{badge(status) + " " if status else ""}'
-        f"{title}</div>",
-        unsafe_allow_html=True,
-    )
+    mark = f"{badge(status)} " if status else ""
     if caption:
-        host.caption(caption)
+        host.markdown(
+            f'<div class="sps-wiz-section">{mark}'
+            f'<span class="sps-fhelp" data-tip="{html.escape(caption, quote=True)}">'
+            f"{html.escape(title)}</span></div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        host.markdown(
+            f'<div class="sps-wiz-section">{mark}{html.escape(title)}</div>',
+            unsafe_allow_html=True,
+        )
     return host.container()
 
 

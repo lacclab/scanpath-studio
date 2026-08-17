@@ -1874,7 +1874,7 @@ which is pandas plus the standard library and imports <strong>no Streamlit</stro
 work from a plain script.</p>
 <p><strong>1. A raw-frames function</strong> — the required entry point.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="o">&lt;</span><span class="n">corpus</span><span class="o">&gt;</span><span class="n">_raw_frames</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">download</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Raw (pre-normalization) (words, fixations) frames.&quot;&quot;&quot;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="sd">"""Raw (pre-normalization) (words, fixations) frames."""</span>
 </code></pre></div>
 <p>It returns the two tables <strong>before</strong> normalization, in the corpus' own column
 names. That's deliberate: the app runs them through the same auto-detect →
@@ -1893,21 +1893,21 @@ omit them to let auto-detection run.</p>
 word table as one shared layout rather than one row per reader:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">POTEC_WORD_SCHEMA</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">participant</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">trial</span><span class="o">=</span><span class="s2">&quot;text_id&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">word_id</span><span class="o">=</span><span class="s2">&quot;aoi&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">text</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">line</span><span class="o">=</span><span class="s2">&quot;line&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">left</span><span class="o">=</span><span class="s2">&quot;start_x&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">right</span><span class="o">=</span><span class="s2">&quot;end_x&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">top</span><span class="o">=</span><span class="s2">&quot;start_y&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">bottom</span><span class="o">=</span><span class="s2">&quot;end_y&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">trial</span><span class="o">=</span><span class="s2">"text_id"</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">word_id</span><span class="o">=</span><span class="s2">"aoi"</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">text</span><span class="o">=</span><span class="s2">"word"</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">line</span><span class="o">=</span><span class="s2">"line"</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">left</span><span class="o">=</span><span class="s2">"start_x"</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">right</span><span class="o">=</span><span class="s2">"end_x"</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">top</span><span class="o">=</span><span class="s2">"start_y"</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">bottom</span><span class="o">=</span><span class="s2">"end_y"</span><span class="p">,</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="p">)</span>
 </code></pre></div>
 <p>Your dicts bind the <strong>headless</strong> loader only. The app never sees them — it
 takes the raw frames and runs auto-detection, exactly as for an upload. So
 detection has to land on the same answer, or your users open the corpus and
 have to fix the mapping by hand. Check it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">potec_raw_frames</span><span class="p">(</span><span class="s2">&quot;data/PoTeC&quot;</span><span class="p">,</span> <span class="n">texts</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;b0&quot;</span><span class="p">])</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">words</span><span class="p">,</span> <span class="n">fixations</span> <span class="o">=</span> <span class="n">datasets</span><span class="o">.</span><span class="n">potec_raw_frames</span><span class="p">(</span><span class="s2">"data/PoTeC"</span><span class="p">,</span> <span class="n">texts</span><span class="o">=</span><span class="p">[</span><span class="s2">"b0"</span><span class="p">])</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">assert</span> <span class="n">data</span><span class="o">.</span><span class="n">validate_word_schema</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">propose_word_schema</span><span class="p">(</span><span class="n">words</span><span class="p">))</span> <span class="o">==</span> <span class="p">[]</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">assert</span> <span class="n">data</span><span class="o">.</span><span class="n">validate_fix_schema</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">propose_fix_schema</span><span class="p">(</span><span class="n">fixations</span><span class="p">))</span> <span class="o">==</span> <span class="p">[]</span>
 </code></pre></div>
@@ -1919,8 +1919,8 @@ every corpus using the same convention.</p>
 silently drops anything it doesn't recognise. A corpus-specific extra — reader
 metadata, a stimulus image path, a genre facet — needs a row in
 <code>data.WORD_OPTIONAL_FIELDS</code> / <code>FIX_OPTIONAL_FIELDS</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">((</span><span class="s2">&quot;stimulus_font_px&quot;</span><span class="p">,</span> <span class="s2">&quot;stimulus_font_px&quot;</span><span class="p">,</span> <span class="s2">&quot;numeric&quot;</span><span class="p">,</span> <span class="s2">&quot;meta&quot;</span><span class="p">),)</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="p">((</span><span class="s2">&quot;comprehension_questions&quot;</span><span class="p">,</span> <span class="s2">&quot;comprehension_questions&quot;</span><span class="p">,</span> <span class="s2">&quot;passthrough&quot;</span><span class="p">,</span> <span class="s2">&quot;meta&quot;</span><span class="p">),)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">((</span><span class="s2">"stimulus_font_px"</span><span class="p">,</span> <span class="s2">"stimulus_font_px"</span><span class="p">,</span> <span class="s2">"numeric"</span><span class="p">,</span> <span class="s2">"meta"</span><span class="p">),)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="p">((</span><span class="s2">"comprehension_questions"</span><span class="p">,</span> <span class="s2">"comprehension_questions"</span><span class="p">,</span> <span class="s2">"passthrough"</span><span class="p">,</span> <span class="s2">"meta"</span><span class="p">),)</span>
 </code></pre></div>
 <p>Skip this and your enrichment work vanishes between the loader and the first
 plot, with no error.</p>
@@ -1940,15 +1940,15 @@ It's what makes the plot true-to-scale.</p>
 corpus' controls and returns raw frames, and one entry in
 <code>PUBLIC_DATASET_REGISTRY</code> — the literal home of the corpora that are fixed at
 import time:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="s2">&quot;PoTeC — Potsdam Textbook Corpus&quot;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="s2">"PoTeC — Potsdam Textbook Corpus"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">loader</span><span class="o">=</span><span class="n">_load_potec_source</span><span class="p">,</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">monitor</span><span class="o">=</span><span class="p">(</span><span class="mi">1680</span><span class="p">,</span> <span class="mi">1050</span><span class="p">),</span>          <span class="c1"># DELL P2210 — the canvas snaps to this</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">short</span><span class="o">=</span><span class="s2">&quot;PoTeC&quot;</span><span class="p">,</span>                 <span class="c1"># what the picker shows</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">language</span><span class="o">=</span><span class="s2">&quot;German&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">size</span><span class="o">=</span><span class="s2">&quot;75 readers · 12 texts&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;German reading of biology &amp; physics textbook passages &quot;</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="s2">&quot;(expert/novice readers).&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">link</span><span class="o">=</span><span class="s2">&quot;https://github.com/DiLi-Lab/PoTeC&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">short</span><span class="o">=</span><span class="s2">"PoTeC"</span><span class="p">,</span>                 <span class="c1"># what the picker shows</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">language</span><span class="o">=</span><span class="s2">"German"</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">size</span><span class="o">=</span><span class="s2">"75 readers · 12 texts"</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">"German reading of biology &amp; physics textbook passages "</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="s2">"(expert/novice readers)."</span><span class="p">,</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">link</span><span class="o">=</span><span class="s2">"https://github.com/DiLi-Lab/PoTeC"</span><span class="p">,</span>
 <a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">),</span>
 </code></pre></div>
 <p>Each entry is <strong>one top-level source in the picker</strong>, tagged 🌐 and searchable
@@ -2045,7 +2045,7 @@ flag, the API re-export, the tests, and a docs page plus its nav line. In the PR
 description state the corpus' <strong>licence</strong>, a <strong>citation</strong>, its <strong>public URL</strong>, and
 its <strong>on-disk size</strong>.</p>
 <p>Before you open it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[test,docs]&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[test,docs]"</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pytest
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ruff<span class="w"> </span>check<span class="w"> </span>--exclude<span class="w"> </span>other_vis<span class="w"> </span>.
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>ruff<span class="w"> </span>format<span class="w"> </span>--exclude<span class="w"> </span>other_vis<span class="w"> </span>.

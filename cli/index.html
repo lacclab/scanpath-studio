@@ -1735,7 +1735,7 @@ one trial without opening the UI.</p>
 <h2 id="launch">Launch<a class="headerlink" href="#launch" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scanpath-studio
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scanpath-studio<span class="w"> </span>--server.port<span class="w"> </span><span class="m">8600</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>--no-persist<span class="w">          </span><span class="c1"># don&#39;t cache the session on this computer</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scanpath-studio<span class="w"> </span>--no-persist<span class="w">          </span><span class="c1"># don't cache the session on this computer</span>
 </code></pre></div>
 <p>Additional launch flags are forwarded to Streamlit.</p>
 <h2 id="render">Render<a class="headerlink" href="#render" title="Permanent link">&para;</a></h2>
@@ -1770,7 +1770,7 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--compare-with<span class="w"> </span>p2:t5<span class="w"> </span>-o<span class="w"> </span>compare.html
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># Side by side, showing only B&#39;s word boxes and text</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># Side by side, showing only B's word boxes and text</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--sample<span class="w"> </span>-p<span class="w"> </span>p1<span class="w"> </span>-t<span class="w"> </span>t1<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span>--compare-with<span class="w"> </span>p2:t5<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span>--compare-layout<span class="w"> </span>side-by-side<span class="w"> </span>--compare-stimulus<span class="w"> </span>b<span class="w"> </span>-o<span class="w"> </span>compare.svg
@@ -1779,7 +1779,7 @@ first — the headless form of the app's <strong>Compare</strong> mode.</p>
 <a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>scanpath-studio<span class="w"> </span>render<span class="w"> </span>--potec<span class="w"> </span>./potec<span class="w"> </span>-p<span class="w"> </span><span class="m">12</span><span class="w"> </span>-t<span class="w"> </span>b0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span>--compare-with<span class="w"> </span>p1:t1<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span>--compare-words<span class="w"> </span>other/ia.csv<span class="w"> </span>--compare-fixations<span class="w"> </span>other/fix.csv<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">&quot;Our lab&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span>--compare-dataset-name<span class="w"> </span><span class="s2">"Our lab"</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span>--canvas<span class="w"> </span>1680x1050<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span>-o<span class="w"> </span>cross.html
 </code></pre></div>
@@ -1832,7 +1832,7 @@ readings into one set of pixel coordinates, so <code>--compare-layout overlay</c
 different screens <strong>fails</strong> rather than quietly falling back:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>scanpath-studio<span class="w"> </span>render<span class="w"> </span>…<span class="w"> </span>--canvas<span class="w"> </span>2560x1440<span class="w"> </span>--compare-canvas<span class="w"> </span>1680x1050
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="go">These readings were recorded on different screens — 2560x1440 and 1680x1050. …</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="go">Pass layout=&#39;side_by_side&#39; (or &#39;stacked&#39;) to compare them anyway, each panel</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="go">Pass layout='side_by_side' (or 'stacked') to compare them anyway, each panel</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="go">drawn to its own screen.</span>
 </code></pre></div>
 <p>The app resolves that case to Side by side because a user can see what they got;

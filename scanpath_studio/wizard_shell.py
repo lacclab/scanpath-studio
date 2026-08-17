@@ -112,7 +112,10 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 #: no heading of its own. Its explanation lives on its uploader's label.
 SECTION_TITLES: dict[str, str] = {
     "identity": "Trials & readers",
-    "geometry": "Fixations & text",
+    # UX-53 r7: the fixation fields lead this section and carry its name; the
+    # word fields keep their own inline heading under it. "Fixations & text"
+    # plus an inner "**Fixations**" was two titles for one group of controls.
+    "geometry": "Fixation features",
     "setup": "Recording setup",
     "fields": "Extra fields",
 }

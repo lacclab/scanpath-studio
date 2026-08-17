@@ -303,9 +303,12 @@ def _enter_add_data_wizard() -> None:
     _reset_wizard_widgets()
 
 
-def _map_section(raw, specs, proposed, prefix, host, keys) -> dict:
-    """Render a subset of a table's mapping fields (the wizard renders the core
-    fields in grouped, ordered steps). Returns the partial mapping for ``keys``.
+def _map_section(raw, specs, proposed, prefix, host, keys, *, per_row: int = 1) -> dict:
+    """Render a subset of a table's mapping fields. Returns that partial mapping.
+
+    ``per_row`` (UX-53 r7) is how many fields share a line — four fixation
+    fields fit where one used to, which is what gets the whole mapping onto one
+    screen.
 
     No ``on_change`` any more: the accordion's open state is owned by the keyed
     expander and moved only by explicit navigation (``wizard_shell``), so a
@@ -323,6 +326,7 @@ def _map_section(raw, specs, proposed, prefix, host, keys) -> dict:
         use_expander=False,
         only_keys=keys,
         header=False,
+        columns_per_row=per_row,
     )
 
 
@@ -2141,6 +2145,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     "col_map_words",
                     screens,
                     ["screen_id", "screen_index", "canvas_width", "canvas_height"],
+                    per_row=2,
                 )
             )
         if has_fix:
@@ -2159,6 +2164,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                         "canvas_width",
                         "canvas_height",
                     ],
+                    per_row=2,
                 )
             )
 
@@ -2172,7 +2178,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         ),
     )
     if has_fix:
-        s3.markdown("**Fixations** — where the eyes landed")
+        # UX-53 r7: one block, four across. X / Y / timestamp / duration are the
+        # same *kind* of answer about the same rows, and splitting them over two
+        # headings (and one of them behind "Advanced") made a reader hunt for
+        # half of them. The AOI-only hint rides the Word/IA ID field's own
+        # tooltip, where it is read at the moment it applies.
         fix_schema.update(
             _map_section(
                 raw_fix,
@@ -2180,20 +2190,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 prop_f,
                 "col_map_fix",
                 s3,
-                ["x", "y", "duration", "fixation_id"],
-            )
-        )
-        # The AOI-only hint now rides the Word/IA ID field's own tooltip
-        # (FIX_FIELD_SPECS), where it is read at the moment it applies.
-        advanced_fix = s3.container()
-        fix_schema.update(
-            _map_section(
-                raw_fix,
-                FIX_FIELD_SPECS,
-                prop_f,
-                "col_map_fix",
-                advanced_fix,
-                ["word_id", "timestamp"],
+                ["x", "y", "timestamp", "duration", "fixation_id", "word_id"],
+                per_row=4,
             )
         )
         # Validation problems render against their own sub-block rather than as
@@ -2202,7 +2200,9 @@ def _render_data_setup(active: bool) -> _UploadResult:
             s3.warning(f"Fixations — {problem}")
 
     if has_words:
-        s3.markdown("**Words / Interest Areas** — where the words are")
+        s3.markdown("**Word features**")
+        # Word id / text / line share a row; the box is its own block below,
+        # being a format radio plus four coordinates rather than one select.
         word_schema.update(
             _map_section(
                 raw_words,
@@ -2210,23 +2210,21 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 prop_w,
                 "col_map_words",
                 s3,
-                ["word_id", "text", "box"],
+                ["word_id", "text", "line"],
+                per_row=3,
             )
         )
-        words_advanced = s3.container()
         word_schema.update(
             _map_section(
                 raw_words,
                 WORD_FIELD_SPECS,
                 prop_w,
                 "col_map_words",
-                words_advanced,
-                ["line"],
+                s3,
+                ["box"],
             )
         )
-        words_advanced.caption(
-            "Line index enables colouring fixations/words by reading line."
-        )
+        words_advanced = s3.container()
         words_advanced.toggle(
             "Aggregate character AOIs into word boxes",
             key="wizard_aggregate_char_boxes",
@@ -2239,7 +2237,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     if not raw_gaze.empty:
         rg_host = s3.container()
-        rg_host.markdown("**Raw gaze overlay**")
+        rg_host.markdown("**Raw gaze features**")
         raw_gaze_schema = _map_section(
             raw_gaze,
             RAW_GAZE_FIELD_SPECS,
@@ -2256,6 +2254,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "timestamp",
                 "text",
             ],
+            per_row=4,
         )
     else:
         raw_gaze_schema = {}

@@ -100,6 +100,11 @@ _LABEL_GAP = "xsmall"
 #: is room for the "✨ auto-detected …" note beside the field instead of under it.
 _MAPPING_ROW_W = (0.24, 0.40, 0.36)
 
+#: `label | ✨` inside one cell of a multi-column mapping grid (UX-53 r7). The
+#: flag is one glyph, so it takes only what it needs and the label keeps the
+#: rest — a cell four-across is narrow, and the label is what has to survive.
+_GRID_LABEL_W = (0.85, 0.15)
+
 #: Markdown emphasis, which a plain-text `title=` attribute would show as
 #: literal punctuation.
 _MD_MARKS = re.compile(r"\*\*|`")
@@ -1629,6 +1634,7 @@ def column_mapping_ui(
     only_keys: list[str] | None = None,
     header: bool = True,
     detected_label: str = "auto-detected",
+    columns_per_row: int = 1,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -1643,6 +1649,13 @@ def column_mapping_ui(
     radio plus the four sub-fields for that format, and expands into all eight
     box keys (the four inactive ones set to None) so the returned schema keeps
     its fixed shape.
+
+    ``columns_per_row`` (UX-53 r7) packs several fields onto one line — four
+    fixation fields fit where one used to sit, and a mapping that fits on a
+    screen is one you can check against itself. Above 1 the row shape flips from
+    ``label | field`` to label-over-field, since four labelled pairs side by side
+    would leave a sliver for each select. The default of 1 keeps the 🗂️ Data
+    page's editor exactly as it was.
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs)
     options = [NONE_OPTION] + list(df.columns)
@@ -1671,15 +1684,44 @@ def column_mapping_ui(
             return hosts.get("advanced") or hosts["main"]
         return hosts["main"]
 
-    def _row(field_key: str, field_label: str, help_text):
-        """A `label | field | note` triple; returns the field and note columns.
+    #: Grid cursor for `columns_per_row > 1`: the current row's columns and how
+    #: many of them are used. Reset whenever the host changes, so the Advanced
+    #: group never continues a row started by the main one.
+    grid: dict = {"cols": [], "used": 0, "host": None}
 
-        UX-52 round 3 — the "✨ auto-detected …" caption used to sit *under* the
-        control, so every row was two lines tall while the right half of a
-        full-width page sat empty. It now rides in a third column beside the
-        field: same information, half the vertical space.
+    def _grid_cell(host):
+        """The next free cell in a `columns_per_row`-wide grid."""
+        if grid["host"] is not host or grid["used"] >= columns_per_row:
+            grid["cols"] = host.columns(columns_per_row, gap=_LABEL_GAP)
+            grid["used"] = 0
+            grid["host"] = host
+        cell = grid["cols"][grid["used"]]
+        grid["used"] += 1
+        return cell
+
+    def _row(field_key: str, field_label: str, help_text):
+        """Where one field's control and its ✨ flag render.
+
+        Two shapes. **One per row** (the default, and what the 🗂️ Data page's
+        editor uses) is UX-52's `label | field | note` triple: the flag rides
+        beside the control instead of under it, so a row is one line tall.
+
+        **`columns_per_row > 1`** (UX-53 r7) stacks label-over-field inside a
+        grid cell instead, because four `label | field` pairs side by side would
+        leave nothing but a sliver for each select. The label row reserves its
+        own flag column *before* the select renders — the flag depends on the
+        value the select returns, and a Streamlit container can be filled after
+        later elements are written, which is what makes the order work.
         """
         host = _host_for(field_key)
+        if columns_per_row > 1:
+            cell = _grid_cell(host)
+            head = cell.container()
+            label_col, flag_col = head.columns(
+                _GRID_LABEL_W, gap=None, vertical_alignment="center"
+            )
+            _row_label(label_col, field_label, help_text)
+            return cell, flag_col
         label_col, field_col, note_col = host.columns(
             _MAPPING_ROW_W, gap=_LABEL_GAP, vertical_alignment="center"
         )

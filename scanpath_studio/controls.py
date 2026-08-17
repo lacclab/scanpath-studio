@@ -100,10 +100,29 @@ _LABEL_GAP = "xsmall"
 #: is room for the "✨ auto-detected …" note beside the field instead of under it.
 _MAPPING_ROW_W = (0.24, 0.40, 0.36)
 
-#: `label | ✨` inside one cell of a multi-column mapping grid (UX-53 r7). The
-#: flag is one glyph, so it takes only what it needs and the label keeps the
-#: rest — a cell four-across is narrow, and the label is what has to survive.
-_GRID_LABEL_W = (0.85, 0.15)
+#: `label | ✨ ✕` inside one cell of a multi-column mapping grid (UX-53 r7). The
+#: two glyphs take only what they need and the label keeps the rest — a cell
+#: four-across is narrow, and the label is what has to survive.
+_GRID_LABEL_W = (0.7, 0.3)
+
+#: `✨ | ✕` — the flag and the clear button, side by side so the ✕ lands against
+#: the select's right edge instead of below it (UX-53 r9).
+_NOTE_ROW_W = (0.5, 0.5)
+
+
+def _clear_mapping_field(state_key: str) -> None:
+    """Put one mapping field back to ``(none)`` (the ✕ button's ``on_click``).
+
+    Writes `NONE_OPTION` rather than deleting the key: the stored value *is* the
+    wire format — `tabs._collect_column_mapping` sweeps every `col_map_*` into
+    the saved config, and `resolve_column_mapping` reads the same keys on views
+    where the editor never renders — so "explicitly not mapped" has to be a
+    value, exactly as it is when the user picks `(none)` from the list. Deleting
+    it would instead mean "never answered", and auto-detection would fill the
+    field straight back in.
+    """
+    st.session_state[state_key] = NONE_OPTION
+
 
 #: Markdown emphasis, which a plain-text `title=` attribute would show as
 #: literal punctuation.
@@ -1766,15 +1785,35 @@ def column_mapping_ui(
         )
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
+        # `flag | clear` — the ✨ and, only while something is selected, a ✕ that
+        # puts the field back to `(none)`. The pair is one row so the clear sits
+        # against the select's right edge rather than under it.
+        flag_col, clear_col = note_col.columns(
+            _NOTE_ROW_W, gap=None, vertical_alignment="center"
+        )
         if hover:
             # Icon only. The sentence — which column was detected, and whether it
             # was overridden or left unused — is on the icon's tooltip, reusing
             # the rail's CSS hover (`.sps-fhelp`, 120ms) rather than the
             # browser's ~1s native one.
-            note_col.markdown(
+            flag_col.markdown(
                 f'<span class="sps-map-flag sps-fhelp" '
                 f'data-tip="{html.escape(hover, quote=True)}">✨</span>',
                 unsafe_allow_html=True,
+            )
+        if chosen != NONE_OPTION:
+            # Only while there is something to clear — a ✕ on an empty field
+            # would be a control that does nothing, on every unmapped row.
+            # `on_click` and not an inline `if button:`: a callback runs before
+            # the script re-executes, which is the only point at which assigning
+            # a widget's own key is legal.
+            clear_col.button(
+                "✕",
+                key=f"{state_key_prefix}_{field_key}_clear",
+                type="tertiary",
+                help="Clear this mapping",
+                on_click=_clear_mapping_field,
+                args=(f"{state_key_prefix}_{field_key}",),
             )
         return None if chosen == NONE_OPTION else chosen
 

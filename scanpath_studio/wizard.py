@@ -1825,48 +1825,6 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
     return statuses
 
 
-def _render_autodetect_card(host, word_schema, fix_schema, has_words, has_fix) -> None:
-    """After the upload: what was detected, what is still missing, by name.
-
-    A *report*, deliberately not a shortcut. Detection matches column names, so a
-    complete-looking result can still be wrong in ways only the mapping steps
-    reveal — and a wrong mapping renders a perfectly plausible figure of the
-    wrong thing. The card tells the user what to confirm; steps 2-3 are where
-    they confirm it.
-    """
-    checks: list[tuple[str, str | None]] = []
-    if has_fix:
-        checks += [
-            ("Trial id", _mapping_label(fix_schema.get("trial"))),
-            ("Fixation duration", _mapping_label(fix_schema.get("duration"))),
-            (
-                "Fixation position",
-                _mapping_label(fix_schema.get("x"))
-                or _mapping_label(fix_schema.get("word_id")),
-            ),
-        ]
-    if has_words:
-        checks += [
-            ("Word id", _mapping_label(word_schema.get("word_id"))),
-            (
-                "Word box",
-                _mapping_label(word_schema.get("left"))
-                or _mapping_label(word_schema.get("x")),
-            ),
-            ("Word text", _mapping_label(word_schema.get("text"))),
-        ]
-    if not checks:
-        return
-    found = [f"✓ **{name}** — `{col}`" for name, col in checks if col]
-    missing = [f"⚠️ **{name}** — not detected" for name, col in checks if not col]
-    host.markdown("\n\n".join(found + missing))
-    host.caption(
-        "Detected by column name — confirm each one in the next two steps."
-        if not missing
-        else "Map whatever is missing in the next two steps."
-    )
-
-
 def _mapping_label(mapping) -> str | None:
     """A human-readable column name for a mapping value (str | list | None)."""
     if not mapping or mapping == NONE_OPTION:
@@ -2059,13 +2017,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
         multi=True,
         noun="words",
     )
-    # Sub-blocks are popovers, not expanders: Streamlit forbids
-    # expander-in-expander but allows popover-in-expander — the same constraint
-    # that shapes `controls.py`.
+    # UX-53 r5: a peer of the other tables, not hidden behind a popover. It is
+    # an upload like the rest, and burying it made it look like a different
+    # *kind* of thing. "Optional" is in the label, where it costs no line.
     raw_gaze = upload_box(
-        s1.popover("➕ Raw gaze overlay (optional)"),
-        label="Raw gaze table",
-        help_text="Optional millisecond-level gaze overlay (one file).",
+        s1,
+        label="Raw gaze table (optional)",
+        help_text="Millisecond-level gaze overlay (one file).",
         prefix="col_map_raw_gaze",
         multi=False,
         noun="gaze points",
@@ -2318,17 +2276,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         problems.append("Raw gaze: " + "; ".join(raw_gaze_problems))
     st.session_state["_wizard_problems_last"] = list(problems)
 
-    # The auto-detect summary sits in step 1, but it needs the resolved schemas,
-    # so it renders into a container reserved there. Streamlit lays containers
-    # out in creation order, so it appears where it was reserved.
-    # DATA-22 review: the card reports what was detected; it does **not** offer to
-    # skip steps 2-3 on the strength of it. Auto-detection matches column *names*,
-    # so it is confident and occasionally wrong — a `trial_id` that is really a
-    # per-participant counter, an `x` that is the word's centre rather than its
-    # left edge. Those produce a plausible figure of the wrong thing, and the only
-    # place they are catchable is the mapping steps. Confirming a correct guess
-    # costs two clicks; skipping a wrong one costs the whole dataset.
-    _render_autodetect_card(s1.container(), word_schema, fix_schema, has_words, has_fix)
+    # UX-53 r5 removed the auto-detect summary card ("✓ Trial id — Trial_Id",
+    # "⚠️ Word box — not detected", …). It restated, in a block of its own, what
+    # every field now shows in place: the ✨ flag and the select's tint say
+    # detected-or-not per row, and a genuinely missing required field turns red
+    # and is listed above ✅ Add dataset. Since the fields all live on one screen
+    # now, the summary was a second copy of what was directly below it.
 
     s4 = wizard_shell.section(
         s_map,

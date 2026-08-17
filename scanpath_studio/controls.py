@@ -1869,10 +1869,19 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
         tint = _FIELD_TINT.get(state)
         if not tint or not keys:
             continue
+        # BaseWeb paints the control's background itself, through an emotion
+        # class that outranks a plain class selector — the first cut of this
+        # rule was simply never visible. `!important` on several nodes of the
+        # widget is what makes it land: the outer control, its value container,
+        # and the Streamlit wrapper for the case where BaseWeb's own node is
+        # transparent and the colour has to come from behind it.
         selector = ", ".join(
-            f'.st-key-{key} div[data-baseweb="select"] > div' for key in keys
+            f'.st-key-{key} [data-baseweb="select"] > div, '
+            f'.st-key-{key} [data-baseweb="select"] [data-baseweb="input"], '
+            f".st-key-{key} [data-testid='stSelectbox'] > div > div"
+            for key in keys
         )
-        rules.append(f"{selector} {{ background-color: {tint}; }}")
+        rules.append(f"{selector} {{ background-color: {tint} !important; }}")
     if rules:
         st.markdown(f"<style>{''.join(rules)}</style>", unsafe_allow_html=True)
 

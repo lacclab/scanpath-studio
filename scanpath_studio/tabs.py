@@ -7876,12 +7876,8 @@ def _participant_metadata_body(participants) -> None:
     from scanpath_studio import metadata as md
     from scanpath_studio.data import read_table
 
-    st.caption(
-        "Optional. One row per reader — `participant_id` plus anything you know "
-        "about them (native language, age, comprehension score). The columns "
-        "then behave like fields in the data: filters, chips, trial sorting, "
-        "inspection and export."
-    )
+    # UX-53 r5: the paragraph that used to print here now rides the uploader's
+    # own label as a tooltip — descriptive prose on this page is hover-only.
     upload = st.file_uploader(
         "Participant table",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
@@ -7890,7 +7886,9 @@ def _participant_metadata_body(participants) -> None:
         # need it either: the parsed frame is kept in session state under
         # `md.RAW_SESSION_KEY`, so the attached table survives even if the
         # uploader widget itself is ever reset.
-        help="CSV / TSV / Parquet / Excel. One row per participant.",
+        help="One row per reader, with a `participant_id` column. The columns "
+        "then behave like fields in the data: filters, chips, trial sorting, "
+        "inspection and export. CSV / TSV / Parquet / Excel.",
     )
     if upload is None:
         if active_participant_metadata() is None:

@@ -3575,17 +3575,23 @@ def render_single_trial_tab(
             # puts them on one row; it wraps rather than overflowing, so on a rail
             # too narrow for both the ▾ simply drops to the line below (which is
             # where it used to live anyway). `gap=None` is load-bearing, not taste:
-            # the toggles measure ~132 px (Animate) and ~137 px (Compare) and the ▾
-            # ~55 px against a ~195 px rail, so even a 4 px gap puts Compare 1 px
-            # over and wraps it. Zero leaves ~3 px of slack — which is the honest
-            # reason the CSS pass that fuses the two into one control also has to
-            # shrink the ▾: 55 px of button around a 16 px glyph is most of the
-            # margin. The trigger also renders on every run — it greys out rather
-            # than disappearing, because one that comes and goes reflows the row
-            # under the cursor, and because what a mode offers is part of deciding
-            # whether to turn it on (so the menu opens either way; the controls
-            # inside are what go disabled).
-            with st.container(horizontal=True, vertical_alignment="center", gap=None):
+            # the toggles measure ~132 px (Animate) and ~137 px (Compare) against a
+            # ~195 px rail, so any gap at all puts Compare over the edge once the ▾
+            # is beside it — and zero is what the fused look wants anyway. The
+            # `split_mode_*` key is the hook `styles.py` draws the shared outline
+            # and the divider on, and it is also what shrinks the ▾ from Streamlit's
+            # default ~55 px button to a glyph's worth, which is where the rest of
+            # the room comes from. The trigger renders on every run — it greys out
+            # rather than disappearing, because one that comes and goes reflows the
+            # row under the cursor, and because what a mode offers is part of
+            # deciding whether to turn it on (so the menu opens either way; the
+            # controls inside are what go disabled).
+            with st.container(
+                horizontal=True,
+                vertical_alignment="center",
+                gap=None,
+                key="split_mode_animate",
+            ):
                 # Animate styled like a layer: a toggle + a ▾ popover for its config
                 # (playback speed) — matching Compare and the visualization layers
                 # below. Seeded, not `value=`-defaulted: `single_animate` is restored
@@ -3779,7 +3785,12 @@ def render_single_trial_tab(
             # the overlay/side-by-side/stacked layout + the show-A/B-legend toggle.
             # The layout reaches the figure via session_state
             # (`single_compare_layout`), read into `compare_layout` below.
-            with st.container(horizontal=True, vertical_alignment="center", gap=None):
+            with st.container(
+                horizontal=True,
+                vertical_alignment="center",
+                gap=None,
+                key="split_mode_compare",
+            ):
                 # CMP-8 §7 made this key wire format (`?compare=` turns it on), so it
                 # is seeded rather than given a `value=`: an explicit default fights
                 # the deep link the same way it would fight a restored config.

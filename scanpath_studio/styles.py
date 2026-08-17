@@ -321,6 +321,93 @@ def get_app_css() -> str:
         border-left: 1px solid var(--sps-border);
         padding-left: 0.7rem;
     }
+    /* UX-59 — the Animate / Compare split buttons. Python puts the mode toggle
+       and its ▾ settings trigger on one row (`tabs.render_single_trial_tab`);
+       these rules are what make the two read as ONE control rather than as a
+       switch that happens to have a button parked beside it.
+
+       The outline goes on the row, not on either half, because the halves are
+       different kinds of thing: Streamlit's toggle is a bare switch + label with
+       no chrome of its own, and only the popover trigger arrives as a bordered
+       button. So the row draws the border and the radius, `overflow: hidden`
+       clips the button's square corners back to it, and the button gives up
+       everything that would read as a second control — its own border, its
+       radius, its background — keeping only a 1px left edge as the divider
+       between the halves. That divider is the whole visual claim: one control,
+       two things you can press.
+
+       `align-items: stretch` is what makes the divider span the full height
+       instead of floating as a short dash beside the switch; it overrides the
+       `vertical_alignment="center"` the container is built with, which is still
+       right for the no-CSS fallback.
+
+       Shrinking the button is not cosmetic. Streamlit's default popover trigger
+       is ~55px wide around a 16px glyph, and the widest of the two toggles is
+       ~137px against a ~195px rail — with the default the row fits by about
+       3px, and anything that nudges either half (a longer label, a wider rail
+       font) wraps the ▾ onto its own line. At a glyph's width there is room to
+       spare. */
+    [class*="st-key-split_mode_"] {
+        width: fit-content;
+        max-width: 100%;
+        align-items: stretch !important;
+        border: 1px solid var(--sps-border);
+        /* A rounded rectangle, not a pill — it is what the Zoom control being
+           copied actually is, and a 999px radius on the wrapped two-line state
+           turns into a lozenge. */
+        border-radius: 0.6rem;
+        padding-left: 0.55rem;
+    }
+    [class*="st-key-split_mode_"] [data-testid="stElementContainer"] {
+        display: flex;
+        align-items: center;
+    }
+    /* The divider is drawn on the popover's SLOT — the row's own child — and not
+       on the button, which is the obvious place and does not work. A trigger
+       given `help=` is wrapped by Streamlit in a tooltip chain
+       (stPopover > div > div > stTooltipIcon > stTooltipHoverTarget > button),
+       every link of which sizes to the glyph, so a border on the button renders
+       as an 18px dash floating in a 24px row rather than as a seam. Stretching
+       that whole chain means naming emotion classes; the slot is already
+       full-height because it is a flex child of the row. `:has()` picks it out
+       without depending on `stLayoutWrapper` being the wrapper's name. */
+    /* The corner rounding is on the slot rather than clipped off the row with
+       `overflow: hidden`, and the row is left free to WRAP. Both were tried the
+       other way and both are traps: the switch will not shrink below about
+       131px (its own min-content), so on a 142px rail a non-wrapping row put the
+       ▾ 38px past the right edge, where `overflow: hidden` deleted it — a
+       control that silently cannot be reached. Wrapping costs a rounded box with
+       the ▾ tucked under the switch, which reads more like a card than a split
+       button; that is the right way to lose. */
+    [class*="st-key-split_mode_"] > div:has([data-testid="stPopover"]) {
+        display: flex;
+        align-items: center;
+        flex: 0 0 auto;
+        border-left: 1px solid var(--sps-border);
+        border-radius: 0 0.6rem 0.6rem 0;
+    }
+    /* Target the popover's own button, never `… button`: the toggle's label
+       carries Streamlit's `?` help icon, which is also a button and would
+       otherwise be restyled along with it. */
+    [class*="st-key-split_mode_"] [data-testid="stPopover"] button {
+        min-width: 0 !important;
+        min-height: 0 !important;
+        width: auto !important;
+        padding: 0 0.3rem !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    /* The hover tint goes on the slot too, so the whole half lights up to the
+       seam instead of only the glyph's own box. `:has(button:hover:enabled)`
+       rather than `:hover` keeps a disabled ▾ inert — it is disabled exactly
+       when its mode is off, and a hover response would promise a menu that,
+       while it does open, is entirely greyed. */
+    [class*="st-key-split_mode_"]
+        > div:has([data-testid="stPopover"] button:hover:enabled) {
+        background: var(--sps-accent-soft);
+    }
     /* UX-27 / CMP-10 — ONE button shape for the control rows stacked above the
        plot. They are built in three different functions across two modules
        (the Narrow-by/More row and the chip strip's Details/✏️ in tabs.py, the

@@ -387,8 +387,10 @@
       acceptance checks in <b>Instructions for implementation</b>. These are saved in
       the repository and become the task handoff for whichever coding agent works next.</li>
     <li>Use <b>New task</b> to capture work without editing the catalogue by hand.</li>
-    <li>Start the live tracker by double-clicking <code>tracker/start.command</code>,
-      or run <code>python3 tracker/server.py</code>. Keep that terminal window open.</li>
+    <li>Start the live tracker by double-clicking <code>tracker/start.command</code>
+      (macOS) or <code>tracker/start.bat</code> (Windows) — or run
+      <code>python3 tracker/server.py</code>, which on Windows is
+      <code>python tracker\server.py</code>. Keep that terminal window open.</li>
     <li>Each save writes to the project immediately. No downloads or file permissions
       are involved, and concurrent browser tabs are protected from overwriting each other.</li>
     <li><b>Closed</b> archives an item automatically. Moving it to any active status
@@ -839,13 +841,20 @@
     return { version: STATE.version, revision: STATE.revision, items, createdItems: STATE.createdItems };
   }
 
+  /* The one screen a stuck user actually reads, so it names *their* launcher.
+     `start.command` is a zsh script and `python3` is the Store stub on Windows —
+     both fail there, which is how a Windows user ends up opening index.html as a
+     file:// page where nothing can save. */
   function renderOffline(message) {
+    const windows = /win/i.test(navigator.userAgentData?.platform || navigator.platform || "");
+    const launcher = windows ? "tracker\\start.bat" : "tracker/start.command";
+    const command = windows ? "python tracker\\server.py" : "python3 tracker/server.py";
     setConnection("Server unavailable", "error");
     el("list").innerHTML = `<div class="offline">
       <h2>Start the live tracker</h2>
       <p>${esc(message)}</p>
-      <p>Double-click <code>tracker/start.command</code>, or run:</p>
-      <pre><code>python3 tracker/server.py</code></pre>
+      <p>Double-click <code>${esc(launcher)}</code>, or run:</p>
+      <pre><code>${esc(command)}</code></pre>
       <p>The tracker will open at <code>http://127.0.0.1:8765/tracker/</code> and save changes directly into the project.</p>
     </div>`;
   }

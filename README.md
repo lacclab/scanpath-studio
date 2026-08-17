@@ -72,7 +72,8 @@ The app is organized into three tabs:
 ![Project map: built vs. planned capabilities](https://raw.githubusercontent.com/lacclab/scanpath-studio/main/assets/project_map.png)
 
 *Solid = built, dashed = planned. For the editable improvements tracker,
-double-click `tracker/start.command` or run `python3 tracker/server.py`.*
+double-click `tracker/start.command` (macOS) or `tracker/start.bat` (Windows) —
+or run `python3 tracker/server.py` (`python tracker\server.py` on Windows).*
 
 ## Your data
 

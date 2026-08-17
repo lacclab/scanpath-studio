@@ -23,6 +23,11 @@ Then start the work tracker — every open and finished item, searchable, with
 python3 tracker/server.py
 ```
 
+On Windows, run `python tracker\server.py` (or double-click `tracker\start.bat`).
+`python3` there is normally the Microsoft Store alias, which prints *"Python was
+not found"* and exits without starting anything — and `start.command` is a zsh
+script. A tracker page opened without its server can be read but not saved.
+
 It opens at <http://127.0.0.1:8765/tracker/>; its **How this works** panel is
 the short version of the conventions below. If a port is already taken, another
 person or another editor session owns that server — start yours on a different

@@ -73,6 +73,26 @@ def _unsafe_row_app():
     )
 
 
+def _gated_row_app():
+    """A control greyed by the mode gate, whose help is therefore two paragraphs."""
+    import streamlit as st
+
+    from scanpath_studio.controls import _gated_help, _labeled
+
+    _labeled(
+        st,
+        "selectbox",
+        "Playback speed",
+        options=["a"],
+        key="global_x",
+        disabled=True,
+        help=_gated_help(
+            "Playback speed relative to the recorded fixation timings.",
+            "⚠️ Turn on **Animate** to change playback.",
+        ),
+    )
+
+
 def _slider_app():
     """The UX-9 slider + typed box, in its UX-51 `label | slider | box` form."""
     import streamlit as st
@@ -173,6 +193,23 @@ class TestOneRow:
         (label,) = _label_markup(at)
         assert "<b>" not in label and "<script>" not in label
         assert "&lt;b&gt;Size&lt;/b&gt;" in label
+
+    def test_a_two_paragraph_help_does_not_break_out_of_the_tag(self):
+        """UX-59: every `_gated_help` string is two paragraphs, and a **blank
+        line** ends a raw HTML block in markdown — so an un-collapsed one split
+        the opening `<span …>` and printed the rest of the tag as page text."""
+        at = AppTest.from_function(_gated_row_app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        (label,) = _label_markup(at)
+        assert "\n" not in label
+        # The whole tooltip is inside the attribute, both halves of it, with the
+        # markdown emphasis stripped and the paragraph break collapsed to a space.
+        assert (
+            'data-tip="Playback speed — ⚠️ Turn on Animate to change playback. '
+            'Playback speed relative to the recorded fixation timings."' in label
+        )
+        assert label.count("<span") == 2 and label.endswith("</span>")
 
 
 class TestSliderRow:

@@ -127,11 +127,21 @@ _UNMAPPED_PLACEHOLDER = "Not mapped"
 #: Markdown emphasis, which a plain-text `title=` attribute would show as
 #: literal punctuation.
 _MD_MARKS = re.compile(r"\*\*|`")
+_WHITESPACE_RUN = re.compile(r"\s+")
 
 
 def _plain(text: str) -> str:
-    """``text`` with markdown emphasis stripped, for a plain-text tooltip."""
-    return _MD_MARKS.sub("", text).strip()
+    """``text`` with markdown emphasis stripped, for a plain-text tooltip.
+
+    Newlines collapse to spaces along with every other run of whitespace, and
+    that is not cosmetic: ``_row_label`` interpolates the result into an HTML
+    attribute inside an ``st.markdown`` string, and a **blank line** ends a raw
+    HTML block in markdown — so a two-paragraph help text (every
+    :func:`_gated_help` result is one) would split the opening ``<span …>`` and
+    render the rest of the tag as visible page text. A tooltip is one line
+    anyway; the paragraph break has nothing to do there.
+    """
+    return _WHITESPACE_RUN.sub(" ", _MD_MARKS.sub("", text)).strip()
 
 
 def _row_label(host, label: str, help: str | None) -> None:
@@ -2313,6 +2323,7 @@ def render_pattern_input(
     help: str | None = None,
     placeholder: str | None = None,
     label_left: bool = False,
+    disabled: bool = False,
 ) -> str:
     """A pattern text box with live validation and a rendered preview.
 
@@ -2333,6 +2344,11 @@ def render_pattern_input(
     ``label_left`` opts into the UX-51 ``label | field`` row (the rail's
     Title/Caption boxes). The error and the preview still span the full width
     below the row — they are the box's *output*, not a second field.
+
+    ``disabled`` greys the box without touching its key (UX-59, the Compare
+    settings menu while Compare is off) — the same "your value is kept" contract
+    as :func:`_numeric_slider`. The error and preview still render, because they
+    describe the pattern that *is* stored, not one being typed.
     """
     if label_left:
         _labeled(
@@ -2343,10 +2359,16 @@ def render_pattern_input(
             persist_state="session",
             help=help,
             placeholder=placeholder,
+            disabled=disabled,
         )
     else:
         host.text_input(
-            label, key=key, persist_state="session", help=help, placeholder=placeholder
+            label,
+            key=key,
+            persist_state="session",
+            help=help,
+            placeholder=placeholder,
+            disabled=disabled,
         )
     value = st.session_state.get(key, "")
     if not value:

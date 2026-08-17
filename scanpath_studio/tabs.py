@@ -90,6 +90,7 @@ from scanpath_studio.controls import (
     WORD_FIELD_SPECS,
     _collect_compare_styles,
     _drop_stale,
+    _gated_help,
     _labeled,
     _numeric_slider,
     column_mapping_ui,
@@ -3568,29 +3569,59 @@ def render_single_trial_tab(
         with st.container(key="plot_controls_header"):
             st.markdown("## 🎛️ Plot controls")
         with rail.container(key="tour_grp_view_modes"):
-            # Animate styled like a layer: a toggle + a ⚙ popover for its config
-            # (playback speed) — matching Compare and the visualization layers below.
-            # Seeded, not `value=`-defaulted: `single_animate` is restored pre-widget
-            # by a deep link / saved config (see session_keys), and passing both makes
-            # Streamlit warn (BUG-17). `setdefault` suffices — this toggle renders on
-            # every run, so it never first mounts late the way a popover-bound widget
-            # can (that case needs `persist_state="session"`; see BUG-15/ENG-36).
-            st.session_state.setdefault("single_animate", False)
-            animate = st.toggle(
-                "🎬 **Animate**",
-                key="single_animate",
-                persist_state="session",
-                help="Replay the trial fixation by fixation; the play / pause / "
-                "restart controls sit below the plot.",
-            )
-            # Reading-time / playback info box, filled below once playback speed + any
-            # compare trial are known (lives inside the Playback popover).
-            anim_info_slot = None
-            # Playback speed shows only when animating a trial that has fixations.
-            # Default ×4 — a brisk review pace (real-time ÷ 4).
-            playback_speed = _ANIM_DEFAULT_SPEED
-            if animate and not trial_fixations.empty:
-                with st.popover("⚙️ Playback", width="stretch"):
+            # UX-59 — the mode and its settings are ONE control, laid out the way a
+            # Zoom-style split button is: the toggle switches the mode on and off,
+            # the ▾ beside it opens the settings. The horizontal container is what
+            # puts them on one row; it wraps rather than overflowing, so on a rail
+            # too narrow for both the ▾ simply drops to the line below (which is
+            # where it used to live anyway). `gap=None` is load-bearing, not taste:
+            # the toggles measure ~132 px (Animate) and ~137 px (Compare) and the ▾
+            # ~55 px against a ~195 px rail, so even a 4 px gap puts Compare 1 px
+            # over and wraps it. Zero leaves ~3 px of slack — which is the honest
+            # reason the CSS pass that fuses the two into one control also has to
+            # shrink the ▾: 55 px of button around a 16 px glyph is most of the
+            # margin. The trigger also renders on every run — it greys out rather
+            # than disappearing, because one that comes and goes reflows the row
+            # under the cursor, and because what a mode offers is part of deciding
+            # whether to turn it on (so the menu opens either way; the controls
+            # inside are what go disabled).
+            with st.container(horizontal=True, vertical_alignment="center", gap=None):
+                # Animate styled like a layer: a toggle + a ▾ popover for its config
+                # (playback speed) — matching Compare and the visualization layers
+                # below. Seeded, not `value=`-defaulted: `single_animate` is restored
+                # pre-widget by a deep link / saved config (see session_keys), and
+                # passing both makes Streamlit warn (BUG-17). `setdefault` suffices —
+                # this toggle renders on every run, so it never first mounts late the
+                # way a popover-bound widget can (that case needs
+                # `persist_state="session"`; see BUG-15/ENG-36).
+                st.session_state.setdefault("single_animate", False)
+                animate = st.toggle(
+                    "🎬 **Animate**",
+                    key="single_animate",
+                    persist_state="session",
+                    help="Replay the trial fixation by fixation; the play / pause / "
+                    "restart controls sit below the plot.",
+                )
+                # The ▾ opens whether or not Animate is on — what a mode *offers* is
+                # part of deciding whether to turn it on, and a menu that refuses to
+                # open shows nothing. Off, every control inside is greyed instead
+                # (`anim_gate`), which is the same "your value is kept" contract the
+                # rail's own mode gating uses. Disabled or not, the body always runs,
+                # which is what keeps `playback_speed` / `anim_info_slot` defined.
+                anim_disabled = not animate or trial_fixations.empty
+                anim_gate = (
+                    ""
+                    if not anim_disabled
+                    else "⚠️ Turn on **Animate** to change playback."
+                    if not animate
+                    else "⚠️ This trial has no fixations to replay."
+                )
+                with st.popover(
+                    "",
+                    icon=":material/arrow_drop_down:",
+                    width="content",
+                    help="Playback settings",
+                ):
                     st.session_state.setdefault(
                         "single_playback_speed", _ANIM_DEFAULT_SPEED
                     )
@@ -3602,9 +3633,13 @@ def render_single_trial_tab(
                         format_func=lambda x: _ANIM_SPEED_LABELS[
                             _ANIM_SPEED_OPTIONS.index(x)
                         ],
-                        help="Playback speed relative to the recorded fixation timings.",
+                        help=_gated_help(
+                            "Playback speed relative to the recorded fixation timings.",
+                            anim_gate,
+                        ),
                         key="single_playback_speed",
                         persist_state="session",
+                        disabled=anim_disabled,
                     )
                     # UX-30: the reading-time / playback-duration box reads as a
                     # consequence of the speed picked above, so it sits right below it
@@ -3620,9 +3655,13 @@ def render_single_trial_tab(
                         "Autoplay on load",
                         key="global_anim_autoplay",
                         persist_state="session",
-                        help="Start the replay automatically when the plot loads, at "
-                        "the playback speed set above. Turn off to start paused (press "
-                        "▶ Play to run it).",
+                        disabled=anim_disabled,
+                        help=_gated_help(
+                            "Start the replay automatically when the plot loads, at "
+                            "the playback speed set above. Turn off to start paused "
+                            "(press ▶ Play to run it).",
+                            anim_gate,
+                        ),
                     )
                     anim_info_slot = st.container()
                     st.divider()
@@ -3675,10 +3714,14 @@ def render_single_trial_tab(
                         key="global_anim_quality",
                         persist_state="session",
                         on_change=_apply_anim_quality,
-                        help="**Coarse** — 300 ms / 120 frames for fast drafts. "
-                        "**Fine** — 40 ms / 900 frames for high-fidelity review. "
-                        "**Custom** reveals the sliders below, pre-seeded with "
-                        "whichever preset was active last.",
+                        disabled=anim_disabled,
+                        help=_gated_help(
+                            "**Coarse** — 300 ms / 120 frames for fast drafts. "
+                            "**Fine** — 40 ms / 900 frames for high-fidelity review. "
+                            "**Custom** reveals the sliders below, pre-seeded with "
+                            "whichever preset was active last.",
+                            anim_gate,
+                        ),
                     )
 
                     def _mark_anim_quality_custom() -> None:
@@ -3701,9 +3744,13 @@ def render_single_trial_tab(
                             max_value=500,
                             step=10,
                             on_change=_mark_anim_quality_custom,
-                            help="How often a frame is emitted along the reading "
-                            "clock. Smaller is smoother and larger to export; the "
-                            "slider scrubs linearly through seconds either way.",
+                            disabled=anim_disabled,
+                            help=_gated_help(
+                                "How often a frame is emitted along the reading "
+                                "clock. Smaller is smoother and larger to export; the "
+                                "slider scrubs linearly through seconds either way.",
+                                anim_gate,
+                            ),
                         )
                         _numeric_slider(
                             st,
@@ -3715,49 +3762,51 @@ def render_single_trial_tab(
                             max_value=2000,
                             step=10,
                             on_change=_mark_anim_quality_custom,
-                            help="Hard ceiling on the frame count. A long reading "
-                            "coarsens the grid to stay under it rather than "
-                            "emitting thousands of frames (which balloons the "
-                            "GIF/MP4 export).",
+                            disabled=anim_disabled,
+                            help=_gated_help(
+                                "Hard ceiling on the frame count. A long reading "
+                                "coarsens the grid to stay under it rather than "
+                                "emitting thousands of frames (which balloons the "
+                                "GIF/MP4 export).",
+                                anim_gate,
+                            ),
                         )
             # Compare is a view mode (toggle here); the second-trial selector renders
             # above the chips in the plot column (compare_slot below), mirroring the
             # main trial picker (CMP-1).
-            # CMP-8 §7 made this key wire format (`?compare=` turns it on), so it
-            # is seeded rather than given a `value=`: an explicit default fights
-            # the deep link the same way it would fight a restored config.
-            st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
-            compare_enabled = st.toggle(
-                "⚖️ **Compare**",
-                key=SINGLE_COMPARE_TOGGLE,
-                persist_state="session",
-                help=(
-                    "Co-animate a second reading on one clock."
-                    if animate
-                    else "Overlay another trial's scanpath or view them side by side."
-                ),
-            )
-            # ENG-24: controls must gate against the mode the renderer can actually
-            # enter, not merely the raw toggle. Compare needs at least one candidate;
-            # Animate is resolved independently because it remains a distinct empty-
-            # state when the selected trial has no fixations.
-            st.session_state["_resolved_comparing"] = bool(
-                compare_enabled
-                and build_comparison_options(
-                    combos,
-                    selection_mode,
-                    selected_participant,
-                    selected_trial,
-                    selected_text,
+            # UX-59: same split-button row as Animate above — toggle + ▾ settings.
+            # Compare config lives in the rail (moved out of the inline selector):
+            # the overlay/side-by-side/stacked layout + the show-A/B-legend toggle.
+            # The layout reaches the figure via session_state
+            # (`single_compare_layout`), read into `compare_layout` below.
+            with st.container(horizontal=True, vertical_alignment="center", gap=None):
+                # CMP-8 §7 made this key wire format (`?compare=` turns it on), so it
+                # is seeded rather than given a `value=`: an explicit default fights
+                # the deep link the same way it would fight a restored config.
+                st.session_state.setdefault(SINGLE_COMPARE_TOGGLE, False)
+                compare_enabled = st.toggle(
+                    "⚖️ **Compare**",
+                    key=SINGLE_COMPARE_TOGGLE,
+                    persist_state="session",
+                    help=(
+                        "Co-animate a second reading on one clock."
+                        if animate
+                        else "Overlay another trial's scanpath or view them side by "
+                        "side."
+                    ),
                 )
-            )
-            st.session_state["_resolved_animating"] = bool(animate)
-            # Compare config in the rail (moved out of the inline selector): the
-            # overlay/side-by-side/stacked layout + the show-A/B-legend toggle. The
-            # layout reaches the figure via session_state (`single_compare_layout`),
-            # read into `compare_layout` below.
-            if compare_enabled:
-                with st.popover("⚙️ Compare options", width="stretch"):
+                # Opens either way; greyed inside while Compare is off — see the
+                # Animate row above for why the menu does not refuse to open.
+                cmp_disabled = not compare_enabled
+                cmp_gate = (
+                    "⚠️ Turn on **Compare** to change these." if cmp_disabled else ""
+                )
+                with st.popover(
+                    "",
+                    icon=":material/arrow_drop_down:",
+                    width="content",
+                    help="Compare settings",
+                ):
                     # CMP-13. Deliberately "Step both trials together" and not
                     # "keep them in sync": the two pools have different sizes
                     # (B excludes A, and a cross-dataset B is another corpus), so
@@ -3767,9 +3816,13 @@ def render_single_trial_tab(
                         "Step both trials together",
                         key=COMPARE_STEP_LINK_KEY,
                         persist_state="session",
-                        help="◀ ▶ on either picker moves this trial *and* the "
-                        "compared one by one. A side that reaches the end of its "
-                        "own list stays put while the other keeps going.",
+                        disabled=cmp_disabled,
+                        help=_gated_help(
+                            "◀ ▶ on either picker moves this trial *and* the "
+                            "compared one by one. A side that reaches the end of its "
+                            "own list stays put while the other keeps going.",
+                            cmp_gate,
+                        ),
                     )
                     if not animate:
                         # Seed so the control shows "Overlay" selected by default
@@ -3782,7 +3835,11 @@ def render_single_trial_tab(
                             options=["Overlay", "Side by side", "Stacked"],
                             key=SINGLE_COMPARE_LAYOUT,
                             persist_state="session",
-                            help="Stacked = trials shown one above the other.",
+                            disabled=cmp_disabled,
+                            help=_gated_help(
+                                "Stacked = trials shown one above the other.",
+                                cmp_gate,
+                            ),
                         )
                         # CMP-8 §5.3 / CMP-11: overlay pools both trials into one
                         # axis range, so across datasets it is allowed only when
@@ -3816,15 +3873,24 @@ def render_single_trial_tab(
                                 options=["Both", "A", "B"],
                                 key=SINGLE_COMPARE_STIMULUS,
                                 persist_state="session",
-                                help="Which reading supplies the word boxes and "
-                                "text. Across datasets the two rarely line up.",
+                                disabled=cmp_disabled,
+                                help=_gated_help(
+                                    "Which reading supplies the word boxes and "
+                                    "text. Across datasets the two rarely line up.",
+                                    cmp_gate,
+                                ),
                             )
                     show_legend_now = st.checkbox(
                         "Show A/B legend",
                         key="global_show_compare_legend",
                         persist_state="session",
-                        help="Show a legend naming the two scanpaths on the overlay "
-                        "(off by default — the colours already tell A and B apart).",
+                        disabled=cmp_disabled,
+                        help=_gated_help(
+                            "Show a legend naming the two scanpaths on the overlay "
+                            "(off by default — the colours already tell A and B "
+                            "apart).",
+                            cmp_gate,
+                        ),
                     )
                     if show_legend_now:
                         # UX-31: override the auto "participant · trial" label,
@@ -3847,10 +3913,30 @@ def render_single_trial_tab(
                                 # what an empty box gives you is readable without
                                 # hovering the tooltip (UX-31).
                                 placeholder=DEFAULT_COMPARE_LABEL_PATTERN,
-                                help="Leave empty for the auto label.",
+                                help=_gated_help(
+                                    "Leave empty for the auto label.", cmp_gate
+                                ),
                                 label_left=True,
+                                disabled=cmp_disabled,
                             )
                         render_pattern_help(box, label_fields)
+            # ENG-24: controls must gate against the mode the renderer can actually
+            # enter, not merely the raw toggle. Compare needs at least one candidate;
+            # Animate is resolved independently because it remains a distinct empty-
+            # state when the selected trial has no fixations. Written after the split
+            # row rather than between its two halves (UX-59) — it renders nothing, and
+            # anything between the toggle and its ▾ would land inside that row.
+            st.session_state["_resolved_comparing"] = bool(
+                compare_enabled
+                and build_comparison_options(
+                    combos,
+                    selection_mode,
+                    selected_participant,
+                    selected_trial,
+                    selected_text,
+                )
+            )
+            st.session_state["_resolved_animating"] = bool(animate)
         # The visualization controls moved out of the sidebar into this rail
         # (host=rail) so they sit beside the plot with the sidebar closed.
         viz_settings = sidebar_controls(

@@ -2378,10 +2378,17 @@ class TestSetupWizard:
     def test_raw_gaze_only_incomplete_mapping_blocks_finalize(self, monkeypatch):
         """Bug fix: a raw-gaze-only upload with an unmappable trial id must block
         finalize (raw-gaze problems are folded in) instead of storing an empty
-        dataset."""
+        dataset.
+
+        UX-53 changed *how* it blocks, not whether: the button is now **enabled**
+        while incomplete, because a disabled control cannot be pressed and the
+        red required-field marking is triggered by the attempt. What must still
+        hold — and is what this test is really about — is that pressing it stores
+        nothing.
+        """
         import pandas as pd
 
-        from scanpath_studio import app
+        from scanpath_studio import app, controls
 
         # No participant/trial/x/y the schema can auto-detect.
         raw_gaze = pd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6]})
@@ -2397,11 +2404,23 @@ class TestSetupWizard:
         answer_setup_step(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # Finalize is shown but disabled; the blocking problem mentions raw gaze.
+        # Finalize is shown and pressable; the blocking problem mentions raw gaze.
         finalize = [b for b in at.button if b.key == "wizard_finalize"]
-        assert finalize and finalize[0].disabled
+        assert finalize and not finalize[0].disabled
         warn_text = " ".join(e.value for e in at.warning)
         assert "Raw gaze" in warn_text, warn_text
+
+        # The guarantee: pressing it stores no dataset, and the wizard stays up.
+        finalize[0].click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # AppTest's session_state is not a dict — no `.get()`.
+        stored = (
+            at.session_state["_datasets"] if "_datasets" in at.session_state else {}
+        )
+        assert not stored, stored
+        assert at.session_state[controls.ADD_ATTEMPTED_KEY] is True
+        assert [b for b in at.button if b.key == "wizard_finalize"]
 
     def test_composite_trial_dataset_restores_picker_on_switch_back(self, monkeypatch):
         """Regression for the review's HIGH finding: a stored dataset whose trial

@@ -1408,6 +1408,43 @@ def _assemble_mapping(
     return mapping
 
 
+#: Set once the user has pressed **✅ Add dataset** on a wizard that still has a
+#: required field unmapped. Until then a blank required field is simply *not
+#: filled in yet* — colouring it red on arrival would paint a fresh upload with
+#: errors before the user has done anything wrong (UX-53).
+ADD_ATTEMPTED_KEY = "_wizard_add_attempted"
+
+#: UX-53's three-colour field state. Rendered as a coloured dot beside the row's
+#: note, using Streamlit's own markdown colours so it follows the active theme
+#: rather than hard-coding hex that only reads on one background.
+_FIELD_MARK = {"user": ":green[●]", "auto": ":orange[●]", "missing": ":red[●]"}
+
+
+def _field_note(
+    *, chosen, default, is_required: bool, attempted: bool, detected_label: str
+) -> str:
+    """The dot-and-caption for one mapping row, or ``""`` for nothing to say.
+
+    Three states, per UX-53: **green** the user picked it, **orange** it was
+    auto-detected and left alone, **red** it is required and still empty *after*
+    an add was attempted. A field that is optional and empty stays unmarked —
+    most rows on most datasets are exactly that, and a dot on every one of them
+    would carry no information.
+    """
+    unmapped = chosen in (None, NONE_OPTION)
+    if unmapped:
+        if is_required and attempted:
+            return f"{_FIELD_MARK['missing']} required — pick a column"
+        if default:
+            return f"{_FIELD_MARK['auto']} ✨ {detected_label} `{default}` · not used"
+        return ""
+    if default and chosen == default:
+        return f"{_FIELD_MARK['auto']} ✨ {detected_label} `{default}`"
+    if default:
+        return f"{_FIELD_MARK['user']} ✨ {detected_label} `{default}` · overridden"
+    return f"{_FIELD_MARK['user']} set by you"
+
+
 #: Marker key recording which table a stored mapping was made for.
 #:
 #: The prefix, not a suffix, and deliberately outside ``col_map_*``:
@@ -1587,6 +1624,10 @@ def column_mapping_ui(
     forget_mapping_for_other_table(df, state_key_prefix, field_specs)
     options = [NONE_OPTION] + list(df.columns)
     expanded = bool(expand_on_problem and problems)
+    # UX-53 field colour: which rows *must* be filled, and whether the user has
+    # already tried to add the dataset (before that, empty is not an error).
+    required_keys = {spec["key"] for spec in field_specs if spec.get("required")}
+    add_attempted = bool(st.session_state.get(ADD_ATTEMPTED_KEY))
     # UX-52 round 2 — "the column mapping can be overwhelming". Two changes:
     # every row is `label | field` (UX-51's shape, which the user asked for here
     # too), and the multipart/canvas fields fold into an **Advanced** group.
@@ -1636,19 +1677,23 @@ def column_mapping_ui(
             # to auto-detection the moment the user clicks over to Scanpath.
             persist_state="session",
         )
-        # Surface what auto-detection found for this field (ENG-9) — and flag when
-        # the user has overridden it — so the mapping isn't silently inferred.
-        # DATA-24: `(none)` gets its own wording. It used to fall into the plain
-        # branch, so a field detection had found but the widget was not using
-        # read exactly like one it was — the caption named the column while the
-        # app normalized without it.
-        if default and default in df.columns:
-            if chosen == NONE_OPTION:
-                note_col.caption(f"✨ {detected_label} `{default}` · not used")
-            elif chosen != default:
-                note_col.caption(f"✨ {detected_label} `{default}` · overridden")
-            else:
-                note_col.caption(f"✨ {detected_label} `{default}`")
+        # Surface what auto-detection found for this field (ENG-9), flag when the
+        # user has overridden it, and carry UX-53's colour so the row's state is
+        # readable without parsing the sentence. DATA-24: `(none)` gets its own
+        # wording — it used to fall into the plain branch, so a field detection
+        # had found but the widget was not using read exactly like one it was.
+        note = _field_note(
+            chosen=chosen,
+            default=default if default in df.columns else None,
+            is_required=field_key in required_keys,
+            attempted=add_attempted,
+            detected_label=detected_label,
+        )
+        if note:
+            # `caption`, not `markdown(..., unsafe_allow_html=True)`: the colour
+            # is Streamlit's own `:green[…]` markdown, which is not parsed inside
+            # raw HTML — and caption is the small type this note has always used.
+            note_col.caption(note)
         return None if chosen == NONE_OPTION else chosen
 
     host = container if container is not None else st.container()

@@ -32,6 +32,7 @@ from .constants import (
     UPLOAD_CHOICE,
 )
 from .controls import (
+    ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
     NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
@@ -133,6 +134,9 @@ def _reset_wizard_widgets() -> None:
         "wizard_filename_regex",
         "wizard_filename_regex_lower",
         "wizard_aggregate_char_boxes",
+        # UX-53: a new dataset starts unattempted, so its required fields are
+        # blank rather than red until this one is asked to be added.
+        ADD_ATTEMPTED_KEY,
         # DATA-22 Recording-setup step. The *mode* radios always reset — decision
         # (d): a second dataset from the same lab keeps the pre-filled values
         # (`_wizard_setup_recall`, deliberately NOT cleared here) but the user
@@ -1099,14 +1103,15 @@ def current_setup_section() -> dict | None:
 
 def _render_setup_download(host) -> None:
     """Export the current column mapping as a JSON setup file, so it can be
-    re-applied later via the wizard's *Restore a saved setup* step. Rendered just
-    above the **Add dataset** button."""
+    re-applied later via the wizard's *Restore a saved setup* step. Rendered
+    beside the **Add dataset** button (UX-53)."""
     host.download_button(
         "⬇️ Download setup (JSON)",
         data=json.dumps(_wizard_setup_config(), indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
         key="wizard_setup_download",
+        width="stretch",
         help="Save this column mapping to re-use on similar data — restore it "
         "from *Restore a saved setup* at the top of Column mapping.",
     )
@@ -1709,6 +1714,16 @@ _IDENTITY_CAPTION = (
 )
 
 
+def _mark_add_attempted() -> None:
+    """Record that **✅ Add dataset** was pressed on a still-incomplete wizard.
+
+    UX-53's red state is deliberately not shown on arrival: a required field the
+    user has not reached yet is *unfilled*, not wrong. It turns red only once
+    they have asked for the dataset to be added.
+    """
+    st.session_state[ADD_ATTEMPTED_KEY] = True
+
+
 def _wizard_name_header(host, active: bool) -> None:
     """The dataset's name, at the head of the combined part (UX-53).
 
@@ -1838,26 +1853,15 @@ def _mapping_label(mapping) -> str | None:
     return str(mapping)
 
 
-def _render_review_table(host, snapshot: SetupSnapshot, readouts: list) -> None:
-    """Step 6's review table: every decision, its value, and its provenance.
+def _render_setup_provenance_note(host, snapshot: SetupSnapshot) -> None:
+    """What the recording setup implies, in one line.
 
-    The provenance column is the reason this table exists — it is where an
-    assumed monitor stops being invisible.
+    UX-53 removed the review *table* this used to close — every decision it
+    listed is now stated beside the control that makes it. These two captions
+    are not: they are derived from the setup as a whole, and the SKIPPED branch
+    is the point at which an assumed monitor stops being invisible (DATA-2), so
+    they survive the table that carried them.
     """
-    rows = [
-        {"Decision": label, "Value": value, "How we know": how}
-        for label, value, how in readouts
-    ]
-    for group in SETUP_GROUPS:
-        provenance = snapshot.provenance[group]
-        rows.append(
-            {
-                "Decision": SETUP_GROUP_LABELS[group],
-                "Value": _setup_group_value(snapshot, group),
-                "How we know": str(provenance) if provenance else "not answered",
-            }
-        )
-    host.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     if snapshot.geometry_provenance is Provenance.SKIPPED:
         host.caption(
             "Visual-angle units (px per degree) are hidden for this dataset — the "
@@ -2360,35 +2364,40 @@ def _render_data_setup(active: bool) -> _UploadResult:
     ]
     blocked = bool(problems) or bool(setup_blockers)
 
+    # UX-53 dropped the review table. Every figure in it is now stated where it
+    # is decided — row counts beside each upload, the trial count under the trial
+    # picker (`_wizard_trial_step`), the mapped column beside its own field, and
+    # each setup value beside its provenance radio. Repeating them here made a
+    # second screen out of things the user had just read.
     if active:
-        readouts: list = []
-        if has_fix:
-            readouts.append(("Fixations", f"{len(raw_fix):,} rows", "uploaded"))
-        if has_words:
-            readouts.append(("Words / IA", f"{len(raw_words):,} rows", "uploaded"))
-        trial_label = _mapping_label(
-            (fix_schema if has_fix else word_schema).get("trial")
-        )
-        if trial_label:
-            readouts.append(("Trial id", trial_label, "mapped"))
-        _render_review_table(s6, setup_snapshot, readouts)
+        _render_setup_provenance_note(s6, setup_snapshot)
 
-        if blocked:
-            s6.markdown("**Still to do**")
-            # Everything is one scroll away now, so a blocker names its section
-            # instead of offering a jump button to a step that no longer exists.
-            for line in problems:
-                s6.warning(f"{wizard_shell.SECTION_TITLES['geometry']} — {line}")
-            for name in setup_blockers:
-                s6.warning(
-                    f"{wizard_shell.SECTION_TITLES['setup']} — {name}, "
-                    "say how you know it"
-                )
+    if active and blocked:
+        s6.markdown("**Still to do**")
+        # Everything is one scroll away now, so a blocker names its section
+        # instead of offering a jump button to a step that no longer exists.
+        for line in problems:
+            s6.warning(f"{wizard_shell.SECTION_TITLES['geometry']} — {line}")
+        for name in setup_blockers:
+            s6.warning(
+                f"{wizard_shell.SECTION_TITLES['setup']} — {name}, say how you know it"
+            )
 
     if problems:
         if active:
             _render_setup_download(s6)
-            s6.button("✅ Add dataset", disabled=True, key="wizard_finalize")
+            # Enabled, not disabled (UX-53). A disabled button cannot be *tried*,
+            # and "red when you try to add with it empty" needs the attempt: the
+            # click sets ADD_ATTEMPTED_KEY, which is what turns every unmapped
+            # required row red on the rerun. It still cannot finalize — this
+            # branch returns the problems either way.
+            s6.button(
+                "✅ Add dataset",
+                key="wizard_finalize",
+                on_click=_mark_add_attempted,
+                help="Some required fields are still empty — they are marked in "
+                "red above.",
+            )
         st.session_state["_composite_trial_columns"] = None
         return _UploadResult(
             empty_words_frame(),
@@ -2522,15 +2531,20 @@ def _render_data_setup(active: bool) -> _UploadResult:
             # canvas on the previous source's monitor.
             "setup": setup_snapshot.to_dict(),
         }
-        _render_setup_download(s6)
-        s6.button(
+        # UX-53: the two things you can do with a finished setup share one row —
+        # save it for next time, or add it — instead of stacking two full-width
+        # buttons.
+        save_col, add_col = s6.columns([1, 1], gap="small")
+        _render_setup_download(save_col)
+        add_col.button(
             "✅ Add dataset",
             type="primary",
             key="wizard_finalize",
             disabled=blocked,
             on_click=_finalize_wizard_dataset,
+            width="stretch",
             help=(
-                "Answer the Recording setup step first: " + ", ".join(setup_blockers)
+                "Answer the Recording setup section first: " + ", ".join(setup_blockers)
                 if setup_blockers
                 else "Store this dataset and switch to it."
             ),

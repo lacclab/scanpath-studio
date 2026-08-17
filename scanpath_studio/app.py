@@ -4198,12 +4198,9 @@ def main() -> None:
     )
     if data_view:
         setup_page.header("Set up your dataset")
-        setup_page.caption(
-            "Where the data comes from, what is actually in it, how its columns "
-            "map onto the app's canonical fields, what you know about the "
-            "readers, and the optional preprocessing applied before anything is "
-            "measured."
-        )
+        # UX-53: one line, not five. The four stage headings below already say
+        # what the page contains.
+        setup_page.caption("Source · what's in it · column mapping · preprocessing.")
         # UX-52 — four peer sections, one heading level, one divider between
         # each. The source block used to open with no heading at all, which
         # made the three headings below it read as the whole page rather than
@@ -4212,9 +4209,6 @@ def main() -> None:
         # containers out in creation order).
         setup_page.divider()
         setup_page.subheader("📂 Data source")
-        setup_page.caption(
-            "Which dataset, where its files are, and any options that source offers."
-        )
     setup_source_slot = setup_page.container()
     description_slot = setup_page.container()
     source_options_slot = setup_page.container()

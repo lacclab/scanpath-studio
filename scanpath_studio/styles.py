@@ -83,6 +83,25 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
+    /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
+       small". Scoped to the page's own key so the plot rail and the analysis
+       views keep the metrics they were tuned against (#UX-51 sized the rail
+       deliberately, and a global type change would move it).
+
+       Two levers, both conservative: close the vertical gap Streamlit puts
+       between every block, and lift the *smallest* type — captions carry most
+       of this page's prose, and they were the part that read as too small. */
+    .st-key-data_setup_page [data-testid="stVerticalBlock"] { gap: 0.55rem; }
+    .st-key-data_setup_page [data-testid="stCaptionContainer"],
+    .st-key-data_setup_page [data-testid="stCaptionContainer"] p {
+        font-size: 0.86rem;
+        line-height: 1.45;
+    }
+    /* The dividers between the page's four stages were doing the spacing job
+       twice — a rule plus a margin either side of it. */
+    .st-key-data_setup_page hr { margin: 0.7rem 0; }
+    .st-key-data_setup_page [data-testid="stExpander"] { margin-bottom: 0.35rem; }
+
     div[data-testid="stPopover"] button { border-radius: 999px; }
     div[data-testid="stPopover"] button p { white-space: nowrap; }
     div[data-testid="stPopoverBody"] {

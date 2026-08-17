@@ -526,8 +526,7 @@ window.TRACKER = {
     "  the map view at the bottom of part 1."
    ],
    "statusNote": [
-    "**In progress.** The wizard restructure landed 2026-08-17; the colour-coding,",
-    "inline counts and the Data-page density pass are still open."
+    "**Review — implemented 2026-08-17.** All seven asks are built."
    ],
    "whatWasDone": [
     "**Seven steps became two.**",
@@ -565,26 +564,39 @@ window.TRACKER = {
     "",
     "Also fixed two more instances of #ENG-40's Windows bug found on the way —",
     "`test_wizard_helpers.py` and `test_tour.py` read source files with the locale",
-    "codec."
+    "codec.",
+    "",
+    "**Field state in colour.** `controls._field_note` marks each mapping row",
+    "**green** (you picked it), **orange** (auto-detected, untouched) or **red**",
+    "(required and still empty). Red appears only *after* **✅ Add dataset** has",
+    "been pressed on an incomplete wizard — a required field nobody has reached yet",
+    "is unfilled, not wrong, so a fresh upload does not arrive covered in errors.",
+    "Recording that attempt is why the button is now **enabled** while blocked",
+    "(`ADD_ATTEMPTED_KEY`): a disabled control cannot be tried. It still stores",
+    "nothing — `tests/test_apptest.py` clicks it and asserts `_datasets` stays",
+    "empty. Colours are Streamlit's `:green[…]` markdown, so they follow the theme.",
+    "",
+    "**The review table is gone**, per the brief. Every figure in it is now stated",
+    "where it is decided: row counts beside each upload, the trial count under the",
+    "trial picker, the mapped column beside its own field. Only",
+    "`_render_setup_provenance_note`'s px-per-degree / *physical size skipped* line",
+    "survives — it is derived from the setup as a whole and stated nowhere else,",
+    "and dropping it would lose a #DATA-2 provenance disclosure.",
+    "",
+    "**⬇️ Download setup and ✅ Add dataset share one row.**",
+    "",
+    "**The 🗂️ Data page density pass**, scoped to `.st-key-data_setup_page` so the",
+    "plot rail keeps the metrics #UX-51 tuned it against: block gap to `0.55rem`,",
+    "captions up to `0.86rem` (the \"text too small\" half), divider margins halved.",
+    "The page's five-line summary is one line, and *Data source* loses a caption",
+    "that restated its own heading.",
+    "",
+    "`CHANGELOG.md`, `AGENTS.md` and",
+    "[`scanpath_studio/CLAUDE.md`](scanpath_studio/CLAUDE.md) all describe the",
+    "two-part wizard now."
    ],
    "whatsLeft": [
-    "**Field-state colour** in `controls.column_mapping_ui`: red (required, still",
-    "unmapped, once *Add dataset* has been attempted) / yellow (auto-detected) /",
-    "green (chosen by the user).",
-    "",
-    "**Counts beside their mapping** — *number of trials* next to the trial mapping",
-    "rather than in a statistics block.",
-    "",
-    "**Related controls sharing a row** where they belong to one topic, and a",
-    "general pass for less text.",
-    "",
-    "**The 🗂️ Data page itself** — the density/typography half of this item",
-    "(`tabs.py`, and whether the fix is this page's spacing or the app's base scale",
-    "in `styles.py`). Nothing has been done here yet; the work so far is all wizard.",
-    "",
-    "**Docs:** `CHANGELOG.md` and the wizard notes in",
-    "[`scanpath_studio/CLAUDE.md`](scanpath_studio/CLAUDE.md) still describe the",
-    "seven-step shape."
+    "Nothing."
    ],
    "background": [
     "A follow-up to #UX-52, which gave this page one heading level and folded its",
@@ -652,6 +664,11 @@ window.TRACKER = {
     "  same space/wording diet as everything else in 2–7.",
     "- **Counts go beside the mapping they describe**, not into part 1 as a block:",
     "  *number of trials* sits next to the trial mapping."
+   ],
+   "decisions": [
+    "Review: open the 🗂️ Data page and **➕ Add data**. Worth clicking through — the two parts and their line-title sections, the name at the top of part 2, the advanced blocks now inline, and **✅ Add dataset** with the download button beside it.",
+    "The CSS density values (block gap `0.55rem`, captions `0.86rem`, halved divider margins) were chosen without being able to see the rendered page. If the page now reads too tight or the captions too large, say which and I will adjust — they are one edit in `styles.py`.",
+    "**✅ Add dataset** is now *enabled* while required fields are empty, so that pressing it is what turns them red. It stores nothing in that state (asserted by a test). If you would rather it stayed greyed out, the red marking needs a different trigger — say so and I will pick one."
    ]
   },
   {

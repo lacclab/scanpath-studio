@@ -100,25 +100,19 @@ _LABEL_GAP = "xsmall"
 #: is room for the "✨ auto-detected …" note beside the field instead of under it.
 _MAPPING_ROW_W = (0.24, 0.40, 0.36)
 
-#: `label | field | ✨` inside one cell of a multi-column mapping grid
-#: (UX-53 r13). Squeezed hard, because a theme's fields now share one row: the
-#: flag is one glyph and takes only what it needs, and the select gets the
-#: larger share of the rest — a truncated *label* still says which field it is
-#: (and gives the full text on hover), a truncated *column name* does not.
-_GRID_ROW_W = (0.4, 0.5, 0.1)
-
-#: `label | field` for a widget the wizard packs into a row of its own making —
-#: the identity pickers are `st.multiselect`s outside this module's grid, but
-#: want the same shape.
-INLINE_LABEL_W = (0.42, 0.58)
+#: `label | ✨` on a grid cell's first line, with the select on its second
+#: (UX-53 r14). Stacking is what makes a packed theme read as two rows — every
+#: field name on one line, every control on the next — instead of as a ragged
+#: run of label-field pairs. The flag is one glyph and takes only what it needs.
+_GRID_LABEL_W = (0.85, 0.15)
 
 
 def inline_field_label(host, label: str, help_text: str | None = None) -> None:
-    """Render a field title into its own left-hand column (UX-53 r13).
+    """Render a field title above its control (UX-53 r14).
 
     The public door onto `_row_label`, for callers that build their own row:
-    `wizard._render_identity_field` puts one picker per table on a shared line
-    and needs their titles to look like every other mapping title, tooltip
+    `wizard._render_identity_field` puts one picker per table across a shared
+    row and needs their titles to look like every other mapping title, tooltip
     included.
     """
     _row_label(host, label, help_text)
@@ -1784,15 +1778,18 @@ def column_mapping_ui(
         """
         host = _host_for(field_key)
         if columns_per_row > 1:
-            # UX-53 r13: `label | field | ✨` *within* the cell, so a packed row
-            # still reads as labelled controls rather than as a strip of selects
-            # under a strip of titles.
+            # UX-53 r14: label over field. Each cell writes its title first and
+            # its select second, so across the row the titles line up on one
+            # line and the controls on the next — and the select gets the cell's
+            # full width instead of splitting it with the label, which is what
+            # keeps a long column name legible.
             cell = _grid_cell(host)
-            label_col, field_col, flag_col = cell.columns(
-                _GRID_ROW_W, gap=None, vertical_alignment="center"
+            head = cell.container()
+            label_col, flag_col = head.columns(
+                _GRID_LABEL_W, gap=None, vertical_alignment="center"
             )
             _row_label(label_col, field_label, help_text)
-            return field_col, flag_col
+            return cell, flag_col
         label_col, field_col, note_col = host.columns(
             _MAPPING_ROW_W, gap=_LABEL_GAP, vertical_alignment="center"
         )

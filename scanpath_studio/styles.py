@@ -552,6 +552,29 @@ def get_app_css() -> str:
     }
     .st-key-wiz_name_box label p { font-weight: 700; }
 
+    /* UX-53 r14 — a dropdown must never cut off a column name. The mapping now
+       packs six or eight selects onto one row, so the *control* is narrow by
+       design; the open menu must not inherit that. BaseWeb sizes the popover to
+       its anchor, so the list is widened to its content and allowed to overhang
+       the column it belongs to.
+
+       The popover is portalled to the body, so this cannot be scoped by our own
+       `.st-key-…`: it is deliberately global, and it only ever widens a menu
+       that would otherwise clip. A very long name still wraps rather than being
+       truncated — `text-overflow: ellipsis` on an option is the exact failure
+       being fixed, since two columns can share a visible prefix. */
+    div[data-baseweb="popover"] [role="listbox"],
+    div[data-baseweb="popover"] ul[role="listbox"] {
+        min-width: max-content;
+        max-width: min(46rem, 92vw);
+    }
+    div[data-baseweb="popover"] [role="option"] {
+        text-overflow: clip;
+        overflow: visible;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
     /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
        nothing else; which column was detected is on its tooltip. The old inline
        sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") ran wider than the

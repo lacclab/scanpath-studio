@@ -35,7 +35,6 @@ from .constants import (
 from .controls import (
     ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
-    INLINE_LABEL_W,
     NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
@@ -518,15 +517,14 @@ def _render_identity_field(
         key = f"col_map_{slug}_{field_key}"
         options = list(raw.columns)
         _seed(key, options, default_cols)
-        label_col, field_col = cell.columns(
-            INLINE_LABEL_W, gap=None, vertical_alignment="center"
-        )
-        # The title says which table it maps, since a theme's row now holds one
-        # picker per table and "Trial ID" twice would be unreadable.
+        # Title on the cell's first line, control on its second (UX-53 r14), so
+        # the row reads as a line of names over a line of pickers. The title
+        # says which table it maps, since a theme's row holds one picker per
+        # table and "Trial ID" twice would be unreadable.
         inline_field_label(
-            label_col, f"{label} · {table_label}", f"{help_text} ({table_label} table)"
+            cell, f"{label} · {table_label}", f"{help_text} ({table_label} table)"
         )
-        chosen = field_col.multiselect(
+        chosen = cell.multiselect(
             f"{label} — {table_label}",
             options=options,
             key=key,

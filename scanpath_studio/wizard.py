@@ -1659,10 +1659,11 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
-#: `table name | Trial | Participant | Text` — one identity row (UX-53 r15).
-#: The name column is narrow because it holds one short word; the three pickers
-#: split the rest evenly, since a column name is what has to stay readable.
-_ID_ROW_W = (0.13, 0.29, 0.29, 0.29)
+#: `table name | Trial | Participant | Text | Screen ID | Screen name` — one
+#: identity row (UX-53 r15, widened in r16). The name column is narrow because
+#: it holds one short word; the five pickers split the rest evenly, since a
+#: column name is what has to stay readable.
+_ID_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
 
 #: One line under the *Trials & readers* heading, in place of the paragraph the
 #: step used to carry. UX-53's brief was "display less text".
@@ -2124,43 +2125,29 @@ def _render_data_setup(active: bool) -> _UploadResult:
             cells=_cells_for(2),
             extras_host=id_extras,
         )
-        # DATA-21 multipart screens: beside, not inside, the logical trial id.
-        # The "only for trials made of ordered screens" explanation lives on the
-        # two fields' own tooltips (WORD/FIX_FIELD_SPECS) — UX-53 r3 keeps
-        # descriptive prose off the page.
-        screens = s2.container()
-        if has_words:
-            screens.markdown("**Words / Interest Areas**")
-            word_schema.update(
-                _map_section(
-                    raw_words,
-                    WORD_FIELD_SPECS,
-                    prop_w,
-                    "col_map_words",
-                    screens,
-                    ["screen_id", "screen_index", "canvas_width", "canvas_height"],
-                    per_row=2,
+        # DATA-21 multipart screens. UX-53 r16 folded them into the same two
+        # rows: a screen id is part of *how a trial is identified* for a
+        # multipart dataset, so it belongs beside the trial id rather than in a
+        # block of its own — which also retires the "Words / Interest Areas" /
+        # "Fixations" sub-headings, since each row is already named.
+        screen_specs = (
+            ("fix", raw_fix, FIX_FIELD_SPECS, prop_f, fix_schema, has_fix),
+            ("words", raw_words, WORD_FIELD_SPECS, prop_w, word_schema, has_words),
+        )
+        for offset, key in enumerate(("screen_id", "screen_index")):
+            for slug, raw, specs, proposal, schema, present in screen_specs:
+                if not present or slug not in id_rows:
+                    continue
+                schema.update(
+                    _map_section(
+                        raw,
+                        specs,
+                        proposal,
+                        f"col_map_{slug}",
+                        id_rows[slug][3 + offset],
+                        [key],
+                    )
                 )
-            )
-        if has_fix:
-            screens.markdown("**Fixations**")
-            fix_schema.update(
-                _map_section(
-                    raw_fix,
-                    FIX_FIELD_SPECS,
-                    prop_f,
-                    "col_map_fix",
-                    screens,
-                    [
-                        "screen_id",
-                        "screen_index",
-                        "screen_fixation_id",
-                        "canvas_width",
-                        "canvas_height",
-                    ],
-                    per_row=2,
-                )
-            )
 
     s3 = wizard_shell.section(
         s_map,

@@ -1173,10 +1173,11 @@ WORD_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "screen_index",
-        "label": "Screen order",
+        "label": "Screen name",
         "required": False,
-        "help": "Positive 1-based screen order inside the parent trial. If only a "
-        "screen ID is mapped, order follows first appearance.",
+        "help": "The column ordering screens inside the parent trial — a positive "
+        "1-based number, not a title. If only a screen ID is mapped, order follows "
+        "first appearance.",
     },
     {
         "key": "word_id",
@@ -1248,9 +1249,10 @@ FIX_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "screen_index",
-        "label": "Screen order",
+        "label": "Screen name",
         "required": False,
-        "help": "Positive 1-based screen order inside the parent trial.",
+        "help": "The column ordering screens inside the parent trial — a positive "
+        "1-based number, not a title.",
     },
     {
         "key": "x",
@@ -1354,9 +1356,10 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "screen_index",
-        "label": "Screen order",
+        "label": "Screen name",
         "required": False,
-        "help": "Positive 1-based order inside the parent trial.",
+        "help": "The column ordering screens inside the parent trial — a positive "
+        "1-based number, not a title.",
     },
     {
         "key": "x",

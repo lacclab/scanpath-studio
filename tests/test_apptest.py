@@ -1705,12 +1705,12 @@ class TestGroupedUploadMapping:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error: {[e.value for e in at.error]}"
-        # Words + fixations share one unified Participant picker (a multiselect);
+        # Each table gets its own Participant picker (a multiselect);
         # raw gaze keeps its own participant mapping (a selectbox). All three
         # present tables get mapped.
         sel_keys = {s.key for s in at.selectbox}
         multi_keys = {m.key for m in at.multiselect}
-        assert "col_map_participant_unified" in multi_keys
+        assert "col_map_fix_participant" in multi_keys
         assert "col_map_raw_gaze_participant" in sel_keys
         # The shared pick is mirrored into each present table's per-table key.
         assert "col_map_words_participant" in at.session_state
@@ -1745,10 +1745,10 @@ class TestGroupedUploadMapping:
         assert at.error == [], f"st.error: {[e.value for e in at.error]}"
         sel_keys = {s.key for s in at.selectbox}
         multi_keys = {m.key for m in at.multiselect}
-        # The Words/IA mapping renders (unified Participant multiselect + the word
+        # The Words/IA mapping renders (its Participant multiselect + the word
         # column mapping); the (un-uploaded) Fixations table gets no mapping, and
         # the app got past mapping (no unmapped-view warning).
-        assert "col_map_participant_unified" in multi_keys
+        assert "col_map_words_participant" in multi_keys
         assert "col_map_words_word_id" in sel_keys
         assert "col_map_fix_duration" not in sel_keys
         assert "col_map_fix_participant" not in at.session_state
@@ -2138,22 +2138,22 @@ class TestSetupWizard:
         assert entry["schemas"]["words"]["text"] == "difficulty_level"
         assert list(entry["words"]["text"]) == ["Adv", "Adv", "Ele", "Ele"]
 
-    def test_unified_trial_picker_and_setup_step(self, monkeypatch):
-        """Group A + C: one shared Trial ID picker (not per-table) and the
-        inline Experimental Setup controls both render in the active wizard."""
+    def test_per_table_trial_pickers_and_setup_step(self, monkeypatch):
+        """Group A + C: a Trial ID picker per table (UX-53 r13 dropped the
+        unified picker and its toggle) and the inline Experimental Setup
+        controls both render in the active wizard."""
         app = self._inject(monkeypatch)
         at = _make_apptest()
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # The unified trial multiselect is rendered; per-table trial widgets are
-        # not (single shared mapping by default).
+        # One trial multiselect per present table, and no mode toggle guarding
+        # them: naming the column in each table is one pick either way.
         ms_keys = {m.key for m in at.multiselect}
-        assert "col_map_trial_unified" in ms_keys
-        assert "col_map_fix_trial" not in ms_keys
-        assert "col_map_words_trial" not in ms_keys
-        # Per-table override toggle is offered (both tables present).
-        assert any(t.key == "wizard_trial_per_table" for t in at.toggle)
+        assert "col_map_fix_trial" in ms_keys
+        assert "col_map_words_trial" in ms_keys
+        assert "col_map_trial_unified" not in ms_keys
+        assert not [t for t in at.toggle if "per table" in (t.label or "")]
         # DATA-22: the recording setup is now step 4, *after* the upload, and
         # asks how each group is known instead of seeding a monitor. Nothing is
         # preselected — a wrong guess here silently rescales every figure.
@@ -2921,7 +2921,7 @@ class TestGenericFilenamePowers:
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # The regex-extracted columns are offered to map as ids…
-        trial_pick = [m for m in at.multiselect if m.key == "col_map_trial_unified"]
+        trial_pick = [m for m in at.multiselect if m.key == "col_map_fix_trial"]
         assert trial_pick, "trial id multiselect not rendered"
         assert "trial" in trial_pick[0].options
         # …and the character-AOI aggregation toggle renders for the words table.

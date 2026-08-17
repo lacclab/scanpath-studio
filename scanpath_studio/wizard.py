@@ -35,11 +35,13 @@ from .constants import (
 from .controls import (
     ADD_ATTEMPTED_KEY,
     FIX_FIELD_SPECS,
+    INLINE_LABEL_W,
     NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
     TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
     column_mapping_ui,
+    inline_field_label,
 )
 from .data import (
     FILE_PART_PREFIX,
@@ -123,9 +125,6 @@ def _reset_wizard_widgets() -> None:
         "wizard_filter_fields",
         "wizard_filter_by",
         "wizard_keep_extra",
-        "wizard_trial_per_table",
-        "wizard_participant_per_table",
-        "wizard_text_id_per_table",
         # MultiplEYE preset uploads + generic filename-derivation / aggregation.
         "mpe_fix_upload",
         "mpe_aoi_upload",
@@ -460,33 +459,37 @@ def _schema_key(schema: dict | None) -> tuple:
     )
 
 
-def _render_unified_identifier(
+def _render_identity_field(
     field_key: str,
     label: str,
     help_text: str,
-    toggle_label: str,
-    body,
+    cells,
     raw_words,
     raw_fix,
     word_schema,
     fix_schema,
     has_words,
     has_fix,
-    common_cols: list,
     default_cols: list,
 ) -> None:
-    """Shared identifier picker for trial / participant / text.
+    """One identifier (trial / participant / text), **one picker per table**.
 
-    One unified multiselect over the columns common to every present table by
-    default, with an opt-in *Different … per table* toggle. The per-table
-    override inherits the unified pick (so flipping it on never reverts to
-    nothing — the old behaviour). Several columns compose an id (joined with
-    ``_`` like the trial id). Writes ``schema[field_key]`` (str / list / None)
-    into ``word_schema`` / ``fix_schema`` in place, mirroring into the per-table
-    ``col_map_<tbl>_<field>`` keys for save/restore + a later per-table toggle.
+    UX-53 r13 removed the *Different … per table* toggle. It was a mode switch
+    guarding a case that costs nothing to show: the tables are listed anyway, so
+    naming the column in each is one pick either way, and the toggle made the
+    common case ("same column, obviously") look like a decision while hiding the
+    uncommon one behind a control nobody finds. Each present table now gets its
+    own multiselect, seeded from the same proposal, so identical columns are
+    still identical — just visible.
+
+    Several columns compose an id (joined with ``_``, like the trial id). Writes
+    ``schema[field_key]`` (str / list / None) into ``word_schema`` /
+    ``fix_schema`` in place; the per-table ``col_map_<tbl>_<field>`` keys are the
+    stored values, which is what save/restore and deep links already carry.
+
+    ``cells`` is one container per present table, in (fixations, words) order —
+    the caller lays the row out, because a theme's fields share one row.
     """
-    fix_key, words_key = f"col_map_fix_{field_key}", f"col_map_words_{field_key}"
-    unified_key = f"col_map_{field_key}_unified"
 
     def _mapping(chosen):
         if not chosen:
@@ -499,90 +502,38 @@ def _render_unified_identifier(
         ``column_mapping_ui`` — so the stale-reset never fights a default arg."""
         stored = st.session_state.get(key)
         if stored is None:
-            st.session_state[key] = list(fallback)
+            st.session_state[key] = [c for c in fallback if c in options]
             return
         valid = [c for c in stored if c in options]
         if len(valid) != len(stored):
-            st.session_state[key] = valid or list(fallback)
+            st.session_state[key] = valid or [c for c in fallback if c in options]
 
-    per_table = False
-    if has_words and has_fix:
-        st.session_state.setdefault(f"wizard_{field_key}_per_table", False)
-        per_table = body.toggle(
-            toggle_label,
-            key=f"wizard_{field_key}_per_table",
-            help="Most datasets name it the same way in every table, so one "
-            "shared mapping is used. Turn this on only if Words and Fixations "
-            "name it differently.",
+    tables = []
+    if has_fix:
+        tables.append(("fix", "Fixations", raw_fix, fix_schema))
+    if has_words:
+        tables.append(("words", "AOI", raw_words, word_schema))
+
+    for cell, (slug, table_label, raw, schema) in zip(cells, tables):
+        key = f"col_map_{slug}_{field_key}"
+        options = list(raw.columns)
+        _seed(key, options, default_cols)
+        label_col, field_col = cell.columns(
+            INLINE_LABEL_W, gap=None, vertical_alignment="center"
         )
-
-    if per_table:
-        # Inherit the unified pick so flipping per-table on doesn't start empty.
-        inherited = list(st.session_state.get(unified_key) or [])
-        if has_fix:
-            if inherited and not st.session_state.get(fix_key):
-                st.session_state[fix_key] = list(inherited)
-            body.caption("Fixations")
-            _seed(fix_key, list(raw_fix.columns), inherited)
-            chosen_f = body.multiselect(
-                label,
-                options=list(raw_fix.columns),
-                key=fix_key,
-                help=help_text,
-                label_visibility="collapsed",
-            )
-            fix_schema[field_key] = _mapping(chosen_f)
-        if has_words:
-            if inherited and not st.session_state.get(words_key):
-                st.session_state[words_key] = list(inherited)
-            body.caption("Words/IA")
-            _seed(words_key, list(raw_words.columns), inherited)
-            chosen_w = body.multiselect(
-                label,
-                options=list(raw_words.columns),
-                key=words_key,
-                help=help_text,
-                label_visibility="collapsed",
-            )
-            word_schema[field_key] = _mapping(chosen_w)
-    else:
-        # One multiselect over the columns common to every present table; its
-        # value is mirrored into each table's schema + the per-table widget keys
-        # (so the save/restore round-trip and a later per-table toggle both start
-        # from this choice). On first render, inherit a restored/seeded per-table
-        # mapping when the tables agree, else fall back to ``default_cols``.
-        stored = st.session_state.get(unified_key)
-        if stored is None:
-            inherited = None
-            for k in (fix_key, words_key):
-                v = st.session_state.get(k)
-                if (
-                    isinstance(v, (list, tuple))
-                    and v
-                    and all(c in common_cols for c in v)
-                ):
-                    inherited = list(v)
-                    break
-            st.session_state[unified_key] = (
-                inherited if inherited else list(default_cols)
-            )
-        else:
-            valid = [c for c in stored if c in common_cols]
-            if len(valid) != len(stored):
-                st.session_state[unified_key] = valid or list(default_cols)
-        chosen = body.multiselect(
-            label,
-            options=common_cols,
-            key=unified_key,
+        # The title says which table it maps, since a theme's row now holds one
+        # picker per table and "Trial ID" twice would be unreadable.
+        inline_field_label(
+            label_col, f"{label} · {table_label}", f"{help_text} ({table_label} table)"
+        )
+        chosen = field_col.multiselect(
+            f"{label} — {table_label}",
+            options=options,
+            key=key,
             help=help_text,
+            label_visibility="collapsed",
         )
-        mapping = _mapping(chosen)
-        if has_fix:
-            fix_schema[field_key] = mapping
-            st.session_state[fix_key] = list(chosen)
-        if has_words:
-            word_schema[field_key] = mapping
-            st.session_state[words_key] = list(chosen)
+        schema[field_key] = _mapping(chosen)
 
 
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
@@ -701,36 +652,32 @@ def _wizard_trial_step(
     fix_schema,
     has_words,
     has_fix,
+    *,
+    cells=None,
+    extras_host=None,
 ) -> None:
-    """Trial-identifier wizard step: a unified picker shared across tables by
-    default (the participant+text default composite), an opt-in per-table
-    override, and a per-table trial-count check that flags mismatches.
-    Mutates ``word_schema`` / ``fix_schema`` in place."""
-    body.caption(
-        "Which column(s) identify a single trial (one reading of one text)? "
-        "Pick several to compose an id — by default the participant and text ids."
-    )
-
+    """Trial-identifier wizard step: one picker per table (UX-53 r13), plus the
+    per-table trial-count check that flags mismatches. Mutates ``word_schema`` /
+    ``fix_schema`` in place. ``cells`` are the row containers the caller built;
+    ``extras_host`` takes the counts, which are a sentence and do not belong in
+    a squeezed column."""
     # Core tables present (raw-gaze keeps its own mapping in its own step).
     core = [f for f, present in ((raw_fix, has_fix), (raw_words, has_words)) if present]
     common_cols = [c for c in core[0].columns if all(c in f.columns for f in core)]
     prop_primary = prop_f if has_fix else prop_w
     default_trial = _default_trial_columns(prop_primary, common_cols)
-    _render_unified_identifier(
+    _render_identity_field(
         "trial",
         "Trial ID *",
-        "Pick the column holding your unique trial ID — or several to build one "
-        "on the fly (values joined with '_'), e.g. participant + text. The same "
-        "mapping is applied to every table.",
-        "Different trial-id columns per table",
-        body,
+        "The column holding your unique trial ID — or several to build one on "
+        "the fly (values joined with '_'), e.g. participant + text.",
+        cells if cells is not None else [body] * 2,
         raw_words,
         raw_fix,
         word_schema,
         fix_schema,
         has_words,
         has_fix,
-        common_cols,
         default_trial,
     )
 
@@ -743,23 +690,24 @@ def _wizard_trial_step(
         sets["Fixations"] = _trial_id_values(raw_fix, fix_schema)
     if has_words:
         sets["Words/IA"] = _trial_id_values(raw_words, word_schema)
+    counts_host = extras_host if extras_host is not None else body
     present = {k: v for k, v in sets.items() if v is not None}
     if present:
         values = list(present.values())
         counts_str = ", ".join(f"{k}: **{len(v):,}**" for k, v in present.items())
         if all(v == values[0] for v in values):
-            body.success(
+            counts_host.success(
                 f"✓ **{len(values[0]):,}** trials detected — make sure this is the "
                 "number of trials you expect to see."
             )
         elif set.intersection(*values):
-            body.info(
+            counts_host.info(
                 f"ℹ️ Trial coverage differs per table — {counts_str}. They share "
                 f"**{len(set.intersection(*values)):,}** trials; some appear in "
                 "only one table."
             )
         else:
-            body.warning(
+            counts_host.warning(
                 f"⚠️ No trial ids are shared across tables — {counts_str}. Check "
                 "the trial-id mapping lines up (try *Different trial-id columns "
                 "per table*)."
@@ -797,34 +745,34 @@ def _wizard_participant_text_step(
     fix_schema,
     has_words,
     has_fix,
+    *,
+    cells=None,
+    extras_host=None,
 ) -> None:
-    """Optional participant- or text-identifier step, in the same shape as the
-    Trial identifier (unified picker + per-table toggle + composite support),
-    followed by a distinct-value count. Mutates the schemas in place."""
+    """Optional participant- or text-identifier step: one picker per table
+    (UX-53 r13), then a distinct-value count. Mutates the schemas in place."""
     core = [f for f, present in ((raw_fix, has_fix), (raw_words, has_words)) if present]
     common_cols = [c for c in core[0].columns if all(c in f.columns for f in core)]
     prop_primary = prop_f if has_fix else prop_w
     default = prop_primary.get(field_key)
     default_cols = [default] if default in common_cols else []
-    _render_unified_identifier(
+    _render_identity_field(
         field_key,
         label,
         help_text,
-        f"Different {noun} columns per table",
-        body,
+        cells if cells is not None else [body] * 2,
         raw_words,
         raw_fix,
         word_schema,
         fix_schema,
         has_words,
         has_fix,
-        common_cols,
         default_cols,
     )
     pp, pp_schema = (raw_fix, fix_schema) if has_fix else (raw_words, word_schema)
     n = _distinct_id_count(pp, pp_schema.get(field_key))
     if n is not None:
-        body.success(
+        (extras_host if extras_host is not None else body).success(
             f"✓ **{n:,}** {noun} — make sure this is the number of {noun} you "
             "expect to see."
         )
@@ -2096,6 +2044,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     if has_words or has_fix:
+        # UX-53 r13: the whole theme on one row. Three identifiers x one picker
+        # per present table, so 6 cells with both tables and 3 with one — each
+        # `label | field`, squeezed, with the labels ellipsising and giving
+        # their full text on hover. The counts go to a full-width strip below:
+        # they are sentences, and a sentence in a sixth of the width is a
+        # column of single words.
+        n_tables = int(has_fix) + int(has_words)
+        id_cells = s2.columns(3 * n_tables, gap="small", vertical_alignment="center")
+        id_extras = s2.container()
         _wizard_trial_step(
             s2,
             raw_words,
@@ -2106,13 +2063,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
+            cells=id_cells[0:n_tables],
+            extras_host=id_extras,
         )
         _wizard_participant_text_step(
             "participant",
             "Participant ID",
             "readers",
-            "Pick the reader column — or several to compose an id. Leave empty "
-            "for a single anonymous reader.",
+            "The reader column — or several to compose an id. Leave empty for a "
+            "single anonymous reader.",
             s2,
             raw_words,
             raw_fix,
@@ -2122,13 +2081,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
+            cells=id_cells[n_tables : 2 * n_tables],
+            extras_host=id_extras,
         )
         _wizard_participant_text_step(
             "text_id",
             "Text ID",
             "texts",
-            "Pick the text column — or several to compose an id. Leave empty to "
-            "fall back to the trial id.",
+            "The text column — or several to compose an id. Leave empty to fall "
+            "back to the trial id.",
             s2,
             raw_words,
             raw_fix,
@@ -2138,6 +2099,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
+            cells=id_cells[2 * n_tables : 3 * n_tables],
+            extras_host=id_extras,
         )
         # DATA-21 multipart screens: beside, not inside, the logical trial id.
         # The "only for trials made of ordered screens" explanation lives on the
@@ -2200,7 +2163,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "col_map_fix",
                 s3,
                 ["x", "y", "timestamp", "duration", "fixation_id", "word_id"],
-                per_row=4,
+                per_row=6,
             )
         )
         # Validation problems render against their own sub-block rather than as
@@ -2263,7 +2226,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "timestamp",
                 "text",
             ],
-            per_row=4,
+            per_row=8,
         )
     else:
         raw_gaze_schema = {}

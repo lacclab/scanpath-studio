@@ -304,12 +304,16 @@ def _enter_add_data_wizard() -> None:
     _reset_wizard_widgets()
 
 
-def _map_section(raw, specs, proposed, prefix, host, keys, *, per_row: int = 1) -> dict:
+def _map_section(
+    raw, specs, proposed, prefix, host, keys, *, per_row: int = 1, stacked: bool = True
+) -> dict:
     """Render a subset of a table's mapping fields. Returns that partial mapping.
 
     ``per_row`` (UX-53 r7) is how many fields share a line — four fixation
     fields fit where one used to, which is what gets the whole mapping onto one
-    screen.
+    screen. ``stacked`` keeps every wizard field's title *above* its control,
+    including a lone field dropped into a row the caller laid out (r17); the
+    🗂️ Data page keeps `label | field` by not going through here.
 
     No ``on_change`` any more: the accordion's open state is owned by the keyed
     expander and moved only by explicit navigation (``wizard_shell``), so a
@@ -328,6 +332,7 @@ def _map_section(raw, specs, proposed, prefix, host, keys, *, per_row: int = 1) 
         only_keys=keys,
         header=False,
         columns_per_row=per_row,
+        stack_labels=stacked,
     )
 
 

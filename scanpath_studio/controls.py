@@ -1699,6 +1699,7 @@ def column_mapping_ui(
     header: bool = True,
     detected_label: str = "auto-detected",
     columns_per_row: int = 1,
+    stack_labels: bool | None = None,
 ) -> dict[str, str | None]:
     """Render a column-mapping expander letting users override the inferred mapping.
 
@@ -1716,10 +1717,16 @@ def column_mapping_ui(
 
     ``columns_per_row`` (UX-53 r7) packs several fields onto one line — four
     fixation fields fit where one used to sit, and a mapping that fits on a
-    screen is one you can check against itself. Above 1 the row shape flips from
-    ``label | field`` to label-over-field, since four labelled pairs side by side
-    would leave a sliver for each select. The default of 1 keeps the 🗂️ Data
-    page's editor exactly as it was.
+    screen is one you can check against itself. The default of 1 keeps the
+    🗂️ Data page's editor exactly as it was.
+
+    ``stack_labels`` picks the row shape: label *above* the control (the wizard)
+    or ``label | field`` beside it (the Data page). It defaults to
+    ``columns_per_row > 1``, which is right for both of those — but a caller
+    that renders **one** field into a cell of a row it built itself still wants
+    the stacked shape, and inferring it from the field count got that wrong
+    (UX-53 r17: the screen fields landed on the identity rows with their titles
+    beside them while every neighbour had its title above).
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs)
     # No `"(none)"` entry any more (UX-53 r10): "not mapped" is the select's own
@@ -1730,6 +1737,7 @@ def column_mapping_ui(
     # already tried to add the dataset (before that, empty is not an error).
     required_keys = {spec["key"] for spec in field_specs if spec.get("required")}
     add_attempted = bool(st.session_state.get(ADD_ATTEMPTED_KEY))
+    stacked = columns_per_row > 1 if stack_labels is None else stack_labels
     #: state -> the keyed cells in that state, filled as rows render and emitted
     #: as ONE <style> block at the end. Per-row style tags would be one extra
     #: element per field on a page whose whole problem is length.
@@ -1780,13 +1788,17 @@ def column_mapping_ui(
         later elements are written, which is what makes the order work.
         """
         host = _host_for(field_key)
-        if columns_per_row > 1:
+        if stacked:
             # UX-53 r14: label over field. Each cell writes its title first and
             # its select second, so across the row the titles line up on one
             # line and the controls on the next — and the select gets the cell's
             # full width instead of splitting it with the label, which is what
             # keeps a long column name legible.
-            cell = _grid_cell(host)
+            #
+            # `host` itself is the cell when the caller supplied one (a single
+            # field dropped into a row it laid out); only a multi-field group
+            # cuts its own grid.
+            cell = _grid_cell(host) if columns_per_row > 1 else host.container()
             head = cell.container()
             label_col, flag_col = head.columns(
                 _GRID_LABEL_W, gap=None, vertical_alignment="center"

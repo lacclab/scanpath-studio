@@ -552,6 +552,15 @@ def get_app_css() -> str:
     }
     .st-key-wiz_name_box label p { font-weight: 700; }
 
+    /* UX-57 — the Word box heading. It labels a group (a format radio plus a
+       row of four coordinates), so it is set like the other group headings
+       rather than like a field label, and its description is on hover. */
+    .sps-box-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+        margin: 0.2rem 0 0.15rem;
+    }
+
     /* UX-53 r15 — the table name at the head of an identity row. It labels the
        line once so the three field titles beside it need not each repeat it,
        and it sits on the titles' baseline rather than the controls'. */

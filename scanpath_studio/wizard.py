@@ -1140,16 +1140,22 @@ def _remember_setup(values: dict) -> None:
     st.session_state["_wizard_setup_recall"] = recall
 
 
-def _setup_mode(host, group: str, options: list, help_text: str):
+def _setup_mode(host, group: str, options: list, help_text: str, label=None):
     """One group's ``st.radio(index=None)`` — nothing preselected, ever.
 
     Returns the chosen label or ``None``. The mode keys are wizard-local UI state
     and deliberately **not** wire format (same reasoning as ``share_identity_mode``
     in ``url_state.py``): what travels is the resolved value plus its provenance,
     not which radio button produced it.
+
+    ``label`` overrides the heading for display only (UX-58). Three groups
+    side by side leave no room for *Physical size & viewing distance*, and a
+    heading that wraps to two lines drops its column out of line with the other
+    two — which is the whole point of the row. `SETUP_GROUP_LABELS` stays the
+    name everything else reports by.
     """
     return host.radio(
-        SETUP_GROUP_LABELS[group],
+        label or SETUP_GROUP_LABELS[group],
         options,
         index=None,
         key=_SETUP_MODE_KEYS[group],
@@ -1166,19 +1172,21 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
     returns before the rail renders, so no widget on a ``global_*`` key exists
     this run.
     """
-    host.caption(
-        "These describe the screen the data was **recorded** on, not the screen "
-        "you are looking at now. Pick how you know each one — there is no default, "
-        "because a wrong guess here silently rescales every figure."
-    )
+    # UX-58: three columns, one per group, so their headings sit at the same
+    # line height. Each column starts with its own radio, which is what keeps
+    # them level even though what follows differs per answer (two number inputs,
+    # an info box, or a caption) and so the columns end at different heights.
+    # The description that used to print here is now the section's hover text.
+    screen_host, geom_host, text_host = host.columns(3, gap="medium")
 
     # --- Screen -------------------------------------------------------------
     screen_mode = _setup_mode(
-        host,
+        screen_host,
         "screen",
         [_SCREEN_KNOW, _SCREEN_ESTIMATE, _SCREEN_DEFAULT],
         "The presentation monitor's resolution in pixels. Everything is drawn in "
         "these coordinates.",
+        label="Screen",
     )
     est_w, est_h = compute_canvas_size(words_raw, fix_raw)
     canvas_w, canvas_h = (
@@ -1186,40 +1194,39 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         _recalled("canvas_height", 1440),
     )
     if screen_mode == _SCREEN_KNOW:
-        cols = host.columns(2)
-        canvas_w = cols[0].number_input(
+        canvas_w = screen_host.number_input(
             "Width (px)", 100, 10000, int(canvas_w), key="wizard_setup_screen_w"
         )
-        canvas_h = cols[1].number_input(
+        canvas_h = screen_host.number_input(
             "Height (px)", 100, 10000, int(canvas_h), key="wizard_setup_screen_h"
         )
     elif screen_mode == _SCREEN_ESTIMATE:
         canvas_w, canvas_h = est_w, est_h
-        host.info(
+        screen_host.info(
             f"Estimated **{est_w} × {est_h} px** from the extent of your word "
             "boxes and fixations. This is a **lower bound** — text rarely fills "
             "the whole screen, so the real monitor was probably larger."
         )
     elif screen_mode == _SCREEN_DEFAULT:
         canvas_w, canvas_h = 2560, 1440
-        host.caption("Recorded as **assumed** — a common 1440p monitor.")
+        screen_host.caption("Recorded as **assumed** — a common 1440p monitor.")
 
     # --- Physical size & viewing distance -----------------------------------
     geom_mode = _setup_mode(
-        host,
+        geom_host,
         "geometry",
         [_GEOM_KNOW, _GEOM_DEFAULT, _GEOM_SKIP],
         "Needed only to express distances in degrees of visual angle. Skipping is "
         "a real answer — the app then hides the numbers it cannot honestly derive.",
+        label="Physical size",
     )
     mon_mm = float(_recalled("monitor_width_mm", 597.0))
     dist_mm = float(_recalled("viewing_distance_mm", 800.0))
     if geom_mode == _GEOM_KNOW:
-        cols = host.columns(2)
-        mon_mm = cols[0].number_input(
+        mon_mm = geom_host.number_input(
             "Monitor width (mm)", 50.0, 2000.0, mon_mm, key="wizard_setup_monitor_mm"
         )
-        dist_mm = cols[1].number_input(
+        dist_mm = geom_host.number_input(
             "Viewing distance (mm)",
             50.0,
             5000.0,
@@ -1227,15 +1234,15 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
             key="wizard_setup_distance_mm",
         )
         if canvas_w and mon_mm > 0 and dist_mm > 0:
-            host.caption(
+            geom_host.caption(
                 f"→ **{pixels_per_degree(dist_mm, canvas_w, mon_mm):.1f} px** per "
                 "degree of visual angle."
             )
     elif geom_mode == _GEOM_DEFAULT:
         mon_mm, dist_mm = 597.0, 800.0
-        host.caption("Recorded as **assumed** — typical lab values.")
+        geom_host.caption("Recorded as **assumed** — typical lab values.")
     elif geom_mode == _GEOM_SKIP:
-        host.caption(
+        geom_host.caption(
             "Visual-angle units stay **hidden** for this dataset rather than being "
             "computed from a default."
         )
@@ -1247,36 +1254,38 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         # option that silently does nothing.
         text_options.insert(0, _TEXT_BOXES)
     text_mode = _setup_mode(
-        host,
+        text_host,
         "text",
         text_options,
         "How big the reading text was drawn. Word labels are rendered at this size "
         "so the figure matches what the participant saw.",
+        label="Text size",
     )
     scale_to_boxes = True
     base_font = int(_recalled("base_font_size", 16))
     font_family = str(_recalled("font_family", FONT_FAMILY))
     if text_mode == _TEXT_BOXES:
         scale_to_boxes = True
-        host.caption("Label size is derived from each word box — the usual choice.")
+        text_host.caption(
+            "Label size is derived from each word box — the usual choice."
+        )
     elif text_mode == _TEXT_FONT:
         scale_to_boxes = False
-        cols = host.columns(2)
-        font_pt = cols[0].number_input(
+        font_pt = text_host.number_input(
             "Stimulus font (pt)",
             4.0,
             96.0,
             float(_recalled("stimulus_font_pt", 12.0)),
             key="wizard_setup_font_pt",
         )
-        font_family = cols[1].text_input(
+        font_family = text_host.text_input(
             "Font family", value=font_family, key="wizard_setup_font_family"
         )
         # pt→px needs a DPI, which needs the physical width. Under a skipped
         # geometry group there is no honest DPI, so the conversion is withheld
         # and the point size falls back to being read as pixels.
         if geom_mode == _GEOM_SKIP:
-            host.warning(
+            text_host.warning(
                 "Converting points to pixels needs the monitor's physical width, "
                 "which was skipped above. The size is being read as **pixels**; "
                 "answer *Physical size & viewing distance* for a true pt → px "
@@ -1286,11 +1295,11 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
         else:
             dpi = float(canvas_w) / (float(mon_mm) / 25.4) if mon_mm > 0 else 96.0
             base_font = int(min(max(round(font_pt_to_px(font_pt, dpi)), 6), 72))
-            host.caption(f"→ **{base_font} px** at {dpi:.0f} DPI.")
+            text_host.caption(f"→ **{base_font} px** at {dpi:.0f} DPI.")
     elif text_mode == _TEXT_DEFAULT:
         scale_to_boxes = False
         base_font = 16
-        host.caption("Recorded as **assumed** — a 16 px reading font.")
+        text_host.caption("Recorded as **assumed** — a 16 px reading font.")
 
     snapshot = SetupSnapshot(
         canvas_width=int(canvas_w),
@@ -2272,10 +2281,13 @@ def _render_data_setup(active: bool) -> _UploadResult:
         s_map,
         "setup",
         status=statuses.get("setup"),
+        # UX-58: the wording the step used to print as a caption inside its
+        # body. One description, on the heading's hover, like the rest of the
+        # page — there is no reason for a section to explain itself twice.
         caption=(
-            "The screen the data was recorded on. Nothing is preselected — say "
-            "whether each value is known, estimated from your data, a named "
-            "default, or skipped, so a default is never read as a measurement."
+            "These describe the screen the data was recorded on, not the screen "
+            "you are looking at now. Pick how you know each one — there is no "
+            "default, because a wrong guess here silently rescales every figure."
         ),
     )
     restored_setup = _restored_setup_snapshot()

@@ -1763,6 +1763,13 @@ def column_mapping_ui(
     #: group never continues a row started by the main one.
     grid: dict = {"cols": [], "used": 0, "host": None}
 
+    #: The word box's own row (UX-57). Reserved by `_render_box_format` and
+    #: drained by the four sub-field picks that follow it — a separate cursor
+    #: from `grid`, because the box is *one* top-level spec that expands into
+    #: four, so it cannot borrow the group's `columns_per_row` without pulling
+    #: the format radio into a cell meant for a select.
+    box_grid: dict = {"cells": [], "used": 0}
+
     def _grid_cell(host):
         """The next free cell in a `columns_per_row`-wide grid."""
         if grid["host"] is not host or grid["used"] >= columns_per_row:
@@ -1788,6 +1795,17 @@ def column_mapping_ui(
         later elements are written, which is what makes the order work.
         """
         host = _host_for(field_key)
+        if field_key in _ALL_BOX_KEYS and box_grid["used"] < len(box_grid["cells"]):
+            # A box sub-field takes the next cell of the row the box reserved,
+            # so the four sit side by side under one heading (UX-57).
+            cell = box_grid["cells"][box_grid["used"]]
+            box_grid["used"] += 1
+            head = cell.container()
+            label_col, flag_col = head.columns(
+                _GRID_LABEL_W, gap=None, vertical_alignment="center"
+            )
+            _row_label(label_col, field_label, help_text)
+            return cell, flag_col
         if stacked:
             # UX-53 r14: label over field. Each cell writes its title first and
             # its select second, so across the row the titles line up on one
@@ -1939,18 +1957,39 @@ def column_mapping_ui(
             )
 
         def _render_box_format(spec: dict) -> str:
+            """The box's heading, its format radio, and the row its four
+            sub-fields will render into (UX-57).
+
+            The description moves onto the heading's hover, like every other
+            explanation on this page (UX-53), and the row is reserved *here*
+            because `_assemble_mapping` calls this immediately before picking
+            the four sub-fields — so by the time they ask `_row` for a cell,
+            there is one waiting.
+            """
             fmt_key = f"{state_key_prefix}_box_format"
             if fmt_key not in st.session_state:
                 # Seed via session state (no `index=`) so it survives reruns
                 # and never fights a default arg — same pattern as the
                 # multiselect below.
                 st.session_state[fmt_key] = _default_box_format(proposed)
-            star = " \\*" if spec.get("required") else ""
+            star = " *" if spec.get("required") else ""
             box_host = hosts["main"]
-            box_host.markdown(f"**{spec['label']}**{star}")
+            title = html.escape(_plain(spec["label"]) + star)
             if spec.get("help"):
-                box_host.caption(spec["help"])
-            return box_host.radio(
+                tip = html.escape(
+                    f"{_plain(spec['label'])} — {_plain(spec['help'])}", quote=True
+                )
+                box_host.markdown(
+                    f'<div class="sps-box-title"><span class="sps-fhelp" '
+                    f'data-tip="{tip}" aria-label="{tip}">{title}</span></div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                box_host.markdown(
+                    f'<div class="sps-box-title">{title}</div>',
+                    unsafe_allow_html=True,
+                )
+            chosen = box_host.radio(
                 "Coordinate format",
                 options=list(_BOX_SUBFIELDS),
                 key=fmt_key,
@@ -1958,6 +1997,15 @@ def column_mapping_ui(
                 label_visibility="collapsed",
                 persist_state="session",
             )
+            if stacked:
+                # One row of four for the sub-fields, matching every other
+                # group. Only in the wizard: the 🗂️ Data page's editor keeps one
+                # field per row, and it is `stacked` that tells the two apart.
+                box_grid["cells"] = list(
+                    box_host.columns(len(_BOX_SUBFIELDS[chosen]), gap=_LABEL_GAP)
+                )
+                box_grid["used"] = 0
+            return chosen
 
         def _render_multi(spec: dict, default, label: str) -> list[str]:
             state_key = f"{state_key_prefix}_{spec['key']}"

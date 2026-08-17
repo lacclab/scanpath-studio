@@ -521,6 +521,34 @@ window.TRACKER = {
     "**Screen**, **Physical size** and **Text size** titles should sit at the same",
     "line height."
    ],
+   "whatWasDone": [
+    "**Three columns, one per group**, so the headings sit at the same line",
+    "height. Each column starts with its own radio, which is what keeps them level",
+    "even though the columns end at different heights — what follows a radio",
+    "depends on the answer (two number inputs, an `st.info`, or a caption).",
+    "",
+    "**The headings are shortened for display only** — *Screen*, *Physical size*,",
+    "*Text size*, the names used in the request. `_setup_mode` takes a `label`",
+    "override; `SETUP_GROUP_LABELS` is untouched, so the review table, the",
+    "blockers and every other consumer still report the full names. *Physical size",
+    "& viewing distance* wrapped to two lines in a third of the width, which drops",
+    "its column out of line with the other two — the whole point of the row.",
+    "",
+    "**Each group's follow-ups render into its own column**, and the two",
+    "number-input pairs stack there instead of splitting a third of the width in",
+    "half.",
+    "",
+    "**The description is the section's hover text**, in the wording asked for;",
+    "the `st.caption` inside the body is gone. The section already had a caption",
+    "of its own saying much the same thing — there is now one description, not",
+    "two.",
+    "",
+    "Nothing preselected is intact: all three radios keep `index=None`, and",
+    "`setup_blockers` still holds **✅ Add dataset** until each is answered."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**Today it is three stacked groups.** `wizard._wizard_setup_step`",
     "([`wizard.py`](scanpath_studio/wizard.py:1160)) writes the description as a",
@@ -555,6 +583,10 @@ window.TRACKER = {
     "",
     "Related: #UX-53 (the hover-only rule and the row shape), #UX-57 (the same two",
     "asks for the Word box), #DATA-22 (why nothing is preselected)."
+   ],
+   "decisions": [
+    "Review: open **➕ Add data** → *Recording setup*. The three headings should sit level; hover the section title for the description. Worth checking each radio's follow-ups at a third of the width — *I know it* on Screen puts two number inputs in one column, and the pt → px caption under *Text size* is the longest line in there.",
+    "The headings are shortened **for display only** (*Physical size*, not *Physical size & viewing distance*) so three fit across. If you would rather keep the full names, they need two rows or a smaller type size — say which."
    ]
   },
   {
@@ -581,27 +613,26 @@ window.TRACKER = {
     "the title as hover text, to save the space."
    ],
    "whatWasDone": [
-    "Nothing yet — picked up 2026-08-17, scoped only. What follows in *What's",
-    "left* is the work; the *Background* below is what a first look turned up."
+    "**The four coordinates are one row**, names on a line and selects below,",
+    "like every other group. `_render_box_format` reserves that row itself and",
+    "`_row` drains it (`box_grid`), rather than the box borrowing the group's",
+    "`columns_per_row` — which was the trap noted below: that grid is keyed on",
+    "*top-level* specs, so raising it would have flowed the edges/origin radio",
+    "into a cell meant for a select. The row is as wide as the chosen format has",
+    "fields, so switching edges ↔ origin+size re-cuts it.",
+    "",
+    "**The description is on the heading's hover** (`.sps-box-title` +",
+    "`.sps-fhelp`), and the `st.caption` that printed it is gone.",
+    "",
+    "**Only in the wizard.** The row is cut when `stacked` is set, which is what",
+    "already separates the wizard from the 🗂️ Data page's editor — that page keeps",
+    "one field per row, verified rather than assumed.",
+    "",
+    "`_assemble_mapping` is untouched, so all eight box keys are still emitted",
+    "with the inactive four as `None`."
    ],
    "whatsLeft": [
-    "Give the word box its **own row of four**: the sub-field names on one line,",
-    "their selects on the next, matching every other group. Not by raising",
-    "`columns_per_row` on the box's `_map_section` call — that grid is keyed on",
-    "*top-level* specs, so the edges/origin radio would flow into a cell meant for",
-    "a select. A small renderer of its own is the likelier shape.",
-    "",
-    "Move the `box` spec's `help` off the page and onto the title's tooltip, the",
-    "way `_row_label` already does for every ordinary field, and delete the",
-    "`host.caption` call in `_render_box_format`.",
-    "",
-    "Keep the format radio working across both layouts — the four sub-fields it",
-    "chooses between are different keys (`left/right/top/bottom` vs.",
-    "`x/y/width/height`), and `_assemble_mapping` still has to emit all eight box",
-    "keys with the inactive four as `None`.",
-    "",
-    "Check the 🗂️ Data page's own mapping editor, which shares this code path but",
-    "keeps one field per row — it must not pick up the packed layout."
+    "Nothing."
    ],
    "background": [
     "**Why it is the odd one out.** Every other mapping group goes through",
@@ -636,6 +667,10 @@ window.TRACKER = {
     "Related: #UX-53 (which established the row shape and the hover-only rule),",
     "#UX-55 (whether the box belongs in the coupled identity rows at all — if it",
     "moves there, this layout question moves with it)."
+   ],
+   "decisions": [
+    "Review: open **➕ Add data** → *Fixation features* → the **Word box**. The four coordinates should be one row of names over selects; hover the *Word box* title for the description. Switch the edges ↔ origin+size radio and check the row re-cuts cleanly.",
+    "The row is only cut in the wizard — the 🗂️ Data page's mapping editor still lists the box one field per row, since it shares its width with a preview table. Fine, or should that page match?"
    ]
   },
   {

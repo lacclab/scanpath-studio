@@ -810,6 +810,14 @@
       "archived": true,
       "updated": "2026-08-17"
     },
+    "UX-57": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-17"
+    },
     "VAL-1": {
       "status": "Closed",
       "priority": "Normal",

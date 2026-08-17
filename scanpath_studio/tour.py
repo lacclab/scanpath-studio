@@ -1639,23 +1639,32 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "📂 Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset on one "
-            "screen: upload them, say which columns mean what, add it. Follow "
+            "Turn your eye-tracking tables into an interactive dataset in two "
+            "steps: upload the files, then say which columns mean what. Follow "
             "along with **Next**, or **Skip** to dive in."
         ),
         "selector": "",
         "step_id": None,
     },
     {
-        "title": "Set up your dataset",
+        "title": "1 · Upload data files",
         "body": (
-            "Add your **Fixations** and/or **Words / IA** tables, name it, then "
-            "work down one screen: **Trials & readers**, **Fixations & text**, "
-            "**Recording setup**, **Extra fields**. Anything missing is listed "
-            "above **✅ Add dataset**. 👀"
+            "Name the dataset at the top, then add your **Fixations** and/or "
+            "**Words / IA** tables — CSV / TSV / Parquet, several files or "
+            "either alone. Raw gaze and a participant table are optional."
         ),
-        "selector": ".st-key-wiz_open_setup",
-        "step_id": "setup",
+        "selector": ".st-key-wiz_part_data",
+        "step_id": "data",
+    },
+    {
+        "title": "2 · Map data fields",
+        "body": (
+            "Say which column is what: **Trials & readers**, **Fixation "
+            "features**, **Recording setup**, **Extra fields**. Anything still "
+            "missing is listed above **✅ Add dataset**. 👀"
+        ),
+        "selector": ".st-key-wiz_part_mapping",
+        "step_id": "mapping",
     },
 ]
 

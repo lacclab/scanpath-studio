@@ -89,18 +89,14 @@ class WizardStep:
 #: uploads it belongs with, and *Name & add* (the old step 7) became the head and
 #: foot of the combined part: the dataset name on top, validation and
 #: **✅ Add dataset** at the bottom.
-#: UX-53 round 3 — **one** part. Two was still two clicks and two headers for
-#: what is a single continuous job: upload the tables, say what the columns
-#: mean, add it. Everything renders in one flow, ordered by
-#: `wizard._render_data_setup`'s own containers.
+#: UX-53 round 8 — two **linear** parts. Upload always precedes mapping (there
+#: is nothing to map until a file is read), so they are labelled but not
+#: navigable: no chips, no accordion, no open state. `part()` renders each as a
+#: one-line headline, and the dataset name sits above both because it belongs to
+#: neither.
 STEPS: tuple[WizardStep, ...] = (
-    WizardStep(
-        "setup",
-        1,
-        "Set up your dataset",
-        "Upload your tables, map their columns, add it",
-        True,
-    ),
+    WizardStep("data", 1, "Upload data files", "The tables you exported", True),
+    WizardStep("mapping", 2, "Map data fields", "Which column is what", True),
 )
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
@@ -124,6 +120,30 @@ SECTION_TITLES: dict[str, str] = {
 def open_key(step_id: str) -> str:
     """Session key holding whether ``step_id``'s expander is open."""
     return f"{OPEN_KEY_PREFIX}{step_id}"
+
+
+def part_key(step_id: str) -> str:
+    """Container key for a part, and so its `.st-key-…` CSS/tour selector."""
+    return f"wiz_part_{step_id}"
+
+
+def part(host, step: WizardStep, *, status: StepStatus | None = None):
+    """One linear part of the wizard: a minimal headline, then its body.
+
+    UX-53 r8. The parts run in a fixed order — there is nothing to map before a
+    file is read — so this is a *label*, not navigation: no expander, no chips,
+    no open state, and therefore none of the DATA-19 / DATA-22 collapse
+    machinery. It costs one line, which is the point; the previous shapes spent
+    a header and a click each on a sequence with no choices in it.
+    """
+    box = host.container(key=part_key(step.id))
+    mark = f"{badge(status)} " if status else ""
+    box.markdown(
+        f'<div class="sps-wiz-part"><span class="sps-wiz-part-n">{step.number}</span>'
+        f"{mark}{html.escape(step.title)}</div>",
+        unsafe_allow_html=True,
+    )
+    return box.container()
 
 
 def badge(status: StepStatus) -> str:

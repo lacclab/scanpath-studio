@@ -733,10 +733,14 @@ class TestTheWizardStep:
         at.run(timeout=120)
         assert not at.exception, at.exception
 
-        # UX-53 folded the seven steps into one part, and the participant table
-        # moved from its own step 5 up beside the uploads — it is an upload, so
-        # it belongs with them, under no heading of its own (r6).
-        assert [s.number for s in wizard_shell.STEPS] == [1]
+        # UX-53 folded the seven steps into two linear parts, and the participant
+        # table moved from its own step 5 up beside the uploads — it is an
+        # upload, so it belongs with them, under no heading of its own (r6).
+        assert [s.number for s in wizard_shell.STEPS] == [1, 2]
+        assert [s.title for s in wizard_shell.STEPS] == [
+            "Upload data files",
+            "Map data fields",
+        ]
         assert "readers" not in wizard_shell.STEPS_BY_ID
         assert "readers" not in wizard_shell.SECTION_TITLES
 

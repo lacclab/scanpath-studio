@@ -515,6 +515,43 @@ def get_app_css() -> str:
     }
     .sps-wiz-note a { text-decoration: none; }
 
+    /* UX-53 round 8 — a wizard part's headline. The two parts are linear, so
+       this labels rather than navigates: one line, a numbered chip, and a rule
+       to separate it from the part above. Heavier than `.sps-wiz-section` (its
+       topics sit *inside* a part) and lighter than a real heading, since the
+       page already has its own. */
+    .sps-wiz-part {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin: 1rem 0 0.3rem;
+        padding-top: 0.6rem;
+        border-top: 2px solid rgba(128, 128, 128, 0.28);
+        font-weight: 700;
+        font-size: 1.02rem;
+        letter-spacing: 0.01em;
+    }
+    .sps-wiz-part-n {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.35rem;
+        height: 1.35rem;
+        border-radius: 999px;
+        background: rgba(128, 128, 128, 0.22);
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+    /* The dataset name leads the wizard and names the whole thing, so it is set
+       larger than an ordinary field rather than looking like the first of them. */
+    .st-key-wiz_name_box input {
+        font-size: 1.05rem;
+        font-weight: 600;
+        padding-top: 0.55rem;
+        padding-bottom: 0.55rem;
+    }
+    .st-key-wiz_name_box label p { font-weight: 700; }
+
     /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
        nothing else; which column was detected is on its tooltip. The old inline
        sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") ran wider than the

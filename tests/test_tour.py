@@ -663,5 +663,6 @@ def test_wizard_guide_steps_are_anchored_to_real_wizard_steps():
     )
     for step in anchored:
         assert step["step_id"] in known
-        # Keyed expanders supply this selector for free.
-        assert step["selector"] == f".st-key-{wizard_shell.open_key(step['step_id'])}"
+        # UX-53 r8: the parts are linear labels, not keyed expanders, so the
+        # selector comes from their own container key.
+        assert step["selector"] == f".st-key-{wizard_shell.part_key(step['step_id'])}"

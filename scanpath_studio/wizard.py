@@ -1752,20 +1752,22 @@ def _mark_add_attempted() -> None:
 
 
 def _wizard_name_header(host, active: bool) -> None:
-    """The dataset's name, at the head of the combined part (UX-53).
+    """The dataset's name, above both parts (UX-53 r8).
 
     It used to sit in step 7 beside *Add dataset*, i.e. below every mapping
-    field. The name is what the dataset is *called* — the user asked for it up
-    front and more prominent — so it leads the part, and the button that consumes
-    it closes the part.
+    field. The name is what the whole dataset is *called*, so it belongs to
+    neither the upload nor the mapping — it leads the wizard, in its own keyed
+    box that `styles.py` sizes up.
     """
     if not active:
         return
     st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
-    host.text_input(
-        "**Dataset name**",
+    box = host.container(key="wiz_name_box")
+    box.text_input(
+        "Dataset name",
         key="wizard_dataset_name",
         help="Shown in the Data source list so you can switch back to it.",
+        placeholder="Name this dataset",
     )
 
 
@@ -1909,10 +1911,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         maybe_show_wizard_guide()
         render_spotlight_wizard_guide()
         render_wizard_guide_button(st)
-        # Must run before any expander instantiates — it writes the `wiz_open_*`
-        # widget keys.
-        wizard_shell.seed_open_step(statuses)
-        wizard_shell.render_progress(st.container(), statuses)
+        # UX-53 r8: no progress chips. They were navigation for an accordion
+        # that no longer exists — the two parts are linear, so there is nothing
+        # to flip between and a chip row would be a menu with one path through
+        # it.
         body = st.container()
     else:
         panel = st.expander("📋 Data & mapping", expanded=False)
@@ -1925,20 +1927,25 @@ def _render_data_setup(active: bool) -> _UploadResult:
             st.session_state["setup_complete"] = False
             st.rerun()
 
-    # UX-53 r3: **one** panel. `s1` (uploads + readers) and `s_map` (the mapping
-    # sections + the footer) are two containers inside it purely to fix the
-    # order — the readers section is written long after the mapping schemas
-    # exist, but has to appear beside the uploads it belongs with.
-    panel_host = wizard_shell.step_panel(
-        body,
-        wizard_shell.STEPS[0],
-        statuses.get("setup", wizard_shell.StepStatus.TODO),
-        active=active,
-    )
-    s1 = panel_host.container()
-    s_map = panel_host.container()
+    # UX-53 r8. The dataset's **name** sits above both parts: it names the whole
+    # thing, so it belongs to neither the upload nor the mapping.
+    _wizard_name_header(body, active)
 
-    # === Your data ===========================================================
+    # Two linear parts. `part()` while the wizard is active — a one-line
+    # headline, no expander — and `step_panel`'s bold-heading degradation in the
+    # collapsed *Data & mapping* review panel, which is itself an expander and
+    # so can nest neither.
+    def _part(step_id: str):
+        step = wizard_shell.STEPS_BY_ID[step_id]
+        status = statuses.get(step_id, wizard_shell.StepStatus.TODO)
+        if active:
+            return wizard_shell.part(body, step, status=status)
+        return wizard_shell.step_panel(body, step, status, active=False)
+
+    s1 = _part("data")
+    s_map = _part("mapping")
+
+    # === 1 · Upload data files ===============================================
     if active:
         s1.segmented_control(
             "Dataset format",
@@ -2065,8 +2072,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     fix_schema: dict = {}
     has_words, has_fix = not raw_words.empty, not raw_fix.empty
 
-    # === Map it & add it =====================================================
-    _wizard_name_header(s_map, active)
+    # === 2 · Map data fields =================================================
 
     s2 = wizard_shell.section(
         s_map, "identity", status=statuses.get("identity"), caption=_IDENTITY_CAPTION

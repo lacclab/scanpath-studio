@@ -1427,35 +1427,45 @@ def _assemble_mapping(
 #: errors before the user has done anything wrong (UX-53).
 ADD_ATTEMPTED_KEY = "_wizard_add_attempted"
 
-#: UX-53's three-colour field state. Rendered as a coloured dot beside the row's
-#: note, using Streamlit's own markdown colours so it follows the active theme
-#: rather than hard-coding hex that only reads on one background.
-_FIELD_MARK = {"user": ":green[●]", "auto": ":orange[●]", "missing": ":red[●]"}
+#: UX-53 round 4 — the field's state is a **tint on the select itself**, not a
+#: dot and a sentence beside it. `● ✨ auto-detected \`CURRENT_FIX_INDEX\`` was
+#: longer than the control it described, on every row. Low-alpha rgba so it
+#: tints whatever the active theme paints underneath rather than assuming a
+#: light background.
+_FIELD_TINT = {
+    "user": "rgba(34, 197, 94, 0.16)",
+    "auto": "rgba(234, 179, 8, 0.16)",
+    "missing": "rgba(239, 68, 68, 0.20)",
+}
 
 
-def _field_note(
+def _field_state(
     *, chosen, default, is_required: bool, attempted: bool, detected_label: str
-) -> str:
-    """The dot-and-caption for one mapping row, or ``""`` for nothing to say.
+) -> tuple[str, str]:
+    """``(state, hover)`` for one mapping row.
 
-    Three states, per UX-53: **green** the user picked it, **orange** it was
-    auto-detected and left alone, **red** it is required and still empty *after*
-    an add was attempted. A field that is optional and empty stays unmarked —
-    most rows on most datasets are exactly that, and a dot on every one of them
-    would carry no information.
+    ``state`` keys `_FIELD_TINT`: **user** picked it, **auto** detection found it
+    and it was left alone, **missing** it is required and still empty *after* an
+    add was attempted (before that, empty is simply not filled in yet). ``""``
+    for an optional empty field — most rows on most datasets, and tinting all of
+    them would say nothing.
+
+    ``hover`` is the ✨ icon's tooltip, and it is the only place the detected
+    column name is now written: the name is what made the old inline note run
+    past the width of the control it annotated, and it is looked at once.
     """
     unmapped = chosen in (None, NONE_OPTION)
     if unmapped:
         if is_required and attempted:
-            return f"{_FIELD_MARK['missing']} required — pick a column"
+            return "missing", "required — pick a column"
         if default:
-            return f"{_FIELD_MARK['auto']} ✨ {detected_label} `{default}` · not used"
-        return ""
+            return "auto", f"{detected_label} `{default}` · not used"
+        return "", ""
     if default and chosen == default:
-        return f"{_FIELD_MARK['auto']} ✨ {detected_label} `{default}`"
+        return "auto", f"{detected_label} `{default}`"
     if default:
-        return f"{_FIELD_MARK['user']} ✨ {detected_label} `{default}` · overridden"
-    return f"{_FIELD_MARK['user']} set by you"
+        return "user", f"{detected_label} `{default}` · overridden"
+    return "user", ""
 
 
 #: Marker key recording which table a stored mapping was made for.
@@ -1641,6 +1651,10 @@ def column_mapping_ui(
     # already tried to add the dataset (before that, empty is not an error).
     required_keys = {spec["key"] for spec in field_specs if spec.get("required")}
     add_attempted = bool(st.session_state.get(ADD_ATTEMPTED_KEY))
+    #: state -> the keyed cells in that state, filled as rows render and emitted
+    #: as ONE <style> block at the end. Per-row style tags would be one extra
+    #: element per field on a page whose whole problem is length.
+    tint_cells: dict[str, list[str]] = {}
     # UX-52 round 2 — "the column mapping can be overwhelming". Two changes:
     # every row is `label | field` (UX-51's shape, which the user asked for here
     # too), and the multipart/canvas fields fold into an **Advanced** group.
@@ -1676,6 +1690,12 @@ def column_mapping_ui(
         default = proposed.get(field_key)
         index = options.index(default) if default in options else 0
         field_col, note_col = _row(field_key, field_label, help_text)
+        # The select goes in its own keyed container so the state tint has
+        # something to attach to: Streamlit stamps `.st-key-<key>` on it, and the
+        # one <style> block emitted at the end of this mapping lists the cells
+        # per state (see `tint_cells`).
+        cell_key = f"{state_key_prefix}_{field_key}_cell"
+        field_col = field_col.container(key=cell_key)
         chosen = field_col.selectbox(
             field_label,
             options=options,
@@ -1695,18 +1715,25 @@ def column_mapping_ui(
         # readable without parsing the sentence. DATA-24: `(none)` gets its own
         # wording — it used to fall into the plain branch, so a field detection
         # had found but the widget was not using read exactly like one it was.
-        note = _field_note(
+        state, hover = _field_state(
             chosen=chosen,
             default=default if default in df.columns else None,
             is_required=field_key in required_keys,
             attempted=add_attempted,
             detected_label=detected_label,
         )
-        if note:
-            # `caption`, not `markdown(..., unsafe_allow_html=True)`: the colour
-            # is Streamlit's own `:green[…]` markdown, which is not parsed inside
-            # raw HTML — and caption is the small type this note has always used.
-            note_col.caption(note)
+        if state:
+            tint_cells.setdefault(state, []).append(cell_key)
+        if hover:
+            # Icon only. The sentence — which column was detected, and whether it
+            # was overridden or left unused — is on the icon's tooltip, reusing
+            # the rail's CSS hover (`.sps-fhelp`, 120ms) rather than the
+            # browser's ~1s native one.
+            note_col.markdown(
+                f'<span class="sps-map-flag sps-fhelp" '
+                f'data-tip="{html.escape(hover, quote=True)}">✨</span>',
+                unsafe_allow_html=True,
+            )
         return None if chosen == NONE_OPTION else chosen
 
     host = container if container is not None else st.container()
@@ -1808,7 +1835,12 @@ def column_mapping_ui(
                 persist_state="session",
             )
             if default and default in df.columns:
-                note_col.caption(f"✨ {detected_label} `{default}`")
+                note_col.markdown(
+                    f'<span class="sps-map-flag sps-fhelp" '
+                    f'data-tip="{html.escape(f"{detected_label} `{default}`", quote=True)}">'
+                    "✨</span>",
+                    unsafe_allow_html=True,
+                )
             return list(chosen_cols)
 
         mapping = _assemble_mapping(
@@ -1820,7 +1852,29 @@ def column_mapping_ui(
             pick_box_format=_render_box_format,
             pick_multi=_render_multi,
         )
+        _emit_field_tints(tint_cells)
     return mapping
+
+
+def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
+    """One <style> block tinting each mapping cell by its state (UX-53 r4).
+
+    Written after the rows because a cell's state is only known once its widget
+    has returned a value. Targets the BaseWeb select *control* rather than the
+    Streamlit wrapper, so the colour lands on the box the user is looking at and
+    not on the whole row.
+    """
+    rules = []
+    for state, keys in tint_cells.items():
+        tint = _FIELD_TINT.get(state)
+        if not tint or not keys:
+            continue
+        selector = ", ".join(
+            f'.st-key-{key} div[data-baseweb="select"] > div' for key in keys
+        )
+        rules.append(f"{selector} {{ background-color: {tint}; }}")
+    if rules:
+        st.markdown(f"<style>{''.join(rules)}</style>", unsafe_allow_html=True)
 
 
 def data_dictionary_help_text() -> str:

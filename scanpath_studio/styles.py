@@ -515,6 +515,22 @@ def get_app_css() -> str:
     }
     .sps-wiz-note a { text-decoration: none; }
 
+    /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
+       nothing else; which column was detected is on its tooltip. The old inline
+       sentence ("✨ auto-detected `CURRENT_FIX_INDEX`") ran wider than the
+       select it annotated, on every row. */
+    .sps-map-flag {
+        display: inline-block;
+        font-size: 0.85rem;
+        line-height: 1;
+        opacity: 0.75;
+        cursor: help;
+    }
+    .sps-map-flag:hover { opacity: 1; }
+    /* The tooltip is anchored to a one-glyph carrier at the right-hand edge of
+       the row, so it opens leftwards rather than off the panel. */
+    .sps-map-flag.sps-fhelp::after { left: auto; right: 0; }
+
     /* Control rail: a subtle card so it reads as a panel, with a hair more
        breathing room between the stacked toggles than the app-wide gap:0 rule.
        UX-43 gives it its own scroll area exactly as tall as the plot row: the

@@ -849,9 +849,12 @@ window.TRACKER = {
     "  *number of trials* sits next to the trial mapping."
    ],
    "decisions": [
-    "Review: open the 🗂️ Data page and **➕ Add data**. Worth clicking through — the two parts and their line-title sections, the name at the top of part 2, the advanced blocks now inline, and **✅ Add dataset** with the download button beside it.",
+    "Review: open the 🗂️ Data page and **➕ Add data**. Worth clicking through — the dataset name above both parts, the two linear part headlines, the Fixations and AOI identity rows, the packed field rows below them, and **✅ Add dataset** with the download button beside it.",
+    "**Which fields belong in the coupled Fixations / AOI rows, and which stay in the sections below?** Those rows currently carry Trial ID · Participant ID · Text ID · Screen ID · Screen name per table, while everything else sits under *Fixation features*, *Word features* and *Word box*. The rows are for what **identifies** a row of data and the sections for what **describes** it — but *Word/IA ID* and the *Word box* are arguably identity too, and *Screen name* is arguably neither. Name what should move in either direction.",
+    "**Does the page go table-by-table, or stage-by-stage?** Today it is stage-by-stage: part 1 is every upload, part 2 is every mapping. The alternative is per table — Fixations (upload, then its fields), then AOI (upload, then its fields) — which keeps one table's whole story together and makes the two-row identity block unnecessary, at the cost of separating the two tables' trial ids, which is exactly the pair a reader compares. Worth deciding before more layout work goes in either shape.",
     "The CSS density values (block gap `0.55rem`, captions `0.86rem`, halved divider margins) were chosen without being able to see the rendered page. If the page now reads too tight or the captions too large, say which and I will adjust — they are one edit in `styles.py`.",
-    "**✅ Add dataset** is now *enabled* while required fields are empty, so that pressing it is what turns them red. It stores nothing in that state (asserted by a test). If you would rather it stayed greyed out, the red marking needs a different trigger — say so and I will pick one."
+    "**✅ Add dataset** is now *enabled* while required fields are empty, so that pressing it is what turns them red. It stores nothing in that state (asserted by a test). If you would rather it stayed greyed out, the red marking needs a different trigger — say so and I will pick one.",
+    "**Screen name** is a relabel of `screen_index`, which `multipart.py` orders screens by and requires to be a **positive 1-based number**, not a title. If what you wanted is a human-readable screen name, that is the existing **Screen / part ID** and this rename should be reverted — one line either way."
    ]
   },
   {

@@ -107,6 +107,14 @@
       "archived": true,
       "updated": "2026-08-15"
     },
+    "BUG-33": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-17"
+    },
     "BUG-4": {
       "status": "Backlog",
       "priority": "Normal",
@@ -272,6 +280,14 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-13"
+    },
+    "DATA-28": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-17"
     },
     "DATA-30": {
       "status": "Backlog",
@@ -787,11 +803,11 @@
       "updated": "2026-08-13"
     },
     "UX-53": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. yes I want the errors or missing field allerts to appear above the \"Add Dataset\" button, and they can also be presented by the colors of the fields - for example a mandatory field that's missing a mapping will be red when you try to add dataset with it's empty, an auto mapped field is yellow and a mapped by the user field is green. the name of the dataset should be on the top of this part and be more prominent. the part of the statistics table isnot needed because the statistics should appear in the dataset upload part and the mapped fields should appear with the choosing buttons now all in one place (parts 2-7)\n2. keep together \n3. if you mean like screen name and screen number fields than you can add both as you suggested. but the screen local timestamp field should not exist and we should count on the trial timestamps instead.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-17"
     },
     "VAL-1": {

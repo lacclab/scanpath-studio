@@ -426,7 +426,7 @@ class TestSpotlightSelectorsResolve:
 
         root = Path(__file__).resolve().parents[1] / "scanpath_studio"
         source = "".join(
-            (root / f"{module}.py").read_text()
+            (root / f"{module}.py").read_text(encoding="utf-8")
             for module in ("tabs", "app", "controls", "annotations", "menu")
         )
         keys = set(re.findall(r'key="([\w]+)"', source))

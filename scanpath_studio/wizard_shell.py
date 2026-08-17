@@ -80,32 +80,38 @@ class WizardStep:
     required: bool
 
 
+#: UX-53 folded the original seven steps into two. Everything that was steps
+#: 2–7 is now one part whose former steps are plain **line titles** (`section`)
+#: rather than expanders, so the whole mapping is visible at once instead of
+#: costing a click each — the ask was "all the field mappings on one screen".
+#: The optional participant table (#DATA-20, the old step 5) moved up beside the
+#: uploads it belongs with, and *Name & add* (the old step 7) became the head and
+#: foot of the combined part: the dataset name on top, validation and
+#: **✅ Add dataset** at the bottom.
 STEPS: tuple[WizardStep, ...] = (
-    WizardStep("data", 1, "Your data", "The tables you exported", True),
     WizardStep(
-        "identity", 2, "Trials & readers", "Which columns identify a trial", True
+        "data", 1, "Your data", "The tables you exported, and who read them", True
     ),
     WizardStep(
-        "geometry",
-        3,
-        "Fixations & text",
-        "Where the eyes landed, where the words are",
+        "mapping",
+        2,
+        "Map it & add it",
+        "Which column is what — then add the dataset",
         True,
     ),
-    WizardStep(
-        "setup", 4, "Recording setup", "The screen and font it was recorded on", True
-    ),
-    # DATA-20: the participant table's main home. It was a Data-page section
-    # only, which every source can reach — but a first-time uploader never sees
-    # it during setup, and "what do you know about your readers" is a setup
-    # question. Optional, and after `identity`, which settles the reader id it
-    # joins on.
-    WizardStep("readers", 5, "About your readers", "Optional participant table", False),
-    WizardStep("fields", 6, "Extra fields", "What else to carry along", False),
-    WizardStep("review", 7, "Name & add", "Check it over and add the dataset", True),
 )
 
 STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
+
+#: The former steps, kept as the section headings inside part 2 (and, for
+#: `readers`, inside part 1). Ordered as they render.
+SECTION_TITLES: dict[str, str] = {
+    "readers": "About your readers",
+    "identity": "Trials & readers",
+    "geometry": "Fixations & text",
+    "setup": "Recording setup",
+    "fields": "Extra fields",
+}
 
 
 def open_key(step_id: str) -> str:
@@ -198,6 +204,30 @@ def step_panel(host, step: WizardStep, status: StepStatus, *, active: bool):
         key=open_key(step.id),
         on_change="rerun",
     )
+
+
+def section(host, section_id: str, *, status: StepStatus | None = None, caption=""):
+    """One topic inside a step, rendered as a **line title** rather than a panel.
+
+    UX-53: the six former steps became sections of one part, and a disclosure per
+    topic was the thing making the page long — you cannot see the mapping you are
+    checking against the mapping you just set. A heading costs one line, always
+    shows its fields, and (unlike the expander it replaces) has no open state to
+    remount, so none of the DATA-19 / DATA-22 collapse hazards apply.
+
+    Kept deliberately small: a divider, a bold title with an optional status
+    badge, an optional one-line caption, and the container to fill. `####`-style
+    markdown is avoided so this never competes with the page's real headings.
+    """
+    title = SECTION_TITLES.get(section_id, section_id)
+    host.markdown(
+        f'<div class="sps-wiz-section">{badge(status) + " " if status else ""}'
+        f"{title}</div>",
+        unsafe_allow_html=True,
+    )
+    if caption:
+        host.caption(caption)
+    return host.container()
 
 
 def continue_button(host, step: WizardStep, *, label: str = "Continue →") -> None:

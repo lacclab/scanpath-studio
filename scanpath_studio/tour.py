@@ -1639,10 +1639,10 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "📂 Set up your dataset",
         "body": (
-            "Turn your eye-tracking tables into an interactive dataset in seven "
-            "steps: upload, tell us which columns mean what, say how the "
-            "recording was set up, name it. Follow along with **Next** — the "
-            "wizard opens each step as you go — or **Skip** to dive in."
+            "Turn your eye-tracking tables into an interactive dataset in two "
+            "parts: upload them, then say which columns mean what and add it. "
+            "Follow along with **Next** — the wizard opens each part as you go — "
+            "or **Skip** to dive in."
         ),
         "selector": "",
         "step_id": None,
@@ -1650,76 +1650,23 @@ _WIZARD_GUIDE_STEPS = [
     {
         "title": "1 · Your data",
         "body": (
-            "Add your **Fixations** and/or **Words / IA** tables (CSV / TSV / "
-            "Parquet; several files or either alone). Each upload previews its "
-            "first rows, and a summary card names the columns that were "
-            "auto-detected.\n\n"
+            "Add your **Fixations** and/or **Words / IA** tables — CSV / TSV / "
+            "Parquet, several files or either alone. Optionally attach a "
+            "one-row-per-reader table at the foot.\n\n"
             "> 💡 Large dataset? Run locally: `pip install scanpath-studio`."
         ),
         "selector": ".st-key-wiz_open_data",
         "step_id": "data",
     },
     {
-        "title": "2 · Trials & readers",
+        "title": "2 · Map it & add it",
         "body": (
-            "Confirm the **trial id** — the columns that identify one reading of "
-            "one text — plus the optional participant and text ids. Pick several "
-            "columns to compose an id. The readout below tells you how many "
-            "trials, readers and texts that produced."
+            "Name it, then work down one screen: **Trials & readers**, "
+            "**Fixations & text**, **Recording setup**, **Extra fields**. "
+            "Anything still missing is listed right above **✅ Add dataset**. 👀"
         ),
-        "selector": ".st-key-wiz_open_identity",
-        "step_id": "identity",
-    },
-    {
-        "title": "3 · Fixations & text",
-        "body": (
-            "Where the eyes landed and where the words are: fixation **x / y / "
-            "duration**, and the word **id / text / box**. Anything unusual lives "
-            "behind **⚙️ Advanced**."
-        ),
-        "selector": ".st-key-wiz_open_geometry",
-        "step_id": "geometry",
-    },
-    {
-        "title": "4 · Recording setup",
-        "body": (
-            "The screen the data was **recorded** on. Nothing is preselected — say "
-            "whether you know each value, want it **estimated from your data**, are "
-            "taking a **named default**, or are **skipping** it. Your answer is "
-            "stored beside the number, so a default is never read as a measurement."
-        ),
-        "selector": ".st-key-wiz_open_setup",
-        "step_id": "setup",
-    },
-    {
-        "title": "5 · About your readers",
-        "body": (
-            "Optional. Attach a table with **one row per reader** — language, "
-            "age, comprehension score. The join is reported in full before "
-            "anything uses it, and the columns then behave like fields in your "
-            "data: filters, chips, sorting, grouping, export."
-        ),
-        "selector": ".st-key-wiz_open_readers",
-        "step_id": "readers",
-    },
-    {
-        "title": "6 · Extra fields",
-        "body": (
-            "Optionally keep extra columns to colour and analyse by, and choose "
-            "which trial-level conditions become filters. Fewer columns is faster."
-        ),
-        "selector": ".st-key-wiz_open_fields",
-        "step_id": "fields",
-    },
-    {
-        "title": "7 · Name & add",
-        "body": (
-            "Check the review table — every decision, its value, and how it is "
-            "known. **⬇️ Download setup** saves the mapping for next time; "
-            "**✅ Add dataset** stores it and switches to it. 👀"
-        ),
-        "selector": ".st-key-wiz_open_review",
-        "step_id": "review",
+        "selector": ".st-key-wiz_open_mapping",
+        "step_id": "mapping",
     },
 ]
 

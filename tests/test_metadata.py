@@ -733,10 +733,12 @@ class TestTheWizardStep:
         at.run(timeout=120)
         assert not at.exception, at.exception
 
-        # The registry gained the step, in its place and optional.
-        step = wizard_shell.STEPS_BY_ID["readers"]
-        assert (step.number, step.required) == (5, False)
-        assert [s.number for s in wizard_shell.STEPS] == [1, 2, 3, 4, 5, 6, 7]
+        # UX-53 folded the seven steps into two, and the participant table moved
+        # from its own step 5 up into part 1 — it is an upload, so it belongs
+        # with the uploads. It survives as a *section* heading there.
+        assert [s.number for s in wizard_shell.STEPS] == [1, 2]
+        assert "readers" not in wizard_shell.STEPS_BY_ID
+        assert wizard_shell.SECTION_TITLES["readers"] == "About your readers"
 
         # …and its body is the participant-table panel: the id-column picker is
         # the widget that only exists once a table is being attached, so the

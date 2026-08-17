@@ -401,6 +401,18 @@ def get_app_css() -> str:
        went: the help text is appended to it, which buys back the icon's width on
        every row. Scoped to our own class name, so it cannot reach any other
        widget label in the app. */
+    /* UX-53: a wizard topic heading. It replaced a per-topic expander, so it has
+       to read as a divider *and* cost about one line — hence the rule above it
+       rather than padding around it. Not an `<h4>`: the Data page keeps its four
+       stage headings as the only h3/h4s (#UX-52). */
+    .sps-wiz-section {
+        margin: 0.85rem 0 0.15rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid rgba(128, 128, 128, 0.22);
+        font-weight: 600;
+        font-size: 0.95rem;
+        line-height: 1.4;
+    }
     .sps-flabel {
         display: block;
         max-width: 100%;

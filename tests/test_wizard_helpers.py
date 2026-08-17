@@ -129,29 +129,29 @@ class TestWizardAccordion:
     def test_go_to_step_opens_exactly_one(self):
         import streamlit as st
 
-        wizard_shell.go_to_step("geometry")
+        wizard_shell.go_to_step("mapping")
         opened = {
             s.id: st.session_state[wizard_shell.open_key(s.id)]
             for s in wizard_shell.STEPS
         }
-        assert opened["geometry"] is True
-        assert not any(v for k, v in opened.items() if k != "geometry")
+        assert opened["mapping"] is True
+        assert not any(v for k, v in opened.items() if k != "mapping")
 
     def test_seed_opens_first_incomplete_then_never_again(self):
         import streamlit as st
 
         wizard_shell.reset_accordion()
         statuses = {s.id: wizard_shell.StepStatus.DONE for s in wizard_shell.STEPS}
-        statuses["setup"] = wizard_shell.StepStatus.TODO
+        statuses["mapping"] = wizard_shell.StepStatus.TODO
         wizard_shell.seed_open_step(statuses)
-        assert st.session_state[wizard_shell.open_key("setup")] is True
+        assert st.session_state[wizard_shell.open_key("mapping")] is True
 
         # A second call must NOT move the accordion — re-seeding on every run is
         # exactly the auto-advance-under-the-cursor behaviour being removed.
-        wizard_shell.go_to_step("identity")
+        wizard_shell.go_to_step("data")
         wizard_shell.seed_open_step(statuses)
-        assert st.session_state[wizard_shell.open_key("identity")] is True
-        assert st.session_state[wizard_shell.open_key("setup")] is False
+        assert st.session_state[wizard_shell.open_key("data")] is True
+        assert st.session_state[wizard_shell.open_key("mapping")] is False
 
     def test_optional_step_does_not_hold_up_seeding(self):
         statuses = {s.id: wizard_shell.StepStatus.DONE for s in wizard_shell.STEPS}
@@ -198,7 +198,7 @@ class TestWizardAccordion:
     def test_the_active_step_header_never_carries_the_status(self):
         """Structural guard for the above: `step_panel`'s expander call must not
         pass a status-derived ``icon=`` or interpolate the badge into its label."""
-        source = pathlib.Path(wizard_shell.__file__).read_text()
+        source = pathlib.Path(wizard_shell.__file__).read_text(encoding="utf-8")
         body = source.split("def step_panel(", 1)[1].split("\ndef ", 1)[0]
         call = body.split("host.expander(", 1)[1]
         assert "icon=" not in call, "a changing icon remounts the expander closed"
@@ -211,7 +211,7 @@ class TestWizardAccordion:
         DATA-19 bug (a step collapsing in response to its own edit), so this is
         asserted structurally rather than left to review.
         """
-        source = pathlib.Path(wizard.__file__).read_text()
+        source = pathlib.Path(wizard.__file__).read_text(encoding="utf-8")
         offenders = [
             stripped
             for line in source.splitlines()

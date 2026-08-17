@@ -1112,7 +1112,6 @@ _ADVANCED_MAPPING_KEYS = frozenset(
     {
         "screen_id",
         "screen_index",
-        "screen_timestamp",
         "screen_fixation_id",
         "canvas_width",
         "canvas_height",
@@ -1249,13 +1248,12 @@ FIX_FIELD_SPECS: list[dict] = [
         "help": "Parent-trial fixation onset (ms); orders the full trial and drives "
         "animation. Defaults to row order.",
     },
-    {
-        "key": "screen_timestamp",
-        "label": "Screen-local timestamp (ms)",
-        "required": False,
-        "help": "Optional onset that resets within each screen. Kept alongside the "
-        "parent-trial timestamp rather than replacing it.",
-    },
+    # UX-53 removed *Screen-local timestamp (ms)* from the mapping: it was a
+    # second clock for the same fixations, and the parent-trial timestamp above
+    # already orders every screen. `screen_timestamp_ms` survives as a
+    # passthrough column for the corpora that ship one (datasets.py stamps it),
+    # so nothing downstream loses it — it just stops being a question every
+    # uploader has to answer.
     {
         "key": "fixation_id",
         "label": "Fixation ID",

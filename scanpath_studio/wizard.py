@@ -1701,6 +1701,32 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
+#: One line under the *Trials & readers* heading, in place of the paragraph the
+#: step used to carry. UX-53's brief was "display less text".
+_IDENTITY_CAPTION = (
+    "Which columns identify a trial, and who read it. Everything else on this "
+    "page hangs off the trial id."
+)
+
+
+def _wizard_name_header(host, active: bool) -> None:
+    """The dataset's name, at the head of the combined part (UX-53).
+
+    It used to sit in step 7 beside *Add dataset*, i.e. below every mapping
+    field. The name is what the dataset is *called* — the user asked for it up
+    front and more prominent — so it leads the part, and the button that consumes
+    it closes the part.
+    """
+    if not active:
+        return
+    st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
+    host.text_input(
+        "**Dataset name**",
+        key="wizard_dataset_name",
+        help="Shown in the Data source list so you can switch back to it.",
+    )
+
+
 def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
     """Each step's badge, derived from session state alone.
 
@@ -1749,10 +1775,14 @@ def _wizard_statuses() -> dict[str, wizard_shell.StepStatus]:
         ),
         "fields": S.DONE if fields_touched else S.OPTIONAL,
     }
-    statuses["review"] = (
+    # UX-53: the six former steps are now *sections*, and the two surviving steps
+    # aggregate them — a part is only DONE when every required section under it
+    # is. The section keys stay in the dict because the section headings, the
+    # blocker list and `_wizard_problems_last` all still badge per topic.
+    statuses["mapping"] = (
         S.DONE
-        if all(statuses[k] is S.DONE for k in ("data", "identity", "geometry", "setup"))
-        else S.TODO
+        if all(statuses[k] is S.DONE for k in ("identity", "geometry", "setup"))
+        else required(False)
     )
     return statuses
 
@@ -1879,8 +1909,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if active:
         st.header("📂 Set up your dataset")
         st.caption(
-            "Work down the seven steps in order, or jump straight to one with the "
-            "chips below. Your answers are kept as you move around."
+            "Upload your tables, then map them — both parts stay filled in as you "
+            "move between them."
         )
         st.caption(
             "First time? [Bring your own data ↗]"
@@ -2045,15 +2075,26 @@ def _render_data_setup(active: bool) -> _UploadResult:
     fix_schema: dict = {}
     has_words, has_fix = not raw_words.empty, not raw_fix.empty
 
-    # === 2 · Trials & readers ================================================
-    _identity_step, s2 = step_of("identity")
+    # === 2 · Map it & add it =================================================
+    # UX-53: one part from here down. Its former steps are `wizard_shell.section`
+    # line titles, so every mapping field is on screen at once.
+    _mapping_step, s_map = step_of("mapping")
+    _wizard_name_header(s_map, active)
+
+    s2 = wizard_shell.section(
+        s_map, "identity", status=statuses.get("identity"), caption=_IDENTITY_CAPTION
+    )
     # Filename derivation must run *before* the identifier pickers so the
-    # derived columns are mappable below.
+    # derived columns are mappable below. UX-53 took it out of its popover —
+    # "advanced" is a reason to place a control last, not to hide it behind a
+    # click — so it renders inline, below the pickers it feeds.
     if (has_words or has_fix) and any(
         SOURCE_FILE_COLUMN in fr.columns for fr in (raw_fix, raw_words) if not fr.empty
     ):
+        derive_host = s2.container()
+        derive_host.markdown("**Advanced** — derive ids from the filename")
         raw_words, raw_fix, raw_gaze = _wizard_filename_derive(
-            s2.popover("⚙️ Advanced — derive ids from the filename"),
+            derive_host,
             raw_words,
             raw_fix,
             raw_gaze,
@@ -2104,7 +2145,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             has_fix,
         )
         # DATA-21 multipart screens: beside, not inside, the logical trial id.
-        screens = s2.popover("⚙️ Advanced — multipart screens")
+        screens = s2.container()
+        screens.markdown("**Advanced** — multipart screens")
         screens.caption(
             "Map these only when one logical trial contains ordered screens. "
             "Screen ID must be mapped in both reports; screen order is 1-based."
@@ -2133,7 +2175,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
                     [
                         "screen_id",
                         "screen_index",
-                        "screen_timestamp",
                         "screen_fixation_id",
                         "canvas_width",
                         "canvas_height",
@@ -2141,8 +2182,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 )
             )
 
-    # === 3 · Fixations & text ================================================
-    _geometry_step, s3 = step_of("geometry")
+    s3 = wizard_shell.section(s_map, "geometry", status=statuses.get("geometry"))
     if has_fix:
         s3.markdown("**Fixations** — where the eyes landed")
         fix_schema.update(
@@ -2159,13 +2199,15 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "Leave X/Y blank for AOI-only data and map the Word/IA ID under "
             "*Advanced* instead."
         )
+        advanced_fix = s3.container()
+        advanced_fix.markdown("**Advanced** — more fixation mappings")
         fix_schema.update(
             _map_section(
                 raw_fix,
                 FIX_FIELD_SPECS,
                 prop_f,
                 "col_map_fix",
-                s3.popover("⚙️ Advanced — more fixation mappings"),
+                advanced_fix,
                 ["word_id", "timestamp"],
             )
         )
@@ -2186,7 +2228,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 ["word_id", "text", "box"],
             )
         )
-        words_advanced = s3.popover("⚙️ Advanced — more text mappings")
+        words_advanced = s3.container()
+        words_advanced.markdown("**Advanced** — more text mappings")
         word_schema.update(
             _map_section(
                 raw_words,
@@ -2212,10 +2255,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     if not raw_gaze.empty:
         rg_required = not has_words and not has_fix
-        rg_host = (
-            s3 if rg_required else s3.popover("⚙️ Advanced — raw gaze overlay mapping")
+        rg_host = s3.container()
+        rg_host.markdown(
+            "**Raw gaze overlay**"
+            if rg_required
+            else "**Advanced** — raw gaze overlay mapping"
         )
-        rg_host.markdown("**Raw gaze overlay**")
         raw_gaze_schema = _map_section(
             raw_gaze,
             RAW_GAZE_FIELD_SPECS,
@@ -2264,36 +2309,32 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # costs two clicks; skipping a wrong one costs the whole dataset.
     _render_autodetect_card(s1.container(), word_schema, fix_schema, has_words, has_fix)
 
-    # === 4 · Recording setup =================================================
-    _setup_step, s4 = step_of("setup")
+    s4 = wizard_shell.section(s_map, "setup", status=statuses.get("setup"))
     restored_setup = _restored_setup_snapshot()
     if restored_setup is not None:
         _apply_restored_setup(restored_setup)
         s4.caption("✓ Pre-answered from the restored setup file — review it below.")
     setup_snapshot = _wizard_setup_step(s4, raw_words, raw_fix, has_boxes=has_words)
 
-    # === 5 · About your readers ==============================================
-    # DATA-20: the participant table's main home. Rendered only while the wizard
-    # is `active` — the collapsed *Data & mapping* review panel would otherwise
-    # build the same widget keys as the 🗂️ Data page's section, which renders
-    # once the wizard is finished.
-    readers_step, s_readers = step_of("readers")
+    # DATA-20's participant table moved up into part 1 (UX-53) — it is an upload,
+    # and it belongs with the other uploads rather than five steps below them.
+    # Still only while `active`: the collapsed *Data & mapping* review panel would
+    # otherwise build the same widget keys as the 🗂️ Data page's own section.
     if active:
         from scanpath_studio.tabs import render_participant_metadata_section
 
+        s_readers = wizard_shell.section(s1, "readers", status=statuses.get("readers"))
         s_readers.caption(
             "Optional, and separate from the tables above: one row per **reader**, "
-            "not per trial. Attach it here and its columns behave like fields in "
-            "your data — filters, chips, trial sorting, corpus grouping, export."
+            "not per trial. Its columns then behave like fields in your data — "
+            "filters, chips, trial sorting, corpus grouping, export."
         )
         render_participant_metadata_section(
             _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
             host=s_readers.container(),
         )
-        wizard_shell.continue_button(s_readers, readers_step, label="Continue →")
 
-    # === 6 · Extra fields ====================================================
-    _fields_step, s5 = step_of("fields")
+    s5 = wizard_shell.section(s_map, "fields", status=statuses.get("fields"))
     s5.caption(
         "*Filter trials by* becomes a value picker in the Narrow-by panel; "
         "*Additional fields to keep* are the columns you can colour, sort and "
@@ -2309,15 +2350,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
     keep_by_prefix, filter_fields = _wizard_keep_and_filter(keep_tables, s5, s5)
     st.session_state["wizard_filter_fields"] = list(filter_fields)
 
-    # === 6 · Name & add ======================================================
-    _review_step, s6 = step_of("review")
-    if active:
-        st.session_state.setdefault("wizard_dataset_name", _default_dataset_name())
-        s6.text_input(
-            "Dataset name",
-            key="wizard_dataset_name",
-            help="Shown in the Data source list so you can switch back to it.",
-        )
+    # The foot of part 2: what is still missing, then the button. UX-53 put the
+    # alerts *directly above* **Add dataset** — a blocker listed a screen away
+    # from the control it blocks is a blocker the user reads after clicking.
+    s6 = s_map.container()
 
     setup_blockers = [
         SETUP_GROUP_LABELS[g] for g, p in setup_snapshot.provenance.items() if p is None
@@ -2339,23 +2375,14 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
         if blocked:
             s6.markdown("**Still to do**")
-            reasons: dict[str, list] = {}
-            if problems:
-                reasons["geometry"] = list(problems)
-            if setup_blockers:
-                reasons["setup"] = [
-                    f"{name} — say how you know it" for name in setup_blockers
-                ]
-            for step, why in wizard_shell.blockers(_wizard_statuses(), reasons):
-                if step.id not in reasons:
-                    continue
-                for line in reasons[step.id]:
-                    s6.warning(line)
-                s6.button(
-                    f"Go to {step.number}. {step.title} →",
-                    key=f"wiz_goto_{step.id}",
-                    on_click=wizard_shell.go_to_step,
-                    args=(step.id,),
+            # Everything is one scroll away now, so a blocker names its section
+            # instead of offering a jump button to a step that no longer exists.
+            for line in problems:
+                s6.warning(f"{wizard_shell.SECTION_TITLES['geometry']} — {line}")
+            for name in setup_blockers:
+                s6.warning(
+                    f"{wizard_shell.SECTION_TITLES['setup']} — {name}, "
+                    "say how you know it"
                 )
 
     if problems:

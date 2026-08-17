@@ -1450,28 +1450,67 @@ _FIELD_TINT = {
 }
 
 
+#: Fields the user has actually interacted with this session. Deliberately ONE
+#: key, and deliberately *outside* the `col_map_` namespace:
+#: `tabs._collect_column_mapping` sweeps every `col_map_*` key into the saved
+#: config, so a per-field marker named that way would travel in users' configs
+#: as if it were part of the mapping.
+TOUCHED_FIELDS_KEY = "_mapping_touched_fields"
+
+
+def _mark_field_touched(state_key: str) -> None:
+    """Record that the user moved this field (the select's ``on_change``).
+
+    What separates *auto-detected and left alone* from *the user chose this* —
+    which are the same value, and different claims. Picking the detected column
+    by hand is an approval, and UX-53 r11 wants it to read as one.
+    """
+    st.session_state.setdefault(TOUCHED_FIELDS_KEY, set()).add(state_key)
+
+
 def _field_state(
-    *, chosen, default, is_required: bool, attempted: bool, detected_label: str
+    *,
+    chosen,
+    default,
+    is_required: bool,
+    attempted: bool,
+    touched: bool,
+    detected_label: str,
 ) -> tuple[str, str]:
     """``(state, hover)`` for one mapping row.
 
-    ``state`` keys `_FIELD_TINT`: **user** picked it, **auto** detection found it
-    and it was left alone, **missing** it is required and still empty *after* an
-    add was attempted (before that, empty is simply not filled in yet). ``""``
-    for an optional empty field — most rows on most datasets, and tinting all of
-    them would say nothing.
+    ``state`` keys `_FIELD_TINT`: **user** they chose it, **auto** detection
+    found it and nobody has touched it, **missing** it is required and still
+    empty *after* an add was attempted (before that, empty is simply not filled
+    in yet). ``""`` is the neutral, untinted row.
 
-    ``hover`` is the ✨ icon's tooltip, and it is the only place the detected
-    column name is now written: the name is what made the old inline note run
-    past the width of the control it annotated, and it is looked at once.
+    Two rules from UX-53 r11, both about who decided:
+
+    * **Choosing a value is an approval**, even when it is the value detection
+      already proposed — so a touched field goes green rather than staying
+      amber. Amber means "nobody has looked at this yet", which stops being true
+      the moment they pick.
+    * **Clearing a detected field goes neutral**, not amber: the ✕ is a decision
+      that this column is *not* the one, and leaving it amber would keep
+      flagging a suggestion the user has just rejected. It stays red only when
+      the field is required and an add has been attempted, because then it is
+      genuinely blocking.
+
+    ``hover`` is the ✨ icon's tooltip, and the only place the detected column
+    name is written: the name is what made the old inline note run past the
+    width of the control it annotated, and it is looked at once.
     """
     unmapped = chosen in (None, NONE_OPTION)
     if unmapped:
         if is_required and attempted:
             return "missing", "required — pick a column"
         if default:
-            return "auto", f"{detected_label} `{default}` · not used"
+            return "", f"{detected_label} `{default}` · not used"
         return "", ""
+    if touched:
+        if default and chosen != default:
+            return "user", f"{detected_label} `{default}` · overridden"
+        return "user", f"{detected_label} `{default}` · confirmed" if default else ""
     if default and chosen == default:
         return "auto", f"{detected_label} `{default}`"
     if default:
@@ -1559,6 +1598,9 @@ def forget_mapping_for_other_table(
         # The box *format* is a property of the table (which four columns it
         # has), not a preference, so it is re-derived from the new proposal.
         st.session_state.pop(key, None)
+        # The approval goes with the answer it approved (UX-53 r11): a field
+        # re-proposed for a different table has not been confirmed by anyone.
+        st.session_state.get(TOUCHED_FIELDS_KEY, set()).discard(key)
 
 
 def resolve_column_mapping(
@@ -1777,6 +1819,10 @@ def column_mapping_ui(
             # any run in which the widget did not render and the mapping reverts
             # to auto-detection the moment the user clicks over to Scanpath.
             persist_state="session",
+            # Marks the field as *decided by a person*, which is what separates
+            # green from amber even when the value is identical (UX-53 r11).
+            on_change=_mark_field_touched,
+            args=(state_key,),
         )
         # Surface what auto-detection found for this field (ENG-9), flag when the
         # user has overridden it, and carry UX-53's colour so the row's state is
@@ -1788,6 +1834,7 @@ def column_mapping_ui(
             default=default if default in df.columns else None,
             is_required=field_key in required_keys,
             attempted=add_attempted,
+            touched=state_key in st.session_state.get(TOUCHED_FIELDS_KEY, ()),
             detected_label=detected_label,
         )
         if state:

@@ -37,6 +37,7 @@ from .controls import (
     FIX_FIELD_SPECS,
     NONE_OPTION,
     RAW_GAZE_FIELD_SPECS,
+    TOUCHED_FIELDS_KEY,
     WORD_FIELD_SPECS,
     column_mapping_ui,
 )
@@ -136,8 +137,10 @@ def _reset_wizard_widgets() -> None:
         "wizard_filename_regex_lower",
         "wizard_aggregate_char_boxes",
         # UX-53: a new dataset starts unattempted, so its required fields are
-        # blank rather than red until this one is asked to be added.
+        # blank rather than red until this one is asked to be added — and
+        # unconfirmed, so nothing is green until somebody picks it here.
         ADD_ATTEMPTED_KEY,
+        TOUCHED_FIELDS_KEY,
         # DATA-22 Recording-setup step. The *mode* radios always reset — decision
         # (d): a second dataset from the same lab keeps the pre-filled values
         # (`_wizard_setup_recall`, deliberately NOT cleared here) but the user

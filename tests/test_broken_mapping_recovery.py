@@ -60,7 +60,7 @@ def test_the_rejected_mapping_stays_editable_so_it_can_be_undone():
     # The panel that made the mistake is still on the page, still holding it.
     assert at.selectbox(key="col_map_fix_screen_id").value == BOGUS_SCREEN_COLUMN
 
-    at.selectbox(key="col_map_fix_screen_id").select("(none)").run()
+    at.selectbox(key="col_map_fix_screen_id").set_value(None).run()
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
@@ -76,7 +76,7 @@ def test_resetting_the_column_mapping_recovers_a_wedged_dataset():
     reset[0].click().run(timeout=180)
 
     assert not at.exception
-    assert at.selectbox(key="col_map_fix_screen_id").value == "(none)"
+    assert at.selectbox(key="col_map_fix_screen_id").value is None
 
 
 # --- the escape hatches that don't go through the 🗂️ Data page -----------------
@@ -93,7 +93,7 @@ def test_a_wedged_dataset_can_be_abandoned_without_visiting_the_data_page():
 
     assert not at.exception
     assert not any("isn't set up yet" in info.value for info in at.info)
-    assert at.selectbox(key="col_map_fix_screen_id").value == "(none)"
+    assert at.selectbox(key="col_map_fix_screen_id").value is None
 
 
 def test_the_session_menu_keeps_its_escape_hatches_while_the_app_is_wedged(

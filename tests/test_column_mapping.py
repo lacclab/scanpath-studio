@@ -362,7 +362,7 @@ class TestSwitchingToAnotherTable:
         at.run(timeout=30)
         assert at.session_state["_mapping"]["screen_index"] == "screen_index"
 
-        at.selectbox(key="col_map_fix_screen_index").select("(none)").run(timeout=30)
+        at.selectbox(key="col_map_fix_screen_index").set_value(None).run(timeout=30)
         assert at.session_state["_mapping"]["screen_index"] is None
         at.run(timeout=30)
         assert at.session_state["_mapping"]["screen_index"] is None

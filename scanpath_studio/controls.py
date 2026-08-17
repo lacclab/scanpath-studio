@@ -100,28 +100,15 @@ _LABEL_GAP = "xsmall"
 #: is room for the "✨ auto-detected …" note beside the field instead of under it.
 _MAPPING_ROW_W = (0.24, 0.40, 0.36)
 
-#: `label | ✨ ✕` inside one cell of a multi-column mapping grid (UX-53 r7). The
-#: two glyphs take only what they need and the label keeps the rest — a cell
-#: four-across is narrow, and the label is what has to survive.
-_GRID_LABEL_W = (0.7, 0.3)
+#: `label | ✨` inside one cell of a multi-column mapping grid (UX-53 r7). The
+#: flag is one glyph, so it takes only what it needs and the label keeps the
+#: rest — a cell four-across is narrow, and the label is what has to survive.
+_GRID_LABEL_W = (0.85, 0.15)
 
-#: `✨ | ✕` — the flag and the clear button, side by side so the ✕ lands against
-#: the select's right edge instead of below it (UX-53 r9).
-_NOTE_ROW_W = (0.5, 0.5)
-
-
-def _clear_mapping_field(state_key: str) -> None:
-    """Put one mapping field back to ``(none)`` (the ✕ button's ``on_click``).
-
-    Writes `NONE_OPTION` rather than deleting the key: the stored value *is* the
-    wire format — `tabs._collect_column_mapping` sweeps every `col_map_*` into
-    the saved config, and `resolve_column_mapping` reads the same keys on views
-    where the editor never renders — so "explicitly not mapped" has to be a
-    value, exactly as it is when the user picks `(none)` from the list. Deleting
-    it would instead mean "never answered", and auto-detection would fill the
-    field straight back in.
-    """
-    st.session_state[state_key] = NONE_OPTION
+#: Shown in a select with nothing chosen. UX-53 r10 replaced the `"(none)"`
+#: *option* with a real empty state, so this is placeholder text, not a value
+#: anyone can pick.
+_UNMAPPED_PLACEHOLDER = "Not mapped"
 
 
 #: Markdown emphasis, which a plain-text `title=` attribute would show as
@@ -1677,7 +1664,9 @@ def column_mapping_ui(
     page's editor exactly as it was.
     """
     forget_mapping_for_other_table(df, state_key_prefix, field_specs)
-    options = [NONE_OPTION] + list(df.columns)
+    # No `"(none)"` entry any more (UX-53 r10): "not mapped" is the select's own
+    # empty state, which is what gives every field Streamlit's built-in ✕.
+    options = list(df.columns)
     expanded = bool(expand_on_problem and problems)
     # UX-53 field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
@@ -1749,7 +1738,6 @@ def column_mapping_ui(
 
     def _selectbox(field_key: str, field_label: str, help_text=None) -> str | None:
         default = proposed.get(field_key)
-        index = options.index(default) if default in options else 0
         field_col, note_col = _row(field_key, field_label, help_text)
         # The select goes in its own keyed container so the state tint has
         # something to attach to: Streamlit stamps `.st-key-<key>` on it, and the
@@ -1757,11 +1745,30 @@ def column_mapping_ui(
         # per state (see `tint_cells`).
         cell_key = f"{state_key_prefix}_{field_key}_cell"
         field_col = field_col.container(key=cell_key)
+        state_key = f"{state_key_prefix}_{field_key}"
+        # UX-53 r10: the value lives in the KEY and `index` is always None, which
+        # is precisely what turns Streamlit's own clear (✕) on — its selectbox
+        # sets `clearable=(index is None)`. So the empty state is a real `None`
+        # rather than the old `"(none)"` sentinel option, and the ✕ sits *inside*
+        # the control instead of beside it.
+        #
+        # Absent key -> seed from auto-detection. Present but holding something
+        # this table cannot offer -> blank it: that is a legacy `"(none)"` from a
+        # saved config, or a column a new upload does not have, and Streamlit
+        # raises on a stored value outside `options`. Present and already None ->
+        # left alone, because that is the user having cleared it on purpose.
+        if state_key in st.session_state:
+            stored = st.session_state[state_key]
+            if stored is not None and stored not in options:
+                st.session_state[state_key] = None
+        else:
+            st.session_state[state_key] = default if default in options else None
         chosen = field_col.selectbox(
             field_label,
             options=options,
-            index=index,
-            key=f"{state_key_prefix}_{field_key}",
+            index=None,
+            placeholder=_UNMAPPED_PLACEHOLDER,
+            key=state_key,
             help=help_text,
             label_visibility="collapsed",
             # DATA-26: the editor lives on the Data page, which executes only
@@ -1785,37 +1792,20 @@ def column_mapping_ui(
         )
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
-        # `flag | clear` — the ✨ and, only while something is selected, a ✕ that
-        # puts the field back to `(none)`. The pair is one row so the clear sits
-        # against the select's right edge rather than under it.
-        flag_col, clear_col = note_col.columns(
-            _NOTE_ROW_W, gap=None, vertical_alignment="center"
-        )
         if hover:
             # Icon only. The sentence — which column was detected, and whether it
             # was overridden or left unused — is on the icon's tooltip, reusing
             # the rail's CSS hover (`.sps-fhelp`, 120ms) rather than the
             # browser's ~1s native one.
-            flag_col.markdown(
+            note_col.markdown(
                 f'<span class="sps-map-flag sps-fhelp" '
                 f'data-tip="{html.escape(hover, quote=True)}">✨</span>',
                 unsafe_allow_html=True,
             )
-        if chosen != NONE_OPTION:
-            # Only while there is something to clear — a ✕ on an empty field
-            # would be a control that does nothing, on every unmapped row.
-            # `on_click` and not an inline `if button:`: a callback runs before
-            # the script re-executes, which is the only point at which assigning
-            # a widget's own key is legal.
-            clear_col.button(
-                "✕",
-                key=f"{state_key_prefix}_{field_key}_clear",
-                type="tertiary",
-                help="Clear this mapping",
-                on_click=_clear_mapping_field,
-                args=(f"{state_key_prefix}_{field_key}",),
-            )
-        return None if chosen == NONE_OPTION else chosen
+        # `NONE_OPTION` is still tolerated on the way out: a config restored
+        # before this run could have seeded it, and `resolve_column_mapping`
+        # reads the same keys.
+        return None if chosen in (None, NONE_OPTION) else chosen
 
     host = container if container is not None else st.container()
     # Render inside an expander by default; ``use_expander=False`` renders inline

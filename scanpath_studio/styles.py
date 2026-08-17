@@ -564,23 +564,6 @@ def get_app_css() -> str:
         cursor: help;
     }
     .sps-map-flag:hover { opacity: 1; }
-
-    /* UX-53 r9 — the per-field clear (✕). It sits in the note column beside the
-       ✨, pulled tight against the select so it reads as part of the control
-       rather than as a button of its own. Only rendered while the field has a
-       value, so it never advertises an action that would do nothing. */
-    [class*="st-key-col_map_"][class*="_clear"] button {
-        min-height: 0;
-        padding: 0.05rem 0.3rem;
-        margin-left: -0.15rem;
-        line-height: 1.1;
-        font-size: 0.9rem;
-        opacity: 0.55;
-    }
-    [class*="st-key-col_map_"][class*="_clear"] button:hover {
-        opacity: 1;
-        color: #ef4444;
-    }
     /* The tooltip is anchored to a one-glyph carrier at the right-hand edge of
        the row, so it opens leftwards rather than off the panel. */
     .sps-map-flag.sps-fhelp::after { left: auto; right: 0; }

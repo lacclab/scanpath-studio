@@ -191,10 +191,12 @@ class TestColumnMappingOverrideFlow:
         # panel, so the selectbox itself is the report — a read-only table
         # repeating it underneath is the duplication the page exists to remove.
         assert at.selectbox(key="col_map_words_text").value == "universal_pos"
-        # The panel says the auto-detected pick was overridden (ENG-9).
+        # The panel says the auto-detected pick was overridden (ENG-9). UX-53 r4
+        # moved that sentence off the page and onto the ✨ flag's tooltip, so it
+        # is the `data-tip` that carries it now, not a caption.
         assert any(
-            "IA_LABEL" in c.value and "overridden" in c.value for c in at.caption
-        ), "the mapping panel should flag the overridden auto-detection"
+            "IA_LABEL" in m.value and "overridden" in m.value for m in at.markdown
+        ), "the ✨ flag should report the overridden auto-detection on hover"
 
         # The frames were re-derived, not just re-labelled: every word label on
         # the word-level table is now a POS tag…
@@ -246,7 +248,7 @@ class TestColumnMappingOverrideFlow:
         at = _boot()
         assert len(_trial_ids(at)) == DEMO_TRIALS_IN_PICKER
 
-        at.selectbox(key="col_map_words_word_id").set_value("(none)")
+        at.selectbox(key="col_map_words_word_id").set_value(None)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         warnings = " ".join(w.value for w in at.warning)

@@ -59,7 +59,9 @@ def test_write_manifest_merges_entries_across_runs(tmp_path):
     prep.write_manifest(tmp_path, [{"name": "B", "monitor": [3, 4]}])
     names = [
         d["name"]
-        for d in json.loads((tmp_path / "manifest.json").read_text())["datasets"]
+        for d in json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))[
+            "datasets"
+        ]
     ]
     assert sorted(names) == ["A", "B"]
 
@@ -67,7 +69,9 @@ def test_write_manifest_merges_entries_across_runs(tmp_path):
 def test_write_manifest_replaces_a_rerun_dataset(tmp_path):
     prep.write_manifest(tmp_path, [{"name": "A", "monitor": [1, 2]}])
     prep.write_manifest(tmp_path, [{"name": "A", "monitor": [9, 9]}])
-    datasets = json.loads((tmp_path / "manifest.json").read_text())["datasets"]
+    datasets = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))[
+        "datasets"
+    ]
     assert len(datasets) == 1 and datasets[0]["monitor"] == [9, 9]
 
 
@@ -359,7 +363,7 @@ def test_write_manifest_is_atomic_and_leaves_the_original_on_failure(
 ):
     """Item 5a / R21: an interrupted write must not truncate a good manifest."""
     prep.write_manifest(tmp_path, [{"name": "A", "monitor": [1, 2]}])
-    original = (tmp_path / "manifest.json").read_text()
+    original = (tmp_path / "manifest.json").read_text(encoding="utf-8")
 
     def _boom(*args, **kwargs):
         raise OSError("simulated failure")
@@ -368,7 +372,7 @@ def test_write_manifest_is_atomic_and_leaves_the_original_on_failure(
     with pytest.raises(OSError, match="simulated failure"):
         prep.write_manifest(tmp_path, [{"name": "B", "monitor": [3, 4]}])
 
-    assert (tmp_path / "manifest.json").read_text() == original
+    assert (tmp_path / "manifest.json").read_text(encoding="utf-8") == original
     assert list(tmp_path.glob(".manifest-*")) == []
 
 

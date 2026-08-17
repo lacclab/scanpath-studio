@@ -197,7 +197,8 @@ def test_a_public_corpus_reports_its_declared_monitor_not_its_data_extents(
                     },
                 ]
             }
-        )
+        ),
+        encoding="utf-8",
     )
     monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
 

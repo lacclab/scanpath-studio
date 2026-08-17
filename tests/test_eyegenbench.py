@@ -65,7 +65,8 @@ def bundle(tmp_path):
                     }
                 ]
             }
-        )
+        ),
+        encoding="utf-8",
     )
     return root
 
@@ -250,7 +251,7 @@ def test_a_manifest_entry_with_no_name_does_not_crash_discovery(bundle, monkeypa
     from scanpath_studio import app
 
     (bundle / "manifest.json").write_text(
-        json.dumps({"datasets": [{"language": "de"}]})
+        json.dumps({"datasets": [{"language": "de"}]}), encoding="utf-8"
     )
     monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
     assert app.discovered_benchmark_datasets() == ()
@@ -403,7 +404,8 @@ def test_a_nameless_manifest_row_before_a_valid_one_does_not_crash(bundle, monke
     (bundle / "manifest.json").write_text(
         json.dumps(
             {"datasets": [{"language": "de"}, {"name": "PoTeC", "language": "de"}]}
-        )
+        ),
+        encoding="utf-8",
     )
     assert eyegenbench.entry_name({"language": "de"}) == ""
     # The name lookups every surface runs, with the malformed row in front.
@@ -443,9 +445,9 @@ def test_an_invented_default_screen_is_declined_by_both_surfaces(bundle, monkeyp
     assert eyegenbench.declared_monitor({"monitor_source": "paper"}) is None
 
     # The CLI's canvas resolution and the picker entry read the same function.
-    manifest = json.loads((bundle / "manifest.json").read_text())
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
     manifest["datasets"][0].update(invented)
-    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     assert eyegenbench.eyegenbench_monitor(bundle, "PoTeC") is None
     monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
     app._cached_eyegenbench_datasets.clear()
@@ -493,7 +495,7 @@ def test_the_cli_and_the_picker_resolve_the_same_screen(bundle, tmp_path, monkey
     """
     from scanpath_studio import api, app, cli
 
-    manifest = json.loads((bundle / "manifest.json").read_text())
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
     row = manifest["datasets"][0]
 
     def _cli_canvas():
@@ -534,7 +536,7 @@ def test_the_cli_and_the_picker_resolve_the_same_screen(bundle, tmp_path, monkey
 
     # 1. A corpus that documents its screen: both surfaces snap to it.
     row["monitor_source"] = "paper"
-    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     assert _cli_canvas() == (1680, 1050)
     assert _picker_monitor() == (1680, 1050)
 
@@ -544,7 +546,7 @@ def test_the_cli_and_the_picker_resolve_the_same_screen(bundle, tmp_path, monkey
     # data's own extents, exactly as the app does with no `monitor` on the entry.
     row["monitor_source"] = "default"
     row["monitor"] = [1920, 1080]
-    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     assert _cli_canvas() is None
     assert _picker_monitor() is None
 
@@ -560,7 +562,7 @@ def test_a_malformed_count_does_not_take_the_picker_down(bundle, monkeypatch):
     """
     from scanpath_studio import app
 
-    manifest = json.loads((bundle / "manifest.json").read_text())
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
     manifest["datasets"][0].update(
         {
             "geometry_source": "real",
@@ -569,7 +571,7 @@ def test_a_malformed_count_does_not_take_the_picker_down(bundle, monkeypatch):
             "paragraphs_without_real_boxes": 3,
         }
     )
-    (bundle / "manifest.json").write_text(json.dumps(manifest))
+    (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.setattr(app, "EYEGENBENCH_DEFAULT_DIR", str(bundle))
     app._cached_eyegenbench_datasets.clear()
 

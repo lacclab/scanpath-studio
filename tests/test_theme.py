@@ -24,7 +24,7 @@ _DOCS_CSS = Path(__file__).resolve().parents[1] / "docs" / "stylesheets" / "extr
 
 def test_config_toml_matches_theme_constants():
     """The bundled config file and the Python source of truth stay in sync."""
-    theme = tomllib.loads(_CONFIG_TOML.read_text())["theme"]
+    theme = tomllib.loads(_CONFIG_TOML.read_text(encoding="utf-8"))["theme"]
     dark = theme.pop("dark", {})
     assert theme == APP_THEME
     assert dark == APP_THEME_DARK
@@ -36,7 +36,7 @@ def test_docs_stylesheet_matches_theme_constants():
     ``docs/stylesheets/extra.css`` hand-mirrors the primary colors (CSS can't
     import Python); this guards a rebrand in ``constants.py`` from silently
     leaving the published docs on the old palette."""
-    css = _DOCS_CSS.read_text()
+    css = _DOCS_CSS.read_text(encoding="utf-8")
     assert APP_THEME["primaryColor"] in css
     assert APP_THEME_DARK["primaryColor"] in css
 
@@ -96,7 +96,7 @@ def test_launch_app_respects_user_theme_override(monkeypatch):
 def test_config_toml_matches_the_upload_cap_constant():
     from scanpath_studio.constants import UPLOAD_MAX_SIZE_MB
 
-    server = tomllib.loads(_CONFIG_TOML.read_text())["server"]
+    server = tomllib.loads(_CONFIG_TOML.read_text(encoding="utf-8"))["server"]
     assert server["maxUploadSize"] == UPLOAD_MAX_SIZE_MB
 
 

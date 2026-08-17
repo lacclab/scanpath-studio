@@ -91,7 +91,7 @@ def eyegenbench_manifest(root) -> dict:
             f"No EyeGenBench bundle at {root!s} (missing {MANIFEST_NAME}). "
             "Build one with: python scripts/prepare_eyegenbench.py --all"
         )
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def eyegenbench_datasets(root) -> list:

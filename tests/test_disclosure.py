@@ -22,7 +22,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _text(path: str) -> str:
-    return (REPO / path).read_text()
+    return (REPO / path).read_text(encoding="utf-8")
 
 
 class TestTheNoteIsOnEverySurface:

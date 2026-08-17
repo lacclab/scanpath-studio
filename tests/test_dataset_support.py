@@ -507,10 +507,10 @@ def test_potec_present(tmp_path):
     scan_dir = root / "eyetracking_data" / "scanpaths"
     for d in (word_dir, char_dir, scan_dir):
         d.mkdir(parents=True)
-    (scan_dir / "reader0_b0_scanpath.tsv").write_text("x\n")
+    (scan_dir / "reader0_b0_scanpath.tsv").write_text("x\n", encoding="utf-8")
     for text_id in datasets_module._POTEC_TEXTS:
-        (word_dir / f"word_aoi_{text_id}.tsv").write_text("x\n")
-        (char_dir / f"{text_id}.ias").write_text("x\n")
+        (word_dir / f"word_aoi_{text_id}.tsv").write_text("x\n", encoding="utf-8")
+        (char_dir / f"{text_id}.ias").write_text("x\n", encoding="utf-8")
 
     assert datasets_module.potec_present(root) is True
     assert datasets_module.potec_present(tmp_path / "empty") is False

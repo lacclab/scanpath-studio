@@ -7,7 +7,7 @@ PACKAGE = Path(__file__).resolve().parents[1] / "scanpath_studio"
 
 
 def _relative_imports(module: str) -> set[str]:
-    tree = ast.parse((PACKAGE / f"{module}.py").read_text())
+    tree = ast.parse((PACKAGE / f"{module}.py").read_text(encoding="utf-8"))
     return {
         node.module or ""
         for node in ast.walk(tree)

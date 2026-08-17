@@ -45,7 +45,7 @@ def test_selector_matches_the_header_container_key() -> None:
     """
     from pathlib import Path
 
-    source = Path(easter_egg.__file__).with_name("app.py").read_text()
+    source = Path(easter_egg.__file__).with_name("app.py").read_text(encoding="utf-8")
     assert '.container(key="about_header")' in source
     assert easter_egg.TITLE_SELECTOR == ".st-key-about_header h1"
 

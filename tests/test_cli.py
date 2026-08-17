@@ -267,14 +267,14 @@ def test_render_animate_autoplays_by_default(tmp_path):
     # VIZ-10: the saved interactive HTML auto-starts the replay (kickoff script).
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "-o", str(out_file)])
-    assert "Plotly.animate" in out_file.read_text()
+    assert "Plotly.animate" in out_file.read_text(encoding="utf-8")
 
 
 def test_render_animate_no_autoplay_flag(tmp_path):
     # VIZ-10: --no-autoplay saves a figure that opens paused (no kickoff).
     out_file = tmp_path / "anim.html"
     cli.main(["render", "--sample", "--animate", "--no-autoplay", "-o", str(out_file)])
-    assert "Plotly.animate" not in out_file.read_text()
+    assert "Plotly.animate" not in out_file.read_text(encoding="utf-8")
 
 
 def test_render_animate_rejects_non_html(tmp_path):
@@ -361,7 +361,7 @@ def test_render_stimulus_image_embeds_and_dims(tmp_path):
             str(out_file),
         ]
     )
-    html = out_file.read_text()
+    html = out_file.read_text(encoding="utf-8")
     assert "data:image/png;base64" in html  # the image is embedded
     assert '"opacity":0.3' in html or '"opacity": 0.3' in html
 
@@ -422,7 +422,7 @@ def test_render_animate_forwards_stimulus_image(tmp_path):
             str(out_file),
         ]
     )
-    assert "data:image/png;base64" in out_file.read_text()
+    assert "data:image/png;base64" in out_file.read_text(encoding="utf-8")
 
 
 def test_render_separable_layers(tmp_path, monkeypatch):

@@ -600,7 +600,9 @@ def test_figure_settings_validate_and_override_without_mutating():
 
 def test_agent_guide_option_tables_match_the_code():
     """docs/agents.md documents every option and default — keep it honest."""
-    guide = (Path(__file__).resolve().parents[1] / "docs" / "agents.md").read_text()
+    guide = (Path(__file__).resolve().parents[1] / "docs" / "agents.md").read_text(
+        encoding="utf-8"
+    )
     section = guide.split("## Every figure option", 1)[1].split(
         "## Reading measures", 1
     )[0]
@@ -811,7 +813,7 @@ def test_animate_scanpath_autoplay_saves_kickoff(sample, tmp_path):
     pid, tid = sps.list_trials(words, fixations).iloc[0]
     fig = sps.animate_scanpath(words, fixations, pid, tid, canvas_size=(2560, 1440))
     out = sps.save_figure(fig, tmp_path / "auto.html")
-    assert "Plotly.animate" in out.read_text()
+    assert "Plotly.animate" in out.read_text(encoding="utf-8")
 
 
 def test_animate_scanpath_no_autoplay_saves_paused(sample, tmp_path):
@@ -821,7 +823,7 @@ def test_animate_scanpath_no_autoplay_saves_paused(sample, tmp_path):
     fig = sps.animate_scanpath(
         words, fixations, pid, tid, canvas_size=(2560, 1440), autoplay=False
     )
-    html = sps.save_figure(fig, tmp_path / "paused.html").read_text()
+    html = sps.save_figure(fig, tmp_path / "paused.html").read_text(encoding="utf-8")
     assert "Plotly.animate" not in html
 
 
@@ -922,7 +924,7 @@ def test_save_figure_layers_one_file_per_layer(sample, tmp_path, monkeypatch):
     fig = sps.plot_scanpath(words, fixations, pid, tid, show_heatmap=True)
 
     def fake_save(f, path, **kw):
-        Path(path).write_text("x")
+        Path(path).write_text("x", encoding="utf-8")
         return Path(path)
 
     monkeypatch.setattr(api, "save_figure", fake_save)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import html
 import math
-import re
 from collections.abc import Callable
 
 import numpy as np
@@ -45,6 +44,13 @@ from .constants import (
     palette_settings,
 )
 from .data import frame_fingerprint
+from .fields import (
+    LABEL_GAP,
+    NARROW_LABEL_W,
+    labeled,
+    plain,
+    row_label,
+)
 from .export import (
     DEFAULT_CAPTION_PATTERN,
     DEFAULT_TITLE_PATTERN,
@@ -89,10 +95,15 @@ NONE_OPTION = "(none)"
 #: rows live: ~160px of label — about 23 characters at the rail's 0.92rem — while
 #: leaving the field wide enough for a multiselect's chips, or for a slider plus
 #: the UX-9 box you type an exact value into.
-_LABEL_W = 0.36
+#:
+#: UX-59 moved the row itself down into `fields.py`, so the Scanpath subtabs can
+#: share it without importing this module (which imports two of them). The
+#: names below stay as they were — this module's call sites are the row's
+#: heaviest user by far.
+_LABEL_W = NARROW_LABEL_W
 
 #: Tighter than the 1rem default: these rows are dense and the width is scarce.
-_LABEL_GAP = "xsmall"
+_LABEL_GAP = LABEL_GAP
 
 #: `label | field | note` for one column-mapping row (UX-52 round 3). Its own
 #: triple rather than `_LABEL_W`: the mapping renders full-width on the 🗂️ Data
@@ -124,75 +135,25 @@ def inline_field_label(host, label: str, help_text: str | None = None) -> None:
 _UNMAPPED_PLACEHOLDER = "Not mapped"
 
 
-#: Markdown emphasis, which a plain-text `title=` attribute would show as
-#: literal punctuation.
-_MD_MARKS = re.compile(r"\*\*|`")
+#: `fields.plain` under this module's own name — the markdown-stripping the
+#: mapping UI's headings and flags do before writing a plain-text tooltip.
+_plain = plain
 
 
-def _plain(text: str) -> str:
-    """``text`` with markdown emphasis stripped, for a plain-text tooltip."""
-    return _MD_MARKS.sub("", text).strip()
+#: `fields.row_label` under this module's own name: one row's title, with its
+#: description folded into the title's own hover tooltip rather than a `?` icon.
+_row_label = row_label
 
 
-def _row_label(host, label: str, help: str | None) -> None:
-    """Render one row's title into its own (left) column — see the UX-51 note.
+def _labeled(host, kind: str, label: str, **kwargs):
+    """`fields.labeled` at the rail's label width — see that module's docstring.
 
-    ``help`` folds into the title's own hover tooltip rather than getting a `?`
-    icon beside it, and the title text is repeated at the head of that tooltip so
-    a label the column had to truncate is still readable in full.
-
-    The tooltip is CSS (``data-tip`` + ``styles.py``'s ``.sps-fhelp::after``),
-    not the browser's native ``title=``. Native ``title`` waits about a second
-    before it appears — fine for an occasional "what is this file", far too slow
-    for a form whose every row hides its description there. The CSS one opens in
-    ~120 ms, matching the `?` icons Streamlit draws elsewhere. ``aria-label``
-    keeps the text reachable now that no ``title`` carries it.
+    Every call site in this module renders into the rail or its popovers, so the
+    narrow width is the one they all want; passing `label_width` explicitly
+    overrides it.
     """
-    text = _plain(label)
-    if not help:
-        host.markdown(
-            f'<span class="sps-flabel">{html.escape(text)}</span>',
-            unsafe_allow_html=True,
-        )
-        return
-    tip = html.escape(f"{text} — {_plain(help)}", quote=True)
-    host.markdown(
-        f'<span class="sps-fhelp" data-tip="{tip}" aria-label="{tip}">'
-        f'<span class="sps-flabel sps-flabel-help">{html.escape(text)}</span>'
-        "</span>",
-        unsafe_allow_html=True,
-    )
-
-
-def _labeled(
-    host,
-    kind: str,
-    label: str,
-    *,
-    display: str | None = None,
-    help: str | None = None,
-    **kwargs,
-):
-    """Render one control as a ``label | field`` row; return the widget's value.
-
-    ``kind`` names the Streamlit method to call (``"selectbox"``,
-    ``"multiselect"``, ``"color_picker"``, …) and every other argument is
-    forwarded untouched, so converting a call site is a matter of *naming* the
-    widget instead of calling it. The widget still receives the real ``label``
-    and ``help`` — only where they are drawn changes.
-
-    ``display`` overrides the *visible* text without touching the widget's own
-    label. Use it where the accessible name has to stay unique but would be far
-    too long for the column — the per-scanpath comparison styling, whose rows are
-    already captioned with the scanpath they belong to.
-    """
-    label_col, field_col = host.columns(
-        [_LABEL_W, 1.0 - _LABEL_W], gap=_LABEL_GAP, vertical_alignment="center"
-    )
-    _row_label(label_col, display if display is not None else label, help)
-    return getattr(field_col, kind)(
-        label, help=help, label_visibility="collapsed", **kwargs
-    )
+    kwargs.setdefault("label_width", _LABEL_W)
+    return labeled(host, kind, label, **kwargs)
 
 
 def _slider_row(host, n_boxes: int) -> list:

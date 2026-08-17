@@ -126,6 +126,7 @@ from scanpath_studio.export import (
     render_pattern,
     render_static_figure_bytes,
 )
+from scanpath_studio.fields import labeled, panel_field
 from scanpath_studio.export_status import (
     EXPORTER_VERSION,
     ExportStage,
@@ -448,9 +449,13 @@ def _render_save_plot_button(
     if fig is None:
         return
     file_stem = f"scanpath_{_safe_filename(slug)}"
-    # Stacked (not columned) so the controls fit the narrow side-panel "Export"
-    # toggle they now live in.
-    fmt = st.radio(
+    # UX-59: `label | field` rows. The pre-UX-43 note here said "stacked (not
+    # columned) so the controls fit the narrow side-panel Export toggle" — that
+    # toggle is long gone; this is a full-width subtab now, and the width the
+    # stack was avoiding is exactly what the label column spends.
+    fmt = panel_field(
+        st,
+        "radio",
         "Download format",
         # HTML is a browser-free fallback (no Kaleido/Chrome) — useful on
         # Streamlit Cloud where static image export needs a Chromium binary.
@@ -584,7 +589,9 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     average duration, so its runtime equals the quoted playback time.
     """
     n_frames = len(fig.frames or ())
-    fmt = st.radio(
+    fmt = panel_field(
+        st,
+        "radio",
         "Export format",
         options=["HTML", "GIF", "MP4"],
         index=0,
@@ -636,7 +643,9 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     frame_ms = playback_ms / n_frames if n_frames else 16.0
     clip_s = playback_ms / 1000.0
 
-    scale = st.select_slider(
+    scale = panel_field(
+        st,
+        "select_slider",
         "Resolution",
         options=[0.5, 0.75, 1.0, 1.5, 2.0],
         value=1.0,
@@ -647,13 +656,18 @@ def _render_animation_export(fig, *, file_stem: str, playback_ms: float) -> None
     )
 
     max_frames = None
-    if n_frames > _ANIM_FRAME_CAP and st.checkbox(
+    # The label column is one ellipsized line, so the sentence this checkbox used
+    # as its label becomes its hover and the column carries the short name.
+    if n_frames > _ANIM_FRAME_CAP and panel_field(
+        st,
+        "checkbox",
         f"Limit to {_ANIM_FRAME_CAP} frames for a faster render",
+        display="Frame cap",
         value=True,
         key="anim_export_limit",
-        help="This reading has many fixations. Capping the rendered frames keeps "
-        "the export quick; the clip's total duration is unchanged (each kept "
-        "frame is held a little longer).",
+        help=f"Render at most {_ANIM_FRAME_CAP} frames. This reading has many "
+        "fixations; capping them keeps the export quick, and the clip's total "
+        "duration is unchanged (each kept frame is held a little longer).",
     ):
         max_frames = _ANIM_FRAME_CAP
 
@@ -1668,7 +1682,9 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
             "doesn't match, or to add a field the detection skipped."
         )
         if span_options:
-            st.multiselect(
+            labeled(
+                st,
+                "multiselect",
                 "Highlighted spans",
                 options=span_options,
                 key=_STIMULUS_SPAN_KEY,
@@ -1677,7 +1693,9 @@ def _render_stimulus_field_picker(host, span_options, qa_options) -> None:
                 "words in the stimulus text and gets a summary line below it.",
             )
         if qa_options:
-            st.multiselect(
+            labeled(
+                st,
+                "multiselect",
                 "Question & answer fields",
                 options=qa_options,
                 key=_STIMULUS_QA_KEY,
@@ -2990,14 +3008,18 @@ def _render_pair_export(
             "side's dataset, trial and recording setup — so the comparison can "
             "be reproduced, which the image alone can't be."
         )
-        fmt = st.selectbox(
+        fmt = panel_field(
+            st,
+            "selectbox",
             "Figure format",
             options=["png", "svg", "pdf", "html"],
             key="cmp_pair_export_format",
             help="PNG/SVG/PDF need a Chrome/Chromium browser (Kaleido); HTML "
             "needs none.",
         )
-        table_fmt = st.selectbox(
+        table_fmt = panel_field(
+            st,
+            "selectbox",
             "Table format",
             options=["csv", "parquet"],
             key="cmp_pair_export_table_format",
@@ -6695,7 +6717,9 @@ def render_alignment_comparison_tab(
     # and Streamlit renders every subtab on each rerun — so gate it behind a
     # toggle the user opts into. The toggle state persists, so it stays on while
     # browsing trials once enabled.
-    if not st.toggle(
+    if not panel_field(
+        st,
+        "toggle",
         "Show comparison grid",
         key="align_grid_show",
         help="Build a side-by-side grid comparing all ten algorithms for this "
@@ -6718,22 +6742,25 @@ def render_alignment_comparison_tab(
             "correct. Showing the original scanpath."
         )
 
-    ctrl_cols = st.columns([1, 1])
-    with ctrl_cols[0]:
-        n_cols = st.slider(
-            "Panels per row",
-            min_value=2,
-            max_value=3,
-            value=2,
-            key="align_grid_ncols",
-        )
-    with ctrl_cols[1]:
-        show_connectors = st.checkbox(
-            "Show drift connectors",
-            key="align_grid_connectors",
-            help="Draw a faint line from each fixation's original position to its "
-            "corrected (snapped) position in every panel.",
-        )
+    # Two `label | field` rows rather than two side-by-side stacks (UX-59): the
+    # rows below the grid toggle read as one form with it.
+    n_cols = panel_field(
+        st,
+        "slider",
+        "Panels per row",
+        min_value=2,
+        max_value=3,
+        value=2,
+        key="align_grid_ncols",
+    )
+    show_connectors = panel_field(
+        st,
+        "checkbox",
+        "Show drift connectors",
+        key="align_grid_connectors",
+        help="Draw a faint line from each fixation's original position to its "
+        "corrected (snapped) position in every panel.",
+    )
 
     # Clean, comparable spatial view: pin axes to x/y, drop the heatmap / raw gaze
     # / labels / order numbers (illegible at grid scale), colour by line.
@@ -7086,7 +7113,9 @@ def render_multiple_comparison_tab(
     col_side, col_main = st.columns([3, 7], gap="medium")
 
     with col_side:
-        gen_col = st.selectbox(
+        gen_col = labeled(
+            st,
+            "selectbox",
             "Comparison column",
             options=gen_cols,
             key="multi_gen_col",
@@ -7094,7 +7123,9 @@ def render_multiple_comparison_tab(
             "value — over the SAME text as the selected trial — becomes one "
             "comparison scanpath, scored against the selected reading.",
         )
-        n_cols = st.slider(
+        n_cols = labeled(
+            st,
+            "slider",
             "Grid columns",
             min_value=1,
             max_value=4,

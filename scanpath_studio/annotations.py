@@ -17,6 +17,8 @@ import json
 
 import streamlit as st
 
+from .fields import panel_field
+
 ANNOTATIONS_STATE_KEY = "trial_annotations"
 SCHEMA_VERSION = 2
 
@@ -217,9 +219,11 @@ def render_trial_annotations(
     annotation_screen = None
     if screen_id is not None:
         scope_key = f"{_WIDGET_PREFIX}scope_{participant_id}__{trial_id}"
-        scope = st.radio(
+        scope = panel_field(
+            st,
+            "radio",
             "Annotation scope",
-            ["Parent trial", "This screen"],
+            options=["Parent trial", "This screen"],
             key=scope_key,
             horizontal=True,
             help="Parent annotations follow the logical trial; screen annotations "
@@ -245,7 +249,20 @@ def render_trial_annotations(
         label += f" · {', '.join(entry['tags'])}"
     container = st.container() if bare else st.expander(label, expanded=False)
     with container:
-        star = st.checkbox("⭐ Favorite (star this trial)", key=star_key)
+        # UX-59: `label | field` rows, so the five stacked controls fit under the
+        # plot without scrolling. Unlike the rail (`controls._labeled`'s note),
+        # the checkbox is split too: here the label column is the row spine every
+        # other field lines up on, and a native checkbox would put its box —
+        # not its title — at that edge.
+        star = panel_field(
+            st,
+            "checkbox",
+            "⭐ Favorite (star this trial)",
+            display="⭐ Favorite",
+            key=star_key,
+            help="Star this trial, so the **More** filters' ⭐ Favorites only "
+            "can narrow the pool to it.",
+        )
         # Options must include every currently-selected tag (incl. ones added
         # via the input) or st.multiselect raises.
         options = sorted(
@@ -253,21 +270,30 @@ def render_trial_annotations(
             | set(entry["tags"])
             | set(st.session_state.get(tags_key, []))
         )
-        tags = st.multiselect(
+        tags = panel_field(
+            st,
+            "multiselect",
             "Tags",
             options=options,
             key=tags_key,
             help="Pick presets (e.g. 'To exclude') or add your own below.",
         )
-        st.text_input(
+        panel_field(
+            st,
+            "text_input",
             "Add a tag",
             key=newtag_key,
             placeholder="type a tag, press Enter",
             on_change=_add_tag_callback,
             args=(tags_key, newtag_key),
         )
-        note = st.text_area(
+        # Top-aligned: the box is ~100px tall, and a centred title would float
+        # opposite the middle of an empty note rather than beside its first line.
+        note = panel_field(
+            st,
+            "text_area",
             "Notes",
+            align="top",
             key=note_key,
             placeholder="Researcher notes for this trial…",
             height=100,

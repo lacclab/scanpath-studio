@@ -826,6 +826,14 @@
       "archived": false,
       "updated": "2026-08-18"
     },
+    "UX-59": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Shubi",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
     "VAL-1": {
       "status": "Closed",
       "priority": "Normal",

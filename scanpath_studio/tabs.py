@@ -7879,7 +7879,7 @@ def _participant_metadata_body(participants) -> None:
     # UX-53 r5: the paragraph that used to print here now rides the uploader's
     # own label as a tooltip — descriptive prose on this page is hover-only.
     upload = st.file_uploader(
-        "Participant table",
+        "Participant metadata table (optional)",
         type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
         key="participant_metadata_upload",
         # No `persist_state` — `st.file_uploader` does not take it. It does not

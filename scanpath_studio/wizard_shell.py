@@ -107,8 +107,10 @@ STEPS_BY_ID: dict[str, WizardStep] = {s.id: s for s in STEPS}
 
 #: The former steps, kept as the section headings inside part 2 (and, for
 #: `readers`, inside part 1). Ordered as they render.
+#: `readers` is deliberately absent (UX-53 r6): the participant table is one
+#: uploader among four, not a stage, so it renders with the other uploads under
+#: no heading of its own. Its explanation lives on its uploader's label.
 SECTION_TITLES: dict[str, str] = {
-    "readers": "About your readers",
     "identity": "Trials & readers",
     "geometry": "Fixations & text",
     "setup": "Recording setup",

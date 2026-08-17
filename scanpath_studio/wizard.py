@@ -2299,26 +2299,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
         s4.caption("✓ Pre-answered from the restored setup file — review it below.")
     setup_snapshot = _wizard_setup_step(s4, raw_words, raw_fix, has_boxes=has_words)
 
-    # DATA-20's participant table moved up into part 1 (UX-53) — it is an upload,
-    # and it belongs with the other uploads rather than five steps below them.
-    # Still only while `active`: the collapsed *Data & mapping* review panel would
-    # otherwise build the same widget keys as the 🗂️ Data page's own section.
+    # DATA-20's participant table moved up beside the uploads (UX-53) — it is an
+    # upload, and it belongs with them. UX-53 r6 dropped its section heading
+    # too: it is one uploader among four now, and a heading of its own made it
+    # read as a stage. Its explanation is on the uploader's own label.
+    # Still only while `active`: the collapsed *Data & mapping* review panel
+    # would otherwise build the same widget keys as the 🗂️ Data page's section.
     if active:
         from scanpath_studio.tabs import render_participant_metadata_section
 
-        s_readers = wizard_shell.section(
-            s1,
-            "readers",
-            status=statuses.get("readers"),
-            caption=(
-                "Optional, and separate from the tables above: one row per reader, "
-                "not per trial. Its columns then behave like fields in your data — "
-                "filters, chips, trial sorting, corpus grouping, export."
-            ),
-        )
         render_participant_metadata_section(
             _wizard_reader_ids(raw_words, word_schema, raw_fix, fix_schema),
-            host=s_readers.container(),
+            host=s1.container(),
         )
 
     s5 = wizard_shell.section(

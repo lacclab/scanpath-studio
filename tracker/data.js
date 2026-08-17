@@ -644,6 +644,13 @@ window.TRACKER = {
     "The participant table's descriptive paragraph moved onto its uploader's",
     "tooltip, phrased as asked.",
     "",
+    "**Round 6 (2026-08-17).** Dropped the *About your readers* heading — the",
+    "participant table is one uploader among four, not a stage — so `readers` is",
+    "gone from `SECTION_TITLES` and it renders with the other uploads. Renamed to",
+    "**Participant metadata table (optional)**, with the agreed sentence on its",
+    "uploader tooltip; an `AppTest` probe checks the label, the hover text and",
+    "that the old always-printed paragraph is gone.",
+    "",
     "255 tests pass across `test_apptest.py`, `test_wizard_helpers.py`,",
     "`test_metadata.py`, `test_tour.py`, `test_theme.py`."
    ],

@@ -629,3 +629,147 @@ class TestCompareParamsOnlyTravelWithAComparison:
         assert "cmp_stimulus" not in params
         # The rest of the settings half of the link is unaffected.
         assert params
+
+
+def _secondary(name: str = "PoTeC", *, participant: str = "r1") -> SecondaryDataset:
+    """A loaded comparison source, small enough to assert on."""
+    words = _words(participant, "b0")
+    fixations = _fixations(participant, "b0")
+    return SecondaryDataset(
+        name=name,
+        words=words,
+        fixations=fixations,
+        combos=pd.DataFrame(
+            {
+                "participant_id": [participant],
+                "trial_id": ["b0"],
+                "text_id": ["t1"],
+            }
+        ),
+        setup=SetupSnapshot(
+            canvas_width=1680,
+            canvas_height=1050,
+            screen_provenance=Provenance.MEASURED,
+        ),
+    )
+
+
+class TestBothPanelsNameTheirDataset:
+    """CMP-15 — a cross-dataset pair names A's corpus as well as B's.
+
+    B's name came free with the *Compare with* pick while A's source was
+    implicit, so the chip strip labelled one panel with a corpus and the other
+    with a bare reader id — which reads as though only B came from a dataset.
+    """
+
+    @staticmethod
+    def _meta(*, source: SecondaryDataset | None, primary_dataset: str | None):
+        return tabs._build_compare_meta(
+            _words("p1", "t1"),
+            _fixations("p1", "t1"),
+            "p1",
+            "t1",
+            "r1" if source is not None else "p2",
+            "b0" if source is not None else "t2",
+            source=source,
+            primary_dataset=primary_dataset,
+        )
+
+    def test_cross_dataset_labels_carry_both_corpus_names(self):
+        meta = self._meta(source=_secondary(), primary_dataset="OneStop")
+        assert meta["label_primary"] == f"OneStop{tabs._COMPARE_DATASET_SEP}p1"
+        assert meta["label_compare"] == f"PoTeC{tabs._COMPARE_DATASET_SEP}r1"
+
+    def test_a_stays_bare_when_its_corpus_is_unknown(self):
+        """No name to show beats an empty separator dangling off the label."""
+        meta = self._meta(source=_secondary(), primary_dataset="")
+        assert meta["label_primary"] == "p1"
+        assert meta["label_compare"] == f"PoTeC{tabs._COMPARE_DATASET_SEP}r1"
+
+    def test_same_dataset_names_neither(self):
+        """The common case: one corpus printed twice tells the reader nothing."""
+        words = pd.concat([_words("p1", "t1"), _words("p2", "t2")], ignore_index=True)
+        fixations = pd.concat(
+            [_fixations("p1", "t1"), _fixations("p2", "t2")], ignore_index=True
+        )
+        meta = tabs._build_compare_meta(
+            words, fixations, "p1", "t1", "p2", "t2", primary_dataset="OneStop"
+        )
+        assert meta["label_primary"] == "p1"
+        assert meta["label_compare"] == "p2"
+
+
+class TestResolveCompareSource:
+    """UX-64 — B's dataset resolves from state, before its one control line draws.
+
+    The row has to know how many candidates B has to decide whether it carries a
+    scrub slider, so the source and its ``cmp`` filters are read the way
+    ``app.main`` reads A's: from session state, ahead of the widgets that write
+    them (which now render inside the row's own 🔎 popover).
+    """
+
+    @staticmethod
+    def _resolve(app_test_state, *, ready=True):
+        return tabs._resolve_compare_source({"PoTeC": ready}, {"PoTeC": "needs setup"})
+
+    def test_this_dataset_resolves_to_no_source(self, monkeypatch):
+        import streamlit as st
+
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY, THIS_DATASET
+
+        st.session_state[COMPARE_SOURCE_KEY] = THIS_DATASET
+        source, notice = tabs._resolve_compare_source({}, {})
+        assert source is None
+        assert notice == ""
+
+    def test_an_unready_corpus_says_why_instead_of_falling_back(self):
+        import streamlit as st
+
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        st.session_state[COMPARE_SOURCE_KEY] = "PoTeC"
+        source, notice = tabs._resolve_compare_source(
+            {"PoTeC": False}, {"PoTeC": "Set its location first."}
+        )
+        assert source is None
+        assert "Set its location first." in notice
+
+    def test_stored_filters_narrow_the_pool_without_rendering_them(self, monkeypatch):
+        import streamlit as st
+
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        source = _secondary()
+        monkeypatch.setattr(tabs, "load_secondary_dataset", lambda name: source)
+        st.session_state[COMPARE_SOURCE_KEY] = "PoTeC"
+        # Pretend the previous run already resolved this dataset, so the stored
+        # filter result belongs to it.
+        st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] = "PoTeC"
+        st.session_state[f"{tabs._COMPARE_FILTER_PREFIX}_trial_filters"] = {
+            "participants": ["nobody"],
+            "metadata": {},
+            "ranges": {},
+        }
+        narrowed, notice = tabs._resolve_compare_source({"PoTeC": True}, {})
+        assert notice == ""
+        assert narrowed is not None
+        assert narrowed.fixations.empty, "B's own filters were not applied"
+
+    def test_a_dataset_switch_ignores_the_previous_corpus_filters(self, monkeypatch):
+        """Reader ids from the corpus you just left would empty the new pool."""
+        import streamlit as st
+
+        from scanpath_studio.compare_source import COMPARE_SOURCE_KEY
+
+        source = _secondary()
+        monkeypatch.setattr(tabs, "load_secondary_dataset", lambda name: source)
+        st.session_state[COMPARE_SOURCE_KEY] = "PoTeC"
+        st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] = "MultiplEYE"
+        st.session_state[f"{tabs._COMPARE_FILTER_PREFIX}_trial_filters"] = {
+            "participants": ["nobody"],
+            "metadata": {},
+            "ranges": {},
+        }
+        narrowed, _ = tabs._resolve_compare_source({"PoTeC": True}, {})
+        assert narrowed is source, "the switch run should not narrow at all"
+        assert st.session_state[tabs._COMPARE_SOURCE_RESOLVED_KEY] == "PoTeC"

@@ -73,10 +73,10 @@ from scanpath_studio.constants import (
     DEMO_CHOICE,
     FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
-    NARROW_BY_GRID,
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
+    SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
     SELECTOR_ROW_WIDE_GRID,
     WORD_LABEL_COLOR,
@@ -1020,19 +1020,25 @@ def _compare_source_name() -> str | None:
     return None if not chosen or chosen == THIS_DATASET else str(chosen)
 
 
-def _render_compare_dataset_picker() -> SecondaryDataset | None:
-    """The **CMP-8 §5.1** dataset picker for scanpath B, plus B's own filters.
+#: CMP-8 §5.2's filter result with nothing selected — the pool as it comes.
+#: Used for the one run where B's stored filter result belongs to the dataset
+#: the user just switched *away* from (see ``_resolve_compare_source``).
+_NO_COMPARE_NARROWING: dict = {"participants": None, "metadata": {}, "ranges": {}}
 
-    Returns the chosen source already narrowed by its own ``cmp``-prefixed filter
-    set (§5.2), or ``None`` for "This dataset" — the pre-CMP-8 behaviour, where B
-    comes out of A's pool. A source that is offered but not loadable (a public
-    corpus whose location has never been set) also returns ``None``, after
-    saying why: silently falling back would look like the picker was ignored.
+#: The comparison dataset the last run resolved, so a switch can be told from a
+#: re-render. Not a widget key — the picker's own key is the user's *pick*, and
+#: this is what was actually loaded and filtered against.
+_COMPARE_SOURCE_RESOLVED_KEY = "_compare_source_resolved"
+
+
+def _compare_source_choices() -> tuple[list[str], dict[str, bool], dict[str, str]]:
+    """The **Compare with** options: every dataset scanpath B could come from.
+
+    Split out of the picker by UX-64. B's controls are one line now, and a line
+    has to know how many candidate trials B has before it can pick its grid —
+    which means resolving the dataset *before* any of the row's widgets render,
+    the same order ``app.main`` resolves A's pool in.
     """
-    # Lazy, like every other `app` reach from this module: app imports tabs, so
-    # a module-level import would close the cycle.
-    from scanpath_studio.app import mark_wip_if_benchmark as _mark_wip_if_benchmark
-
     options = secondary_dataset_options(
         exclude=st.session_state.get("data_source_choice")
     )
@@ -1041,13 +1047,60 @@ def _render_compare_dataset_picker() -> SecondaryDataset | None:
     names = [THIS_DATASET, *(name for name, _, _ in options)]
     if st.session_state.get(COMPARE_SOURCE_KEY) not in names:
         st.session_state[COMPARE_SOURCE_KEY] = THIS_DATASET
-    # UX-47: B's row is A's row one level down, so it takes the same grid —
-    # the **Compare with** dropdown lands under **Select Trial**, and B's own
-    # **More** under A's.
-    ds_col, filter_col, more_col = st.columns(
-        SELECTOR_ROW_TRIO, vertical_alignment="bottom"
-    )
-    chosen = ds_col.selectbox(
+    return names, ready_by_name, reason_by_name
+
+
+def _resolve_compare_source(
+    ready_by_name: dict[str, bool], reason_by_name: dict[str, str]
+) -> tuple[SecondaryDataset | None, str]:
+    """Load scanpath B's dataset (**CMP-8 §5.1**), narrowed by its own filters.
+
+    Returns ``(source, notice)``. ``source`` is ``None`` for "This dataset" — the
+    pre-CMP-8 behaviour, where B comes out of A's pool — and also for a source
+    that is offered but not loadable (a public corpus whose location has never
+    been set), in which case ``notice`` says why: silently falling back would
+    look like the picker was ignored.
+
+    §5.2's filters are **read from session state** rather than taken from the
+    widgets, which now render inside this row's 🔎 popover (UX-64) instead of
+    above it. That is the same contract A has — ``render_trial_filters`` stashes
+    its result, and every widget's ``on_change`` recomputes the stash before the
+    rerun, so a filter change still applies on the run it happens.
+    """
+    chosen = str(st.session_state.get(COMPARE_SOURCE_KEY) or THIS_DATASET)
+    if chosen == THIS_DATASET:
+        st.session_state[_COMPARE_SOURCE_RESOLVED_KEY] = chosen
+        return None, ""
+    if not ready_by_name.get(chosen, False):
+        return None, f"⚠️ {reason_by_name.get(chosen, '')}"
+    source = load_secondary_dataset(chosen)
+    if source is None:
+        return None, f"⚠️ Couldn't load **{chosen}** as a comparison dataset."
+    # The run that *switches* dataset ignores the stored result: it was computed
+    # against the corpus just left, and applying one corpus' reader ids to
+    # another empties the pool for a run with nothing on screen explaining it.
+    # The widgets below re-seed against the new source and stash a fresh result,
+    # so the following run filters normally.
+    filters = read_trial_filters(_COMPARE_FILTER_PREFIX)
+    if st.session_state.get(_COMPARE_SOURCE_RESOLVED_KEY) != chosen:
+        filters = dict(_NO_COMPARE_NARROWING)
+    st.session_state[_COMPARE_SOURCE_RESOLVED_KEY] = chosen
+    return _narrow_secondary(source, filters), ""
+
+
+def _render_compare_dataset_cell(
+    host, names: list[str], ready_by_name: dict[str, bool]
+) -> None:
+    """The **Compare with** selectbox — B's line's leading cell (UX-64).
+
+    Sits under A's dataset picker, on the same grid track, so the two control
+    lines read down the page as *which dataset → which trial → scrub → act*.
+    """
+    # Lazy, like every other `app` reach from this module: app imports tabs, so
+    # a module-level import would close the cycle.
+    from scanpath_studio.app import mark_wip_if_benchmark as _mark_wip_if_benchmark
+
+    host.selectbox(
         "**Compare with**",
         options=names,
         key=COMPARE_SOURCE_KEY,
@@ -1067,39 +1120,32 @@ def _render_compare_dataset_picker() -> SecondaryDataset | None:
         help="Which dataset scanpath B comes from. Other datasets keep their own "
         "screen geometry, so each panel is drawn to its own monitor.",
     )
-    if chosen == THIS_DATASET:
-        return None
-    if not ready_by_name.get(chosen, False):
-        st.caption(f"⚠️ {reason_by_name.get(chosen, '')}")
-        return None
-    source = load_secondary_dataset(chosen)
-    if source is None:
-        st.caption(f"⚠️ Couldn't load **{chosen}** as a comparison dataset.")
-        return None
-    # §5.2: B's own Narrow-by pair + More popover, on B's columns. Mirrors A's
-    # row above the chips; the `cmp` prefix is what keeps the two independent.
-    box = filter_col.container(key="cmp_narrow_by")
-    nb_label, nb_text, nb_part = box.columns(
-        NARROW_BY_GRID, vertical_alignment="center"
-    )
-    nb_label.markdown("**Filter B by**")
+
+
+def _render_compare_filters(host, source: SecondaryDataset) -> None:
+    """Every way to narrow **B's** pool, behind one 🔎 — A's popover, for B.
+
+    §5.2's *Filter B by* row and its **More** popover were two controls on a row
+    of their own; UX-64 folded them into the one icon that closes B's line, so
+    both lines end in the same cluster. The widgets and their ``cmp`` prefix are
+    unchanged — only where they render is.
+    """
+    pop = host.popover("🔎", width="content", help=f"Filter {source.name}'s trials")
+    box = pop.container(key="cmp_narrow_by")
+    box.caption(f"Narrow **{source.name}** — scanpath B only.")
     render_narrow_by(
         source.words,
         source.fixations,
         prefix=_COMPARE_FILTER_PREFIX,
-        text_host=nb_text,
-        part_host=nb_part,
+        text_host=box,
+        part_host=box,
     )
-    with more_col:
-        more_pop = st.container(key="railbtn_cmp_more").popover("More", width="content")
-        more_pop.caption(f"Narrow **{chosen}** — conditions.")
-        filters = render_trial_filters(
-            source.words,
-            source.fixations,
-            prefix=_COMPARE_FILTER_PREFIX,
-            host=more_pop,
-        )
-    return _narrow_secondary(source, filters)
+    render_trial_filters(
+        source.words,
+        source.fixations,
+        prefix=_COMPARE_FILTER_PREFIX,
+        host=box,
+    )
 
 
 def _narrow_secondary(source: SecondaryDataset, filters: dict) -> SecondaryDataset:
@@ -1148,8 +1194,16 @@ def _render_compare_selector(
     corpus entirely, in which case the candidate pool, the narrow-by filters and
     the screen geometry are all that dataset's own. Returns
     ``(participant, trial, source)`` — ``source`` is ``None`` for the
-    same-dataset case, i.e. everything that existed before CMP-8."""
-    source = _render_compare_dataset_picker()
+    same-dataset case, i.e. everything that existed before CMP-8.
+
+    **UX-64** made that one line rather than three: B's row is now A's row —
+    ``[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ 🔎]`` on the same
+    ``SELECTOR_ROW_GRID`` — instead of a dataset row, a *Filter B by* row and a
+    picker row stacked above the chips. The dataset is therefore resolved from
+    session state *before* the row is drawn (``_resolve_compare_source``), since
+    how many candidates B has is what decides whether the row has a slider."""
+    names, ready_by_name, reason_by_name = _compare_source_choices()
+    source, source_notice = _resolve_compare_source(ready_by_name, reason_by_name)
     if source is not None:
         # B's pool is its own dataset, narrowed by its own filters (§5.2), and
         # nothing about A applies to it — including the multipart screen scoping
@@ -1214,9 +1268,54 @@ def _render_compare_selector(
                 fixations_filtered = fixations_filtered[
                     fixations_filtered[SCREEN_ID].astype(str) == active_screen
                 ]
+    # UX-64 — ONE row for scanpath B, the mirror of A's above it:
+    # `[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ 🔎]` on the same
+    # `SELECTOR_ROW_GRID`, replacing the dataset row + *Filter B by* row + picker
+    # row this used to stack above the chips. The dataset keeps a track of its
+    # own and does not shrink — the label is what tells two compared corpora
+    # apart — and a one-candidate pool drops the slider exactly as A's row does
+    # (`st.select_slider` throws on a single option — BUG-23).
+    #
+    # Built BEFORE the "no candidates" notice below, so the dataset picker and
+    # the filters that emptied the pool are still on screen to undo it.
+    n = len(options)
+    slider_col = None
+    if n > 1:
+        lead_col, sel_col, slider_col, trail_col = st.columns(
+            SELECTOR_ROW_GRID, vertical_alignment="bottom"
+        )
+    else:
+        lead_col, sel_col, trail_col = st.columns(
+            SELECTOR_ROW_TRIO, vertical_alignment="bottom"
+        )
+    _render_compare_dataset_cell(lead_col, names, ready_by_name)
+    trail = trail_col.container(key="railbtn_single_compare_trail")
+    # CMP-6: candidate sorting is visually LAST in the row, after the step
+    # buttons. It still executes before the selectbox/slider below, so a change
+    # applies to their list on the same run. CMP-10 mirrors the main trial
+    # picker: ◀ / ▶ / ⇅ share one right-packed `railbtn_*` pill cluster instead
+    # of occupying three independent columns — UX-64 adds 🔎 to the same cluster.
+    # The sort is UI-only: it never travels in a deep link or saved config (same
+    # call as `share_identity_mode`, DATA-16/S3).
+    step_col = sort_col = None
+    if n > 1:
+        # Created in display order, then filled out of order: the ordering
+        # popover has to run first because its result is the list the selectbox,
+        # the slider and the ◀ ▶ steps all walk.
+        step_col = trail.container(key="railbtn_single_compare_step")
+        sort_col = trail.container(key="railbtn_single_compare_sort")
+    # §5.2's filters, only when B has a dataset of its own to narrow: under
+    # "This dataset" the candidates come out of A's pool, which A's own 🔎 has
+    # already narrowed — a second copy of the same controls would fight it.
+    if source is not None:
+        _render_compare_filters(
+            trail.container(key="railbtn_single_compare_filter"), source
+        )
+    if source_notice:
+        st.caption(source_notice)
     if not options:
         if source is not None:
-            st.info(f"No trials in **{source.name}** match the filters above.")
+            st.info(f"No trials in **{source.name}** match its 🔎 filters.")
         else:
             st.info(
                 "No other trials contain this screen."
@@ -1225,13 +1324,6 @@ def _render_compare_selector(
             )
         return None, None, None
 
-    # CMP-6: candidate sorting is visually LAST in the picker row, after the
-    # step buttons. It still executes before the selectbox/slider below, so a
-    # change applies to their list on the same run. CMP-10 mirrors the main trial
-    # picker: ◀ / ▶ / ⇅ share one right-packed `railbtn_*` pill cluster instead of
-    # occupying three independent columns. UI-only — it never travels in a deep
-    # link or saved config (same call as `share_identity_mode`, DATA-16/S3).
-    n = len(options)
     sort_keys = trial_sort_keys(
         combos,
         "trial_id",
@@ -1239,18 +1331,6 @@ def _render_compare_selector(
         fixations=fixations_filtered,
     )
     sort_options = [_CMP_SORT_DEFAULT, TRIAL_SORT_DEFAULT, *sort_keys]
-    sort_col = None
-    if n > 1:
-        sel_col, slider_col, trail_col = st.columns(
-            SELECTOR_ROW_TRIO, vertical_alignment="bottom"
-        )
-        trail = trail_col.container(key="railbtn_single_compare_trail")
-        # Create the children in display order, then fill the ordering popover
-        # first because its result determines the option order used below.
-        step_col = trail.container(key="railbtn_single_compare_step")
-        sort_col = trail.container(key="railbtn_single_compare_sort")
-    else:
-        sel_col = st
 
     sort_choice = _CMP_SORT_DEFAULT
     # What the list is actually ordered by, which linking can override — see the
@@ -2593,9 +2673,14 @@ def _build_compare_meta(
     compare_trial: str | None,
     selected_screen: str | None = None,
     source: SecondaryDataset | None = None,
+    primary_dataset: str | None = None,
 ) -> dict | None:
     """Build the second trial's words/fixations + column labels for the
     side-by-side metadata table, or None when no comparison is active.
+
+    ``primary_dataset`` is A's own corpus name (CMP-15): a cross-dataset
+    comparison names *both* sides above their chip strips, since naming only B
+    reads as though A had no corpus at all.
 
     ``source`` (CMP-8 §3) makes B come out of a *different* dataset: the trial is
     extracted from that source's frames, namespaced by `_qualify_for_compare`,
@@ -2632,8 +2717,18 @@ def _build_compare_meta(
     # participants (the common same-text case), else the trial ids — the long
     # ids otherwise overflow the narrow panel. Across datasets the two readers
     # are never the same person, so the dataset name is the distinguishing half.
+    #
+    # CMP-15: across datasets that qualifier goes on **both** labels. B's name
+    # comes free with the *Compare with* pick while A's source is implicit, so
+    # labelling only B read as though one panel had a corpus and the other did
+    # not. Same-dataset comparisons — the common case — stay bare on both sides:
+    # repeating one corpus name twice says nothing.
     if source is not None:
         label_primary = str(selected_participant)
+        if primary_dataset:
+            label_primary = (
+                f"{primary_dataset}{_COMPARE_DATASET_SEP}{selected_participant}"
+            )
         label_compare = f"{source.name}{_COMPARE_DATASET_SEP}{compare_participant}"
     elif str(selected_participant) != str(compare_participant):
         label_primary = str(selected_participant)
@@ -4088,6 +4183,8 @@ def render_single_trial_tab(
         compare_trial,
         selected_screen,
         source=compare_source,
+        # CMP-15: A's corpus, so a cross-dataset pair names both sides.
+        primary_dataset=str(st.session_state.get("data_source_choice") or ""),
     )
     comparing = compare_meta is not None
     # CMP-8 §7: publish B for the Share link, alongside A above. Always the

@@ -169,7 +169,7 @@
       "updated": "2026-08-18"
     },
     "CMP-15": {
-      "status": "Backlog",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
@@ -894,7 +894,7 @@
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. its ok. leave the data page as the only way to add data.\n2. tha dataset buttonm shouldn't shrink because you may compare 2 different datasets. it's better to shrink the slider, and make filter an icon which shrinks it too.",
+      "implementationBrief": "great, do the same for the second control line when we use compare - when compare is on, I want the second trial control line to be the same as this one",
       "archived": false,
       "updated": "2026-08-18"
     },

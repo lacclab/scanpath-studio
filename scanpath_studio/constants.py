@@ -669,7 +669,3 @@ SELECTOR_ROW_WIDE_GRID = [
     SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
     SELECTOR_ROW_GRID[3],
 ]
-
-#: The Narrow-by row's middle track, split into `label | text | participant`.
-#: Used by both A's row and (in Compare mode) B's, so the two line up too.
-NARROW_BY_GRID = [0.9, 2.2, 2.2]

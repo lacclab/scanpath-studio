@@ -78,10 +78,16 @@ computation.
 
 ### Comparing across datasets
 
-**Compare with** (above the *Compare To* picker) chooses which dataset scanpath
-B comes from. It defaults to *This dataset*; pick another and the candidate list,
-the **Filter B by** controls beside it, and the trial's screen geometry all come
-from that dataset instead.
+**Compare with** (the first control on scanpath B's line, directly under the
+dataset picker on your own) chooses which dataset scanpath B comes from. It
+defaults to *This dataset*; pick another and the candidate list, the 🔎 filters
+at the end of B's line, and the trial's screen geometry all come from that
+dataset instead.
+
+B's line is the same shape as the trial line above it — dataset, trial, scrub
+slider, then ◀ ▶ ⇅ and 🔎 — so the two read down the page as one pair of
+controls. B's 🔎 appears only when B has a dataset of its own to narrow;
+under *This dataset* the candidates come out of the pool your own 🔎 defines.
 
 Any loaded upload, the bundled demo and the synthetic trial are always
 available. A public corpus is offered too, but only loads when its files are

@@ -211,6 +211,32 @@ window.TRACKER = {
     "Add a **Filter** expander that sits outside every other expander and",
     "**unites** the Saccades and Fixations filters, replacing both."
    ],
+   "whatWasDone": [
+    "**One 🧹 Filter section for the whole figure**, a peer of the layer",
+    "sections rather than a popover inside two of them. It holds both",
+    "halves under their own named blocks — **👁️ Fixations** (the",
+    "fixation-index window plus the short / long / out-of-bounds rules) and",
+    "**↗️ Saccades** (which reading classes are drawn) — in that order,",
+    "whatever order the code that renders them happens to run in (the",
+    "section reserves a slot for each up front).",
+    "",
+    "**It sits after the layer sections and before 📐 Figure & canvas**, so",
+    "the rail reads *what is drawn → what is thinned out of it → how it is",
+    "framed*.",
+    "",
+    "**The badge survived the merge and grew a level.** Each half still",
+    "badges its own block with its own detail (`2 active, 1 hidden`), and",
+    "the section header carries a plain `•` when either is narrowing —",
+    "`_plot_filter_badge`. VIZ-27's rule is why: a thinned figure otherwise",
+    "reads as missing data.",
+    "",
+    "Each half renders only while its layer is on, exactly as its popover",
+    "did, so the section never offers a filter for something that is not",
+    "being drawn."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**Where they are today.** The rail's layer sections each end in their own",
     "`🧹 Filter` popover — `👁️ Fixations → 🧹 Filter` (duration and",
@@ -230,7 +256,36 @@ window.TRACKER = {
     "and now has two independent reasons to badge.",
     "",
     "Related: #UX-51 (the rail's section shape), #UX-73 (Reset out of the",
-    "expanders), #UX-74 (flattening the nesting), #UX-64 (the trial-pool 🔎)."
+    "expanders), #UX-74 (flattening the nesting), #UX-64 (the trial-pool 🔎).",
+    "**Where they were.** Each layer section ended in its own `🧹 Filter`",
+    "popover, following the `toggle → ⚙️ style → 🧹 filter` shape #UX-51",
+    "gave every layer — so \"filter the plot\" was two controls, in two",
+    "places, each two clicks deep.",
+    "",
+    "**Not the 🔎 on the control line** (#UX-64), which narrows the *trial",
+    "pool* — which readings you can pick. This one thins one reading. The",
+    "two now sit a few centimetres apart, which is why one is 🔎 *Filter the",
+    "trial list* and this one is 🧹, on the rail with the drawing controls.",
+    "",
+    "The widget keys are untouched (`global_fixclass_*`,",
+    "`global_saccade_classes`, `global_fix_index_range`), so every share",
+    "link and saved config keeps working — this moved containers, not",
+    "settings.",
+    "",
+    "Related: #UX-73, #UX-74 (the same pass), #UX-51 (the section shape),",
+    "#VIZ-27 (why an active filter must be visible)."
+   ],
+   "decisions": [
+    "Open 🧹 **Filter** in the rail: both halves should be there, in one",
+    "place, with the same controls as before. Is *Filter* the right name",
+    "beside the control line's 🔎, or should one of them be renamed now that",
+    "they are close together?",
+    "Turn a fixation rule on and collapse the section — the header should",
+    "carry a `•`. Enough of a signal, or should it repeat the detail (`2",
+    "active, 1 hidden`) at section level?",
+    "Each half hides with its layer, so with Saccades off the section shows",
+    "only the fixation half. Right call, or should the saccade filter stay",
+    "visible and greyed?"
    ]
   },
   {
@@ -250,6 +305,23 @@ window.TRACKER = {
    "request": [
     "The **reset** button should be outside any expander."
    ],
+   "whatWasDone": [
+    "**♻️ Reset visualization is a button now**, at the foot of the rail",
+    "below everything it resets. It was a popover holding a caption and that",
+    "button — the rail's one escape hatch was itself a click deep, and the",
+    "thing behind the click was a single button, which is what a popover",
+    "exists to avoid.",
+    "",
+    "The caption it used to hold — what is reset, and what is kept",
+    "(annotations, trial filters, column mapping, data source, the selected",
+    "trial) — is the button's tooltip.",
+    "",
+    "The key (`reset_viz_settings_btn`) and the scope are unchanged, so the",
+    "existing reset test still drives it."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**Today** `♻️ Reset settings` is a popover at the foot of the rail",
     "(`controls.render_viz_reset`), below the collapsible layer sections —",
@@ -261,6 +333,14 @@ window.TRACKER = {
     "wherever it moves it must keep saying what it does and does not clear.",
     "",
     "Related: #UX-72, #UX-74 (the same pass over the rail's hierarchy)."
+   ],
+   "decisions": [
+    "The reset is one click from the plot now. It resets **only** the",
+    "visualization settings, but a mis-click is still a lost figure setup —",
+    "is the tooltip enough, or should it confirm first (like ✕ Delete on the",
+    "dataset table, #UX-54)?",
+    "It is a plain button rather than a filled one: it should not be the",
+    "loudest control in the rail. Agree?"
    ]
   },
   {
@@ -283,6 +363,33 @@ window.TRACKER = {
     "keeping them in an orderly arrangement inside the main expanders like",
     "**👁️ Fixations** or **📐 Figure & canvas**."
    ],
+   "whatWasDone": [
+    "**No control in the rail is behind a popover any more.** Every `⚙️ …`",
+    "and `🧹 …` popover inside a section became a `_rail_subsection` — a",
+    "light rule-and-label with the controls laid out under it — so opening a",
+    "section shows everything in it:",
+    "",
+    "- **📐 Figure & canvas** — 🖥️ Screen & geometry · 🔤 Text & fonts · 📊",
+    "  Axes & grid · 🏷️ Title & labels, the four blocks #UX-48 created, now",
+    "  in place rather than behind four triggers.",
+    "- **👁️ Fixations** / **↗️ Saccades** / **📄 Stimulus** / **🔥",
+    "  Overlays** — each section's ⚙️ Style (and the stimulus image and",
+    "  heatmap style blocks) inline under their own heading.",
+    "- The filters left the sections entirely — see #UX-72.",
+    "",
+    "**The names and the grouping are unchanged**, which is the point: the",
+    "same blocks, one click closer. `tests/test_apptest.py` and",
+    "`tests/test_tour.py` pinned the popover shape by name and now pin the",
+    "flat one, including that `figure_grp.popover(` appears nowhere.",
+    "",
+    "**A gated block keeps its explanation.** A popover trigger could carry",
+    "the \"⚠️ this is ignored in Animate\" line as a tooltip; an inline block",
+    "has no trigger, so `_rail_subsection(..., note=…)` prints it as a",
+    "caption under the heading."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**The nesting today.** 📐 Figure & canvas holds four sub-groups — 🖥️",
     "Screen & geometry · 🔤 Text & fonts · 📊 Axes & grid · 🏷️ Title & labels",
@@ -301,7 +408,29 @@ window.TRACKER = {
     "its type and spacing to fit; a flatter layout has to stay inside that",
     "width without a horizontal scroll.",
     "",
-    "Related: #UX-51 (the rail's current shape), #UX-72, #UX-73."
+    "Related: #UX-51 (the rail's current shape), #UX-72, #UX-73.",
+    "**Why it was popovers.** Streamlit nests neither expander-in-expander",
+    "nor popover-in-popover, and popover-in-**expander** was the only",
+    "two-level shape available — so a section that wanted sub-sections had",
+    "to spend a click on each. Flattening spends vertical space instead,",
+    "which a collapsed section costs nothing for.",
+    "",
+    "The first block in a section drops the rule above it (the expander's",
+    "own header is that boundary) — `.sps-rail-subhead` in",
+    "[styles.py](scanpath_studio/styles.py).",
+    "",
+    "Related: #UX-48 (which created the four figure blocks), #UX-51 (the",
+    "rail's sizing), #UX-72, #UX-73."
+   ],
+   "decisions": [
+    "Open **📐 Figure & canvas**: four named blocks, no popovers. Is the",
+    "section too tall now that everything is in it, or is the extra scroll",
+    "the right trade for one less click?",
+    "The sub-headings are small and grey with a rule above them. Loud enough",
+    "to group at that width, or do they need to be bolder?",
+    "**👁️ Fixations** is the section that opens by default and is now the",
+    "tallest. Worth collapsing its ⚙️ Style block by default some other way,",
+    "or leave it?"
    ]
   },
   {
@@ -397,6 +526,36 @@ window.TRACKER = {
     "own**, each one directly below the control line of the trial it belongs",
     "to."
    ],
+   "whatWasDone": [
+    "**Each reading's title and chips are one line, under that reading's own",
+    "control line.** The slots run picker row → A's title + chips → B's",
+    "control row → B's title + chips → plot, so a strip is read against the",
+    "row that selected it rather than by matching colours.",
+    "",
+    "**The line is `SELECTOR_ROW_TRIO`** — the control-line grid with the",
+    "trial and scrub tracks merged — so the title lands under the dataset",
+    "picker, the chips under the trial picker and scrubber, and **Details** /",
+    "✏️ under the ◀ ▶ ⇅ cluster. One grid for both rows, per #UX-47.",
+    "",
+    "**Outside compare mode the title is the reader** (`_plain_trial_title`)",
+    "— what compare mode's titles name too, so the same cell means the same",
+    "thing either way. Not the trial id: the picker immediately above",
+    "already shows it, and a composite id is far too long for that cell.",
+    "In compare mode each title keeps its scanpath's colour and its",
+    "`⟨dataset⟩ · ⟨reader⟩` form for a cross-dataset pair (#CMP-15).",
+    "",
+    "**B's line carries no ✏️ or Details of its own**: the chip fields are",
+    "one setting for both readings, and the summary popover describes the",
+    "trial the panels are anchored on. Its trailing cell stays empty so the",
+    "two lines still line up.",
+    "",
+    "The title cell clips with an ellipsis rather than wrapping — it shares",
+    "its row with a strip that wraps by design (#UX-11), and a title growing",
+    "to two lines would push the chips down for nothing."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**Today** the strip above the plot is one row —",
     "`[chips … ] [Details] [✏️]` on `SELECTOR_ROW_WIDE_GRID` — and in compare",
@@ -422,16 +581,26 @@ window.TRACKER = {
     "column.",
     "",
     "Related: #UX-64 (the control lines these would sit under), #CMP-15 (the",
-    "labels), #UX-11 (the wrapping strip), #UX-47 (the shared row grid)."
+    "labels), #UX-11 (the wrapping strip), #UX-47 (the shared row grid).",
+    "",
+    "**Answered while implementing (2026-08-18).** The single-trial title is",
+    "the **reader id**, for the symmetry above. The compare strips stay",
+    "**above the figure**, one under each control line, rather than moving",
+    "down over their panel in a side-by-side layout: the panels are one",
+    "Plotly figure, so a strip per panel would have to be positioned against",
+    "a figure that re-lays itself out at every width — and in *overlay*",
+    "there are no panels to sit over at all, which would leave the two",
+    "layouts with different answers to the same question."
    ],
    "decisions": [
-    "Outside compare mode there is no title above the chips today. Should the",
-    "left of that line carry the **trial id**, the `⟨dataset⟩ · ⟨reader⟩` label",
-    "compare mode uses, or the figure's own title text?",
-    "In a **side-by-side / stacked** compare layout the two plots sit in one",
-    "figure. Should each panel's line sit under its own control line (two",
-    "strips above one figure), or should the strips move down to sit directly",
-    "over their panel?"
+    "Look at the Scanpath view: reader on the left, chips filling the line,",
+    "**Details** and ✏️ at the right — and in Compare, one such line under",
+    "each trial's control row. Does the pairing read the way you meant?",
+    "The single-trial title is the **reader id** (see *Background*). Would",
+    "you rather it were the trial id, the text, or the figure's own title?",
+    "In side-by-side / stacked the two strips still sit above the figure",
+    "rather than over their own panel — the reasoning is in *Background*.",
+    "Live with it?"
    ]
   },
   {

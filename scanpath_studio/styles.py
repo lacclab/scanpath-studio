@@ -744,6 +744,40 @@ def get_app_css() -> str:
        selects' baseline (their own titles are stacked above them). */
     .sps-geo-row-name { padding-bottom: 0.45rem; }
 
+    /* UX-75 — the chip line's title cell: the reading this strip belongs to,
+       on the strip's own first line. Bold but not loud, and clipped rather than
+       wrapped — the title shares its row with a strip that wraps, and a title
+       growing to two lines would push the chips down for no gain. */
+    .sps-chip-title {
+        font-weight: 700;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* UX-74 — a block inside a rail section, where a `⚙️ …` popover used to be.
+       A rule and a small caps-ish label: enough to group, cheap in height (the
+       rail is narrow and every section now shows its whole contents). */
+    .sps-rail-subhead {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        opacity: 0.72;
+        margin: 0.55rem 0 0.15rem;
+        padding-top: 0.4rem;
+        border-top: 1px solid rgba(128, 128, 128, 0.28);
+    }
+    /* The first block in a section needs no rule — the expander's own header is
+       the boundary. */
+    [data-testid="stExpander"] [data-testid="stVerticalBlock"]
+        > div:first-child .sps-rail-subhead {
+        border-top: none;
+        padding-top: 0;
+        margin-top: 0.1rem;
+    }
+
     /* UX-71 — see `mapping_menu_css()` below: the option list is widened only
        on the two mapping surfaces, so this global sheet leaves dropdowns alone. */
 

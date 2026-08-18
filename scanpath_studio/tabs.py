@@ -78,7 +78,6 @@ from scanpath_studio.constants import (
     SACCADE_DASH_OPTIONS,
     SELECTOR_ROW_GRID,
     SELECTOR_ROW_TRIO,
-    SELECTOR_ROW_WIDE_GRID,
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
@@ -3447,6 +3446,32 @@ def _render_trial_condition_chips(
     return summary
 
 
+def _plain_trial_title(participant: str, trial: str) -> str:
+    """The chip line's title outside compare mode (UX-75).
+
+    Compare mode has one for free — the coloured `⟨dataset⟩ · ⟨reader⟩` label
+    naming which scanpath a strip belongs to (#CMP-15) — and a single-trial view
+    had none at all, so the left of the line would have been blank. It names the
+    **reader**, which is what compare mode's titles name too, so the same cell
+    means the same thing in both. Not the trial id: the picker directly above
+    this line already shows it, and a composite one is far too long for a cell
+    this narrow. The trial stands in only when there is no reader at all.
+    """
+    reader, trial_id = str(participant or ""), str(trial or "")
+    return reader or trial_id
+
+
+def _render_chip_title(host, title: str, color: str | None) -> None:
+    """One chip line's title cell — coloured to match its scanpath when comparing."""
+    if not title:
+        return
+    style = f"color:{color};" if color else ""
+    host.markdown(
+        f'<div class="sps-chip-title" style="{style}">{html.escape(str(title))}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _render_trial_details_popover(summary: list[tuple[str, str]], host) -> None:
     """The **Details** popover beside the chip strip: the computed summary stats.
 
@@ -3572,11 +3597,18 @@ def render_single_trial_tab(
                 )
             )
         screen_slot = st.container(key="tour_grp_screen_picker")
-        # Slots filled once the selection is resolved (chips need the trial). The
-        # compare-trial selector (CMP-1) sits above the chips, below the picker.
+        # Slots filled once the selection is resolved (chips need the trial).
         # Keyed containers double as welcome-tour spotlight targets.
-        compare_slot = st.container()
+        #
+        # UX-75 — the order is one **pair** per reading: control line, then that
+        # reading's title + chips. Compare mode used to stack A's label, A's
+        # chips, B's label and B's chips all below *both* control lines, so
+        # which chips described which reading was inferred from colour and
+        # order. Now A's strip sits under A's row and B's under B's, which is
+        # also why the compare selector is created between them.
         chips_slot = st.container(key="tour_grp_chips")
+        compare_slot = st.container()
+        compare_chips_slot = st.container(key="tour_grp_compare_chips")
         plot_slot = st.container(key="tour_grp_plot")
 
     # UX-43: a second row repeats the 4:1 split and reserves only its left side
@@ -4319,22 +4351,31 @@ def render_single_trial_tab(
     # Condition chips above the plot — configurable via the sidebar picker
     # (`trial_chip_fields`); `Field = Value` for the chosen fields. When comparing,
     # a second labelled strip shows the compared trial too.
+    # UX-75 — one line per reading: its **title on the left**, its chips filling
+    # the rest, and the row's controls in the trailing track. The line takes
+    # `SELECTOR_ROW_TRIO` — the control-line grid with the trial and scrub
+    # tracks merged — so the title sits under the dataset picker, the chips
+    # under the trial picker and scrubber, and **Details** / ✏️ under ◀ ▶ ⇅.
+    color_a = color_b = None
+    if comparing and compare_meta:
+        # Each title takes the colour of the scanpath it names (A = primary,
+        # B = compared), which is what replaced the old "■ A … ■ B compared
+        # with:" legend line.
+        _ca, _cb = _collect_compare_styles()
+        color_a = _ca.get("fix_color") or compare_palette_color(0)
+        color_b = _cb.get("fix_color") or compare_palette_color(1)
     with chips_slot:
-        # Inline "Edit chips" popover at the right end of the chip row (UX-1) —
+        # Inline "Edit chips" popover at the right end of the row (UX-1) —
         # replaces the former sidebar 🏷️ Trial chips picker. Rendered before the
         # strip reads `trial_chip_fields` so an edit/reorder applies the same run.
-        # UX-11: three columns on one row — the wrapping chip strip, then the
-        # two controls. They're top-aligned, not centre-aligned: the strip can
-        # now wrap to several lines, and a centred control would drift to the
-        # middle of a tall strip instead of sitting on the first chip's line.
-        # Kept at the top level rather than nesting the controls in one column,
-        # so no `st.columns` nesting is involved.
+        # Top-aligned, not centre-aligned: the strip wraps to several lines
+        # (UX-11), and a centred control would drift to the middle of a tall
+        # strip instead of sitting on the first chip's line.
         # UX-27: **Details** and ✏️ share ONE trailing column, as a `railbtn_*`
         # cluster — styles.py lays every such container out as a right-packed
-        # flex row, so this row's pair ends flush with **More** above it and
-        # ◀ ▶ ⇅ between them, at the same 3px internal spacing.
-        strip_col, trail_col = st.columns(
-            SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
+        # flex row, so this row's pair ends flush with the ◀ ▶ ⇅ cluster above.
+        title_col, strip_col, trail_col = st.columns(
+            SELECTOR_ROW_TRIO, vertical_alignment="top"
         )
         trail = trail_col.container(key="railbtn_chip_trail")
         # Created in display order (Details, then ✏️) but filled out of order:
@@ -4349,38 +4390,35 @@ def render_single_trial_tab(
         ):
             render_trial_chip_picker(words_all, fixations_all, host=st.container())
         chip_fields = st.session_state.get("trial_chip_fields") or []
+        _render_chip_title(
+            title_col,
+            compare_meta["label_primary"]
+            if comparing and compare_meta
+            else _plain_trial_title(selected_participant, selected_trial),
+            color_a,
+        )
         with strip_col:
-            # When comparing, label each chip strip with its trial id coloured to
-            # match the scanpath in the overlay (A = primary colour, B = compared
-            # colour) — replaces the old "■ A … ■ B compared with:" legend line.
-            color_a = color_b = None
-            if comparing and compare_meta:
-                _ca, _cb = _collect_compare_styles()
-                color_a = _ca.get("fix_color") or compare_palette_color(0)
-                color_b = _cb.get("fix_color") or compare_palette_color(1)
-                st.markdown(
-                    f'<span style="color:{color_a};font-weight:700">'
-                    f"{html.escape(str(compare_meta['label_primary']))}</span>",
-                    unsafe_allow_html=True,
-                )
             summary = _render_trial_condition_chips(
                 trial_words, trial_fixations, selected_participant, chip_fields
             )
-            if comparing and compare_meta:
-                st.markdown(
-                    f'<span style="color:{color_b};font-weight:700">'
-                    f"{html.escape(str(compare_meta['label_compare']))}</span>",
-                    unsafe_allow_html=True,
-                )
+        # Rendered after the strip so it reads the *primary* trial's stats.
+        _render_trial_details_popover(summary, details_box)
+    if comparing and compare_meta:
+        with compare_chips_slot:
+            # B's own line, directly under B's control row. No ✏️ or **Details**
+            # of its own: the chip fields are one setting for both readings, and
+            # the summary popover describes the trial the panels are anchored on.
+            b_title, b_strip, _b_trail = st.columns(
+                SELECTOR_ROW_TRIO, vertical_alignment="top"
+            )
+            _render_chip_title(b_title, compare_meta["label_compare"], color_b)
+            with b_strip:
                 _render_trial_condition_chips(
                     compare_meta["words"],
                     compare_meta["fixations"],
                     compare_participant,
                     chip_fields,
                 )
-        # Rendered after the strip so it reads the *primary* trial's stats; the
-        # compared trial's chips stay inline beside its own label.
-        _render_trial_details_popover(summary, details_box)
 
     # CMP-8 §6: the two halves of the pair bundle, built from the *unqualified*
     # frames and real ids — the `dataset · pid` namespace is a figure-internal

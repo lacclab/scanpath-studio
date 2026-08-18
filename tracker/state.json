@@ -954,6 +954,38 @@
       "archived": false,
       "updated": "2026-08-18"
     },
+    "UX-72": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-73": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-74": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-75": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. outside compare should be no title, like now. \n2. each chips line should sit under its own control line",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
     "VAL-1": {
       "status": "Closed",
       "priority": "Normal",

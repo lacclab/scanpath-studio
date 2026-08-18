@@ -573,14 +573,20 @@ class TestSpotlightSelectorsResolve:
         assert 'viz.expander("📐 Figure & axes"' not in control_source
 
     def test_plot_rail_uses_contextual_style_filter_labels(self):
-        """UX-44: repeated per-layer labels stay terse."""
+        """UX-44: repeated per-layer labels stay terse.
+
+        UX-72/UX-74 changed where those labels live, not what they say: ⚙️ Style
+        is a `_rail_subsection` block inside its layer section instead of a
+        popover, and 🧹 Filter is one section for the whole figure instead of a
+        popover per layer — so the badge-carrying label is now the section's.
+        """
         import inspect
 
         from scanpath_studio import controls
 
         control_source = inspect.getsource(controls.sidebar_controls)
 
-        assert 'popover("⚙️ Style"' in control_source
+        assert '_rail_subsection(fix_grp, "⚙️ Style")' in control_source
         assert 'f"🧹 Filter{' in control_source
         assert "Reset settings" not in control_source
 

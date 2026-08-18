@@ -664,7 +664,10 @@ SELECTOR_ROW_TRIO = [
 ]
 
 #: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
-#: is a single wide element (the chip strip) rather than dataset + pick + scrub.
+#: is a single wide element rather than dataset + pick + scrub. Kept for
+#: deep-link-stable layouts that still want it; UX-75 moved the chip strip off
+#: it onto ``SELECTOR_ROW_TRIO``, so its title lands under the dataset picker
+#: and its chips under the trial picker and scrubber.
 SELECTOR_ROW_WIDE_GRID = [
     SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
     SELECTOR_ROW_GRID[3],

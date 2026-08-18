@@ -784,6 +784,17 @@ def _fixation_filter_badge() -> str:
     return f" · {detail}"
 
 
+def _plot_filter_badge() -> str:
+    """UX-72: one badge for the whole 🧹 Filter section.
+
+    The section folds the fixation and saccade filters together, so its header
+    has to answer "is anything being hidden?" for both — the reason each of them
+    badged its own trigger before (VIZ-27): a thinned figure otherwise reads as
+    missing data. The detail stays on each half's own badge inside.
+    """
+    return " •" if _fixation_filter_badge() or _saccade_filter_badge() else ""
+
+
 def _saccade_filter_badge() -> str:
     """Compact badge summarising the VIZ-31 saccade reading-class filter.
 
@@ -3053,31 +3064,50 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
-def render_viz_reset(host) -> None:
-    """Render the scoped visualization reset popover into ``host``.
+def _rail_subsection(host, label: str, *, note: str = ""):
+    """A named block *inside* a rail section — UX-74's replacement for a popover.
 
-    Full width, like every other trigger in the rail. UX-44's compact ``↺ Reset``
-    pill was for sharing the heading row; BUG-24 moved the control to the foot of
-    the rail, where it has a row of its own, so the compact form is gone.
+    Every section used to hold its detail in `⚙️ …` popovers, because Streamlit
+    nests neither expander-in-expander nor popover-in-popover and
+    popover-in-expander was the only two-level shape available. That made a
+    setting two or three clicks from the plot and hid, behind an unlabelled
+    click, which knobs lived where. A section's contents are laid out in place
+    now, under a light rule-and-label — the same idiom the add-dataset screen
+    uses for its groups — so opening a section shows everything in it.
+
+    ``note`` renders under the label: the "why is this greyed out" line that used
+    to be the popover trigger's tooltip, which an inline block has no trigger to
+    carry.
     """
-    reset = host.popover(
-        "♻️ Reset settings",
-        width="stretch",
-        help="Reset visualization settings to their defaults.",
+    host.markdown(
+        f'<div class="sps-rail-subhead">{label}</div>', unsafe_allow_html=True
     )
-    reset.caption(
-        "Put every visualization control back to the app's defaults. Your "
-        "**annotations**, trial filters, column mapping, data source and the "
-        "selected trial are kept."
-    )
-    reset.button(
+    box = host.container()
+    if note:
+        box.caption(note)
+    return box
+
+
+def render_viz_reset(host) -> None:
+    """Render the scoped visualization reset into ``host`` — a plain button.
+
+    Full width, like every other control in the rail, and at its foot (BUG-24)
+    below everything it resets.
+
+    **UX-73**: it used to be a popover holding a caption and this button, so the
+    rail's one escape hatch was itself a click deep — and the thing behind the
+    click was a single button, which is what a popover is *for* avoiding. The
+    caption it held is the button's tooltip now; nothing else was in there.
+    """
+    host.button(
         "♻️ Reset visualization",
         key="reset_viz_settings_btn",
-        type="primary",
         on_click=reset_viz_settings,
         width="stretch",
         help="Every layer, colour, size and axis control back to its default — "
-        "including the settings a Share link put there.",
+        "including the settings a Share link put there. Your **annotations**, "
+        "trial filters, column mapping, data source and the selected trial are "
+        "kept.",
     )
 
 
@@ -3275,6 +3305,25 @@ def sidebar_controls(
     sac_grp = viz.expander("↗️ Saccades", expanded=False)
     stim_grp = viz.expander("📄 Stimulus", expanded=False)
     ovl_grp = viz.expander("🔥 Overlays", expanded=False)
+    # UX-72 — ONE filter section for the whole figure, a peer of the layer
+    # sections rather than a 🧹 popover inside each of them. "Filter the plot"
+    # was two controls, in two places, each two clicks deep; it is one place
+    # now, and it sits after the layers because it thins what they draw.
+    #
+    # Not to be confused with the 🔎 on the control line (#UX-64), which narrows
+    # the *trial pool* — which readings you can pick. This one thins one
+    # reading. The badge still says an active filter is on, or a thinned figure
+    # reads as missing data; with two filters folded together it now reports
+    # both, so `•` on the section means at least one of them is narrowing.
+    filter_grp = viz.expander(
+        f"🧹 Filter{_plot_filter_badge()}",
+        expanded=False,
+    )
+    # Sub-slots up front so each block below renders into the right half of the
+    # section from wherever it sits in this file (the same trick the sections
+    # themselves use).
+    filter_fix_slot = filter_grp.container()
+    filter_sac_slot = filter_grp.container()
     # Canvas/text and the former Figure/axes controls share one disclosure: both
     # describe the figure's framing rather than a data layer. The injected canvas
     # renderer writes directly into this expander (not a nested expander), as its
@@ -3307,7 +3356,7 @@ def sidebar_controls(
     # …but the styling below is still (partly) live in those modes, so keep the
     # popover reachable even when the (inert) layer toggle reads off.
     if show_fix or fix_off_disabled:
-        with fix_grp.popover("⚙️ Style", width="stretch"):
+        with _rail_subsection(fix_grp, "⚙️ Style"):
             # The metric that maps to fixation HUE — applies to the static
             # figure, the single animated replay AND the comparison overlay (in
             # compare it colours both scanpaths by the metric; the per-scanpath
@@ -3566,13 +3615,10 @@ def sidebar_controls(
     # trial-fact strip was rejected because this is a view setting, not trial data.
     _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
     if show_fix or fix_off_disabled:
-        with fix_grp.popover(
-            f"🧹 Filter{_fixation_filter_badge()}",
-            width="stretch",
-            help=_gated_help(
-                "Highlight or hide short, long, and out-of-bounds fixations.",
-                _flag_reason,
-            ),
+        with _rail_subsection(
+            filter_fix_slot,
+            f"👁️ Fixations{_fixation_filter_badge()}",
+            note=_flag_reason,
         ):
             # VIZ-27 follow-up: the index window removes fixations just like the
             # short/long/OOB rules, so it belongs here rather than under marker style.
@@ -3585,7 +3631,7 @@ def sidebar_controls(
         "**Visible**", key="global_show_saccades", persist_state="session"
     )
     if show_saccades:
-        with sac_grp.popover("⚙️ Style", width="stretch"):
+        with _rail_subsection(sac_grp, "⚙️ Style"):
             # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
             # (each arrowhead un-masks with the saccade it belongs to), so
             # direction arrows now reach all three builders.
@@ -3726,14 +3772,10 @@ def sidebar_controls(
     # picker greys out there rather than silently dropping the filter.
     if show_saccades:
         _cls_dis, _cls_reason = _mode_gate(animating, comparing, **_static_only)
-        with sac_grp.popover(
-            f"🧹 Filter{_saccade_filter_badge()}",
-            width="stretch",
-            help=_gated_help(
-                "Draw only some reading classes — forward, skip, refixation, "
-                "return sweep, regression.",
-                _cls_reason,
-            ),
+        with _rail_subsection(
+            filter_sac_slot,
+            f"↗️ Saccades{_saccade_filter_badge()}",
+            note=_cls_reason,
         ):
             _labeled(
                 st,
@@ -3762,7 +3804,7 @@ def sidebar_controls(
         "**Text**", key="global_show_labels", persist_state="session"
     )
     if show_labels:
-        with stim_grp.popover("⚙️ Text & highlight", width="stretch"):
+        with _rail_subsection(stim_grp, "⚙️ Text & highlight"):
             # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
             # choice appears only when it's on (no "None" option). The canonical
             # value stays in `global_critical_span_style` ("Mark text" |
@@ -3898,7 +3940,7 @@ def sidebar_controls(
         help=_gated_help("Tint the reading by fixation density.", heat_reason),
     )
     if show_heatmap:
-        with ovl_grp.popover("⚙️ Heatmap style", width="stretch"):
+        with _rail_subsection(ovl_grp, "⚙️ Heatmap style"):
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
@@ -4047,7 +4089,7 @@ def sidebar_controls(
     # image loaded yet) — its uploader is the only way to get an image in and
     # enable the toggle in the first place.
     if show_stim_image or not can_show_image:
-        with stim_grp.popover("⚙️ Stimulus image", width="stretch"):
+        with _rail_subsection(stim_grp, "⚙️ Stimulus image"):
             st.file_uploader(
                 "Upload a stimulus image",
                 type=["png", "jpg", "jpeg", "gif", "webp"],
@@ -4170,10 +4212,10 @@ def sidebar_controls(
 
     # The plot frame itself: the coordinate grid, the colour bar and which
     # fixation columns the two axes plot.
-    axes = figure_grp.popover("📊 Axes & grid", width="stretch")
+    axes = _rail_subsection(figure_grp, "📊 Axes & grid")
     # Everything the figure says in words: the Illustration disclosure label and
     # the EXP-5 title/caption.
-    labels = figure_grp.popover("🏷️ Title & labels", width="stretch")
+    labels = _rail_subsection(figure_grp, "🏷️ Title & labels")
 
     show_coordinate_grid = axes.toggle(
         "Coordinate grid",

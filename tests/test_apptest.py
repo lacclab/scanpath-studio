@@ -63,11 +63,35 @@ class TestAppLaunches:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.error == [], f"st.error calls: {[e.value for e in at.error]}"
 
-    def test_title_present(self):
+    def test_wordmark_ships_and_does_not_double_up_in_the_page(self):
+        """UX-62: the name is the header wordmark, and *only* that.
+
+        Two things worth failing on. The image must **exist inside the
+        package** — it is declared in `pyproject.toml`'s `package-data`, and a
+        logo that slipped back outside it would leave every pip install with an
+        empty header while a source checkout looked fine. And the page body must
+        not print the title or its one-line description any more, or the app
+        says its own name twice, a row apart.
+
+        `st.logo` writes into Streamlit's header strip, which `AppTest` does not
+        expose (it has no `.logo`), so the element itself is browser-verified.
+        """
+        from scanpath_studio import app as app_mod
+
+        assert app_mod.LOGO_PATH.is_file(), (
+            f"the wordmark must live inside the package (looked in "
+            f"{app_mod.LOGO_PATH}); see pyproject.toml package-data"
+        )
+
         at = _make_apptest(synthetic=True)
         at.run(timeout=30)
-        titles = [t.value for t in at.title]
-        assert any("Scanpath Studio" in v for v in titles)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert not [t for t in at.title if "Scanpath Studio" in t.value], (
+            "the title is the header wordmark now; printing it again duplicates it"
+        )
+        assert not [
+            c for c in at.caption if "Interactive visualization of eye" in c.value
+        ], "the one-line description lives in About, not in the page chrome"
 
     def test_nothing_renders_into_the_sidebar(self):
         """The sidebar is gone — every group it held is a top-menu popover now.

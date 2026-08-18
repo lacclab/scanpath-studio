@@ -86,6 +86,10 @@ include = ["scanpath_studio"]
 
 [tool.setuptools.package-data]
 "scanpath_studio" = [
+    # UX-62: the header logo. It lives inside the package, not at the repo root,
+    # because only this list ships — a logo outside it would leave every
+    # pip-installed copy with an empty header.
+    "assets/*.png",
     "sample_data/*.csv",
     "sample_data/*.parquet",
     "sample_data/*.feather",

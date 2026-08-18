@@ -277,19 +277,47 @@ def configure_page() -> None:
     st.markdown(get_app_css(), unsafe_allow_html=True)
 
 
-def _render_about_panel(host=None) -> None:
-    """The page heading: title + caption.
+#: The app's wordmark, shown in Streamlit's own header (UX-62). Inside the
+#: package so it ships with a pip install — see `pyproject.toml`'s
+#: `package-data`, and `desktop/scanpath_studio.spec` for the frozen build.
+LOGO_PATH = Path(__file__).parent / "assets" / "scanpath_studio_title_logo.png"
 
-    Sits below Streamlit's own top nav, so navigation is the first thing on the
-    page. ``host`` is ``menu.TopMenu.title`` — the left side of the row the
-    settings triggers share, so ❓ Help and 💾 Session sit at the title's height
-    instead of costing a page row of their own (see ``menu.render_top_menu``).
-    **About** is a dialog off the ❓ Help menu group.
+
+def render_app_logo() -> None:
+    """Put the wordmark in the top-left of Streamlit's header (UX-62).
+
+    ``st.logo`` is the only way into that strip: the nav is drawn there by
+    Streamlit itself (``st.navigation(position="top")``), and the page body —
+    where the title used to live, a row below — cannot reach up into it.
+
+    Must run **before** the nav, and is cheap enough to run on every rerun.
+    Falls back silently to nothing when the file is missing: a wordmark is
+    chrome, and an editable checkout that has not been reinstalled should still
+    open rather than raise on a decoration.
     """
-    header = (host if host is not None else st).container(key="about_header")
-    with header:
-        st.title("Scanpath Studio")
-        st.caption("Interactive visualization of eye movements in reading.")
+    if not LOGO_PATH.is_file():
+        logging.getLogger(__name__).warning(
+            "App logo not found at %s; header left bare.", LOGO_PATH
+        )
+        return
+    st.logo(str(LOGO_PATH), size="large", link=CITATION["docs_url"])
+
+
+def _render_about_panel(host=None) -> None:
+    """The page heading — now only what the header cannot carry.
+
+    UX-62 moved the title into Streamlit's header as the wordmark
+    (:func:`render_app_logo`), so this no longer prints "Scanpath Studio" or its
+    one-line description; both would then appear twice, a row apart. The
+    description survives in **About** (a dialog off the ❓ Help menu) and in the
+    README.
+
+    ``host`` is ``menu.TopMenu.title`` — the left side of the row the settings
+    triggers share. The container is still created, and deliberately: ❓ Help and
+    💾 Session are laid out against it (see ``menu.render_top_menu``), and it is
+    where anything page-level would go.
+    """
+    (host if host is not None else st).container(key="about_header")
 
 
 # Base URL for the DiLi Lab (UZH) people pages — three co-author links hang off
@@ -4086,6 +4114,9 @@ def main() -> None:
     # popovers by `host=`, so those slots have to exist first — the same
     # reserve-then-fill discipline the sidebar containers had.
     seed_debug_mode()  # UX-37: a legacy ?debug=1 link pre-arms the Help toggle.
+    # UX-62: before the nav — `st.logo` writes into the same header strip
+    # `st.navigation` draws into, and has to be there when it renders.
+    render_app_logo()
     menu = render_top_menu(show_debug=debug_enabled())
     _render_about_panel(menu.title)
     # BUG-28: filled HERE, not in the epilogue with its two neighbours. `main`

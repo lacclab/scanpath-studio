@@ -556,11 +556,44 @@ window.TRACKER = {
     "",
     "Related: #UX-38 (which put the nav in the header strip and the title row",
     "below it), #BUG-6 (the injected branded theme, the other place the app's",
-    "identity is set)."
+    "identity is set).",
+    "",
+    "**Decided 2026-08-18** (user): *\"1. logo image only 2. image only\"* — the",
+    "wordmark replaces the text heading rather than joining it, and the one-line",
+    "description leaves the chrome entirely. It still appears in **About** and in",
+    "`README.md`, so nothing is lost."
+   ],
+   "whatWasDone": [
+    "**The wordmark is in Streamlit's header**, top-left of the nav, on every",
+    "view. `app.render_app_logo` calls `st.logo(size=\"large\")` — the only way",
+    "into that strip, since the nav is drawn there by Streamlit itself and the",
+    "page body cannot reach up into it — and it runs **before** the nav, which is",
+    "when the header is assembled.",
+    "",
+    "**The page heading is gone.** `_render_about_panel` no longer prints the",
+    "title or the caption; both would otherwise appear twice, a row apart. Its",
+    "container survives because ❓ Help and 💾 Session are laid out against it.",
+    "",
+    "**The image moved inside the package** — `scanpath_studio/assets/` — and is",
+    "declared in `pyproject.toml`'s `package-data`. At the repo root it would have",
+    "shipped with nothing: only that list travels in a wheel, so every pip install",
+    "would have come up with an empty header while a source checkout looked fine.",
+    "The desktop bundle needs no change: its spec already collects the package's",
+    "data files wholesale.",
+    "",
+    "**A missing file is a warning, not a crash** — a wordmark is chrome, and an",
+    "editable checkout that has not been reinstalled should still open.",
+    "",
+    "The old `test_title_present` became a test of what now matters: that the",
+    "image exists *inside the package*, and that neither the title nor the",
+    "description is printed in the page body any more."
+   ],
+   "whatsLeft": [
+    "Nothing."
    ],
    "decisions": [
-    "Logo image, the text heading, or both — and does the *Interactive visualization of eye movements in reading* caption survive anywhere in the chrome, or only in **About**?",
-    "`st.logo` renders in Streamlit's header and cannot be styled much: its `size` is `small` / `medium` / `large`, and a wide title-logo may read small there. If it comes out too small, the fallback is CSS-positioning our own image over the header, which is fragile across Streamlit upgrades — worth knowing before choosing."
+    "Review: the wordmark should sit top-left of **Scanpath · Corpus Analysis · Data**, on every view, and link to the docs site. `st.logo` only offers `small` / `medium` / `large` — it is on **large**; if it still reads small, the fallback is CSS over Streamlit's header, which is fragile across upgrades.",
+    "`scanpath_studio_title_logo_wide.png` moved into the package alongside the one in use but is unused. Keep it there for a future `icon_image` (the collapsed-state slot), or delete it?"
    ]
   },
   {

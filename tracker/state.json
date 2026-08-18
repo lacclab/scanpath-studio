@@ -826,6 +826,14 @@
       "archived": false,
       "updated": "2026-08-18"
     },
+    "UX-62": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. logo image only\n2. image only",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
     "VAL-1": {
       "status": "Closed",
       "priority": "Normal",

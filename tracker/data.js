@@ -277,6 +277,22 @@ window.TRACKER = {
     "",
     "Do **not** change the field alignment — only the open menu."
    ],
+   "whatWasDone": [
+    "**The options wrap now**, and the reason the earlier attempt did not work is",
+    "the reason it is fixed: #UX-53 r14 asked the list for `min-width:",
+    "max-content`, but BaseWeb's popover carries an *inline* width from",
+    "popper.js, so the list asked to be wider than a parent it cannot grow past —",
+    "it overflowed and was clipped. Asking for width was the wrong lever. That",
+    "rule is gone; the option and **every node inside it** now wrap, `*` included,",
+    "because BaseWeb puts the label in a child div carrying its own",
+    "`white-space: nowrap` that outlived styling the option alone.",
+    "",
+    "The option's fixed height goes too, or a two-line name would be cropped by",
+    "the row instead of by the box."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**This was already attempted, and evidently is not enough.** #UX-53 r14 added",
     "exactly these rules to [`styles.py`](scanpath_studio/styles.py:711) — the",
@@ -314,7 +330,7 @@ window.TRACKER = {
     "Related: #UX-53 (which packed the rows and made the first attempt), #UX-57."
    ],
    "decisions": [
-    "If widening the popover wrapper turns out to need `!important` against an inline style, it pins us to BaseWeb's DOM — the same fragility #UX-62 accepted for the header wordmark. Accept it here too, or prefer per-option wrapping alone (which keeps the menu the control's width and makes long names two or three lines tall)?"
+    "Review: open a mapping select on a narrow window — a long column name should now run onto a second line rather than being cut. Worth checking the plot rail's selects too, since the popover is portalled to the body and this rule is necessarily global."
    ]
   },
   {
@@ -893,6 +909,24 @@ window.TRACKER = {
     "   auto-detected fields are yellow and missing mandatory fields are red;",
     "   everything else is grey."
    ],
+   "whatWasDone": [
+    "**No green.** `_FIELD_TINT` keeps only `auto` (amber) and `missing` (red), so",
+    "a mapping the user chose reads like any other filled field. The `user`",
+    "*state* stays — it is still what moves a field **out** of amber the moment",
+    "somebody picks — it just has no colour of its own.",
+    "",
+    "**The count boxes moved down beside ✅ Add dataset**, kept as boxes per the",
+    "call. They are a check you run before committing, so they belong next to the",
+    "commit rather than three sections above it. That needed reserve-then-fill:",
+    "Streamlit lays containers out in creation order and the identity steps run",
+    "long before the footer exists, so the slot is created up front and filled",
+    "later.",
+    "",
+    "The *N rows · N columns* lines under the upload boxes are untouched, as asked."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**Where the boxes are written** ([`wizard.py`](scanpath_studio/wizard.py)):",
     "`_wizard_trial_step` emits the trial `st.success` / `st.info` / `st.warning`,",
@@ -934,8 +968,7 @@ window.TRACKER = {
     "strip), #BUG-32 (the silent zero-join this warning is the early alarm for)."
    ],
    "decisions": [
-    "The *\"no trial ids are shared\"* warning cannot become a per-field count — two tables can show the same number and share nothing, and that is exactly the case that yields a dataset with no joined rows. Keep it as a small inline note (red caption under the two trial fields), keep it as a box **only when it fires**, or drop the check?",
-    "The *\"N rows · N columns\"* line under each upload box is the same shape of message. Shrink it to a caption too, or leave the upload boxes alone — they are full-width, so the sentence fits there?"
+    "Review: the trial / reader / text counts should now sit just above **✅ Add dataset**, and a field you picked should look no different from any other filled one — only detection is amber, only a blocking gap is red."
    ]
   },
   {
@@ -966,6 +999,19 @@ window.TRACKER = {
     "   failure symptom means.\"*",
     "3. Get rid of all the white space and margins at the top and bottom of the",
     "   page."
+   ],
+   "whatWasDone": [
+    "Nothing yet — the answers are in, and recorded: the sticky row is **for the",
+    "add-dataset screen only** for now, and the *Bring your own data* link stays",
+    "on that line without crowding **❓ Show setup guide**."
+   ],
+   "whatsLeft": [
+    "Build the sticky row (title · Show setup guide · the docs link · Cancel) and",
+    "delete the four headers and captions it replaces — remembering the title is",
+    "written **twice** today, by `app.main` and by `wizard._render_data_setup`.",
+    "",
+    "Then the margins: `top` has to clear Streamlit's header strip, and a sticky",
+    "child only sticks while its scroll container is the page."
    ],
    "background": [
     "**The four pieces of copy, and who writes each** — they are in three",
@@ -1035,6 +1081,21 @@ window.TRACKER = {
     "Change **Help** in the top menu so that clicking it opens a *page-selection",
     "menu* rather than a page — and make each button now on the Help page a page",
     "of its own."
+   ],
+   "whatWasDone": [
+    "Nothing yet, and the answers **narrow the design**: the tours and tutorials",
+    "are not to change at all — Help should merely become a menu that opens the",
+    "*same* dialogs, not a full page. Documentation stays reachable as an external",
+    "link (the #UX-62 wordmark is the precedent: an image that links out). The 🐛",
+    "Debug toggle moves to the **Session** page."
+   ],
+   "whatsLeft": [
+    "Find the shape that opens the existing dialogs from the nav. A `st.Page`",
+    "*navigates*; it does not open a modal — so a Help section whose entries arm",
+    "the current dialogs needs either a page that arms and bounces back, or Help",
+    "reverting to a dropdown in place. That tension is the work, and it is worth",
+    "settling before writing code (#UX-63's brief says to keep changing it along",
+    "with this item)."
    ],
    "background": [
     "**Directly supported, and already verified** while answering #UX-63:",
@@ -1109,6 +1170,17 @@ window.TRACKER = {
     "3. Put the dataset selection, the trial selection, the slider, and the flip /",
     "   sort / filter buttons **all on the same line** — the dataset picker joins",
     "   the trial line."
+   ],
+   "whatWasDone": [
+    "Nothing yet — the answers are in: the 🗂️ Data page becomes the **only** way",
+    "to add data, and on the one control line the **dataset picker must not**",
+    "shrink (you may be comparing two datasets); the slider gives up width and the",
+    "filter becomes an icon."
+   ],
+   "whatsLeft": [
+    "Merge the two rows onto one grid, drop **➕ Add data**, and fold *Filter by*",
+    "+ **More** into a single filter-icon popover beside ⇅ — keeping the `prefix`",
+    "argument, since compare mode renders its own copy of both."
    ],
    "background": [
     "**Two rows today, on one shared grid.** `tabs.render_single_trial_tab`",
@@ -1608,6 +1680,24 @@ window.TRACKER = {
     "**Fixations** and **AOI** rows, and which should stay in the parts below —",
     "*Fixation features*, *Word features*, *Word box*."
    ],
+   "whatWasDone": [
+    "**Partly**, on the answers in *Instructions for implementation*. The fixation",
+    "fields now run over **two lines of three** instead of one line of six — six",
+    "across left each select about a sixth of the page, which is where the clipped",
+    "column names (#UX-71) came from. The AOI fields sit together, word id / text",
+    "/ line with the box directly beneath them, and the bold **Word features** /",
+    "**Raw gaze features** headings are replaced by a light rule-and-label",
+    "(`.sps-wiz-subhead`) so the group is separated without a heading's weight.",
+    "",
+    "*ID vs description* stays the rule for the coupled rows, as asked."
+   ],
+   "whatsLeft": [
+    "Confirm the grouping is what was meant by \"all AOI related fields close",
+    "together, including word ids and word boxes\" — the fixations table has its",
+    "own `word_id` (which word a fixation landed on), which is arguably",
+    "AOI-related but belongs to the fixation rows. It was left with the fixation",
+    "fields; moving it would split one table's mapping across two groups."
+   ],
    "background": [
     "**Where it stands.** #UX-53 put two identity rows at the head of the mapping,",
     "one per table, each carrying **Trial ID · Participant ID · Text ID · Screen ID",
@@ -2075,6 +2165,22 @@ window.TRACKER = {
     "A big **Add dataset** button in the upper corner of the screen would be good,",
     "and some prominent list of the existing datasets — with the option to add a",
     "description card for each dataset, to allow the user to browse through them."
+   ],
+   "whatWasDone": [
+    "Nothing yet. The ask is now much more specific than the original card: a",
+    "**scrollable, sortable table** of datasets — name, trials, participants,",
+    "fixations, and only measures that are cheap to compute — replacing the",
+    "picker *and* the cards, with a **✕ delete** and a **✏️ edit** on each",
+    "uploaded row, where edit opens an add-dataset-like screen for the mapping",
+    "and the stored tables."
+   ],
+   "whatsLeft": [
+    "All of it. Two things to settle while building: the counts must come from",
+    "already-normalized frames (`st.session_state[\"_datasets\"]`) or the table",
+    "costs a pass over every dataset on every rerun; and *edit* is effectively",
+    "the wizard re-entered against a stored dataset, which is what",
+    "`tabs._render_remap_editor` already does in part — worth reusing rather than",
+    "building a second mapping screen."
    ],
    "background": [
     "**Today.** Adding is a modest **➕ Add data** button beside the source picker",

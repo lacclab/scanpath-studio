@@ -676,6 +676,19 @@ def get_app_css() -> str:
        with a taller mark it leaves a gap the nav then starts after. */
     [data-testid="stLogoSpacer"] { display: none !important; }
 
+    /* UX-55 — a sub-group heading inside a wizard section (AOI features, Raw
+       gaze features). Lighter and tighter than the bold markdown it replaced:
+       the section above it already carries the weight, and these only need to
+       separate one table's fields from the next. */
+    .sps-wiz-subhead {
+        margin: 0.5rem 0 0.1rem;
+        padding-top: 0.35rem;
+        border-top: 1px solid rgba(128, 128, 128, 0.18);
+        font-weight: 600;
+        font-size: 0.88rem;
+        opacity: 0.85;
+    }
+
     /* UX-57 — the Word box heading. It labels a group (a format radio plus a
        row of four coordinates), so it is set like the other group headings
        rather than like a field label, and its description is on hover. */
@@ -697,27 +710,45 @@ def get_app_css() -> str:
         text-overflow: ellipsis;
     }
 
-    /* UX-53 r14 — a dropdown must never cut off a column name. The mapping now
-       packs six or eight selects onto one row, so the *control* is narrow by
-       design; the open menu must not inherit that. BaseWeb sizes the popover to
-       its anchor, so the list is widened to its content and allowed to overhang
-       the column it belongs to.
+    /* UX-71 — a dropdown must never cut off a column name. The mapping packs six
+       or eight selects onto one row, so the *control* is narrow by design and
+       the open menu inherits that width.
 
-       The popover is portalled to the body, so this cannot be scoped by our own
-       `.st-key-…`: it is deliberately global, and it only ever widens a menu
-       that would otherwise clip. A very long name still wraps rather than being
-       truncated — `text-overflow: ellipsis` on an option is the exact failure
-       being fixed, since two columns can share a visible prefix. */
+       UX-53 r14 tried to fix this by widening the list (`min-width:
+       max-content`) and that is why it never worked: BaseWeb mounts the menu in
+       a popover whose width popper.js writes as an **inline style**, so the list
+       asked to be wider than a parent it cannot grow past, overflowed, and was
+       clipped — the opposite of the intent. Asking for width was the wrong
+       lever; the option has to **wrap** inside the width it has.
+
+       So: no min-width, and every node inside an option wraps. The `*` matters —
+       BaseWeb puts the label in a child div that carries its own
+       `white-space: nowrap`, and styling only the option leaves that child
+       clipping. `!important` because those are inline/emotion styles.
+
+       Truncation is not an acceptable fallback here: two columns routinely share
+       a visible prefix (`CURRENT_FIX_INTEREST_AREA_ID` vs `…_INDEX`), so a
+       clipped option is ambiguous, not just ugly.
+
+       Necessarily global — the popover is portalled to the document body, so it
+       cannot be scoped by our own `.st-key-…`. */
     div[data-baseweb="popover"] [role="listbox"],
     div[data-baseweb="popover"] ul[role="listbox"] {
-        min-width: max-content;
-        max-width: min(46rem, 92vw);
+        max-width: 100%;
     }
-    div[data-baseweb="popover"] [role="option"] {
-        text-overflow: clip;
-        overflow: visible;
-        white-space: normal;
+    div[data-baseweb="popover"] [role="option"],
+    div[data-baseweb="popover"] [role="option"] * {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
         overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    /* A wrapped option is two or three lines tall, so the row cannot keep the
+       fixed height BaseWeb gives it. */
+    div[data-baseweb="popover"] [role="option"] {
+        height: auto !important;
+        min-height: 0 !important;
     }
 
     /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and

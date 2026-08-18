@@ -56,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A column mapping the pipeline rejects no longer takes the whole app down** (BUG-28)
 
 ### Changed
+- **A mapping dropdown wraps long column names instead of clipping them** (UX-71, UX-57)
+- **Only detection and blocking gaps are coloured; counts sit beside Add dataset** (UX-67)
+- **Fixation fields run over two lines, and the AOI fields group together** (UX-55)
 - **One menu: Scanpath, Corpus Analysis, Data, Session, Help** (UX-63)
 - **The app's name is a wordmark in the header, not a heading on the page** (UX-62)
 - **Animate and Compare are split buttons: the toggle, and a ▾ for its settings** (UX-68)

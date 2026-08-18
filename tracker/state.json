@@ -144,6 +144,22 @@
       "archived": true,
       "updated": "2026-08-13"
     },
+    "CMP-14": {
+      "status": "Backlog",
+      "priority": "Low",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "CMP-15": {
+      "status": "Backlog",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
     "CMP-5": {
       "status": "Closed",
       "priority": "Normal",
@@ -810,20 +826,36 @@
       "archived": true,
       "updated": "2026-08-17"
     },
-    "UX-57": {
-      "status": "Review",
+    "UX-54": {
+      "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "",
+      "implementationBrief": "from the data, I want to see some table of the datasets instead of the selectable opening menu. I want a table with X rows that is scrollable and sortable by each field that contains the dataset name, how many trials, participants, fixations etc. - only measurements that are easy to calculate from the data for fast performance. the table is instead of the cards. each dataset uploaded by the user should have there a delete (x) button which removes the dataset. it should also have an edit (pencil icon) button, that when clicked moves you to a screen similar to the \"add dataset\" screen, that allows you to edit the maps and see the saved data tables.",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-55": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "keep it ID vrs. DESC for now, and move all fixation fields to be at the same place, 2 lines of features, and move all AOI realted fields to be close together, including word ids and word boxes. remove any big titles or spaces in between to save space.",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-57": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "the menu options text is sometimes cropped, this is not good and should change for all selection menus.",
       "archived": false,
       "updated": "2026-08-18"
     },
     "UX-58": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
+      "implementationBrief": "great",
+      "archived": true,
       "updated": "2026-08-18"
     },
     "UX-62": {
@@ -835,18 +867,66 @@
       "updated": "2026-08-18"
     },
     "UX-63": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. ok\n2. fine",
+      "implementationBrief": "1-3 ok. keep changing according to ux-65",
       "archived": false,
       "updated": "2026-08-18"
     },
-    "UX-69": {
+    "UX-64": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. its ok. leave the data page as the only way to add data.\n2. tha dataset buttonm shouldn't shrink because you may compare 2 different datasets. it's better to shrink the slider, and make filter an icon which shrinks it too.",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-65": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. keep the same tours and tutorials! don tchange them! only chenge the help button to be a menu that opens the same things, not a full page.\n2. find a way to put this as an external page or link in the menu, maybe use redirect? the logo is now in the header menu and links to the doc, you can use an image as a link so there is a way.\n3. put it in the session page for now",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-66": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. title only for the add dataset screen for now\n2. keep the link somewhere in the line but dont disturb the \"show guide\" button",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-67": {
       "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. keep it in a box but down near the add button\n2. leave as they are",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-68": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-18"
+    },
+    "UX-69": {
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Shubi",
       "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-18"
+    },
+    "UX-71": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. prefer wrap",
       "archived": false,
       "updated": "2026-08-18"
     },

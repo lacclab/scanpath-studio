@@ -2042,8 +2042,18 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     # === 2 · Map data fields =================================================
 
+    # Reserve-then-fill, in reading order: the mapping sections, then the counts,
+    # then the footer. UX-67 moved the trial/reader/text counts down here from
+    # under the identity rows -- they are a check you run *before committing*,
+    # so they belong beside "Add dataset", not three sections above it.
+    sections_host = s_map.container()
+    counts_host = s_map.container()
+
     s2 = wizard_shell.section(
-        s_map, "identity", status=statuses.get("identity"), caption=_IDENTITY_CAPTION
+        sections_host,
+        "identity",
+        status=statuses.get("identity"),
+        caption=_IDENTITY_CAPTION,
     )
     # Filename derivation must run *before* the identifier pickers so the
     # derived columns are mappable below. UX-53 took it out of its popover —
@@ -2089,7 +2099,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         def _cells_for(index: int) -> list:
             return [id_rows[s][index] for s in ("fix", "words") if s in id_rows]
 
-        id_extras = s2.container()
+        id_extras = counts_host
         _wizard_trial_step(
             s2,
             raw_words,
@@ -2164,7 +2174,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 )
 
     s3 = wizard_shell.section(
-        s_map,
+        sections_host,
         "geometry",
         status=statuses.get("geometry"),
         caption=(
@@ -2186,7 +2196,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "col_map_fix",
                 s3,
                 ["x", "y", "timestamp", "duration", "fixation_id", "word_id"],
-                per_row=6,
+                # UX-55: two lines of three rather than one of six. Six across
+                # left each select about a sixth of the page, which is where the
+                # clipped column names came from (#UX-71).
+                per_row=3,
             )
         )
         # Validation problems render against their own sub-block rather than as
@@ -2195,7 +2208,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             s3.warning(f"Fixations — {problem}")
 
     if has_words:
-        s3.markdown("**Word features**")
+        # UX-55: a light rule-and-label, not a bold heading, and the box follows
+        # directly so every AOI-related field reads as one group.
+        s3.markdown(
+            '<div class="sps-wiz-subhead">AOI features</div>', unsafe_allow_html=True
+        )
         # Word id / text / line share a row; the box is its own block below,
         # being a format radio plus four coordinates rather than one select.
         word_schema.update(
@@ -2232,7 +2249,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     if not raw_gaze.empty:
         rg_host = s3.container()
-        rg_host.markdown("**Raw gaze features**")
+        rg_host.markdown(
+            '<div class="sps-wiz-subhead">Raw gaze features</div>',
+            unsafe_allow_html=True,
+        )
         raw_gaze_schema = _map_section(
             raw_gaze,
             RAW_GAZE_FIELD_SPECS,
@@ -2278,7 +2298,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
     # now, the summary was a second copy of what was directly below it.
 
     s4 = wizard_shell.section(
-        s_map,
+        sections_host,
         "setup",
         status=statuses.get("setup"),
         # UX-58: the wording the step used to print as a caption inside its
@@ -2311,7 +2331,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     s5 = wizard_shell.section(
-        s_map,
+        sections_host,
         "fields",
         status=statuses.get("fields"),
         caption=(

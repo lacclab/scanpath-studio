@@ -1420,8 +1420,12 @@ ADD_ATTEMPTED_KEY = "_wizard_add_attempted"
 #: longer than the control it described, on every row. Low-alpha rgba so it
 #: tints whatever the active theme paints underneath rather than assuming a
 #: light background.
+#: UX-67 dropped the green: a mapping the user chose is simply *filled*, and
+#: tinting it made "reviewed" compete for attention with the two states that
+#: actually need acting on. `user` keeps its own name in `_field_state` — it is
+#: still what moves a field **out** of amber once someone picks — it just has no
+#: colour of its own now.
 _FIELD_TINT = {
-    "user": "rgba(34, 197, 94, 0.16)",
     "auto": "rgba(234, 179, 8, 0.16)",
     "missing": "rgba(239, 68, 68, 0.20)",
 }

@@ -875,7 +875,7 @@
       "updated": "2026-08-18"
     },
     "UX-64": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. its ok. leave the data page as the only way to add data.\n2. tha dataset buttonm shouldn't shrink because you may compare 2 different datasets. it's better to shrink the slider, and make filter an icon which shrinks it too.",
@@ -891,7 +891,7 @@
       "updated": "2026-08-18"
     },
     "UX-66": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. title only for the add dataset screen for now\n2. keep the link somewhere in the line but dont disturb the \"show guide\" button",

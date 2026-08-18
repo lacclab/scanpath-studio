@@ -76,7 +76,7 @@ from scanpath_studio.constants import (
     SACCADE_CLASS_ORDER,
     SACCADE_COLOR,
     SACCADE_DASH_OPTIONS,
-    SELECTOR_ROW_GRID,
+    SELECTOR_ROW_TRIO,
     SELECTOR_ROW_WIDE_GRID,
     WORD_LABEL_COLOR,
     compare_palette_color,
@@ -275,7 +275,7 @@ def _render_screen_navigator(catalog: pd.DataFrame) -> str | None:
         for row in catalog.itertuples()
     }
     sel_col, slider_col, trail_col = st.columns(
-        SELECTOR_ROW_GRID, vertical_alignment="bottom"
+        SELECTOR_ROW_TRIO, vertical_alignment="bottom"
     )
     position = options.index(str(st.session_state["single_screen_id"]))
     selected = sel_col.selectbox(
@@ -1044,7 +1044,7 @@ def _render_compare_dataset_picker() -> SecondaryDataset | None:
     # the **Compare with** dropdown lands under **Select Trial**, and B's own
     # **More** under A's.
     ds_col, filter_col, more_col = st.columns(
-        SELECTOR_ROW_GRID, vertical_alignment="bottom"
+        SELECTOR_ROW_TRIO, vertical_alignment="bottom"
     )
     chosen = ds_col.selectbox(
         "**Compare with**",
@@ -1241,7 +1241,7 @@ def _render_compare_selector(
     sort_col = None
     if n > 1:
         sel_col, slider_col, trail_col = st.columns(
-            SELECTOR_ROW_GRID, vertical_alignment="bottom"
+            SELECTOR_ROW_TRIO, vertical_alignment="bottom"
         )
         trail = trail_col.container(key="railbtn_single_compare_trail")
         # Create the children in display order, then fill the ordering popover
@@ -3435,47 +3435,37 @@ def render_single_trial_tab(
         rail = st.container(key="scanpath_rail")
 
     with plot_col:
-        # Narrow-by row: [Data source] [Filter by] [Text multiselect]
-        # [Participant multiselect] [More popover]. UX-25 put the data source
-        # first, so the row reads left-to-right as *which dataset → how to narrow
-        # it → which trial*. The Text/Participant multiselects narrow the pool;
-        # "More" holds the condition + annotation filters. The specific trial is
-        # picked on the row below (select_trial → selectbox + slider + ◀ ▶).
-        # UX-42: Data source and Filter by have separate tour steps, so they need
-        # sibling spotlight targets even though they share one visual row.
-        # UX-47: on `SELECTOR_ROW_GRID`, the same three tracks as the trial picker
-        # below — so the source dropdown ends exactly where the trial dropdown
-        # does, the filters start where the scrub slider does, and **More** sits
-        # on the ◀ ▶ ⇅ edge. It used to be [2.2, 6.4] with the narrowing controls
-        # subdivided inside the second column, which put every boundary in this
-        # row a few dozen pixels off the row below it.
-        nb_source, nb_filters, nb_more = st.columns(
-            SELECTOR_ROW_GRID, vertical_alignment="center"
-        )
-        # Rendered by app (it owns the entry list + the wizard hooks) — see
-        # app.render_data_source_picker; its own `tour_grp_data_source` wrapper
-        # now sits beside, rather than inside, the Filter-by spotlight.
-        if data_source_renderer is not None:
-            data_source_renderer(nb_source)
+        # UX-64 — everything is on the picker row below now: the dataset, the
+        # trial, the scrubber, ◀ ▶ ⇅ and a 🔎 filter popover. The Narrow-by row
+        # that used to sit here — [data source] [Filter by: Text, Participant]
+        # [More] — is gone, and its two multiselects moved *inside* that filter
+        # popover beside the condition/annotation filters, so there is one place
+        # that narrows the pool instead of two.
+        #
+        # `tour_grp_data_source` and `tour_grp_narrow_by` still exist as sibling
+        # spotlight targets (UX-42) — they are just the row's lead cell and the
+        # filter popover's body rather than two thirds of a row of their own.
+        def _render_dataset_cell(host) -> None:
+            # No wrapper container here: `app.render_data_source_picker` makes
+            # its own `tour_grp_data_source`, and a second one is a duplicate key.
+            if data_source_renderer is not None:
+                data_source_renderer(host)
 
-        filter_box = nb_filters.container(key="tour_grp_narrow_by")
-        nb_label, nb_text, nb_part = filter_box.columns(
-            NARROW_BY_GRID, vertical_alignment="center"
-        )
-        nb_label.markdown("**Filter by**")
-        render_narrow_by(words_all, fixations_all, text_host=nb_text, part_host=nb_part)
-        with nb_more:
-            # UX-27: keyed so styles.py can give it the shared rail-button
-            # shape, matching the picker's ◀ ▶ ⇅ and the chip row below.
-            more_pop = st.container(key="railbtn_more").popover("More", width="content")
-            more_pop.caption("More ways to narrow — conditions & annotations.")
-            render_trial_filters(words_all, fixations_all, host=more_pop)
+        def _render_filters(host) -> None:
+            """Every way to narrow the pool, behind one 🔎 (UX-64)."""
+            pop = host.popover("🔎", width="content", help="Filter the trial list")
+            box = pop.container(key="tour_grp_narrow_by")
+            render_narrow_by(words_all, fixations_all, text_host=box, part_host=box)
+            render_trial_filters(words_all, fixations_all, host=box)
+
         # Trial picker (its own row of columns): selectbox + slider + ◀ ▶.
         with st.container(key="tour_grp_trial_picker"):
             selected_participant, selected_trial, selection_mode, selected_text = (
                 select_trial(
                     combos,
                     key_prefix="single",
+                    leading_renderer=_render_dataset_cell,
+                    filter_renderer=_render_filters,
                     # UX-10: the frames `combos` was built from, so the ⇅ sort
                     # popover can offer computed keys (fixation count, reading
                     # time) alongside the reader / text / condition columns.

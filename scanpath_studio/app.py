@@ -2828,17 +2828,16 @@ def render_sidebar_data_source(host=None) -> str:
         st.session_state.get("_show_upload_wizard")
         or st.session_state.get("data_source_choice") == UPLOAD_CHOICE
     ):
-        source = (host if host is not None else st).container(
-            key="tour_grp_data_source"
-        )
-        source.caption("➕ Adding a dataset — fill in the setup wizard below.")
-        if source.button("✕ Cancel", key="cancel_add_data"):
-            st.session_state["_pending_source_choice"] = st.session_state.get(
-                "_prev_source", DEMO_CHOICE
-            )
-            st.session_state["_show_upload_wizard"] = False
-            st.session_state["setup_complete"] = True
-            st.rerun()
+        # UX-66: the caption is gone (the sticky bar's title says where you are)
+        # and ✕ Cancel rides that bar — `wizard._render_data_setup` reserves the
+        # slot, and the wizard renders *after* this, so on the very first run of
+        # a fresh wizard the slot does not exist yet and it falls back to here.
+        # UX-66: ✕ Cancel moved onto the wizard's sticky bar, which is the one
+        # row that stays on screen — the way out used to scroll away with the
+        # page. It is rendered by `wizard._render_data_setup` via
+        # `leave_add_data_wizard` below; nothing is drawn here, because this
+        # function runs *before* the wizard and a container reserved now would
+        # belong to the previous run.
         return UPLOAD_CHOICE
 
     # DATA-9: one **flat** source picker. Every source is a single entry tagged by
@@ -2954,6 +2953,21 @@ def _on_data_source_pick() -> None:
         st.session_state["_pending_source_choice"] = picked
 
 
+def leave_add_data_wizard() -> None:
+    """Abandon the add-dataset wizard and go back to the previous source.
+
+    Split out of the picker for UX-66, which moved ✕ Cancel onto the wizard's
+    sticky bar. Writes through the pre-widget ``_pending_source_choice`` seam
+    (assigning the picker's value inline is reconciled away by the browser), so
+    it is safe as an ``on_click``.
+    """
+    st.session_state["_pending_source_choice"] = st.session_state.get(
+        "_prev_source", DEMO_CHOICE
+    )
+    st.session_state["_show_upload_wizard"] = False
+    st.session_state["setup_complete"] = True
+
+
 def render_data_source_picker(host=None) -> None:
     """Render the data-source picker in the main view (UX-25).
 
@@ -2963,13 +2977,11 @@ def render_data_source_picker(host=None) -> None:
     :func:`render_sidebar_data_source` published earlier this run; a pick is
     applied on the next run via :func:`_on_data_source_pick`.
 
-    The compact row holds the selectbox only; managing sources (➕ Add data,
-    removing an uploaded dataset, contributing a corpus) lives behind the ➕
-    popover beside it.
+    UX-64 reduced it to the selectbox alone. Adding a dataset, removing one and
+    the contribute link were behind a ➕ popover here; the 🗂️ Data page owns all
+    three now, and the width it frees is what lets the dataset picker keep its
+    size on the single control line.
     """
-    # Imported lazily (not at module top) to avoid the app⇄wizard import cycle.
-    from scanpath_studio.wizard import _enter_add_data_wizard, _remove_dataset
-
     entries = list(st.session_state.get("_data_source_entries") or [])
     if not entries:
         return
@@ -3002,13 +3014,19 @@ def render_data_source_picker(host=None) -> None:
 
     # Keyed wrapper → stable `.st-key-…` selector for the spotlight tour.
     box = (host if host is not None else st).container(key="tour_grp_data_source")
-    pick_col, add_col = box.columns([5.6, 1], vertical_alignment="center")
+    # UX-64: the picker is the whole control now. The ➕ popover that sat beside
+    # it — Add data, remove-an-upload, the contribute link — is gone: the 🗂️ Data
+    # page is the only way to add a dataset, which is where the wizard renders
+    # anyway, and removing one moves there too (#UX-54's dataset table). Dropping
+    # it is also what frees the width for the single control line, since the
+    # dataset picker itself must **not** shrink — you may be comparing two.
+    #
     # Mirror the canonical key onto the widget key before it instantiates, so a
     # deep link / restore / wizard finalize shows up in the picker.
     current = st.session_state.get("data_source_choice")
     if current in entries:
         st.session_state["data_source_picker"] = current
-    pick_col.selectbox(
+    box.selectbox(
         "Data source",
         entries,
         format_func=_entry_label,
@@ -3016,41 +3034,6 @@ def render_data_source_picker(host=None) -> None:
         key="data_source_picker",
         on_change=_on_data_source_pick,
         label_visibility="collapsed",
-    )
-    # UX-47: `railbtn_*`, like every other trigger on the four control rows above
-    # the plot. It was the one that never joined UX-27's shared shape, and it
-    # showed: a 40 px-tall stretched rectangle beside 27 px pills, which also made
-    # this row the tallest of the four for no reason.
-    manage = add_col.container(key="railbtn_data_add").popover(
-        "➕", width="content", help="Add or remove datasets."
-    )
-    # The state change runs in an on_click callback (before widgets instantiate)
-    # so it can reassign the data_source_choice key — see _enter_add_data_wizard.
-    # The callback fires, then Streamlit reruns into the wizard branch.
-    manage.button(
-        "➕ Add data",
-        key="add_data_btn",
-        on_click=_enter_add_data_wizard,
-        help="Upload your own eye-tracking tables.",
-        width="stretch",
-    )
-    # Let the user remove datasets they added earlier (✕ next to each). Selecting
-    # the removed one falls back to the demo (see _remove_dataset).
-    if uploaded:
-        manage.caption("Remove an added dataset")
-        for name in uploaded:
-            name_col, x_col = manage.columns([5, 1])
-            name_col.write(name)
-            x_col.button(
-                "✕",
-                key=f"remove_dataset_{name}",
-                on_click=_remove_dataset,
-                args=(name,),
-                help=f"Remove '{name}'",
-            )
-    manage.caption(
-        "Have a public corpus? "
-        f"[Get it built in ↗]({CITATION['docs_url']}contributing-a-dataset/)"
     )
 
 
@@ -4229,7 +4212,11 @@ def main() -> None:
     setup_page = st.container(
         key=DATA_PAGE_KEY if data_view else DATA_PAGE_OFFSCREEN_KEY
     )
-    if data_view:
+    # UX-66: while the add-dataset wizard is up it owns the page and carries its
+    # own sticky title, so the page's header and its stage subheading would be a
+    # second and third title above it.
+    wizard_owns_page = bool(st.session_state.get("_show_upload_wizard"))
+    if data_view and not wizard_owns_page:
         setup_page.header("Set up your dataset")
         # UX-53: one line, not five. The four stage headings below already say
         # what the page contains.
@@ -4287,9 +4274,29 @@ def main() -> None:
     # the page slot above. The resolver takes the same slot because while the
     # add-dataset wizard is open it renders a "✕ Cancel" bar *instead of* a
     # picker, and rendering both would duplicate the `tour_grp_data_source` key.
+    from scanpath_studio.wizard import _enter_add_data_wizard
+
     data_choice = render_sidebar_data_source(host=setup_source_slot)
     if data_view and data_choice != UPLOAD_CHOICE:
-        render_data_source_picker(host=setup_source_slot)
+        pick_col, add_col = setup_source_slot.columns(
+            [5, 1], vertical_alignment="center"
+        )
+        render_data_source_picker(host=pick_col)
+        # UX-64 took ➕ Add data off the Scanpath row and made this page the only
+        # way in — so the way in has to *be* here. It was the popover's only
+        # caller, and without this button `_enter_add_data_wizard` would have no
+        # trigger at all and uploading would be unreachable. An `on_click`
+        # callback, not an inline handler: it reassigns `data_source_choice`,
+        # which only lands before the widgets instantiate. #UX-54 replaces this
+        # row with the dataset table, and this button is the seed of it.
+        add_col.button(
+            "➕ Add dataset",
+            key="add_data_btn",
+            on_click=_enter_add_data_wizard,
+            help="Upload your own eye-tracking tables.",
+            width="stretch",
+            type="primary",
+        )
     if data_view:
         setup_preproc_slot.divider()
         setup_preproc_slot.subheader("🧹 Preprocessing")

@@ -627,13 +627,30 @@ DATA_PAGE_OFFSCREEN_KEY = "data_setup_page_offscreen"
 #
 # Widths, not pixels: Streamlit shares the row minus its gutters out by weight,
 # so the grid holds at every window size.
-SELECTOR_ROW_GRID = [3.0, 5.0, 1.9]
+# UX-64 made it **four** tracks — dataset · trial · scrub · actions — because
+# the Narrow-by row above it is gone and its dataset picker moved down onto this
+# one. The dataset track is as wide as the trial track and deliberately does not
+# shrink: two datasets under comparison are told apart by that label. What gave
+# way is the scrubber (5.0 → 3.6) and the filters, which became one icon in the
+# actions cluster rather than a labelled **More** button of their own.
+SELECTOR_ROW_GRID = [3.0, 3.0, 3.6, 2.3]
 
-#: The first two tracks of ``SELECTOR_ROW_GRID`` as one — for a row whose left
-#: side is a single wide element (the chip strip) rather than pick + scrub.
+#: The pre-UX-64 three-track shape, for the rows that still have three things
+#: on them — the multipart screen navigator and compare mode's own picker rows.
+#: Built by merging the trial and scrub tracks, so their outer boundaries still
+#: line up with the four-track row above them (which is the whole point of
+#: sharing one grid — see the note at the top of this block).
+SELECTOR_ROW_TRIO = [
+    SELECTOR_ROW_GRID[0],
+    SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
+    SELECTOR_ROW_GRID[3],
+]
+
+#: ``SELECTOR_ROW_GRID``'s three left tracks as one — for a row whose left side
+#: is a single wide element (the chip strip) rather than dataset + pick + scrub.
 SELECTOR_ROW_WIDE_GRID = [
-    SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1],
-    SELECTOR_ROW_GRID[2],
+    SELECTOR_ROW_GRID[0] + SELECTOR_ROW_GRID[1] + SELECTOR_ROW_GRID[2],
+    SELECTOR_ROW_GRID[3],
 ]
 
 #: The Narrow-by row's middle track, split into `label | text | participant`.

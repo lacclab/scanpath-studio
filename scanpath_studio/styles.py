@@ -7,7 +7,7 @@ def get_app_css() -> str:
     """Return custom CSS to reduce whitespace and disable animations."""
     return """
     <style>
-    section.main > div.block-container {padding-top: 0.5rem; padding-bottom: 0.5rem;}
+    section.main > div.block-container {padding-top: 0.25rem; padding-bottom: 0.25rem;}
     /* Remove all whitespace around plotly charts */
     div[data-testid="stPlotlyChart"] {margin: 0 !important; padding: 0 !important; line-height: 0 !important;}
     div[data-testid="stPlotlyChart"] > div {margin: 0 !important; padding: 0 !important;}
@@ -675,6 +675,38 @@ def get_app_css() -> str:
     /* The spacer Streamlit reserves beside the logo assumes the default height;
        with a taller mark it leaves a gap the nav then starts after. */
     [data-testid="stLogoSpacer"] { display: none !important; }
+
+    /* UX-66 — the add-dataset screen's one permanent row: title, guide, docs
+       link, cancel. It stays put while the page scrolls.
+
+       `top` clears Streamlit's own header strip, which occupies the top of the
+       viewport — without it the row slides *under* the nav rather than resting
+       below it. The background is opaque so the fields scrolling beneath do not
+       show through, and the z-index keeps it over them.
+
+       Scoped to this container's key: only the wizard gets a sticky bar, not
+       every page. */
+    .st-key-wiz_sticky_bar {
+        position: sticky;
+        top: 3.2rem;
+        z-index: 60;
+        background: var(--background-color, #fff);
+        padding: 0.35rem 0 0.4rem;
+        margin-bottom: 0.2rem;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+    }
+    .sps-wiz-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* "get rid of all white spaces and margins at the top and bottom" — the
+       page's own padding, and the gap Streamlit leaves under the last block. */
+    .st-key-data_setup_page > div:first-child { margin-top: 0 !important; }
+    .st-key-data_setup_page > div:last-child { margin-bottom: 0 !important; }
 
     /* UX-55 — a sub-group heading inside a wizard section (AOI features, Raw
        gaze features). Lighter and tighter than the bold markdown it replaced:

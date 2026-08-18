@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from .annotations import get_entry
-from .constants import SELECTOR_ROW_GRID
+from .constants import SELECTOR_ROW_GRID, SELECTOR_ROW_TRIO
 from .data import frame_fingerprint
 
 # Annotation markers shown beside a trial in the pickers (UX-6). Independent of
@@ -765,9 +765,11 @@ def _select_trial_none_mode(
     *,
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
+    leading_renderer=None,
+    filter_renderer=None,
 ) -> tuple[str | None, str | None, str | None]:
-    """The trial picker: a **selectbox + scrubbing slider + ◀ ▶ step buttons + a ⇅
-    sort popover**, all on one row. The slider thumb shows ``index/TOTAL · id``
+    """The trial picker: **dataset + selectbox + scrubbing slider + ◀ ▶ steps + ⇅
+    sort + 🔎 filters**, all on one row (UX-64). The slider thumb shows ``index/TOTAL · id``
     (index first). The pool is narrowed upstream (the "Narrow by" multiselects +
     the "More" filters), so this just picks one trial from it and orders it.
 
@@ -843,20 +845,33 @@ def _select_trial_none_mode(
             # so a separate "Trial X / N" caption is redundant.
             return f"{idx_of.get(value, 0) + 1}/{n_trials}  ·  {_option_label(value)}"
 
-        # One row: [selectbox] [slider] [◀ ▶ ⇅] — the three triggers share ONE
-        # trailing column as a `railbtn_*` cluster (UX-27), which styles.py packs
-        # right at a uniform 3px spacing. A column each put a full gutter between
-        # them, so a prev/next *pair* didn't read as a pair and the group didn't
-        # line up with the **More** row above or the chip row below.
-        sel_col, slider_col, trail_col = host.columns(
+        # UX-64 — ONE row for everything: [dataset] [trial] [slider] [◀ ▶ ⇅ 🔎].
+        # The Narrow-by row above it is gone; its filters live in the 🔎 popover
+        # at the end of this row. The dataset picker keeps its width on purpose
+        # (you may be comparing two datasets, and the label is what tells them
+        # apart) — the slider gives up the room instead, and the filter is an
+        # icon, which is what makes six controls fit.
+        #
+        # The three triggers share ONE trailing column as a `railbtn_*` cluster
+        # (UX-27), which styles.py packs right at a uniform 3px spacing. A column
+        # each put a full gutter between them, so a prev/next *pair* didn't read
+        # as a pair.
+        lead_col, sel_col, slider_col, trail_col = host.columns(
             SELECTOR_ROW_GRID, vertical_alignment="bottom"
         )
+        if leading_renderer is not None:
+            leading_renderer(lead_col)
         trail = trail_col.container(key=f"railbtn_{key_prefix}_trail")
         # Created in display order (◀ ▶ then ⇅) but filled out of order: the sort
         # popover has to render first, because the order it returns is what the
         # selectbox, the slider and the ◀ ▶ steps all walk.
         step_col = trail.container(key=f"railbtn_{key_prefix}_step")
         sort_col = trail.container(key=f"railbtn_{key_prefix}_sort")
+        filter_col = trail.container(key=f"railbtn_{key_prefix}_filter")
+        # Filled by the caller, which owns the filter widgets — but created here,
+        # in display order, so 🔎 lands after ⇅ in the cluster (UX-64).
+        if filter_renderer is not None:
+            filter_renderer(filter_col)
         # UX-10: order the pool *before* the widgets read `trial_options`, so the
         # selectbox, the slider and the ◀ ▶ steps all walk the same order. The
         # canonical selection is a trial *id*, so re-sorting never changes which
@@ -888,7 +903,19 @@ def _select_trial_none_mode(
             )
         current_idx = trial_options.index(current_label)
     else:
-        sel_col = host
+        # A one-trial pool has no slider (`st.select_slider` throws on a single
+        # option — BUG-23) and nothing to step through, but it still needs the
+        # dataset picker and the filters: a pool of one is *usually the result of
+        # a filter*, so this is exactly when the user reaches for them. UX-64.
+        lead_col, sel_col, trail_col = host.columns(
+            SELECTOR_ROW_TRIO, vertical_alignment="bottom"
+        )
+        if leading_renderer is not None:
+            leading_renderer(lead_col)
+        if filter_renderer is not None:
+            filter_renderer(
+                trail_col.container(key=f"railbtn_{key_prefix}_filter_solo")
+            )
 
     # CMP-13: publish the list as rendered (post-sort), so the *Compare To*
     # picker's linked ◀ ▶ can step this picker without rebuilding its ordering.
@@ -974,6 +1001,8 @@ def select_trial(
     *,
     words: pd.DataFrame | None = None,
     fixations: pd.DataFrame | None = None,
+    leading_renderer=None,
+    filter_renderer=None,
 ) -> tuple[str | None, str | None, str, str | None]:
     """Pick a specific trial from the (already-narrowed) pool.
 
@@ -1018,6 +1047,10 @@ def select_trial(
         text_field,
         key_prefix,
         picker_host=picker_host,
+        # UX-64: the row's lead cell (the dataset picker) and its 🔎 filter
+        # popover are filled by the caller, which owns those widgets.
+        leading_renderer=leading_renderer,
+        filter_renderer=filter_renderer,
         words=words,
         fixations=fixations,
     )

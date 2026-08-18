@@ -1866,19 +1866,49 @@ def _render_data_setup(active: bool) -> _UploadResult:
     """
     statuses = _wizard_statuses()
     if active:
-        st.header("📂 Set up your dataset")
-        st.caption(
-            "First time? [Bring your own data ↗]"
-            "(https://lacclab.github.io/scanpath-studio/bring-your-own-data/) "
-            "covers the minimum your export needs, worked EyeLink and plain-CSV "
-            "examples, and what each failure symptom means."
+        # UX-66 — ONE row, and it stays put while the page scrolls: the title,
+        # the guide button, the docs link, and the way out. Everything else that
+        # used to stack above the wizard is gone (the page header and its summary
+        # in `app.main`, the "Adding a dataset…" caption in
+        # `render_sidebar_data_source`, and the second copy of this very title
+        # that lived here) — four headings for one screen, from three modules.
+        #
+        # Keyed so `styles.py` can pin it; the CSS is scoped to this key alone,
+        # so only the add-dataset screen gets a sticky bar.
+        bar = st.container(key="wiz_sticky_bar")
+        title_col, guide_col, link_col, cancel_col = bar.columns(
+            [5, 2.2, 2.2, 1.4], vertical_alignment="center"
+        )
+        title_col.markdown(
+            '<div class="sps-wiz-title">Set up your dataset</div>',
+            unsafe_allow_html=True,
         )
         # Step-by-step guide: a bottom-right card that auto-opens once per session
         # and is replayable via the button. Arm it (auto/first-visit) then render
         # the card early so it streams before the heavy upload/normalize work.
         maybe_show_wizard_guide()
         render_spotlight_wizard_guide()
-        render_wizard_guide_button(st)
+        render_wizard_guide_button(guide_col)
+        # The docs pointer keeps its place on the line without crowding the guide
+        # button: a link, not a sentence. It is the only thing telling a first-time
+        # uploader what an export has to contain.
+        link_col.link_button(
+            "📖 Data guide ↗",
+            "https://lacclab.github.io/scanpath-studio/bring-your-own-data/",
+            help="What your export needs, worked EyeLink and plain-CSV examples, "
+            "and what each failure symptom means.",
+            width="stretch",
+        )
+        # The way out, on the row that stays on screen. An `on_click`, not an
+        # inline handler: it reassigns `data_source_choice` through the pending
+        # seam, which only lands before the widgets instantiate.
+        cancel_col.button(
+            "✕ Cancel",
+            key="cancel_add_data",
+            on_click=app.leave_add_data_wizard,
+            help="Leave the wizard and go back to the dataset you were on.",
+            width="stretch",
+        )
         # UX-53 r8: no progress chips. They were navigation for an accordion
         # that no longer exists — the two parts are linear, so there is nothing
         # to flip between and a chip row would be a menu with one path through

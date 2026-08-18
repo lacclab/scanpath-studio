@@ -1001,17 +1001,28 @@ window.TRACKER = {
     "   page."
    ],
    "whatWasDone": [
-    "Nothing yet — the answers are in, and recorded: the sticky row is **for the",
-    "add-dataset screen only** for now, and the *Bring your own data* link stays",
-    "on that line without crowding **❓ Show setup guide**."
+    "**One sticky row on the add-dataset screen** (`wizard._render_data_setup`,",
+    "container key `wiz_sticky_bar`): *Set up your dataset* · **📘 Show setup guide**",
+    "· **📖 Data guide ↗** · **✕ Cancel**. It stays put while the fields scroll under",
+    "it — `position: sticky` with `top` clearing Streamlit's own header strip, an",
+    "opaque background so nothing shows through, and the CSS scoped to that one key",
+    "so no other page grows a bar.",
+    "",
+    "**The four headings it replaces are gone** — the page header + one-line summary",
+    "and the **📂 Data source** subheader in `app.main`, the *\"Adding a dataset…\"*",
+    "caption in `render_sidebar_data_source`, and the second copy of the title",
+    "`_render_data_setup` wrote itself. That is four headings for one screen, from",
+    "three modules, which is why the top of this page kept re-growing.",
+    "",
+    "**The docs pointer stayed on the line as a link button**, not the paragraph it",
+    "was, per your answer — so it does not crowd **Show setup guide**. Its old",
+    "sentence survives as the button's tooltip.",
+    "",
+    "**Margins**: the app's `block-container` padding is down to `0.25rem` top and",
+    "bottom, and the wizard page's first/last blocks lose their own margins."
    ],
    "whatsLeft": [
-    "Build the sticky row (title · Show setup guide · the docs link · Cancel) and",
-    "delete the four headers and captions it replaces — remembering the title is",
-    "written **twice** today, by `app.main` and by `wizard._render_data_setup`.",
-    "",
-    "Then the margins: `top` has to clear Streamlit's header strip, and a sticky",
-    "child only sticks while its scroll container is the page."
+    "Nothing."
    ],
    "background": [
     "**The four pieces of copy, and who writes each** — they are in three",
@@ -1057,6 +1068,14 @@ window.TRACKER = {
     "Related: #UX-53 (the density pass that removed the earlier five-line",
     "summary), #DATA-26 (why this page exists at all), #BUG-31 (leaving the wizard",
     "mid-flow), #UX-62 (the header wordmark that now sits above all this)."
+   ],
+   "decisions": [
+    "Scroll the add-dataset screen and check the bar rests *below* the top nav",
+    "rather than sliding under it — `top: 3.2rem` is tuned to the current nav",
+    "height, so it is the one number that would need re-tuning if that changes.",
+    "The bar is opaque `var(--background-color)`; check it in dark mode too.",
+    "**✕ Cancel** moved off the source-picker block onto this row — confirm it still",
+    "puts you back on the dataset you were on."
    ],
    "decisions": [
     "Does the sticky row belong to the **whole 🗂️ Data page** or only to the **wizard**? They are different screens: the page also shows the source picker, the tables and preprocessing when no wizard is running, and *Cancel* means nothing there.",
@@ -1172,15 +1191,29 @@ window.TRACKER = {
     "   the trial line."
    ],
    "whatWasDone": [
-    "Nothing yet — the answers are in: the 🗂️ Data page becomes the **only** way",
-    "to add data, and on the one control line the **dataset picker must not**",
-    "shrink (you may be comparing two datasets); the slider gives up width and the",
-    "filter becomes an icon."
+    "**One row now carries the whole selection** — `[dataset] [trial] [scrub slider]",
+    "[◀ ▶ ⇅ 🔎]`. The Narrow-by row above it is gone; `utils._select_trial_none_mode`",
+    "grew a `leading_renderer` (the dataset cell) and a `filter_renderer` (the 🔎",
+    "popover), so the row is still built in one place and the caller supplies only",
+    "what it owns.",
+    "",
+    "**🔎 replaces both *Filter by* and *More*.** The popover holds",
+    "`render_narrow_by`'s Text + Participant multiselects *and*",
+    "`render_trial_filters`' condition/annotation filters, in that order. Both keep",
+    "their `prefix` argument, so compare mode's B renders its own copy unchanged.",
+    "",
+    "**➕ Add data is off this row**; the 🗂️ Data page's button is the only way into",
+    "the wizard, per your answer.",
+    "",
+    "**Widths follow your call**: the dataset picker does not shrink (`3.0` of the",
+    "grid, as before), the scrubber gives up the width (`5.0 → 3.6`), and the filter",
+    "is an icon in the trailing cluster. `SELECTOR_ROW_GRID` is four tracks now, so",
+    "the three rows that still have three things on them — the multipart screen",
+    "navigator and compare mode's two picker rows — take the new `SELECTOR_ROW_TRIO`",
+    "(tracks 2+3 merged), which keeps their outer boundaries on the same grid."
    ],
    "whatsLeft": [
-    "Merge the two rows onto one grid, drop **➕ Add data**, and fold *Filter by*",
-    "+ **More** into a single filter-icon popover beside ⇅ — keeping the `prefix`",
-    "argument, since compare mode renders its own copy of both."
+    "Nothing."
    ],
    "background": [
     "**Two rows today, on one shared grid.** `tabs.render_single_trial_tab`",
@@ -1222,6 +1255,17 @@ window.TRACKER = {
     "Related: #UX-54 (the Add-dataset entry point that would replace ➕), #UX-47",
     "(the shared row grid), #UX-27 (the `railbtn_*` shape), #BUG-23 (one picker",
     "for every dataset), #CMP-8 (the prefixed second copy)."
+   ],
+   "decisions": [
+    "Review the one-line Scanpath row — six controls now share it: is the trial",
+    "selectbox still wide enough to read a composite id, and does the scrubber still",
+    "feel usable at `3.6`?",
+    "Everything that narrows the pool is behind 🔎 now, with no visible sign that a",
+    "filter is *on* — the chips below still spell out the trial, but an active Text",
+    "or Participant filter is invisible until you open the popover. Worth a badge?",
+    "A one-trial pool degrades to `[dataset] [trial] [🔎]` (no slider — a one-option",
+    "`select_slider` throws). Click through a composite-trial-id dataset and check",
+    "that row reads sensibly."
    ],
    "decisions": [
     "Dropping **➕ Add data** leaves no way to start an upload from the Scanpath view, and no home for *remove an added dataset*. Should this wait on #UX-54 (the prominent Add-dataset button on the 🗂️ Data page), or ship first and leave the Data page's existing entry as the only route?",

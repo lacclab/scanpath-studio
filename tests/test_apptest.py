@@ -26,6 +26,7 @@ from tests.conftest import (
     _write_benchmark_corpus,
     _write_benchmark_manifest,
     answer_setup_step,
+    open_data_view,
     pin_data_view,
 )
 
@@ -51,6 +52,18 @@ def _make_apptest(*, synthetic: bool = False) -> AppTest:
     if synthetic:
         at.session_state["data_source_choice"] = SYNTHETIC_SOURCE
     return at
+
+
+def _enter_add_data(at: AppTest) -> None:
+    """Click the Add-dataset button, wherever the app currently keeps it.
+
+    UX-64 moved it off the Scanpath control row onto the Data page, which is
+    now the only way in — so reaching it means switching views first.
+    """
+    open_data_view(at)
+    add = [b for b in at.button if b.key == "add_data_btn"]
+    assert add, "Add data button not rendered on the Data page"
+    add[0].click()
 
 
 @pytest.mark.timeout(60)
@@ -2068,9 +2081,7 @@ class TestSetupWizard:
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        add = [b for b in at.button if b.key == "add_data_btn"]
-        assert add, "Add data button not rendered"
-        add[0].click()
+        _enter_add_data(at)
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["_show_upload_wizard"] is True
@@ -2262,7 +2273,7 @@ class TestSetupWizard:
         at = _make_apptest(synthetic=True)
         at.run(timeout=60)
         # Real flow: enter the wizard via the button (picker already rendered).
-        next(b for b in at.button if b.key == "add_data_btn").click()
+        _enter_add_data(at)
         at.run(timeout=60)
         # Entering the wizard resets its widgets, so the setup step must be
         # answered *after* that click, not before it.

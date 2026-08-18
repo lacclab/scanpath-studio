@@ -608,6 +608,18 @@ HELP_PAGE_OFFSCREEN_KEY = "help_menu_page_offscreen"
 DATA_PAGE_KEY = "data_setup_page"
 DATA_PAGE_OFFSCREEN_KEY = "data_setup_page_offscreen"
 
+#: BUG-31 — the view the user tried to reach while the add-dataset wizard was
+#: open. `app.main` holds them on the 🗂️ Data page and the wizard asks whether to
+#: discard the setup; this remembers where they were headed so *Discard and
+#: leave* can finish the trip. Session state only, never a wire format.
+WIZARD_LEAVE_KEY = "_wizard_leave_requested"
+
+#: BUG-31 — the view the user answered *Keep setting up* for. The prompt is
+#: suppressed while the nav sits on exactly that view, so choosing to stay does
+#: not re-ask on every rerun; clicking a *different* view asks again. Session
+#: state only, never a wire format.
+WIZARD_STAY_KEY = "_wizard_leave_acknowledged"
+
 #: UX-54 — set by the dataset table's ✏️ Edit button to the dataset it opened, so
 #: the Column mapping section below can say that is why the page changed under
 #: the user. Read once and cleared; session state only, never a wire format.

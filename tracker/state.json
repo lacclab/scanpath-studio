@@ -1,6 +1,22 @@
 {
   "version": 3,
   "items": {
+    "BUG-31": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "BUG-30": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
     "AN-29": {
       "status": "Closed",
       "priority": "Normal",

@@ -31,6 +31,7 @@ from .constants import (
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
+    WIZARD_LEAVE_KEY,
 )
 from .controls import (
     ADD_ATTEMPTED_KEY,
@@ -279,6 +280,45 @@ def rename_dataset(old: str, new: str) -> str | None:
         st.session_state[COMPARE_SOURCE_STATE_KEY] = name
     rename_cached_dataset(st.session_state, old, name)
     return name
+
+
+def _render_leave_prompt(host) -> None:
+    """Ask before abandoning a half-built dataset (BUG-31).
+
+    Raised by ``app.main`` when the user navigates away while the wizard is open:
+    rather than switching the app onto the unfinished upload — which reported
+    *"this dataset isn't set up yet"* over a session full of finished datasets —
+    the view is held here and the question is asked.
+
+    It says the files will be lost because they will. Streamlit drops a widget's
+    key at the end of any run in which it did not render, and ``st.file_uploader``
+    is the one widget ``persist_state="session"`` cannot cover (ENG-36), so
+    "park it and come back" is not available to promise. The mapping answers
+    would survive; the uploads would not, which is the half that matters.
+    """
+    destination = st.session_state.get(WIZARD_LEAVE_KEY)
+    if not destination:
+        return
+    box = host.container()
+    box.warning(
+        f"**Leave setup and go to {destination}?** This dataset isn't added yet "
+        "— the files you uploaded won't be kept.",
+        icon="⚠️",
+    )
+    stay_col, leave_col, _rest = box.columns([1.6, 1.8, 4])
+    stay_col.button(
+        "↩️ Keep setting up",
+        key="wizard_leave_stay",
+        on_click=app.stay_in_wizard,
+        width="stretch",
+        type="primary",
+    )
+    leave_col.button(
+        "🗑️ Discard and leave",
+        key="wizard_leave_discard",
+        on_click=app.discard_and_leave_wizard,
+        width="stretch",
+    )
 
 
 def _enter_add_data_wizard() -> None:
@@ -1909,6 +1949,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             help="Leave the wizard and go back to the dataset you were on.",
             width="stretch",
         )
+        _render_leave_prompt(bar)
         # UX-53 r8: no progress chips. They were navigation for an accordion
         # that no longer exists — the two parts are linear, so there is nothing
         # to flip between and a chip row would be a menu with one path through

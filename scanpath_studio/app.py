@@ -86,6 +86,8 @@ from scanpath_studio.constants import (
     PUBLIC_DATASETS_CHOICE,
     SYNTHETIC_CHOICE,
     UPLOAD_CHOICE,
+    WIZARD_LEAVE_KEY,
+    WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
     language_display,
 )
@@ -2296,6 +2298,8 @@ def load_bundled_demo() -> None:
     st.session_state["_pending_source_choice"] = DEMO_CHOICE
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
+    st.session_state.pop(WIZARD_LEAVE_KEY, None)
+    st.session_state.pop(WIZARD_STAY_KEY, None)
     reset_column_mapping()
 
 
@@ -2964,6 +2968,30 @@ def leave_add_data_wizard() -> None:
     )
     st.session_state["_show_upload_wizard"] = False
     st.session_state["setup_complete"] = True
+
+
+def stay_in_wizard() -> None:
+    """Dismiss BUG-31's leave prompt and carry on setting the dataset up.
+
+    Records *which* view was declined rather than just clearing the prompt: the
+    nav is still sitting on that view (nothing here navigates — see the note in
+    ``main``), so a bare clear would re-raise the same question on the next
+    rerun. Clicking a different view asks again, which is right.
+    """
+    st.session_state[WIZARD_STAY_KEY] = st.session_state.pop(WIZARD_LEAVE_KEY, None)
+
+
+def discard_and_leave_wizard() -> None:
+    """Abandon the half-built dataset and let the trip finish (BUG-31).
+
+    :func:`leave_add_data_wizard` restores the source the wizard was opened
+    *from*. Nothing here navigates, and nothing needs to: the nav has been
+    sitting on the view the user asked for the whole time the prompt was up, so
+    closing the wizard is all it takes for the next run to render it.
+    """
+    st.session_state.pop(WIZARD_LEAVE_KEY, None)
+    st.session_state.pop(WIZARD_STAY_KEY, None)
+    leave_add_data_wizard()
 
 
 def render_data_source_picker(host=None) -> None:
@@ -4354,6 +4382,36 @@ def main() -> None:
     # Active top-level view (set by the nav switch). Read here so the dispatch
     # below renders only the active page.
     active_view = _active_view()
+
+    # BUG-31 — navigating away mid-wizard used to land the user on the *half-built*
+    # dataset: `render_sidebar_data_source` reports `UPLOAD_CHOICE` for the whole
+    # run while the wizard is open, whatever the view, so `main` returned early
+    # with "this dataset isn't set up yet" over a session that still held every
+    # finished dataset. It read as data loss; it was an unfinished wizard.
+    #
+    # While the wizard is open the 🗂️ Data page is what renders, wherever the nav
+    # says the user is — and the wizard asks whether to discard. It has to keep
+    # **rendering** for the question to be worth asking: Streamlit drops a
+    # widget's key at the end of any run in which it did not render, and
+    # `st.file_uploader` is the one widget `persist_state="session"` cannot cover
+    # (ENG-36), so a single run spent drawing Scanpath throws the uploaded files
+    # away before the user can be asked about them.
+    #
+    # Deliberately **no navigation of our own** — not a `switch_to_view`, not a
+    # `main_nav` write. Both end in `st.switch_page`, which aborts the run where
+    # it is called, and an aborted run renders no wizard: the fix would destroy
+    # exactly what it exists to protect. So the nav highlight is simply allowed to
+    # sit on the view the user picked while the page under it asks the question,
+    # and *Discard* then needs no navigation at all — the router is already there.
+    if st.session_state.get("_show_upload_wizard"):
+        if (
+            active_view != _VIEW_DATA
+            and st.session_state.get(WIZARD_STAY_KEY) != active_view
+        ):
+            st.session_state[WIZARD_LEAVE_KEY] = active_view
+        else:
+            st.session_state.pop(WIZARD_LEAVE_KEY, None)
+        active_view = _VIEW_DATA
 
     # Switching view is a full rerun — data load, filters, then a page of fresh
     # figures — and Streamlit leaves the OLD view painted until the new run

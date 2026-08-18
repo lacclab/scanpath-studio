@@ -2190,9 +2190,18 @@ class TestPlotEnhancements:
         # No highlight column active -> a single base colour for all words.
         assert words.textfont.color == "#0a0b0c"
 
-    def test_rtl_word_labels_anchor_at_right_edge(
+    def test_rtl_word_labels_are_centred_and_kept_isolated(
         self, synthetic_words_df, synthetic_fixations_df
     ):
+        """BUG-30: labels centre in their box, in either direction.
+
+        They used to anchor at the leading edge — `x` for LTR, `x + width` for
+        RTL — which left all of the box's spare room on the trailing side. A
+        centred label needs no direction-dependent anchor at all; the Unicode
+        isolates stay, because they are about shaping mixed runs, not placement.
+        """
+        from scanpath_studio.measures import word_box_bounds
+
         rtl_words = synthetic_words_df.iloc[[0]].copy()
         rtl_words["text"] = "שלום"
         rtl_words["right_to_left"] = True
@@ -2202,9 +2211,35 @@ class TestPlotEnhancements:
             show_word_labels=True,
         )
         trace = next(t for t in fig.data if t.name == "words")
-        assert trace.x[0] == rtl_words.iloc[0]["x"] + rtl_words.iloc[0]["width"]
-        assert trace.textposition[0] == "middle left"
-        assert trace.text[0].startswith("\u2067") and trace.text[0].endswith("\u2069")
+        x0, _, x1, _ = word_box_bounds(rtl_words)
+        assert trace.x[0] == pytest.approx((x0[0] + x1[0]) / 2.0)
+        assert trace.textposition == "middle center"
+        # RTL isolate / pop-isolate, spelled by codepoint: the literal control
+        # characters in a source file trip ruff's PLE2502.
+        isolate, pop_isolate = chr(0x2067), chr(0x2069)
+        assert trace.text[0].startswith(isolate)
+        assert trace.text[0].endswith(pop_isolate)
+
+    def test_labels_centre_in_the_box_as_drawn(
+        self, synthetic_words_df, synthetic_fixations_df
+    ):
+        """The centre is the *corrected* box's, not the raw frame's.
+
+        On a corpus whose boxes tile the line, BUG-11 pulls every edge back half
+        a space, so the corrected centre already coincides with the glyph run's
+        and this change is a no-op there — which is the property that makes it
+        safe to apply to every corpus rather than gating it behind an option.
+        """
+        from scanpath_studio.measures import word_box_bounds
+
+        fig = self._figure(
+            synthetic_words_df,
+            synthetic_fixations_df,
+            show_word_labels=True,
+        )
+        trace = next(t for t in fig.data if t.name == "words")
+        x0, _, x1, _ = word_box_bounds(synthetic_words_df)
+        assert list(trace.x) == pytest.approx(list((x0 + x1) / 2.0))
 
 
 class TestTrueToScaleText:

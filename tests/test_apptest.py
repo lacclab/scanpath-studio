@@ -28,6 +28,7 @@ from tests.conftest import (
     answer_setup_step,
     open_data_view,
     pin_data_view,
+    pin_view,
 )
 
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
@@ -703,6 +704,102 @@ class TestDataInspectionTab:
             "help_faq",
             "help_about",
         ]
+
+
+@pytest.mark.timeout(120)
+class TestLeavingTheWizard:
+    """BUG-31: navigating away mid-wizard must not switch the app onto the
+    half-built dataset."""
+
+    def _in_wizard(self):
+        """An app with the add-dataset wizard open and rendering.
+
+        `main_nav` is deliberately not asserted: it mirrors Streamlit's own
+        router, and AppTest's router does not follow the `st.switch_page` that
+        `menu.render_nav` issues, so it reports the default page here whatever
+        the app asked for. What matters — and what is checked — is that the
+        wizard is open and its widgets are on screen.
+        """
+        at = _make_apptest(synthetic=True)
+        at.run(timeout=60)
+        _enter_add_data(at)
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["_show_upload_wizard"] is True
+        assert "cancel_add_data" in {b.key for b in at.button}
+        return at
+
+    def test_navigating_away_holds_the_page_and_asks(self):
+        """The wizard keeps rendering and asks, instead of the app switching onto
+        the unfinished upload and reporting "no data" over a session that still
+        holds every finished dataset.
+
+        Nothing here navigates — see the note in `app.main`: every way to move
+        the router ends in `st.switch_page`, which aborts the run it is called
+        in, and an aborted run renders no wizard, so `st.file_uploader` (the one
+        widget `persist_state` cannot save) would lose its files before the
+        question could be asked. The nav highlight is therefore allowed to sit on
+        the view the user clicked while the page under it asks."""
+        from scanpath_studio.constants import _VIEW_SCANPATH
+
+        at = self._in_wizard()
+        at.session_state["main_nav"] = _VIEW_SCANPATH
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["_wizard_leave_requested"] == _VIEW_SCANPATH
+        assert at.session_state["_show_upload_wizard"] is True
+        keys = {b.key for b in at.button}
+        assert {"wizard_leave_stay", "wizard_leave_discard"} <= keys
+        # The wizard is still on screen — its own bar, not a "nothing to plot".
+        assert "cancel_add_data" in keys
+
+    def test_keep_setting_up_dismisses_the_prompt(self):
+        """…and *stays* dismissed. Nothing navigated, so the nav is still on the
+        view the user declined; clearing the prompt without recording which view
+        that was would re-ask it on every rerun.
+
+        The view is re-pinned before each run because AppTest's router falls back
+        to the default page between runs, where a browser's would simply stay
+        where the user left it."""
+        at = self._in_wizard()
+        pin_view(at, "Corpus Analysis")
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_leave_stay").click()
+        pin_view(at, "Corpus Analysis")
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert "_wizard_leave_requested" not in at.session_state
+        assert at.session_state["_show_upload_wizard"] is True
+        pin_view(at, "Corpus Analysis")
+        at.run(timeout=60)
+        assert not [b for b in at.button if b.key == "wizard_leave_stay"]
+        # A *different* view is a new question.
+        pin_view(at, "Scanpath Visualization")
+        at.run(timeout=60)
+        assert [b for b in at.button if b.key == "wizard_leave_stay"]
+
+    def test_discard_closes_the_wizard_and_restores_the_source(self):
+        """Discarding leaves the wizard and puts the previous dataset back.
+
+        The *destination* half — that the nav then completes the trip the user
+        started — is browser-verified only: the callback requests it by writing
+        `main_nav` (an `on_click` may not call `st.switch_page`), and AppTest's
+        router does not follow the `switch_page` the reconciler then issues, so
+        it reports the default page instead. What is asserted here is everything
+        that lives in session state, including the part that actually caused the
+        bug: the app must not be left pointing at the half-built upload."""
+        at = self._in_wizard()
+        previous = at.session_state["_prev_source"]
+        pin_view(at, "Corpus Analysis")
+        at.run(timeout=60)
+        next(b for b in at.button if b.key == "wizard_leave_discard").click()
+        at.run(timeout=60)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        assert at.session_state["_show_upload_wizard"] is False
+        assert "_wizard_leave_requested" not in at.session_state
+        # Back on the dataset the wizard was opened from, not the half-built one
+        # — the symptom that made this read as data loss.
+        assert at.session_state["data_source_choice"] == previous
 
 
 @pytest.mark.timeout(120)

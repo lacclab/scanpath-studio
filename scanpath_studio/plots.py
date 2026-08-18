@@ -1432,9 +1432,27 @@ def _add_word_label_trace(
         ]
     else:
         label_color = text_color
-    # Anchor LTR labels at the left edge and RTL labels at the right edge. Unicode
-    # direction isolates keep mixed Hebrew/Arabic + punctuation shaped by the
-    # browser without leaking bidi state into neighbouring labels.
+    # BUG-30 — the label is **centred in the box as drawn**, so whatever room the
+    # text does not fill splits evenly instead of piling up on one side.
+    #
+    # It used to anchor at the box's leading edge (raw `x` for LTR, `x + width`
+    # for RTL), which put every word flush against that edge: the ~8% of slack
+    # `_WIDTH_FIT_MARGIN` leaves, plus whatever the conservative width fit gives
+    # back on a short word, all showed up as a gap on the *trailing* side and none
+    # on the leading one — "no space from the left side of the AOI".
+    #
+    # The box is `measures.word_box_bounds`, not the raw frame, which is what
+    # makes this a no-op where it should be one: a tiling corpus' box carries the
+    # following space as trailing padding and BUG-11 pulls every edge back half a
+    # space, so its centre already *is* the glyph run's centre (checked on the
+    # bundled demo: 415.0 against a glyph centre of 416.3 for the first word).
+    # Where the boxes hug the glyphs the centre is the box's own, and the padding
+    # lands half on each side — which is the reported ask, as a rendering.
+    #
+    # Centring also retires the LTR/RTL anchor split: centred text is centred in
+    # either direction. The Unicode direction isolates stay — they are about
+    # *shaping* mixed Hebrew/Arabic + punctuation, not about placement.
+    from .measures import word_box_bounds
     from .preprocessing import detect_right_to_left
 
     rtl = words.get("right_to_left")
@@ -1442,8 +1460,8 @@ def _add_word_label_trace(
         rtl = words["text"].astype(str).map(detect_right_to_left)
     else:
         rtl = rtl.fillna(False).astype(bool)
-    label_x = words["x"].where(~rtl, words["x"] + words["width"])
-    label_position = ["middle left" if value else "middle right" for value in rtl]
+    box_x0, _box_y0, box_x1, _box_y1 = word_box_bounds(words)
+    label_x = (box_x0 + box_x1) / 2.0
     label_text = [
         f"\u2067{value}\u2069" if is_rtl else value
         for value, is_rtl in zip(words["text"].astype(str), rtl)
@@ -1453,7 +1471,7 @@ def _add_word_label_trace(
         y=words["y"] + words["height"] / 2,
         text=label_text,
         mode="text",
-        textposition=label_position,
+        textposition="middle center",
         showlegend=False,
         textfont=dict(color=label_color, size=base_font_size, family=font_family),
         hovertemplate=hover,

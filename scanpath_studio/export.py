@@ -52,6 +52,7 @@ from .constants import (
 )
 from .data import compute_word_metrics
 from .export_status import ExportStage, StatusCallback, emit_status
+from .fields import panel_field
 from .measures import assign_fixations_to_words, enrich_fixations
 from .multipart import (
     SCREEN_ID,
@@ -751,8 +752,13 @@ def _render_scope_picker(
 
     # Default to the filtered subset (respect what the user narrowed to).
     default_index = 1
-    scope_label = st.radio(
+    scope_label = panel_field(
+        st,
+        "radio",
         "Trials to include",
+        # Four options wrap to a second line on a narrow window, and a centred
+        # title would then float between the two rows of choices.
+        align="top",
         options=list(options_map),
         index=default_index,
         key=f"{key_prefix}_scope",
@@ -774,8 +780,12 @@ def _render_scope_picker(
 
     if scope == "trial" and not active.empty:
         participants = sorted(active["participant_id"].dropna().astype(str).unique())
-        scope_participant = st.selectbox(
-            "Participant", options=participants, key=f"{key_prefix}_scope_pid"
+        scope_participant = panel_field(
+            st,
+            "selectbox",
+            "Participant",
+            options=participants,
+            key=f"{key_prefix}_scope_pid",
         )
         trials_for_pid = (
             active.loc[
@@ -785,21 +795,33 @@ def _render_scope_picker(
             .astype(str)
             .unique()
         )
-        scope_trial = st.selectbox(
-            "Trial", options=sorted(trials_for_pid), key=f"{key_prefix}_scope_trial"
+        scope_trial = panel_field(
+            st,
+            "selectbox",
+            "Trial",
+            options=sorted(trials_for_pid),
+            key=f"{key_prefix}_scope_trial",
         )
     elif scope == "participant" and not active.empty:
         participants = sorted(active["participant_id"].dropna().astype(str).unique())
-        scope_participant = st.selectbox(
-            "Participant", options=participants, key=f"{key_prefix}_scope_pid"
+        scope_participant = panel_field(
+            st,
+            "selectbox",
+            "Participant",
+            options=participants,
+            key=f"{key_prefix}_scope_pid",
         )
     elif scope == "text" and not active.empty:
         if text_col is None:
             st.info("No text id is available in this dataset.")
         else:
             texts = sorted(active[text_col].dropna().astype(str).unique())
-            scope_text = st.selectbox(
-                "Text", options=texts, key=f"{key_prefix}_scope_text"
+            scope_text = panel_field(
+                st,
+                "selectbox",
+                "Text",
+                options=texts,
+                key=f"{key_prefix}_scope_text",
             )
 
     # Close the Scope section with a live count of what will be exported.
@@ -868,7 +890,9 @@ def _render_metadata_field_picker(key_prefix: str):
             st.session_state.pop(state_key, None)
         elif list(stored) != kept:
             st.session_state[state_key] = kept
-    chosen = st.multiselect(
+    chosen = panel_field(
+        st,
+        "multiselect",
         "Participant fields to include",
         options=names,
         default=names,
@@ -903,7 +927,9 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
     )
 
     def _pattern_input(label: str, default: str, key: str, help_text: str) -> str:
-        value = st.text_input(label, value=default, key=key, help=help_text)
+        value = panel_field(
+            st, "text_input", label, value=default, key=key, help=help_text
+        )
         error = pattern_error(value, fields)
         if error:
             st.error(error)
@@ -970,7 +996,9 @@ def render_export_options(
         # multi-select of formats (pills) rather than a column of checkboxes.
         st.markdown("### Figures")
         fig_formats = (
-            st.pills(
+            panel_field(
+                st,
+                "pills",
                 "Formats",
                 options=["PDF", "SVG", "PNG", "HTML"],
                 selection_mode="multi",
@@ -987,13 +1015,18 @@ def render_export_options(
         include_png = "PNG" in fig_formats
         include_html = "HTML" in fig_formats
         # Only surface the scale stepper when PNG is on, and keep it narrow.
+        # `width` does here what the old `st.columns([1, 3])` did: a 1–4 stepper
+        # stretched across the whole field column reads as a text box. UX-69
+        # dropped the columns because they nested inside the row's own.
         if include_png:
-            scale_col, _ = st.columns([1, 3])
-            png_scale = scale_col.number_input(
+            png_scale = panel_field(
+                st,
+                "number_input",
                 "PNG scale",
                 min_value=1,
                 max_value=4,
                 value=2,
+                width=140,
                 key=f"{key_prefix}_scale",
                 help="Higher → better quality and larger files. 1 = 1×, 2 = retina, 4 = poster.",
             )
@@ -1002,7 +1035,9 @@ def render_export_options(
 
         st.markdown("### Also include")
         # VIZ-5: per-layer figure breakdown for publication editing.
-        separable_layers = st.toggle(
+        separable_layers = panel_field(
+            st,
+            "toggle",
             "Separable layers",
             value=False,
             key=f"{key_prefix}_layers",
@@ -1022,7 +1057,9 @@ def render_export_options(
                 "Chrome/Kaleido) — HTML figures can't be split. Pick SVG/PDF/PNG "
                 "above to choose the layer format."
             )
-        include_plot_config = st.toggle(
+        include_plot_config = panel_field(
+            st,
+            "toggle",
             "Plot config (JSON)",
             value=True,
             key=f"{key_prefix}_cfg",
@@ -1031,7 +1068,9 @@ def render_export_options(
             "figures later.",
         )
         tabular = (
-            st.pills(
+            panel_field(
+                st,
+                "pills",
                 "Tabular data",
                 options=[
                     "Fixations",
@@ -1056,7 +1095,9 @@ def render_export_options(
         any_table = bool(tabular)
         if any_table:
             table_format = (
-                st.segmented_control(
+                panel_field(
+                    st,
+                    "segmented_control",
                     "Table format",
                     options=["csv", "parquet", "both"],
                     default="csv",

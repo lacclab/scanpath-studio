@@ -57,6 +57,7 @@ from .controls import (
     palette_state,
 )
 from .experimental_setup import format_provenance_param, parse_provenance_param
+from .fields import panel_field
 from .session_keys import (
     COMPARE_LAYOUT_PARAM,
     COMPARE_PARAM,
@@ -2120,9 +2121,11 @@ def _render_share_body(data_choice: str) -> None:
         "**Share this view** — a link that reopens Scanpath Studio on the "
         "current trial with your visualization settings."
     )
-    mode = st.radio(
+    mode = panel_field(
+        st,
+        "radio",
         "What the link includes",
-        _SHARE_IDENTITY_MODES,
+        options=_SHARE_IDENTITY_MODES,
         key=_SHARE_IDENTITY_KEY,
         horizontal=True,
         help=(

@@ -865,12 +865,20 @@ class TestDatasetTable:
         checked as one."""
         import inspect
 
-        from scanpath_studio.app import render_dataset_table
+        from scanpath_studio.app import (
+            _render_delete_confirmation,
+            render_dataset_table,
+        )
 
-        source = inspect.getsource(render_dataset_table)
-        assert "from scanpath_studio.wizard import _remove_dataset" in source
-        assert "_remove_dataset(token)" in source
-        assert '_clicked("dataset_table_delete")' in source
+        # UX-54 r2 put a confirmation between the two: the table's ✕ arms the
+        # pending token, and the confirm button is what calls the remover. The
+        # invariant this test exists for is unchanged — something still calls it.
+        table_source = inspect.getsource(render_dataset_table)
+        assert '_clicked("dataset_table_delete")' in table_source
+        assert "PENDING_DELETE_KEY" in table_source
+        confirm_source = inspect.getsource(_render_delete_confirmation)
+        assert "from scanpath_studio.wizard import _remove_dataset" in confirm_source
+        assert "_remove_dataset(" in confirm_source
 
 
 @pytest.mark.timeout(90)
@@ -2566,8 +2574,12 @@ class TestSetupWizard:
         at.session_state["data_source_choice"] = app.UPLOAD_CHOICE
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        info_text = " ".join(e.value for e in at.info)
-        assert "Trial coverage differs" in info_text, info_text
+        # UX-67 r2: the count is a caption under each table's own picker, so
+        # differing coverage reads as two different numbers side by side rather
+        # than as a sentence about them in a banner.
+        captions = [e.value for e in at.caption]
+        assert any("3 trials" in c for c in captions), captions
+        assert any("2 trials" in c for c in captions), captions
 
     def test_disjoint_trial_ids_warn(self, monkeypatch):
         """Group C.1c: when the tables share no trial ids at all (a likely mapping

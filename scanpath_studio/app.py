@@ -3109,6 +3109,56 @@ def _select_dataset(name: str) -> None:
     st.session_state["data_source_choice"] = name
 
 
+#: UX-54 r2 — the upload the ✕ Delete button asked about, awaiting confirmation.
+#: A plain session value, not a widget key: it is armed by a table callback and
+#: read by the row of buttons the next run draws.
+PENDING_DELETE_KEY = "_dataset_pending_delete"
+
+
+def _render_delete_confirmation(host, tokens: list) -> None:
+    """The confirm step between ✕ Delete and the dataset actually going away.
+
+    Deleting an upload drops its frames, its mapping and its annotations from
+    the session with no undo, and the button that starts it is one cell away
+    from ✏️ Edit in a table row — so the click arms this, and this asks. Renders
+    nothing until something is armed; a token that has since disappeared (the
+    dataset was removed another way) disarms itself.
+    """
+    token = st.session_state.get(PENDING_DELETE_KEY)
+    if token is None:
+        return
+    if token not in tokens:
+        st.session_state.pop(PENDING_DELETE_KEY, None)
+        return
+
+    def _confirm() -> None:
+        # Local import, like `_enter_add_data_wizard` above: `wizard` imports
+        # `app` back, so it cannot be imported at module load.
+        from scanpath_studio.wizard import _remove_dataset
+
+        _remove_dataset(st.session_state.pop(PENDING_DELETE_KEY, None))
+
+    box = host.container(border=True)
+    box.warning(
+        f"Delete **{token}**? Its tables, column mapping and annotations leave "
+        "this session — there is no undo."
+    )
+    yes, no = box.columns(2)
+    yes.button(
+        "✕ Delete it",
+        key="dataset_delete_confirm",
+        type="primary",
+        on_click=_confirm,
+        width="stretch",
+    )
+    no.button(
+        "Keep it",
+        key="dataset_delete_cancel",
+        on_click=lambda: st.session_state.pop(PENDING_DELETE_KEY, None),
+        width="stretch",
+    )
+
+
 def render_dataset_table(
     host=None,
     *,
@@ -3139,7 +3189,6 @@ def render_dataset_table(
         return
     kinds = dict(st.session_state.get("_data_source_kinds") or {})
     uploaded = set(st.session_state.get("_data_source_uploaded") or [])
-    stored = st.session_state.get("_datasets") or {}
     registry = public_dataset_registry()
 
     rows = []
@@ -3148,15 +3197,13 @@ def render_dataset_table(
             continue  # the wizard, not a dataset
         own = token in uploaded
         name = picker_name_for(token, registry) if token in registry else token
-        # Frames, if this run already has them: the open dataset from the load, a
-        # stored upload from its entry. Everything else stays uncounted.
-        if token == active:
-            frames = (words, fixations)
-        elif token in stored:
-            entry = stored.get(token) or {}
-            frames = (entry.get("words"), entry.get("fixations"))
-        else:
-            frames = (None, None)
+        # UX-54 r2: counted only for the dataset that is **open**. Every stored
+        # upload could be counted too — its frames are in memory — but a table
+        # of numbers where some rows are filled and others blank invites reading
+        # the blanks as zeroes, and the counts are a check on the dataset you
+        # are working with, not a leaderboard across the session. One row
+        # carries them, and it is the one marked ▶.
+        frames = (words, fixations) if token == active else (None, None)
         counts = (
             _dataset_counts(
                 *frames, (frame_fingerprint(frames[0]), frame_fingerprint(frames[1]))
@@ -3215,13 +3262,13 @@ def render_dataset_table(
             st.session_state[FOCUS_MAPPING_KEY] = token
 
     def _on_delete() -> None:
-        # Local import, like `_enter_add_data_wizard` above: `wizard` imports
-        # `app` back, so it cannot be imported at module load.
-        from scanpath_studio.wizard import _remove_dataset
-
+        # UX-54 r2: arm, don't delete. The click lands on a row of a table — one
+        # cell away from ✏️ Edit — and an upload is not recoverable from the
+        # session once dropped, so the button asks and the confirmation below
+        # does the work.
         token = _clicked("dataset_table_delete")
         if token is not None:
-            _remove_dataset(token)
+            st.session_state[PENDING_DELETE_KEY] = token
 
     box = host if host is not None else st
     box.dataframe(
@@ -3262,10 +3309,11 @@ def render_dataset_table(
             ),
         },
     )
+    _render_delete_confirmation(box, tokens)
     if any(row["Readers"] is None for row in rows):
         box.caption(
-            "Counts are shown for the open dataset and your own uploads — a "
-            "public corpus is only read once you open it."
+            "Readers · Trials · Fixations · Words are counted for the **open** "
+            "dataset (▶). Open another row to count it."
         )
 
 

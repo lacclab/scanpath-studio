@@ -1,22 +1,6 @@
 {
   "version": 3,
   "items": {
-    "BUG-31": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-18"
-    },
-    "BUG-30": {
-      "status": "Review",
-      "priority": "Normal",
-      "owner": "Maya",
-      "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-18"
-    },
     "AN-29": {
       "status": "Closed",
       "priority": "Normal",
@@ -122,6 +106,22 @@
       "implementationBrief": "Didn't test, closing",
       "archived": true,
       "updated": "2026-08-15"
+    },
+    "BUG-30": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "BUG-31": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
     },
     "BUG-33": {
       "status": "Closed",
@@ -846,23 +846,23 @@
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "from the data, I want to see some table of the datasets instead of the selectable opening menu. I want a table with X rows that is scrollable and sortable by each field that contains the dataset name, how many trials, participants, fixations etc. - only measurements that are easy to calculate from the data for fast performance. the table is instead of the cards. each dataset uploaded by the user should have there a delete (x) button which removes the dataset. it should also have an edit (pencil icon) button, that when clicked moves you to a screen similar to the \"add dataset\" screen, that allows you to edit the maps and see the saved data tables.",
+      "implementationBrief": "i do want to duplicate add dataset page so that it looks the same when someone wants to edit the dataset.\nshow dataset statistics only when dataset is chosen, and add confirmation step on delete.",
       "archived": false,
       "updated": "2026-08-18"
     },
     "UX-55": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "keep it ID vrs. DESC for now, and move all fixation fields to be at the same place, 2 lines of features, and move all AOI realted fields to be close together, including word ids and word boxes. remove any big titles or spaces in between to save space.",
+      "implementationBrief": "move ALL FIXATION FIELDS up to the fixation line, instead of a single line do 2 lines so that all the fields fit on the screen. then unify ALL AOI FIELDS as well.\n\nkeep it ID vrs. DESC for now, and move all fixation fields to be at the same place, 2 lines of features, and move all AOI realted fields to be close together, including word ids and word boxes. remove any big titles or spaces in between to save space.",
       "archived": false,
       "updated": "2026-08-18"
     },
     "UX-57": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "the menu options text is sometimes cropped, this is not good and should change for all selection menus.",
+      "implementationBrief": "the menu options text is sometimes cropped, this is not good and should change for all selection menus. for example fixaation x coordinate has cropped options",
       "archived": false,
       "updated": "2026-08-18"
     },
@@ -883,7 +883,7 @@
       "updated": "2026-08-18"
     },
     "UX-63": {
-      "status": "Review",
+      "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1-3 ok. keep changing according to ux-65",
@@ -910,7 +910,7 @@
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. title only for the add dataset screen for now\n2. keep the link somewhere in the line but dont disturb the \"show guide\" button",
+      "implementationBrief": "great! now just change the cancle button color so that it's blue like the \"add dataset\" button and change the text of the documentation link button to be \"for more documentation\" or something similar",
       "archived": false,
       "updated": "2026-08-18"
     },
@@ -918,7 +918,7 @@
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. keep it in a box but down near the add button\n2. leave as they are",
+      "implementationBrief": "i want the warnings to be above the add dataset button, that's good, but I dont want to have these anouncement boxes for the counts. i want the counts to appear below the relevant field in small text, for example for trial count i want it to be in the trial fieldd container below the selection menu.",
       "archived": false,
       "updated": "2026-08-18"
     },
@@ -942,7 +942,7 @@
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. prefer wrap",
+      "implementationBrief": "no wraping, this doesnt work. try again.",
       "archived": false,
       "updated": "2026-08-18"
     },

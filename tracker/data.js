@@ -211,6 +211,30 @@ window.TRACKER = {
     "Add **`dataset_name`** to the fields available in the scanpath plot labels,",
     "so the dataset can be shown in the title."
    ],
+   "whatWasDone": [
+    "Nothing yet — picked up 2026-08-18, with the two open questions answered in",
+    "the item's instructions (recorded under *Background*)."
+   ],
+   "whatsLeft": [
+    "**Resolve `{dataset_name}` for the trial being drawn.** The app knows it as",
+    "`data_source_choice`, which is the name the dataset picker shows on the",
+    "control line; the label patterns are expanded in",
+    "[plots.py](scanpath_studio/plots.py) via the `cmp{idx}_label_pattern` /",
+    "title-pattern machinery, so the name has to reach the builder as part of the",
+    "figure contract rather than being read from session state down there.",
+    "",
+    "**Per-panel in a split layout, `_a` / `_b` in an overlay.** Side by side and",
+    "stacked draw one dataset per panel, so each panel expands the field against",
+    "its own trial; an overlay has two readings in one frame, so it needs",
+    "`{dataset_name_a}` / `{dataset_name_b}` — and the same `_a` / `_b` variants",
+    "for every other field that can hold two values at once (trial id, reader,",
+    "text id).",
+    "",
+    "**All four surfaces** (`@AGENTS.md` → *Exposing a feature on every surface*):",
+    "the label pattern help in the UI, the deep link / Share round-trip, `cli",
+    "render`, and `api.plot_scanpath` / `animate_scanpath` — the last two being",
+    "where the headless question below has to be answered."
+   ],
    "background": [
     "**One place to add it.** `export.pattern_fields`",
     "([`export.py`](scanpath_studio/export.py:237)) is the single vocabulary every",
@@ -289,17 +313,29 @@ window.TRACKER = {
     "Do **not** change the field alignment — only the open menu."
    ],
    "whatWasDone": [
-    "**The options wrap now**, and the reason the earlier attempt did not work is",
-    "the reason it is fixed: #UX-53 r14 asked the list for `min-width:",
-    "max-content`, but BaseWeb's popover carries an *inline* width from",
-    "popper.js, so the list asked to be wider than a parent it cannot grow past —",
-    "it overflowed and was clipped. Asking for width was the wrong lever. That",
-    "rule is gone; the option and **every node inside it** now wrap, `*` included,",
-    "because BaseWeb puts the label in a child div carrying its own",
-    "`white-space: nowrap` that outlived styling the option alone.",
+    "**Found why two rounds of \"wrap the option\" changed nothing: the CSS was",
+    "aimed at markup Streamlit no longer renders.** A selectbox is a",
+    "`react-aria` ComboBox now, not a BaseWeb Select — every rule under",
+    "`div[data-baseweb=\"popover\"]` (#UX-53 r14 and this item's first attempt)",
+    "matched no element on the page.",
     "",
-    "The option's fixed height goes too, or a two-line name would be cropped by",
-    "the row instead of by the box."
+    "**Wrapping is also the wrong lever now.** The option list is virtualized:",
+    "fixed row heights, absolutely positioned rows. A two-line option overlaps",
+    "its neighbour — and for the same reason `width: max-content` collapses",
+    "straight back to the control's width (measured live: 207 px in, 207 px",
+    "out).",
+    "",
+    "**So the menu is given a width**: `--trigger-width + 9rem`, capped at",
+    "92 vw (`styles.mapping_menu_css`). Measured on the running app: a 207 px",
+    "select now opens a 351 px list, and react-aria shifts the popover left",
+    "when that would run past the window (1039 → 895 px on the right-most",
+    "cell), so nothing lands off-screen.",
+    "",
+    "**Emitted per screen, not from the global sheet**: the popover is portalled",
+    "to `<body>`, so it cannot be scoped by an ancestor selector, and a global",
+    "rule would widen the plot rail's dropdowns too — where the extra width has",
+    "nowhere to go but over the plot. The two mapping screens emit it: the",
+    "add-dataset wizard and the 🗂️ Data page's editor (#UX-54 r2)."
    ],
    "whatsLeft": [
     "Nothing."
@@ -341,7 +377,11 @@ window.TRACKER = {
     "Related: #UX-53 (which packed the rows and made the first attempt), #UX-57."
    ],
    "decisions": [
-    "Review: open a mapping select on a narrow window — a long column name should now run onto a second line rather than being cut. Worth checking the plot rail's selects too, since the popover is portalled to the body and this rule is necessarily global."
+    "Open a mapping dropdown on a narrow window and check the longest column",
+    "name is fully readable — `CURRENT_FIX_INTEREST_AREA_INDEX` vs `…_ID` was",
+    "the pair that could not be told apart.",
+    "The widening is deliberately limited to the two mapping screens; the rail's",
+    "own dropdowns still open at their control's width. Want it everywhere?"
    ]
   },
   {
@@ -969,10 +1009,6 @@ window.TRACKER = {
     "If the boxes themselves still look like they carry no space, that is the",
     "*extents* half — say so and I will file it separately, since it moves every",
     "reading measure and deserves its own review."
-   ],
-   "decisions": [
-    "Is this about the **rendered label** (draw the text filling the box it already has), or about the **AOI extents** themselves? Only the second changes fixation→word assignment and every reading measure — worth being explicit, since the wording could mean either.",
-    "If it is the extents: should the half-space rule apply to glyph-tight corpora only, given #BUG-11 already treats tiling corpora as carrying that space?"
    ]
   },
   {
@@ -1003,19 +1039,20 @@ window.TRACKER = {
     "   everything else is grey."
    ],
    "whatWasDone": [
-    "**No green.** `_FIELD_TINT` keeps only `auto` (amber) and `missing` (red), so",
-    "a mapping the user chose reads like any other filled field. The `user`",
-    "*state* stays — it is still what moves a field **out** of amber the moment",
-    "somebody picks — it just has no colour of its own.",
+    "**Counts moved under the field they count** (2026-08-18, round 2). The",
+    "trial / reader / text counts were three coloured `st.success` banners; each",
+    "is now a caption directly under the picker that produces it, inside that",
+    "field's own cell — `✓ 121 trials` under the trial menu, and one per",
+    "**table**, so a Fixations/AOI mismatch is two numbers side by side rather",
+    "than a sentence about them.",
     "",
-    "**The count boxes moved down beside ✅ Add dataset**, kept as boxes per the",
-    "call. They are a check you run before committing, so they belong next to the",
-    "commit rather than three sections above it. That needed reserve-then-fill:",
-    "Streamlit lays containers out in creation order and the identity steps run",
-    "long before the footer exists, so the slot is created up front and filled",
-    "later.",
+    "**Only a real problem still gets a box**, and it renders where you asked",
+    "the warnings to be — directly above ✅ Add dataset: the case where the",
+    "tables share *no* trial ids at all, which is a mapping error rather than a",
+    "count.",
     "",
-    "The *N rows · N columns* lines under the upload boxes are untouched, as asked."
+    "Earlier in this item: the per-field counts under each mapping select, and",
+    "the green tint dropped from a chosen mapping."
    ],
    "whatsLeft": [
     "Nothing."
@@ -1061,7 +1098,12 @@ window.TRACKER = {
     "strip), #BUG-32 (the silent zero-join this warning is the early alarm for)."
    ],
    "decisions": [
-    "Review: the trial / reader / text counts should now sit just above **✅ Add dataset**, and a field you picked should look no different from any other filled one — only detection is amber, only a blocking gap is red."
+    "Upload something and read the identity rows: each picker should carry its",
+    "own small `✓ N trials` / `N readers` / `N texts` line, with no banners",
+    "above **Add dataset** unless something is actually wrong.",
+    "The *differing coverage* case is now told by the two numbers differing,",
+    "with no note explaining it. Enough, or should a mismatch still say so in",
+    "words?"
    ]
   },
   {
@@ -1094,25 +1136,18 @@ window.TRACKER = {
     "   page."
    ],
    "whatWasDone": [
-    "**One sticky row on the add-dataset screen** (`wizard._render_data_setup`,",
-    "container key `wiz_sticky_bar`): *Set up your dataset* · **📘 Show setup guide**",
-    "· **📖 Data guide ↗** · **✕ Cancel**. It stays put while the fields scroll under",
-    "it — `position: sticky` with `top` clearing Streamlit's own header strip, an",
-    "opaque background so nothing shows through, and the CSS scoped to that one key",
-    "so no other page grows a bar.",
+    "**One sticky row** carries the title, ❓ the setup guide, the docs link and",
+    "✕ Cancel, and stays put while the page scrolls (`.st-key-wiz_sticky_bar`).",
+    "Everything that used to stack above the wizard is gone — the page header",
+    "and its summary, the \"Adding a dataset…\" caption, and a second copy of the",
+    "title — four headings for one screen, from three modules.",
     "",
-    "**The four headings it replaces are gone** — the page header + one-line summary",
-    "and the **📂 Data source** subheader in `app.main`, the *\"Adding a dataset…\"*",
-    "caption in `render_sidebar_data_source`, and the second copy of the title",
-    "`_render_data_setup` wrote itself. That is four headings for one screen, from",
-    "three modules, which is why the top of this page kept re-growing.",
-    "",
-    "**The docs pointer stayed on the line as a link button**, not the paragraph it",
-    "was, per your answer — so it does not crowd **Show setup guide**. Its old",
-    "sentence survives as the button's tooltip.",
-    "",
-    "**Margins**: the app's `block-container` padding is down to `0.25rem` top and",
-    "bottom, and the wizard page's first/last blocks lose their own margins."
+    "**Round 2 (2026-08-18):** ✕ Cancel is filled blue (`type=\"primary\"`), the",
+    "same button shape as ✅ Add dataset — they are the two ends of one",
+    "decision, and a ghost button beside a filled one read as the disabled",
+    "half of a pair. The docs link is now **📖 More documentation ↗** rather",
+    "than \"Data guide\", which read like one more step on a row of wizard",
+    "controls."
    ],
    "whatsLeft": [
     "Nothing."
@@ -1163,16 +1198,11 @@ window.TRACKER = {
     "mid-flow), #UX-62 (the header wordmark that now sits above all this)."
    ],
    "decisions": [
-    "Scroll the add-dataset screen and check the bar rests *below* the top nav",
-    "rather than sliding under it — `top: 3.2rem` is tuned to the current nav",
-    "height, so it is the one number that would need re-tuning if that changes.",
-    "The bar is opaque `var(--background-color)`; check it in dark mode too.",
-    "**✕ Cancel** moved off the source-picker block onto this row — confirm it still",
-    "puts you back on the dataset you were on."
-   ],
-   "decisions": [
-    "Does the sticky row belong to the **whole 🗂️ Data page** or only to the **wizard**? They are different screens: the page also shows the source picker, the tables and preprocessing when no wizard is running, and *Cancel* means nothing there.",
-    "*First time? Bring your own data ↗* is the only pointer a new uploader gets to the docs on what an export must contain. Drop it outright, or fold it into the ❓ Show setup guide button's tooltip so the link survives without a line?"
+    "Scroll the add-dataset screen: the bar rests below the top nav, and ✕",
+    "Cancel now matches ✅ Add dataset's blue.",
+    "Both blue buttons on one screen means the row that *leaves* is as loud as",
+    "the one that *commits*. That is what you asked for — say if the Cancel",
+    "should be a lighter blue instead once you see them together."
    ]
   },
   {
@@ -1276,11 +1306,6 @@ window.TRACKER = {
     "and come back: it should still be on, and the 🐛 panel still there.",
     "Nothing links to the docs from inside Help anymore — the wordmark is the only",
     "way out to the docs site (the FAQ dialog still links on too). Enough?"
-   ],
-   "decisions": [
-    "The tour, the FAQ and About are `st.dialog`s today. As pages, should their content be **inlined into the page** (no modal at all), or should the page keep opening the dialog it already has? Inlining reads better and is the obvious intent, but it is a rewrite of three panels rather than a re-parenting.",
-    "**📚 Documentation ↗** cannot be a nav entry — `st.Page` takes a callable, not a URL, and the link opens a new tab. Leave it as a link button on one of the Help pages (which one?), or drop it from the menu and rely on the About dialog's link?",
-    "Where does the **🐛 Debug mode** toggle go? It has to render on every run or Streamlit drops the key that *is* the debug gate. Own sub-page (rendered hidden when inactive, as Help is today), or moved to the foot of **Session**, which already renders that way?"
    ]
   },
   {
@@ -1391,19 +1416,19 @@ window.TRACKER = {
     "for every dataset), #CMP-8 (the prefixed second copy)."
    ],
    "decisions": [
-    "Review the one-line Scanpath row — six controls now share it: is the trial",
-    "selectbox still wide enough to read a composite id, and does the scrubber still",
-    "feel usable at `3.6`?",
-    "Everything that narrows the pool is behind 🔎 now, with no visible sign that a",
-    "filter is *on* — the chips below still spell out the trial, but an active Text",
-    "or Participant filter is invisible until you open the popover. Worth a badge?",
-    "A one-trial pool degrades to `[dataset] [trial] [🔎]` (no slider — a one-option",
-    "`select_slider` throws). Click through a composite-trial-id dataset and check",
-    "that row reads sensibly."
-   ],
-   "decisions": [
-    "Dropping **➕ Add data** leaves no way to start an upload from the Scanpath view, and no home for *remove an added dataset*. Should this wait on #UX-54 (the prominent Add-dataset button on the 🗂️ Data page), or ship first and leave the Data page's existing entry as the only route?",
-    "One line has to hold six controls — dataset, trial, slider, ◀ ▶, ⇅, filter. At a normal window width something has to give: the **slider** is the widest and the most valuable for scrubbing, the **dataset picker** is the least used once a dataset is chosen. Which shrinks first, or should the dataset picker be an icon-button popover like the others?"
+    "Turn **Compare** on and read the two lines together: they should be the",
+    "same shape, the dataset pickers stacked in the same track and the ◀ ▶ ⇅",
+    "clusters aligned. Verified live at 1280px — both rows measure",
+    "`226 · 226 · 274 · 171`.",
+    "Pick another corpus in **Compare with**: B's 🔎 appears (it holds *Filter",
+    "B by* plus the old **More** conditions). Under *This dataset* there is no",
+    "🔎 on B's line at all — its pool is yours, already narrowed by your own.",
+    "Switching B's dataset deliberately ignores the filters you had set on the",
+    "previous corpus for that one run, rather than applying one corpus' reader",
+    "ids to another and emptying the pool. Right call?",
+    "The one-candidate case drops B's slider (a one-option `select_slider`",
+    "throws — #BUG-23), leaving `[Compare with] [Compare To] [🔎]`. Worth a",
+    "look on a heavily filtered pool."
    ]
   },
   {
@@ -1546,6 +1571,29 @@ window.TRACKER = {
     "The `persist_state` audit turned out to be unnecessary — hiding the panels",
     "rather than skipping them keeps every widget executing, so nothing resets and",
     "the Save & restore uploader is unaffected. Worth confirming on the real page."
+   ]
+  },
+  {
+   "id": "UX-62",
+   "prefix": "UX",
+   "num": 62,
+   "sub": "",
+   "title": "Move the app title into the top-left header, and make it the logo",
+   "status": "Backlog",
+   "owner": "Maya",
+   "note": "",
+   "date": "",
+   "added": "2026-08-18",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "Move the main title — **Scanpath Studio** / *Interactive visualization of eye",
+    "movements in reading.* — to the upper-most top-left corner of the screen, on",
+    "every view, to the left of the **Scanpath · Corpus Analysis · Data** top menu.",
+    "",
+    "It might also be more professional to replace it with a logo picture:",
+    "`logo/scanpath_studio_title_logo.png`."
    ],
    "background": [
     "**Where it is now.** `app._render_about_panel`",
@@ -1828,10 +1876,6 @@ window.TRACKER = {
     "Related: #UX-53 (which established the row shape and the hover-only rule),",
     "#UX-55 (whether the box belongs in the coupled identity rows at all — if it",
     "moves there, this layout question moves with it)."
-   ],
-   "decisions": [
-    "Review: open **➕ Add data** → *Fixation features* → the **Word box**. The four coordinates should be one row of names over selects; hover the *Word box* title for the description. Switch the edges ↔ origin+size radio and check the row re-cuts cleanly.",
-    "The row is only cut in the wizard — the 🗂️ Data page's mapping editor still lists the box one field per row, since it shares its width with a preview table. Fine, or should that page match?"
    ]
   },
   {
@@ -1851,21 +1895,68 @@ window.TRACKER = {
    "request": [
     "On the add-dataset view, decide which fields should sit in the first coupled",
     "**Fixations** and **AOI** rows, and which should stay in the parts below —",
-    "*Fixation features*, *Word features*, *Word box*."
+    "*Fixation features*, *Word features*, *Word box*.",
+    "",
+    "**Round 3 (2026-08-18).** Two changes to the fields themselves, and one",
+    "exact order for the whole add-dataset view:",
+    "",
+    "- Get rid of **Screen name**.",
+    "- Rename **Screen / part ID** to **Screen ID**.",
+    "",
+    "Keep the table name on the left as it is now, and lay each table out as two",
+    "lines to its right:",
+    "",
+    "**Fixations**",
+    "",
+    "1. Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID",
+    "2. X coordinate · Y coordinate · Timestamp (ms) · Duration (ms) · Fixation ID",
+    "",
+    "**AOI**",
+    "",
+    "1. Trial ID · Screen ID · Participant ID · Text ID · Word/IA ID · Word",
+    "   text/label",
+    "2. The *edges* ↔ *origin + size* radio at the left of the line, then the four",
+    "   coordinates it selects (left / right / top / bottom, or the other four) on",
+    "   that same line, and **Line index** at the end of it."
    ],
    "whatWasDone": [
-    "**Partly**, on the answers in *Instructions for implementation*. The fixation",
-    "fields now run over **two lines of three** instead of one line of six — six",
-    "across left each select about a sixth of the page, which is where the clipped",
-    "column names (#UX-71) came from. The AOI fields sit together, word id / text",
-    "/ line with the box directly beneath them, and the bold **Word features** /",
-    "**Raw gaze features** headings are replaced by a light rule-and-label",
-    "(`.sps-wiz-subhead`) so the group is separated without a heading's weight.",
+    "**Round 2 (2026-08-18) regrouped the mapping by what each field describes.**",
+    "The geometry section became two named groups on the identity rows' grid — a",
+    "short word in a narrow left column, no headings, no spacer rows:",
     "",
-    "*ID vs description* stays the rule for the coupled rows, as asked."
+    "- **Fixations** — `X · Y · Timestamp · Duration`, then `Fixation ID`.",
+    "- **AOI** — the fixations table's `Word/IA ID` beside the AOI table's own",
+    "  `Word/IA ID`, `Word text` and `Line index`, with the **Word box** on the",
+    "  line directly beneath them.",
+    "",
+    "**The fixations' `word_id` moved into the AOI group**, reversing round 1's",
+    "call: it is a column of the fixation file, but what it says is which AOI the",
+    "fixation hit.",
+    "",
+    "**The \"AOI features\" sub-heading is gone**, along with the blank line under",
+    "it — the whole mapping has to fit on one screen.",
+    "",
+    "Round 3's ordering is not built yet; it is the item's remaining work."
    ],
    "whatsLeft": [
-    "Nothing."
+    "**Merge the identity rows into the two table blocks.** Trial / Participant /",
+    "Text / Screen live in their own section above geometry today",
+    "(`wizard._wizard_trial_step`, `_wizard_participant_text_step` on",
+    "`_ID_ROW_W`), and round 3 puts them on each table's *first* line beside the",
+    "ids — so the two sections become one two-line block per table. The counts",
+    "captioned under each picker (#UX-67 r2) travel with them.",
+    "",
+    "**Drop Screen name from the view** and relabel `screen_id` to **Screen ID**",
+    "in `controls.FIX_FIELD_SPECS` / `WORD_FIELD_SPECS` — see *Background* for",
+    "what happens to screen ordering once nothing maps it.",
+    "",
+    "**Put the word box on one line**: the radio, its four coordinate selects and",
+    "**Line index** share a row, which the box widget currently owns end-to-end",
+    "(`controls._render_box_fields`).",
+    "",
+    "**AOI line 1 carries six fields** against the geometry grid's five, so the",
+    "row weights need re-deriving rather than squeezing (#UX-47's rule: one grid,",
+    "spanned by summing tracks)."
    ],
    "background": [
     "**Where it stands.** #UX-53 put two identity rows at the head of the mapping,",
@@ -1906,14 +1997,56 @@ window.TRACKER = {
     "its own — which word each fixation landed on. It is AOI-related by name, but it",
     "is a column of the fixation file, and moving it would split one table's mapping",
     "across two groups, so it stayed with the fixation fields. \"All AOI related",
-    "fields together\" is read as being about the **AOI table**."
+    "fields together\" is read as being about the **AOI table**.",
+    "",
+    "**Round 3 calls made before implementing.**",
+    "",
+    "**Screen name is dropped from the *view*, not from the pipeline.** Order",
+    "within a multipart trial comes from `screen_index` when it is mapped and",
+    "from **first appearance** when it is not",
+    "([multipart.normalize_screen_identity](scanpath_studio/multipart.py:55)) —",
+    "so a corpus whose rows are not in reading order would silently get the wrong",
+    "screen order if nothing could map it. The field stops being *shown*; the",
+    "auto-detected column keeps being applied, and the 🗂️ Data page's editor",
+    "still exposes it on its *More* row (#UX-54 r2), which is where a dataset",
+    "that needs an explicit order can still say so.",
+    "",
+    "**\"Screen / part ID\" → \"Screen ID\" is a label change only.** The canonical",
+    "column stays `screen_id` and the widget keys stay `col_map_*_screen_id`, so",
+    "no share link, saved config or stored mapping is affected.",
+    "",
+    "Anchors: the identity rows are built in `wizard._render_data_setup` around",
+    "`_ID_ROW_W`; the geometry rows in the same function around `_GEO_ROW_W`; the",
+    "field labels in [controls.py](scanpath_studio/controls.py:1191)."
    ],
    "decisions": [
-    "Review the add-dataset field grouping: fixations over two lines of three, the",
-    "AOI fields with word id / text / line and the box beneath, and no bold headings",
-    "between groups.",
-    "The fixations table's own **Word/IA ID** stayed with the fixation fields rather",
-    "than moving into the AOI group — see *Background*. Move it if you disagree."
+    "Round 3 puts **Trial · Screen · Participant · Text** on each table's own",
+    "line, which retires the *Trials & readers* section as a separate step. The",
+    "wizard is then one block per table plus the setup groups — confirm that is",
+    "the intent and not just a re-order inside the geometry step.",
+    "**Screen name** stops being shown but keeps being auto-detected, so screen",
+    "order still works where a column carries it (see *Background*). If you want",
+    "it gone from the mapping entirely — no detection, order always by first",
+    "appearance — say so, since that changes what a multipart dataset does."
+   ]
+  },
+  {
+   "id": "UX-56",
+   "prefix": "UX",
+   "num": 56,
+   "sub": "",
+   "title": "Decide whether the add-dataset view goes table-by-table or stage-by-stage",
+   "status": "Backlog",
+   "owner": "Maya",
+   "note": "",
+   "date": "",
+   "added": "2026-08-17",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "Should the add-dataset view show **each dataset and then its field mappings**,",
+    "or **first all the datasets and then all the mappings**?"
    ],
    "background": [
     "**Today it is stage-by-stage.** #UX-53 made the wizard two linear parts:",
@@ -2407,16 +2540,33 @@ window.TRACKER = {
     "label in that cell, since a ButtonColumn takes its label from the cell value."
    ],
    "decisions": [
-    "Review the dataset table: sort by Fixations, open another dataset from a row,",
-    "and delete one of your uploads.",
-    "**✏️ Edit does not open a separate screen.** \"A screen similar to add-dataset,",
-    "to edit the maps and see the saved tables\" already exists — it is this page,",
-    "for whichever dataset is open — so Edit opens the dataset and points at the",
-    "mapping editor rather than duplicating the wizard. Enough, or do you want a",
-    "dedicated full-screen editor?",
-    "Public corpora show no counts until opened, on purpose (see *What was done*).",
-    "The alternative is loading every corpus to fill the table. Live with the gaps?",
-    "Deleting is immediate — no confirmation step. Add one?"
+    "Click ✏️ Edit on one of your uploads: the mapping should now read like the",
+    "add-dataset screen (named rows, one field per cell, ✅ Save changes at the",
+    "foot). Does it match closely enough, or should Edit open a full-screen",
+    "wizard of its own?",
+    "✕ Delete now asks before removing — check the confirmation reads clearly",
+    "and that **Keep it** leaves everything alone.",
+    "Counts are shown for the open dataset only. Blank cells on the other rows",
+    "are the honest answer (nothing was read), but say if you would rather see",
+    "counts for every upload already in memory."
+   ]
+  },
+  {
+   "id": "DATA-28",
+   "prefix": "DATA",
+   "num": 28,
+   "sub": "",
+   "title": "Nothing says which column became the fixation timestamp",
+   "status": "Backlog",
+   "owner": "Maya",
+   "note": "",
+   "date": "",
+   "added": "2026-08-16",
+   "group": "Datasets & ingestion",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "How does it know the fixation timestamp? It doesn't ask the user to match it."
    ],
    "background": [
     "**It does ask — just not visibly.** *Timestamp (ms)* is a real, mappable field",
@@ -2564,10 +2714,6 @@ window.TRACKER = {
     "fix. Acceptable?",
     "Discarding is immediate once confirmed, with no undo: the mapping answers go",
     "with the files."
-   ],
-   "decisions": [
-    "Confirm-on-leave prompt, deferring the source switch until **Create**, or both? The deferred switch alone fixes the wrong-dataset symptom silently; the prompt is what stops half-finished setup work being lost without being asked.",
-    "Given `st.file_uploader` cannot persist across a run where it doesn't render (see *Background*): should leaving the wizard **discard** it (honest, with the prompt as the guard), or should the wizard keep rendering into the Data page so the mapping survives and only the file upload is lost? Discarding is simpler and never lies about what was kept."
    ]
   },
   {

@@ -740,47 +740,12 @@ def get_app_css() -> str:
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    /* UX-55 r2 — the same name column on the geometry rows, sitting on the
+       selects' baseline (their own titles are stacked above them). */
+    .sps-geo-row-name { padding-bottom: 0.45rem; }
 
-    /* UX-71 — a dropdown must never cut off a column name. The mapping packs six
-       or eight selects onto one row, so the *control* is narrow by design and
-       the open menu inherits that width.
-
-       UX-53 r14 tried to fix this by widening the list (`min-width:
-       max-content`) and that is why it never worked: BaseWeb mounts the menu in
-       a popover whose width popper.js writes as an **inline style**, so the list
-       asked to be wider than a parent it cannot grow past, overflowed, and was
-       clipped — the opposite of the intent. Asking for width was the wrong
-       lever; the option has to **wrap** inside the width it has.
-
-       So: no min-width, and every node inside an option wraps. The `*` matters —
-       BaseWeb puts the label in a child div that carries its own
-       `white-space: nowrap`, and styling only the option leaves that child
-       clipping. `!important` because those are inline/emotion styles.
-
-       Truncation is not an acceptable fallback here: two columns routinely share
-       a visible prefix (`CURRENT_FIX_INTEREST_AREA_ID` vs `…_INDEX`), so a
-       clipped option is ambiguous, not just ugly.
-
-       Necessarily global — the popover is portalled to the document body, so it
-       cannot be scoped by our own `.st-key-…`. */
-    div[data-baseweb="popover"] [role="listbox"],
-    div[data-baseweb="popover"] ul[role="listbox"] {
-        max-width: 100%;
-    }
-    div[data-baseweb="popover"] [role="option"],
-    div[data-baseweb="popover"] [role="option"] * {
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-    }
-    /* A wrapped option is two or three lines tall, so the row cannot keep the
-       fixed height BaseWeb gives it. */
-    div[data-baseweb="popover"] [role="option"] {
-        height: auto !important;
-        min-height: 0 !important;
-    }
+    /* UX-71 — see `mapping_menu_css()` below: the option list is widened only
+       on the two mapping surfaces, so this global sheet leaves dropdowns alone. */
 
     /* UX-53 round 4 — the auto-detection flag beside a mapping row is the ✨ and
        nothing else; which column was detected is on its tooltip. The old inline
@@ -1097,6 +1062,52 @@ def get_app_css() -> str:
             overscroll-behavior-y: auto;
             scrollbar-gutter: auto;
         }
+    }
+    </style>
+    """
+
+
+def mapping_menu_css() -> str:
+    """UX-71 r3 — the option-list widening, for the mapping screens only.
+
+    A mapping row packs four or five selects across, so the *control* is narrow
+    by design and its dropdown inherits that width — and a clipped option is
+    ambiguous, not just ugly, since two columns routinely share a visible prefix
+    (``CURRENT_FIX_INTEREST_AREA_ID`` vs ``…_INDEX``).
+
+    Two earlier attempts (UX-53 r14, UX-71 r1) failed for a reason neither
+    recorded: they styled ``div[data-baseweb="popover"]``, and **Streamlit no
+    longer renders a selectbox with BaseWeb**. It is a `react-aria` ComboBox
+    whose list is portalled to ``<body>`` inside a popover div carrying the
+    trigger's width as an *inline* style, next to a ``--trigger-width`` variable.
+    Every rule aimed at the old markup matched nothing, which is why "wrap the
+    option text" changed nothing on screen.
+
+    Wrapping is also the wrong lever now: the list is **virtualized** (fixed row
+    heights, absolutely positioned rows), so a two-line option would overlap its
+    neighbour — and for the same reason ``width: max-content`` collapses back to
+    the container's own width. The list has to be given a width, and it is
+    given one relative to its trigger.
+
+    **Why this is injected per screen rather than added to the global sheet**:
+    the popover is portalled out of our DOM, so it cannot be scoped by an
+    ancestor selector — a global rule would widen *every* dropdown in the app,
+    including the plot rail's, which sits against the right edge of the window
+    where a wider menu has nowhere to grow into. The mapping screens have no
+    right rail, so there the extra width is free. Emitted by the add-dataset
+    wizard and by the 🗂️ Data page's mapping editor, which are the two places a
+    column name is the thing being read.
+    """
+    return """
+    <style>
+    div:has(> [role="listbox"]) {
+        width: min(calc(var(--trigger-width, 12rem) + 9rem), 92vw) !important;
+        max-width: 92vw !important;
+    }
+    div:has(> [role="listbox"]) [role="option"] {
+        /* The row is as wide as the menu now, so the label has the room it
+           needs; keep it on one line so the virtualizer's row height holds. */
+        white-space: nowrap;
     }
     </style>
     """

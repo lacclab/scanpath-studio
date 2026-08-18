@@ -96,6 +96,7 @@ from scanpath_studio.controls import (
     _numeric_slider,
     column_mapping_ui,
     corpus_style_controls,
+    read_trial_filters,
     render_narrow_by,
     render_pattern_help,
     render_pattern_input,
@@ -184,6 +185,7 @@ from scanpath_studio.similarity import (
     nld_by_fixation_index,
     nld_by_time,
 )
+from scanpath_studio.styles import mapping_menu_css
 from scanpath_studio.utils import (
     COMPARE_DATASET_SEP,
     COMPARE_OPTIONS_SNAPSHOT_KEY,
@@ -8329,6 +8331,166 @@ def _apply_remap() -> None:
     st.session_state["_remap_applied"] = name
 
 
+#: UX-54 r2 — the editor's field groups, in the add-dataset screen's order and
+#: shape: what a row *is*, then where the eyes landed, then what the AOI says.
+#: ``("<table>", "<field>")`` pairs, one tuple per rendered line. Whatever a
+#: table's specs carry beyond these lands on a trailing *More* line, so a field
+#: can never be dropped by this list falling behind ``*_FIELD_SPECS``.
+_EDIT_ROWS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
+    (
+        "Fixations",
+        (
+            ("fixations", "trial"),
+            ("fixations", "participant"),
+            ("fixations", "text_id"),
+            ("fixations", "screen_id"),
+            ("fixations", "screen_index"),
+        ),
+    ),
+    (
+        "AOI",
+        (
+            ("words", "trial"),
+            ("words", "participant"),
+            ("words", "text_id"),
+            ("words", "screen_id"),
+            ("words", "screen_index"),
+        ),
+    ),
+    (
+        "Fixations",
+        (
+            ("fixations", "x"),
+            ("fixations", "y"),
+            ("fixations", "timestamp"),
+            ("fixations", "duration"),
+        ),
+    ),
+    ("", (("fixations", "fixation_id"), ("fixations", "screen_fixation_id"))),
+    (
+        "AOI",
+        (
+            ("fixations", "word_id"),
+            ("words", "word_id"),
+            ("words", "text"),
+            ("words", "line"),
+        ),
+    ),
+    ("", (("words", "box"),)),
+    (
+        "Raw gaze",
+        (
+            ("raw_gaze", "trial"),
+            ("raw_gaze", "participant"),
+            ("raw_gaze", "x"),
+            ("raw_gaze", "y"),
+        ),
+    ),
+    ("", (("raw_gaze", "timestamp"), ("raw_gaze", "screen_id"), ("raw_gaze", "text"))),
+)
+
+#: The editor's row grid: a narrow name column, then five equal picker cells —
+#: ``wizard._ID_ROW_W``, so the two screens' rows line up with one another.
+_EDIT_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
+
+
+def _render_remap_fields(
+    name: str, stored: dict, problems: dict, composite: list
+) -> dict:
+    """The stored dataset's mapping, laid out the way add-dataset lays it out.
+
+    **UX-54 r2**: "duplicate the add-dataset page so it looks the same when
+    someone wants to edit the dataset." The controls are already the same ones —
+    ``controls.column_mapping_ui`` builds both screens — so only the shape
+    differed, and this gives the editor the wizard's: rows named down a narrow
+    left column (Fixations · AOI · Raw gaze), one field per cell, each title
+    stacked over its select, in place of one stacked expander per table.
+
+    The widget keys stay ``remap_<dataset>_<table>_*``. They are the editor's own
+    namespace, and borrowing the wizard's ``col_map_*`` keys would make an open
+    wizard and an open editor overwrite each other's answers.
+    """
+    frames, proposals, prefixes, specs_by_table = {}, {}, {}, {}
+    for table_key, _label, specs, canon in _REMAP_TABLES:
+        frame = stored.get(table_key)
+        if frame is None or getattr(frame, "empty", True):
+            continue
+        frames[table_key] = frame
+        specs_by_table[table_key] = specs
+        prefixes[table_key] = f"remap_{name}_{table_key}"
+        proposals[table_key] = _remap_proposed(
+            (stored.get("schemas") or {}).get(table_key), frame.columns, canon
+        )
+        # Composite trial id: pre-seed the multiselect with the preserved
+        # component columns (column_mapping_ui's ``proposed`` carries only a
+        # single default). Initial-seed only — never fight later user edits.
+        if composite and all(c in frame.columns for c in composite):
+            trial_key = f"{prefixes[table_key]}_trial"
+            if trial_key not in st.session_state:
+                st.session_state[trial_key] = list(composite)
+
+    def _cell(host, table_key: str, field: str) -> dict:
+        return column_mapping_ui(
+            frames[table_key],
+            table_label="",
+            state_key_prefix=prefixes[table_key],
+            field_specs=specs_by_table[table_key],
+            proposed=proposals[table_key],
+            problems=problems.get(table_key),
+            container=host,
+            use_expander=False,
+            only_keys=[field],
+            header=False,
+            columns_per_row=1,
+            stack_labels=True,
+            # Here `proposed` is the dataset's current saved mapping (the frame
+            # is already normalized), not a fresh auto-detect — say so.
+            detected_label="currently mapped",
+        )
+
+    pending: dict = {table: {} for table in frames}
+    seen: set = set()
+    for label, fields in _EDIT_ROWS:
+        live = [
+            (table, field)
+            for table, field in fields
+            if table in frames
+            and any(spec["key"] == field for spec in specs_by_table[table])
+        ]
+        if not live:
+            continue
+        row = st.columns(
+            _EDIT_ROW_W[: len(live) + 1], gap="small", vertical_alignment="bottom"
+        )
+        row[0].markdown(
+            f'<div class="sps-id-row-name sps-geo-row-name">{label}</div>',
+            unsafe_allow_html=True,
+        )
+        for cell, (table, field) in zip(row[1:], live):
+            pending[table].update(_cell(cell, table, field))
+            seen.add((table, field))
+
+    # Anything the rows above do not name — a field added to the specs since, or
+    # one this editor never grouped — still has to render, or applying the
+    # mapping would silently drop it.
+    for table in frames:
+        rest = [
+            spec["key"]
+            for spec in specs_by_table[table]
+            if (table, spec["key"]) not in seen
+        ]
+        if not rest:
+            continue
+        row = st.columns(_EDIT_ROW_W, gap="small", vertical_alignment="bottom")
+        row[0].markdown(
+            '<div class="sps-id-row-name sps-geo-row-name">More</div>',
+            unsafe_allow_html=True,
+        )
+        for index, field in enumerate(rest):
+            pending[table].update(_cell(row[1 + index % 5], table, field))
+    return pending
+
+
 def _render_remap_editor(name: str, stored: dict) -> None:
     """Editable column-mapping form for a stored dataset (the surviving columns).
 
@@ -8349,38 +8511,14 @@ def _render_remap_editor(name: str, stored: dict) -> None:
         "Change how this dataset's columns map to the app's canonical fields. "
         "Only columns that survived the original import are available."
     )
+    # UX-71: the same wide option lists the add-dataset screen gets — this is
+    # the same mapping, in the same shape (UX-54 r2).
+    st.markdown(mapping_menu_css(), unsafe_allow_html=True)
     if st.session_state.pop("_remap_applied", None) == name:
         st.success("Mapping updated — the dataset was re-derived.")
     problems = st.session_state.get("_remap_problems") or {}
     composite = list(stored.get("composite_trial_columns") or [])
-    pending: dict = {}
-    for table_key, label, specs, canon in _REMAP_TABLES:
-        frame = stored.get(table_key)
-        if frame is None or frame.empty:
-            continue
-        prefix = f"remap_{name}_{table_key}"
-        proposed = _remap_proposed(
-            (stored.get("schemas") or {}).get(table_key), frame.columns, canon
-        )
-        # Composite trial id: pre-seed the multiselect with the preserved
-        # component columns (column_mapping_ui's ``proposed`` carries only a
-        # single default). Initial-seed only — never fight later user edits.
-        if composite and all(c in frame.columns for c in composite):
-            trial_key = f"{prefix}_trial"
-            if trial_key not in st.session_state:
-                st.session_state[trial_key] = list(composite)
-        pending[table_key] = column_mapping_ui(
-            frame,
-            label,
-            prefix,
-            specs,
-            proposed,
-            problems=problems.get(table_key),
-            use_expander=True,
-            # Here `proposed` is the dataset's current saved mapping (the frame is
-            # already normalized), not a fresh auto-detect — label it truthfully.
-            detected_label="currently mapped",
-        )
+    pending: dict = _render_remap_fields(name, stored, problems, composite)
     st.session_state["_remap_pending_schemas"] = pending
 
     dropped = stored.get("dropped_columns") or {}
@@ -8399,7 +8537,9 @@ def _render_remap_editor(name: str, stored: dict) -> None:
                 height=320,
             )
     st.button(
-        "Apply remapping",
+        # UX-54 r2: the add-dataset screen's ✅ Add dataset, for the screen that
+        # edits one — same shape, same place, same filled blue.
+        "✅ Save changes",
         type="primary",
         key=f"remap_apply_{name}",
         on_click=_apply_remap,

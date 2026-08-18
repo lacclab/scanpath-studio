@@ -81,6 +81,7 @@ from .experimental_setup import (
 )
 from .persistence import is_loopback_url, rename_cached_dataset
 from .session_keys import COMPARE_SOURCE_STATE_KEY
+from .styles import mapping_menu_css
 from .tabs import _collect_column_mapping
 from .tour import (
     maybe_show_wizard_guide,
@@ -700,9 +701,10 @@ def _wizard_trial_step(
 ) -> None:
     """Trial-identifier wizard step: one picker per table (UX-53 r13), plus the
     per-table trial-count check that flags mismatches. Mutates ``word_schema`` /
-    ``fix_schema`` in place. ``cells`` are the row containers the caller built;
-    ``extras_host`` takes the counts, which are a sentence and do not belong in
-    a squeezed column."""
+    ``fix_schema`` in place. ``cells`` are the row containers the caller built —
+    each table's count is a caption inside its own cell (UX-67 r2), and
+    ``extras_host`` is left with the one thing that is not a count: the warning
+    that the two tables' trial ids do not line up at all."""
     # Core tables present (raw-gaze keeps its own mapping in its own step).
     core = [f for f, present in ((raw_fix, has_fix), (raw_words, has_words)) if present]
     common_cols = [c for c in core[0].columns if all(c in f.columns for f in core)]
@@ -732,23 +734,26 @@ def _wizard_trial_step(
         sets["Fixations"] = _trial_id_values(raw_fix, fix_schema)
     if has_words:
         sets["Words/IA"] = _trial_id_values(raw_words, word_schema)
+    # UX-67 r2: the count is a caption under the picker it counts, not a banner.
+    # One `st.success` per identifier stacked three coloured boxes onto a screen
+    # whose whole point is that the mapping fits on it — and put the number far
+    # from the menu that produces it. Per *table*, too: each cell counts its own
+    # column, so a mismatch is read by comparing two numbers side by side rather
+    # than by parsing a sentence about it.
+    cell_by_table = dict(zip(sets, cells if cells is not None else []))
+    for table, values in sets.items():
+        cell = cell_by_table.get(table)
+        if values is None or cell is None:
+            continue
+        cell.caption(f"✓ {len(values):,} trials")
+    # Only a real problem still gets a box, and it renders where UX-67 put the
+    # blockers: directly above **Add dataset**.
     counts_host = extras_host if extras_host is not None else body
     present = {k: v for k, v in sets.items() if v is not None}
-    if present:
+    if len(present) > 1:
         values = list(present.values())
         counts_str = ", ".join(f"{k}: **{len(v):,}**" for k, v in present.items())
-        if all(v == values[0] for v in values):
-            counts_host.success(
-                f"✓ **{len(values[0]):,}** trials detected — make sure this is the "
-                "number of trials you expect to see."
-            )
-        elif set.intersection(*values):
-            counts_host.info(
-                f"ℹ️ Trial coverage differs per table — {counts_str}. They share "
-                f"**{len(set.intersection(*values)):,}** trials; some appear in "
-                "only one table."
-            )
-        else:
+        if not set.intersection(*values):
             counts_host.warning(
                 f"⚠️ No trial ids are shared across tables — {counts_str}. Check "
                 "the trial-id mapping lines up (try *Different trial-id columns "
@@ -792,7 +797,8 @@ def _wizard_participant_text_step(
     extras_host=None,
 ) -> None:
     """Optional participant- or text-identifier step: one picker per table
-    (UX-53 r13), then a distinct-value count. Mutates the schemas in place."""
+    (UX-53 r13), then a distinct-value count captioned under the picker it was
+    taken from (UX-67 r2). Mutates the schemas in place."""
     core = [f for f, present in ((raw_fix, has_fix), (raw_words, has_words)) if present]
     common_cols = [c for c in core[0].columns if all(c in f.columns for f in core)]
     prop_primary = prop_f if has_fix else prop_w
@@ -814,10 +820,10 @@ def _wizard_participant_text_step(
     pp, pp_schema = (raw_fix, fix_schema) if has_fix else (raw_words, word_schema)
     n = _distinct_id_count(pp, pp_schema.get(field_key))
     if n is not None:
-        (extras_host if extras_host is not None else body).success(
-            f"✓ **{n:,}** {noun} — make sure this is the number of {noun} you "
-            "expect to see."
-        )
+        # UX-67 r2: under the picker that produced it (the first cell is the
+        # table the count was taken from), as small text rather than a banner.
+        host = cells[0] if cells else (extras_host if extras_host is not None else body)
+        host.caption(f"✓ {n:,} {noun}")
 
 
 def _clean_multiselect_state(key: str, valid) -> None:
@@ -1719,6 +1725,16 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
 #: column name is what has to stay readable.
 _ID_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
 
+#: UX-55 r2 — the *geometry* rows, on the identity row's grid so the two halves
+#: of the mapping line up down the page: a narrow name column, then up to four
+#: equal picker cells (four rather than five, because these selects hold column
+#: names rather than short ids and the AOI line is the widest of them).
+_GEO_ROW_W = (0.10, 0.225, 0.225, 0.225, 0.225)
+
+#: The word box is a format radio plus four coordinate selects that lay
+#: themselves out, so it takes the whole line minus the name column.
+_GEO_ROW_BOX_W = (0.10, 0.90)
+
 #: One line under the *Trials & readers* heading, in place of the paragraph the
 #: step used to carry. UX-53's brief was "display less text".
 _IDENTITY_CAPTION = (
@@ -1933,7 +1949,10 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # button: a link, not a sentence. It is the only thing telling a first-time
         # uploader what an export has to contain.
         link_col.link_button(
-            "📖 Data guide ↗",
+            # UX-66 r2: named for what it *is* rather than for the page it opens
+            # — "Data guide" reads like one more wizard step on a row of wizard
+            # controls, which is the one thing it is not.
+            "📖 More documentation ↗",
             "https://lacclab.github.io/scanpath-studio/bring-your-own-data/",
             help="What your export needs, worked EyeLink and plain-CSV examples, "
             "and what each failure symptom means.",
@@ -1946,6 +1965,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "✕ Cancel",
             key="cancel_add_data",
             on_click=app.leave_add_data_wizard,
+            # UX-66 r2: the same filled blue as ✅ Add dataset. The two are the
+            # ends of the same decision — commit or leave — and a ghost button
+            # beside a filled one reads as the disabled half of a pair rather
+            # than as the other way out.
+            type="primary",
             help="Leave the wizard and go back to the dataset you were on.",
             width="stretch",
         )
@@ -2113,6 +2137,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
 
     # === 2 · Map data fields =================================================
 
+    # UX-71: this screen's dropdowns hold column names, so their option lists
+    # get to be wider than the selects they drop from (see the docstring — it is
+    # per-screen because the menu is portalled out of our DOM and cannot be
+    # scoped any other way).
+    s_map.markdown(mapping_menu_css(), unsafe_allow_html=True)
+
     # Reserve-then-fill, in reading order: the mapping sections, then the counts,
     # then the footer. UX-67 moved the trial/reader/text counts down here from
     # under the identity rows -- they are a check you run *before committing*,
@@ -2253,57 +2283,67 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "duration, and the word id / text / box."
         ),
     )
-    if has_fix:
-        # UX-53 r7: one block, four across. X / Y / timestamp / duration are the
-        # same *kind* of answer about the same rows, and splitting them over two
-        # headings (and one of them behind "Advanced") made a reader hunt for
-        # half of them. The AOI-only hint rides the Word/IA ID field's own
-        # tooltip, where it is read at the moment it applies.
-        fix_schema.update(
-            _map_section(
-                raw_fix,
-                FIX_FIELD_SPECS,
-                prop_f,
-                "col_map_fix",
-                s3,
-                ["x", "y", "timestamp", "duration", "fixation_id", "word_id"],
-                # UX-55: two lines of three rather than one of six. Six across
-                # left each select about a sixth of the page, which is where the
-                # clipped column names came from (#UX-71).
-                per_row=3,
-            )
+
+    # UX-55 r2 — TWO groups, each named the way the identity rows above are
+    # named: a short word in a narrow left column instead of a heading and a
+    # blank line. Everything that describes a **fixation** is in the first
+    # group, two lines of it; everything that describes an **AOI** is in the
+    # second, the word ids included — the fixations table's own `word_id` is
+    # *which AOI this fixation hit*, so it reads with the AOI fields even though
+    # it is a column of the fixation file, and the box follows directly under
+    # the ids it belongs to. No sub-headings, no spacer rows: the whole mapping
+    # has to fit on one screen, and every heading was a line it could not spare.
+    def _geo_row(label: str, weights):
+        row = s3.columns(weights, gap="small", vertical_alignment="bottom")
+        row[0].markdown(
+            f'<div class="sps-id-row-name sps-geo-row-name">{label}</div>',
+            unsafe_allow_html=True,
         )
+        return row[1:]
+
+    if has_fix:
+        # X / Y / timestamp / duration / id are the same *kind* of answer about
+        # the same rows (UX-53 r7 put them in one block; r2 keeps them together
+        # and splits them 3 + 2 so no select is narrower than a column name —
+        # which is where the clipping in #UX-71 came from).
+        for keys in (["x", "y", "timestamp", "duration"], ["fixation_id"]):
+            cells = _geo_row("Fixations" if keys[0] == "x" else "", _GEO_ROW_W)
+            for cell, key in zip(cells, keys):
+                fix_schema.update(
+                    _map_section(
+                        raw_fix, FIX_FIELD_SPECS, prop_f, "col_map_fix", cell, [key]
+                    )
+                )
         # Validation problems render against their own sub-block rather than as
         # one lumped warning above the Add button.
         for problem in validate_fix_schema(fix_schema):
             s3.warning(f"Fixations — {problem}")
 
-    if has_words:
-        # UX-55: a light rule-and-label, not a bold heading, and the box follows
-        # directly so every AOI-related field reads as one group.
-        s3.markdown(
-            '<div class="sps-wiz-subhead">AOI features</div>', unsafe_allow_html=True
-        )
-        # Word id / text / line share a row; the box is its own block below,
-        # being a format radio plus four coordinates rather than one select.
-        word_schema.update(
-            _map_section(
-                raw_words,
-                WORD_FIELD_SPECS,
-                prop_w,
-                "col_map_words",
-                s3,
-                ["word_id", "text", "line"],
-                per_row=3,
+    if has_words or has_fix:
+        # The AOI line: which AOI a fixation hit, which AOI a word row *is*, and
+        # what that AOI says — then its box on the line below.
+        aoi_fields = []
+        if has_fix:
+            aoi_fields.append(
+                (raw_fix, FIX_FIELD_SPECS, prop_f, "col_map_fix", "word_id", fix_schema)
             )
-        )
+        if has_words:
+            aoi_fields += [
+                (raw_words, WORD_FIELD_SPECS, prop_w, "col_map_words", key, word_schema)
+                for key in ("word_id", "text", "line")
+            ]
+        cells = _geo_row("AOI", _GEO_ROW_W[: len(aoi_fields) + 1])
+        for cell, (raw, specs, proposal, prefix, key, schema) in zip(cells, aoi_fields):
+            schema.update(_map_section(raw, specs, proposal, prefix, cell, [key]))
+    if has_words:
+        box_cells = _geo_row("", _GEO_ROW_BOX_W)
         word_schema.update(
             _map_section(
                 raw_words,
                 WORD_FIELD_SPECS,
                 prop_w,
                 "col_map_words",
-                s3,
+                box_cells[0],
                 ["box"],
             )
         )

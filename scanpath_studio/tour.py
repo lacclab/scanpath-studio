@@ -1200,6 +1200,16 @@ def maybe_show_tutorial_library() -> None:
         _tutorial_library_dialog()
 
 
+def stash_tutorial_context(context: dict[str, object]) -> None:
+    """Park the context the tutorial chooser reads, without rendering anything.
+
+    UX-65 turned the ❓ Help buttons into nav entries, so there is no longer a
+    widget to hang this on — but the dialog still needs to know what is loaded,
+    and it can be opened from any view, so the stash has to happen every run.
+    """
+    st.session_state["_tutorial_context"] = dict(context)
+
+
 def render_tutorial_library(context: dict[str, object], *, host=None) -> None:
     """Button in the ❓ Help menu popover that opens the tutorial chooser.
 
@@ -1208,7 +1218,7 @@ def render_tutorial_library(context: dict[str, object], *, host=None) -> None:
     popover. The chooser is a modal-shaped thing anyway — pick an outcome, start,
     and the tutorial takes over the page.
     """
-    st.session_state["_tutorial_context"] = dict(context)
+    stash_tutorial_context(context)
     (host if host is not None else st).button(
         "🧭 Tutorials",
         key="tutorial_library_open",

@@ -44,11 +44,8 @@ import streamlit as st
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
-    _VIEW_HELP,
     _VIEW_SCANPATH,
     _VIEW_SESSION,
-    HELP_PAGE_KEY,
-    HELP_PAGE_OFFSCREEN_KEY,
     SESSION_PAGE_KEY,
     SESSION_PAGE_OFFSCREEN_KEY,
 )
@@ -77,8 +74,23 @@ _NAV_PAGES = {
     # chrome, visited on purpose and rarely, and putting them earlier would cost
     # every existing user their aim at the views they use.
     _VIEW_SESSION: ("Session", "💾", "session"),
-    _VIEW_HELP: ("Help", "❓", "help"),
 }
+
+#: UX-65 — the ❓ Help *section* of the nav: entry id → (label, icon, url path).
+#: These are not views. Each one opens the dialog that used to sit behind a
+#: button on the Help page, over whatever you were already looking at — see
+#: :func:`render_nav` for the bounce that makes that work. Documentation is
+#: absent on purpose: ``st.Page`` cannot be a URL, and the UX-62 wordmark beside
+#: this nav already links to the docs site.
+_HELP_PAGES = {
+    "help_tour": ("Show tutorial", "🎓", "help-tour"),
+    "help_tutorials": ("Tutorials", "🧭", "help-tutorials"),
+    "help_faq": ("FAQ", "❔", "help-faq"),
+    "help_about": ("About", "ℹ️", "help-about"),
+}
+
+#: The nav section heading the four entries above collapse under.
+HELP_SECTION = "❓ Help"
 
 #: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
 #: ``st.Page`` belongs to the run that made it) and read by
@@ -121,12 +133,13 @@ class TopMenu:
     recovery_cache: DeltaGenerator
     #: BUG-28's escape hatches — back to the demo, and clear the computed cache.
     start_fresh: DeltaGenerator
-    help: DeltaGenerator
     notices: DeltaGenerator
     #: The page heading's slot — the left half of the row the menu shares.
     #: ``app._render_about_panel`` fills it; see :func:`render_top_menu`.
     title: DeltaGenerator | None = None
     debug: DeltaGenerator | None = None
+    #: UX-65 — where ``render_debug_toggle`` goes, on the 💾 Session page.
+    debug_gate: DeltaGenerator | None = None
 
 
 def close_open_popovers() -> None:
@@ -196,6 +209,28 @@ def switch_to_view(view: str) -> None:
         st.switch_page(page)
 
 
+def _arm_help_action(entry: str) -> None:
+    """Arm the dialog a ❓ Help nav entry stands for (UX-65).
+
+    The dialogs themselves are untouched — this only sets the request flag each
+    ``maybe_show_*`` already serves early in ``app.main``, which is exactly what
+    the Help *buttons* did through their ``on_click`` callbacks. Imports are
+    local because ``app`` imports this module.
+    """
+    from scanpath_studio import tour
+
+    if entry == "help_tour":
+        tour._arm_tour()
+    elif entry == "help_tutorials":
+        tour._arm_tutorial_library()
+    elif entry == "help_faq":
+        tour._arm_faq()
+    elif entry == "help_about":
+        from scanpath_studio import app
+
+        app._arm_about()
+
+
 def render_nav() -> str:
     """Draw Streamlit's native top nav and return the active view.
 
@@ -231,7 +266,30 @@ def render_nav() -> str:
             url_path=url_path,
             default=view == _VIEW_SCANPATH,
         )
-    selected = st.navigation(list(_PAGES.values()), position="top")
+    # UX-65: a *dict* of sections. The entries under the empty-string key are
+    # drawn first, at the top level; every other key becomes a collapsible item
+    # — Streamlit's own documented behaviour for `position="top"`, so ❓ Help
+    # opens a menu with no CSS of ours.
+    help_pages = {
+        entry: st.Page(_unused_page_body, title=label, icon=icon, url_path=url_path)
+        for entry, (label, icon, url_path) in _HELP_PAGES.items()
+    }
+    selected = st.navigation(
+        {"": list(_PAGES.values()), HELP_SECTION: list(help_pages.values())},
+        position="top",
+    )
+    # A Help entry is an *action*, not a destination: arm its dialog and go
+    # straight back to the view the user was on, so the modal opens over their
+    # work instead of over an empty page. The bounce reruns, and next run the
+    # router has re-selected that view, so nothing re-arms.
+    chosen_help = next(
+        (entry for entry, page in help_pages.items() if page.title == selected.title),
+        None,
+    )
+    if chosen_help is not None:
+        _arm_help_action(chosen_help)
+        back = st.session_state.get(_MIRROR_KEY)
+        switch_to_view(back if back in _PAGES else _VIEW_SCANPATH)  # reruns
     active = next(
         (view for view, page in _PAGES.items() if page.title == selected.title),
         _VIEW_SCANPATH,
@@ -286,18 +344,9 @@ def render_top_menu(
     title_col, _menu_col = st.columns([4, 1], vertical_alignment="bottom")
     # One container per group, keyed by whether it is the active view. `styles`
     # hides the `*_offscreen` twins; the widgets inside keep executing.
-    help_ = st.container(
-        key=HELP_PAGE_KEY if active == _VIEW_HELP else HELP_PAGE_OFFSCREEN_KEY
-    )
     session = st.container(
         key=SESSION_PAGE_KEY if active == _VIEW_SESSION else SESSION_PAGE_OFFSCREEN_KEY
     )
-    if active == _VIEW_HELP:
-        help_.subheader("❓ Help")
-        help_.caption(
-            "The guided tour, the task tutorials, the FAQ, the documentation, "
-            "and what this app is."
-        )
     if active == _VIEW_SESSION:
         session.subheader("💾 Session")
         session.caption(
@@ -343,13 +392,20 @@ def render_top_menu(
         help="Reload the bundled demo with a freshly detected column mapping, "
         "or recompute everything from the data already loaded.",
     )
-    debug = help_.container() if show_debug else None
+    # UX-65: 🐛 Debug mode moved here from the foot of ❓ Help. Help is a set of
+    # dialog-opening nav entries now and hosts no widgets at all, and the toggle
+    # was never a link — it *is* `DEBUG_STATE_KEY`, a gate that has to keep
+    # rendering every run or Streamlit drops it. Session is where the rest of
+    # "what is this session holding" already lives.
+    debug_gate = session.container()
+    debug_gate.divider()
+    debug = session.container() if show_debug else None
     return TopMenu(
         save_restore=save_restore,
         recovery_cache=recovery_cache,
         start_fresh=start_fresh,
-        help=help_,
         notices=st.container(key=NOTICES_KEY),
         title=title_col,
         debug=debug,
+        debug_gate=debug_gate,
     )

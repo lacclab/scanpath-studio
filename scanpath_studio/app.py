@@ -56,7 +56,6 @@ from scanpath_studio.annotations import (
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
-    _VIEW_HELP,
     _VIEW_SESSION,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
@@ -200,11 +199,9 @@ from scanpath_studio.tour import (
     maybe_show_faq,
     maybe_show_tutorial_library,
     maybe_show_welcome_tour,
-    render_faq_button,
     render_spotlight_tour,
-    render_tour_replay_button,
-    render_tutorial_library,
     render_use_case_tutorial,
+    stash_tutorial_context,
 )
 from scanpath_studio.url_state import (
     CORPUS_SOURCE_TOKEN,
@@ -4867,12 +4864,14 @@ def main() -> None:
                 scale_text_to_boxes=scale_text_to_boxes,
                 canvas_renderer=canvas_renderer,
             )
-    elif active_view in (_VIEW_SESSION, _VIEW_HELP):
-        # UX-63: these two are menu pages. `menu.render_top_menu` drew their
-        # panels at the top of the run — into a container that is visible only
+    elif active_view == _VIEW_SESSION:
+        # UX-63: 💾 Session is a menu page. `menu.render_top_menu` drew its
+        # panel at the top of the run — into a container that is visible only
         # while its own entry is active — so there is nothing to render here,
-        # and falling through to the Scanpath branch would draw a plot under
-        # them. The panels' own fills happen at their usual points below.
+        # and falling through to the Scanpath branch would draw a plot under it.
+        # The panel's own fills happen at their usual points below. (❓ Help was
+        # a second such page until UX-65 turned it into dialog-opening nav
+        # entries, which never become the active view at all.)
         pass
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
@@ -4955,38 +4954,20 @@ def main() -> None:
     # share_renderer passed into render_single_trial_tab), so it builds its deep
     # link from the resolved trial + live viz settings right where it's shown.
 
-    # The ❓ Help menu group: replay the welcome tour (the tour itself renders
-    # early in this function — see the maybe_show_welcome_tour call), the task
-    # tutorials, the FAQ, the docs, and About.
-    help_menu = menu.help
-    render_tour_replay_button(help_menu)
-    render_tutorial_library(
-        build_tutorial_context(words_filtered, fixations_filtered, combos),
-        host=help_menu,
+    # UX-65 — ❓ Help is a *menu* in the nav now, not a page of buttons: each
+    # entry arms the same dialog its button used to (menu._arm_help_action), and
+    # the dialogs themselves are untouched. Nothing to fill here anymore — only
+    # the tutorial chooser's context, which is data, not a widget, and has to be
+    # stashed on every run so the dialog can open over any view.
+    #
+    # 📚 Documentation left with the buttons: `st.Page` cannot be a URL, and the
+    # UX-62 wordmark beside the nav already opens the docs site.
+    stash_tutorial_context(
+        build_tutorial_context(words_filtered, fixations_filtered, combos)
     )
-    # UX-15: a handful of recurring questions answered in-app, linking out to the
-    # full FAQ / tutorials on the docs site for anything longer. Like the tour
-    # button it only arms the dialog; maybe_show_faq (above) opens it.
-    render_faq_button(help_menu)
-    # UX-17: the docs site is the full reference — link it directly here, not
-    # only from inside the About dialog.
-    # The "↗" marks it as leaving the app — a link_button opens a new browser tab,
-    # unlike every other control on the menu bar.
-    help_menu.link_button(
-        "📚 Documentation ↗",
-        CITATION["docs_url"],
-        width="stretch",
-        help="Guides, the column-mapping reference, and the Python API. Opens in "
-        "a new tab.",
-    )
-    render_about_button(help_menu)
-    # UX-37: the way *in* to debug mode. It used to be a `?debug=1` URL param,
-    # which meant only someone who already knew about it could find it — the
-    # same "hidden behind a URL" problem as the synthetic trial. The toggle sits
-    # at the foot of ❓ Help, below the user-facing entries, because it is a
-    # developer/bug-report affordance rather than something to reach for daily.
-    help_menu.divider()
-    render_debug_toggle(help_menu)
+    # UX-37/UX-65: the way *in* to debug mode, now at the foot of 💾 Session —
+    # a developer/bug-report affordance, kept below the user-facing blocks.
+    render_debug_toggle(menu.debug_gate)
 
     # Developer debug panel — hidden unless that toggle is on, which is also
     # what put the 🐛 Debug popover on the menu bar to host it.

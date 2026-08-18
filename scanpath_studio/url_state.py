@@ -23,7 +23,6 @@ from .annotations import restore_records
 from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
-    _VIEW_HELP,
     _VIEW_SCANPATH,
     _VIEW_SESSION,
     AUTHOR_CHOICE,
@@ -2197,6 +2196,6 @@ def _active_view() -> str:
     cached value does *not* silently resolve to it), or a view *requested* for
     the next run; anything unrecognized resolves to the Scanpath page."""
     requested = st.session_state.get("main_nav")
-    if requested in (_VIEW_CORPUS, _VIEW_DATA, _VIEW_SESSION, _VIEW_HELP):
+    if requested in (_VIEW_CORPUS, _VIEW_DATA, _VIEW_SESSION):
         return requested
     return _VIEW_SCANPATH

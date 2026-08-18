@@ -843,7 +843,7 @@
       "updated": "2026-08-18"
     },
     "UX-57": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "the menu options text is sometimes cropped, this is not good and should change for all selection menus.",
@@ -867,7 +867,7 @@
       "updated": "2026-08-18"
     },
     "UX-63": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1-3 ok. keep changing according to ux-65",
@@ -883,7 +883,7 @@
       "updated": "2026-08-18"
     },
     "UX-65": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. keep the same tours and tutorials! don tchange them! only chenge the help button to be a menu that opens the same things, not a full page.\n2. find a way to put this as an external page or link in the menu, maybe use redirect? the logo is now in the header menu and links to the doc, you can use an image as a link so there is a way.\n3. put it in the session page for now",

@@ -91,7 +91,6 @@ def get_app_css() -> str:
        so they contribute no layout and the tour's `findVisible()` cannot aim at
        a hidden copy. */
     .st-key-session_menu_page_offscreen,
-    .st-key-help_menu_page_offscreen { display: none !important; }
 
     /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
        small". Scoped to the page's own key so the plot rail and the analysis

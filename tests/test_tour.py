@@ -494,13 +494,17 @@ class TestSpotlightSelectorsResolve:
         from scanpath_studio.tabs import render_single_trial_tab
 
         source = inspect.getsource(render_single_trial_tab)
-        # UX-47 added a third track (the **More** popover moved out of the
-        # Filter-by group onto the shared grid's right-hand column), but the
-        # invariant is unchanged: the source picker is a *sibling* of the
-        # Filter-by spotlight, never a child of it.
-        assert "nb_source, nb_filters, nb_more = st.columns(" in source
-        assert "data_source_renderer(nb_source)" in source
-        assert 'filter_box = nb_filters.container(key="tour_grp_narrow_by")' in source
+        # UX-64 collapsed the Narrow-by row into the picker row: the source
+        # picker is that row's lead cell and the filters moved inside a 🔎
+        # popover. The invariant is unchanged — the two spotlight targets are
+        # *siblings*, never one inside the other. `tour_grp_data_source` is made
+        # by `app.render_data_source_picker` (a second one here would be a
+        # duplicate key), so what this pins is that the dataset cell gets the
+        # renderer straight and the filter group is built somewhere else.
+        assert "def _render_dataset_cell(host)" in source
+        assert "data_source_renderer(host)" in source
+        assert 'box = pop.container(key="tour_grp_narrow_by")' in source
+        assert "leading_renderer=_render_dataset_cell" in source
 
     def test_filter_group_has_a_dataset_divider(self):
         """UX-42: the sibling groups retain a visible boundary between them."""

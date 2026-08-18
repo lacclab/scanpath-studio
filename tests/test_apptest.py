@@ -54,6 +54,27 @@ def _make_apptest(*, synthetic: bool = False) -> AppTest:
     return at
 
 
+def _replay_tour(at: AppTest) -> None:
+    """Replay the tour the way the user does — the ❓ Help nav entry.
+
+    UX-65 turned the 🎓 Show tutorial *button* into a nav entry, and AppTest
+    cannot click an ``st.navigation`` entry, so this takes the path the entry
+    takes: ``menu._arm_help_action`` is exactly what the router calls on it.
+    """
+    from unittest.mock import patch
+
+    import streamlit as st
+
+    from scanpath_studio import menu
+
+    # `_arm_help_action` writes through `st.session_state`, which outside a
+    # script run is not this AppTest's state — point it at the right one rather
+    # than restating which keys arming a tour sets.
+    with patch.object(st, "session_state", at.session_state):
+        menu._arm_help_action("help_tour")
+    at.run(timeout=30)
+
+
 def _enter_add_data(at: AppTest) -> None:
     """Click the Add-dataset button, wherever the app currently keeps it.
 
@@ -655,24 +676,32 @@ class TestDataInspectionTab:
         is a view nothing can reach programmatically. DATA-26 added 🗂️ Data
         **last** of the analysis views: setup comes first in time, but the two
         analysis views are where the work happens and moving them would cost
-        every user their aim. UX-63 then appended 💾 Session and ❓ Help, which
-        are chrome — visited on purpose and rarely.
+        every user their aim. UX-63 then appended 💾 Session, which is chrome —
+        visited on purpose and rarely.
+
+        ❓ Help is deliberately **not** here: UX-65 made it a collapsible nav
+        *section* of dialog-openers (`_HELP_PAGES`), which are actions rather
+        than views — nothing navigates to one and stays.
         """
         from scanpath_studio.constants import (
             _VIEW_CORPUS,
             _VIEW_DATA,
-            _VIEW_HELP,
             _VIEW_SCANPATH,
             _VIEW_SESSION,
         )
-        from scanpath_studio.menu import _NAV_PAGES
+        from scanpath_studio.menu import _HELP_PAGES, _NAV_PAGES
 
         assert list(_NAV_PAGES) == [
             _VIEW_SCANPATH,
             _VIEW_CORPUS,
             _VIEW_DATA,
             _VIEW_SESSION,
-            _VIEW_HELP,
+        ]
+        assert list(_HELP_PAGES) == [
+            "help_tour",
+            "help_tutorials",
+            "help_faq",
+            "help_about",
         ]
 
 
@@ -1949,8 +1978,7 @@ class TestWelcomeTour:
         at.run(timeout=30)  # first run: auto-open, marks tour_seen
         at.run(timeout=30)  # second run: dialog gone
         at.session_state["tour_step"] = 3
-        at.button(key="tour_replay").click()
-        at.run(timeout=30)
+        _replay_tour(at)
         assert "tour_next" in self._tour_buttons(at)
         assert at.session_state["tour_step"] == 0  # replay restarts the tour
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
@@ -2019,8 +2047,7 @@ class TestSpotlightTour:
         at.button(key="tour_sp_close").click()
         at.run(timeout=30)
         assert self._sp_buttons(at) == set()
-        at.button(key="tour_replay").click()
-        at.run(timeout=30)
+        _replay_tour(at)
         assert "tour_sp_next" in self._sp_buttons(at)
         assert at.session_state["tour_step"] == 0
         assert not at.exception, f"Streamlit exceptions: {at.exception}"

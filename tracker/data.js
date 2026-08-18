@@ -1102,19 +1102,33 @@ window.TRACKER = {
     "of its own."
    ],
    "whatWasDone": [
-    "Nothing yet, and the answers **narrow the design**: the tours and tutorials",
-    "are not to change at all — Help should merely become a menu that opens the",
-    "*same* dialogs, not a full page. Documentation stays reachable as an external",
-    "link (the #UX-62 wordmark is the precedent: an image that links out). The 🐛",
-    "Debug toggle moves to the **Session** page."
+    "**❓ Help is a collapsible nav section**, not a page — `st.navigation` now",
+    "takes a *dict* of sections (`{\"\": [the four views], \"❓ Help\": [the four",
+    "entries]}`), which is the documented way to get a menu under `position=\"top\"`,",
+    "so there is no CSS of ours holding it up.",
+    "",
+    "**Its entries open the existing dialogs, unchanged**, over whatever you were",
+    "looking at. A `st.Page` navigates rather than opening a modal, so the router",
+    "treats a Help entry as an *action*: `menu._arm_help_action` sets the same",
+    "request flag the button's `on_click` used to set, then bounces straight back",
+    "to the view you came from. The rerun re-selects that view, so nothing re-arms.",
+    "**The tours and tutorials themselves are untouched** — not one line of",
+    "`tour.py`'s dialogs, steps or progress changed.",
+    "",
+    "**📚 Documentation left with the buttons.** `st.Page` cannot be a URL, and the",
+    "#UX-62 wordmark beside the nav already links to the docs site — your answer's",
+    "\"use an image as a link\".",
+    "",
+    "**🐛 Debug mode moved to 💾 Session**, per your answer. It was never a link:",
+    "the toggle *is* `DEBUG_STATE_KEY`, a gate that has to keep rendering every run",
+    "or Streamlit drops it — which is precisely what it could not do on a page that",
+    "no longer exists.",
+    "",
+    "The Help *page* and its off-screen twin are gone with it (`_VIEW_HELP` is",
+    "retired from the view dispatch, `_active_view` and the CSS)."
    ],
    "whatsLeft": [
-    "Find the shape that opens the existing dialogs from the nav. A `st.Page`",
-    "*navigates*; it does not open a modal — so a Help section whose entries arm",
-    "the current dialogs needs either a page that arms and bounces back, or Help",
-    "reverting to a dropdown in place. That tension is the work, and it is worth",
-    "settling before writing code (#UX-63's brief says to keep changing it along",
-    "with this item)."
+    "Nothing."
    ],
    "background": [
     "**Directly supported, and already verified** while answering #UX-63:",
@@ -1157,6 +1171,18 @@ window.TRACKER = {
     "Related: #UX-63 (which put Help in the nav and established the",
     "render-always-hide-with-CSS rule), #UX-40 (the task tutorials), #UX-15 (the",
     "FAQ), #UX-37 (the debug toggle's placement at the foot of Help)."
+   ],
+   "decisions": [
+    "Open **❓ Help** in the nav and check the four entries — Show tutorial ·",
+    "Tutorials · FAQ · About — each open their dialog *over the view you were on*",
+    "and leave the nav where it was.",
+    "The bounce costs one extra rerun per Help click (arm → switch → render). On a",
+    "large corpus that is a visible pause before the dialog appears — acceptable,",
+    "or should Help go back to being a dropdown in place?",
+    "🐛 Debug mode is now at the foot of 💾 Session. Turn it on, visit another view",
+    "and come back: it should still be on, and the 🐛 panel still there.",
+    "Nothing links to the docs from inside Help anymore — the wordmark is the only",
+    "way out to the docs site (the FAQ dialog still links on too). Enough?"
    ],
    "decisions": [
     "The tour, the FAQ and About are `st.dialog`s today. As pages, should their content be **inlined into the page** (no modal at all), or should the page keep opening the dialog it already has? Inlining reads better and is the obvious intent, but it is a rewrite of three panels rather than a re-parenting.",
@@ -1368,7 +1394,12 @@ window.TRACKER = {
     "**So the work is:** the sections dict; re-homing the two Session panels and",
     "the Help panel into `main`'s dispatch (it controls the order, so they can",
     "still be filled after the view renders and after `save_local_state`); and a",
-    "`persist_state` audit of the widgets inside them."
+    "`persist_state` audit of the widgets inside them.",
+    "",
+    "**Settled by #UX-65 (2026-08-18).** The open question here was whether Help",
+    "*navigating* is acceptable. It is not, and it no longer does: Help became a",
+    "collapsible nav section whose entries arm the existing dialogs and bounce back",
+    "to the view you were on. Session stayed a real page."
    ],
    "whatWasDone": [
     "**The header carries one menu**: Scanpath · Corpus Analysis · Data ·",
@@ -1401,32 +1432,12 @@ window.TRACKER = {
     "Nothing."
    ],
    "decisions": [
-    "Review: the header should read **Scanpath · Corpus Analysis · Data · Session · Help**. Click Session and Help, then go back to Scanpath and confirm nothing was lost — in particular that 🐛 Debug mode, once on, stays on across those visits.",
-    "Opening **Help → FAQ** (or About, or a tutorial) would now *navigate*, so you leave the plot you were looking at and come back to it via the nav. The popover opens over it instead. Acceptable, or should Help stay a dropdown-in-place and only **Session** move up?",
-    "The `persist_state` audit turned out to be unnecessary — hiding the panels rather than skipping them keeps every widget executing, so nothing resets and the Save & restore uploader is unaffected. Worth confirming that on the running app, since it is the assumption the whole approach rests on."
-   ]
-  },
-  {
-   "id": "UX-62",
-   "prefix": "UX",
-   "num": 62,
-   "sub": "",
-   "title": "Move the app title into the top-left header, and make it the logo",
-   "status": "Backlog",
-   "owner": "Maya",
-   "note": "",
-   "date": "",
-   "added": "2026-08-18",
-   "group": "UX & Interaction",
-   "subgroup": "",
-   "archived": false,
-   "request": [
-    "Move the main title — **Scanpath Studio** / *Interactive visualization of eye",
-    "movements in reading.* — to the upper-most top-left corner of the screen, on",
-    "every view, to the left of the **Scanpath · Corpus Analysis · Data** top menu.",
-    "",
-    "It might also be more professional to replace it with a logo picture:",
-    "`logo/scanpath_studio_title_logo.png`."
+    "Review: the header should read **Scanpath · Corpus Analysis · Data · Session ·",
+    "Help**. Click Session, then go back to Scanpath and confirm nothing was lost —",
+    "in particular that 🐛 Debug mode, once on, stays on across those visits.",
+    "The `persist_state` audit turned out to be unnecessary — hiding the panels",
+    "rather than skipping them keeps every widget executing, so nothing resets and",
+    "the Save & restore uploader is unaffected. Worth confirming on the real page."
    ],
    "background": [
     "**Where it is now.** `app._render_about_panel`",
@@ -1665,6 +1676,16 @@ window.TRACKER = {
    ],
    "whatsLeft": [
     "Nothing."
+   ],
+   "decisions": [
+    "Review the **Word box** group in the add-dataset screen: names on one line,",
+    "the four selects below, and switching *edges* ↔ *origin+size* re-cuts the row.",
+    "The description is hover-only on the heading now — check it is still findable.",
+    "Your note that cropped option text should be fixed for **all** selection menus",
+    "is handled by #UX-71's wrap, which is scoped to every BaseWeb dropdown rather",
+    "than to this screen — worth clicking a long column name in the rail too.",
+    "The 🗂️ Data page's mapping editor deliberately keeps one field per row (it is",
+    "not width-constrained the way the wizard is). Right call?"
    ],
    "background": [
     "**Why it is the odd one out.** Every other mapping group goes through",

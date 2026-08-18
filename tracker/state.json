@@ -329,6 +329,14 @@
       "archived": true,
       "updated": "2026-08-17"
     },
+    "DATA-29": {
+      "status": "Backlog",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. let the user decide on one of these options. decide on the best implementation and link a user choice field, like the select menus in add data for example to choose trial id field and participant id field.\n2. you decide which works best",
+      "archived": false,
+      "updated": "2026-08-19"
+    },
     "DATA-30": {
       "status": "Backlog",
       "priority": "Normal",

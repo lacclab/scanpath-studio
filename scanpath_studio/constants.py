@@ -574,7 +574,25 @@ _VIEW_CORPUS = "Corpus Analysis"
 # which used to be split between the ⚙️ Configure / 🧹 Preprocessing menu
 # popovers and a 🔎 Data Inspection subtab buried in the Scanpath view.
 _VIEW_DATA = "Data"
+# UX-63: the two menu groups became views of their own, so the header carries
+# one menu — Scanpath · Corpus Analysis · Data · Session · Help — instead of a
+# nav plus a row of popovers under it.
+_VIEW_SESSION = "Session"
+_VIEW_HELP = "Help"
 _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
+
+#: UX-63: the keys each menu page's container is built with — visible when that
+#: view is active, off-screen otherwise. Same reasoning as the Data page's pair
+#: below: these panels hold widgets whose keys Streamlit drops at the end of any
+#: run in which they do not render (the 🐛 Debug toggle *is* the debug gate, and
+#: the persistence pause toggle governs what is written to disk). Rendering them
+#: every run and hiding them with CSS keeps the popovers' semantics exactly,
+#: which is what UX-38 chose them for — a page body that only runs when active
+#: would silently reset both.
+SESSION_PAGE_KEY = "session_menu_page"
+SESSION_PAGE_OFFSCREEN_KEY = "session_menu_page_offscreen"
+HELP_PAGE_KEY = "help_menu_page"
+HELP_PAGE_OFFSCREEN_KEY = "help_menu_page_offscreen"
 
 # DATA-26: the two keys the Data page's outer container is built with — visible
 # when that view is active, off-screen otherwise.

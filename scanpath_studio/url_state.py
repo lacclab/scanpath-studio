@@ -23,7 +23,9 @@ from .annotations import restore_records
 from .constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
+    _VIEW_HELP,
     _VIEW_SCANPATH,
+    _VIEW_SESSION,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     COLORSCALES,
@@ -2183,7 +2185,7 @@ def _go_data() -> None:
 
 
 def _active_view() -> str:
-    """The active top-level view, normalized to one of the three pages.
+    """The active top-level view, normalized to one of the nav's entries.
 
     Reads the `main_nav` mirror `menu.render_nav` writes from the router's
     selection, so it stays the one answer every caller shares. It may also carry
@@ -2192,6 +2194,6 @@ def _active_view() -> str:
     cached value does *not* silently resolve to it), or a view *requested* for
     the next run; anything unrecognized resolves to the Scanpath page."""
     requested = st.session_state.get("main_nav")
-    if requested in (_VIEW_CORPUS, _VIEW_DATA):
+    if requested in (_VIEW_CORPUS, _VIEW_DATA, _VIEW_SESSION, _VIEW_HELP):
         return requested
     return _VIEW_SCANPATH

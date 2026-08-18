@@ -593,9 +593,40 @@ window.TRACKER = {
     "still be filled after the view renders and after `save_local_state`); and a",
     "`persist_state` audit of the widgets inside them."
    ],
+   "whatWasDone": [
+    "**The header carries one menu**: Scanpath · Corpus Analysis · Data ·",
+    "Session · Help. The two groups are `st.Page`s in `menu._NAV_PAGES` like the",
+    "three views, appended last — they are chrome, and putting them earlier would",
+    "cost every existing user their aim at the views they use.",
+    "",
+    "**The row of popovers under the nav is gone.**",
+    "",
+    "**They still render on every run.** Each group is a container keyed by",
+    "whether its entry is active, and `styles.py` hides the `*_offscreen` twin —",
+    "the same trick #DATA-26 uses for the Data page. This is the part that",
+    "matters: a popover executes every run, and Streamlit drops a widget's key at",
+    "the end of any run in which it did not render, so a page body that only ran",
+    "while its own entry was open would silently reset the 🐛 Debug gate and the",
+    "persistence pause toggle between visits. Rendering always and hiding with CSS",
+    "keeps the popovers' semantics exactly — which is why **every `host=` fill",
+    "site in `app.main` is unchanged**, and why the `persist_state` audit the",
+    "second decision worried about turned out not to be needed.",
+    "",
+    "`_active_view` recognises the two new entries, and `main`'s dispatch gets a",
+    "branch that renders nothing for them — falling through would have drawn a",
+    "scanpath underneath.",
+    "",
+    "Three tests moved with the design: the two that asserted the popover bar's",
+    "labels became one asserting the panels still render *off* their own page",
+    "(the real invariant), and the nav-coverage test now expects five entries."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "decisions": [
+    "Review: the header should read **Scanpath · Corpus Analysis · Data · Session · Help**. Click Session and Help, then go back to Scanpath and confirm nothing was lost — in particular that 🐛 Debug mode, once on, stays on across those visits.",
     "Opening **Help → FAQ** (or About, or a tutorial) would now *navigate*, so you leave the plot you were looking at and come back to it via the nav. The popover opens over it instead. Acceptable, or should Help stay a dropdown-in-place and only **Session** move up?",
-    "The move needs a `persist_state=\"session\"` audit of everything inside those two panels (the 🐛 Debug toggle, the persistence pause toggle, the Save & restore uploader). `st.file_uploader` cannot take it — so a restore file picked on the Session page and then navigated away from is dropped. Fine, or does the restore flow need re-thinking first?"
+    "The `persist_state` audit turned out to be unnecessary — hiding the panels rather than skipping them keeps every widget executing, so nothing resets and the Save & restore uploader is unaffected. Worth confirming that on the running app, since it is the assumption the whole approach rests on."
    ]
   },
   {

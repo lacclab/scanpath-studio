@@ -111,38 +111,26 @@ class TestAppLaunches:
         ]
         assert not stray, f"these still render into the sidebar: {stray}"
 
-    def test_menu_bar_hosts_every_session_wide_group(self):
-        """The menu popovers exist, and the debug one stays hidden.
+    def test_every_session_wide_group_still_renders_off_its_own_page(self):
+        """UX-63: the two groups are nav entries now, not popovers — but their
+        panels must still render on **every** run.
 
-        Each popover is the *disclosure* for a group that used to be an
-        ``st.sidebar`` expander, so a missing one means an unreachable panel —
-        not a cosmetic difference. DATA-26 took ⚙️ Configure and 🧹 Preprocessing
-        off this bar onto the 🗂️ Data page and UX-38 merged 💾 Save & restore
-        with 🗄️ Recovery cache, leaving two groups plus 🐛 Debug (see
-        ``test_configure_and_preprocessing_left_the_menu_bar``).
+        That is the whole reason they are hidden with CSS rather than skipped:
+        a popover executes every run, and Streamlit drops a widget's key at the
+        end of any run in which it did not render, so content that only drew
+        while its own page was open would silently reset the 🐛 Debug gate and
+        the persistence pause toggle between visits. This asserts the panels are
+        present while the *Scanpath* view is active.
         """
         at = _make_apptest()
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
-        # AppTest has no `.popover` accessor and its Block wrapper exposes no
-        # `.label`, so read the label off the element proto.
+        body = " ".join(m.value for m in at.markdown)
+        for expected in ("💾 Save & restore", "🗄️ Recovery cache", "🧹 Start fresh"):
+            assert expected in body, f"{expected} stopped rendering off its page"
+        # The old bar is gone: neither group is a popover any more.
         labels = {p.proto.popover.label for p in at.get("popover")}
-        for expected in ("❓ Help", "💾 Session"):
-            assert expected in labels, f"{expected} missing from the menu bar"
-        # 🐛 Debug only joins the bar once ❓ Help's debug toggle is on (UX-37).
-        assert "🐛 Debug" not in labels
-
-    def test_help_leads_the_menu_bar(self):
-        """UX-38: ❓ Help first — the one group a first-time user is after, and
-        the only one reachable before they have a dataset."""
-        at = _make_apptest()
-        at.run(timeout=30)
-        bar = [
-            p.proto.popover.label
-            for p in at.get("popover")
-            if p.proto.popover.label in ("❓ Help", "💾 Session")
-        ]
-        assert bar[:2] == ["❓ Help", "💾 Session"], bar
+        assert "❓ Help" not in labels and "💾 Session" not in labels, labels
 
     def test_the_session_group_holds_both_ways_work_is_kept(self):
         """UX-38 merged the two into one 💾 Session popover — the portable JSON
@@ -648,17 +636,31 @@ class TestDataInspectionTab:
         assert state["main_nav"] == _VIEW_CORPUS
 
     def test_nav_pages_cover_every_view(self):
-        """The nav offers exactly the three top-level views, Scanpath first.
+        """The nav offers every top-level entry, in order.
 
         `_PAGES` is what `switch_to_view` navigates through, so a missing entry
         is a view nothing can reach programmatically. DATA-26 added 🗂️ Data
-        **last**: setup comes first in time, but the two analysis views are
-        where the work happens and moving them would cost every user their aim.
+        **last** of the analysis views: setup comes first in time, but the two
+        analysis views are where the work happens and moving them would cost
+        every user their aim. UX-63 then appended 💾 Session and ❓ Help, which
+        are chrome — visited on purpose and rarely.
         """
-        from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
+        from scanpath_studio.constants import (
+            _VIEW_CORPUS,
+            _VIEW_DATA,
+            _VIEW_HELP,
+            _VIEW_SCANPATH,
+            _VIEW_SESSION,
+        )
         from scanpath_studio.menu import _NAV_PAGES
 
-        assert list(_NAV_PAGES) == [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
+        assert list(_NAV_PAGES) == [
+            _VIEW_SCANPATH,
+            _VIEW_CORPUS,
+            _VIEW_DATA,
+            _VIEW_SESSION,
+            _VIEW_HELP,
+        ]
 
 
 @pytest.mark.timeout(90)

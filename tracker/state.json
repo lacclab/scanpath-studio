@@ -827,10 +827,18 @@
       "updated": "2026-08-18"
     },
     "UX-62": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "all good, closed",
+      "archived": true,
+      "updated": "2026-08-18"
+    },
+    "UX-63": {
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. I think the container of the header menu limits it's size, is there a way to get rid of all the white margins around it? and make it a little bigger?\n2. dont delete",
+      "implementationBrief": "1. ok\n2. fine",
       "archived": false,
       "updated": "2026-08-18"
     },

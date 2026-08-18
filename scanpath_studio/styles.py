@@ -83,6 +83,16 @@ def get_app_css() -> str:
        spotlight target has to measure zero rather than sit off to one side. */
     .st-key-data_setup_page_offscreen { display: none !important; }
 
+    /* UX-63 — the Session and Help pages, when they are not the active entry.
+       Same reasoning and same mechanism as the Data page above: the widgets
+       inside must keep executing (the 🐛 Debug toggle *is* the debug gate, and
+       the persistence pause toggle governs what is written to disk), and
+       Streamlit drops the key of a widget that did not render. `display: none`,
+       so they contribute no layout and the tour's `findVisible()` cannot aim at
+       a hidden copy. */
+    .st-key-session_menu_page_offscreen,
+    .st-key-help_menu_page_offscreen { display: none !important; }
+
     /* UX-53 — the 🗂️ Data page was "too much space and text, and text too
        small". Scoped to the page's own key so the plot rail and the analysis
        views keep the metrics they were tuned against (#UX-51 sized the rail

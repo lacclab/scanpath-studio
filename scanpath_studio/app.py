@@ -56,6 +56,8 @@ from scanpath_studio.annotations import (
 from scanpath_studio.constants import (
     _VIEW_CORPUS,
     _VIEW_DATA,
+    _VIEW_HELP,
+    _VIEW_SESSION,
     AUTHOR_CHOICE,
     BACKGROUND_PRESETS,
     BENCHMARK_LABEL_SUFFIX,
@@ -4858,6 +4860,13 @@ def main() -> None:
                 scale_text_to_boxes=scale_text_to_boxes,
                 canvas_renderer=canvas_renderer,
             )
+    elif active_view in (_VIEW_SESSION, _VIEW_HELP):
+        # UX-63: these two are menu pages. `menu.render_top_menu` drew their
+        # panels at the top of the run — into a container that is visible only
+        # while its own entry is active — so there is nothing to render here,
+        # and falling through to the Scanpath branch would draw a plot under
+        # them. The panels' own fills happen at their usual points below.
+        pass
     else:
         # The Scanpath view renders the viz controls itself (right rail) and
         # writes the global_* keys; re-read them below so Save & restore captures

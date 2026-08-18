@@ -41,7 +41,17 @@ from typing import TYPE_CHECKING
 
 import streamlit as st
 
-from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_DATA, _VIEW_SCANPATH
+from scanpath_studio.constants import (
+    _VIEW_CORPUS,
+    _VIEW_DATA,
+    _VIEW_HELP,
+    _VIEW_SCANPATH,
+    _VIEW_SESSION,
+    HELP_PAGE_KEY,
+    HELP_PAGE_OFFSCREEN_KEY,
+    SESSION_PAGE_KEY,
+    SESSION_PAGE_OFFSCREEN_KEY,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from streamlit.delta_generator import DeltaGenerator
@@ -62,6 +72,12 @@ _NAV_PAGES = {
     _VIEW_SCANPATH: ("Scanpath", "🗺️", "scanpath"),
     _VIEW_CORPUS: ("Corpus Analysis", "📊", "corpus-analysis"),
     _VIEW_DATA: ("Data", "🗂️", "data"),
+    # UX-63: the two menu groups joined the nav rather than sitting in a row of
+    # popovers beneath it. Last, after the three analysis views — they are
+    # chrome, visited on purpose and rarely, and putting them earlier would cost
+    # every existing user their aim at the views they use.
+    _VIEW_SESSION: ("Session", "💾", "session"),
+    _VIEW_HELP: ("Help", "❓", "help"),
 }
 
 #: This run's ``st.Page`` objects, view constant → Page. Rebuilt every run (an
@@ -230,50 +246,63 @@ def render_nav() -> str:
     return active
 
 
-def render_top_menu(*, show_debug: bool = False) -> TopMenu:
-    """Draw the native top nav + the settings bar, returning the bar's slots.
+def render_top_menu(
+    *, show_debug: bool = False, active_view: str | None = None
+) -> TopMenu:
+    """Draw the native top nav + the two menu pages, returning their slots.
 
     Call this once, early in ``app.main`` — before any data loading, so the
     loaders' UI lands in the bar rather than after the page content.
 
-    **The bar shares the title's row.** Once UX-38 got it down to two triggers,
-    a whole page row for two buttons was the wrong trade, so the row is a
-    ``st.columns`` split: the heading on the left, the triggers right-aligned
-    over roughly where the Scanpath view's control rail begins. The split
-    mirrors that view's ``[4, 1]`` plot/rail proportion so the buttons land above
-    the rail rather than at some unrelated offset.
+    **UX-63 moved the two groups into the nav.** They were popovers in a
+    ``st.columns`` row *under* the nav; they are now entries of the nav itself,
+    so the header carries one menu — Scanpath · Corpus Analysis · Data ·
+    Session · Help — instead of a menu plus a row of buttons beneath it. The
+    earlier note here said this was impossible without ``position: fixed``
+    against Streamlit's internals; that was true of lifting a *widget* into the
+    header strip, and false of the route taken: ``st.navigation`` takes pages,
+    and these two are now pages.
 
-    It is deliberately *not* lifted into Streamlit's own header strip beside the
-    nav. There is no supported way to put a widget there — ``st.navigation``
-    takes pages and ``st.logo`` takes a logo — so it would mean ``position:
-    fixed`` against an internal test id, with a right offset that has to clear a
-    toolbar whose width depends on which buttons that deployment shows.
+    **They still render on every run**, into a container that is off-screen
+    unless its entry is active — the same trick DATA-26 uses for the Data page.
+    That is not incidental: a popover executes every run, and Streamlit drops a
+    widget's key at the end of any run in which it did not render, so content
+    that only rendered while its own page was open would silently reset the 🐛
+    Debug gate and the persistence pause toggle between visits. Rendering always
+    and hiding with CSS keeps exactly the popovers' semantics, so every
+    ``host=`` fill site in ``app.main`` is unchanged.
 
     Args:
-        show_debug: Add the 🐛 Debug popover. Only ``?debug=1`` sessions want it
+        show_debug: Add the 🐛 Debug block. Only debug sessions want it
             (``debug_log.debug_enabled``).
+        active_view: The entry the nav currently has selected, from
+            :func:`render_nav`. Decides which of the two pages is visible.
 
     Returns:
-        The bar's empty slots, plus the heading's — ``app._render_about_panel``
-        fills ``title``. The active view is *not* among them: read it from
-        :func:`render_nav`'s return value, which ``app.main`` calls for its
-        dispatch; this function calls it only so the nav is drawn.
+        The pages' empty slots, plus ``title`` — ``app._render_about_panel``
+        fills it.
     """
-    render_nav()
-    title_col, menu_col = st.columns([4, 1], vertical_alignment="bottom")
-    bar = menu_col.container(
-        key=MENU_KEY,
-        horizontal=True,
-        horizontal_alignment="right",
-        vertical_alignment="center",
+    active = active_view if active_view is not None else render_nav()
+    title_col, _menu_col = st.columns([4, 1], vertical_alignment="bottom")
+    # One container per group, keyed by whether it is the active view. `styles`
+    # hides the `*_offscreen` twins; the widgets inside keep executing.
+    help_ = st.container(
+        key=HELP_PAGE_KEY if active == _VIEW_HELP else HELP_PAGE_OFFSCREEN_KEY
     )
-    # UX-38: ❓ Help leads. It is the one group a first-time user is looking for,
-    # and it is the only one they can reach before they have a dataset.
-    help_ = bar.popover(
-        "❓ Help",
-        help="The guided tour, the task tutorials, the FAQ, the documentation, "
-        "and what this app is.",
+    session = st.container(
+        key=SESSION_PAGE_KEY if active == _VIEW_SESSION else SESSION_PAGE_OFFSCREEN_KEY
     )
+    if active == _VIEW_HELP:
+        help_.subheader("❓ Help")
+        help_.caption(
+            "The guided tour, the task tutorials, the FAQ, the documentation, "
+            "and what this app is."
+        )
+    if active == _VIEW_SESSION:
+        session.subheader("💾 Session")
+        session.caption(
+            "Save or restore your work, and see what is kept on this computer."
+        )
     # UX-38: 💾 Save & restore and 🗄️ Recovery cache merged into one **💾 Session**
     # group. Both answer the same question — *what is kept, and how do I get it
     # back* — differing only in whether the state travels to another machine,
@@ -281,11 +310,6 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
     # styling. Two containers, not one body: `main` fills them at very different
     # points (Save & restore after the view renders, the cache after this run's
     # `save_local_state`), and creation order is what keeps them in this order.
-    session = bar.popover(
-        "💾 Session",
-        key=SAVE_RESTORE_KEY,
-        help="Save or restore your work, and see what is kept on this computer.",
-    )
     # UX-53: one short line per block, with the detail folded into its `?` —
     # the panel opens on a menu click, so nobody arrives here to read prose.
     save_restore = session.container()
@@ -319,7 +343,7 @@ def render_top_menu(*, show_debug: bool = False) -> TopMenu:
         help="Reload the bundled demo with a freshly detected column mapping, "
         "or recompute everything from the data already loaded.",
     )
-    debug = bar.popover("🐛 Debug") if show_debug else None
+    debug = help_.container() if show_debug else None
     return TopMenu(
         save_restore=save_restore,
         recovery_cache=recovery_cache,

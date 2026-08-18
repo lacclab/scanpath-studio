@@ -71,6 +71,7 @@ from scanpath_studio.constants import (
     DEFAULT_LINE_SPACING,
     DEMO_CHOICE,
     EYEGENBENCH_DEFAULT_DIR,
+    FOCUS_MAPPING_KEY,
     FONT_FAMILY,
     MULTIPLEYE_BUNDLE_CHOICE,
     MULTIPLEYE_DEFAULT_DIR,
@@ -3034,6 +3035,212 @@ def render_data_source_picker(host=None) -> None:
     )
 
 
+#: Cell text of the dataset table's action buttons. `st.column_config.ButtonColumn`
+#: takes each button's label from the cell *value*, which is what lets a row that
+#: cannot be edited or deleted (a built-in corpus) simply carry no label.
+_DATASET_OPEN_LABEL = ":material/open_in_new: Open"
+_DATASET_EDIT_LABEL = ":material/edit: Edit"
+_DATASET_DELETE_LABEL = ":material/delete: Delete"
+
+
+@st.cache_data(show_spinner=False)
+def _dataset_counts(_words: pd.DataFrame, _fixations: pd.DataFrame, _key) -> dict:
+    """Cheap headline counts for one dataset: readers, trials, words, fixations.
+
+    Two ``nunique`` calls and two lengths — UX-54 asked for "measurements that
+    are easy to calculate", and anything needing the measures pipeline would make
+    *listing* the datasets as expensive as opening them. Cached on the frames'
+    fingerprints (``_key``), since this runs for every listed dataset on every
+    rerun of the page.
+    """
+
+    def _n_unique(frame, column):
+        if frame is None or frame.empty or column not in frame.columns:
+            return None
+        return int(frame[column].nunique())
+
+    words = _words if _words is not None else pd.DataFrame()
+    fixations = _fixations if _fixations is not None else pd.DataFrame()
+    return {
+        "Readers": _n_unique(fixations, "participant_id")
+        or _n_unique(words, "participant_id"),
+        "Trials": _n_unique(fixations, "trial_id") or _n_unique(words, "trial_id"),
+        "Words": len(words) or None,
+        "Fixations": len(fixations) or None,
+    }
+
+
+def _select_dataset(name: str) -> None:
+    """Switch to a dataset from the UX-54 table, as the picker's callback does.
+
+    Goes through the same ``_pending_source_choice`` seam the rename and the
+    wizard finalize use: ``data_source_choice`` is a widget key elsewhere, so
+    this is the one way an assignment lands before the widgets instantiate.
+    """
+    st.session_state["_pending_source_choice"] = name
+    st.session_state["data_source_choice"] = name
+
+
+def render_dataset_table(
+    host=None,
+    *,
+    active: str | None = None,
+    words: pd.DataFrame | None = None,
+    fixations: pd.DataFrame | None = None,
+) -> None:
+    """The 🗂️ Data page's dataset list, as a table (UX-54).
+
+    One row per dataset — the same entries the picker offers — carrying the
+    headline counts and the actions belonging to that dataset: **Open** it,
+    **Edit** its column mapping, **Delete** it. Sortable and scrollable by virtue
+    of being an ``st.dataframe``, which is what a column of cards could not be.
+
+    **Counts are only shown for data already in memory** — the open dataset
+    (whose frames are passed in) and every stored upload. A public corpus is not
+    read until it is opened, and loading eight of them to fill a table would cost
+    minutes; those rows stay blank.
+
+    Args:
+        host: Container to render into. Defaults to the page.
+        active: The open dataset's entry token, marked in the table.
+        words: The open dataset's word frame, for its counts.
+        fixations: Its fixation frame.
+    """
+    entries = list(st.session_state.get("_data_source_entries") or [])
+    if not entries:
+        return
+    kinds = dict(st.session_state.get("_data_source_kinds") or {})
+    uploaded = set(st.session_state.get("_data_source_uploaded") or [])
+    stored = st.session_state.get("_datasets") or {}
+    registry = public_dataset_registry()
+
+    rows = []
+    for token in entries:
+        if token == UPLOAD_CHOICE:
+            continue  # the wizard, not a dataset
+        own = token in uploaded
+        name = picker_name_for(token, registry) if token in registry else token
+        # Frames, if this run already has them: the open dataset from the load, a
+        # stored upload from its entry. Everything else stays uncounted.
+        if token == active:
+            frames = (words, fixations)
+        elif token in stored:
+            entry = stored.get(token) or {}
+            frames = (entry.get("words"), entry.get("fixations"))
+        else:
+            frames = (None, None)
+        counts = (
+            _dataset_counts(
+                *frames, (frame_fingerprint(frames[0]), frame_fingerprint(frames[1]))
+            )
+            if any(f is not None for f in frames)
+            else {}
+        )
+        rows.append(
+            {
+                " ": "▶" if token == active else "",
+                "Dataset": name,
+                "Kind": kinds.get(token, "") or ("Yours" if own else ""),
+                "Readers": counts.get("Readers"),
+                "Trials": counts.get("Trials"),
+                "Fixations": counts.get("Fixations"),
+                "Words": counts.get("Words"),
+                "Open": None if token == active else _DATASET_OPEN_LABEL,
+                "Edit": _DATASET_EDIT_LABEL if own else None,
+                "Delete": _DATASET_DELETE_LABEL if own else None,
+                "_token": token,
+            }
+        )
+    if not rows:
+        return
+    frame = pd.DataFrame(rows)
+    tokens = frame.pop("_token").tolist()
+
+    def _clicked(state_key):
+        """The token of the row whose button was clicked, or ``None``.
+
+        ``click["row"]`` is a position in the frame handed to ``st.dataframe``,
+        not in whatever order the user sorted the columns into — the same
+        source-position semantics dataframe selections have — so this parallel
+        list stays correct under client-side sorting (the ENG-36 pattern).
+        """
+        click = st.session_state.get(state_key)
+        row = click["row"] if click else None
+        if row is not None and 0 <= row < len(tokens):
+            return tokens[row]
+        return None
+
+    def _on_open() -> None:
+        token = _clicked("dataset_table_open")
+        if token is not None:
+            _select_dataset(token)
+
+    def _on_edit() -> None:
+        # "A screen similar to add-dataset, that allows you to edit the maps and
+        # see the saved data tables" — that screen is *this page*, for whichever
+        # dataset is open: the mapping editor and the raw tables are already on
+        # it. So Edit opens the dataset and marks it, and the mapping section
+        # below renders itself expanded rather than folded.
+        token = _clicked("dataset_table_edit")
+        if token is not None:
+            _select_dataset(token)
+            st.session_state[FOCUS_MAPPING_KEY] = token
+
+    def _on_delete() -> None:
+        # Local import, like `_enter_add_data_wizard` above: `wizard` imports
+        # `app` back, so it cannot be imported at module load.
+        from scanpath_studio.wizard import _remove_dataset
+
+        token = _clicked("dataset_table_delete")
+        if token is not None:
+            _remove_dataset(token)
+
+    box = host if host is not None else st
+    box.dataframe(
+        frame,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            " ": st.column_config.TextColumn(" ", width=40, help="The open dataset."),
+            "Dataset": st.column_config.TextColumn("Dataset", width="medium"),
+            "Kind": st.column_config.TextColumn("Kind", width="small"),
+            "Readers": st.column_config.NumberColumn("Readers", width="small"),
+            "Trials": st.column_config.NumberColumn("Trials", width="small"),
+            "Fixations": st.column_config.NumberColumn("Fixations", width="small"),
+            "Words": st.column_config.NumberColumn("Words", width="small"),
+            "Open": st.column_config.ButtonColumn(
+                "",
+                type="tertiary",
+                width="small",
+                help="Work with this dataset.",
+                on_click=_on_open,
+                key="dataset_table_open",
+            ),
+            "Edit": st.column_config.ButtonColumn(
+                "",
+                type="tertiary",
+                width="small",
+                help="Open it and edit its column mapping.",
+                on_click=_on_edit,
+                key="dataset_table_edit",
+            ),
+            "Delete": st.column_config.ButtonColumn(
+                "",
+                type="tertiary",
+                width="small",
+                help="Remove this uploaded dataset from the session.",
+                on_click=_on_delete,
+                key="dataset_table_delete",
+            ),
+        },
+    )
+    if any(row["Readers"] is None for row in rows):
+        box.caption(
+            "Counts are shown for the open dataset and your own uploads — a "
+            "public corpus is only read once you open it."
+        )
+
+
 def resolve_source_monitor(
     data_choice: str | None,
     words: pd.DataFrame,
@@ -4274,18 +4481,20 @@ def main() -> None:
     from scanpath_studio.wizard import _enter_add_data_wizard
 
     data_choice = render_sidebar_data_source(host=setup_source_slot)
+    # UX-54: the page lists every dataset as a *table* — one row each, sortable,
+    # with the counts beside the name and the per-row actions in the row they
+    # belong to. Reserved here (so it keeps its place at the top of the page)
+    # and filled after the load, which is the first point this run's counts for
+    # the open dataset exist.
+    dataset_table_slot = setup_source_slot.container()
     if data_view and data_choice != UPLOAD_CHOICE:
-        pick_col, add_col = setup_source_slot.columns(
-            [5, 1], vertical_alignment="center"
-        )
-        render_data_source_picker(host=pick_col)
         # UX-64 took ➕ Add data off the Scanpath row and made this page the only
-        # way in — so the way in has to *be* here. It was the popover's only
-        # caller, and without this button `_enter_add_data_wizard` would have no
-        # trigger at all and uploading would be unreachable. An `on_click`
-        # callback, not an inline handler: it reassigns `data_source_choice`,
-        # which only lands before the widgets instantiate. #UX-54 replaces this
-        # row with the dataset table, and this button is the seed of it.
+        # way in — so the way in has to *be* here. Without this button
+        # `_enter_add_data_wizard` would have no trigger at all and uploading
+        # would be unreachable. An `on_click` callback, not an inline handler:
+        # it reassigns `data_source_choice`, which only lands before the widgets
+        # instantiate.
+        _, add_col = setup_source_slot.columns([5, 1], vertical_alignment="center")
         add_col.button(
             "➕ Add dataset",
             key="add_data_btn",
@@ -4810,6 +5019,18 @@ def main() -> None:
         # dispatch already landed in its slot (source picker · description ·
         # options · data location · wizard · mode-A mapping panels); what is left
         # needs the loaded frames, so it renders here.
+        #
+        # UX-54's dataset table is the first of those: its counts for the open
+        # dataset are this run's frames, which do not exist until the load has
+        # happened. Unfiltered on purpose — the table describes the *dataset*,
+        # not what the current Narrow-by left standing.
+        if not wizard_owns_page:
+            render_dataset_table(
+                host=dataset_table_slot,
+                active=data_choice,
+                words=words_all,
+                fixations=fixations_all,
+            )
         mapping_head_slot.divider()
         mapping_head_slot.subheader("🔤 Column mapping")
         mapping_head_slot.caption(

@@ -608,6 +608,11 @@ HELP_PAGE_OFFSCREEN_KEY = "help_menu_page_offscreen"
 DATA_PAGE_KEY = "data_setup_page"
 DATA_PAGE_OFFSCREEN_KEY = "data_setup_page_offscreen"
 
+#: UX-54 — set by the dataset table's ✏️ Edit button to the dataset it opened, so
+#: the Column mapping section below can say that is why the page changed under
+#: the user. Read once and cleared; session state only, never a wire format.
+FOCUS_MAPPING_KEY = "_focus_column_mapping"
+
 # UX-47: ONE column grid for every control row stacked above the plot — the
 # Narrow-by row, the trial picker, the multipart screen navigator, the chip
 # strip, and (in Compare mode) the second dataset's picker and its own Narrow-by

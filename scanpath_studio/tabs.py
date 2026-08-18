@@ -71,6 +71,7 @@ from scanpath_studio.constants import (
     DEFAULT_PALETTE,
     DEFAULT_SACCADE_WIDTH,
     DEMO_CHOICE,
+    FOCUS_MAPPING_KEY,
     HIGHLIGHTED_TEXT_COLOR,
     NARROW_BY_GRID,
     SACCADE_CLASS_ORDER,
@@ -8242,6 +8243,11 @@ def _render_remap_editor(name: str, stored: dict) -> None:
     DATA-26: the *Column mapping* heading is the page section's, rendered by
     ``app.main`` above whichever of the three modes applies — this one no longer
     titles itself."""
+    # UX-54: the dataset table's ✏️ Edit both opened this dataset and sent the
+    # user here, so say so — otherwise the page has silently changed under them
+    # and the mapping form is several screens down.
+    if st.session_state.pop(FOCUS_MAPPING_KEY, None) == name:
+        st.info(f"Editing **{name}** — its mapping and saved tables are below.")
     st.caption(
         "Change how this dataset's columns map to the app's canonical fields. "
         "Only columns that survived the original import are available."

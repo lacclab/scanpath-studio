@@ -827,7 +827,7 @@
       "updated": "2026-08-17"
     },
     "UX-54": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "from the data, I want to see some table of the datasets instead of the selectable opening menu. I want a table with X rows that is scrollable and sortable by each field that contains the dataset name, how many trials, participants, fixations etc. - only measurements that are easy to calculate from the data for fast performance. the table is instead of the cards. each dataset uploaded by the user should have there a delete (x) button which removes the dataset. it should also have an edit (pencil icon) button, that when clicked moves you to a screen similar to the \"add dataset\" screen, that allows you to edit the maps and see the saved data tables.",
@@ -835,7 +835,7 @@
       "updated": "2026-08-18"
     },
     "UX-55": {
-      "status": "In progress",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "keep it ID vrs. DESC for now, and move all fixation fields to be at the same place, 2 lines of features, and move all AOI realted fields to be close together, including word ids and word boxes. remove any big titles or spaces in between to save space.",

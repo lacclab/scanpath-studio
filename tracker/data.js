@@ -1757,11 +1757,7 @@ window.TRACKER = {
     "*ID vs description* stays the rule for the coupled rows, as asked."
    ],
    "whatsLeft": [
-    "Confirm the grouping is what was meant by \"all AOI related fields close",
-    "together, including word ids and word boxes\" — the fixations table has its",
-    "own `word_id` (which word a fixation landed on), which is arguably",
-    "AOI-related but belongs to the fixation rows. It was left with the fixation",
-    "fields; moving it would split one table's mapping across two groups."
+    "Nothing."
    ],
    "background": [
     "**Where it stands.** #UX-53 put two identity rows at the head of the mapping,",
@@ -1791,30 +1787,25 @@ window.TRACKER = {
     "`_ID_ROW_W`) and filled by `wizard._render_identity_field`; the themed rows go",
     "through `wizard._map_section` → `controls.column_mapping_ui(columns_per_row=…)`.",
     "Related: #UX-53, #UX-56 (the other layout call), #DATA-24 (why screen identity",
-    "matters at all)."
+    "matters at all).",
+    "",
+    "**Answered 2026-08-18**, and built to it: *identity vs. description* stays the",
+    "rule; the fixation fields run over **two lines of three**; the AOI fields sit",
+    "together with word id, text, line and the word box beneath them; and the big",
+    "headings between groups are gone.",
+    "",
+    "**One call made rather than asked.** The *fixations* table has a `word_id` of",
+    "its own — which word each fixation landed on. It is AOI-related by name, but it",
+    "is a column of the fixation file, and moving it would split one table's mapping",
+    "across two groups, so it stayed with the fixation fields. \"All AOI related",
+    "fields together\" is read as being about the **AOI table**."
    ],
    "decisions": [
-    "Which fields move **into** the coupled Fixations / AOI rows — *Word/IA ID*? the *Word box*? — and which move **out** of them, if any (*Screen name* is the likeliest candidate)?",
-    "Is *identity vs. description* the right rule to draw the line by, or is there a better one — e.g. *required vs. optional*, or *what you check first vs. what you check later*?"
-   ]
-  },
-  {
-   "id": "UX-56",
-   "prefix": "UX",
-   "num": 56,
-   "sub": "",
-   "title": "Decide whether the add-dataset view goes table-by-table or stage-by-stage",
-   "status": "Backlog",
-   "owner": "Maya",
-   "note": "",
-   "date": "",
-   "added": "2026-08-17",
-   "group": "UX & Interaction",
-   "subgroup": "",
-   "archived": false,
-   "request": [
-    "Should the add-dataset view show **each dataset and then its field mappings**,",
-    "or **first all the datasets and then all the mappings**?"
+    "Review the add-dataset field grouping: fixations over two lines of three, the",
+    "AOI fields with word id / text / line and the box beneath, and no bold headings",
+    "between groups.",
+    "The fixations table's own **Word/IA ID** stayed with the fixation fields rather",
+    "than moving into the AOI group — see *Background*. Move it if you disagree."
    ],
    "background": [
     "**Today it is stage-by-stage.** #UX-53 made the wizard two linear parts:",
@@ -2232,20 +2223,35 @@ window.TRACKER = {
     "description card for each dataset, to allow the user to browse through them."
    ],
    "whatWasDone": [
-    "Nothing yet. The ask is now much more specific than the original card: a",
-    "**scrollable, sortable table** of datasets — name, trials, participants,",
-    "fixations, and only measures that are cheap to compute — replacing the",
-    "picker *and* the cards, with a **✕ delete** and a **✏️ edit** on each",
-    "uploaded row, where edit opens an add-dataset-like screen for the mapping",
-    "and the stored tables."
+    "**The 🗂️ Data page lists datasets as a table** (`app.render_dataset_table`) —",
+    "one row per source, sortable and scrollable because it is an `st.dataframe`,",
+    "which is the thing a column of cards could not be. Columns: the open dataset's",
+    "marker, name, kind, **Readers · Trials · Fixations · Words**, then the three",
+    "row actions.",
+    "",
+    "**The counts are deliberately cheap** — two `nunique` calls and two lengths,",
+    "cached on the frames' fingerprints. Nothing that needs the measures pipeline,",
+    "or listing the datasets would cost what opening one does.",
+    "",
+    "**Only data already in memory is counted**: the open dataset and your own",
+    "uploads. A public corpus is not read until it is opened, and loading eight of",
+    "them to fill a table would take minutes — those rows stay blank, with one",
+    "caption saying why.",
+    "",
+    "**✕ Delete restores something that was broken.** #UX-64 dropped the ➕ popover",
+    "that held *Remove a dataset*, which left `wizard._remove_dataset` with no",
+    "caller at all — deleting an upload had become unreachable. The row's ✕ is what",
+    "puts it back, and a test now pins that it has a caller.",
+    "",
+    "**✏️ Edit opens the dataset and marks it**, and the mapping section below says",
+    "*\"Editing ⟨name⟩\"* — see the call recorded in *Background*.",
+    "",
+    "The data-source **selectbox is gone from this page** (the table is the",
+    "selector); it still renders on the Scanpath and Corpus views, where it is one",
+    "cell of the #UX-64 control line."
    ],
    "whatsLeft": [
-    "All of it. Two things to settle while building: the counts must come from",
-    "already-normalized frames (`st.session_state[\"_datasets\"]`) or the table",
-    "costs a pass over every dataset on every rerun; and *edit* is effectively",
-    "the wizard re-entered against a stored dataset, which is what",
-    "`tabs._render_remap_editor` already does in part — worth reusing rather than",
-    "building a second mapping screen."
+    "Nothing."
    ],
    "background": [
     "**Today.** Adding is a modest **➕ Add data** button beside the source picker",
@@ -2258,29 +2264,38 @@ window.TRACKER = {
     "A user-authored description is **new persisted state**, so it has more surfaces",
     "than it looks: the `_datasets` entry, the recovery-cache manifest",
     "(`persistence.py`) and the 💾 Save & restore JSON would all need to carry it.",
-    "Related: #DATA-23, #DATA-26, #UX-53."
+    "Related: #DATA-23, #DATA-26, #UX-53.",
+    "",
+    "**Answered 2026-08-18, and two calls made while building it.**",
+    "",
+    "- **Counts are per *loaded* dataset**, not per listed one. \"Only measurements",
+    "  that are easy to calculate from the data for fast performance\" cannot be",
+    "  honoured for a corpus that has not been read off disk yet, so those rows are",
+    "  blank rather than slow.",
+    "- **✏️ Edit re-uses this page instead of a new screen.** The mapping editor",
+    "  (`tabs._render_remap_editor`) and the saved tables are already on the 🗂️ Data",
+    "  page for whichever dataset is open, so Edit opens the dataset and sets",
+    "  `constants.FOCUS_MAPPING_KEY`, which that section reads once to say why the",
+    "  page changed under the user.",
+    "",
+    "**Row actions are `st.column_config.ButtonColumn`** (Streamlit 1.61), the same",
+    "mechanism #ENG-36 uses for *Open this trial* — including its gotcha: the click",
+    "reports a **source** row position, not a position in whatever order the user",
+    "sorted the columns into, so the parallel token list stays correct under",
+    "client-side sorting. A row that cannot be edited or deleted simply carries no",
+    "label in that cell, since a ButtonColumn takes its label from the cell value."
    ],
    "decisions": [
-    "Is the description typed by the user, or generated from the data (readers, trials, screens, row counts, geometry provenance)? Generated needs no new persisted state and is never stale; typed says things the data cannot.",
-    "Does the card list **replace** the source selectbox as the way to switch datasets, or sit beside it? Replacing it touches every surface that reads `data_source_choice`, including deep links."
-   ]
-  },
-  {
-   "id": "DATA-28",
-   "prefix": "DATA",
-   "num": 28,
-   "sub": "",
-   "title": "Nothing says which column became the fixation timestamp",
-   "status": "Backlog",
-   "owner": "Maya",
-   "note": "",
-   "date": "",
-   "added": "2026-08-16",
-   "group": "Datasets & ingestion",
-   "subgroup": "",
-   "archived": false,
-   "request": [
-    "How does it know the fixation timestamp? It doesn't ask the user to match it."
+    "Review the dataset table: sort by Fixations, open another dataset from a row,",
+    "and delete one of your uploads.",
+    "**✏️ Edit does not open a separate screen.** \"A screen similar to add-dataset,",
+    "to edit the maps and see the saved tables\" already exists — it is this page,",
+    "for whichever dataset is open — so Edit opens the dataset and points at the",
+    "mapping editor rather than duplicating the wizard. Enough, or do you want a",
+    "dedicated full-screen editor?",
+    "Public corpora show no counts until opened, on purpose (see *What was done*).",
+    "The alternative is loading every corpus to fill the table. Live with the gaps?",
+    "Deleting is immediate — no confirmation step. Add one?"
    ],
    "background": [
     "**It does ask — just not visibly.** *Timestamp (ms)* is a real, mappable field",

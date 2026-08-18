@@ -705,6 +705,77 @@ class TestDataInspectionTab:
         ]
 
 
+@pytest.mark.timeout(120)
+class TestDatasetTable:
+    """UX-54: the 🗂️ Data page lists datasets as a table, with the per-row
+    actions in the row they belong to."""
+
+    NAME = "My corpus"
+
+    def _at(self):
+        import pandas as pd
+
+        from scanpath_studio import api
+        from scanpath_studio.data import load_sample_data
+
+        words, fixations = api.load_scanpath_data(*load_sample_data())
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["_datasets"] = {
+            self.NAME: {
+                "words": words,
+                "fixations": fixations,
+                "raw_gaze": pd.DataFrame(),
+                "filter_fields": [],
+                "composite_trial_columns": [],
+            }
+        }
+        at.session_state["data_source_choice"] = self.NAME
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        return at
+
+    def _table(self, at):
+        for element in at.dataframe:
+            frame = element.value
+            if frame is not None and "Dataset" in getattr(frame, "columns", []):
+                return frame
+        raise AssertionError("dataset table not rendered on the Data page")
+
+    def test_the_table_lists_datasets_with_counts_and_row_actions(self):
+        at = self._at()
+        frame = self._table(at)
+        row = frame[frame["Dataset"] == self.NAME]
+        assert not row.empty, f"{self.NAME} missing from {list(frame['Dataset'])}"
+        # Counts come from the frames already in memory, not from a reload.
+        assert int(row["Readers"].iloc[0]) > 0
+        assert int(row["Fixations"].iloc[0]) > 0
+        # Edit and Delete belong to the user's own uploads; the built-in demo
+        # carries neither, which is how a row says the action does not apply.
+        assert row["Delete"].iloc[0]
+        demo = frame[frame["Dataset"].str.contains("demo", case=False)]
+        if not demo.empty:
+            assert not demo["Delete"].iloc[0]
+
+    def test_delete_is_wired_to_the_remover(self):
+        """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,
+        leaving `wizard._remove_dataset` with **no caller at all** — deleting an
+        upload was unreachable until this table's ✕ put it back.
+
+        AppTest cannot click a `ButtonColumn` cell, and the remover itself is
+        covered by `tests/test_wizard_helpers.py`; what is untested without this
+        is that anything still calls it. That is a source-level fact, so it is
+        checked as one."""
+        import inspect
+
+        from scanpath_studio.app import render_dataset_table
+
+        source = inspect.getsource(render_dataset_table)
+        assert "from scanpath_studio.wizard import _remove_dataset" in source
+        assert "_remove_dataset(token)" in source
+        assert '_clicked("dataset_table_delete")' in source
+
+
 @pytest.mark.timeout(90)
 class TestDatasetRename:
     """DATA-23: a dataset the user added can be renamed after the fact, from the
@@ -759,8 +830,16 @@ class TestDatasetRename:
         # rather than falling back to the demo (the healing branch in
         # render_sidebar_data_source drops a name that is no longer an entry).
         assert at.session_state["data_source_choice"] == "Reading study 2026"
-        pickers = [s for s in at.selectbox if s.key == "data_source_picker"]
-        assert pickers and pickers[0].value == "Reading study 2026"
+        # UX-54: the 🗂️ Data page lists datasets as a *table*, not a selectbox —
+        # the picker only renders on the analysis views now. The table is what
+        # has to show the new name.
+        names = [
+            str(name)
+            for frame in (d.value for d in at.dataframe)
+            if frame is not None and "Dataset" in getattr(frame, "columns", [])
+            for name in frame["Dataset"]
+        ]
+        assert "Reading study 2026" in names
 
     def test_a_taken_name_is_suffixed_and_said_so(self):
         at = self._stored_apptest(extra=["Other corpus"])

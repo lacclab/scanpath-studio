@@ -552,6 +552,33 @@ def get_app_css() -> str:
     }
     .st-key-wiz_name_box label p { font-weight: 700; }
 
+    /* UX-62 r2 — the header wordmark. `st.logo`'s only sizing control is
+       small/medium/large, and even `large` leaves it small beside the nav, in a
+       link that carries its own padding. So the height is set here instead, and
+       the wrapper's spacing zeroed — "get rid of the white margins around it".
+
+       The other half of that margin was baked into the PNG (36 px either side,
+       24% of the canvas) and was cropped out of the file itself; CSS cannot
+       reach inside an image. Sized in `rem` so it tracks the browser's text
+       size rather than pinning to one display. */
+    [data-testid="stLogo"] {
+        height: 2.75rem !important;
+        max-height: none !important;
+        width: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        object-fit: contain;
+    }
+    [data-testid="stLogoLink"] {
+        margin: 0 !important;
+        padding: 0 !important;
+        display: inline-flex;
+        align-items: center;
+    }
+    /* The spacer Streamlit reserves beside the logo assumes the default height;
+       with a taller mark it leaves a gap the nav then starts after. */
+    [data-testid="stLogoSpacer"] { display: none !important; }
+
     /* UX-57 — the Word box heading. It labels a group (a format radio plus a
        row of four coordinates), so it is set like the other group headings
        rather than like a field label, and its description is on hover. */

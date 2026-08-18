@@ -560,6 +560,11 @@ window.TRACKER = {
     "below it), #BUG-6 (the injected branded theme, the other place the app's",
     "identity is set).",
     "",
+    "**Decided 2026-08-18** (user, round 2): *\"1. … get rid of all the white",
+    "margins around it? and make it a little bigger? 2. dont delete\"* — so the",
+    "second logo file stays in `assets/` unused, and the mark was both trimmed and",
+    "enlarged (see *What was done*).",
+    "",
     "**Decided 2026-08-18** (user): *\"1. logo image only 2. image only\"* — the",
     "wordmark replaces the text heading rather than joining it, and the one-line",
     "description leaves the chrome entirely. It still appears in **About** and in",
@@ -588,14 +593,27 @@ window.TRACKER = {
     "",
     "The old `test_title_present` became a test of what now matters: that the",
     "image exists *inside the package*, and that neither the title nor the",
-    "description is printed in the page body any more."
+    "description is printed in the page body any more.",
+    "",
+    "**Round 2 — bigger, and no margins.** The white margin had two sources and",
+    "needed two fixes. **24% of the PNG was its own background** — 36 px either",
+    "side, 10 px above and below — which no CSS can reach inside, so the file was",
+    "cropped to its ink (610×155 → 535×134). The rest was the header's own",
+    "spacing: `st.logo`'s `size` tops out at `large` and still rendered small, so",
+    "the height is set in CSS (`2.75rem`) with the link's padding zeroed and",
+    "`stLogoSpacer` hidden — it reserves room for a default-height mark and left a",
+    "gap before the nav.",
+    "",
+    "The two originals are untouched in git history, and",
+    "`scanpath_studio_full_logo2_wide.png` stays in `assets/` unused, as asked."
    ],
    "whatsLeft": [
     "Nothing."
    ],
    "decisions": [
-    "Review: the wordmark should sit top-left of **Scanpath · Corpus Analysis · Data**, on every view, and link to the docs site. `st.logo` only offers `small` / `medium` / `large` — it is on **large**; if it still reads small, the fallback is CSS over Streamlit's header, which is fragile across upgrades.",
-    "`scanpath_studio_full_logo2_wide.png` sits in `assets/` beside the one in use but is unused — it is the square-ish 1126x614 lockup, where the header takes the wide 610x155 one. Keep it for a future `icon_image` (the collapsed-state slot), or delete it?"
+    "Review: the wordmark should now be noticeably bigger and sit flush — no pale box around it, no gap before **Scanpath**. Worth checking at a narrow window, where the header has least room, and in whichever theme you use.",
+    "The height is set in CSS (`2.75rem`) rather than by `st.logo`'s `size`, because `large` was still small. That means it is pinned to Streamlit's `stLogo` / `stLogoLink` / `stLogoSpacer` test ids and could break on a Streamlit upgrade — accepted for now; say if you would rather live with `large` and no CSS.",
+    "The logo's own background is still opaque `#f3f4f7`, so it reads as a very light plate rather than blending. Only artwork with an alpha channel fixes that — worth asking for a transparent PNG, or leave it?"
    ]
   },
   {

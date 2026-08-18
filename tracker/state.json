@@ -830,7 +830,7 @@
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. logo image only\n2. image only",
+      "implementationBrief": "1. I think the container of the header menu limits it's size, is there a way to get rid of all the white margins around it? and make it a little bigger?\n2. dont delete",
       "archived": false,
       "updated": "2026-08-18"
     },

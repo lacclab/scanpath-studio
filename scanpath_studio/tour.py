@@ -143,8 +143,8 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
             TutorialStep(
                 "Choose the data source",
                 "Everything about the dataset lives on the 🗂️ **Data** page, in the "
-                "order the pipeline uses it. Start at **📂 Data source** — keep the "
-                "demo, or use ➕ to add your own tables.",
+                "order the pipeline uses it. Start at **📂 Available datasets** — "
+                "click a name to open it, or ➕ **Add dataset** for your own tables.",
                 ".st-key-tour_grp_data_source",
                 view=_VIEW_DATA,
             ),
@@ -385,6 +385,7 @@ def steps_of(tutorial: TutorialDefinition) -> tuple[TutorialStep, ...]:
         if step.gate is None or _STEP_GATES.get(step.gate, lambda: True)()
     )
 
+
 # (title, markdown body) per step — keep bodies to a few lines each; the tour
 # should take well under a minute.
 _STEPS = [
@@ -561,10 +562,10 @@ _SPOTLIGHT_STEPS = [
     },
     {
         "selector": ".st-key-tour_grp_data_source",
-        "title": "📂 Data source",
+        "title": "📂 Available datasets",
         "body": "Your **data source** (demo or your own upload) sits at the left "
-        "of the filter row — ➕ beside it adds or removes datasets. Columns "
-        "auto-detect; remap any field in the wizard.",
+        "of the control line. Every dataset is listed on the 🗂️ **Data** page — "
+        "click a name there to open it, ➕ **Add dataset** for your own.",
     },
     # UX-34: narrowing comes before picking, both on screen (the Filter-by row
     # sits above the picker) and in the workflow, so the spotlight now walks them

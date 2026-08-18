@@ -211,6 +211,26 @@ window.TRACKER = {
     "Rename the **Data source** title to **Available datasets**, and move",
     "the **Add dataset** button onto the same line as that title."
    ],
+   "whatWasDone": [
+    "**📂 Data source is now 📂 Available datasets**, and ➕ **Add**",
+    "**dataset** sits on that heading's line rather than in a row of its",
+    "own below the table. The heading row is a `[5, 1]` split with the",
+    "button's cell reserved at heading time and filled once `data_choice`",
+    "is known — Streamlit lays containers out in creation order, so the",
+    "button lands beside the title without moving the code that decides",
+    "whether to draw it.",
+    "",
+    "The name follows the section: since #UX-54 it lists every dataset",
+    "rather than picking one *source*.",
+    "",
+    "The tour's own copy moved with it — the *Load and verify a dataset*",
+    "step and the welcome spotlight both said \"📂 Data source\"; they now",
+    "name the section and tell you a dataset opens by clicking its name",
+    "(#UX-78)."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
    "background": [
     "**Today** the 🗂️ Data page opens on a `📂 Data source` subheader",
     "([app.py](scanpath_studio/app.py:4562)) with the dataset table under",
@@ -230,6 +250,12 @@ window.TRACKER = {
     "",
     "Related: #UX-54 (the table), #UX-78 (the same table's columns),",
     "#UX-52 (the page's heading level), #PRE-22."
+   ],
+   "decisions": [
+    "Open 🗂️ **Data**: the section reads **📂 Available datasets** with ➕",
+    "**Add dataset** on the same line, right-aligned. Is the button the",
+    "right weight there (it is still filled blue), or should it be quieter",
+    "now that it sits beside a heading?"
    ]
   },
   {
@@ -251,6 +277,30 @@ window.TRACKER = {
     "Clicking the **dataset's name** in the table should do the same thing,",
     "and the dataset that is currently open should be shown by a **coloured",
     "highlight** on its row instead of the right-most pointer-arrow column."
+   ],
+   "whatWasDone": [
+    "**The dataset's name is the control.** The *Dataset* column is now the",
+    "`ButtonColumn` — a `ButtonColumn` takes its label from the cell value,",
+    "so the column that says which dataset a row is can also be the thing",
+    "you click to open it. The separate **Open** column is gone.",
+    "",
+    "**The open dataset is a tinted row**, not a ▶ in a column of its own,",
+    "so the marker column went too — the table is down from five non-data",
+    "columns to two (✏️ Edit · ✕ Delete).",
+    "",
+    "**The tint is a pandas `Styler`**, the only per-row colour",
+    "`st.dataframe` takes. It is applied across the whole row rather than",
+    "one cell, and the colour is a translucent blue rather than a theme",
+    "token: a Styler emits inline CSS and cannot read the theme's",
+    "variables, so the value has to be one that works on both the light and",
+    "the dark grid.",
+    "",
+    "The #ENG-36 click rule is unchanged: a click reports a **source** row",
+    "position, so the token still comes from the parallel list rather than",
+    "from whatever order the user sorted the columns into."
+   ],
+   "whatsLeft": [
+    "Nothing."
    ],
    "background": [
     "**Today** the table (`app.render_dataset_table`) carries a marker",
@@ -281,6 +331,15 @@ window.TRACKER = {
     "",
     "Related: #UX-54 (the table), #UX-77 (its heading), #ENG-36 (the click",
     "position rule)."
+   ],
+   "decisions": [
+    "Click a dataset's **name** — it should open. Then check the open row's",
+    "tint in **both themes**: it is a fixed translucent blue (a Styler",
+    "cannot see the theme), so it is the one colour in the app that does",
+    "not follow your theme. Legible enough in dark mode?",
+    "The name is a *tertiary* button, so it reads as a link rather than as",
+    "a button in every row. Clear enough that it is clickable, or should it",
+    "be underlined / carry an icon?"
    ]
   },
   {
@@ -303,6 +362,48 @@ window.TRACKER = {
     "Compute them for each uploaded dataset too and add them to the saved",
     "table — and make sure that when a dataset is deleted, or the cache is",
     "cleared, its row is deleted from that table as well."
+   ],
+   "whatWasDone": [
+    "**Counted once per version of a dataset, then remembered.**",
+    "`app.remembered_dataset_counts` keys the counts on the frames'",
+    "fingerprints and stores them under `constants.DATASET_COUNTS_STORE_KEY`:",
+    "",
+    "1. **Frames in memory** (the open dataset *and* every stored upload) —",
+    "   reused while the fingerprint still describes those rows, recomputed",
+    "   the moment it does not. A remap, a re-upload or any other edit",
+    "   changes the fingerprint, which is what makes remembering safe.",
+    "2. **Not loaded, but counted before** — the remembered row is shown.",
+    "   This is the payoff: a corpus opened last week lists instantly.",
+    "3. **Never counted** — blank. Nothing is read from disk to fill a row.",
+    "",
+    "**It survives a restart.** The store rides in the recovery cache's",
+    "manifest (#ENG-26), written beside the datasets it describes and",
+    "restored with them; a manifest written before this simply has none.",
+    "",
+    "**Invalidation, which is the substance of the item:** a dataset that",
+    "leaves the list takes its counts with it (`forget_dataset_counts`,",
+    "called with the live tokens on every render — so delete, rename and a",
+    "corpus whose location was unset are all covered); 🗑 *Forget saved",
+    "session* drops the store with the rest of the cache; and 🧹 *Clear",
+    "cached computations* drops it too, since a remembered count is exactly",
+    "the kind of derived value that button promises to clear.",
+    "",
+    "**A real bug fell out of this.** `_dataset_counts`' cache key was",
+    "named `_key`, and `@st.cache_data` **skips underscore-prefixed",
+    "arguments** — that is how the frames are passed without being hashed —",
+    "so the fingerprint was skipped too: the cache held exactly one entry",
+    "and every dataset after the first was served the first one's counts.",
+    "#UX-54 r2 had accidentally hidden it by counting only the open",
+    "dataset. Renaming the parameter to `key` is the fix, and it is what",
+    "makes counting several datasets in one table correct at all.",
+    "",
+    "Five tests in `tests/test_persistence.py` cover it: counted once then",
+    "reused, an unloaded dataset showing what was remembered, changed rows",
+    "being recounted, a removed dataset losing its row, and the round trip",
+    "through the cache including the clear."
+   ],
+   "whatsLeft": [
+    "Nothing."
    ],
    "background": [
     "**Today the counts live only in memory.** `app._dataset_counts` is an",
@@ -338,18 +439,31 @@ window.TRACKER = {
     "",
     "Related: #UX-54 (the table and why it counts only what is loaded),",
     "#ENG-26 / #ENG-30 (the recovery cache and its controls), #PERF-3 (the",
-    "fingerprint-keyed caching pattern)."
+    "fingerprint-keyed caching pattern).",
+    "",
+    "**The two open questions, answered while implementing (2026-08-19).**",
+    "",
+    "The store is the **recovery cache's** (#ENG-26) — on-device,",
+    "localhost/desktop only, and gone when the user clears it. That is what",
+    "the ask described (\"if the cache is cleared, delete them too\"), it",
+    "inherits that module's answers about where on disk and whether a",
+    "shared deployment may write at all, and it needs no new privacy story.",
+    "",
+    "**A corpus nobody has opened stays blank** rather than being read in",
+    "the background. Reading one costs minutes and the app would be doing",
+    "it unasked, on the machine of someone who came to look at a different",
+    "dataset. It fills itself the first time you open it, which is the",
+    "moment the cost is one the user has chosen."
    ],
    "decisions": [
-    "Should the saved counts be the **recovery cache**'s (on-device,",
-    "localhost/desktop only, gone when the user clears it) or a separate",
-    "store that survives *Clear cached computations*? The first reuses",
-    "#ENG-26 wholesale; the second means a new file with its own privacy",
-    "answer for shared deployments.",
-    "Counting a **public corpus that has never been opened** means reading",
-    "it once — minutes on the big ones. Do that in the background so every",
-    "row eventually fills, or keep those rows blank until you open them and",
-    "only remember what has been loaded at least once?"
+    "Open a dataset, switch to another, and come back: the first row should",
+    "still carry its counts without recomputing. Then restart the app —",
+    "with the recovery cache on, they should still be there.",
+    "Counts for a corpus you have **never** opened stay blank on purpose",
+    "(see *Background*). Would you rather they filled in the background?",
+    "🧹 *Clear cached computations* now also forgets the remembered counts.",
+    "Right call, or should that button leave them alone and only 🗑 *Forget",
+    "saved session* clear them?"
    ]
   },
   {
@@ -373,6 +487,29 @@ window.TRACKER = {
     "Make **\"are you sure you want to leave and discard?\"** in the",
     "add-data window a pop-up in the same way, rather than a hidden",
     "container."
+   ],
+   "whatWasDone": [
+    "**Both confirmations are `st.dialog` modals now.**",
+    "",
+    "- **Deleting a dataset** (`app._delete_confirmation_dialog`): the",
+    "  question opened under the table, which on a long list is off-screen",
+    "  from the row that asked it.",
+    "- **Leaving the add-dataset wizard**",
+    "  (`wizard._leave_prompt_dialog`): the question is raised by a click on",
+    "  the **nav**, at the top of the window, while the answer appeared",
+    "  inside a screen the user is scrolled down in — and it has to",
+    "  interrupt, since the run that asks it is the run that would otherwise",
+    "  have navigated away.",
+    "",
+    "**The arming flags did not change** — `PENDING_DELETE_KEY`,",
+    "`WIZARD_LEAVE_KEY` and the two callbacks are as they were. A dialog is",
+    "opened by *calling* it, so all that moved is where the flag is read;",
+    "`app.main`'s hold-the-view logic and the delete wiring are untouched",
+    "(the test that pins \"something still calls `_remove_dataset`\" follows",
+    "the chain one link further)."
+   ],
+   "whatsLeft": [
+    "Nothing."
    ],
    "background": [
     "**Two confirmations, both currently inline.**",
@@ -398,6 +535,16 @@ window.TRACKER = {
     "",
     "Related: #UX-54 (the delete flow), #BUG-31 (the leave prompt),",
     "#UX-65 (dialogs opened from a nav action)."
+   ],
+   "decisions": [
+    "Delete one of your uploads: the confirmation should open as a modal",
+    "over the page, and **Keep it** should leave everything alone.",
+    "Start the wizard, then click another view in the nav: the leave prompt",
+    "should open as a modal and the nav should stay where you were until",
+    "you answer it.",
+    "Both dialogs are dismissible with Streamlit's ✕ / Escape, which is",
+    "the same as choosing *Keep* — the arming flag is cleared on the next",
+    "run either way. Acceptable, or should dismissing be prevented?"
    ]
   },
   {
@@ -417,6 +564,25 @@ window.TRACKER = {
    "request": [
     "Remove the **Open Session** button from the bottom of the Scanpath",
     "page."
+   ],
+   "whatWasDone": [
+    "**The button is gone** from the foot of 📝 Annotations. It was a",
+    "shortcut to a nav entry that is one click away in the header",
+    "(#UX-63), sitting at the bottom of a panel about *this trial* and",
+    "pointing at a session-wide one.",
+    "",
+    "**Its caption was wrong too, and is fixed**: it said \"restore them",
+    "from the sidebar\", and there has been no sidebar since #UX-38. It now",
+    "names **💾 Session** in the top menu, which is where the download and",
+    "the restore actually are.",
+    "",
+    "`_open_save_restore` stays: the flag is still read by",
+    "`tabs._render_save_restore_expander`, which uses it to open the",
+    "Session popover when something else asks — this button was one",
+    "writer, not the only one."
+   ],
+   "whatsLeft": [
+    "Nothing."
    ],
    "background": [
     "**Where it is.** The 📝 Annotations subtab ends with a caption —",
@@ -438,6 +604,11 @@ window.TRACKER = {
     "",
     "Related: #UX-63 (Session in the nav), #UX-38 (the sidebar's removal),",
     "#BUG-34 (the Session panels' visibility)."
+   ],
+   "decisions": [
+    "📝 Annotations should now end with the note about where annotations",
+    "are saved and nothing else. Check the wording reads right — it points",
+    "at **💾 Session** in the top menu now, not at a sidebar."
    ]
   },
   {

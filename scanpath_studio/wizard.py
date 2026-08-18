@@ -296,17 +296,37 @@ def _render_leave_prompt(host) -> None:
     is the one widget ``persist_state="session"`` cannot cover (ENG-36), so
     "park it and come back" is not available to promise. The mapping answers
     would survive; the uploads would not, which is the half that matters.
+
+    **UX-79** made it a modal. ``host`` is kept in the signature — the caller
+    reserves a place in the wizard's sticky bar and nothing else needs to know
+    that the question now opens over the page rather than inside it.
     """
     destination = st.session_state.get(WIZARD_LEAVE_KEY)
     if not destination:
         return
-    box = host.container()
-    box.warning(
+    _leave_prompt_dialog(destination)
+
+
+@st.dialog("Leave setup?")
+def _leave_prompt_dialog(destination: str) -> None:
+    """The modal body — UX-79. Opened by :func:`_render_leave_prompt`.
+
+    A dialog rather than a bar inside the wizard: the question is raised by a
+    click on the **nav**, at the top of the window, while the answer used to
+    appear inside a screen the user is already scrolled down in. It also has to
+    interrupt — the run that asks it is the run that would otherwise have
+    navigated away.
+
+    The keys are unchanged (`WIZARD_LEAVE_KEY` arms it; the two callbacks clear
+    it), so `app.main`'s hold-the-view logic is untouched: a dialog is opened by
+    *calling* it, so all that moved is where the flag is read.
+    """
+    st.warning(
         f"**Leave setup and go to {destination}?** This dataset isn't added yet "
         "— the files you uploaded won't be kept.",
         icon="⚠️",
     )
-    stay_col, leave_col, _rest = box.columns([1.6, 1.8, 4])
+    stay_col, leave_col = st.columns(2)
     stay_col.button(
         "↩️ Keep setting up",
         key="wizard_leave_stay",

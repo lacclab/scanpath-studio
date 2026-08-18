@@ -557,7 +557,7 @@ class TestDataInspectionTab:
         # collapsed expanders rather than same-weight subheaders of their own.
         subheaders = [s.value for s in at.subheader]
         for section in (
-            "📂 Data source",
+            "📂 Available datasets",
             "🔤 Column mapping",
             "🔎 What's in this dataset",
             "🧹 Preprocessing",
@@ -866,19 +866,24 @@ class TestDatasetTable:
         import inspect
 
         from scanpath_studio.app import (
+            _delete_confirmation_dialog,
             _render_delete_confirmation,
             render_dataset_table,
         )
 
         # UX-54 r2 put a confirmation between the two: the table's ✕ arms the
-        # pending token, and the confirm button is what calls the remover. The
-        # invariant this test exists for is unchanged — something still calls it.
+        # pending token, and the confirm button is what calls the remover. UX-79
+        # then made that confirmation a modal, so the chain is one link longer —
+        # the invariant this test exists for is unchanged: something still calls
+        # the remover.
         table_source = inspect.getsource(render_dataset_table)
         assert '_clicked("dataset_table_delete")' in table_source
         assert "PENDING_DELETE_KEY" in table_source
-        confirm_source = inspect.getsource(_render_delete_confirmation)
-        assert "from scanpath_studio.wizard import _remove_dataset" in confirm_source
-        assert "_remove_dataset(" in confirm_source
+        gate_source = inspect.getsource(_render_delete_confirmation)
+        assert "_delete_confirmation_dialog(" in gate_source
+        dialog_source = inspect.getsource(_delete_confirmation_dialog)
+        assert "from scanpath_studio.wizard import _remove_dataset" in dialog_source
+        assert "_remove_dataset(" in dialog_source
 
 
 @pytest.mark.timeout(90)

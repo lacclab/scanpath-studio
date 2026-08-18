@@ -309,15 +309,14 @@ def render_trial_annotations(
         scope_caption = (
             f"screen `{annotation_screen}`" if annotation_screen else "the parent trial"
         )
+        # UX-76: no 💾 Open Session button under this. It was a shortcut to a nav
+        # entry that is one click away in the header (#UX-63), and it sat at the
+        # foot of a panel about *this trial* pointing at a session-wide one. The
+        # caption names where the annotations go instead — and no longer says
+        # "the sidebar", which has not existed since #UX-38.
         st.caption(
-            f"Saved for {scope_caption} in this session. Download all annotations "
-            "as JSON or restore them from the sidebar."
-        )
-        st.button(
-            "💾 Open Session",
-            key="annotation_open_save_restore",
-            type="tertiary",
-            on_click=lambda: st.session_state.__setitem__("_open_save_restore", True),
+            f"Saved for {scope_caption} in this session. **💾 Session** in the "
+            "top menu downloads them all as JSON, or restores them."
         )
 
 

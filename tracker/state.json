@@ -330,7 +330,7 @@
       "updated": "2026-08-17"
     },
     "DATA-29": {
-      "status": "Backlog",
+      "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. let the user decide on one of these options. decide on the best implementation and link a user choice field, like the select menus in add data for example to choose trial id field and participant id field.\n2. you decide which works best",
@@ -352,6 +352,14 @@
       "implementationBrief": "Chase the real y.",
       "archived": false,
       "updated": "2026-08-17"
+    },
+    "DATA-32": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. should be in the user's cache, like his uploaded datasets. it's better to keep these calculation results for all public datasets that exist in the system by default, and only save in the user's cache the user's uploaded datasets' info.\n2. can you do that once and then save it as part of the app's info? then we can do it once offline before the release.",
+      "archived": false,
+      "updated": "2026-08-19"
     },
     "ENG-19": {
       "status": "Closed",
@@ -1003,12 +1011,36 @@
       "updated": "2026-08-18"
     },
     "UX-76": {
-      "status": "Planned",
+      "status": "Review",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-18"
+      "updated": "2026-08-19"
+    },
+    "UX-77": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-19"
+    },
+    "UX-78": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-19"
+    },
+    "UX-79": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-19"
     },
     "VAL-1": {
       "status": "Closed",

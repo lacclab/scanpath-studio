@@ -66,6 +66,7 @@ from scanpath_studio.constants import (
     CITATION,
     DATA_PAGE_KEY,
     DATA_PAGE_OFFSCREEN_KEY,
+    DATASET_COUNTS_STORE_KEY,
     DEFAULT_BACKGROUND_COLOR,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LINE_SPACING,
@@ -2312,9 +2313,13 @@ def clear_computation_cache() -> None:
     a key — so the only cost of clearing is recomputing it, which is exactly
     what someone reaches for when a figure or a table looks stale. It does
     **not** touch the on-device recovery cache (that is 🗑 Forget saved session,
-    above it) or anything in session state.
+    above it) or anything in session state — except DATA-32's remembered dataset
+    counts, which are derived values of exactly the kind this promises to drop,
+    and which the ask for them named explicitly. They are recomputed the next
+    time each dataset is listed with its frames in memory.
     """
     st.cache_data.clear()
+    forget_dataset_counts()
 
 
 def _apply_declared_schema(proposed: dict, declared: dict | None) -> dict:
@@ -3066,21 +3071,89 @@ def render_data_source_picker(host=None) -> None:
 
 #: Cell text of the dataset table's action buttons. `st.column_config.ButtonColumn`
 #: takes each button's label from the cell *value*, which is what lets a row that
-#: cannot be edited or deleted (a built-in corpus) simply carry no label.
-_DATASET_OPEN_LABEL = ":material/open_in_new: Open"
+#: cannot be edited or deleted (a built-in corpus) simply carry no label — and,
+#: since UX-78, what lets the **Dataset** column be both the name and the control
+#: that opens it.
 _DATASET_EDIT_LABEL = ":material/edit: Edit"
 _DATASET_DELETE_LABEL = ":material/delete: Delete"
 
+#: UX-78 — the open dataset's row tint. A Styler writes inline CSS and so cannot
+#: read the theme's variables; a translucent blue reads as "selected" on both the
+#: light and the dark grid without being opaque enough to fight the text.
+_DATASET_ACTIVE_TINT = "rgba(59, 130, 246, 0.18)"
+
+
+def _counts_store() -> dict:
+    store = st.session_state.get(DATASET_COUNTS_STORE_KEY)
+    if not isinstance(store, dict):
+        store = {}
+        st.session_state[DATASET_COUNTS_STORE_KEY] = store
+    return store
+
+
+def remembered_dataset_counts(
+    token: str, words: pd.DataFrame | None, fixations: pd.DataFrame | None
+) -> dict:
+    """This dataset's headline counts, computed at most once per version of it.
+
+    **DATA-32.** Three cases, in order:
+
+    1. **Frames in memory** (the open dataset, and every stored upload) — the
+       counts are keyed on the frames' fingerprints, so a remembered entry is
+       reused only while it still describes *these* rows. A remap, a re-upload
+       or any other edit changes the fingerprint and the counts are recomputed;
+       staleness is therefore not possible, which is what makes remembering them
+       safe at all.
+    2. **Frames not loaded, but counted before** — the remembered row is shown.
+       This is the case the item is for: a public corpus you opened last week no
+       longer costs minutes to list.
+    3. **Never counted** — blank, as before. Nothing is read from disk to fill a
+       table.
+
+    The store is pruned by :func:`forget_dataset_counts` when a dataset leaves
+    the session, and cleared with the recovery cache.
+    """
+    store = _counts_store()
+    entry = store.get(token)
+    if words is None and fixations is None:
+        counts = entry.get("counts") if isinstance(entry, dict) else None
+        return dict(counts) if isinstance(counts, dict) else {}
+    key = [frame_fingerprint(words), frame_fingerprint(fixations)]
+    if isinstance(entry, dict) and entry.get("key") == key:
+        return dict(entry.get("counts") or {})
+    counts = _dataset_counts(words, fixations, tuple(key))
+    store[token] = {"key": key, "counts": dict(counts)}
+    return dict(counts)
+
+
+def forget_dataset_counts(keep: set | None = None) -> None:
+    """Drop remembered counts for datasets that are no longer listed (DATA-32).
+
+    ``keep=None`` forgets all of them — what 🗑 *Forget saved session* and 🧹
+    *Clear cached computations* do, since a remembered count is exactly the kind
+    of derived value both promise to drop.
+    """
+    store = _counts_store()
+    for token in [t for t in store if keep is None or t not in keep]:
+        store.pop(token, None)
+
 
 @st.cache_data(show_spinner=False)
-def _dataset_counts(_words: pd.DataFrame, _fixations: pd.DataFrame, _key) -> dict:
+def _dataset_counts(_words: pd.DataFrame, _fixations: pd.DataFrame, key) -> dict:
     """Cheap headline counts for one dataset: readers, trials, words, fixations.
 
     Two ``nunique`` calls and two lengths — UX-54 asked for "measurements that
     are easy to calculate", and anything needing the measures pipeline would make
     *listing* the datasets as expensive as opening them. Cached on the frames'
-    fingerprints (``_key``), since this runs for every listed dataset on every
+    fingerprints (``key``), since this runs for every listed dataset on every
     rerun of the page.
+
+    **``key`` has no leading underscore, and that is the whole point.**
+    ``@st.cache_data`` skips underscore-prefixed arguments when it builds its
+    cache key — that is how the frames are passed without being hashed — so the
+    fingerprint argument was being skipped too (DATA-32 found it): the cache had
+    exactly *one* entry, and every dataset after the first was served the first
+    one's counts. UX-54 r2 had hidden it by counting only the open dataset.
     """
 
     def _n_unique(frame, column):
@@ -3116,21 +3189,9 @@ def _select_dataset(name: str) -> None:
 PENDING_DELETE_KEY = "_dataset_pending_delete"
 
 
-def _render_delete_confirmation(host, tokens: list) -> None:
-    """The confirm step between ✕ Delete and the dataset actually going away.
-
-    Deleting an upload drops its frames, its mapping and its annotations from
-    the session with no undo, and the button that starts it is one cell away
-    from ✏️ Edit in a table row — so the click arms this, and this asks. Renders
-    nothing until something is armed; a token that has since disappeared (the
-    dataset was removed another way) disarms itself.
-    """
-    token = st.session_state.get(PENDING_DELETE_KEY)
-    if token is None:
-        return
-    if token not in tokens:
-        st.session_state.pop(PENDING_DELETE_KEY, None)
-        return
+@st.dialog("Delete this dataset?")
+def _delete_confirmation_dialog(token: str) -> None:
+    """The modal body — UX-79. Opened by ``_render_delete_confirmation``."""
 
     def _confirm() -> None:
         # Local import, like `_enter_add_data_wizard` above: `wizard` imports
@@ -3139,12 +3200,11 @@ def _render_delete_confirmation(host, tokens: list) -> None:
 
         _remove_dataset(st.session_state.pop(PENDING_DELETE_KEY, None))
 
-    box = host.container(border=True)
-    box.warning(
+    st.warning(
         f"Delete **{token}**? Its tables, column mapping and annotations leave "
         "this session — there is no undo."
     )
-    yes, no = box.columns(2)
+    yes, no = st.columns(2)
     yes.button(
         "✕ Delete it",
         key="dataset_delete_confirm",
@@ -3158,6 +3218,30 @@ def _render_delete_confirmation(host, tokens: list) -> None:
         on_click=lambda: st.session_state.pop(PENDING_DELETE_KEY, None),
         width="stretch",
     )
+
+
+def _render_delete_confirmation(host, tokens: list) -> None:
+    """The confirm step between ✕ Delete and the dataset actually going away.
+
+    Deleting an upload drops its frames, its mapping and its annotations from
+    the session with no undo, and the button that starts it is one cell away
+    from ✏️ Edit in a table row — so the click arms this, and this asks.
+
+    **UX-79** made it a modal rather than a block under the table: the question
+    is raised by a click *in* the table, and on a long list of datasets a
+    container below it can be off-screen from the row that asked. The arming
+    flag is unchanged — a dialog is opened by calling it, so what moved is where
+    the flag is read. A token that has since disappeared (the dataset was
+    removed another way) disarms itself instead of opening a dialog about
+    nothing.
+    """
+    token = st.session_state.get(PENDING_DELETE_KEY)
+    if token is None:
+        return
+    if token not in tokens:
+        st.session_state.pop(PENDING_DELETE_KEY, None)
+        return
+    _delete_confirmation_dialog(token)
 
 
 def render_dataset_table(
@@ -3190,7 +3274,11 @@ def render_dataset_table(
         return
     kinds = dict(st.session_state.get("_data_source_kinds") or {})
     uploaded = set(st.session_state.get("_data_source_uploaded") or [])
+    stored_uploads = dict(st.session_state.get("_datasets") or {})
     registry = public_dataset_registry()
+    # DATA-32: a dataset that has left the list takes its remembered counts with
+    # it — deleted, renamed, or a public corpus whose location was unset.
+    forget_dataset_counts(keep={t for t in entries if t != UPLOAD_CHOICE})
 
     rows = []
     for token in entries:
@@ -3198,33 +3286,36 @@ def render_dataset_table(
             continue  # the wizard, not a dataset
         own = token in uploaded
         name = picker_name_for(token, registry) if token in registry else token
-        # UX-54 r2: counted only for the dataset that is **open**. Every stored
-        # upload could be counted too — its frames are in memory — but a table
-        # of numbers where some rows are filled and others blank invites reading
-        # the blanks as zeroes, and the counts are a check on the dataset you
-        # are working with, not a leaderboard across the session. One row
-        # carries them, and it is the one marked ▶.
-        frames = (words, fixations) if token == active else (None, None)
-        counts = (
-            _dataset_counts(
-                *frames, (frame_fingerprint(frames[0]), frame_fingerprint(frames[1]))
-            )
-            if any(f is not None for f in frames)
-            else {}
-        )
+        # DATA-32: counted once per version of a dataset and remembered, so a
+        # row keeps its numbers without the frames being in memory. UX-54 r2 had
+        # narrowed this to the open dataset because counting meant *loading*;
+        # with a store that argument only applies to a corpus nobody has opened
+        # yet, and those rows are still blank rather than guessed at.
+        if token == active:
+            frames = (words, fixations)
+        elif token in stored_uploads:
+            entry = stored_uploads.get(token) or {}
+            frames = (entry.get("words"), entry.get("fixations"))
+        else:
+            frames = (None, None)
+        counts = remembered_dataset_counts(token, *frames)
         rows.append(
             {
-                " ": "▶" if token == active else "",
+                # UX-78: the name *is* the button. `ButtonColumn` takes its label
+                # from the cell value, so the column that says which dataset a
+                # row is can also be the control that opens it — which retires
+                # both the ▶ marker column and the separate Open column. The open
+                # dataset is the coloured row instead (see the Styler below).
                 "Dataset": name,
                 "Kind": kinds.get(token, "") or ("Yours" if own else ""),
                 "Readers": counts.get("Readers"),
                 "Trials": counts.get("Trials"),
                 "Fixations": counts.get("Fixations"),
                 "Words": counts.get("Words"),
-                "Open": None if token == active else _DATASET_OPEN_LABEL,
                 "Edit": _DATASET_EDIT_LABEL if own else None,
                 "Delete": _DATASET_DELETE_LABEL if own else None,
                 "_token": token,
+                "_active": token == active,
             }
         )
     if not rows:
@@ -3247,7 +3338,8 @@ def render_dataset_table(
         return None
 
     def _on_open() -> None:
-        token = _clicked("dataset_table_open")
+        # UX-78: raised by a click on the dataset's *name*.
+        token = _clicked("dataset_table_name")
         if token is not None:
             _select_dataset(token)
 
@@ -3272,26 +3364,45 @@ def render_dataset_table(
             st.session_state[PENDING_DELETE_KEY] = token
 
     box = host if host is not None else st
+    # UX-78: the open dataset is a tinted row rather than a ▶ in a column of its
+    # own. A Styler is the only per-row colour `st.dataframe` takes, and it is
+    # applied to the whole row so the tint reads as "this one" rather than as a
+    # highlighted cell. The colour is `color-mix`-free on purpose — a Styler
+    # emits inline CSS, which cannot see the theme's variables — so it is a
+    # translucent accent that sits legibly on both the light and the dark grid.
+    active_row = next((i for i, row in enumerate(rows) if row["_active"]), None)
+    frame = frame.drop(columns=["_active"])
+    display = frame
+    if active_row is not None:
+        display = frame.style.apply(
+            lambda row: (
+                [
+                    f"background-color: {_DATASET_ACTIVE_TINT}"
+                    if row.name == active_row
+                    else ""
+                ]
+                * len(row)
+            ),
+            axis=1,
+        )
     box.dataframe(
-        frame,
+        display,
         width="stretch",
         hide_index=True,
         column_config={
-            " ": st.column_config.TextColumn(" ", width=40, help="The open dataset."),
-            "Dataset": st.column_config.TextColumn("Dataset", width="medium"),
+            "Dataset": st.column_config.ButtonColumn(
+                "Dataset",
+                width="medium",
+                type="tertiary",
+                help="Open this dataset.",
+                on_click=_on_open,
+                key="dataset_table_name",
+            ),
             "Kind": st.column_config.TextColumn("Kind", width="small"),
             "Readers": st.column_config.NumberColumn("Readers", width="small"),
             "Trials": st.column_config.NumberColumn("Trials", width="small"),
             "Fixations": st.column_config.NumberColumn("Fixations", width="small"),
             "Words": st.column_config.NumberColumn("Words", width="small"),
-            "Open": st.column_config.ButtonColumn(
-                "",
-                type="tertiary",
-                width="small",
-                help="Work with this dataset.",
-                on_click=_on_open,
-                key="dataset_table_open",
-            ),
             "Edit": st.column_config.ButtonColumn(
                 "",
                 type="tertiary",
@@ -3313,8 +3424,9 @@ def render_dataset_table(
     _render_delete_confirmation(box, tokens)
     if any(row["Readers"] is None for row in rows):
         box.caption(
-            "Readers · Trials · Fixations · Words are counted for the **open** "
-            "dataset (▶). Open another row to count it."
+            "Readers · Trials · Fixations · Words are counted the first time a "
+            "dataset is opened, then remembered. A corpus you have never opened "
+            "is not read just to fill a row."
         )
 
 
@@ -4559,7 +4671,18 @@ def main() -> None:
         # before the slots are created, so it lands above them (Streamlit lays
         # containers out in creation order).
         setup_page.divider()
-        setup_page.subheader("📂 Data source")
+        # UX-77: the section lists every dataset (#UX-54 made it a table), so it
+        # is named for that rather than for the one *source* it used to pick —
+        # and its one action shares the heading's line instead of sitting a row
+        # below the table it acts on. The button is filled further down, once
+        # `data_choice` is known; the cell is reserved here so it lands beside
+        # the title (Streamlit lays containers out in creation order).
+        heading_col, add_dataset_slot = setup_page.columns(
+            [5, 1], vertical_alignment="bottom"
+        )
+        heading_col.subheader("📂 Available datasets")
+    else:
+        add_dataset_slot = None
     setup_source_slot = setup_page.container()
     description_slot = setup_page.container()
     source_options_slot = setup_page.container()
@@ -4614,15 +4737,14 @@ def main() -> None:
     # and filled after the load, which is the first point this run's counts for
     # the open dataset exist.
     dataset_table_slot = setup_source_slot.container()
-    if data_view and data_choice != UPLOAD_CHOICE:
+    if data_view and add_dataset_slot is not None and data_choice != UPLOAD_CHOICE:
         # UX-64 took ➕ Add data off the Scanpath row and made this page the only
         # way in — so the way in has to *be* here. Without this button
         # `_enter_add_data_wizard` would have no trigger at all and uploading
         # would be unreachable. An `on_click` callback, not an inline handler:
         # it reassigns `data_source_choice`, which only lands before the widgets
-        # instantiate.
-        _, add_col = setup_source_slot.columns([5, 1], vertical_alignment="center")
-        add_col.button(
+        # instantiate. UX-77 put it on the section heading's line.
+        add_dataset_slot.button(
             "➕ Add dataset",
             key="add_data_btn",
             on_click=_enter_add_data_wizard,

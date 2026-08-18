@@ -31,6 +31,7 @@ from urllib.parse import urlparse
 import pandas as pd
 
 from .annotations import ANNOTATIONS_STATE_KEY, records_to_store, store_to_records
+from .constants import DATASET_COUNTS_STORE_KEY
 from .session_keys import COLUMN_MAPPING_PREFIX, PLOT_CONFIG_STATE_KEYS
 
 SCHEMA_VERSION = 1
@@ -270,6 +271,14 @@ def save_state(session: MutableMapping[str, Any], root: Path) -> bool:
             session.get(_LAST_DATASET_ENTRIES_KEY), dict
         )
         manifest = _manifest_for(session, root, reuse_datasets=reuse_datasets)
+        # DATA-32: the dataset table's remembered counts ride along with the
+        # datasets they describe — one small dict, and it is what stops a
+        # restored session recounting every corpus it has ever opened. Written
+        # here rather than inside `_manifest_for` because it is session state,
+        # not a frame on disk.
+        counts = session.get(DATASET_COUNTS_STORE_KEY)
+        if isinstance(counts, dict) and counts:
+            manifest["dataset_counts"] = _json_safe(counts)
         encoded = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)
         _atomic_text(encoded, root / "manifest.json")
         session[_LAST_FINGERPRINT_KEY] = fingerprint
@@ -318,6 +327,11 @@ def restore_state(
             if not existing:
                 session[_LAST_DATASET_IDENTITY_KEY] = _dataset_identity(session)
                 session[_LAST_DATASET_ENTRIES_KEY] = dict(manifest.get("datasets", {}))
+            counts = manifest.get("dataset_counts")
+            if isinstance(counts, dict):
+                # DATA-32 — a manifest written before this existed simply has
+                # none, and the table recounts what it can, as it always did.
+                session[DATASET_COUNTS_STORE_KEY] = dict(counts)
             # Separate from _RESTORED_KEY, which only records that a restore was
             # *attempted* this session. The app reads this one to tell the user
             # their previous session came back (restored_from_cache).
@@ -470,6 +484,9 @@ def clear_local_state(session=None, root: Path | None = None) -> None:
             _LAST_DATASET_IDENTITY_KEY,
             _LAST_DATASET_ENTRIES_KEY,
             _RESTORED_PAYLOAD_KEY,
+            # DATA-32: the remembered counts are part of what "forget this
+            # session" means — the ask named clearing the cache explicitly.
+            DATASET_COUNTS_STORE_KEY,
         ):
             session.pop(key, None)
 

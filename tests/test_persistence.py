@@ -390,3 +390,123 @@ def test_a_failed_rename_forces_a_full_rewrite_next_save(tmp_path):
     restored = {}
     assert restore_state(restored, tmp_path)
     assert set(restored["_datasets"]) == {"Renamed"}
+
+
+class TestRememberedDatasetCounts:
+    """DATA-32 — a dataset's headline counts are computed once and remembered.
+
+    The point of the item is the *invalidation*, not the store: a remembered
+    count is a number on screen that claims to describe the data, so it must
+    never outlive the rows it was taken from.
+    """
+
+    @staticmethod
+    def _frames():
+        import pandas as pd
+
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2"],
+                "trial_id": ["t1", "t1", "t2"],
+                "word_id": [0, 1, 0],
+                "text": ["the", "cat", "sat"],
+                "x": [10.0, 60.0, 10.0],
+                "y": [10.0, 10.0, 50.0],
+                "width": [40.0, 40.0, 40.0],
+                "height": [20.0, 20.0, 20.0],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1", "p1", "p2"],
+                "trial_id": ["t1", "t1", "t2"],
+                "x": [20.0, 70.0, 20.0],
+                "y": [15.0, 15.0, 55.0],
+                "duration_ms": [200.0, 180.0, 220.0],
+            }
+        )
+        return words, fixations
+
+    def test_counted_once_then_reused(self, monkeypatch):
+        import streamlit as st
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_COUNTS_STORE_KEY
+
+        st.session_state.pop(DATASET_COUNTS_STORE_KEY, None)
+        words, fixations = self._frames()
+        calls = []
+        real = app._dataset_counts
+
+        def _counting(_words, _fixations, _key):
+            calls.append(_key)
+            return real(_words, _fixations, _key)
+
+        monkeypatch.setattr(app, "_dataset_counts", _counting)
+        first = app.remembered_dataset_counts("corpus", words, fixations)
+        second = app.remembered_dataset_counts("corpus", words, fixations)
+        assert first == second
+        assert first["Readers"] == 2
+        assert first["Trials"] == 2
+        assert first["Words"] == 3
+        assert len(calls) == 1, "the second listing recomputed the counts"
+
+    def test_an_unloaded_dataset_shows_what_was_remembered(self):
+        import streamlit as st
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_COUNTS_STORE_KEY
+
+        st.session_state.pop(DATASET_COUNTS_STORE_KEY, None)
+        words, fixations = self._frames()
+        app.remembered_dataset_counts("corpus", words, fixations)
+        # The payoff: a corpus opened earlier keeps its row without being read.
+        assert app.remembered_dataset_counts("corpus", None, None)["Trials"] == 2
+        # …and one never opened stays blank rather than guessed at.
+        assert app.remembered_dataset_counts("never-opened", None, None) == {}
+
+    def test_changed_rows_are_recounted(self):
+        """The staleness guard: same name, different data — recount."""
+        import streamlit as st
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_COUNTS_STORE_KEY
+
+        st.session_state.pop(DATASET_COUNTS_STORE_KEY, None)
+        words, fixations = self._frames()
+        app.remembered_dataset_counts("corpus", words, fixations)
+        trimmed = fixations.iloc[:2]
+        assert app.remembered_dataset_counts("corpus", words, trimmed)["Fixations"] == 2
+
+    def test_a_removed_dataset_loses_its_row(self):
+        import streamlit as st
+
+        from scanpath_studio import app
+        from scanpath_studio.constants import DATASET_COUNTS_STORE_KEY
+
+        st.session_state.pop(DATASET_COUNTS_STORE_KEY, None)
+        words, fixations = self._frames()
+        app.remembered_dataset_counts("corpus", words, fixations)
+        app.remembered_dataset_counts("other", words, fixations)
+        app.forget_dataset_counts(keep={"other"})
+        assert app.remembered_dataset_counts("corpus", None, None) == {}
+        assert app.remembered_dataset_counts("other", None, None)["Trials"] == 2
+        app.forget_dataset_counts()
+        assert app.remembered_dataset_counts("other", None, None) == {}
+
+    def test_they_round_trip_through_the_recovery_cache(self, tmp_path):
+        from scanpath_studio import persistence
+        from scanpath_studio.constants import DATASET_COUNTS_STORE_KEY
+
+        remembered = {"corpus": {"key": ["a", "b"], "counts": {"Trials": 2}}}
+        session = {
+            "data_source_choice": "corpus",
+            DATASET_COUNTS_STORE_KEY: dict(remembered),
+        }
+        persistence.save_state(session, tmp_path)
+        restored: dict = {}
+        assert persistence.restore_state(restored, tmp_path)
+        assert restored[DATASET_COUNTS_STORE_KEY] == remembered
+        # …and forgetting the cache forgets them, which is what the ask named.
+        persistence.clear_local_state(restored, tmp_path)
+        assert DATASET_COUNTS_STORE_KEY not in restored

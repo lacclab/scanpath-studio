@@ -606,6 +606,13 @@ _MAIN_TAB_LABELS = [_VIEW_SCANPATH, _VIEW_CORPUS, _VIEW_DATA]
 #: every run and hiding them with CSS keeps the popovers' semantics exactly,
 #: which is what UX-38 chose them for — a page body that only runs when active
 #: would silently reset both.
+#: DATA-32 — the dataset table's remembered headline counts, `{token: {...}}`.
+#: A session-state key that also travels in the recovery cache's manifest, so it
+#: lives here rather than in `app`: `persistence` writes it and `app` fills it,
+#: and `persistence` cannot import `app` (that is the cycle `app` already
+#: avoids by importing `persistence` one way).
+DATASET_COUNTS_STORE_KEY = "_dataset_counts_store"
+
 SESSION_PAGE_KEY = "session_menu_page"
 SESSION_PAGE_OFFSCREEN_KEY = "session_menu_page_offscreen"
 HELP_PAGE_KEY = "help_menu_page"

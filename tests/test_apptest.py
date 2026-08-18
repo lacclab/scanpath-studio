@@ -3263,13 +3263,12 @@ class TestFigureAndCanvasSubGroups:
             "Horizontal",
         )
 
-    def test_the_group_keeps_one_inline_toggle_and_four_named_blocks(self):
-        """The shape itself: framing inline, everything else under a name.
+    def test_the_group_keeps_one_inline_toggle_and_four_popovers(self):
+        """The shape itself: framing inline, everything else behind a name.
 
-        UX-74 flattened the four sub-groups from popovers into
-        ``_rail_subsection`` blocks — same names, same split, one click less —
-        so this still pins that the group did not collapse back into the one
-        flat ~26-row run UX-48 broke up.
+        UX-74 replaced these popovers with inline blocks and was reverted — a
+        section then read as one long undifferentiated run — so the popovers are
+        the shape again, and this pins them.
         """
         import inspect
 
@@ -3278,10 +3277,8 @@ class TestFigureAndCanvasSubGroups:
         control_source = inspect.getsource(controls.sidebar_controls)
         canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
 
-        assert '_rail_subsection(figure_grp, "📊 Axes & grid")' in control_source
-        assert '_rail_subsection(figure_grp, "🏷️ Title & labels")' in control_source
-        # Nothing inside a rail section sits behind a popover any more (UX-74).
-        assert "figure_grp.popover(" not in control_source
+        assert 'figure_grp.popover("📊 Axes & grid"' in control_source
+        assert 'figure_grp.popover("🏷️ Title & labels"' in control_source
         assert '"🖥️ Screen & geometry"' in canvas_source
         assert '"🔤 Text & fonts"' in canvas_source
         # The framing toggle is the group's one inline control.

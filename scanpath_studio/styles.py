@@ -757,9 +757,10 @@ def get_app_css() -> str:
         text-overflow: ellipsis;
     }
 
-    /* UX-74 — a block inside a rail section, where a `⚙️ …` popover used to be.
-       A rule and a small caps-ish label: enough to group, cheap in height (the
-       rail is narrow and every section now shows its whole contents). */
+    /* UX-72 — the two halves of the rail's 🧹 Filter section. A rule and a
+       small label: enough to group, cheap in height. (UX-74 briefly used this
+       for every section's contents and was reverted — the sections read better
+       with their `⚙️ …` popovers.) */
     .sps-rail-subhead {
         font-size: 0.78rem;
         font-weight: 700;

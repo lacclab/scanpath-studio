@@ -3065,19 +3065,18 @@ def corpus_style_controls(
 
 
 def _rail_subsection(host, label: str, *, note: str = ""):
-    """A named block *inside* a rail section — UX-74's replacement for a popover.
+    """A named block inside the rail's 🧹 Filter section (UX-72).
 
-    Every section used to hold its detail in `⚙️ …` popovers, because Streamlit
-    nests neither expander-in-expander nor popover-in-popover and
-    popover-in-expander was the only two-level shape available. That made a
-    setting two or three clicks from the plot and hid, behind an unlabelled
-    click, which knobs lived where. A section's contents are laid out in place
-    now, under a light rule-and-label — the same idiom the add-dataset screen
-    uses for its groups — so opening a section shows everything in it.
+    **Scope, after UX-74 was reverted.** That item flattened *every* section's
+    `⚙️ …` popovers into blocks like this one; the rail read worse for it — a
+    section became a long unbroken run — so the popovers are back everywhere
+    they were. What is left using this is the one section that never had them:
+    #UX-72's 🧹 Filter, whose two halves (👁️ Fixations · ↗️ Saccades) are
+    genuinely one thing each and would spend a click for nothing.
 
-    ``note`` renders under the label: the "why is this greyed out" line that used
-    to be the popover trigger's tooltip, which an inline block has no trigger to
-    carry.
+    ``note`` renders under the label — a block has no trigger, so the sentence a
+    popover carried as a tooltip (what the filter does, and why it is inert in
+    Animate or Compare) goes here instead.
     """
     host.markdown(
         f'<div class="sps-rail-subhead">{label}</div>', unsafe_allow_html=True
@@ -3130,12 +3129,16 @@ def sidebar_controls(
       2. Five collapsible sections — **👁️ Fixations** (expanded), then collapsed
          **↗️ Saccades**, **📄 Stimulus**, **🔥 Overlays**, and
          **📐 Figure & canvas** (canvas/text plus axes/labels).
-      3. Inside a section: **layer toggle → ⚙️ style → 🧹 filter**, the detail
-         popovers shown only while the layer is on. Streamlit nests neither
+      3. Inside a section: **layer toggle → ⚙️ style**, the detail popovers
+         shown only while the layer is on. Streamlit nests neither
          expander-in-expander nor popover-in-popover, so an expander holding
          popovers is the only two-level shape available — which is also why
          Fixations and Saccades are peer sections rather than sub-sections of a
-         single "Scanpath" group.
+         single "Scanpath" group. UX-74 tried replacing those popovers with
+         inline blocks and was reverted: a section then read as one long
+         undifferentiated run.
+      3b. Filtering left the sections entirely (UX-72): one 🧹 **Filter**
+         section after them holds both the fixation and the saccade filters.
       4. **📐 Figure & canvas** follows the same shape with no layer to toggle
          (UX-48): the framing toggle inline, then four popovers — 🖥️ Screen &
          geometry · 🔤 Text & fonts (both from ``canvas_renderer``) · 📊 Axes &
@@ -3356,7 +3359,7 @@ def sidebar_controls(
     # …but the styling below is still (partly) live in those modes, so keep the
     # popover reachable even when the (inert) layer toggle reads off.
     if show_fix or fix_off_disabled:
-        with _rail_subsection(fix_grp, "⚙️ Style"):
+        with fix_grp.popover("⚙️ Style", width="stretch"):
             # The metric that maps to fixation HUE — applies to the static
             # figure, the single animated replay AND the comparison overlay (in
             # compare it colours both scanpaths by the metric; the per-scanpath
@@ -3618,7 +3621,12 @@ def sidebar_controls(
         with _rail_subsection(
             filter_fix_slot,
             f"👁️ Fixations{_fixation_filter_badge()}",
-            note=_flag_reason,
+            # The sentence the popover trigger carried as its tooltip, plus the
+            # gate reason when this is inert in the current mode.
+            note=_gated_help(
+                "Highlight or hide short, long, and out-of-bounds fixations.",
+                _flag_reason,
+            ),
         ):
             # VIZ-27 follow-up: the index window removes fixations just like the
             # short/long/OOB rules, so it belongs here rather than under marker style.
@@ -3631,7 +3639,7 @@ def sidebar_controls(
         "**Visible**", key="global_show_saccades", persist_state="session"
     )
     if show_saccades:
-        with _rail_subsection(sac_grp, "⚙️ Style"):
+        with sac_grp.popover("⚙️ Style", width="stretch"):
             # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
             # (each arrowhead un-masks with the saccade it belongs to), so
             # direction arrows now reach all three builders.
@@ -3775,7 +3783,11 @@ def sidebar_controls(
         with _rail_subsection(
             filter_sac_slot,
             f"↗️ Saccades{_saccade_filter_badge()}",
-            note=_cls_reason,
+            note=_gated_help(
+                "Draw only some reading classes — forward, skip, refixation, "
+                "return sweep, regression.",
+                _cls_reason,
+            ),
         ):
             _labeled(
                 st,
@@ -3804,7 +3816,7 @@ def sidebar_controls(
         "**Text**", key="global_show_labels", persist_state="session"
     )
     if show_labels:
-        with _rail_subsection(stim_grp, "⚙️ Text & highlight"):
+        with stim_grp.popover("⚙️ Text & highlight", width="stretch"):
             # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
             # choice appears only when it's on (no "None" option). The canonical
             # value stays in `global_critical_span_style` ("Mark text" |
@@ -3940,7 +3952,7 @@ def sidebar_controls(
         help=_gated_help("Tint the reading by fixation density.", heat_reason),
     )
     if show_heatmap:
-        with _rail_subsection(ovl_grp, "⚙️ Heatmap style"):
+        with ovl_grp.popover("⚙️ Heatmap style", width="stretch"):
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
@@ -4089,7 +4101,7 @@ def sidebar_controls(
     # image loaded yet) — its uploader is the only way to get an image in and
     # enable the toggle in the first place.
     if show_stim_image or not can_show_image:
-        with _rail_subsection(stim_grp, "⚙️ Stimulus image"):
+        with stim_grp.popover("⚙️ Stimulus image", width="stretch"):
             st.file_uploader(
                 "Upload a stimulus image",
                 type=["png", "jpg", "jpeg", "gif", "webp"],
@@ -4212,10 +4224,10 @@ def sidebar_controls(
 
     # The plot frame itself: the coordinate grid, the colour bar and which
     # fixation columns the two axes plot.
-    axes = _rail_subsection(figure_grp, "📊 Axes & grid")
+    axes = figure_grp.popover("📊 Axes & grid", width="stretch")
     # Everything the figure says in words: the Illustration disclosure label and
     # the EXP-5 title/caption.
-    labels = _rail_subsection(figure_grp, "🏷️ Title & labels")
+    labels = figure_grp.popover("🏷️ Title & labels", width="stretch")
 
     show_coordinate_grid = axes.toggle(
         "Coordinate grid",

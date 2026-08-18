@@ -97,7 +97,6 @@ from scanpath_studio.controls import (
     WORD_FIELD_SPECS,
     _labeled,
     _pin,
-    _rail_subsection,
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
@@ -3684,12 +3683,10 @@ def render_sidebar_canvas_controls(
     # Both sub-groups are created up front (Streamlit lays containers out in
     # creation order), so the code below keeps its order while landing in the
     # right group. Flat mode points both names at the one container.
-    # UX-74: named blocks in place, not popovers — the rail section they land in
-    # shows everything it holds when it is opened. `_rail_subsection` is the
-    # rail's one sub-section idiom; flat mode (the wizard's own page) still
-    # points both names at the single container it was given.
-    screen = _rail_subsection(display, "🖥️ Screen & geometry") if bare else display
-    text = _rail_subsection(display, "🔤 Text & fonts") if bare else display
+    screen = (
+        display.popover("🖥️ Screen & geometry", width="stretch") if bare else display
+    )
+    text = display.popover("🔤 Text & fonts", width="stretch") if bare else display
     canvas_width = field(
         screen,
         "number_input",

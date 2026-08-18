@@ -575,10 +575,10 @@ class TestSpotlightSelectorsResolve:
     def test_plot_rail_uses_contextual_style_filter_labels(self):
         """UX-44: repeated per-layer labels stay terse.
 
-        UX-72/UX-74 changed where those labels live, not what they say: ⚙️ Style
-        is a `_rail_subsection` block inside its layer section instead of a
-        popover, and 🧹 Filter is one section for the whole figure instead of a
-        popover per layer — so the badge-carrying label is now the section's.
+        UX-72 changed where 🧹 Filter lives, not what it says: it is one section
+        for the whole figure instead of a popover per layer, so the
+        badge-carrying label is the section's. ⚙️ Style stayed a per-layer
+        popover (UX-74's flattening was reverted).
         """
         import inspect
 
@@ -586,7 +586,7 @@ class TestSpotlightSelectorsResolve:
 
         control_source = inspect.getsource(controls.sidebar_controls)
 
-        assert '_rail_subsection(fix_grp, "⚙️ Style")' in control_source
+        assert 'popover("⚙️ Style"' in control_source
         assert 'f"🧹 Filter{' in control_source
         assert "Reset settings" not in control_source
 

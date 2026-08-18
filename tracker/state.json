@@ -131,6 +131,14 @@
       "archived": true,
       "updated": "2026-08-17"
     },
+    "BUG-34": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
     "BUG-4": {
       "status": "Backlog",
       "priority": "Normal",
@@ -1082,6 +1090,14 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-11"
+    },
+    "VIZ-36": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "1. each dataset has a name defined by the user and displayed in the select dataset menu in the control line where you choose the scanpath's trial id with the slider. i want the tag {dataset_name} to display that name, the name of the dataset from which you take the fixations and aois.\n2. if in side by side or stacked display, each plot has it's own dataset and trial id etc. so that's what this field should represent. in overlay view, i would like to have dataset_name_a and b, and also for trial id and the rest of the fields that can have 2 different values in this situation.",
+      "archived": false,
+      "updated": "2026-08-18"
     }
   },
   "createdItems": []

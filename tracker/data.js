@@ -543,9 +543,11 @@ window.TRACKER = {
     "`package-data`, the way the demo corpus and its images already are. The",
     "desktop bundle (`desktop/scanpath_studio.spec`) needs the same.",
     "",
-    "**Two files exist**: `scanpath_studio_title_logo.png` and",
-    "`scanpath_studio_title_logo_wide.png` — `st.logo` takes both a main `image`",
-    "and an `icon_image` for the collapsed state, so they may map onto that pair.",
+    "**Two files exist** in `assets/` — `scanpath_studio_title_logo.png` (wide",
+    "610x155 lockup, the one the header uses) and",
+    "`scanpath_studio_full_logo2_wide.png` (1126x614). `st.logo` takes a main",
+    "`image` and an `icon_image` for the collapsed state, so they could map onto",
+    "that pair; today only the first is used.",
     "",
     "**What the text is worth keeping for.** The caption is the app's one-line",
     "description; if it goes, the same sentence still appears in **About** (the ❓",
@@ -593,7 +595,7 @@ window.TRACKER = {
    ],
    "decisions": [
     "Review: the wordmark should sit top-left of **Scanpath · Corpus Analysis · Data**, on every view, and link to the docs site. `st.logo` only offers `small` / `medium` / `large` — it is on **large**; if it still reads small, the fallback is CSS over Streamlit's header, which is fragile across upgrades.",
-    "`scanpath_studio_title_logo_wide.png` moved into the package alongside the one in use but is unused. Keep it there for a future `icon_image` (the collapsed-state slot), or delete it?"
+    "`scanpath_studio_full_logo2_wide.png` sits in `assets/` beside the one in use but is unused — it is the square-ish 1126x614 lockup, where the header takes the wide 610x155 one. Keep it for a future `icon_image` (the collapsed-state slot), or delete it?"
    ]
   },
   {

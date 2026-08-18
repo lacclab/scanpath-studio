@@ -237,3 +237,109 @@ def test_the_modules_themselves_are_untouched():
     assert similarity.METRICS
     assert similarity.normalized_levenshtein([1, 2, 3], [1, 2, 3]) == 0.0
     assert isinstance(pd.DataFrame(), pd.DataFrame)
+
+
+class TestPreprocessingGate:
+    """PRE-22 — preprocessing is held back from the app, not from the package.
+
+    The distinction is the whole item: a released feature (0.28.0 shipped it
+    across app, API, CLI and export) is withdrawn from *this release's UI* and
+    picked up in the next one. So the app must not render it, and the API and
+    CLI must keep working — a hidden button and a broken function call are
+    different promises to a user.
+    """
+
+    def test_it_is_hidden_by_default(self, monkeypatch):
+        from scanpath_studio import constants
+
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
+        assert constants.preprocessing_enabled() is False
+
+    def test_the_experimental_flag_brings_it_back(self, monkeypatch):
+        from scanpath_studio import constants
+
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        assert constants.preprocessing_enabled() is True
+
+    def test_the_settings_read_off_while_hidden(self, monkeypatch):
+        """A share link or saved config cannot run a pipeline with no control."""
+        import streamlit as st
+
+        from scanpath_studio import app, constants
+
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
+        st.session_state["global_preproc_enabled"] = True
+        st.session_state["global_preproc_short_policy"] = "Discard"
+        settings = app._preprocessing_settings()
+        assert settings["enabled"] is False
+        assert settings["short_policy"] == "Off"
+        # …and the stored answers survive for the release that shows it again.
+        assert st.session_state["global_preproc_enabled"] is True
+
+    def test_the_python_api_still_preprocesses(self, monkeypatch):
+        """PRE-21's gate raises; this one must not — the API shipped in 0.28.0."""
+        import pandas as pd
+
+        from scanpath_studio import api, constants
+
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
+        words = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 2,
+                "trial_id": ["t1"] * 2,
+                "word_id": [0, 1],
+                "text": ["the", "cat"],
+                "x": [100.0, 200.0],
+                "y": [50.0, 50.0],
+                "width": [90.0, 90.0],
+                "height": [40.0, 40.0],
+            }
+        )
+        fixations = pd.DataFrame(
+            {
+                "participant_id": ["p1"] * 3,
+                "trial_id": ["t1"] * 3,
+                "x": [110.0, 118.0, 210.0],
+                "y": [70.0, 70.0, 70.0],
+                "duration_ms": [200.0, 30.0, 180.0],
+                "timestamp_ms": [0.0, 210.0, 260.0],
+                "order_in_trial": [1, 2, 3],
+            }
+        )
+        _words, processed, qa = api.preprocess_data(
+            words, fixations, enabled=True, short_policy="Discard"
+        )
+        assert not processed.empty
+        assert "excluded" in processed.columns
+        assert not qa.empty
+
+    def test_the_tutorial_drops_its_preprocessing_step(self, monkeypatch):
+        from scanpath_studio import constants
+        from scanpath_studio.tour import TUTORIALS, steps_of
+
+        tutorial = next(t for t in TUTORIALS if any(s.gate for s in t.steps))
+        monkeypatch.setenv(constants.EXPERIMENTAL_ENV_VAR, "1")
+        with_step = steps_of(tutorial)
+        monkeypatch.delenv(constants.EXPERIMENTAL_ENV_VAR, raising=False)
+        without_step = steps_of(tutorial)
+        assert len(without_step) == len(with_step) - 1
+        assert not any(step.gate == "preprocessing" for step in without_step)
+
+    def test_the_data_page_shows_no_preprocessing_section(self):
+        """The whole point of the item: the app must not offer it."""
+        from tests.conftest import pin_data_view
+
+        at = AppTest.from_file(APP_SCRIPT)
+        at.session_state["data_source_choice"] = "Synthetic test trial"
+        pin_data_view(at)
+        at.run(timeout=90)
+        assert not at.exception, at.exception
+        assert "🧹 Preprocessing" not in [s.value for s in at.subheader]
+        # …including the pipeline's own QA table, which is a preprocessing
+        # surface rather than one of the plain analysis tables beside it.
+        labels = [e.label for e in at.expander]
+        derived = next((label for label in labels if "Derived analysis" in label), "")
+        assert derived, labels
+        assert "Cleaning QA" not in derived
+        for kept in ("Sentences", "Saccades", "Trials", "Readers", "Characters"):
+            assert kept in derived, f"{kept} is not a preprocessing surface: {derived}"

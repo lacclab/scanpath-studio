@@ -132,6 +132,14 @@ containment with a small nearest-word fallback).
 
 ## Optional preprocessing and derived tables
 
+!!! note "Not in the app in this release (PRE-22)"
+
+    The **Preprocessing** panel is held back from the app's 🗂️ Data page for
+    this release and returns in the next one. Nothing about the pipeline
+    changed: `api.preprocess_data`, `scanpath-studio analyze` and the tables
+    below are shipped and supported as before, and setting
+    `SCANPATH_EXPERIMENTAL=1` brings the panel back for a local session.
+
 The **Preprocessing** panel is off by default. When disabled, it returns the
 normalized fixation table unchanged. When enabled, it can soft-mark
 blink-adjacent or short fixations as `excluded`, merge short-and-close

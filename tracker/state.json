@@ -599,6 +599,14 @@
       "archived": true,
       "updated": "2026-08-13"
     },
+    "PRE-22": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-19"
+    },
     "PRE-4": {
       "status": "Closed",
       "priority": "Normal",
@@ -983,6 +991,14 @@
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. outside compare should be no title, like now. \n2. each chips line should sit under its own control line",
+      "archived": false,
+      "updated": "2026-08-18"
+    },
+    "UX-76": {
+      "status": "Planned",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
       "archived": false,
       "updated": "2026-08-18"
     },

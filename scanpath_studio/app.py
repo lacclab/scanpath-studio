@@ -90,6 +90,7 @@ from scanpath_studio.constants import (
     WIZARD_STAY_KEY,
     WORD_LABEL_COLOR,
     language_display,
+    preprocessing_enabled,
 )
 from scanpath_studio.controls import (
     FIX_FIELD_SPECS,
@@ -4152,6 +4153,17 @@ _PREPROC_DEFAULTS: dict = {
     "global_preproc_blink_adjacent": True,
 }
 
+#: PRE-22 — what `_preprocessing_settings` answers while the feature is hidden:
+#: the shape every caller expects, with the pipeline off. Mirrors
+#: ``_PREPROC_DEFAULTS`` in values, but keyed the way the settings dict is.
+_PREPROC_SETTINGS_OFF = {
+    "enabled": False,
+    "short_policy": "Off",
+    "short_threshold_ms": 80.0,
+    "merge_distance_chars": 1.0,
+    "discard_blink_adjacent": True,
+}
+
 
 def _preprocessing_settings(host=None) -> dict:
     """Render the PRE-1 controls and return their cache-key-safe settings.
@@ -4165,7 +4177,16 @@ def _preprocessing_settings(host=None) -> dict:
     *every* view reads, including Corpus Analysis, which has no rail: a
     dataset-wide control must not be unreachable from one of the views it
     changes.
+
+    **PRE-22**: while the feature is held back from the release, nothing renders
+    and the returned settings are the "off" ones — whatever session state holds.
+    A saved config or share link from a build that *did* show the panel carries
+    `global_preproc_*` values, and honouring them would run a pipeline with no
+    control anywhere to see it, undo it, or explain the changed numbers. They are
+    ignored rather than cleared, so re-enabling the panel finds them intact.
     """
+    if not preprocessing_enabled():
+        return dict(_PREPROC_SETTINGS_OFF)
     for key, default in _PREPROC_DEFAULTS.items():
         st.session_state.setdefault(key, default)
     with host if host is not None else st.container():
@@ -4609,7 +4630,10 @@ def main() -> None:
             width="stretch",
             type="primary",
         )
-    if data_view:
+    # PRE-22: the section is held back from this release — heading, caption and
+    # controls all come from behind the same gate, so the page has no gap where
+    # a hidden stage used to be.
+    if data_view and preprocessing_enabled():
         setup_preproc_slot.divider()
         setup_preproc_slot.subheader("🧹 Preprocessing")
         setup_preproc_slot.caption(

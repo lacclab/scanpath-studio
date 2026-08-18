@@ -46,6 +46,23 @@ def similarity_enabled() -> bool:
     return experimental_features_enabled()
 
 
+def preprocessing_enabled() -> bool:
+    """Whether the soft-exclusion / merge pipeline is exposed **in the app** (PRE-22).
+
+    The feature is finished and tested; it is held back from this release's UI
+    and picked up in the next one, so the same flag that carries PRE-21's
+    unfinished work carries it — one env var for "not in this release", one code
+    path, and no branch to rebase.
+
+    Scope is the **app** only. `api.preprocess_data`, `scanpath-studio analyze`
+    and `preprocessing.py` itself are untouched and still shipped: they were
+    released in 0.28.0 and a script that already calls them must keep working.
+    Unlike PRE-21's gate, this one therefore does *not* raise from the API — a
+    hidden button and a broken function call are different promises.
+    """
+    return experimental_features_enabled()
+
+
 # Default text font. A single generic family that renders (monospaced) on every
 # platform including the Streamlit Cloud demo; the sidebar field accepts any CSS
 # font name or stack if you want the exact experiment font.

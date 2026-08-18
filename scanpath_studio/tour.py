@@ -68,6 +68,7 @@ from .constants import (
     _VIEW_SCANPATH,
     CITATION,
     drift_correction_enabled,
+    preprocessing_enabled,
     similarity_enabled,
 )
 
@@ -93,6 +94,11 @@ class TutorialStep:
     view: str = _VIEW_SCANPATH
     subtab: str | None = None
     optional: bool = False
+    #: PRE-22 — a step about a feature this build may not show. ``"preprocessing"``
+    #: is the only value so far; a step whose gate is closed is dropped from the
+    #: tutorial entirely (`steps_of`), so it never spotlights a surface that is
+    #: not there or counts toward "step 3 of 7".
+    gate: str | None = None
 
 
 @dataclass(frozen=True)
@@ -176,6 +182,7 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
                 ".st-key-tutorial_preprocessing",
                 view=_VIEW_DATA,
                 optional=True,
+                gate="preprocessing",
             ),
         ),
     ),
@@ -359,6 +366,24 @@ TUTORIALS: tuple[TutorialDefinition, ...] = (
 )
 
 _TUTORIAL_BY_ID = {tutorial.id: tutorial for tutorial in TUTORIALS}
+
+#: PRE-22 — which builds show a gated step. Read at *call* time, not at import,
+#: so a test (or a session started with the env var) sees the current answer.
+_STEP_GATES = {"preprocessing": preprocessing_enabled}
+
+
+def steps_of(tutorial: TutorialDefinition) -> tuple[TutorialStep, ...]:
+    """The tutorial's steps this build can honestly walk (PRE-22).
+
+    A step about a feature held back from the release is dropped rather than
+    shown-and-skipped: it would otherwise spotlight a surface that does not
+    exist, and count toward "step 3 of 7" for something the reader cannot do.
+    """
+    return tuple(
+        step
+        for step in tutorial.steps
+        if step.gate is None or _STEP_GATES.get(step.gate, lambda: True)()
+    )
 
 # (title, markdown body) per step — keep bodies to a few lines each; the tour
 # should take well under a minute.
@@ -1137,13 +1162,13 @@ def _move_use_case(tutorial_id: str, delta: int) -> None:
     tutorial = _TUTORIAL_BY_ID[tutorial_id]
     current = int(_tutorial_progress().get(tutorial_id, 0))
     _tutorial_progress()[tutorial_id] = max(
-        0, min(len(tutorial.steps) - 1, current + delta)
+        0, min(len(steps_of(tutorial)) - 1, current + delta)
     )
 
 
 def _finish_use_case(tutorial_id: str) -> None:
     _tutorial_completed()[tutorial_id] = True
-    _tutorial_progress()[tutorial_id] = len(_TUTORIAL_BY_ID[tutorial_id].steps) - 1
+    _tutorial_progress()[tutorial_id] = len(steps_of(_TUTORIAL_BY_ID[tutorial_id])) - 1
     st.session_state["tutorial_active"] = None
 
 
@@ -1258,11 +1283,11 @@ def _tutorial_library_dialog() -> None:
         head.markdown(f"**{tutorial.title}**{badge}")
         head.caption(tutorial.outcome)
         if started:
-            state = f"Paused at step {progress + 1} of {len(tutorial.steps)}"
+            state = f"Paused at step {progress + 1} of {len(steps_of(tutorial))}"
         elif completed:
             state = "Completed — replay any time"
         else:
-            state = f"{len(tutorial.steps)} steps · {tutorial.estimated_time}"
+            state = f"{len(steps_of(tutorial))} steps · {tutorial.estimated_time}"
         head.caption(f"{state} · needs {tutorial.prerequisite.lower()}")
         # Handled by return value, not `on_click`, because **an `st.dialog` body
         # is a fragment**: a callback here reruns only the dialog, so the state
@@ -1306,9 +1331,10 @@ def render_use_case_tutorial() -> None:
         st.warning(f"Tutorial paused: {reason}")
         return
     step_index = min(
-        int(_tutorial_progress().get(tutorial.id, 0)), len(tutorial.steps) - 1
+        int(_tutorial_progress().get(tutorial.id, 0)), len(steps_of(tutorial)) - 1
     )
-    step = tutorial.steps[step_index]
+    steps = steps_of(tutorial)
+    step = steps[step_index]
     surface_open = _tutorial_surface_is_open(step)
     selector = step.selector if surface_open else None
     accent = st.get_option("theme.primaryColor") or "#1f77b4"
@@ -1342,8 +1368,8 @@ def render_use_case_tutorial() -> None:
             _open_tutorial_surface(step)
             st.rerun()
         st.progress(
-            (step_index + 1) / len(tutorial.steps),
-            text=f"Step {step_index + 1} of {len(tutorial.steps)}",
+            (step_index + 1) / len(steps),
+            text=f"Step {step_index + 1} of {len(steps)}",
         )
         st.link_button(
             "Matching written tutorial ↗",
@@ -1362,7 +1388,7 @@ def render_use_case_tutorial() -> None:
         if exit_col.button("Exit", key="tutorial_exit", width="stretch"):
             _restore_tutorial_return()
             st.rerun()
-        if step_index < len(tutorial.steps) - 1:
+        if step_index < len(steps) - 1:
             next_col.button(
                 "Next →",
                 key="tutorial_next",

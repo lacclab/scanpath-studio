@@ -81,6 +81,7 @@ from scanpath_studio.constants import (
     WORD_LABEL_COLOR,
     compare_palette_color,
     drift_correction_enabled,
+    preprocessing_enabled,
     similarity_enabled,
 )
 from scanpath_studio.controls import (
@@ -8948,6 +8949,13 @@ def render_data_inspection_tab(
         frame_fingerprint(raw_gaze_filtered),
         ppd,
     )
+    # PRE-22: *Cleaning QA* is the preprocessing pipeline's own provenance table
+    # (PRE-15) — one row per trial saying what that stage excluded and why — so
+    # it goes with the stage while the feature is held back from the release.
+    # The other five are plain analysis tables that happen to live in
+    # `preprocessing.py`; they are unaffected.
+    if not preprocessing_enabled():
+        derived = {k: v for k, v in derived.items() if k != "Cleaning QA"}
     with st.expander(
         "🧮 Derived analysis tables — " + " · ".join(derived), expanded=False
     ):

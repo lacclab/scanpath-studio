@@ -16987,6 +16987,50 @@ window.TRACKER = {
    "",
    "Related: #PERF-4, #PERF-2, #PERF-3, #VAL-5."
   ]
+ },
+ {
+  "id": "BUG-36",
+  "prefix": "BUG",
+  "num": 36,
+  "sub": "",
+  "title": "A second test fails on main: pandas 3 makes an empty table cell truthy",
+  "status": "Review",
+  "owner": "Shubi",
+  "note": "",
+  "date": "2026-08-19",
+  "added": "2026-08-19",
+  "group": "Bugs",
+  "subgroup": "",
+  "archived": false,
+  "request": [
+   "Found while running the suite before committing #PERF-4, and confirmed on a clean tree so it is not that change's doing. `tests/test_apptest.py::TestDatasetTable::test_the_table_lists_datasets_with_counts_and_row_actions` fails on `main` with `assert not nan`. It is a *second* red test alongside #BUG-35, so a green run needed both."
+  ],
+  "whatWasDone": [
+   "**The app is fine; the assertion was.** The dataset table writes `\"Delete\": _DATASET_DELETE_LABEL if own else None` ([app.py:3316](scanpath_studio/app.py:3316)) — the built-in demo is not yours, so its cell is empty and `ButtonColumn` draws no button. That part still works.",
+   "",
+   "What changed is how the emptiness reads back. **pandas 3 infers a mixed `str`/`None` column as `str` dtype and stores the gap as `nan`**, where pandas 2 gave an `object` column holding a real `None`. `None` is falsy and `nan` is *truthy*, so `assert not demo[\"Delete\"].iloc[0]` flipped without a line of app code changing:",
+   "",
+   "```",
+   "pd.DataFrame([{'Delete': None}, {'Delete': '✕'}])['Delete']",
+   "  pandas 2 → dtype object, first value None   (falsy — test passed)",
+   "  pandas 3 → dtype str,    first value nan    (truthy — test fails)",
+   "```",
+   "",
+   "The assertion is `pd.isna(...)` now, which is what it always meant — *this row has no delete action* — and which holds under both. `tests/test_apptest.py` is 143 passed."
+  ],
+  "whatsLeft": [
+   "Nothing."
+  ],
+  "background": [
+   "**Why not change `app.py` instead.** Writing `\"\"` rather than `None` would also make the cell falsy, but it would be writing a value to satisfy a test: the column means *absent*, `None` is how you say that, and `ButtonColumn` already reads it correctly. The test was asserting on dtype-inference behaviour it did not mean to depend on.",
+   "",
+   "Worth a look wherever else a test leans on an empty cell being falsy — this is a pandas-3 upgrade artefact, so it can be hiding in more than one place, and it fails *loudly* only when the column happens to be mixed. An all-`None` column still infers `object` and still holds `None`, which is why this surfaced on the one table that has both kinds of row.",
+   "",
+   "Related: #BUG-35 (the other red test on main, a different cause), #DATA-32 and #UX-76..79 (the dataset table this guards), #PERF-4 (the run that surfaced it)."
+  ],
+  "decisions": [
+   "**Sign off on the side I fixed.** I moved the test rather than the app, on the reasoning above — `None` is the honest value for an absent action, and the test was depending on pandas dtype inference by accident. If you would rather the table wrote a falsy sentinel so cells are uniformly comparable, that is a one-line change in `app.py` instead and I will swap it."
+  ]
  }
  ]
 };

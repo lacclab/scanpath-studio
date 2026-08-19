@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from unittest import mock
 
+import pandas as pd
 import pytest
 
 from scanpath_studio import controls
@@ -852,7 +853,11 @@ class TestDatasetTable:
         assert row["Delete"].iloc[0]
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
-            assert not demo["Delete"].iloc[0]
+            # Missing, not falsy: pandas 3 infers a mixed str/None column as
+            # `str` and stores the gap as NaN, which is *truthy*. `app.py` still
+            # writes None and ButtonColumn still draws no button — only the way
+            # the absence reads back changed.
+            assert pd.isna(demo["Delete"].iloc[0])
 
     def test_delete_is_wired_to_the_remover(self):
         """Regression: UX-64 dropped the ➕ popover that held *Remove a dataset*,

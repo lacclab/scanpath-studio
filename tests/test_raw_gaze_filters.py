@@ -17,9 +17,11 @@ import pytest
 from scanpath_studio.annotations import select_keys
 from scanpath_studio.data import (
     ZIP_MAX_COMPRESSION_RATIO,
+    ZIP_MAX_MEMBER_ENV,
     ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES,
     ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES,
     ZIP_RATIO_CHECK_MIN_BYTES,
+    _zip_limit_from_env,
     filter_frame_to_keys,
     filter_to_keys,
     read_table,
@@ -215,6 +217,31 @@ class TestZipSizeCap:
         buf.seek(0)
         with pytest.raises(ValueError, match="declared size was wrong"):
             read_table(buf)
+
+    def test_defaults_clear_a_full_fixation_report(self):
+        # DATA-34: one OneStop fixation report is a single ~8 GB CSV inside its
+        # zip. The 4 GB per-member default refused it outright; the caps are a
+        # memory guard, and the machine holding a corpus has the memory.
+        assert ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES >= 16 * 1024**3
+        assert ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES >= 32 * 1024**3
+
+    def test_env_var_overrides_a_limit(self, monkeypatch):
+        monkeypatch.setenv(ZIP_MAX_MEMBER_ENV, "2.5")
+        assert _zip_limit_from_env(ZIP_MAX_MEMBER_ENV, 32.0) == 2.5
+
+    def test_a_useless_env_value_keeps_the_default(self, monkeypatch):
+        for raw in ("", "   ", "lots", "0", "-4"):
+            monkeypatch.setenv(ZIP_MAX_MEMBER_ENV, raw)
+            assert _zip_limit_from_env(ZIP_MAX_MEMBER_ENV, 32.0) == 32.0
+
+    def test_a_zipped_parquet_member_still_reads(self):
+        # Parquet's reader seeks, so that member takes the read-into-memory
+        # path rather than the streamed one — both stay under the budget.
+        frame = pd.DataFrame({"participant_id": ["p1", "p1"], "x": [1, 2]})
+        payload = io.BytesIO()
+        frame.to_parquet(payload, index=False)
+        out = read_table(_zip_bytes({"fix.parquet": payload.getvalue()}))
+        assert out["x"].tolist() == [1, 2]
 
     def test_empty_archive_still_raises_its_own_error(self):
         buf = io.BytesIO()

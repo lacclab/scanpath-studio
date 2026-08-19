@@ -506,19 +506,32 @@ any of them, rather than discovering the size by exhausting RAM.
 
 **Status:** **fixed** 2026-07-29 — `data._check_zip_limits` runs before any
 member is opened, checking the declared `ZipInfo.file_size` values against
-`ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES` (4 GB), `ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES`
-(8 GB) and `ZIP_MAX_COMPRESSION_RATIO` (200×, applied only once the total
-uncompressed size reaches `ZIP_RATIO_CHECK_MIN_BYTES` = 256 MB, so a small
-very-repetitive table isn't punished). Each raises a clear user-facing
-`ValueError`.
+`ZIP_MAX_MEMBER_UNCOMPRESSED_BYTES`, `ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES` and
+`ZIP_MAX_COMPRESSION_RATIO` (200×, applied only once the total uncompressed size
+reaches `ZIP_RATIO_CHECK_MIN_BYTES` = 256 MB, so a small very-repetitive table
+isn't punished). Each raises a clear user-facing `ValueError`.
 
 A declared-size check alone is forgeable — the central directory is attacker-
-controlled — so `_read_zipped_table` additionally reads each member with
-`inner.read(remaining + 1)` against a running byte budget and raises if the
-actual payload overruns it. The absolute caps are deliberately generous because
-real eye-tracking exports are genuinely large; the **ratio** is what actually
-discriminates a zip bomb. `UPLOAD_SIZE_WARN_BYTES` (25 MB, compressed) is
-unchanged and still only warns.
+controlled — so `_read_zipped_table` additionally reads each member through
+`_BudgetedZipMember`, which counts the bytes that actually arrive against a
+running budget and raises the moment they overrun it. The absolute caps are
+deliberately generous because real eye-tracking exports are genuinely large; the
+**ratio** is what actually discriminates a zip bomb. `UPLOAD_SIZE_WARN_BYTES`
+(25 MB, compressed) is unchanged and still only warns.
+
+**Revised** 2026-08-19 (DATA-34) — the two absolute caps were 4 GB per member
+and 8 GB per archive, which refused an honest single-CSV fixation report of
+~8 GB on a workstation with the memory to read it. They are now 32 GB / 64 GB
+by default and all three are tunable from the environment
+(`SCANPATH_ZIP_MAX_MEMBER_GB`, `SCANPATH_ZIP_MAX_TOTAL_GB`,
+`SCANPATH_ZIP_MAX_RATIO`, read once at import), so a memory-capped deployment
+such as the hosted demo sets them *down* rather than every workstation living
+with the container's budget. This is a deliberate trade: the absolute caps are a
+memory guard, not a security boundary — on the ~1 GB hosted demo any upload
+approaching them was already fatal, and the ratio check, which is what actually
+distinguishes a bomb from a corpus, is unchanged. Members are also streamed into
+pandas now instead of being read whole into `bytes` first, so the honest large
+case no longer needs a second full-size copy of itself in memory.
 
 ---
 

@@ -116,12 +116,12 @@
       "updated": "2026-08-18"
     },
     "BUG-31": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "BUG-33": {
       "status": "Closed",
@@ -132,12 +132,20 @@
       "updated": "2026-08-17"
     },
     "BUG-34": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "BUG-35": {
+      "status": "Planned",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "no need to warn",
       "archived": false,
-      "updated": "2026-08-18"
+      "updated": "2026-08-19"
     },
     "BUG-4": {
       "status": "Backlog",

@@ -493,17 +493,23 @@ def profile(
             lambda: aggregation.group_effect_size(groups["Group A"], groups["Group B"]),
             rows_in=len(groups["Group A"]) + len(groups["Group B"]),
         )
+    # Both of these take the *fixation* frame, not the measured word frame —
+    # `landing_positions(words, fixations)` and `metric_over_time(fixations, …)`.
     profiler.run(
         "landing_positions",
         ["agg.landing_curve"],
-        lambda: aggregation.landing_positions(frame, words),
-        rows_in=len(frame),
+        lambda: aggregation.landing_positions(frame, fixations),
+        rows_in=len(frame) + len(fixations),
     )
+    # `tfd` lives on the words frame; this one needs a fixation-grain measure or
+    # it walks an empty path and times nothing.
+    over_time_measure = aggregation.MEASURES["fix_dur"]
     profiler.run(
         "metric_over_time",
         ["agg.over_time"],
-        lambda: aggregation.metric_over_time(frame, measure),
-        rows_in=len(frame),
+        lambda: aggregation.metric_over_time(fixations, over_time_measure),
+        rows_in=len(fixations),
+        note=f"measure={over_time_measure.label}",
     )
 
     sizes = fixations.groupby(trial_keys, observed=True).size().sort_values()

@@ -16958,7 +16958,7 @@ window.TRACKER = {
    "",
    "**One cell reads ERR and it was mine.** `landing_positions` and `metric_over_time` both take the *fixation* frame, and the harness was handing both the measured *words* frame; `metric_over_time` was also being given `tfd`, a words-grain measure, so it walked an empty path. Small scale never complained — it only raised once the 360 run skipped `compute_per_word_measures` and the frame arriving twice lacked the columns. Fixed; all three are sub-millisecond at every scale even doing real work, so no conclusion moves.",
    "",
-   "Related: #PERF-5 (the fixes these numbers argue for), #PERF-2 (the same question asked about frame *width* — the answer there was a warning, not an optimisation), #PERF-3 (fixed this exact hoist-the-scan shape in `saccade_table`), #VAL-5 (the register), #VAL-8, #DATA-33."
+   "Related: #PERF-5 (the fixes these numbers argue for), #PERF-2 (the same question asked about frame *width* — the answer there was a warning, not an optimisation), #PERF-3 (fixed this exact hoist-the-scan shape in `saccade_table`), #VAL-5 (the register), #VAL-8, #DATA-34."
   ],
   "decisions": [
    "**Is a 360-reader session a workflow you intend to support?** Everything below turns on this. The app already has the other answer built — `data.load_onestop_server_bundle`'s per-pid shards load one reader in under a second — so if one-reader-at-a-time is the intended path for corpora this size, the honest response is a documented ceiling and a warning (the shape #PERF-2 took) and #PERF-5 should be closed rather than done. If it is a workflow, #PERF-5 is real work.",
@@ -16997,9 +16997,9 @@ window.TRACKER = {
   ]
  },
  {
-  "id": "BUG-36",
+  "id": "BUG-40",
   "prefix": "BUG",
-  "num": 36,
+  "num": 40,
   "sub": "",
   "title": "A second test fails on main: pandas 3 makes an empty table cell truthy",
   "status": "Review",
@@ -17011,7 +17011,7 @@ window.TRACKER = {
   "subgroup": "",
   "archived": false,
   "request": [
-   "Found while running the suite before committing #PERF-4, and confirmed on a clean tree so it is not that change's doing. `tests/test_apptest.py::TestDatasetTable::test_the_table_lists_datasets_with_counts_and_row_actions` fails on `main` with `assert not nan`. It is a *second* red test alongside #BUG-35, so a green run needed both."
+   "Found while running the suite before committing #PERF-4, and confirmed on a clean tree so it is not that change's doing. `tests/test_apptest.py::TestDatasetTable::test_the_table_lists_datasets_with_counts_and_row_actions` fails on `main` with `assert not nan`. It is a *second* red test alongside #BUG-38, so a green run needed both."
   ],
   "whatWasDone": [
    "**The app is fine; the assertion was.** The dataset table writes `\"Delete\": _DATASET_DELETE_LABEL if own else None` ([app.py:3316](scanpath_studio/app.py:3316)) — the built-in demo is not yours, so its cell is empty and `ButtonColumn` draws no button. That part still works.",
@@ -17041,7 +17041,9 @@ window.TRACKER = {
    "",
    "**Root cause of the false green**, for the record: the suite had been run under a `python` that was not this project's — conda earlier in `PATH`, pandas 2.3.3 — where the assertion passes. `CONTRIBUTING.md` already warned about a drifted `.venv`; it now names the `PATH` case too, and asks that a *the suite is green* claim say which interpreter produced it.",
    "",
-   "Related: #BUG-35 (the other red test on main, a different cause), #DATA-32 and #UX-76..79 (the dataset table this guards), #PERF-4 (the run that surfaced it)."
+   "**Renumbered.** Filed as BUG-36; upstream took that number (*Confirmation dialogs open but their buttons do nothing*) while this branch was off `main`, so it is BUG-40 here. Commits earlier on this branch, and their CHANGELOG lines, still say BUG-36 — they were written before the collision existed. #DATA-34 and #BUG-38 below were renumbered by their author for the same reason.",
+   "",
+   "Related: #BUG-38 (the other red test on main, a different cause), #DATA-32 and #UX-76..79 (the dataset table this guards), #PERF-4 (the run that surfaced it)."
   ],
   "decisions": [
    "**Sign off on the side I fixed.** I moved the test rather than the app, on the reasoning above — `None` is the honest value for an absent action, and the test was depending on pandas dtype inference by accident. If you would rather the table wrote a falsy sentinel so cells are uniformly comparable, that is a one-line change in `app.py` instead and I will swap it."

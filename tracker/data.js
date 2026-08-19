@@ -17024,7 +17024,14 @@ window.TRACKER = {
   "background": [
    "**Why not change `app.py` instead.** Writing `\"\"` rather than `None` would also make the cell falsy, but it would be writing a value to satisfy a test: the column means *absent*, `None` is how you say that, and `ButtonColumn` already reads it correctly. The test was asserting on dtype-inference behaviour it did not mean to depend on.",
    "",
-   "Worth a look wherever else a test leans on an empty cell being falsy — this is a pandas-3 upgrade artefact, so it can be hiding in more than one place, and it fails *loudly* only when the column happens to be mixed. An all-`None` column still infers `object` and still holds `None`, which is why this surfaced on the one table that has both kinds of row.",
+   "**The sweep is done and nothing else needs changing.** Exactly two other tests assert on an absent frame cell, and both should stay as they are:",
+   "",
+   "* `tests/test_measures.py:180` — `cls.iloc[2] is None`. This looks like the same trap and is in fact the **guard against it**: `measures.classify_saccades` pins `dtype=object` on the way out, with a comment ([measures.py:519](scanpath_studio/measures.py:519)) naming this exact pandas-3 behaviour, because *None for the last fixation* is a contract other code reads. Relaxing the assertion to `pd.isna(...)` would delete the only thing holding that pin in place. Left alone deliberately.",
+   "* `tests/test_authoring.py:145` — `events.loc[2, \"word_id\"] is None`. Passes, but **not** because an int/None column is safe: under pandas 3 `pd.Series([1, 2, None])` infers `float64` and gives `nan`. It survives because the frame is assembled by `pd.concat`, which widens an int64 column plus a `None` row to `object`. So it is incidental rather than guarded — worth knowing before anyone rebuilds that frame in a single constructor.",
+   "",
+   "That second one turned up something separate and probably worth a look on its own: `authoring.py` is already of two minds about how *no word* is spelled — [authoring.py:260](scanpath_studio/authoring.py:260) writes `None` while [authoring.py:373](scanpath_studio/authoring.py:373) writes `float(\"nan\")` for what reads like the same condition. Not filed as a bug, because which one is intended is a call rather than an error.",
+   "",
+   "**Root cause of the false green**, for the record: the suite had been run under a `python` that was not this project's — conda earlier in `PATH`, pandas 2.3.3 — where the assertion passes. `CONTRIBUTING.md` already warned about a drifted `.venv`; it now names the `PATH` case too, and asks that a *the suite is green* claim say which interpreter produced it.",
    "",
    "Related: #BUG-35 (the other red test on main, a different cause), #DATA-32 and #UX-76..79 (the dataset table this guards), #PERF-4 (the run that surfaced it)."
   ],

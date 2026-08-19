@@ -543,6 +543,11 @@ _VIZ_WIDGET_DEFAULTS = {
     "global_show_heatmap": False,
     "global_duration_mass_sigma_chars": 1.0,
     "global_show_raw_gaze": False,
+    # UX-86: raw gaze's own style — previously fixed in `plots._add_raw_gaze_layer`
+    # (#888888, size 4, opacity 0.6) with no control at all.
+    "global_raw_gaze_color": "#888888",
+    "global_raw_gaze_marker_size": 4.0,
+    "global_raw_gaze_opacity": 0.6,
     "global_show_stimulus_image": False,
     # VIZ-4: image-based stimuli. Opacity dims a busy stimulus image so the AOIs /
     # scanpath read over it (round-trips in Share / Save & restore, since it also
@@ -1086,6 +1091,13 @@ _BOX_SUBFIELDS: dict[str, list[tuple]] = {
 }
 _ALL_BOX_KEYS = [key for fields in _BOX_SUBFIELDS.values() for key, _ in fields]
 
+#: UX-91 — the word-box row: `Word box * + format radio | four coordinate
+#: selects`. The head is wide enough for the title and both radio options
+#: without wrapping (a wrapped radio would push the selects beside it out of
+#: line with every other row on the page); the four selects split the rest
+#: evenly, matching the width they had when they were a row of their own.
+_BOX_ROW_W = (0.26, 0.185, 0.185, 0.185, 0.185)
+
 
 def _default_box_format(proposed: dict[str, str | None]) -> str:
     """Which box encoding to show first, from what auto-detect found.
@@ -1104,7 +1116,7 @@ def _default_box_format(proposed: dict[str, str | None]) -> str:
 # size. All optional, all inert for an ordinary single-screen corpus, and
 # together they were half the rows in the editor — so they fold into an
 # "Advanced" group instead of padding the list everyone reads.
-_ADVANCED_MAPPING_KEYS = frozenset({"screen_id", "screen_index"})
+_ADVANCED_MAPPING_KEYS = frozenset({"screen_id"})
 
 #: Mapping keys that are **resolved but never rendered** (UX-53 round 3).
 #:
@@ -1117,6 +1129,13 @@ _ADVANCED_MAPPING_KEYS = frozenset({"screen_id", "screen_index"})
 #: downstream sees a narrower schema — what is gone is the widget, not the
 #: field. Anything genuinely unmappable this way is a column-name problem, and
 #: `data.py`'s candidate lists are where that gets fixed.
+#: UX-55 r4 hid `screen_index` ("Screen name") behind this set; UX-88 removed
+#: the field outright, from the specs themselves — it is not offered, not
+#: resolved from a proposal, and not written into any schema. The *column* is
+#: untouched and still load-bearing: `multipart.normalize_screen_identity`
+#: derives it from first appearance, and the public corpora in `datasets.py`
+#: stamp it straight onto the frames — neither goes through a mapping. What is
+#: gone is the idea that anyone should have to think about it.
 _HIDDEN_MAPPING_KEYS = frozenset(
     {"screen_fixation_id", "canvas_width", "canvas_height"}
 )
@@ -1138,18 +1157,10 @@ WORD_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "screen_id",
-        "label": "Screen / part ID",
+        "label": "Screen ID",
         "required": False,
         "help": "Child screen inside a logical trial. Leave empty for ordinary "
         "single-screen trials.",
-    },
-    {
-        "key": "screen_index",
-        "label": "Screen name",
-        "required": False,
-        "help": "The column ordering screens inside the parent trial — a positive "
-        "1-based number, not a title. If only a screen ID is mapped, order follows "
-        "first appearance.",
     },
     {
         "key": "word_id",
@@ -1215,16 +1226,9 @@ FIX_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "screen_id",
-        "label": "Screen / part ID",
+        "label": "Screen ID",
         "required": False,
         "help": "Child screen inside a logical trial. Map this in both reports.",
-    },
-    {
-        "key": "screen_index",
-        "label": "Screen name",
-        "required": False,
-        "help": "The column ordering screens inside the parent trial — a positive "
-        "1-based number, not a title.",
     },
     {
         "key": "x",
@@ -1322,16 +1326,9 @@ RAW_GAZE_FIELD_SPECS: list[dict] = [
     },
     {
         "key": "screen_id",
-        "label": "Screen / part ID",
+        "label": "Screen ID",
         "required": False,
         "help": "Child screen inside a logical trial.",
-    },
-    {
-        "key": "screen_index",
-        "label": "Screen name",
-        "required": False,
-        "help": "The column ordering screens inside the parent trial — a positive "
-        "1-based number, not a title.",
     },
     {
         "key": "x",
@@ -1405,7 +1402,12 @@ def _assemble_mapping(
             # get a column, the rest stay None.
             mapping.update({box_key: None for box_key in _ALL_BOX_KEYS})
             for sub_key, sub_label in _BOX_SUBFIELDS[fmt]:
-                mapping[sub_key] = pick(sub_key, sub_label, None)
+                # UX-91: the four coordinates *are* the required Word box, so
+                # each carries the `*` its parent does. The star was on the
+                # group heading alone, which read as one optional-looking row
+                # of four beneath a required title.
+                sub_star = " *" if spec.get("required") else ""
+                mapping[sub_key] = pick(sub_key, sub_label + sub_star, None)
             continue
         if spec.get("multi"):
             chosen_cols = pick_multi(spec, default, label)
@@ -1712,6 +1714,13 @@ def column_mapping_ui(
     # UX-53 field colour: which rows *must* be filled, and whether the user has
     # already tried to add the dataset (before that, empty is not an error).
     required_keys = {spec["key"] for spec in field_specs if spec.get("required")}
+    # UX-90: a `kind="box"` spec is required under its own key ("box"), but what
+    # the user actually fills are its four coordinate sub-fields — which are not
+    # in `field_specs` at all, so `_field_state` saw them as optional and they
+    # stayed neutral after a failed add. Only the active format's four ever
+    # render, so naming all eight here is safe and needs no format resolution.
+    if any(spec.get("kind") == "box" and spec.get("required") for spec in field_specs):
+        required_keys.update(_ALL_BOX_KEYS)
     add_attempted = bool(st.session_state.get(ADD_ATTEMPTED_KEY))
     stacked = columns_per_row > 1 if stack_labels is None else stack_labels
     #: state -> the keyed cells in that state, filled as rows render and emitted
@@ -1866,7 +1875,26 @@ def column_mapping_ui(
         )
         if state:
             tint_cells.setdefault(state, []).append(cell_key)
-        if hover:
+        if state == "auto":
+            # UX-92 — the ✨ is a **button** while the row is amber, and pressing
+            # it is the approval the select cannot report.
+            #
+            # Re-picking the value a select already holds fires no `on_change`:
+            # Streamlit dedupes it in the frontend and does not even rerun
+            # (verified in a browser, not inferred). Since UX-53 r10 the value
+            # lives in the widget key with `index=None` — which is what makes
+            # the ✕ clear work — so the detected column *is* the widget's value,
+            # and confirming it by hand is invisible to Python by construction.
+            # A one-click confirm in the space the flag already occupies is the
+            # only honest way to say "I chose this" for that case.
+            note_col.button(
+                "✨",
+                key=f"{cell_key}_confirm",
+                help=f"{hover} — click to confirm this column and clear the mark.",
+                on_click=_mark_field_touched,
+                args=(state_key,),
+            )
+        elif hover:
             # Icon only. The sentence — which column was detected, and whether it
             # was overridden or left unused — is on the icon's tooltip, reusing
             # the rail's CSS hover (`.sps-fhelp`, 120ms) rather than the
@@ -1951,21 +1979,37 @@ def column_mapping_ui(
             star = " *" if spec.get("required") else ""
             box_host = hosts["main"]
             title = html.escape(_plain(spec["label"]) + star)
+            # UX-91: title, format radio and the four coordinate selects on
+            # **one** line. They used to stack — heading, radio, then a row of
+            # four — which cost three lines for one field on a page whose whole
+            # complaint is length, and left the radio looking like a heading for
+            # the row beneath rather than the switch that chooses what it holds.
+            #
+            # The row can be sized before the radio returns because every format
+            # in `_BOX_SUBFIELDS` has exactly four sub-fields; only their
+            # *names* differ. `_BOX_ROW_W` gives the head enough room for
+            # "Word box *" plus both radio options on one line.
+            head = box_host
+            if stacked:
+                cells = box_host.columns(_BOX_ROW_W, gap=_LABEL_GAP)
+                head = cells[0]
+                box_grid["cells"] = list(cells[1:])
+                box_grid["used"] = 0
             if spec.get("help"):
                 tip = html.escape(
                     f"{_plain(spec['label'])} — {_plain(spec['help'])}", quote=True
                 )
-                box_host.markdown(
+                head.markdown(
                     f'<div class="sps-box-title"><span class="sps-fhelp" '
                     f'data-tip="{tip}" aria-label="{tip}">{title}</span></div>',
                     unsafe_allow_html=True,
                 )
             else:
-                box_host.markdown(
+                head.markdown(
                     f'<div class="sps-box-title">{title}</div>',
                     unsafe_allow_html=True,
                 )
-            chosen = box_host.radio(
+            chosen = head.radio(
                 "Coordinate format",
                 options=list(_BOX_SUBFIELDS),
                 key=fmt_key,
@@ -1973,14 +2017,6 @@ def column_mapping_ui(
                 label_visibility="collapsed",
                 persist_state="session",
             )
-            if stacked:
-                # One row of four for the sub-fields, matching every other
-                # group. Only in the wizard: the 🗂️ Data page's editor keeps one
-                # field per row, and it is `stacked` that tells the two apart.
-                box_grid["cells"] = list(
-                    box_host.columns(len(_BOX_SUBFIELDS[chosen]), gap=_LABEL_GAP)
-                )
-                box_grid["used"] = 0
             return chosen
 
         def _render_multi(spec: dict, default, label: str) -> list[str]:
@@ -2001,6 +2037,10 @@ def column_mapping_ui(
                 if len(valid) != len(stored):
                     st.session_state[state_key] = valid or proposed_default
             field_col, note_col = _row(spec["key"], label, spec.get("help"))
+            # UX-90: a keyed cell, like `_selectbox`'s, so `_emit_field_tints`
+            # has something to colour when this required field is left empty.
+            cell_key = f"{state_key_prefix}_{spec['key']}_cell"
+            field_col = field_col.container(key=cell_key)
             chosen_cols = field_col.multiselect(
                 label,
                 options=list(df.columns),
@@ -2016,6 +2056,12 @@ def column_mapping_ui(
                     "✨</span>",
                     unsafe_allow_html=True,
                 )
+            # UX-90: the same red-when-required-and-empty rule the selectboxes
+            # get. Trial ID is the one required multiselect on the page, and it
+            # was the one required field that could be left empty through a
+            # failed add without saying so.
+            if not chosen_cols and spec["key"] in required_keys and add_attempted:
+                tint_cells.setdefault("missing", []).append(cell_key)
             return list(chosen_cols)
 
         mapping = _assemble_mapping(
@@ -2031,6 +2077,19 @@ def column_mapping_ui(
     return mapping
 
 
+def mark_missing_cells(cell_keys) -> None:
+    """Paint the *missing* tint onto keyed cells the mapping UI did not render.
+
+    UX-91. `wizard._render_identity_field` builds its own multiselects — one per
+    table, laid out by the caller — so they never pass through
+    `column_mapping_ui` and never reached `tint_cells`. Trial ID is required and
+    was the last field that could survive a failed add without going red. This
+    is the same `<style>` block by the same rules; only the collection point
+    differs.
+    """
+    _emit_field_tints({"missing": [str(key) for key in cell_keys]})
+
+
 def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
     """One <style> block tinting each mapping cell by its state (UX-53 r4).
 
@@ -2044,16 +2103,21 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
         tint = _FIELD_TINT.get(state)
         if not tint or not keys:
             continue
-        # BaseWeb paints the control's background itself, through an emotion
-        # class that outranks a plain class selector — the first cut of this
-        # rule was simply never visible. `!important` on several nodes of the
-        # widget is what makes it land: the outer control, its value container,
-        # and the Streamlit wrapper for the case where BaseWeb's own node is
-        # transparent and the colour has to come from behind it.
+        # The painted node, checked against the live DOM (UX-91): a selectbox
+        # and a multiselect have the *same* shape —
+        # `[data-testid="stSelectbox"|"stMultiSelect"] > div > div` is the box
+        # carrying the background, and everything above it is transparent.
+        # `!important` because the theme paints that node through an emotion
+        # class that outranks a plain class selector.
+        #
+        # The earlier `[data-baseweb="select"]` selectors are gone: they match
+        # **nothing** in this Streamlit version. Selectboxes tinted anyway,
+        # through the `stSelectbox` fallback beside them, which is why the rule
+        # looked fine — while multiselects (Trial ID, the one required one) had
+        # no matching selector at all and silently never coloured.
         selector = ", ".join(
-            f'.st-key-{key} [data-baseweb="select"] > div, '
-            f'.st-key-{key} [data-baseweb="select"] [data-baseweb="input"], '
-            f".st-key-{key} [data-testid='stSelectbox'] > div > div"
+            f".st-key-{key} [data-testid='stSelectbox'] > div > div, "
+            f".st-key-{key} [data-testid='stMultiSelect'] > div > div"
             for key in keys
         )
         rules.append(f"{selector} {{ background-color: {tint} !important; }}")
@@ -2278,6 +2342,25 @@ def render_pattern_help(host, fields: dict) -> None:
             + "\n".join(f"- `{{{name}}}`" for name in sorted(fields))
             + "\n\nAnything else is left as literal text."
         )
+
+
+def current_dataset_name() -> str:
+    """The name the dataset picker shows for the source now loaded (VIZ-36).
+
+    ``data_source_choice`` is canonical: since DATA-9's flat picker the stored
+    value *is* the entry's label — the user's own name for an upload, the
+    registry label for a public corpus — and DATA-23's rename re-keys it, so a
+    renamed dataset carries the new name without anything else to update.
+
+    Returns ``""`` rather than a placeholder when there is no session (headless
+    render, import time): ``{dataset_name}`` then renders empty, which is the
+    same thing an unnamed CLI render produces, instead of inventing a label
+    that would disagree with the app.
+    """
+    try:
+        return str(st.session_state.get("data_source_choice") or "")
+    except Exception:  # no ScriptRunContext — headless import, tests, docs
+        return ""
 
 
 def render_pattern_input(
@@ -2852,6 +2935,10 @@ def _collect_viz_settings(
             ss.get("global_duration_mass_sigma_chars", 1.0)
         ),
         show_raw_gaze=bool(ss.get("global_show_raw_gaze")),
+        # UX-86: raw gaze's own style.
+        raw_gaze_color=ss.get("global_raw_gaze_color") or "#888888",
+        raw_gaze_marker_size=float(ss.get("global_raw_gaze_marker_size", 4.0)),
+        raw_gaze_opacity=float(ss.get("global_raw_gaze_opacity", 0.6)),
         show_stimulus_image=bool(ss.get("global_show_stimulus_image")),
         # VIZ-4: image-stimulus opacity (applies to dataset + uploaded images) and
         # the uploaded image's data URI (session-only; set by sidebar_controls).
@@ -3102,6 +3189,22 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
       widget's `help` as a `?` icon next to its label — one more thing on a row
       that has to fit — while a popover trigger's `help` is a plain hover
       tooltip. Same words, no icon.
+
+    **BUG-37 — the popover carries an explicit ``key=``.** ``st.popover`` is a
+    stateful widget in this Streamlit version (it takes ``key``/``on_change``
+    like ``st.expander``), and every section here calls it with the same empty
+    label (``""``) — the only thing distinguishing one from another is
+    surrounding call order. Without a `key`, Streamlit falls back to a
+    positional auto-key, and this row sits downstream of several booleans that
+    change which widgets render (`_mode_gate`'s `disabled=`/`help=`, the
+    layer toggles themselves) — so the auto-key for a *later* section can shift
+    between reruns whenever an *earlier* one's rendered shape changes. A
+    shifted key reads to Streamlit as a brand-new widget, which drops the one
+    thing this widget tracks: whether it is open. That is what a click "not
+    working" looked like — the popover opened, a rerun landed before the user
+    saw it, and the fresh auto-key came back closed. Every OTHER popover in the
+    app has a distinct, stable label (🔎, ⇅, Details, …), which is why only
+    this shared-blank-label family of eight was affected.
     """
     row = host.container(
         horizontal=True,
@@ -3114,7 +3217,10 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
     if value is None:
         row.markdown(label)
     return value, row.popover(
-        "", width="content", help="\n\n".join(tips) if tips else None
+        "",
+        width="content",
+        help="\n\n".join(tips) if tips else None,
+        key=f"split_mode_rail_{slug}_popover",
     )
 
 
@@ -3141,6 +3247,40 @@ def _rail_subsection(host, label: str, *, note: str = ""):
     return box
 
 
+#: BUG-36 — the ♻️ Reset visualization button's confirmation flag.
+_RESET_VIZ_PENDING_KEY = "_reset_viz_pending"
+
+
+@st.dialog("Reset visualization?")
+def _reset_viz_confirmation_dialog() -> None:
+    """The modal body — BUG-36. Opened by ``render_viz_reset``.
+
+    Handled by the button's *return value*, not ``on_click`` (see the module
+    note on ``reset_viz_settings`` for why that function itself still runs as
+    a bare call rather than a callback here: the confirm click executes inside
+    the dialog's own fragment rerun, a different script frame from the one
+    that instantiates the rail's ``global_*`` widgets, so deleting their keys
+    here hits none of the "set after instantiation" ordering that forces
+    ``on_click`` on the *un-confirmed* button next door).
+    """
+    st.caption(
+        "Every layer, colour, size and axis control back to its default — "
+        "including the settings a Share link put there. Your **annotations**, "
+        "trial filters, column mapping, data source and the selected trial are "
+        "kept."
+    )
+    yes, no = st.columns(2)
+    if yes.button(
+        "♻️ Reset it", key="reset_viz_confirm", type="primary", width="stretch"
+    ):
+        reset_viz_settings()
+        st.session_state.pop(_RESET_VIZ_PENDING_KEY, None)
+        st.rerun(scope="app")
+    if no.button("Cancel", key="reset_viz_cancel", width="stretch"):
+        st.session_state.pop(_RESET_VIZ_PENDING_KEY, None)
+        st.rerun(scope="app")
+
+
 def render_viz_reset(host) -> None:
     """Render the scoped visualization reset into ``host`` — a plain button.
 
@@ -3151,17 +3291,24 @@ def render_viz_reset(host) -> None:
     rail's one escape hatch was itself a click deep — and the thing behind the
     click was a single button, which is what a popover is *for* avoiding. The
     caption it held is the button's tooltip now; nothing else was in there.
+
+    **BUG-36**: the click now arms a confirmation dialog rather than firing
+    ``reset_viz_settings`` straight away — a Share link's settings ride on this
+    too, so an accidental click used to be able to lose more than it looked
+    like.
     """
-    host.button(
+    if host.button(
         "♻️ Reset visualization",
         key="reset_viz_settings_btn",
-        on_click=reset_viz_settings,
         width="stretch",
         help="Every layer, colour, size and axis control back to its default — "
         "including the settings a Share link put there. Your **annotations**, "
         "trial filters, column mapping, data source and the selected trial are "
         "kept.",
-    )
+    ):
+        st.session_state[_RESET_VIZ_PENDING_KEY] = True
+    if st.session_state.get(_RESET_VIZ_PENDING_KEY):
+        _reset_viz_confirmation_dialog()
 
 
 def sidebar_controls(
@@ -3404,11 +3551,33 @@ def sidebar_controls(
         slug="stim",
         help="The text, its word boxes, and the stimulus image.",
     )
-    _ovl_none, ovl_grp = _rail_section(
+    # UX-86: Overlays dissolved — Heatmap and Raw gaze are now peer sections,
+    # each with exactly one thing to switch, so each carries its own toggle
+    # on the row the way Fixations/Saccades do. `_mode_gate` is called again
+    # (cheaply) where each layer's style popover needs its own `reason` text.
+    heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
+    show_heatmap, heatmap_grp = _rail_section(
         viz,
-        "🔥 **Overlays**",
-        slug="ovl",
-        help="Heatmap and raw gaze, drawn over the scanpath.",
+        "🔥 **Heatmap**",
+        slug="heatmap",
+        help="Tint the reading by fixation density.",
+        key="global_show_heatmap",
+        persist_state="session",
+        disabled=heat_disabled,
+        help_text=_gated_help("", heat_reason),
+    )
+    raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
+    show_raw_gaze, raw_gaze_grp = _rail_section(
+        viz,
+        "🔵 **Raw gaze**",
+        slug="rawgaze",
+        help="Millisecond-level gaze positions as small dots.",
+        key="global_show_raw_gaze",
+        persist_state="session",
+        disabled=not has_raw_gaze or raw_disabled,
+        help_text=_gated_help(
+            "" if has_raw_gaze else "(No raw gaze data loaded)", raw_reason
+        ),
     )
     # UX-72 — ONE filter section for the whole figure, a peer of the layer
     # sections rather than a 🧹 popover inside each of them. "Filter the plot"
@@ -4045,17 +4214,10 @@ def sidebar_controls(
     # Compare supports a shared word-box scale: overlay splits each box into
     # A/B halves; side-by-side and stacked tint their respective full boxes.
     # Animation remains disabled because a time-varying density layer would
-    # need a distinct frame contract.
-    heat_disabled, heat_reason = _mode_gate(animating, comparing, in_animation=False)
-    show_heatmap = ovl_grp.toggle(
-        "**Heatmap**",
-        key="global_show_heatmap",
-        persist_state="session",
-        disabled=heat_disabled,
-        help=_gated_help("Tint the reading by fixation density.", heat_reason),
-    )
+    # need a distinct frame contract. The toggle itself is on the section's
+    # row now (UX-86); this block only owns the style popover's contents.
     if show_heatmap:
-        with _rail_subsection(ovl_grp, "⚙️ Heatmap style"):
+        with _rail_subsection(heatmap_grp, "⚙️ Heatmap style"):
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
@@ -4270,19 +4432,50 @@ def sidebar_controls(
                 help="Scale the image up/down so its text matches the word boxes "
                 "(1.0 = the image's native / dataset size).",
             )
-    # Raw gaze is a `make_scanpath_figure`-only overlay.
-    raw_disabled, raw_reason = _mode_gate(animating, comparing, **_static_only)
-    ovl_grp.toggle(
-        "**Raw gaze data**",
-        help=_gated_help(
-            "Display millisecond-level gaze positions as small dots. "
-            + ("" if has_raw_gaze else "(No raw gaze data loaded)"),
-            raw_reason,
-        ),
-        disabled=not has_raw_gaze or raw_disabled,
-        key="global_show_raw_gaze",
-        persist_state="session",
-    )
+    # Raw gaze is a `make_scanpath_figure`-only overlay. The toggle is on the
+    # section's row (UX-86); this owns the style popover — previously nothing,
+    # since raw gaze had no styling of its own before it got a section.
+    if show_raw_gaze:
+        with _rail_subsection(raw_gaze_grp, "⚙️ Raw gaze style"):
+            _labeled(
+                st,
+                "color_picker",
+                "Raw gaze color",
+                key="global_raw_gaze_color",
+                persist_state="session",
+                disabled=raw_disabled,
+                help=_gated_help(
+                    "Flat marker colour. Ignored when the data carries "
+                    "timestamps, which are colour-mapped by time instead.",
+                    raw_reason,
+                ),
+            )
+            _numeric_slider(
+                st,
+                "Raw gaze marker size",
+                label_left=True,
+                key="global_raw_gaze_marker_size",
+                persist_state="session",
+                min_value=1.0,
+                max_value=12.0,
+                step=0.5,
+                disabled=raw_disabled,
+                help="Diameter of each raw-gaze sample dot.",
+            )
+            _numeric_slider(
+                st,
+                "Raw gaze opacity",
+                label_left=True,
+                key="global_raw_gaze_opacity",
+                persist_state="session",
+                min_value=0.1,
+                max_value=1.0,
+                step=0.05,
+                number_format="%.2f",
+                disabled=raw_disabled,
+                help="Sample dots overlap heavily at typical sampling rates; "
+                "lower opacity keeps dense clusters legible.",
+            )
     # DATA-15: the bundled demo's raw gaze is SYNTHESIZED from the fixation
     # report (OneStop ships no sample-level gaze) — it looks like eye-tracker
     # output and isn't, so say so wherever it can be switched on.
@@ -4291,7 +4484,7 @@ def sidebar_controls(
         and st.session_state.get("data_source_choice") == DEMO_CHOICE
         and st.session_state.get("global_show_raw_gaze")
     ):
-        ovl_grp.caption(
+        raw_gaze_grp.caption(
             "⚠️ The demo's raw gaze is **synthesized** from its fixations for "
             "illustration — it is not recorded eye-tracker output."
         )
@@ -4476,6 +4669,7 @@ def sidebar_controls(
             words if words is not None else pd.DataFrame(),
             trial_fixations if trial_fixations is not None else pd.DataFrame(),
             {},
+            dataset_name=current_dataset_name(),
         )
         # EXP-5: two text boxes, two previews and a field list is far too tall
         # for the rail — inline it ran "very long and narrow", so it opened in a
@@ -5224,11 +5418,32 @@ def metadata_filter_key(name: str, prefix: str = "") -> str:
     return f"{prefix}filter_meta_{name}"
 
 
+def trial_metadata_filter_key(name: str, prefix: str = "") -> str:
+    """Session key of a trial-metadata filter (DATA-29).
+
+    Its own ``filter_trialmeta_`` prefix rather than DATA-20's ``filter_meta_``:
+    the two tables may legitimately register the *same* column name at different
+    grains (a ``session`` column describing readers and one describing trials),
+    and a shared prefix would collide them onto one widget. Still under
+    ``filter_``, so *✕ Clear all filters*, the ``_trial_filters_raw`` mirror and
+    compare-mode B's namespace keep working without being taught about it.
+    """
+    return f"{prefix}filter_trialmeta_{name}"
+
+
 def participant_metadata_fields():
     """The attached participant table's fields, or ``()`` when none (DATA-20)."""
     from scanpath_studio.tabs import active_participant_metadata
 
     attached = active_participant_metadata()
+    return attached.fields if attached is not None else ()
+
+
+def trial_metadata_fields():
+    """The attached trial table's fields, or ``()`` when none (DATA-29)."""
+    from scanpath_studio import metadata as md
+
+    attached = md.active_trials()
     return attached.fields if attached is not None else ()
 
 
@@ -5278,6 +5493,92 @@ def _render_participant_metadata_filters(host, *, prefix: str, on_change) -> Non
             on_change=on_change,
             help=f"From your participant table ({field.source}).",
         )
+
+
+def _render_trial_metadata_filters(host, *, prefix: str, on_change) -> None:
+    """One control per registered trial-grain field (DATA-29).
+
+    The mirror image of :func:`_render_participant_metadata_filters`, and simpler
+    for the reason DATA-29 opened with: a trial attribute already *is* the grain
+    the pool is keyed on, so the selection resolves straight to
+    ``(participant_id, trial_id)`` keys with no reader indirection in between.
+    """
+    from scanpath_studio import metadata as md
+
+    attached = md.active_trials()
+    if attached is None or not attached.fields:
+        return
+    host.markdown("**By trial**")
+    for field in attached.fields:
+        key = trial_metadata_filter_key(field.name, prefix)
+        if field.is_numeric:
+            bounds = md.trial_bounds_for(attached, field.name)
+            if bounds is None:
+                continue
+            low, high = bounds
+            _seed_range_bounds(key, low, high, prefix=prefix)
+            host.slider(
+                field.label,
+                min_value=low,
+                max_value=high,
+                key=key,
+                on_change=on_change,
+                help=f"From your trial table ({field.source}). Trials with no "
+                "value are kept.",
+            )
+            continue
+        options = md.trial_options_for(attached, field.name)
+        if len(options) <= 1:
+            continue
+        _seed_filter_widget(key, options, options, prefix=prefix)
+        _labeled(
+            host,
+            "multiselect",
+            field.label,
+            options=options,
+            key=key,
+            on_change=on_change,
+            help=f"From your trial table ({field.source}).",
+        )
+
+
+def _trial_metadata_narrowing(prefix: str, keys) -> tuple:
+    """``((participant_id, trial_id) keys | None, widget keys)`` (DATA-29).
+
+    ``None`` means no constraint; an empty set means a constraint nothing
+    satisfies — the same three-way contract as
+    :func:`_participant_metadata_narrowing`, one grain down.
+    """
+    from scanpath_studio import metadata as md
+
+    attached = md.active_trials()
+    if attached is None or not attached.fields:
+        return None, ()
+    selections: dict[str, list] = {}
+    ranges: dict[str, tuple] = {}
+    widget_keys: list = []
+    for field in attached.fields:
+        key = trial_metadata_filter_key(field.name, prefix)
+        chosen = st.session_state.get(key)
+        if field.is_numeric:
+            bounds = md.trial_bounds_for(attached, field.name)
+            if (
+                bounds
+                and isinstance(chosen, (tuple, list))
+                and len(chosen) == 2
+                and tuple(chosen) != bounds
+            ):
+                ranges[field.name] = (float(chosen[0]), float(chosen[1]))
+                widget_keys.append(key)
+            continue
+        options = md.trial_options_for(attached, field.name)
+        if chosen and len(chosen) < len(options):
+            selections[field.name] = list(chosen)
+            widget_keys.append(key)
+    return (
+        md.trials_matching(attached, selections, ranges, keys=keys),
+        tuple(widget_keys),
+    )
 
 
 def _seed_range_bounds(key: str, low: float, high: float, *, prefix: str) -> None:
@@ -5336,6 +5637,13 @@ def _participant_metadata_narrowing(prefix: str) -> tuple:
     return md.participants_matching(attached, selections, ranges), tuple(keys)
 
 
+def _loaded_trial_keys(words: pd.DataFrame, fixations: pd.DataFrame) -> set:
+    """``(participant_id, trial_id)`` pairs present in either frame (DATA-29)."""
+    from scanpath_studio.data import trial_keys as _keys
+
+    return set(_keys(words)) | set(_keys(fixations))
+
+
 def _compute_trial_filters(
     words: pd.DataFrame, fixations: pd.DataFrame, *, prefix: str = ""
 ) -> dict:
@@ -5360,6 +5668,13 @@ def _compute_trial_filters(
         # DATA-20: widget keys behind a participant-grain metadata narrowing,
         # which lands in `participants` above rather than in `metadata`.
         "participant_filter_keys": (),
+        # DATA-29: a trial-grain narrowing is already `(participant_id,
+        # trial_id)` keys, so it gets its own slot rather than being squeezed
+        # into `participants` (a reader may be kept for one trial and dropped
+        # for another) or `metadata` (which is column → values on the frames).
+        # `None` = no constraint; an empty set = nothing satisfies it.
+        "trial_keys": None,
+        "trial_filter_keys": (),
         "favorites_only": False,
         "required_tags": [],
         "excluded_tags": [],
@@ -5391,6 +5706,16 @@ def _compute_trial_filters(
         # entry in `metadata_keys`: that dict is column-name → *one* key string,
         # and a dataset is free to have a column called "participants".
         result["participant_filter_keys"] = meta_keys
+    # DATA-29: the trial table narrows to keys directly. Computed against the
+    # loaded pool so a trial-id-keyed table expands to every reading of that
+    # trial, and so a numeric range keeps the trials the table never mentions
+    # (UX-49's rule, one grain down).
+    by_trial, trial_keys_used = _trial_metadata_narrowing(
+        prefix, _loaded_trial_keys(words, fixations)
+    )
+    if by_trial is not None:
+        result["trial_keys"] = by_trial
+        result["trial_filter_keys"] = trial_keys_used
     # Text narrowing (the "Narrow by → Text" multiselect). Like a categorical
     # condition, but the text id isn't in the condition list, so handle it here.
     text_field, text_frame = _text_field_and_frame(words, fixations)
@@ -5615,6 +5940,7 @@ def render_trial_filters(
                 )
 
     _render_participant_metadata_filters(host, prefix=prefix, on_change=_apply)
+    _render_trial_metadata_filters(host, prefix=prefix, on_change=_apply)
 
     host.markdown("**By annotation**")
     if f"{prefix}filter_favorites" not in st.session_state:
@@ -5682,6 +6008,8 @@ def render_trial_filters(
         # survives a run where the popover didn't render and round-trips
         # through Share / save & restore with the rest of the filter layer.
         + [metadata_filter_key(f.name, prefix) for f in participant_metadata_fields()]
+        # DATA-29 — same reason, one grain down.
+        + [trial_metadata_filter_key(f.name, prefix) for f in trial_metadata_fields()]
     )
     st.session_state[f"{prefix}_trial_filters_raw"] = {
         k: st.session_state[k] for k in keys if k in st.session_state

@@ -392,6 +392,11 @@ class TestTrialFilterFlow:
             # narrowing. Empty here — nothing was attached — and it must reset
             # with the rest, or a cleared filter would still claim a cause.
             "participant_filter_keys": (),
+            # DATA-29: the trial-grain sibling. `None` is "no constraint" — an
+            # empty set would mean a constraint nothing satisfies, which is the
+            # opposite of cleared.
+            "trial_keys": None,
+            "trial_filter_keys": (),
             "favorites_only": False,
             "required_tags": [],
             "excluded_tags": [],
@@ -602,7 +607,14 @@ class TestRecoveryCachePanelFlow:
         forget = [b for b in at.button if "Forget" in str(b.label)]
         assert forget, "the Forget button is missing from the panel"
         at = forget[0].click().run(timeout=60)
-        _clean(at, "after forgetting:")
+        _clean(at, "after clicking forget:")
+
+        # BUG-36: the click now only opens a confirmation dialog; the delete
+        # itself happens on the confirm click, one run later.
+        confirm = [b for b in at.button if b.key == "forget_cache_confirm"]
+        assert confirm, "the Forget confirmation button is missing"
+        at = confirm[0].click().run(timeout=60)
+        _clean(at, "after confirming forget:")
         assert not manifest.exists()
         assert not persistence.cache_status(tmp_path)["exists"]
 

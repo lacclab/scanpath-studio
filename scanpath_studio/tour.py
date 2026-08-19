@@ -478,6 +478,79 @@ def _tour_optout_script(opted_out: bool) -> str:
     )
 
 
+#: UX-85 — one cookie holding a comma-joined *set* of dismissed tutorial ids,
+#: rather than one cookie per tutorial. Separate from #UX-12's single
+#: `TOUR_OPTOUT_COOKIE`: that one gates only the automatic welcome card.
+TUTORIAL_OPTOUT_COOKIE = "sps_tutorial_optout"
+
+
+def _dismissed_tutorial_ids() -> set[str]:
+    """Tutorial ids marked "don't auto-show" in this browser (UX-85).
+
+    Session state's own set wins within a session — same rule as
+    :func:`tour_opted_out` — seeded from the cookie the first time it's read.
+    Defensive about ``st.context`` for the same reason: bare-mode / AppTest
+    runs have no request behind them.
+    """
+    if "_tutorial_dismissed_ids" not in st.session_state:
+        try:
+            raw = st.context.cookies.get(TUTORIAL_OPTOUT_COOKIE) or ""
+        except Exception:
+            raw = ""
+        st.session_state["_tutorial_dismissed_ids"] = {p for p in raw.split(",") if p}
+    return st.session_state["_tutorial_dismissed_ids"]
+
+
+def tutorial_opted_out(tutorial_id: str) -> bool:
+    """True when ``tutorial_id`` was marked "don't auto-show" (UX-85).
+
+    Nothing in the 🧭 Tutorials library auto-opens itself today — only the
+    welcome card and the wizard guide do, each with their own mechanism — so
+    this is the opt-out for whichever ones start doing that (the wizard guide
+    included, once it reads this too) rather than something with an effect
+    yet on every tutorial. It never hides a tutorial from the chooser, only
+    stops it greeting you — the same "gone, not away" rule #UX-12 set.
+    """
+    return tutorial_id in _dismissed_tutorial_ids()
+
+
+def _tutorial_optout_script(dismissed: set[str]) -> str:
+    """A same-origin script writing (or clearing) the dismissed-id cookie."""
+    if dismissed:
+        joined = ",".join(sorted(dismissed))
+        value = f"{TUTORIAL_OPTOUT_COOKIE}={joined}; max-age={_TOUR_OPTOUT_MAX_AGE}"
+    else:
+        value = f"{TUTORIAL_OPTOUT_COOKIE}=; max-age=0"
+    return (
+        "<script>window.parent.document.cookie = "
+        f'"{value}; path=/; SameSite=Lax";</script>'
+    )
+
+
+def _render_tutorial_optout(tutorial_id: str, host) -> None:
+    """The per-tutorial "Don't auto-show this one" checkbox (UX-85).
+
+    Read directly, like :func:`_render_tour_optout` — this renders inside the
+    🧭 Tutorials dialog, and a dialog body re-executes on its own widgets'
+    interactions, so there is no fragment-scoping hazard to route around (the
+    checkbox's effect is entirely local to this card; nothing outside the
+    dialog needs to see it in the same run — unlike Start/Resume next to it).
+    """
+    dismissed = _dismissed_tutorial_ids()
+    checked = host.checkbox(
+        "🔕 Don't auto-show this one",
+        key=f"tutorial_dont_autoshow_{tutorial_id}",
+        value=tutorial_id in dismissed,
+        help="Stops this tutorial from offering itself automatically. It "
+        "stays listed here, and Start / Resume work exactly the same.",
+    )
+    if checked:
+        dismissed.add(tutorial_id)
+    else:
+        dismissed.discard(tutorial_id)
+    embed_html_iframe(_tutorial_optout_script(dismissed), height=0)
+
+
 def _render_tour_optout() -> None:
     """The "Don't show this again" checkbox + the cookie write that backs it."""
     opted_out = st.checkbox(
@@ -1142,7 +1215,8 @@ def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
     if tutorial_id not in _TUTORIAL_BY_ID:
         return
     context = st.session_state.get("_tutorial_context") or {}
-    available, _ = tutorial_availability(_TUTORIAL_BY_ID[tutorial_id], context)
+    tutorial = _TUTORIAL_BY_ID[tutorial_id]
+    available, _ = tutorial_availability(tutorial, context)
     if not available:
         return
     st.session_state["tutorial_return"] = {
@@ -1154,6 +1228,16 @@ def _start_use_case(tutorial_id: str, *, restart: bool = False) -> None:
         _tutorial_completed().pop(tutorial_id, None)
     else:
         _tutorial_progress().setdefault(tutorial_id, 0)
+    # UX-83: navigate to the step's own page right away when it names a
+    # different view, instead of opening the card on whatever page the user
+    # already stood on and offering a "Show me / Open this panel" button to
+    # get there. Covers resume too — the current step (not always index 0)
+    # is what the card is about to show. `tutorial_return` above already
+    # captured the page being left, so Exit still comes back to it.
+    step_index = int(_tutorial_progress().get(tutorial_id, 0))
+    steps = steps_of(tutorial)
+    if 0 <= step_index < len(steps):
+        _open_tutorial_surface(steps[step_index])
     st.session_state["tutorial_active"] = tutorial_id
     # Never stack this task card over the automatic welcome/setup card.
     st.session_state["tour_mode"] = None
@@ -1317,6 +1401,7 @@ def _tutorial_library_dialog() -> None:
             st.rerun(scope="app")
         if not available:
             card.caption(f"⚠️ Unavailable — {reason.lower()}")
+        _render_tutorial_optout(tutorial.id, card)
 
 
 @st.fragment
@@ -1513,7 +1598,7 @@ _FAQ_ITEMS = [
         "My uploaded data vanished after a refresh.",
         "Expected — uploads, wizard datasets and annotations live in session "
         "state, which dies with the session. Use **💾 Session → Save & restore** for the "
-        "plot config + annotations, and **⬇️ Download setup (JSON)** in the "
+        "plot config + annotations, and **⬇️ Save setup** in the "
         "wizard for the column mapping; both are re-importable.",
     ),
     (

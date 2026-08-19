@@ -170,6 +170,7 @@ from scanpath_studio.experimental_setup import (
 )
 from scanpath_studio.menu import (
     close_open_popovers,
+    render_nav,
     render_top_menu,
     view_label,
 )
@@ -198,6 +199,7 @@ from scanpath_studio.tabs import (
     render_participant_metadata_section,
     render_single_trial_tab,
     render_trial_identity_section,
+    render_trial_metadata_section,
 )
 from scanpath_studio.tour import (
     build_tutorial_context,
@@ -210,7 +212,6 @@ from scanpath_studio.tour import (
 )
 from scanpath_studio.url_state import (
     CORPUS_SOURCE_TOKEN,
-    _active_view,
     _apply_pending_trial_selection,
     _apply_uploaded_plot_config,
     _apply_url_preset,
@@ -503,16 +504,57 @@ def _render_empty_after_filtering(
 def _forget_recovery_cache() -> None:
     """Delete the on-device cache and stop re-writing it this session.
 
-    An ``on_click`` callback, not inline button handling: it writes the
-    ``persist_local_saving`` toggle's key, which Streamlit forbids once that
-    widget has rendered in the current run. Pausing is what makes Forget stick —
-    ``main`` saves at the end of every run, so deleting alone would hand the
-    same session straight back to disk.
+    Pausing is what makes Forget stick — ``main`` saves at the end of every
+    run, so deleting alone would hand the same session straight back to disk.
+
+    **BUG-36:** called from the confirmation dialog's confirm button, by then
+    *after* the "Keep saving here" toggle has already rendered once this run
+    (the panel draws it above the Forget button) — so, unlike the original
+    ``on_click`` callback this replaced, a bare `st.session_state["persist_
+    local_saving"] = False` here would hit Streamlit's "cannot be modified
+    after the widget… is instantiated" guard. Popping the key instead is
+    safe post-render (`controls.reset_viz_settings` uses the same move on a
+    much larger key set) — the confirm button's `st.rerun(scope="app")`
+    right after this call re-seeds it fresh via the panel's own
+    ``setdefault``, which by then reads the pause flag set below as `True`
+    and seeds the toggle to `False` on that clean run.
     """
     clear_local_state(st.session_state)
     set_persistence_paused(st.session_state, True)
-    st.session_state["persist_local_saving"] = False
+    st.session_state.pop("persist_local_saving", None)
     st.session_state["_recovery_cache_forgotten"] = True
+
+
+#: BUG-36 — the 🗑 Forget saved session button's confirmation flag.
+_FORGET_CACHE_PENDING_KEY = "_forget_cache_pending"
+
+
+@st.dialog("Forget saved session?")
+def _forget_cache_confirmation_dialog() -> None:
+    """The modal body — BUG-36. Opened by ``_render_recovery_cache_panel``.
+
+    The destructive half of the pair beside ``_clear_cache_confirmation_dialog``
+    — this one actually deletes the on-disk recovery cache and pauses saving,
+    unlike the lossless computation cache. Handled by the button's *return
+    value*, not ``on_click`` — see ``_delete_confirmation_dialog`` for why an
+    ``on_click`` inside an ``st.dialog`` body silently does nothing.
+    """
+    st.warning(
+        "Delete the stored copy of this session from this computer and pause "
+        "saving here? The data you have **loaded right now stays open** — "
+        "this only removes what's on disk.",
+        icon="⚠️",
+    )
+    yes, no = st.columns(2)
+    if yes.button(
+        "🗑 Forget it", key="forget_cache_confirm", type="primary", width="stretch"
+    ):
+        _forget_recovery_cache()
+        st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
+        st.rerun(scope="app")
+    if no.button("Keep it", key="forget_cache_cancel", width="stretch"):
+        st.session_state.pop(_FORGET_CACHE_PENDING_KEY, None)
+        st.rerun(scope="app")
 
 
 def _toggle_recovery_saving() -> None:
@@ -613,14 +655,17 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             help="Turn off to stop writing to the cache for the rest of this "
             "session. Your work stays loaded either way.",
         )
-        st.button(
+        if st.button(
             "🗑 Forget saved session",
-            on_click=_forget_recovery_cache,
+            key="forget_recovery_cache_btn",
             width="stretch",
             disabled=not status["exists"],
             help="Delete the stored copy from this computer and pause saving. "
             "The data you have loaded stays open.",
-        )
+        ):
+            st.session_state[_FORGET_CACHE_PENDING_KEY] = True
+        if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
+            _forget_cache_confirmation_dialog()
         # The folder is the one detail worth a line of its own (it is what you
         # go and look at); the env-var switches live in its tooltip.
         st.caption(
@@ -649,15 +694,17 @@ def _render_start_fresh_panel(*, slot=None) -> None:
         help=DEMO_RESET_HELP,
         on_click=load_bundled_demo,
     )
-    container.button(
+    if container.button(
         "🧹 Clear cached computations",
         key="session_clear_cache",
         width="stretch",
         help="Recompute every figure, table and normalization from the data "
         "already loaded. Nothing is lost — this cache only holds results the "
         "app can rebuild. The saved session on this computer is untouched.",
-        on_click=clear_computation_cache,
-    )
+    ):
+        st.session_state[_CLEAR_CACHE_PENDING_KEY] = True
+    if st.session_state.get(_CLEAR_CACHE_PENDING_KEY):
+        _clear_cache_confirmation_dialog()
 
 
 def _arm_about() -> None:
@@ -2305,6 +2352,39 @@ def load_bundled_demo() -> None:
     reset_column_mapping()
 
 
+#: BUG-36 — the 🧹 Clear cached computations button's confirmation flag.
+_CLEAR_CACHE_PENDING_KEY = "_clear_cache_pending"
+
+
+@st.dialog("Clear cached computations?")
+def _clear_cache_confirmation_dialog() -> None:
+    """The modal body — BUG-36. Opened by ``_render_start_fresh_panel``.
+
+    ``clear_computation_cache`` is lossless by construction — everything it
+    drops is recomputable from the data already loaded — but the tracker item
+    asked for a confirmation on this button anyway (alongside the destructive
+    🗑 Forget button beside it), so both stop for a click rather than one.
+    Handled by the button's *return value*, not ``on_click`` — see
+    ``_delete_confirmation_dialog`` for why an ``on_click`` inside an
+    ``st.dialog`` body silently does nothing.
+    """
+    st.caption(
+        "Recompute every figure, table and normalization from the data "
+        "already loaded. **Nothing is lost** — this cache only holds results "
+        "the app can rebuild. The saved session on this computer is untouched."
+    )
+    yes, no = st.columns(2)
+    if yes.button(
+        "🧹 Clear it", key="clear_cache_confirm", type="primary", width="stretch"
+    ):
+        clear_computation_cache()
+        st.session_state.pop(_CLEAR_CACHE_PENDING_KEY, None)
+        st.rerun(scope="app")
+    if no.button("Cancel", key="clear_cache_cancel", width="stretch"):
+        st.session_state.pop(_CLEAR_CACHE_PENDING_KEY, None)
+        st.rerun(scope="app")
+
+
 def clear_computation_cache() -> None:
     """``on_click``: drop every ``@st.cache_data`` entry for this process.
 
@@ -2991,13 +3071,25 @@ def discard_and_leave_wizard() -> None:
     """Abandon the half-built dataset and let the trip finish (BUG-31).
 
     :func:`leave_add_data_wizard` restores the source the wizard was opened
-    *from*. Nothing here navigates, and nothing needs to: the nav has been
-    sitting on the view the user asked for the whole time the prompt was up, so
-    closing the wizard is all it takes for the next run to render it.
+    *from*. For a **nav-triggered** prompt nothing here needs to navigate: the
+    nav has been sitting on the requested view the whole time the prompt was
+    up, so closing the wizard is all it takes for the next run to render it.
+
+    **BUG-36 follow-up:** that assumption breaks for ✕ Cancel, whose prompt
+    always names 🗂️ Data as the destination regardless of where the nav
+    actually is — click Session, click Keep setting up, then Cancel, and the
+    nav is still genuinely on Session throughout; closing the wizard alone
+    left it there instead of on Data as promised. Requesting the recorded
+    destination through the same ``main_nav`` seam :func:`url_state._go_data`
+    and friends use is a no-op for the nav-triggered case (the router is
+    already sitting on it, so this just re-affirms the same value) and is
+    what actually moves it for Cancel's fixed one.
     """
-    st.session_state.pop(WIZARD_LEAVE_KEY, None)
+    destination = st.session_state.pop(WIZARD_LEAVE_KEY, None)
     st.session_state.pop(WIZARD_STAY_KEY, None)
     leave_add_data_wizard()
+    if destination:
+        st.session_state["main_nav"] = destination
 
 
 def render_data_source_picker(host=None) -> None:
@@ -3191,33 +3283,39 @@ PENDING_DELETE_KEY = "_dataset_pending_delete"
 
 @st.dialog("Delete this dataset?")
 def _delete_confirmation_dialog(token: str) -> None:
-    """The modal body — UX-79. Opened by ``_render_delete_confirmation``."""
+    """The modal body — UX-79. Opened by ``_render_delete_confirmation``.
 
-    def _confirm() -> None:
-        # Local import, like `_enter_add_data_wizard` above: `wizard` imports
-        # `app` back, so it cannot be imported at module load.
-        from scanpath_studio.wizard import _remove_dataset
-
-        _remove_dataset(st.session_state.pop(PENDING_DELETE_KEY, None))
-
+    **BUG-36:** handled by the button's *return value*, not ``on_click`` — an
+    ``st.dialog`` body is a fragment, so an ``on_click`` callback here reran
+    only the dialog: the deletion happened, but ``main()`` never re-executed,
+    so the modal sat there looking inert. ``st.rerun(scope="app")`` both closes
+    the modal and re-renders the page underneath (see ``tour.py``'s
+    ``_tutorial_library_dialog``, which hit the same trap first).
+    """
     st.warning(
         f"Delete **{token}**? Its tables, column mapping and annotations leave "
         "this session — there is no undo."
     )
     yes, no = st.columns(2)
-    yes.button(
+    if yes.button(
         "✕ Delete it",
         key="dataset_delete_confirm",
         type="primary",
-        on_click=_confirm,
         width="stretch",
-    )
-    no.button(
+    ):
+        # Local import, like `_enter_add_data_wizard` above: `wizard` imports
+        # `app` back, so it cannot be imported at module load.
+        from scanpath_studio.wizard import _remove_dataset
+
+        _remove_dataset(st.session_state.pop(PENDING_DELETE_KEY, None))
+        st.rerun(scope="app")
+    if no.button(
         "Keep it",
         key="dataset_delete_cancel",
-        on_click=lambda: st.session_state.pop(PENDING_DELETE_KEY, None),
         width="stretch",
-    )
+    ):
+        st.session_state.pop(PENDING_DELETE_KEY, None)
+        st.rerun(scope="app")
 
 
 def _render_delete_confirmation(host, tokens: list) -> None:
@@ -4544,7 +4642,52 @@ def main() -> None:
     # UX-62: before the nav — `st.logo` writes into the same header strip
     # `st.navigation` draws into, and has to be there when it renders.
     render_app_logo()
-    menu = render_top_menu(show_debug=debug_enabled())
+    # Active top-level view, resolved BEFORE `render_top_menu` — its own 💾
+    # Session page is a CSS-keyed panel drawn *inside* `render_top_menu`
+    # (UX-63), gated on this same value, so the BUG-31 wizard hold-override
+    # below has to land before that call, not after it (see the note there).
+    active_view = render_nav()
+
+    # BUG-31 — navigating away mid-wizard used to land the user on the *half-built*
+    # dataset: `render_sidebar_data_source` reports `UPLOAD_CHOICE` for the whole
+    # run while the wizard is open, whatever the view, so `main` returned early
+    # with "this dataset isn't set up yet" over a session that still held every
+    # finished dataset. It read as data loss; it was an unfinished wizard.
+    #
+    # While the wizard is open the 🗂️ Data page is what renders, wherever the nav
+    # says the user is — and the wizard asks whether to discard. It has to keep
+    # **rendering** for the question to be worth asking: Streamlit drops a
+    # widget's key at the end of any run in which it did not render, and
+    # `st.file_uploader` is the one widget `persist_state="session"` cannot cover
+    # (ENG-36), so a single run spent drawing Scanpath throws the uploaded files
+    # away before the user can be asked about them.
+    #
+    # Deliberately **no navigation of our own** — not a `switch_to_view`, not a
+    # `main_nav` write. Both end in `st.switch_page`, which aborts the run where
+    # it is called, and an aborted run renders no wizard: the fix would destroy
+    # exactly what it exists to protect. So the nav highlight is simply allowed to
+    # sit on the view the user picked while the page under it asks the question,
+    # and *Discard* then needs no navigation at all — the router is already there.
+    #
+    # BUG-36 follow-up: this block used to run *after* `render_top_menu`, so
+    # choosing "Keep setting up" correctly held the `if/elif` dispatch below on
+    # Data but did nothing for the 💾 Session page's own panel, which
+    # `render_top_menu` draws itself from the *raw* nav click, earlier in the
+    # run — navigating to Session while the wizard was open kept showing the
+    # Session panel over the wizard regardless of what was chosen. Resolving
+    # the override here, before that call, and handing it in as `active_view=`
+    # closes that gap.
+    if st.session_state.get("_show_upload_wizard"):
+        if (
+            active_view != _VIEW_DATA
+            and st.session_state.get(WIZARD_STAY_KEY) != active_view
+        ):
+            st.session_state[WIZARD_LEAVE_KEY] = active_view
+        else:
+            st.session_state.pop(WIZARD_LEAVE_KEY, None)
+        active_view = _VIEW_DATA
+
+    menu = render_top_menu(show_debug=debug_enabled(), active_view=active_view)
     _render_about_panel(menu.title)
     # BUG-28: filled HERE, not in the epilogue with its two neighbours. `main`
     # returns early on every path where the dataset can't be drawn — the wizard
@@ -4589,39 +4732,9 @@ def main() -> None:
     maybe_show_about()
     maybe_show_tutorial_library()
 
-    # Active top-level view (set by the nav switch). Read here so the dispatch
-    # below renders only the active page.
-    active_view = _active_view()
-
-    # BUG-31 — navigating away mid-wizard used to land the user on the *half-built*
-    # dataset: `render_sidebar_data_source` reports `UPLOAD_CHOICE` for the whole
-    # run while the wizard is open, whatever the view, so `main` returned early
-    # with "this dataset isn't set up yet" over a session that still held every
-    # finished dataset. It read as data loss; it was an unfinished wizard.
-    #
-    # While the wizard is open the 🗂️ Data page is what renders, wherever the nav
-    # says the user is — and the wizard asks whether to discard. It has to keep
-    # **rendering** for the question to be worth asking: Streamlit drops a
-    # widget's key at the end of any run in which it did not render, and
-    # `st.file_uploader` is the one widget `persist_state="session"` cannot cover
-    # (ENG-36), so a single run spent drawing Scanpath throws the uploaded files
-    # away before the user can be asked about them.
-    #
-    # Deliberately **no navigation of our own** — not a `switch_to_view`, not a
-    # `main_nav` write. Both end in `st.switch_page`, which aborts the run where
-    # it is called, and an aborted run renders no wizard: the fix would destroy
-    # exactly what it exists to protect. So the nav highlight is simply allowed to
-    # sit on the view the user picked while the page under it asks the question,
-    # and *Discard* then needs no navigation at all — the router is already there.
-    if st.session_state.get("_show_upload_wizard"):
-        if (
-            active_view != _VIEW_DATA
-            and st.session_state.get(WIZARD_STAY_KEY) != active_view
-        ):
-            st.session_state[WIZARD_LEAVE_KEY] = active_view
-        else:
-            st.session_state.pop(WIZARD_LEAVE_KEY, None)
-        active_view = _VIEW_DATA
+    # `active_view` was already resolved above, before `render_top_menu` drew
+    # its Session-page panel from it (including the BUG-31 wizard hold-override
+    # — see the note there); the dispatch below reuses the same value.
 
     # Switching view is a full rerun — data load, filters, then a page of fresh
     # figures — and Streamlit leaves the OLD view painted until the new run
@@ -5110,6 +5223,15 @@ def main() -> None:
         metadata=trial_filters["metadata"],
         ranges=trial_filters.get("ranges"),
     )
+    # DATA-29: a trial-grain metadata narrowing is already `(participant_id,
+    # trial_id)` keys, so it applies through `filter_to_keys` rather than
+    # `filter_trials` — the table is never broadcast onto the frames, which is
+    # DATA-20's rule and the reason this design holds at either grain. `None`
+    # means no constraint; an empty set legitimately narrows to nothing.
+    trialmeta_keys = trial_filters.get("trial_keys")
+    if trialmeta_keys is not None:
+        words_df, fixations_df = filter_to_keys(words_df, fixations_df, trialmeta_keys)
+        raw_gaze_df = filter_frame_to_keys(raw_gaze_df, trialmeta_keys)
     # BUG-12: the raw-gaze samples table has to travel through the same
     # annotation filter as words + fixations, or a sample row for an unstarred
     # trial survives "⭐ Favorites only" — which also kept the all-three-empty
@@ -5190,6 +5312,12 @@ def main() -> None:
     # downstream discovers its columns from this frame, with no allowlist to
     # extend per surface.
     combos = metadata_mod.project(metadata_mod.active(), combos)
+    # DATA-29 §3 — and the one place the *trial* table is joined, onto the same
+    # small frame. Everything downstream (the chip picker, trial sorting, Data
+    # Inspection, export) discovers its columns from `combos`, so this single
+    # left-join is what makes a trial field behave like a field in the data —
+    # again without broadcasting the table onto words or fixations.
+    combos = metadata_mod.project_trials(metadata_mod.active_trials(), combos)
 
     # Land a shared/deep link on its exact `?trial_id=` (once) now that combos
     # exist — see _apply_url_trial_selection. Runs before the sidebar/tab widgets
@@ -5341,6 +5469,11 @@ def main() -> None:
             # The *unfiltered* readers: the join report describes the dataset,
             # not whatever the current Narrow-by left standing.
             render_participant_metadata_section(participants_all)
+            st.divider()
+            st.subheader("🗂️ Trial metadata")
+            # DATA-29: same reasoning one grain down — the report describes the
+            # dataset's trials, so it is built from the *unfiltered* combos.
+            render_trial_metadata_section(combos_all)
         with setup_body_slot:
             st.divider()
             st.subheader("🔎 What's in this dataset")

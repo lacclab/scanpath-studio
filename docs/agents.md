@@ -370,6 +370,19 @@ the linear-reading schematic.
 `heatmap_norm="Log"` compresses heavy-tailed dwell times. Duration mass spreads
 dwell over nearby characters; `duration_mass_sigma_chars` controls its Gaussian.
 
+### Raw gaze
+
+| Option | Default | Anim |
+|--------|---------|------|
+| `raw_gaze_color` | `'#888888'` | yes |
+| `raw_gaze_opacity` | `0.6` | yes |
+| `raw_gaze_marker_size` | `4.0` | yes |
+
+The raw sample cloud drawn under the scanpath when `show_raw_gaze=True` and a
+normalized raw-gaze frame is passed as `raw_gaze=…`. Its own colour, opacity
+and marker size (UX-86) — separate from the fixation styling, since the point
+of the layer is to sit behind the fixations without competing with them.
+
 ### Text & words
 
 | Option | Default | Anim |

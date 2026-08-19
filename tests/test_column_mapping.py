@@ -292,11 +292,10 @@ class TestSwitchingToAnotherTable:
     the ``index=`` auto-detection computes — that is what makes an override
     stick. But the app switches data sources *in place*, so those keys outlive
     the table they describe. Opening the bundled demo (no screen columns, so
-    *Screen order* = ``(none)``) and then switching to MultiplEYE left the field
-    on ``(none)`` while the caption under it still read
-    "✨ auto-detected ``screen_index``" — the proposal had found the column and
-    only the widget was stale, so the multipart trial ordered its screens by name
-    instead of by reading order.
+    *Screen ID* = ``(none)``) and then switching to MultiplEYE left the field on
+    ``(none)`` while the caption under it still read "✨ auto-detected ``page``"
+    — the proposal had found the column and only the widget was stale, so the
+    multipart trial never saw its own screens.
     """
 
     @staticmethod
@@ -328,17 +327,19 @@ class TestSwitchingToAnotherTable:
     def test_a_field_detected_only_in_the_new_table_is_used(self):
         at = AppTest.from_function(self._switch_app)
         at.run(timeout=30)
-        assert at.session_state["_mapping"]["screen_index"] is None
+        assert at.session_state["_mapping"]["screen_id"] is None
 
         at.session_state["_multipart"] = True
         at.run(timeout=30)
         assert not at.exception, at.exception
-        assert at.session_state["_mapping"]["screen_index"] == "screen_index", (
-            "the second table has a screen_index column and auto-detection "
-            "proposes it, so the field must not stay on the (none) left behind "
-            "by the first table"
+        assert at.session_state["_mapping"]["screen_id"] == "page", (
+            "the second table has a `page` column and auto-detection proposes "
+            "it as the screen id, so the field must not stay on the (none) left "
+            "behind by the first table"
         )
-        assert at.session_state["_mapping"]["screen_id"] == "page"
+        # UX-88 removed the *Screen name* field, so `screen_index` is no longer
+        # part of a mapping at all — the column is derived downstream instead.
+        assert "screen_index" not in at.session_state["_mapping"]
 
     def test_a_pick_that_still_applies_survives_the_switch(self):
         """Only what has gone stale is cleared — the wizard grows its own frame
@@ -356,16 +357,21 @@ class TestSwitchingToAnotherTable:
 
     def test_none_is_respected_while_the_table_is_the_same(self):
         """Within one table the widget stays authoritative, so a field the user
-        deliberately cleared is not quietly re-detected on the next rerun."""
+        deliberately cleared is not quietly re-detected on the next rerun.
+
+        Uses ``screen_id``, not ``screen_index`` (UX-88 removed *Screen name*
+        from every mapping surface — there is no widget of its own for a "None
+        stays None" check to apply to; `screen_id` exercises the identical
+        mechanism and is still rendered)."""
         at = AppTest.from_function(self._switch_app)
         at.session_state["_multipart"] = True
         at.run(timeout=30)
-        assert at.session_state["_mapping"]["screen_index"] == "screen_index"
+        assert at.session_state["_mapping"]["screen_id"] == "page"
 
-        at.selectbox(key="col_map_fix_screen_index").set_value(None).run(timeout=30)
-        assert at.session_state["_mapping"]["screen_index"] is None
+        at.selectbox(key="col_map_fix_screen_id").set_value(None).run(timeout=30)
+        assert at.session_state["_mapping"]["screen_id"] is None
         at.run(timeout=30)
-        assert at.session_state["_mapping"]["screen_index"] is None
+        assert at.session_state["_mapping"]["screen_id"] is None
 
     def test_the_table_marker_stays_out_of_the_saved_config(self):
         """It records this session's widget state, not the mapping.
@@ -415,3 +421,84 @@ class TestSwitchingToAnotherTable:
         import json
 
         json.dumps(swept)  # the config is written as JSON; a tuple would survive
+
+
+class TestConfirmingAnAutoDetectedField:
+    """UX-92 — clicking the ✨ flag is "I chose this", and clears the amber.
+
+    Re-picking the value a select already holds fires no ``on_change``:
+    Streamlit dedupes it in the frontend and does not rerun at all. Since
+    UX-53 r10 the value lives in the widget key with ``index=None`` (which is
+    what makes the ✕ clear work), so the detected column *is* the widget's
+    value and confirming it by hand is invisible to Python by construction.
+    The flag button is the signal that case has instead.
+    """
+
+    @staticmethod
+    def _app():
+        import pandas as pd
+        import streamlit as st
+
+        from scanpath_studio.controls import WORD_FIELD_SPECS, column_mapping_ui
+        from scanpath_studio.data import propose_word_schema
+
+        df = pd.DataFrame(
+            {
+                "participant_id": ["p1"],
+                "trial": ["t1"],
+                "IA_ID": [1],
+                "word": ["a"],
+                "IA_LEFT": [0],
+                "IA_RIGHT": [10],
+                "IA_TOP": [0],
+                "IA_BOTTOM": [10],
+            }
+        )
+        st.session_state["_m"] = column_mapping_ui(
+            df,
+            table_label="AOI",
+            state_key_prefix="col_map_words",
+            field_specs=WORD_FIELD_SPECS,
+            proposed=propose_word_schema(df),
+            only_keys=["box"],
+            columns_per_row=4,
+        )
+
+    @staticmethod
+    def _amber(at) -> str:
+        """The one <style> block carrying the auto-detected tint."""
+        return " ".join(
+            str(m.value)
+            for m in at.markdown
+            if "<style" in str(m.value) and "234, 179, 8" in str(m.value)
+        )
+
+    def test_the_flag_is_a_button_while_the_row_is_amber(self):
+        at = AppTest.from_function(self._app)
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        keys = [b.key for b in at.button]
+
+        assert "col_map_words_left_cell_confirm" in keys, (
+            "an auto-detected row must offer the one-click confirm — a "
+            f"same-value re-pick cannot report itself. Buttons: {keys}"
+        )
+        assert ".st-key-col_map_words_left_cell " in self._amber(at)
+
+    def test_confirming_clears_the_amber_for_that_field_only(self):
+        at = AppTest.from_function(self._app)
+        at.run(timeout=30)
+        at.button(key="col_map_words_left_cell_confirm").click()
+        at.run(timeout=30)
+        assert not at.exception, at.exception
+        amber = self._amber(at)
+
+        assert ".st-key-col_map_words_left_cell " not in amber, (
+            "the confirmed field must go neutral, not stay auto-detected"
+        )
+        assert ".st-key-col_map_words_right_cell " in amber, (
+            "confirming one field must not silently approve the rest"
+        )
+        # And the mapping itself is untouched — this is a claim about who
+        # decided, not a change of value.
+        assert at.session_state["_m"]["left"] == "IA_LEFT"

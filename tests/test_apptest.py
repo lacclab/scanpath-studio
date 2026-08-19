@@ -758,23 +758,36 @@ class TestLeavingTheWizard:
         view the user declined; clearing the prompt without recording which view
         that was would re-ask it on every rerun.
 
-        The view is re-pinned before each run because AppTest's router falls back
-        to the default page between runs, where a browser's would simply stay
-        where the user left it."""
+        **BUG-36 follow-up:** the click-processing run is deliberately *not*
+        re-pinned. `render_nav`'s reconciliation (which `pin_view` drives by
+        clearing its mirror) calls `st.switch_page` when it fires — a real
+        rerun, early in the script, well before the dialog's own button is
+        reached — and a button's "just clicked" value is one-shot: valid only
+        for the script execution immediately following the actual click, not
+        for one a same-run `st.rerun()` restarts from scratch. Pin_view'ing
+        the same run as the click would silently drop it before the return
+        value ever reads `True` — a race that can't happen in a real browser,
+        since nothing about clicking a dialog button asks the router to
+        switch pages, but very much can here since `pin_view` is a test-only
+        stand-in for the router remembering its page across runs at all. Left
+        unpinned, the run instead resolves the *default* page (Scanpath) —
+        AppTest's router forgets the previous switch between separate `.run()`
+        calls the same way it forgets everything else — so that is also what
+        `WIZARD_STAY_KEY` ends up recording, and the two checks below follow
+        that: an unpinned rerun (same, default page) must not re-ask, while
+        pinning to a genuinely different view (Corpus Analysis) must."""
         at = self._in_wizard()
         pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
         next(b for b in at.button if b.key == "wizard_leave_stay").click()
-        pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert "_wizard_leave_requested" not in at.session_state
         assert at.session_state["_show_upload_wizard"] is True
-        pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
         assert not [b for b in at.button if b.key == "wizard_leave_stay"]
         # A *different* view is a new question.
-        pin_view(at, "Scanpath Visualization")
+        pin_view(at, "Corpus Analysis")
         at.run(timeout=60)
         assert [b for b in at.button if b.key == "wizard_leave_stay"]
 
@@ -2664,13 +2677,19 @@ class TestSetupWizard:
         # Finalize is shown and pressable; the blocking problem mentions raw gaze.
         finalize = [b for b in at.button if b.key == "wizard_finalize"]
         assert finalize and not finalize[0].disabled
-        warn_text = " ".join(e.value for e in at.warning)
-        assert "Raw gaze" in warn_text, warn_text
+        # UX-88/UX-90: the page says nothing about what is missing until the
+        # user tries — so on arrival there is no blocker text to find yet.
+        assert not [e for e in at.error if "Raw gaze" in e.value]
 
         # The guarantee: pressing it stores no dataset, and the wizard stays up.
         finalize[0].click()
         at.run(timeout=60)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
+        # ...and pressing it explains itself. This blocker has no required
+        # field on screen to turn red, so without this the button is a dead
+        # end — press, nothing happens, nothing says why.
+        err_text = " ".join(e.value for e in at.error)
+        assert "Raw gaze" in err_text, err_text
         # AppTest's session_state is not a dict — no `.get()`.
         stored = (
             at.session_state["_datasets"] if "_datasets" in at.session_state else {}
@@ -3313,7 +3332,13 @@ class TestResetSettings:
 
         reset = [b for b in at.button if b.key == "reset_viz_settings_btn"]
         assert reset, "Reset visualization button not rendered"
-        reset[0].click().run(timeout=30)
+        at = reset[0].click().run(timeout=30)
+
+        # BUG-36: the click now only opens a confirmation dialog; the reset
+        # itself happens on the confirm click, one run later.
+        confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
+        assert confirm, "Reset confirmation button not rendered"
+        at = confirm[0].click().run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         # Re-seeded from controls._VIZ_WIDGET_DEFAULTS, not left deleted.
@@ -3332,7 +3357,12 @@ class TestResetSettings:
 
         reset = [b for b in at.button if b.key == "reset_viz_settings_btn"]
         assert reset, "Reset visualization button not rendered"
-        reset[0].click().run(timeout=30)
+        at = reset[0].click().run(timeout=30)
+
+        # BUG-36: click through the confirmation to actually reset.
+        confirm = [b for b in at.button if b.key == "reset_viz_confirm"]
+        assert confirm, "Reset confirmation button not rendered"
+        at = confirm[0].click().run(timeout=30)
 
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         assert at.session_state["filter_participants"] == ["nobody"]

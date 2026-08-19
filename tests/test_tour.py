@@ -280,15 +280,18 @@ class TestUseCaseTutorials:
         assert all(tutorial_availability(tutorial, ready)[0] for tutorial in TUTORIALS)
 
     def test_navigation_opens_panels_and_exit_restores_the_start_location(self):
+        """UX-83: starting a tutorial navigates to its first step's view right
+        away, instead of leaving the card on the page you were already on and
+        offering a "Show me / Open this panel" button to get there."""
         from scanpath_studio.constants import _VIEW_CORPUS, _VIEW_SCANPATH
 
         at = AppTest.from_function(_use_case_tutorial_app).run()
         assert not at.exception, at.exception
-        assert at.session_state["main_nav"] == _VIEW_CORPUS
-        assert at.button(key="tutorial_open_surface")
-
-        at.button(key="tutorial_open_surface").click().run()
+        # "filter_annotate"'s first step is on Scanpath — the app started on
+        # Corpus Analysis (the fixture's seed), so UX-83 should have moved it
+        # already, with no click needed and no "Show me" button offered.
         assert at.session_state["main_nav"] == _VIEW_SCANPATH
+        assert not [b for b in at.button if b.key == "tutorial_open_surface"]
         assert at.button(key="tutorial_next")
 
         at.button(key="tutorial_exit").click().run()

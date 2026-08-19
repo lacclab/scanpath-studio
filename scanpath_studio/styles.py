@@ -541,7 +541,10 @@ def get_app_css() -> str:
        rather than padding around it. Not an `<h4>`: the Data page keeps its four
        stage headings as the only h3/h4s (#UX-52). */
     .sps-wiz-section {
-        margin: 0.85rem 0 0.15rem;
+        /* UX-90: the bottom margin was 0.15rem, which Streamlit's own negative
+           block gap ate entirely — the heading and the first control's label
+           overlapped. A heading has to clear what it names. */
+        margin: 0.85rem 0 0.6rem;
         padding-top: 0.55rem;
         border-top: 1px solid rgba(128, 128, 128, 0.22);
         font-weight: 600;
@@ -625,7 +628,7 @@ def get_app_css() -> str:
         cursor: help;
     }
     .sps-wiz-note {
-        margin: 0.1rem 0 0.35rem;
+        margin: 0.1rem 0 0.5rem;  /* UX-90 */
         font-size: 0.86rem;
         opacity: 0.85;
     }
@@ -640,7 +643,7 @@ def get_app_css() -> str:
         display: flex;
         align-items: center;
         gap: 0.45rem;
-        margin: 1rem 0 0.3rem;
+        margin: 1rem 0 0.6rem;  /* UX-90 — same collision as the section rule */
         padding-top: 0.6rem;
         border-top: 2px solid rgba(128, 128, 128, 0.28);
         font-weight: 700;
@@ -753,6 +756,7 @@ def get_app_css() -> str:
        line once so the three field titles beside it need not each repeat it,
        and it sits on the titles' baseline rather than the controls'. */
     .sps-id-row-name {
+        padding-bottom: 0.3rem;  /* UX-90 — clear of the fields it names */
         font-weight: 700;
         font-size: 0.9rem;
         opacity: 0.85;
@@ -763,6 +767,34 @@ def get_app_css() -> str:
     /* UX-55 r2 — the same name column on the geometry rows, sitting on the
        selects' baseline (their own titles are stacked above them). */
     .sps-geo-row-name { padding-bottom: 0.45rem; }
+
+    /* UX-92 — the ✨ flag is a button while its row is amber (pressing it is
+       the "I chose this" that a same-value re-pick cannot report). It has to
+       keep reading as the icon it replaced: no chrome, no button box, no width
+       of its own — only the pointer and a lift on hover say it is pressable. */
+    [class*="st-key-"][class*="_confirm"] button {
+        min-height: 0;
+        padding: 0;
+        border: none;
+        background: none;
+        line-height: 1.2;
+    }
+    [class*="st-key-"][class*="_confirm"] button:hover {
+        background: none;
+        transform: translateY(-1px);
+    }
+    [class*="st-key-"][class*="_confirm"] button p { font-size: 0.95rem; }
+
+    /* UX-89 — the hairline between the Fixations block and the AOI block. The
+       mapping is grouped by *table* now (each table's identity row and its
+       feature row together), so the only thing separating the two groups is
+       this: one line, deliberately fainter and far tighter than `st.divider`,
+       whose margins would reintroduce the vertical cost the page keeps
+       fighting. */
+    .sps-wiz-blockgap {
+        border-top: 1px solid var(--sps-line, rgba(128, 128, 128, 0.22));
+        margin: 0.55rem 0 0.35rem;
+    }
 
     /* UX-75 — the chip line's title cell: the reading this strip belongs to,
        on the strip's own first line. Bold but not loud, and clipped rather than

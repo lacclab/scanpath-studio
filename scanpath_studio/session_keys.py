@@ -50,6 +50,10 @@ GLOBAL_FIXATION_SNAP_TO_WORD = "global_fixation_snap_to_word"
 GLOBAL_ANIM_AUTOPLAY = "global_anim_autoplay"
 GLOBAL_SHOW_HEATMAP = "global_show_heatmap"
 GLOBAL_SHOW_RAW_GAZE = "global_show_raw_gaze"
+# UX-86: raw gaze's own style.
+GLOBAL_RAW_GAZE_COLOR = "global_raw_gaze_color"
+GLOBAL_RAW_GAZE_MARKER_SIZE = "global_raw_gaze_marker_size"
+GLOBAL_RAW_GAZE_OPACITY = "global_raw_gaze_opacity"
 GLOBAL_SHOW_COLORBARS = "global_show_colorbars"
 GLOBAL_HOLLOW_FIXATIONS = "global_hollow_fixations"
 GLOBAL_SCALE_TEXT_TO_BOXES = "global_scale_text_to_boxes"
@@ -329,6 +333,7 @@ SHARE_VALUE_PARAMS: Mapping[str, str] = MappingProxyType(
         "fixation_colorscale": GLOBAL_FIXATION_COLORSCALE,
         "heatmap_colorscale": GLOBAL_HEATMAP_COLORSCALE,
         "saccade_color": GLOBAL_SACCADE_COLOR,
+        "raw_gaze_color": GLOBAL_RAW_GAZE_COLOR,
         "saccade_color_mode": GLOBAL_SACCADE_COLOR_MODE,
         "saccade_color_forward": GLOBAL_SACCADE_CLASS_COLOR_FORWARD,
         "saccade_color_skip": GLOBAL_SACCADE_CLASS_COLOR_SKIP,
@@ -380,6 +385,8 @@ SHARE_FLOAT_PARAMS: Mapping[str, str] = MappingProxyType(
         "stimulus_image_offset_y": GLOBAL_STIMULUS_IMAGE_OFFSET_Y,
         "stimulus_image_scale": GLOBAL_STIMULUS_IMAGE_SCALE,
         "coordinate_grid_spacing": GLOBAL_COORDINATE_GRID_SPACING,
+        "raw_gaze_marker_size": GLOBAL_RAW_GAZE_MARKER_SIZE,
+        "raw_gaze_opacity": GLOBAL_RAW_GAZE_OPACITY,
     }
 )
 

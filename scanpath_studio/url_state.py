@@ -276,6 +276,8 @@ _SHARE_VALUE_PARAMS = {  # string / choice / color → str (emitted only when se
     "fixation_colorscale": "global_fixation_colorscale",
     "heatmap_colorscale": "global_heatmap_colorscale",
     "saccade_color": "global_saccade_color",
+    # UX-86: raw gaze's own style.
+    "raw_gaze_color": "global_raw_gaze_color",
     # VIZ-8: colour-by-reading-type mode + the five class colours.
     "saccade_color_mode": "global_saccade_color_mode",
     "saccade_color_forward": "global_saccade_class_color_forward",
@@ -332,6 +334,9 @@ _SHARE_FLOAT_PARAMS = {
     "stimulus_image_offset_y": "global_stimulus_image_offset_y",
     "stimulus_image_scale": "global_stimulus_image_scale",
     "coordinate_grid_spacing": "global_coordinate_grid_spacing",
+    # UX-86: raw gaze's own style.
+    "raw_gaze_marker_size": "global_raw_gaze_marker_size",
+    "raw_gaze_opacity": "global_raw_gaze_opacity",
 }
 _SHARE_INT_RANGE_PARAMS = {"marker_size_range": "global_marker_size_range"}
 _SHARE_FLOAT_RANGE_PARAMS = {
@@ -1777,6 +1782,21 @@ def _restore_plot_config(
             st.toast(
                 f"Restored participant metadata ({len(attached.fields)} field(s)).",
                 icon="👤",
+            )
+
+    # DATA-29 — the trial table, same contract and the same ordering reason.
+    trial_payload = config.get("trial_metadata")
+    if isinstance(trial_payload, dict):
+        from scanpath_studio import metadata as _metadata
+
+        attached_trials = _metadata.trial_from_payload(trial_payload)
+        if attached_trials is not None:
+            st.session_state[_metadata.TRIAL_SESSION_KEY] = attached_trials
+            st.session_state[_metadata.TRIAL_RAW_SESSION_KEY] = attached_trials.frame
+            restore.applied += 1
+            st.toast(
+                f"Restored trial metadata ({len(attached_trials.fields)} field(s)).",
+                icon="🗂️",
             )
 
     return restore.applied, skipped

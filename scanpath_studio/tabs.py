@@ -96,6 +96,7 @@ from scanpath_studio.controls import (
     _numeric_slider,
     column_mapping_ui,
     corpus_style_controls,
+    current_dataset_name,
     read_trial_filters,
     render_narrow_by,
     render_pattern_help,
@@ -2425,6 +2426,9 @@ def _build_studio_config(
         # point at fields that no longer exist. Records, not a file path: the
         # JSON has to be portable between machines like everything else in it.
         "participant_metadata": _participant_metadata_payload(),
+        # DATA-29: and the trial table, for exactly the same reason — a restored
+        # `filter_trialmeta_*` selection has to land on fields that exist.
+        "trial_metadata": _trial_metadata_payload(),
     }
 
 
@@ -2432,6 +2436,12 @@ def _participant_metadata_payload():
     from scanpath_studio import metadata as md
 
     return md.to_payload(active_participant_metadata())
+
+
+def _trial_metadata_payload():
+    from scanpath_studio import metadata as md
+
+    return md.trial_to_payload(md.active_trials())
 
 
 def _collect_column_mapping() -> dict:
@@ -2910,6 +2920,8 @@ def _apply_title_caption(
     participant: str,
     trial: str,
     combo_row: dict | None = None,
+    dataset_name: str | None = None,
+    compare_row: dict | None = None,
 ) -> None:
     """EXP-5: stamp the rail's title/caption pattern onto ``fig``.
 
@@ -2946,6 +2958,11 @@ def _apply_title_caption(
         trial_fixations,
         settings_summary_input,
         combo_row=combo_row,
+        # VIZ-36: the name the dataset picker shows. `current_dataset_name()`
+        # is the session default so the three in-app render paths (static,
+        # animation, compare) all get it without each remembering to.
+        dataset_name=current_dataset_name() if dataset_name is None else dataset_name,
+        compare_row=compare_row,
     )
     title = render_pattern(title_pattern, fields) if title_pattern else ""
     caption = render_pattern(caption_pattern, fields) if caption_pattern else ""
@@ -2965,6 +2982,7 @@ def _resolve_compare_label(
     trial: str | None,
     trial_words: pd.DataFrame | None,
     trial_fixations: pd.DataFrame | None,
+    dataset_name: str = "",
 ) -> str:
     """UX-31: the A/B legend label for compare scanpath ``idx`` (0 or 1).
 
@@ -2981,8 +2999,23 @@ def _resolve_compare_label(
         trial_words if trial_words is not None else pd.DataFrame(),
         trial_fixations if trial_fixations is not None else pd.DataFrame(),
         {},
+        # VIZ-36: side B can be a different corpus entirely (#CMP-8), so the
+        # label resolves `{dataset_name}` against *its own* side rather than
+        # the picker's — an A/B legend that named the same dataset twice would
+        # be worse than no name at all.
+        dataset_name=dataset_name or current_dataset_name(),
     )
     return render_pattern(pattern, fields) or default
+
+
+def _compare_dataset_name(compare_meta: dict | None) -> str:
+    """The dataset scanpath B is drawn from (VIZ-36).
+
+    #CMP-8 lets B come from a second corpus, and `compare_meta["dataset"]`
+    carries its name when it does; a same-dataset comparison leaves it unset and
+    both sides are the picker's current source.
+    """
+    return str((compare_meta or {}).get("dataset") or current_dataset_name())
 
 
 def _build_and_render_animation(
@@ -2999,6 +3032,7 @@ def _build_and_render_animation(
     viz_settings: dict,
     playback_speed: float,
     drift_corrected: bool = False,
+    dataset_name_b: str = "",
 ):
     """Build + render the animation figure (single or dual co-animation) in the
     main column. Returns ``(fig, playback_ms, save_slug, file_stem)``.
@@ -3036,7 +3070,12 @@ def _build_and_render_animation(
         ),
         label_b=(
             _resolve_compare_label(
-                1, compare_participant, compare_trial, words_b, fixations_b
+                1,
+                compare_participant,
+                compare_trial,
+                words_b,
+                fixations_b,
+                dataset_name=dataset_name_b,
             )
             if dual
             else "Scanpath B"
@@ -3061,6 +3100,15 @@ def _build_and_render_animation(
         trial_fixations,
         selected_participant,
         selected_trial,
+        compare_row=(
+            {
+                "dataset_name": dataset_name_b or current_dataset_name(),
+                "participant_id": compare_participant,
+                "trial_id": compare_trial,
+            }
+            if dual
+            else None
+        ),
     )
     _render_true_scale_chart(fig, key="single_anim")
     if dual:
@@ -3601,14 +3649,19 @@ def render_single_trial_tab(
         # Slots filled once the selection is resolved (chips need the trial).
         # Keyed containers double as welcome-tour spotlight targets.
         #
-        # UX-75 — the order is one **pair** per reading: control line, then that
-        # reading's title + chips. Compare mode used to stack A's label, A's
-        # chips, B's label and B's chips all below *both* control lines, so
-        # which chips described which reading was inferred from colour and
-        # order. Now A's strip sits under A's row and B's under B's, which is
-        # also why the compare selector is created between them.
+        # CMP-16 — creation order *is* screen order, so these three reservations
+        # are the whole layout: **both control lines first, then both chip
+        # strips** (control A · control B · chips A · chips B). UX-75 had paired
+        # them the other way — each reading's chips directly under the row that
+        # chose it — which says whose chips are whose but puts the two control
+        # lines a strip apart, so comparing the A and B selectors means reading
+        # across an unrelated block. Grouping by kind puts them adjacent, and
+        # #CMP-15 is what keeps the attribution: each chip strip names its own
+        # dataset, so nothing depends on vertical adjacency any more. Keyed
+        # containers double as welcome-tour spotlight targets — `compare_slot`
+        # takes one too, for symmetry with the strip it now sits beside.
+        compare_slot = st.container(key="tour_grp_compare_picker")
         chips_slot = st.container(key="tour_grp_chips")
-        compare_slot = st.container()
         compare_chips_slot = st.container(key="tour_grp_compare_chips")
         plot_slot = st.container(key="tour_grp_plot")
 
@@ -3768,9 +3821,15 @@ def render_single_trial_tab(
                 # one. The toggle's `help` moved here for the same pass: on a
                 # widget it renders as a `?` icon, on a trigger as a plain hover
                 # tooltip.
+                # BUG-37: an explicit key — a blank-label popover otherwise
+                # relies on Streamlit's positional auto-key, which can shift
+                # across reruns and drop the open state. See `_rail_section`
+                # in controls.py for the full diagnosis; this row predates
+                # that helper but shares its exact shape and its exposure.
                 with st.popover(
                     "",
                     width="content",
+                    key="split_mode_animate_popover",
                     help="Playback settings. Replay the trial fixation by "
                     "fixation; the play / pause / restart controls sit below "
                     "the plot.",
@@ -3955,9 +4014,12 @@ def render_single_trial_tab(
                 )
                 # UX-80 r2: see the Animate row above — one arrow, and the
                 # toggle's `help` served as a tooltip here instead of a `?`.
+                # BUG-37: see the Animate row above — an explicit key so a
+                # blank-label popover keeps its open state across reruns.
                 with st.popover(
                     "",
                     width="content",
+                    key="split_mode_compare_popover",
                     help="Compare settings. "
                     + (
                         "Co-animate a second reading on one clock."
@@ -4059,7 +4121,12 @@ def render_single_trial_tab(
                         # pointed at: "same fields as the title/caption pattern"
                         # only helps a user who has already found that control.
                         label_fields = pattern_fields(
-                            "p01", "t01", pd.DataFrame(), pd.DataFrame(), {}
+                            "p01",
+                            "t01",
+                            pd.DataFrame(),
+                            pd.DataFrame(),
+                            {},
+                            dataset_name=current_dataset_name(),
                         )
                         box = st.container()
                         for idx, side in ((0, "A"), (1, "B")):
@@ -4539,6 +4606,7 @@ def render_single_trial_tab(
                         selected_trial,
                         compare_participant,
                         compare_trial,
+                        dataset_name_b=_compare_dataset_name(compare_meta),
                         settings=render_settings,
                         viz_settings=viz_settings,
                         playback_speed=playback_speed,
@@ -4980,6 +5048,7 @@ def _render_comparison_figure(
             selected_trial,
             extract_trial(words_filtered, selected_participant, selected_trial),
             extract_trial(fixations_filtered, selected_participant, selected_trial),
+            dataset_name=current_dataset_name(),
         )
     if st.session_state.get("cmp1_label_pattern"):
         compare_label = _resolve_compare_label(
@@ -4988,6 +5057,7 @@ def _render_comparison_figure(
             compare_trial,
             extract_trial(words_filtered, compare_participant, compare_trial),
             extract_trial(fixations_filtered, compare_participant, compare_trial),
+            dataset_name=_compare_dataset_name(compare_meta),
         )
 
     overrides: dict = dict(
@@ -5052,6 +5122,14 @@ def _render_comparison_figure(
         combo_row=(
             _primary_combo.iloc[0].to_dict() if not _primary_combo.empty else None
         ),
+        # VIZ-36: two readings in one figure, so `{dataset_name_b}` and friends
+        # have a value to resolve against.
+        compare_row={
+            "dataset_name": _compare_dataset_name(compare_meta),
+            "participant_id": compare_participant,
+            "trial_id": compare_trial,
+            "text_id": compare_text_id,
+        },
     )
     _render_true_scale_chart(fig_compare, key="compare")
     if cross_dataset:
@@ -8247,6 +8325,173 @@ def _participant_metadata_body(participants) -> None:
         key="participant_metadata_clear",
         on_click=_clear_participant_metadata,
         help="Remove the participant metadata from this session.",
+    )
+
+
+#: DATA-29 — the trial table's display name, like `_PM_NAME_KEY` for readers.
+_TM_NAME_KEY = "_trial_metadata_name"
+
+
+def _clear_trial_metadata() -> None:
+    """Detach the trial table (the ✕ button's ``on_click``) — DATA-29."""
+    from scanpath_studio import metadata as md
+
+    for key in (
+        md.TRIAL_SESSION_KEY,
+        md.TRIAL_RAW_SESSION_KEY,
+        md.TRIAL_FILE_SESSION_KEY,
+        _TM_NAME_KEY,
+    ):
+        st.session_state.pop(key, None)
+
+
+def render_trial_metadata_section(combos, *, host=None) -> None:
+    """DATA-29 — attach a trial-level table and report the join.
+
+    The sibling of :func:`render_participant_metadata_section`, and deliberately
+    the same shape: nothing is guessed, the key columns are offered pre-filled
+    but overridable, and the join is reported in full before the fields go
+    anywhere.
+
+    **The key is the user's call, not an inference.** A table keyed by trial id
+    alone describes a *text*, and every reading of that text inherits its row; a
+    table keyed by reader *and* trial describes one *reading*. Nothing in a file
+    says which world a corpus is in, so the reader column is a picker with an
+    explicit *(none)* — defaulting to unset, the trial-grain reading, rather
+    than auto-filling from any plausible column, because guessing wrong here
+    silently changes what every filter built on it means.
+    """
+    if host is not None:
+        with host:
+            _trial_metadata_body(combos)
+        return
+    _trial_metadata_body(combos)
+
+
+_TRIAL_META_NONE = "(none — one row per trial)"
+
+
+def _trial_metadata_body(combos) -> None:
+    from scanpath_studio import metadata as md
+    from scanpath_studio.data import read_table
+
+    upload = st.file_uploader(
+        "Trial metadata table (optional)",
+        type=["csv", "tsv", "txt", "parquet", "feather", "xlsx", "zip"],
+        key="trial_metadata_upload",
+        help="One row per trial, with a trial-id column. The columns then "
+        "behave like fields in the data: filters, chips, trial sorting, "
+        "inspection and export. CSV / TSV / Parquet / Excel.",
+    )
+    if upload is None:
+        if md.active_trials() is None:
+            return
+    else:
+        signature = getattr(upload, "file_id", None) or (
+            upload.name,
+            getattr(upload, "size", None),
+        )
+        if st.session_state.get(md.TRIAL_FILE_SESSION_KEY) != signature:
+            try:
+                st.session_state[md.TRIAL_RAW_SESSION_KEY] = read_table(upload)
+                st.session_state[md.TRIAL_FILE_SESSION_KEY] = signature
+                st.session_state[_TM_NAME_KEY] = upload.name
+                st.session_state.pop("trial_metadata_id_column", None)
+                st.session_state.pop("trial_metadata_participant_column", None)
+            except Exception as exc:  # unreadable file — say so, keep the page
+                st.error(f"Could not read {upload.name}: {exc}")
+                return
+
+    raw = st.session_state.get(md.TRIAL_RAW_SESSION_KEY)
+    if raw is None or raw.empty:
+        return
+
+    columns = [str(column) for column in raw.columns]
+    inferred = md.infer_trial_id_column(raw)
+    left, right = st.columns(2)
+    trial_column = left.selectbox(
+        "Trial ID column",
+        columns,
+        index=columns.index(inferred) if inferred in columns else 0,
+        key="trial_metadata_id_column",
+        persist_state="session",
+        help="Which column holds the trial id that joins to your data. "
+        "Required — it is what makes this a trial table.",
+    )
+    participant_choice = right.selectbox(
+        "Reader ID column",
+        [_TRIAL_META_NONE, *columns],
+        key="trial_metadata_participant_column",
+        persist_state="session",
+        help="Optional. Leave unset when each row describes a **text** and "
+        "every reading of it inherits the row. Set it when each row describes "
+        "one **reading** by one reader.",
+    )
+    participant_column = (
+        None if participant_choice == _TRIAL_META_NONE else participant_choice
+    )
+    attached = md.build_trial_metadata(
+        raw,
+        trial_column,
+        participant_column,
+        source_name=str(st.session_state.get(_TM_NAME_KEY) or "trial table"),
+        keys=md.trial_keys(combos),
+    )
+    st.session_state[md.TRIAL_SESSION_KEY] = attached
+
+    report = attached.report
+    if not attached.fields:
+        st.warning(
+            "That table has no columns besides the key, so there is nothing to add.",
+            icon="⚠️",
+        )
+        return
+    grain = "reading" if attached.keyed_by_participant else "trial"
+    matched = len(report.matched)
+    if report.is_clean:
+        st.success(f"Joined to all {matched} {grain}s.", icon="✅")
+    else:
+        st.info(f"Joined to {matched} {grain}s.", icon="🔗")
+    if report.conflicting:
+        st.warning(
+            f"**{len(report.conflicting)} {grain}(s) have rows that disagree** "
+            f"({_id_list(report.conflicting)}). Their fields are left empty "
+            "rather than resolved by taking the first row.",
+            icon="⚠️",
+        )
+    if report.only_in_data:
+        st.caption(
+            f"No row for {len(report.only_in_data)} loaded {grain}(s): "
+            f"{_id_list(report.only_in_data)}. Their fields read as missing."
+        )
+    if report.only_in_table:
+        st.caption(
+            f"{len(report.only_in_table)} row(s) describe {grain}s that are not "
+            f"loaded: {_id_list(report.only_in_table)}. Ignored."
+        )
+
+    with st.expander(f"🗂️ {len(attached.fields)} field(s) added", expanded=False):
+        st.dataframe(
+            [
+                {
+                    "Field": field.label,
+                    "Column": field.name,
+                    "Grain": field.grain,
+                    "Type": field.dtype,
+                    "Distinct": field.n_unique,
+                    "Missing": field.n_missing,
+                }
+                for field in attached.fields
+            ],
+            hide_index=True,
+            width="stretch",
+        )
+        st.dataframe(attached.frame, hide_index=True, width="stretch")
+    st.button(
+        "✕ Detach this table",
+        key="trial_metadata_clear",
+        on_click=_clear_trial_metadata,
+        help="Remove the trial metadata from this session.",
     )
 
 

@@ -94,6 +94,9 @@ class FigureSettings:
     fixation_colorscale: str = DEFAULT_FIXATION_COLORSCALE
     heatmap_colorscale: str = DEFAULT_HEATMAP_COLORSCALE
     show_raw_gaze: bool = False
+    raw_gaze_color: str = "#888888"
+    raw_gaze_marker_size: float = 4.0
+    raw_gaze_opacity: float = 0.6
     critical_span_style: str = "Mark text"
     highlight_column: str | None = "is_in_aspan"
     saccade_color: str = SACCADE_COLOR
@@ -1781,13 +1784,22 @@ def _add_saccade_layer(
 
 
 def _add_raw_gaze_layer(
-    fig: go.Figure, raw_gaze: pd.DataFrame | None, *, show_raw_gaze: bool
+    fig: go.Figure,
+    raw_gaze: pd.DataFrame | None,
+    *,
+    show_raw_gaze: bool,
+    raw_gaze_color: str = "#888888",
+    raw_gaze_marker_size: float = 4.0,
+    raw_gaze_opacity: float = 0.6,
 ) -> bool:
     """Add the raw-gaze sample-point scatter (time-coloured when available).
 
     Returns ``True`` if a trace was added, so the caller can mark the legend
     active (it reserves margin for the legend). Self-gates on ``show_raw_gaze``
-    and a non-empty frame.
+    and a non-empty frame. **UX-86**: ``raw_gaze_color`` is the flat colour
+    used when the data carries no ``timestamp_ms`` — when it does, fixations
+    stay time-mapped (Viridis) since that is the more informative default and
+    a flat colour would throw it away.
     """
     if not (show_raw_gaze and raw_gaze is not None and not raw_gaze.empty):
         return False
@@ -1795,7 +1807,7 @@ def _add_raw_gaze_layer(
         color_vals = raw_gaze["timestamp_ms"]
         colorscale = "Viridis"
     else:
-        color_vals = "#888888"
+        color_vals = raw_gaze_color
         colorscale = None
     fig.add_trace(
         go.Scatter(
@@ -1803,10 +1815,10 @@ def _add_raw_gaze_layer(
             y=raw_gaze["y"],
             mode="markers",
             marker=dict(
-                size=4,
+                size=raw_gaze_marker_size,
                 color=color_vals,
                 colorscale=colorscale,
-                opacity=0.6,
+                opacity=raw_gaze_opacity,
                 showscale=False,
             ),
             hovertemplate=(
@@ -1930,6 +1942,9 @@ def _render_scanpath_figure(
     fixation_colorscale = settings.fixation_colorscale
     heatmap_colorscale = settings.heatmap_colorscale
     show_raw_gaze = settings.show_raw_gaze
+    raw_gaze_color = settings.raw_gaze_color
+    raw_gaze_marker_size = settings.raw_gaze_marker_size
+    raw_gaze_opacity = settings.raw_gaze_opacity
     critical_span_style = settings.critical_span_style
     highlight_column = settings.highlight_column
     saccade_color = settings.saccade_color
@@ -2094,7 +2109,14 @@ def _render_scanpath_figure(
                 word_hover_fields=word_hover_fields,
             )
 
-    if _add_raw_gaze_layer(fig, raw_gaze, show_raw_gaze=show_raw_gaze):
+    if _add_raw_gaze_layer(
+        fig,
+        raw_gaze,
+        show_raw_gaze=show_raw_gaze,
+        raw_gaze_color=raw_gaze_color,
+        raw_gaze_marker_size=raw_gaze_marker_size,
+        raw_gaze_opacity=raw_gaze_opacity,
+    ):
         legend_active = True
 
     if spatial_axes and show_heatmap and not fixations.empty:

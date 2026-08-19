@@ -123,6 +123,11 @@ class ExportOptions:
     # recorded in the per-trial manifest. Empty = off (the historical behaviour).
     title_pattern: str = ""
     caption_pattern: str = ""
+    # VIZ-36: what `{dataset_name}` substitutes to. The app fills it from the
+    # dataset picker's label; a headless caller that says nothing gets "", so
+    # the placeholder renders empty rather than erroring on a surface nobody is
+    # watching.
+    dataset_name: str = ""
     # DATA-20 milestone 10: which columns of the attached participant table go
     # into `metadata/participants.*`. `None` is every field (the default, and
     # what a headless caller that knows nothing about this gets); a tuple is
@@ -234,6 +239,11 @@ def _settings_summary(settings: dict) -> str:
     return " · ".join(parts)
 
 
+#: VIZ-36 — the fields that can hold *two* values at once, because an overlay
+#: draws two readings into one frame. Each gains an ``_a`` / ``_b`` variant.
+PAIRED_PATTERN_FIELDS = ("dataset_name", "participant_id", "trial_id", "text_id")
+
+
 def pattern_fields(
     participant: str,
     trial: str,
@@ -241,17 +251,34 @@ def pattern_fields(
     trial_fixations: pd.DataFrame,
     settings: dict,
     combo_row: dict | None = None,
+    dataset_name: str = "",
+    compare_row: dict | None = None,
 ) -> dict:
     """Every value a filename / title / caption pattern can substitute.
 
     The trial's own combo columns (participant, trial, text, conditions …) plus
     counts and the settings summary. Values are left raw here; path rendering
     sanitizes them, while titles and captions want them readable.
+
+    **VIZ-36 — ``dataset_name`` arrives as an argument, never read from here.**
+    The app knows it as ``data_source_choice`` (since DATA-9 that key *is* the
+    picker's label, and DATA-23's rename re-keys it), but this function is pure
+    and also runs headless under ``api.save_figure_layers`` and ``cli render``,
+    where there is no session at all. Each of the five callers supplies it.
+
+    ``compare_row`` is the *other* reading in an overlay — two scanpaths in one
+    frame, so a single ``{dataset_name}`` is ambiguous exactly where a title
+    most wants to name both. Every field in :data:`PAIRED_PATTERN_FIELDS` gains
+    an ``_a`` / ``_b`` variant, which are defined **always** (``_b`` empty when
+    there is no second reading) so that a pattern written in compare mode still
+    validates and renders on a single-trial figure instead of erroring on a
+    surface the author cannot see.
     """
     fields: dict = dict(combo_row or {})
     fields.update(
         participant_id=participant,
         trial_id=trial,
+        dataset_name=dataset_name,
         n_fixations=len(trial_fixations),
         n_words=len(trial_words),
         reading_time_s=round(
@@ -266,6 +293,9 @@ def pattern_fields(
         settings=_settings_summary(settings),
     )
     fields.setdefault("text_id", trial)
+    for name in PAIRED_PATTERN_FIELDS:
+        fields[f"{name}_a"] = fields.get(name, "")
+        fields[f"{name}_b"] = (compare_row or {}).get(name, "")
     return fields
 
 
@@ -1133,6 +1163,9 @@ def render_export_options(
         path_pattern=path_pattern,
         title_pattern=title_pattern,
         caption_pattern=caption_pattern,
+        # VIZ-36: this panel only runs inside the app, so the picker's label is
+        # available; `pattern_fields` itself stays session-free.
+        dataset_name=_session_dataset_name(),
         metadata_fields=metadata_fields,
         export_unfiltered=export_unfiltered,
         scope=scope,
@@ -1140,6 +1173,21 @@ def render_export_options(
         scope_trial=scope_trial,
         scope_text=scope_text,
     )
+
+
+def _session_dataset_name() -> str:
+    """The dataset picker's label, for the options UI only (VIZ-36).
+
+    Guarded because `export` is imported headless by `api` and `cli`, where
+    there is no session; the value only ever reaches `ExportOptions`, never
+    `pattern_fields`, which takes it as an argument by design.
+    """
+    import streamlit as st
+
+    try:
+        return str(st.session_state.get("data_source_choice") or "")
+    except Exception:
+        return ""
 
 
 def _scope_frame(
@@ -1552,6 +1600,7 @@ def bulk_export(
                 trial_fix,
                 settings,
                 combo_row=combo._asdict(),
+                dataset_name=options.dataset_name,
             )
 
             def _path(artifact: str, ext: str, _f=fields, _slug=screen_slug) -> str:

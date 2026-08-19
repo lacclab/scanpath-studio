@@ -107,13 +107,21 @@
       "archived": true,
       "updated": "2026-08-15"
     },
-    "BUG-30": {
-      "status": "Review",
+    "BUG-29": {
+      "status": "On hold",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-18"
+      "updated": "2026-08-19"
+    },
+    "BUG-30": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "BUG-31": {
       "status": "Closed",
@@ -140,11 +148,27 @@
       "updated": "2026-08-19"
     },
     "BUG-35": {
-      "status": "Planned",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "no need to warn",
-      "archived": false,
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "BUG-36": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "better but still not perfect - if i click the session navigation and then KEEP EDITING, and then cancle, it still moves to the session page even though i'm supposed to stay in the data page after cancle. make sure that clicking \"keep editing\" updates the active page to be the data page in add dataset dialog",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "BUG-37": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "still very very slow, some menus dont open",
+      "archived": true,
       "updated": "2026-08-19"
     },
     "BUG-4": {
@@ -163,11 +187,12 @@
       "updated": "2026-08-12"
     },
     "CMP-12": {
-      "status": "Backlog",
+      "status": "On hold",
       "priority": "Low",
+      "owner": "",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-12"
+      "updated": "2026-08-19"
     },
     "CMP-13": {
       "status": "Closed",
@@ -177,20 +202,28 @@
       "updated": "2026-08-13"
     },
     "CMP-14": {
-      "status": "Backlog",
+      "status": "Closed",
       "priority": "Low",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "CMP-15": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "CMP-16": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "CMP-5": {
       "status": "Closed",
@@ -341,7 +374,7 @@
       "status": "In progress",
       "priority": "Normal",
       "owner": "Maya",
-      "implementationBrief": "1. let the user decide on one of these options. decide on the best implementation and link a user choice field, like the select menus in add data for example to choose trial id field and participant id field.\n2. you decide which works best",
+      "implementationBrief": "1. this is the right model, the usecase is the same - appear as metadata chips on the scanpath screen and let the user choose which fields he would like to see\n2. auto fill. \ntrial field is mandatory, reader isnt",
       "archived": false,
       "updated": "2026-08-19"
     },
@@ -362,11 +395,11 @@
       "updated": "2026-08-17"
     },
     "DATA-32": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. should be in the user's cache, like his uploaded datasets. it's better to keep these calculation results for all public datasets that exist in the system by default, and only save in the user's cache the user's uploaded datasets' info.\n2. can you do that once and then save it as part of the app's info? then we can do it once offline before the release.",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "ENG-19": {
@@ -624,11 +657,11 @@
       "updated": "2026-08-13"
     },
     "PRE-22": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "PRE-4": {
@@ -891,20 +924,28 @@
       "updated": "2026-08-19"
     },
     "UX-55": {
-      "status": "In progress",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "move ALL FIXATION FIELDS up to the fixation line, instead of a single line do 2 lines so that all the fields fit on the screen. then unify ALL AOI FIELDS as well.\n\nkeep it ID vrs. DESC for now, and move all fixation fields to be at the same place, 2 lines of features, and move all AOI realted fields to be close together, including word ids and word boxes. remove any big titles or spaces in between to save space.",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-56": {
+      "status": "On hold",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-18"
+      "updated": "2026-08-19"
     },
     "UX-57": {
-      "status": "In progress",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "the menu options text is sometimes cropped, this is not good and should change for all selection menus. for example fixaation x coordinate has cropped options",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-58": {
       "status": "Closed",
@@ -923,12 +964,12 @@
       "updated": "2026-08-18"
     },
     "UX-63": {
-      "status": "In progress",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1-3 ok. keep changing according to ux-65",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-64": {
       "status": "Closed",
@@ -1003,11 +1044,11 @@
       "updated": "2026-08-19"
     },
     "UX-74": {
-      "status": "On hold",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "UX-75": {
@@ -1064,6 +1105,94 @@
       "owner": "Maya",
       "implementationBrief": "",
       "archived": false,
+      "updated": "2026-08-19"
+    },
+    "UX-82": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-83": {
+      "status": "In progress",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "moves to the right page but tutorial itself doesnt start. \nalso i wanted a \"dont show again\" checkbox inside each tutorial's dialogs",
+      "archived": false,
+      "updated": "2026-08-19"
+    },
+    "UX-84": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "popover",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-85": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "only stop it auto-opening. you can add checkbox for \"dont auto-show\" for each tutorial in the list.",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-86": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "make heatmap it's own section like fixations and saccades and raw gaze.",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-88": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-89": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-90": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-91": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-92": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-19"
+    },
+    "UX-93": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
       "updated": "2026-08-19"
     },
     "VAL-1": {
@@ -1204,13 +1333,34 @@
       "updated": "2026-08-11"
     },
     "VIZ-36": {
-      "status": "In progress",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. each dataset has a name defined by the user and displayed in the select dataset menu in the control line where you choose the scanpath's trial id with the slider. i want the tag {dataset_name} to display that name, the name of the dataset from which you take the fixations and aois.\n2. if in side by side or stacked display, each plot has it's own dataset and trial id etc. so that's what this field should represent. in overlay view, i would like to have dataset_name_a and b, and also for trial id and the rest of the fields that can have 2 different values in this situation.",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     }
   },
-  "createdItems": []
+  "createdItems": [
+    {
+      "added": "2026-08-19",
+      "sub": "",
+      "request": [
+        "🧹 Clear cached computations button is pretty useless - delete it?"
+      ],
+      "priority": "Normal",
+      "prefix": "UX",
+      "subgroup": "",
+      "implementationBrief": "I think claude created this card when i told him to delete the calculations when a dataset is deleted. is there a button that deletes all uploaded datasets? if so that this should be the button that clears calculations. no point in a button that does only that.",
+      "id": "UX-87",
+      "num": 87,
+      "group": "UX & Interaction",
+      "archived": false,
+      "status": "Backlog",
+      "title": "🧹 Clear cached computations button is pretty useless - delete it?",
+      "background": [
+        "Related to #DATA-32."
+      ]
+    }
+  ]
 }

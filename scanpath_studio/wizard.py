@@ -42,6 +42,7 @@ from .controls import (
     WORD_FIELD_SPECS,
     column_mapping_ui,
     inline_field_label,
+    mark_missing_cells,
 )
 from .data import (
     FILE_PART_PREFIX,
@@ -241,11 +242,22 @@ def _remove_dataset(name: str) -> None:
 
     Pops it from the ``_datasets`` store and, if it was the selected source,
     switches back to the bundled demo via ``_pending_source_choice`` (applied
-    before the radio re-instantiates, like the wizard finalize/cancel switch)."""
+    before the radio re-instantiates, like the wizard finalize/cancel switch).
+
+    **UX-87: deleting a dataset drops the computations derived from it.** Every
+    figure, table and normalization the app cached for this dataset is dead the
+    moment its frames leave the session — keeping them only holds memory and
+    leaves stale results one undo-less click away from being attributed to
+    whatever takes the name next. ``@st.cache_data`` has no per-key eviction, so
+    this is ``clear_computation_cache``'s blunt instrument: the survivors are
+    recomputed on the next rerun from frames that are still loaded, which is the
+    same lossless trade the 🧹 button makes.
+    """
     store = st.session_state.get("_datasets", {})
     store.pop(name, None)
     if st.session_state.get("data_source_choice") == name:
         st.session_state["_pending_source_choice"] = DEMO_CHOICE
+    app.clear_computation_cache()
 
 
 def rename_dataset(old: str, new: str) -> str | None:
@@ -320,6 +332,13 @@ def _leave_prompt_dialog(destination: str) -> None:
     The keys are unchanged (`WIZARD_LEAVE_KEY` arms it; the two callbacks clear
     it), so `app.main`'s hold-the-view logic is untouched: a dialog is opened by
     *calling* it, so all that moved is where the flag is read.
+
+    **BUG-36:** handled by the button's *return value*, not `on_click` — an
+    `st.dialog` body is a fragment, so an `on_click` callback here reran only
+    the dialog: it wrote the session state fine, but `main()` never
+    re-executed, so the modal sat there looking inert. `st.rerun(scope="app")`
+    both closes the modal and renders the page underneath (see `tour.py`'s
+    `_tutorial_library_dialog`, which hit the same trap first).
     """
     st.warning(
         f"**Leave setup and go to {destination}?** This dataset isn't added yet "
@@ -327,19 +346,21 @@ def _leave_prompt_dialog(destination: str) -> None:
         icon="⚠️",
     )
     stay_col, leave_col = st.columns(2)
-    stay_col.button(
+    if stay_col.button(
         "↩️ Keep setting up",
         key="wizard_leave_stay",
-        on_click=app.stay_in_wizard,
         width="stretch",
         type="primary",
-    )
-    leave_col.button(
+    ):
+        app.stay_in_wizard()
+        st.rerun(scope="app")
+    if leave_col.button(
         "🗑️ Discard and leave",
         key="wizard_leave_discard",
-        on_click=app.discard_and_leave_wizard,
         width="stretch",
-    )
+    ):
+        app.discard_and_leave_wizard()
+        st.rerun(scope="app")
 
 
 def _enter_add_data_wizard() -> None:
@@ -536,6 +557,7 @@ def _render_identity_field(
     has_words,
     has_fix,
     default_cols: list,
+    required: bool = False,
 ) -> None:
     """One identifier (trial / participant / text), **one picker per table**.
 
@@ -579,6 +601,7 @@ def _render_identity_field(
     if has_words:
         tables.append(("words", "AOI", raw_words, word_schema))
 
+    missing_cells: list[str] = []
     for cell, (slug, table_label, raw, schema) in zip(cells, tables):
         key = f"col_map_{slug}_{field_key}"
         options = list(raw.columns)
@@ -589,7 +612,13 @@ def _render_identity_field(
         # each is labelled once at its head, so repeating it on all three fields
         # would say the same thing three times.
         inline_field_label(cell, label, f"{help_text} ({table_label} table)")
-        chosen = cell.multiselect(
+        # UX-91: a keyed wrapper so an empty *required* picker can be tinted the
+        # red every other required field turns after a failed add. These
+        # multiselects are the wizard's own — they never went through
+        # `column_mapping_ui`, which is why Trial ID stayed grey while the
+        # selects beside it went red.
+        cell_key = f"{key}_cell"
+        chosen = cell.container(key=cell_key).multiselect(
             f"{label} — {table_label}",
             options=options,
             key=key,
@@ -597,6 +626,10 @@ def _render_identity_field(
             label_visibility="collapsed",
         )
         schema[field_key] = _mapping(chosen)
+        if required and not chosen and st.session_state.get(ADD_ATTEMPTED_KEY):
+            missing_cells.append(cell_key)
+    if missing_cells:
+        mark_missing_cells(missing_cells)
 
 
 def _wizard_filename_derive(body, raw_words, raw_fix, raw_gaze):
@@ -743,6 +776,7 @@ def _wizard_trial_step(
         has_words,
         has_fix,
         default_trial,
+        required=True,
     )
 
     # Per-table trial-id sets. Equal → one clean count. Differing but overlapping
@@ -817,8 +851,11 @@ def _wizard_participant_text_step(
     extras_host=None,
 ) -> None:
     """Optional participant- or text-identifier step: one picker per table
-    (UX-53 r13), then a distinct-value count captioned under the picker it was
-    taken from (UX-67 r2). Mutates the schemas in place."""
+    (UX-53 r13), then a distinct-value count captioned under **each** table's
+    own picker (UX-67 r2) — every present table gets one, the same per-table
+    shape `_wizard_trial_step` uses (BUG-35: previously only Fixations' count
+    was ever shown, so the AOI row's pickers had nothing under them). Mutates
+    the schemas in place."""
     core = [f for f, present in ((raw_fix, has_fix), (raw_words, has_words)) if present]
     common_cols = [c for c in core[0].columns if all(c in f.columns for f in core)]
     prop_primary = prop_f if has_fix else prop_w
@@ -837,13 +874,19 @@ def _wizard_participant_text_step(
         has_fix,
         default_cols,
     )
-    pp, pp_schema = (raw_fix, fix_schema) if has_fix else (raw_words, word_schema)
-    n = _distinct_id_count(pp, pp_schema.get(field_key))
-    if n is not None:
-        # UX-67 r2: under the picker that produced it (the first cell is the
-        # table the count was taken from), as small text rather than a banner.
-        host = cells[0] if cells else (extras_host if extras_host is not None else body)
-        host.caption(f"✓ {n:,} {noun}")
+    tables = []
+    if has_fix:
+        tables.append(("fix", raw_fix, fix_schema))
+    if has_words:
+        tables.append(("words", raw_words, word_schema))
+    cell_by_table = dict(zip((slug for slug, *_ in tables), cells)) if cells else {}
+    fallback_cell = extras_host if extras_host is not None else body
+    for slug, frame, schema in tables:
+        n = _distinct_id_count(frame, schema.get(field_key))
+        if n is not None:
+            # UX-67 r2: under the picker that produced it, as small text
+            # rather than a banner.
+            cell_by_table.get(slug, fallback_cell).caption(f"✓ {n:,} {noun}")
 
 
 def _clean_multiselect_state(key: str, valid) -> None:
@@ -1130,7 +1173,11 @@ def _render_setup_download(host) -> None:
     re-applied later via the wizard's *Restore a saved setup* step. Rendered
     beside the **Add dataset** button (UX-53)."""
     host.download_button(
-        "⬇️ Download setup (JSON)",
+        # UX-93: short enough to sit on ONE line at the ✕ Cancel width the
+        # footer now uses — "Download setup (JSON)" wrapped to two, making the
+        # pair 55 px and 40 px tall side by side. What it saves and how to load
+        # it back is on the tooltip, where the sentence was already.
+        "⬇️ Save setup",
         data=json.dumps(_wizard_setup_config(), indent=2),
         file_name="scanpath_studio_setup.json",
         mime="application/json",
@@ -1138,6 +1185,39 @@ def _render_setup_download(host) -> None:
         width="stretch",
         help="Save this column mapping to re-use on similar data — restore it "
         "from *Restore a saved setup* at the top of Column mapping.",
+    )
+
+
+#: UX-93 — the wizard's footer row. `1.4` is the ✕ Cancel width from the sticky
+#: bar's `[7.2, 2.2, 1.4]`, so the two things you do with a finished setup are
+#: the same size as the way out of it, side by side, with the rest of the line
+#: left empty. They used to be either two full-width banners stacked (the
+#: blocked path) or a 50/50 split of the whole section (the finished path) —
+#: neither of which reads as "two buttons".
+_FOOTER_ROW_W = (1.4, 1.4, 8.0)
+
+
+def _wizard_footer(host, *, disabled: bool, help_text: str, on_click=None) -> None:
+    """⬇️ Save setup · ✅ Add dataset, one line, matched widths (UX-93).
+
+    One place for all three endings — blocked on required fields, blocked on a
+    mapping the pipeline rejected, and finished — which is what keeps them the
+    same size and the same colour. ✅ Add dataset is `primary` on every path:
+    it is the page's one commit, and #UX-66 r2 already paired ✕ Cancel with it
+    in the same filled blue, as the two ends of one decision.
+    """
+    save_col, add_col, _rest = host.columns(
+        _FOOTER_ROW_W, gap="small", vertical_alignment="center"
+    )
+    _render_setup_download(save_col)
+    add_col.button(
+        "✅ Add dataset",
+        type="primary",
+        key="wizard_finalize",
+        disabled=disabled,
+        on_click=on_click,
+        width="stretch",
+        help=help_text,
     )
 
 
@@ -1220,8 +1300,12 @@ def _setup_mode(host, group: str, options: list, help_text: str, label=None):
     two — which is the whole point of the row. `SETUP_GROUP_LABELS` stays the
     name everything else reports by.
     """
+    # UX-90: every setup group is mandatory — *Add dataset* stays disabled until
+    # each says how it is known — so each carries the same trailing `*` the
+    # required mapping fields do. One convention for "you must answer this",
+    # rather than a starred column mapping above an unstarred set of questions.
     return host.radio(
-        label or SETUP_GROUP_LABELS[group],
+        f"{label or SETUP_GROUP_LABELS[group]} *",
         options,
         index=None,
         key=_SETUP_MODE_KEYS[group],
@@ -1414,14 +1498,48 @@ def _wizard_setup_step(host, words_raw, fix_raw, has_boxes: bool) -> SetupSnapsh
     if recall:
         _remember_setup(recall)
 
+    # UX-90 — an error, not a warning, and only once the user has actually tried
+    # to add. Before that an unanswered question is one they have not reached
+    # yet, and saying so in yellow on arrival made the page open already
+    # complaining. Same rule the mapping fields follow
+    # (`controls.ADD_ATTEMPTED_KEY`), so one click now turns the whole page red
+    # at once instead of it nagging in two different tenses.
     unanswered = [g for g, p in snapshot.provenance.items() if p is None]
-    if unanswered:
-        host.warning(
+    if unanswered and st.session_state.get(ADD_ATTEMPTED_KEY):
+        host.error(
             "Still to answer: "
             + ", ".join(f"**{SETUP_GROUP_LABELS[g]}**" for g in unanswered)
-            + ". *Add dataset* stays disabled until each says how you know it."
+            + ". Each needs to say how you know it before the dataset can be "
+            "added."
         )
+        _mark_missing_setup_groups(unanswered)
     return snapshot
+
+
+def _mark_missing_setup_groups(unanswered: list) -> None:
+    """Ring the unanswered required setup radios in red (UX-90).
+
+    One ``<style>`` block for all of them, targeting each radio's `.st-key-…`
+    container — the same technique as `controls._emit_field_tints`, and for the
+    same reason: a wrapper element per group would be more DOM on a page whose
+    whole problem is length.
+
+    A ring and a red label rather than a fill: the group is a list of radio
+    options, and tinting three option rows reads as three separate problems
+    instead of one unanswered question.
+    """
+    keys = [_SETUP_MODE_KEYS[group] for group in unanswered]
+    box = ", ".join(f".st-key-{key} > div" for key in keys)
+    label = ", ".join(f".st-key-{key} label p" for key in keys)
+    st.markdown(
+        "<style>"
+        f"{box} {{ border: 1px solid rgba(239, 68, 68, 0.85);"
+        " border-radius: 0.4rem; padding: 0.35rem 0.5rem;"
+        " background: rgba(239, 68, 68, 0.06); }"
+        f"{label} {{ color: rgb(239, 68, 68); }}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
 
 
 def _restored_setup_snapshot() -> SetupSnapshot | None:
@@ -1739,21 +1857,26 @@ def _render_multipleye_upload(body, active: bool) -> _UploadResult:
     )
 
 
-#: `table name | Trial | Participant | Text | Screen ID | Screen name` — one
-#: identity row (UX-53 r15, widened in r16). The name column is narrow because
-#: it holds one short word; the five pickers split the rest evenly, since a
-#: column name is what has to stay readable.
-_ID_ROW_W = (0.10, 0.18, 0.18, 0.18, 0.18, 0.18)
+#: UX-55 r4 — `table name | Trial ID | Screen ID | Participant ID | Text ID |
+#: Word/IA ID | Fixation ID-or-Word text` — row 1 of the per-table block, now
+#: merged with what used to be a separate "geometry" section (r3/r4:
+#: identity-vs-description stopped paying for itself once Screen name left the
+#: view and Word/IA id joined the row it already read as identity). The name
+#: column stays narrow for one short word; the six pickers split the rest
+#: evenly — a column name is what has to stay readable, and six is the most
+#: this row fits.
+_ID_ROW1_W = (0.09, 0.152, 0.152, 0.152, 0.152, 0.152, 0.152)
 
-#: UX-55 r2 — the *geometry* rows, on the identity row's grid so the two halves
-#: of the mapping line up down the page: a narrow name column, then up to four
-#: equal picker cells (four rather than five, because these selects hold column
-#: names rather than short ids and the AOI line is the widest of them).
-_GEO_ROW_W = (0.10, 0.225, 0.225, 0.225, 0.225)
+#: Row 2 of the Fixations block: X · Y · Timestamp · Duration. Same grid as
+#: row 1 (UX-55 r2) so the two halves of the mapping line up down the page —
+#: four equal picker cells under the name column, since these selects hold
+#: column names rather than short ids.
+_FIX_ROW2_W = (0.09, 0.2275, 0.2275, 0.2275, 0.2275)
 
-#: The word box is a format radio plus four coordinate selects that lay
-#: themselves out, so it takes the whole line minus the name column.
-_GEO_ROW_BOX_W = (0.10, 0.90)
+#: Row 2 of the AOI block: the word box (a format radio plus four coordinate
+#: selects that lay themselves out) and, sharing the same line, Line index —
+#: the box gets most of the row, Line index the rest (UX-55 r3).
+_AOI_ROW2_W = (0.09, 0.73, 0.18)
 
 #: One line under the *Trials & readers* heading, in place of the paragraph the
 #: step used to carry. UX-53's brief was "display less text".
@@ -1952,39 +2075,55 @@ def _render_data_setup(active: bool) -> _UploadResult:
         # Keyed so `styles.py` can pin it; the CSS is scoped to this key alone,
         # so only the add-dataset screen gets a sticky bar.
         bar = st.container(key="wiz_sticky_bar")
-        title_col, guide_col, link_col, cancel_col = bar.columns(
-            [5, 2.2, 2.2, 1.4], vertical_alignment="center"
+        title_col, help_col, cancel_col = bar.columns(
+            [7.2, 2.2, 1.4], vertical_alignment="center"
         )
         title_col.markdown(
             '<div class="sps-wiz-title">Set up your dataset</div>',
             unsafe_allow_html=True,
         )
         # Step-by-step guide: a bottom-right card that auto-opens once per session
-        # and is replayable via the button. Arm it (auto/first-visit) then render
-        # the card early so it streams before the heavy upload/normalize work.
+        # and is replayable via the popover below. Arm it (auto/first-visit) then
+        # render the card early so it streams before the heavy upload/normalize
+        # work.
         maybe_show_wizard_guide()
         render_spotlight_wizard_guide()
-        render_wizard_guide_button(guide_col)
-        # The docs pointer keeps its place on the line without crowding the guide
-        # button: a link, not a sentence. It is the only thing telling a first-time
-        # uploader what an export has to contain.
-        link_col.link_button(
-            # UX-66 r2: named for what it *is* rather than for the page it opens
-            # — "Data guide" reads like one more wizard step on a row of wizard
-            # controls, which is the one thing it is not.
-            "📖 More documentation ↗",
-            "https://lacclab.github.io/scanpath-studio/bring-your-own-data/",
-            help="What your export needs, worked EyeLink and plain-CSV examples, "
-            "and what each failure symptom means.",
-            width="stretch",
-        )
-        # The way out, on the row that stays on screen. An `on_click`, not an
-        # inline handler: it reassigns `data_source_choice` through the pending
-        # seam, which only lands before the widgets instantiate.
-        cancel_col.button(
+        # UX-84: one ❓ Help popover replaces the two buttons that used to sit
+        # here (🧭 guide · 📖 docs) — a popover, not a dialog, since it is a
+        # two-item chooser with no modal weight to it (matches #UX-65's nav
+        # Help, minus the "arm-then-bounce" dance that menu entries need).
+        with help_col.popover("❓ Help", width="stretch"):
+            render_wizard_guide_button(st)
+            # A real `link_button`, not an in-app navigation: it opens in a new
+            # tab and so cannot lose an in-progress upload the way switching
+            # views would — the same reason #BUG-31's leave prompt exists.
+            st.link_button(
+                # UX-66 r2: named for what it *is* rather than for the page it
+                # opens — "Data guide" reads like one more wizard step on a row
+                # of wizard controls, which is the one thing it is not.
+                "📖 More documentation ↗",
+                "https://lacclab.github.io/scanpath-studio/bring-your-own-data/",
+                help="What your export needs, worked EyeLink and plain-CSV "
+                "examples, and what each failure symptom means.",
+                width="stretch",
+            )
+        # The way out, on the row that stays on screen.
+        #
+        # BUG-36: checked by return value, not `on_click` — arms the same
+        # leave-prompt the nav-triggered leave uses (`_render_leave_prompt`
+        # below reads it later in this same run), rather than calling
+        # `app.leave_add_data_wizard` straight away, which discarded an
+        # in-progress upload with no confirmation at all. It has to be the
+        # return-value form here too: `app.main`'s hold-the-view prologue pops
+        # `WIZARD_LEAVE_KEY` at the top of every run whenever the nav is
+        # already on 🗂️ Data — true for the whole time the wizard is open — so
+        # an `on_click` callback (which runs *before* that prologue) would have
+        # its flag wiped before `_render_leave_prompt` ever saw it. Setting it
+        # here, after the prologue has already run this pass, is what makes it
+        # stick for the `_render_leave_prompt(bar)` call three lines down.
+        if cancel_col.button(
             "✕ Cancel",
             key="cancel_add_data",
-            on_click=app.leave_add_data_wizard,
             # UX-66 r2: the same filled blue as ✅ Add dataset. The two are the
             # ends of the same decision — commit or leave — and a ghost button
             # beside a filled one reads as the disabled half of a pair rather
@@ -1992,7 +2131,8 @@ def _render_data_setup(active: bool) -> _UploadResult:
             type="primary",
             help="Leave the wizard and go back to the dataset you were on.",
             width="stretch",
-        )
+        ):
+            st.session_state[WIZARD_LEAVE_KEY] = _VIEW_DATA
         _render_leave_prompt(bar)
         # UX-53 r8: no progress chips. They were navigation for an accordion
         # that no longer exists — the two parts are linear, so there is nothing
@@ -2022,7 +2162,11 @@ def _render_data_setup(active: bool) -> _UploadResult:
         step = wizard_shell.STEPS_BY_ID[step_id]
         status = statuses.get(step_id, wizard_shell.StepStatus.TODO)
         if active:
-            return wizard_shell.part(body, step, status=status)
+            # UX-88: no status badge. `step_panel` already refuses one (a keyed
+            # expander that changes label remounts collapsed); the headline was
+            # the last place a ⚠️ could nag about a field visible on the same
+            # screen.
+            return wizard_shell.part(body, step)
         return wizard_shell.step_panel(body, step, status, active=False)
 
     s1 = _part("data")
@@ -2173,7 +2317,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s2 = wizard_shell.section(
         sections_host,
         "identity",
-        status=statuses.get("identity"),
         caption=_IDENTITY_CAPTION,
     )
     # Filename derivation must run *before* the identifier pickers so the
@@ -2192,35 +2335,57 @@ def _render_data_setup(active: bool) -> _UploadResult:
         )
 
     if has_words or has_fix:
-        # UX-53 r15: one line per *table* — the Fixations row, then the AOI row —
-        # each holding that table's Trial / Participant / Text pickers. Grouping
-        # by table beats interleaving by field because the two rows are then the
-        # two things being compared: read across a line to see how one table is
-        # identified, down a column to see whether the tables agree.
+        # UX-55 r4: one block per table, two lines — row 1 is identity, row 2
+        # is geometry, and the two are no longer separate sections. A screen id
+        # is part of *how a trial is identified* for a multipart dataset
+        # (UX-53 r16's reasoning), and a word/fixation id reads the same way,
+        # so splitting "identity" from "description" bought less legibility
+        # than the two-line block costs: read across a line to see how one
+        # table is identified end to end, down a column to see whether the
+        # tables agree.
         #
         # A narrow first column names the row, so the field titles need not
         # repeat it three times. The counts go to a full-width strip below: they
         # are sentences, and a sentence in a quarter of the width is a column of
         # single words.
+        # UX-89 — grouped by **table**, not by kind: each table's identity row
+        # and its feature row are adjacent, under one name on the left, with a
+        # hairline between the two blocks. The rows used to interleave (both
+        # identity rows, then both feature rows), which put a table's own two
+        # lines two rows apart and made the left-hand name look like it labelled
+        # one line rather than the block. Streamlit's creation order *is* screen
+        # order, so all four are reserved here and filled far below — the same
+        # reserve-then-fill discipline the rest of the page uses.
         id_rows = {}
-        for slug, present, table_label in (
-            ("fix", has_fix, "Fixations"),
-            ("words", has_words, "AOI"),
-        ):
+        feature_rows = {}
+        blocks = [
+            ("fix", has_fix, "Fixations", _FIX_ROW2_W),
+            ("words", has_words, "AOI", _AOI_ROW2_W),
+        ]
+        for position, (slug, present, table_label, feature_widths) in enumerate(blocks):
             if not present:
                 continue
-            row = s2.columns(_ID_ROW_W, gap="small", vertical_alignment="center")
+            if position and any(pres for _, pres, _, _ in blocks[:position]):
+                s2.markdown(
+                    '<div class="sps-wiz-blockgap"></div>', unsafe_allow_html=True
+                )
+            row = s2.columns(_ID_ROW1_W, gap="small", vertical_alignment="center")
             row[0].markdown(
                 f'<div class="sps-id-row-name">{table_label}</div>',
                 unsafe_allow_html=True,
             )
             id_rows[slug] = row[1:]
+            feature_rows[slug] = s2.columns(
+                feature_widths, gap="small", vertical_alignment="bottom"
+            )
 
         # `_render_identity_field` takes its cells in (fixations, AOI) order.
         def _cells_for(index: int) -> list:
             return [id_rows[s][index] for s in ("fix", "words") if s in id_rows]
 
         id_extras = counts_host
+        # Row 1, in the order the request pins: Trial ID · Screen ID ·
+        # Participant ID · Text ID · Word/IA ID · Fixation ID-or-Word text.
         _wizard_trial_step(
             s2,
             raw_words,
@@ -2234,6 +2399,31 @@ def _render_data_setup(active: bool) -> _UploadResult:
             cells=_cells_for(0),
             extras_host=id_extras,
         )
+        # Screen ID (DATA-21 multipart) — a simple per-table field, not a
+        # composite like Trial/Participant/Text, so it goes straight through
+        # `_map_section` rather than `_render_identity_field`. Screen *name*
+        # (`screen_index`) is dropped from the view entirely (UX-55 r4): order
+        # within a multipart trial still comes from it when it is mapped and
+        # from first appearance when it is not (multipart.normalize_screen_
+        # identity), so the column stays auto-detected — see Background for
+        # why the field itself is gone rather than merely unlabelled.
+        screen_specs = (
+            ("fix", raw_fix, FIX_FIELD_SPECS, prop_f, fix_schema, has_fix),
+            ("words", raw_words, WORD_FIELD_SPECS, prop_w, word_schema, has_words),
+        )
+        for slug, raw, specs, proposal, schema, present in screen_specs:
+            if not present or slug not in id_rows:
+                continue
+            schema.update(
+                _map_section(
+                    raw,
+                    specs,
+                    proposal,
+                    f"col_map_{slug}",
+                    id_rows[slug][1],
+                    ["screen_id"],
+                )
+            )
         _wizard_participant_text_step(
             "participant",
             "Participant ID",
@@ -2249,7 +2439,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(1),
+            cells=_cells_for(2),
             extras_host=id_extras,
         )
         _wizard_participant_text_step(
@@ -2267,106 +2457,98 @@ def _render_data_setup(active: bool) -> _UploadResult:
             fix_schema,
             has_words,
             has_fix,
-            cells=_cells_for(2),
+            cells=_cells_for(3),
             extras_host=id_extras,
         )
-        # DATA-21 multipart screens. UX-53 r16 folded them into the same two
-        # rows: a screen id is part of *how a trial is identified* for a
-        # multipart dataset, so it belongs beside the trial id rather than in a
-        # block of its own — which also retires the "Words / Interest Areas" /
-        # "Fixations" sub-headings, since each row is already named.
-        screen_specs = (
-            ("fix", raw_fix, FIX_FIELD_SPECS, prop_f, fix_schema, has_fix),
-            ("words", raw_words, WORD_FIELD_SPECS, prop_w, word_schema, has_words),
-        )
-        for offset, key in enumerate(("screen_id", "screen_index")):
-            for slug, raw, specs, proposal, schema, present in screen_specs:
-                if not present or slug not in id_rows:
-                    continue
-                schema.update(
-                    _map_section(
-                        raw,
-                        specs,
-                        proposal,
-                        f"col_map_{slug}",
-                        id_rows[slug][3 + offset],
-                        [key],
-                    )
+        # Word/IA ID — the fixations table's own `word_id` says which AOI a
+        # fixation hit; the AOI table's is which AOI a row *is*. Different
+        # columns, same slot: both tables read it as identity now.
+        for slug, raw, specs, proposal, schema, present in screen_specs:
+            if not present or slug not in id_rows:
+                continue
+            schema.update(
+                _map_section(
+                    raw,
+                    specs,
+                    proposal,
+                    f"col_map_{slug}",
+                    id_rows[slug][4],
+                    ["word_id"],
                 )
+            )
+        # Row 1's last slot differs per table: Fixation ID for Fixations,
+        # Word text/label for AOI.
+        if has_fix:
+            fix_schema.update(
+                _map_section(
+                    raw_fix,
+                    FIX_FIELD_SPECS,
+                    prop_f,
+                    "col_map_fix",
+                    id_rows["fix"][5],
+                    ["fixation_id"],
+                )
+            )
+        if has_words:
+            word_schema.update(
+                _map_section(
+                    raw_words,
+                    WORD_FIELD_SPECS,
+                    prop_w,
+                    "col_map_words",
+                    id_rows["words"][5],
+                    ["text"],
+                )
+            )
 
-    s3 = wizard_shell.section(
-        sections_host,
-        "geometry",
-        status=statuses.get("geometry"),
-        caption=(
-            "Where the eyes landed and where the words are: fixation x / y / "
-            "duration, and the word id / text / box."
-        ),
-    )
-
-    # UX-55 r2 — TWO groups, each named the way the identity rows above are
-    # named: a short word in a narrow left column instead of a heading and a
-    # blank line. Everything that describes a **fixation** is in the first
-    # group, two lines of it; everything that describes an **AOI** is in the
-    # second, the word ids included — the fixations table's own `word_id` is
-    # *which AOI this fixation hit*, so it reads with the AOI fields even though
-    # it is a column of the fixation file, and the box follows directly under
-    # the ids it belongs to. No sub-headings, no spacer rows: the whole mapping
-    # has to fit on one screen, and every heading was a line it could not spare.
-    def _geo_row(label: str, weights):
-        row = s3.columns(weights, gap="small", vertical_alignment="bottom")
-        row[0].markdown(
-            f'<div class="sps-id-row-name sps-geo-row-name">{label}</div>',
-            unsafe_allow_html=True,
-        )
-        return row[1:]
-
-    if has_fix:
-        # X / Y / timestamp / duration / id are the same *kind* of answer about
-        # the same rows (UX-53 r7 put them in one block; r2 keeps them together
-        # and splits them 3 + 2 so no select is narrower than a column name —
-        # which is where the clipping in #UX-71 came from).
-        for keys in (["x", "y", "timestamp", "duration"], ["fixation_id"]):
-            cells = _geo_row("Fixations" if keys[0] == "x" else "", _GEO_ROW_W)
-            for cell, key in zip(cells, keys):
+        # Row 2 of each block: the table's own features, filled into the cells
+        # reserved above so they sit directly under that table's identity row.
+        # UX-89 also removed the per-block validation warnings that used to
+        # print here ("Words/IA — missing Word/IA ID", …): a required field that
+        # is empty turns red in place the moment ✅ Add dataset is pressed, and
+        # a sentence repeating it below the row was the third copy of the same
+        # complaint on a page whose problem is length.
+        if has_fix:
+            for cell, key in zip(
+                feature_rows["fix"][1:], ["x", "y", "timestamp", "duration"]
+            ):
                 fix_schema.update(
                     _map_section(
                         raw_fix, FIX_FIELD_SPECS, prop_f, "col_map_fix", cell, [key]
                     )
                 )
-        # Validation problems render against their own sub-block rather than as
-        # one lumped warning above the Add button.
-        for problem in validate_fix_schema(fix_schema):
-            s3.warning(f"Fixations — {problem}")
-
-    if has_words or has_fix:
-        # The AOI line: which AOI a fixation hit, which AOI a word row *is*, and
-        # what that AOI says — then its box on the line below.
-        aoi_fields = []
-        if has_fix:
-            aoi_fields.append(
-                (raw_fix, FIX_FIELD_SPECS, prop_f, "col_map_fix", "word_id", fix_schema)
-            )
         if has_words:
-            aoi_fields += [
-                (raw_words, WORD_FIELD_SPECS, prop_w, "col_map_words", key, word_schema)
-                for key in ("word_id", "text", "line")
-            ]
-        cells = _geo_row("AOI", _GEO_ROW_W[: len(aoi_fields) + 1])
-        for cell, (raw, specs, proposal, prefix, key, schema) in zip(cells, aoi_fields):
-            schema.update(_map_section(raw, specs, proposal, prefix, cell, [key]))
-    if has_words:
-        box_cells = _geo_row("", _GEO_ROW_BOX_W)
-        word_schema.update(
-            _map_section(
-                raw_words,
-                WORD_FIELD_SPECS,
-                prop_w,
-                "col_map_words",
-                box_cells[0],
-                ["box"],
+            # The box (a format radio plus four coordinate selects that lay
+            # themselves out) and Line index share the row (UX-55 r3).
+            words_row2 = feature_rows["words"]
+            word_schema.update(
+                _map_section(
+                    raw_words,
+                    WORD_FIELD_SPECS,
+                    prop_w,
+                    "col_map_words",
+                    words_row2[1],
+                    ["box"],
+                )
             )
-        )
+            word_schema.update(
+                _map_section(
+                    raw_words,
+                    WORD_FIELD_SPECS,
+                    prop_w,
+                    "col_map_words",
+                    words_row2[2],
+                    ["line"],
+                )
+            )
+
+    s3 = wizard_shell.section(
+        sections_host,
+        "geometry",
+        caption="Character-AOI aggregation and raw gaze, if either applies.",
+    )
+
+    if has_words:
         words_advanced = s3.container()
         words_advanced.toggle(
             "Aggregate character AOIs into word boxes",
@@ -2375,8 +2557,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
             "corpora): collapse the characters of each word (grouped by the Trial "
             "+ Word/IA id above) into one bounding box.",
         )
-        for problem in validate_word_schema(word_schema):
-            s3.warning(f"Words/IA — {problem}")
 
     if not raw_gaze.empty:
         rg_host = s3.container()
@@ -2394,7 +2574,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
                 "participant",
                 "trial",
                 "screen_id",
-                "screen_index",
                 "x",
                 "y",
                 "timestamp",
@@ -2431,7 +2610,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s4 = wizard_shell.section(
         sections_host,
         "setup",
-        status=statuses.get("setup"),
         # UX-58: the wording the step used to print as a caption inside its
         # body. One description, on the heading's hover, like the rest of the
         # page — there is no reason for a section to explain itself twice.
@@ -2464,7 +2642,6 @@ def _render_data_setup(active: bool) -> _UploadResult:
     s5 = wizard_shell.section(
         sections_host,
         "fields",
-        status=statuses.get("fields"),
         caption=(
             "Filter trials by becomes a value picker in the Narrow-by panel; "
             "Additional fields to keep are the columns you can colour, sort and "
@@ -2499,31 +2676,41 @@ def _render_data_setup(active: bool) -> _UploadResult:
     if active:
         _render_setup_provenance_note(s6, setup_snapshot)
 
-    if active and blocked:
-        s6.markdown("**Still to do**")
-        # Everything is one scroll away now, so a blocker names its section
-        # instead of offering a jump button to a step that no longer exists.
-        for line in problems:
-            s6.warning(f"{wizard_shell.SECTION_TITLES['geometry']} — {line}")
-        for name in setup_blockers:
-            s6.warning(
-                f"{wizard_shell.SECTION_TITLES['setup']} — {name}, say how you know it"
-            )
+    # UX-88: no "Still to do" list, and no status badges on the part headlines
+    # or section headings above. The page said the same thing three times — a
+    # badge on the part, a badge on its section, and a warning down here — for a
+    # field the user can see is empty, on a page whose entire complaint has been
+    # length. What is left is the one thing that actually points at the problem:
+    # clicking ✅ Add dataset sets `ADD_ATTEMPTED_KEY`, which turns every unmapped
+    # required row **red in place**. `blocked` still gates finalizing; it just
+    # no longer narrates.
 
     if problems:
         if active:
-            _render_setup_download(s6)
+            # UX-88 removed the *Still to do* list that used to print here on
+            # arrival. What it must NOT remove is the answer to "I pressed Add
+            # and nothing happened" — and for some blockers there is nothing
+            # else to see: a raw-gaze-only upload whose trial id cannot be
+            # mapped has no required field on screen to turn red, so with no
+            # message at all the button is a dead end.
+            #
+            # So the problems still get stated, on exactly the terms UX-90 set
+            # for the Recording-setup gate: red, and only once the user has
+            # actually tried. Before that the page stays quiet.
+            if st.session_state.get(ADD_ATTEMPTED_KEY):
+                for line in problems:
+                    s6.error(line)
             # Enabled, not disabled (UX-53). A disabled button cannot be *tried*,
             # and "red when you try to add with it empty" needs the attempt: the
             # click sets ADD_ATTEMPTED_KEY, which is what turns every unmapped
             # required row red on the rerun. It still cannot finalize — this
             # branch returns the problems either way.
-            s6.button(
-                "✅ Add dataset",
-                key="wizard_finalize",
+            _wizard_footer(
+                s6,
+                disabled=False,
                 on_click=_mark_add_attempted,
-                help="Some required fields are still empty — they are marked in "
-                "red above.",
+                help_text="Some required fields are still empty — they are "
+                "marked in red above.",
             )
         st.session_state["_composite_trial_columns"] = None
         return _UploadResult(
@@ -2590,7 +2777,7 @@ def _render_data_setup(active: bool) -> _UploadResult:
             st.session_state["_composite_trial_columns"] = None
             if active:
                 s6.error(problem)
-                s6.button("✅ Add dataset", disabled=True, key="wizard_finalize")
+                _wizard_footer(s6, disabled=True, help_text=problem)
             return _UploadResult(
                 empty_words_frame(),
                 empty_fixations_frame(),
@@ -2660,17 +2847,12 @@ def _render_data_setup(active: bool) -> _UploadResult:
         }
         # UX-53: the two things you can do with a finished setup share one row —
         # save it for next time, or add it — instead of stacking two full-width
-        # buttons.
-        save_col, add_col = s6.columns([1, 1], gap="small")
-        _render_setup_download(save_col)
-        add_col.button(
-            "✅ Add dataset",
-            type="primary",
-            key="wizard_finalize",
+        # buttons. UX-93 made that row the same on all three endings.
+        _wizard_footer(
+            s6,
             disabled=blocked,
             on_click=_finalize_wizard_dataset,
-            width="stretch",
-            help=(
+            help_text=(
                 "Answer the Recording setup section first: " + ", ".join(setup_blockers)
                 if setup_blockers
                 else "Store this dataset and switch to it."

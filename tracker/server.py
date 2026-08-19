@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -20,10 +21,10 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 TRACKER_DIR = APP_ROOT / "tracker"
 DATA_FILE = TRACKER_DIR / "data.js"
 STATE_FILE = TRACKER_DIR / "state.json"
-#: Machine-local, git-ignored (ENG-39). Holds the two things that must *not* be
-#: shared: the save counter — which changes on every save and so conflicted on
-#: every parallel pull — and which of the people in `data.js` is at this
-#: keyboard. Neither means anything in another clone.
+#: Machine-local, git-ignored (ENG-39). Holds which of the people in `data.js`
+#: is at this keyboard — that means nothing in another clone. The save counter
+#: used to live here too; it is now derived from `state.json` itself, see
+#: `_state_revision`.
 LOCAL_FILE = TRACKER_DIR / ".local.json"
 API_PATH = "/tracker/api/state"
 WHOAMI_PATH = "/tracker/api/whoami"
@@ -78,7 +79,13 @@ CREATED_FIELDS = {
     "added",
     "request",
 }
-CREATED_OPTIONAL_FIELDS = {"decisions", *WRITE_UP_FIELDS} - CREATED_FIELDS
+# `owner` is optional rather than required because every created item written
+# before ENG-39 predates claiming and so has no owner key. It has to be *allowed*
+# though: the page keeps one object per created item, shared between `ITEMS` and
+# `createdItems`, and `stageEditor` assigns the edited fields straight onto it —
+# so claiming a UI-created task stamps `owner` on it and the whole payload was
+# rejected, which failed every save from that page, for every item (ENG-42).
+CREATED_OPTIONAL_FIELDS = {"owner", "decisions", *WRITE_UP_FIELDS} - CREATED_FIELDS
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 STATE_LOCK = threading.Lock()
 
@@ -140,6 +147,8 @@ def _validate_created_item(value: Any, known_ids: set[str]) -> dict[str, Any]:
         raise ValueError(f"Invalid implementation brief for {item_id}.")
     if not isinstance(value["archived"], bool):
         raise ValueError(f"Invalid archive value for {item_id}.")
+    if "owner" in value and value["owner"] not in ("", *_known_people()):
+        raise ValueError(f"Invalid owner for {item_id}.")
     if not isinstance(value["added"], str) or not DATE_RE.fullmatch(value["added"]):
         raise ValueError(f"Invalid creation date for {item_id}.")
     for field in ("decisions", *WRITE_UP_FIELDS):
@@ -239,16 +248,25 @@ def _write_local(local: dict[str, Any]) -> None:
     )
 
 
-def _read_revision() -> int:
-    revision = _read_local().get("revision")
-    return revision if isinstance(revision, int) and revision >= 0 else 0
+def _state_revision() -> int:
+    """The concurrency token for `state.json`, derived from the file itself.
 
-
-def _bump_revision() -> int:
-    local = _read_local()
-    local["revision"] = _read_revision() + 1
-    _write_local(local)
-    return local["revision"]
+    It used to be a counter in `.local.json` that only the API bumped, which
+    made the guard blind to the *other* writer this repo actually has: an agent
+    (or a hand edit, or a `git pull`) writing `state.json` directly, as
+    `CLAUDE.md` tells them to. The counter never moved, so a page loaded before
+    that write happily PUT its stale copy over the top and reported success —
+    the edits just vanished. Hashing the bytes means any write by anyone changes
+    the token, so a stale save is a 409 instead of a silent overwrite, and
+    nothing revision-shaped is stored in the repo (ENG-39 still holds).
+    """
+    try:
+        digest = hashlib.sha256(STATE_FILE.read_bytes()).hexdigest()
+    except OSError:
+        return 0
+    # 48 bits: comfortably inside JSON's exact-integer range, and the page only
+    # ever echoes it back.
+    return int(digest[:12], 16)
 
 
 def _git_name() -> str:
@@ -334,7 +352,7 @@ class TrackerHandler(SimpleHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
         if path == API_PATH:
-            state = {**_read_state(), "revision": _read_revision()}
+            state = {**_read_state(), "revision": _state_revision()}
             self._send_json(HTTPStatus.OK, {"ok": True, "state": state})
             return
         if path == WHOAMI_PATH:
@@ -365,17 +383,21 @@ class TrackerHandler(SimpleHTTPRequestHandler):
                 return
             incoming = _validate_state(body)
             with STATE_LOCK:
-                if body.get("revision") != _read_revision():
+                if body.get("revision") != _state_revision():
                     self._send_json(
                         HTTPStatus.CONFLICT,
                         {
                             "ok": False,
-                            "error": "The tracker changed in another tab. Reload before saving.",
+                            "error": (
+                                "tracker/state.json changed since this page loaded "
+                                "— another tab, an agent, or a git pull. Reload to "
+                                "pick it up, then redo this edit."
+                            ),
                         },
                     )
                     return
                 _write_state(incoming)
-                incoming["revision"] = _bump_revision()
+                incoming["revision"] = _state_revision()
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
             self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(error)})
             return

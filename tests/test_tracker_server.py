@@ -284,28 +284,54 @@ def test_validate_state_rejects_invalid_changes(change: dict, message: str) -> N
         )
 
 
-def test_validate_state_accepts_created_task() -> None:
-    item = {
-        "id": "CMP-99",
-        "prefix": "CMP",
-        "num": 99,
-        "sub": "",
-        "title": "A new comparison task",
-        "status": "Backlog",
-        "priority": "Normal",
-        "implementationBrief": "Keep the two views aligned.",
-        "group": "Compare mode",
-        "subgroup": "",
-        "archived": False,
-        "added": "2026-08-03",
-        "request": ["A new comparison task"],
-    }
+#: A task as the page's "New task" form builds it.
+CREATED_TASK = {
+    "id": "CMP-99",
+    "prefix": "CMP",
+    "num": 99,
+    "sub": "",
+    "title": "A new comparison task",
+    "status": "Backlog",
+    "priority": "Normal",
+    "implementationBrief": "Keep the two views aligned.",
+    "group": "Compare mode",
+    "subgroup": "",
+    "archived": False,
+    "added": "2026-08-03",
+    "request": ["A new comparison task"],
+}
 
+
+def test_validate_state_accepts_created_task() -> None:
     state = SERVER._validate_state(
-        {"version": 2, "revision": 0, "items": {}, "createdItems": [item]}
+        {"version": 2, "revision": 0, "items": {}, "createdItems": [dict(CREATED_TASK)]}
     )
 
     assert state["createdItems"][0]["id"] == "CMP-99"
+
+
+def test_a_created_task_can_be_claimed() -> None:
+    """Claiming a UI-created task must not poison every later save (ENG-42).
+
+    The page keeps one object per created item, shared between `ITEMS` and
+    `STATE.createdItems`, and `stageEditor` assigns the edited fields onto it —
+    so a claim stamps `owner` there. `owner` was not in the created-item
+    contract, so the whole payload was rejected and *every* save from that page
+    failed, for every item, with "Save failed".
+    """
+    people = SERVER._known_people()
+    item = {**CREATED_TASK, "owner": people[0]}
+
+    state = SERVER._validate_state({"version": 3, "items": {}, "createdItems": [item]})
+
+    assert state["createdItems"][0]["owner"] == people[0]
+
+
+def test_a_created_task_rejects_an_owner_who_does_not_exist() -> None:
+    item = {**CREATED_TASK, "owner": "Nobody"}
+
+    with pytest.raises(ValueError, match="Invalid owner"):
+        SERVER._validate_state({"version": 3, "items": {}, "createdItems": [item]})
 
 
 def test_validate_state_rejects_group_prefix_mismatch() -> None:
@@ -344,14 +370,56 @@ def test_write_state_is_valid_json(
     assert json.loads(state_file.read_text(encoding="utf-8")) == state
 
 
-def test_revision_counter_lives_outside_the_repository(
+def test_revision_is_derived_from_the_state_file_not_stored(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The concurrency token is a hash of `state.json`, kept nowhere (ENG-41)."""
+    state_file = tmp_path / "state.json"
+    monkeypatch.setattr(SERVER, "TRACKER_DIR", tmp_path)
+    monkeypatch.setattr(SERVER, "STATE_FILE", state_file)
     monkeypatch.setattr(SERVER, "LOCAL_FILE", tmp_path / ".local.json")
 
-    assert SERVER._read_revision() == 0
-    assert SERVER._bump_revision() == 1
-    assert SERVER._read_revision() == 1
+    assert SERVER._state_revision() == 0  # no file yet
+    SERVER._write_state(
+        {"version": SERVER.STATE_VERSION, "items": {}, "createdItems": []}
+    )
+    first = SERVER._state_revision()
+
+    assert first > 0
+    assert SERVER._state_revision() == first  # stable while the file is untouched
+    assert not (tmp_path / ".local.json").exists()
+
+
+def test_an_out_of_band_edit_moves_the_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An agent editing `state.json` by hand must invalidate an open page's token.
+
+    This is the whole point of ENG-41: `CLAUDE.md` tells agents to edit
+    `tracker/state.json` directly, and the old counter only moved when the API
+    wrote. A page loaded before such an edit then PUT its stale copy straight
+    over it and reported success.
+    """
+    state_file = tmp_path / "state.json"
+    monkeypatch.setattr(SERVER, "TRACKER_DIR", tmp_path)
+    monkeypatch.setattr(SERVER, "STATE_FILE", state_file)
+    SERVER._write_state(
+        {"version": SERVER.STATE_VERSION, "items": {}, "createdItems": []}
+    )
+    before = SERVER._state_revision()
+
+    state_file.write_text(
+        json.dumps(
+            {
+                "version": SERVER.STATE_VERSION,
+                "items": {"ENG-1": {"status": "Closed"}},
+                "createdItems": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert SERVER._state_revision() != before
 
 
 def test_whoami_prefers_an_explicit_choice_over_the_git_name(

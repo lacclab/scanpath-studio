@@ -104,6 +104,11 @@
   .connection::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); }
   .connection.on::before { background: #22c55e; }
   .connection.error::before { background: #ef4444; }
+  .stale {
+    position: sticky; top: 0; z-index: 60; display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; background: #7f1d1d; color: #fff; font-size: 13px; line-height: 1.4;
+  }
+  .stale button { background: #fff; border-color: #fff; color: #7f1d1d; font-weight: 600; }
 
   /* ---------- layout ---------- */
   .wrap { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 26px; padding: 22px; max-width: 1240px; margin: 0 auto; align-items: start; }
@@ -914,6 +919,21 @@
     editor.querySelector(".item-save-state").textContent = "Unsaved";
   }
 
+  /* A 409 means the file moved under us — another tab, an agent editing
+     `state.json` by hand, or a `git pull`. Saying "Save failed" in the corner
+     was not enough: the edit is still sitting in the form, the page still shows
+     the pre-pull world, and the only safe move is a reload. So say exactly that,
+     once, in a banner the user has to dismiss by reloading. */
+  function renderStaleBanner(message) {
+    if (el("stale")) return;
+    const banner = document.createElement("div");
+    banner.id = "stale";
+    banner.className = "stale";
+    banner.innerHTML = `<span>${esc(message)}</span><button type="button" id="staleReload">Reload now</button>`;
+    document.body.prepend(banner);
+    el("staleReload").addEventListener("click", () => location.reload());
+  }
+
   async function saveState() {
     if (!serverConnected) return { ok: false, error: "Tracker server is not connected." };
     setConnection("Saving…", "");
@@ -924,6 +944,11 @@
         body: JSON.stringify(statePayload()),
       });
       const payload = await response.json();
+      if (response.status === 409) {
+        setConnection("Out of date · reload", "error");
+        renderStaleBanner(payload.error || "The tracker changed on disk. Reload before saving.");
+        return { ok: false, error: payload.error || "The tracker changed on disk. Reload before saving." };
+      }
       if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not save tracker changes.");
       STATE.revision = payload.state.revision;
       unsavedChanges = false;

@@ -3087,6 +3087,21 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
     The ``split_mode_`` key prefix is what `styles.py` styles the row with; it is
     shared with the two mode rows above the plot deliberately, because they are
     the same control.
+
+    **Round 2 (UX-80).** Three things the first cut got wrong, all visible at
+    once in one screenshot: the row wrapped, the trigger showed two arrows, and
+    the toggle carried a `?`.
+
+    - ``width="content"``, not ``"stretch"`` — a stretched trigger claims the
+      row's whole width, so the switch and the ▾ could not share a line however
+      much room the rail had. Animate and Compare had it right.
+    - **No label and no icon on the trigger.** A `▾` label (or a
+      `:material/arrow_drop_down:` icon) sits *beside* the chevron Streamlit
+      draws on every popover, which is one arrow too many.
+    - ``help_text`` goes to the **popover**, not the toggle. Streamlit renders a
+      widget's `help` as a `?` icon next to its label — one more thing on a row
+      that has to fit — while a popover trigger's `help` is a plain hover
+      tooltip. Same words, no icon.
     """
     row = host.container(
         horizontal=True,
@@ -3094,13 +3109,13 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
         gap=None,
         key=f"split_mode_rail_{slug}",
     )
-    toggle_help = toggle.pop("help_text", None)
-    if toggle_help is not None:
-        toggle["help"] = toggle_help
+    tips = [t for t in (toggle.pop("help_text", None), help) if t]
     value = row.toggle(label, **toggle) if toggle else None
     if value is None:
         row.markdown(label)
-    return value, row.popover("▾", width="stretch", help=help or None)
+    return value, row.popover(
+        "", width="content", help="\n\n".join(tips) if tips else None
+    )
 
 
 def _rail_subsection(host, label: str, *, note: str = ""):
@@ -3273,17 +3288,19 @@ def sidebar_controls(
     _active = _active_palette()
     _palette_options = list(PALETTES) if _active else [CUSTOM_PALETTE, *PALETTES]
     st.session_state["global_palette"] = _active or CUSTOM_PALETTE
+    # UX-80 r2: no `help=`, because Streamlit draws it as a `?` icon and the ask
+    # was to clear those off the rail's head. This is the one that had nowhere
+    # else to go — the toggles' text moved to their ▾ tooltips, but a selectbox
+    # has no second hover target — so what each palette *is* now reads off the
+    # option names themselves ("Default (colourblind-safe)", "Print / greyscale",
+    # "High contrast"), and "any change reads Custom" is visible the moment it
+    # happens. The full explanation lives in the docs.
     viz.selectbox(
         "Palette",
         options=_palette_options,
         key="global_palette",
         persist_state="session",
         on_change=_on_palette_change,
-        help="Colour defaults for the marks. **Default (colourblind-safe)** uses "
-        "the Okabe–Ito hues; **Print / greyscale** drops hue entirely so the "
-        "figure survives a black & white print (pair it with a marker shape); "
-        "**High contrast** is for projectors. Each one just presets the colour "
-        "pickers — change any of them afterwards and this reads **Custom**.",
     )
 
     # Keep the palette controls visually separate from the bordered layer cards.

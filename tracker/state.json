@@ -875,12 +875,12 @@
       "updated": "2026-08-17"
     },
     "UX-54": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "i do want to duplicate add dataset page so that it looks the same when someone wants to edit the dataset.\nshow dataset statistics only when dataset is chosen, and add confirmation step on delete.",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-55": {
       "status": "In progress",
@@ -923,36 +923,36 @@
       "updated": "2026-08-18"
     },
     "UX-64": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "great, do the same for the second control line when we use compare - when compare is on, I want the second trial control line to be the same as this one",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-65": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. keep the same tours and tutorials! don tchange them! only chenge the help button to be a menu that opens the same things, not a full page.\n2. find a way to put this as an external page or link in the menu, maybe use redirect? the logo is now in the header menu and links to the doc, you can use an image as a link so there is a way.\n3. put it in the session page for now",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-66": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "great! now just change the cancle button color so that it's blue like the \"add dataset\" button and change the text of the documentation link button to be \"for more documentation\" or something similar",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-67": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "i want the warnings to be above the add dataset button, that's good, but I dont want to have these anouncement boxes for the counts. i want the counts to appear below the relevant field in small text, for example for trial count i want it to be in the trial fieldd container below the selection menu.",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-68": {
       "status": "Closed",
@@ -971,28 +971,28 @@
       "updated": "2026-08-18"
     },
     "UX-71": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "no wraping, this doesnt work. try again.",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-72": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-73": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-74": {
       "status": "On hold",
@@ -1003,51 +1003,51 @@
       "updated": "2026-08-19"
     },
     "UX-75": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "1. outside compare should be no title, like now. \n2. each chips line should sit under its own control line",
-      "archived": false,
-      "updated": "2026-08-18"
+      "archived": true,
+      "updated": "2026-08-19"
     },
     "UX-76": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "UX-77": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "UX-78": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "UX-79": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "UX-80": {
-      "status": "Review",
+      "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
-      "archived": false,
+      "archived": true,
       "updated": "2026-08-19"
     },
     "UX-81": {

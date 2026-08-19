@@ -3748,8 +3748,6 @@ def render_single_trial_tab(
                     "🎬 **Animate**",
                     key="single_animate",
                     persist_state="session",
-                    help="Replay the trial fixation by fixation; the play / pause / "
-                    "restart controls sit below the plot.",
                 )
                 # The ▾ opens whether or not Animate is on — what a mode *offers* is
                 # part of deciding whether to turn it on, and a menu that refuses to
@@ -3765,11 +3763,17 @@ def render_single_trial_tab(
                     if not animate
                     else "⚠️ This trial has no fixations to replay."
                 )
+                # UX-80 r2: no `icon=` — Streamlit already draws a chevron on a
+                # popover trigger, so the material arrow beside it was a second
+                # one. The toggle's `help` moved here for the same pass: on a
+                # widget it renders as a `?` icon, on a trigger as a plain hover
+                # tooltip.
                 with st.popover(
                     "",
-                    icon=":material/arrow_drop_down:",
                     width="content",
-                    help="Playback settings",
+                    help="Playback settings. Replay the trial fixation by "
+                    "fixation; the play / pause / restart controls sit below "
+                    "the plot.",
                 ):
                     st.session_state.setdefault(
                         "single_playback_speed", _ANIM_DEFAULT_SPEED
@@ -3942,12 +3946,6 @@ def render_single_trial_tab(
                     "⚖️ **Compare**",
                     key=SINGLE_COMPARE_TOGGLE,
                     persist_state="session",
-                    help=(
-                        "Co-animate a second reading on one clock."
-                        if animate
-                        else "Overlay another trial's scanpath or view them side by "
-                        "side."
-                    ),
                 )
                 # Opens either way; greyed inside while Compare is off — see the
                 # Animate row above for why the menu does not refuse to open.
@@ -3955,11 +3953,18 @@ def render_single_trial_tab(
                 cmp_gate = (
                     "⚠️ Turn on **Compare** to change these." if cmp_disabled else ""
                 )
+                # UX-80 r2: see the Animate row above — one arrow, and the
+                # toggle's `help` served as a tooltip here instead of a `?`.
                 with st.popover(
                     "",
-                    icon=":material/arrow_drop_down:",
                     width="content",
-                    help="Compare settings",
+                    help="Compare settings. "
+                    + (
+                        "Co-animate a second reading on one clock."
+                        if animate
+                        else "Overlay another trial's scanpath or view them side "
+                        "by side."
+                    ),
                 ):
                     # CMP-13. Deliberately "Step both trials together" and not
                     # "keep them in sync": the two pools have different sizes

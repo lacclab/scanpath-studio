@@ -371,6 +371,26 @@ def get_app_css() -> str:
         display: flex;
         align-items: center;
     }
+    /* UX-80 r2 — **one line per section**, which the block below deliberately
+       did not guarantee. Its reasoning still holds (a switch will not shrink
+       below its own min-content, so a forced single line can push the ▾ off a
+       narrow rail) — what changed is that the ▾ is now a bare chevron rather
+       than a labelled or icon-bearing button, so the row needs ~35px less, and
+       the *label* is allowed to give way before the trigger does. The switch
+       may shrink and ellipsise; the ▾ never moves. */
+    [class*="st-key-split_mode_"] {
+        flex-wrap: nowrap !important;
+    }
+    [class*="st-key-split_mode_"] > div:not(:has([data-testid="stPopover"])) {
+        min-width: 0;
+        flex: 0 1 auto;
+    }
+    [class*="st-key-split_mode_"] [data-testid="stWidgetLabel"] p,
+    [class*="st-key-split_mode_"] [data-testid="stMarkdownContainer"] p {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     /* The divider is drawn on the popover's SLOT — the row's own child — and not
        on the button, which is the obvious place and does not work. A trigger
        given `help=` is wrapped by Streamlit in a tooltip chain

@@ -995,12 +995,12 @@
       "updated": "2026-08-18"
     },
     "UX-74": {
-      "status": "Backlog",
+      "status": "On hold",
       "priority": "Normal",
       "owner": "Maya",
       "implementationBrief": "",
       "archived": false,
-      "updated": "2026-08-18"
+      "updated": "2026-08-19"
     },
     "UX-75": {
       "status": "Review",
@@ -1035,6 +1035,22 @@
       "updated": "2026-08-19"
     },
     "UX-79": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-19"
+    },
+    "UX-80": {
+      "status": "Review",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": false,
+      "updated": "2026-08-19"
+    },
+    "UX-81": {
       "status": "Review",
       "priority": "Normal",
       "owner": "Maya",

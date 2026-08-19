@@ -555,10 +555,17 @@ class TestSpotlightSelectorsResolve:
         assert 'st.markdown("## 🎛️ View modes")' not in tab_source
         assert 'st.markdown("## 🎨 Visualization")' not in tab_source
         assert 'viz.caption("Quick views")' in control_source
-        assert 'sac_grp = viz.expander("↗️ Saccades", expanded=False)' in control_source
+        # UX-80: a section is a `[toggle | ▾]` row, not an expander.
+        assert "_rail_section(" in control_source
+        assert 'viz.expander("↗️ Saccades"' not in control_source
 
     def test_plot_rail_merges_figure_and_canvas_without_nested_expander(self):
-        """UX-44: four lower groups become three without nesting expanders."""
+        """UX-44: four lower groups become three without nesting expanders.
+
+        UX-80/81 kept the merge and changed the container: 📐 Figure & canvas is
+        a `[name | ▾]` row whose popover holds the screen half, the axes and the
+        labels — and the *text* half left it for 📄 Stimulus → Text.
+        """
         import inspect
 
         from scanpath_studio import app, controls
@@ -566,8 +573,10 @@ class TestSpotlightSelectorsResolve:
         control_source = inspect.getsource(controls.sidebar_controls)
         canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
 
-        assert 'figure_grp = viz.expander("📐 Figure & canvas"' in control_source
-        assert "canvas_renderer(figure_grp)" in control_source
+        assert '"📐 **Figure & canvas**"' in control_source
+        assert (
+            "canvas_renderer(screen_group, text_host=stim_text_slot)" in control_source
+        )
         assert "display = host if bare else host.expander" in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
@@ -575,10 +584,11 @@ class TestSpotlightSelectorsResolve:
     def test_plot_rail_uses_contextual_style_filter_labels(self):
         """UX-44: repeated per-layer labels stay terse.
 
-        UX-72 changed where 🧹 Filter lives, not what it says: it is one section
-        for the whole figure instead of a popover per layer, so the
-        badge-carrying label is the section's. ⚙️ Style stayed a per-layer
-        popover (UX-74's flattening was reverted).
+        UX-72 moved 🧹 Filter out of the layers into one section for the whole
+        figure, and UX-80 made every section a `[toggle | ▾]` row — so a layer's
+        style controls *are* its section's popover body and no longer need a
+        label of their own. What is still pinned is that the labels are the
+        section names, terse, and that Reset is not one of them.
         """
         import inspect
 
@@ -586,8 +596,8 @@ class TestSpotlightSelectorsResolve:
 
         control_source = inspect.getsource(controls.sidebar_controls)
 
-        assert 'popover("⚙️ Style"' in control_source
-        assert 'f"🧹 Filter{' in control_source
+        assert '"👁️ **Fixations**"' in control_source
+        assert 'f"🧹 **Filter**{' in control_source
         assert "Reset settings" not in control_source
 
     def test_reset_closes_the_rail_below_every_control_it_resets(self):

@@ -3064,6 +3064,45 @@ def corpus_style_controls(
     return viz_settings_from_state(trial_fixations, base_font_size, words=words)
 
 
+def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
+    """One rail section: `[toggle | ▾]` on a single line (UX-80).
+
+    The shape #UX-68 gave 🎬 Animate and ⚖️ Compare, applied to every section of
+    the rail: the layer's switch and the disclosure for its options share a row,
+    and the options open in a **popover** rather than inside an expander.
+
+    That last part is the point, not the tidiness. The rail is ~150–200 px wide
+    on purpose (the plot is the hero, #UX-51), so an expander lays its controls
+    out inside that width and crops them; a popover is positioned over the page
+    and sizes to its content. #UX-74 tried the opposite — inlining the popovers —
+    and had to be reverted for exactly this.
+
+    Passing ``toggle`` kwargs (``key=``, ``help=``, ``disabled=``) draws the
+    switch and returns its value. Omitting them draws the section's **name**
+    instead, for the sections that have no single thing to switch: 📄 Stimulus
+    and 🔥 Overlays hold several layers, 📐 Figure & canvas holds none, and 🧹
+    Filter is not a layer at all.
+
+    Returns ``(value, body)`` — ``value`` is ``None`` for a name-only section.
+    The ``split_mode_`` key prefix is what `styles.py` styles the row with; it is
+    shared with the two mode rows above the plot deliberately, because they are
+    the same control.
+    """
+    row = host.container(
+        horizontal=True,
+        vertical_alignment="center",
+        gap=None,
+        key=f"split_mode_rail_{slug}",
+    )
+    toggle_help = toggle.pop("help_text", None)
+    if toggle_help is not None:
+        toggle["help"] = toggle_help
+    value = row.toggle(label, **toggle) if toggle else None
+    if value is None:
+        row.markdown(label)
+    return value, row.popover("▾", width="stretch", help=help or None)
+
+
 def _rail_subsection(host, label: str, *, note: str = ""):
     """A named block inside the rail's 🧹 Filter section (UX-72).
 
@@ -3304,10 +3343,56 @@ def sidebar_controls(
     # Fixations opens because it is the primary layer; Saccades and the less-used
     # groups stay collapsed so the independent rail starts compact. The preset row
     # above still covers the common combinations without opening anything at all.
-    fix_grp = viz.expander("👁️ Fixations", expanded=True)
-    sac_grp = viz.expander("↗️ Saccades", expanded=False)
-    stim_grp = viz.expander("📄 Stimulus", expanded=False)
-    ovl_grp = viz.expander("🔥 Overlays", expanded=False)
+    # UX-80: each section is a row — its switch (when it has exactly one thing
+    # to switch) and a ▾ holding everything else. The layer toggles are rendered
+    # HERE rather than in the blocks below, because a row lays its children out
+    # in creation order and the switch has to precede the ▾; the blocks below
+    # still own everything inside the popovers.
+    fix_off_disabled, _fix_off_reason = _mode_gate(
+        animating, comparing, in_animation=False, in_compare=True
+    )
+    show_fix, fix_grp = _rail_section(
+        viz,
+        "👁️ **Fixations**",
+        slug="fix",
+        help="Fixation marker style, colour and size.",
+        key="global_show_fix",
+        persist_state="session",
+        disabled=fix_off_disabled,
+        help_text=_gated_help(
+            "Draw the fixation markers.",
+            "⚠️ Fixations always draw in **Animate** mode — the replay is made "
+            "of them. Your setting is kept for the static and comparison "
+            "figures; the styling below still applies."
+            if fix_off_disabled
+            else "",
+        ),
+    )
+    show_saccades, sac_grp = _rail_section(
+        viz,
+        "↗️ **Saccades**",
+        slug="sac",
+        help="Saccade line shape, colour and width.",
+        key="global_show_saccades",
+        persist_state="session",
+    )
+    # Three layers in one section (text, boxes, image) and two in the next
+    # (heatmap, raw gaze), so neither row has a single switch to carry — they
+    # take their name instead, and each layer's own toggle leads its group
+    # inside. A master switch was considered and rejected: it would have to
+    # remember which of the three were on to restore them.
+    _stim_none, stim_grp = _rail_section(
+        viz,
+        "📄 **Stimulus**",
+        slug="stim",
+        help="The text, its word boxes, and the stimulus image.",
+    )
+    _ovl_none, ovl_grp = _rail_section(
+        viz,
+        "🔥 **Overlays**",
+        slug="ovl",
+        help="Heatmap and raw gaze, drawn over the scanpath.",
+    )
     # UX-72 — ONE filter section for the whole figure, a peer of the layer
     # sections rather than a 🧹 popover inside each of them. "Filter the plot"
     # was two controls, in two places, each two clicks deep; it is one place
@@ -3318,9 +3403,13 @@ def sidebar_controls(
     # reading. The badge still says an active filter is on, or a thinned figure
     # reads as missing data; with two filters folded together it now reports
     # both, so `•` on the section means at least one of them is narrowing.
-    filter_grp = viz.expander(
-        f"🧹 Filter{_plot_filter_badge()}",
-        expanded=False,
+    # UX-80: no toggle — filtering is not a layer — but the same row shape, so
+    # its controls open over the page instead of being cropped by the rail.
+    _filter_none, filter_grp = _rail_section(
+        viz,
+        f"🧹 **Filter**{_plot_filter_badge()}",
+        slug="filter",
+        help="Thin what is drawn inside this reading.",
     )
     # Sub-slots up front so each block below renders into the right half of the
     # section from wherever it sits in this file (the same trick the sections
@@ -3331,7 +3420,12 @@ def sidebar_controls(
     # describe the figure's framing rather than a data layer. The injected canvas
     # renderer writes directly into this expander (not a nested expander), as its
     # own popover sub-groups — see the "Figure & canvas" block below.
-    figure_grp = viz.expander("📐 Figure & canvas", expanded=False)
+    _figure_none, figure_grp = _rail_section(
+        viz,
+        "📐 **Figure & canvas**",
+        slug="figure",
+        help="Framing, screen, axes, and what the figure says in words.",
+    )
 
     # --- Fixations --------------------------------------------------------
     # The Fixations toggle reaches the static figure AND Compare (CMP-7 — the
@@ -3339,27 +3433,11 @@ def sidebar_controls(
     # animated replay ignores it: the replay *is* the fixation trail, so there is
     # nothing left to draw with it off, and `make_scanpath_animation` takes no
     # `show_fixations` argument.
-    fix_off_disabled, _ = _mode_gate(
-        animating, comparing, in_animation=False, in_compare=True
-    )
-    show_fix = fix_grp.toggle(
-        "**Visible**",
-        key="global_show_fix",
-        persist_state="session",
-        disabled=fix_off_disabled,
-        help=_gated_help(
-            "Draw the fixation markers.",
-            "⚠️ Fixations always draw in **Animate** mode — the replay is made "
-            "of them. Your setting is kept for the static and comparison "
-            "figures; the styling below still applies."
-            if fix_off_disabled
-            else "",
-        ),
-    )
-    # …but the styling below is still (partly) live in those modes, so keep the
-    # popover reachable even when the (inert) layer toggle reads off.
+    # The toggle is on the section's row (UX-80); the styling below is still
+    # (partly) live in Animate / Compare, so the popover stays reachable even
+    # when the (inert) layer toggle reads off.
     if show_fix or fix_off_disabled:
-        with fix_grp.popover("⚙️ Style", width="stretch"):
+        with fix_grp:
             # The metric that maps to fixation HUE — applies to the static
             # figure, the single animated replay AND the comparison overlay (in
             # compare it colours both scanpaths by the metric; the per-scanpath
@@ -3635,11 +3713,8 @@ def sidebar_controls(
             _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
-    show_saccades = sac_grp.toggle(
-        "**Visible**", key="global_show_saccades", persist_state="session"
-    )
     if show_saccades:
-        with sac_grp.popover("⚙️ Style", width="stretch"):
+        with sac_grp:
             # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
             # (each arrowhead un-masks with the saccade it belongs to), so
             # direction arrows now reach all three builders.
@@ -3816,7 +3891,18 @@ def sidebar_controls(
         "**Text**", key="global_show_labels", persist_state="session"
     )
     if show_labels:
-        with stim_grp.popover("⚙️ Text & highlight", width="stretch"):
+        with _rail_subsection(stim_grp, "🔤 Text"):
+            # UX-81: the typography that draws this text — line spacing, the
+            # font and its size, scale-to-boxes — used to sit two sections away
+            # in 📐 Figure & canvas → 🔤 Text & fonts. It describes the stimulus,
+            # so it lives beside the layer that draws it. Same widgets, same
+            # `global_*` keys: a re-home, not a rewrite, so every share link and
+            # saved config restores exactly as before.
+            #
+            # Reserved here, filled by the single `canvas_renderer` call in the
+            # 📐 Figure & canvas block below — one call draws both halves, since
+            # a widget drawn twice is a duplicate-key error.
+            stim_text_slot = st.container()
             # "Highlight a span" is an on/off toggle; the Mark-text / Mark-border
             # choice appears only when it's on (no "None" option). The canonical
             # value stays in `global_critical_span_style` ("Mark text" |
@@ -3952,7 +4038,7 @@ def sidebar_controls(
         help=_gated_help("Tint the reading by fixation density.", heat_reason),
     )
     if show_heatmap:
-        with ovl_grp.popover("⚙️ Heatmap style", width="stretch"):
+        with _rail_subsection(ovl_grp, "⚙️ Heatmap style"):
             # A radio (not segmented_control) so the active style is always shown
             # selected from the seeded default — segmented_control could render
             # with nothing selected on first open.
@@ -4101,7 +4187,7 @@ def sidebar_controls(
     # image loaded yet) — its uploader is the only way to get an image in and
     # enable the toggle in the first place.
     if show_stim_image or not can_show_image:
-        with stim_grp.popover("⚙️ Stimulus image", width="stretch"):
+        with _rail_subsection(stim_grp, "⚙️ Image placement"):
             st.file_uploader(
                 "Upload a stimulus image",
                 type=["png", "jpg", "jpeg", "gif", "webp"],
@@ -4194,40 +4280,33 @@ def sidebar_controls(
         )
 
     # --- Figure & canvas --------------------------------------------------
-    # UX-48: this group merged two former sections (canvas/text + axes/labels)
-    # and read as one ~26-row flat run — two `**bold caption**` lines were the
-    # only structure in it. It now follows the same shape as every layer group:
-    # ONE headline control inline, everything else behind named popovers.
+    # UX-80/81: one popover, three named groups inside it and nothing nested —
     #
-    #   **Show full monitor**   (inline — the framing decision, cheap to reach)
-    #   🖥️ Screen & geometry    ┐ rendered by `canvas_renderer`
-    #   🔤 Text & fonts         ┘ (app.render_sidebar_canvas_controls, bare mode)
-    #   📊 Axes & grid          ┐ rendered here
-    #   🏷️ Title & labels       ┘
+    #   🖥️ Screen & framing   Show full monitor + the monitor's pixel size
+    #                         (`canvas_renderer`, screen half only)
+    #   📊 Axes & grid        the coordinate grid, colour bar, axis fields
+    #   🏷️ Title & labels     the Illustration disclosure + the EXP-5 title
     #
-    # The two containers below are created up front so each block keeps its place
-    # in this file while rendering into its own sub-group (same trick as the
-    # section expanders above). Popovers, not expanders, because Streamlit nests
-    # neither expander-in-expander nor popover-in-popover — and this group is
-    # already an expander.
-    figure_grp.toggle(
+    # 🔤 Text & fonts is **not** here any more: it describes the stimulus text,
+    # so it moved to 📄 Stimulus → Text (UX-81), beside the layer it draws. The
+    # physical-geometry fields (monitor width in mm, viewing distance, DPI) went
+    # with the same pass — they are experiment facts the 🗂️ Data page's Recording
+    # setup already owns, and a second set here could disagree with it.
+    #
+    # The three containers are created up front so each block keeps its place in
+    # this file while landing in the right group.
+    screen_group = _rail_subsection(figure_grp, "🖥️ Screen & framing")
+    axes = _rail_subsection(figure_grp, "📊 Axes & grid")
+    labels = _rail_subsection(figure_grp, "🏷️ Title & labels")
+    screen_group.toggle(
         "**Show full monitor**",
         key="global_fit_to_monitor",
         persist_state="session",
         help="Frame the whole presentation monitor so the scanpath sits where it "
         "appeared on screen. Turn off to crop the view tightly to the data.",
     )
-    # The renderer is bound by app.main and writes its canvas/text sub-groups
-    # directly into the shared disclosure, followed by the figure/axis ones.
     if canvas_renderer is not None:
-        canvas_renderer(figure_grp)
-
-    # The plot frame itself: the coordinate grid, the colour bar and which
-    # fixation columns the two axes plot.
-    axes = figure_grp.popover("📊 Axes & grid", width="stretch")
-    # Everything the figure says in words: the Illustration disclosure label and
-    # the EXP-5 title/caption.
-    labels = figure_grp.popover("🏷️ Title & labels", width="stretch")
+        canvas_renderer(screen_group, text_host=stim_text_slot)
 
     show_coordinate_grid = axes.toggle(
         "Coordinate grid",

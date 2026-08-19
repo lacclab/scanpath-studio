@@ -3750,6 +3750,7 @@ def render_sidebar_canvas_controls(
     expanded: bool = False,
     title: str = "Experimental Setup",
     bare: bool = False,
+    text_host=None,
 ) -> tuple[int, int, int, str, float, bool]:
     """Render the canvas-geometry, typography and background panel.
 
@@ -3762,14 +3763,25 @@ def render_sidebar_canvas_controls(
     `seed_canvas_state` does the state work and is called first here, so rendering
     and not-rendering resolve identically.
 
-    **UX-48 sub-grouping.** In ``bare`` mode these ~19 controls share the rail's
-    "📐 Figure & canvas" disclosure with the axes/label controls, which made one
-    ~26-row scroll with no internal structure. So the compact form splits them
-    into two popovers — **🖥️ Screen & geometry** (the monitor the experiment ran
-    on) and **🔤 Text & fonts** (how the reading text is drawn, plus the two
-    colours) — the same `expander → popover` shape every layer group uses. The
-    wizard's standalone expander stays flat: that step *is* the setup form, and
-    hiding half of it behind buttons would be a step you can't read at a glance.
+    **UX-80/81 — ``text_host`` is where the typography half goes.** The two
+    halves answer different questions and, in the rail, now live in different
+    sections: the **screen** half (the monitor the figure is framed on) is drawn
+    into ``slot`` for 📐 Figure & canvas, and the **text** half (how the reading
+    text is drawn) into ``text_host`` for 📄 Stimulus → *Text*, beside the layer
+    it describes. One call renders both — a widget drawn twice is a duplicate-key
+    error, and one not drawn at all loses its key at the end of the run. The
+    wizard passes neither and gets both, flat, in one expander: that step *is*
+    the setup form, and hiding half of it behind buttons would be a step you
+    cannot read at a glance.
+
+    **The physical-geometry controls are not drawn in ``bare`` mode** (UX-81).
+    Monitor physical width, viewing distance and display DPI are experiment
+    facts, and the 🗂️ Data page's **Recording setup** (#DATA-22) already asks for
+    them with a provenance; a second set in the rail could disagree with it. The
+    *values* are unaffected — ``seed_canvas_state`` still pins them, and every
+    consumer (px/degree for saccade amplitude in degrees, the point-to-pixel
+    stimulus font conversion) reads them from state exactly as before, which is
+    also what keeps a share link carrying them working.
 
     Returns:
         Tuple of (canvas_width, canvas_height, base_font_size, font_family,
@@ -3793,13 +3805,10 @@ def render_sidebar_canvas_controls(
         kwargs.pop("display", None)
         return getattr(host, kind)(label, **kwargs)
 
-    # Both sub-groups are created up front (Streamlit lays containers out in
-    # creation order), so the code below keeps its order while landing in the
-    # right group. Flat mode points both names at the one container.
-    screen = (
-        display.popover("🖥️ Screen & geometry", width="stretch") if bare else display
-    )
-    text = display.popover("🔤 Text & fonts", width="stretch") if bare else display
+    # UX-80: no sub-popovers any more — each half is drawn straight into the
+    # section that owns it, and the caller has already opened the one disclosure.
+    screen = display
+    text = text_host if (bare and text_host is not None) else display
     canvas_width = field(
         screen,
         "number_input",
@@ -3825,48 +3834,68 @@ def render_sidebar_canvas_controls(
     # DATA-2: physical setup values live beside the pixel canvas they explain.
     # They are persisted with the plot config and immediately yield a px/degree
     # scale for downstream saccade/reporting work.
-    monitor_width_mm = field(
-        screen,
-        "number_input",
-        "Monitor physical width (mm)",
-        display="Physical width (mm)",
-        min_value=100.0,
-        max_value=3000.0,
-        step=1.0,
-        key="global_monitor_width_mm",
-        persist_state="session",
-        help="Width of the visible display area, not the diagonal size.",
-    )
-    viewing_distance_mm = field(
-        screen,
-        "number_input",
-        "Viewing distance (mm)",
-        min_value=100.0,
-        max_value=3000.0,
-        step=10.0,
-        key="global_viewing_distance_mm",
-        persist_state="session",
-        help="Eye-to-screen distance during the experiment.",
-    )
-    derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
-    display_dpi = field(
-        screen,
-        "number_input",
-        "Display DPI",
-        min_value=20.0,
-        max_value=1000.0,
-        step=1.0,
-        key="global_display_dpi",
-        persist_state="session",
-        help="Used for point-to-pixel stimulus font conversion. The physical "
-        f"width above implies {derived_dpi:.1f} DPI.",
-    )
+    #
+    # **UX-81 — in the rail these three are not drawn at all.** They are
+    # experiment facts, and the 🗂️ Data page's Recording setup (#DATA-22) already
+    # asks for them *with a provenance*; a second set here could disagree with
+    # it, and did. Not rendering a widget normally loses its key — but these keys
+    # are not widget-owned any more: `seed_canvas_state` pins all three on every
+    # run (including the derived DPI), so a share link or saved config still
+    # restores them and every consumer reads the same numbers as before.
+    # The wizard's standalone form still shows them: that *is* where they are set.
+    if bare:
+        monitor_width_mm = float(st.session_state.get("global_monitor_width_mm", 597.0))
+        viewing_distance_mm = float(
+            st.session_state.get("global_viewing_distance_mm", 800.0)
+        )
+        display_dpi = float(st.session_state.get("global_display_dpi", 96.0))
+    else:
+        monitor_width_mm = field(
+            screen,
+            "number_input",
+            "Monitor physical width (mm)",
+            display="Physical width (mm)",
+            min_value=100.0,
+            max_value=3000.0,
+            step=1.0,
+            key="global_monitor_width_mm",
+            persist_state="session",
+            help="Width of the visible display area, not the diagonal size.",
+        )
+        viewing_distance_mm = field(
+            screen,
+            "number_input",
+            "Viewing distance (mm)",
+            min_value=100.0,
+            max_value=3000.0,
+            step=10.0,
+            key="global_viewing_distance_mm",
+            persist_state="session",
+            help="Eye-to-screen distance during the experiment.",
+        )
+        derived_dpi = float(canvas_width) / (float(monitor_width_mm) / 25.4)
+        display_dpi = field(
+            screen,
+            "number_input",
+            "Display DPI",
+            min_value=20.0,
+            max_value=1000.0,
+            step=1.0,
+            key="global_display_dpi",
+            persist_state="session",
+            help="Used for point-to-pixel stimulus font conversion. The physical "
+            f"width above implies {derived_dpi:.1f} DPI.",
+        )
     px_per_degree = pixels_per_degree(
         float(viewing_distance_mm), float(canvas_width), float(monitor_width_mm)
     )
+    # Still said, because it is the one number the framing controls imply and
+    # cannot be read off them: where the geometry came from is the Data page's
+    # to explain, but what it *means* for this figure belongs beside the canvas.
     screen.caption(
         f"Geometry: **{px_per_degree:.1f} px/degree** · "
         f"{1.0 / px_per_degree:.4f}° per pixel."
+        + ("  ·  set in 🗂️ Data → Recording setup." if bare else "")
     )
 
     # --- 🔤 Text & fonts (sub-group in bare mode) -------------------------
@@ -5199,14 +5228,20 @@ def main() -> None:
         scale_text_to_boxes,
     ) = seed_canvas_state(words_filtered, canvas_geometry_frame, data_choice)
 
-    def canvas_renderer(slot) -> None:
-        """Render canvas/text controls into the rail's figure disclosure."""
+    def canvas_renderer(slot, text_host=None) -> None:
+        """Render the canvas/text controls into the rail, in two places.
+
+        UX-81 split the panel between two sections: the screen half into
+        ``slot`` (📐 Figure & canvas) and the typography half into ``text_host``
+        (📄 Stimulus → Text). One call, so each widget is created exactly once.
+        """
         render_sidebar_canvas_controls(
             words_filtered,
             canvas_geometry_frame,
             data_choice,
             slot=slot,
             bare=True,
+            text_host=text_host,
         )
 
     # The visualization controls moved out of the sidebar into the Scanpath

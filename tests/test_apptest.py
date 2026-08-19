@@ -3268,12 +3268,14 @@ class TestFigureAndCanvasSubGroups:
             "Horizontal",
         )
 
-    def test_the_group_keeps_one_inline_toggle_and_four_popovers(self):
-        """The shape itself: framing inline, everything else behind a name.
+    def test_the_group_keeps_its_named_blocks(self):
+        """The shape itself: one disclosure, named blocks, nothing nested.
 
-        UX-74 replaced these popovers with inline blocks and was reverted — a
-        section then read as one long undifferentiated run — so the popovers are
-        the shape again, and this pins them.
+        UX-80 made the group a ``[name | ▾]`` row and its sub-popovers named
+        blocks inside it; UX-81 moved the typography out to 📄 Stimulus → Text
+        and dropped the physical-geometry controls, which the 🗂️ Data page's
+        Recording setup owns. What this pins is that the group did not collapse
+        back into the one flat ~26-row run UX-48 broke up.
         """
         import inspect
 
@@ -3282,12 +3284,14 @@ class TestFigureAndCanvasSubGroups:
         control_source = inspect.getsource(controls.sidebar_controls)
         canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
 
-        assert 'figure_grp.popover("📊 Axes & grid"' in control_source
-        assert 'figure_grp.popover("🏷️ Title & labels"' in control_source
-        assert '"🖥️ Screen & geometry"' in canvas_source
-        assert '"🔤 Text & fonts"' in canvas_source
-        # The framing toggle is the group's one inline control.
-        assert 'figure_grp.toggle(\n        "**Show full monitor**"' in control_source
+        assert '_rail_subsection(figure_grp, "🖥️ Screen & framing")' in control_source
+        assert '_rail_subsection(figure_grp, "📊 Axes & grid")' in control_source
+        assert '_rail_subsection(figure_grp, "🏷️ Title & labels")' in control_source
+        # The typography half is drawn into the Stimulus section instead.
+        assert "text_host" in canvas_source
+        assert '_rail_subsection(stim_grp, "🔤 Text")' in control_source
+        # The framing toggle leads the screen block.
+        assert 'screen_group.toggle(\n        "**Show full monitor**"' in control_source
         # …and the old flat captions are gone.
         assert 'figure_grp.caption("**Canvas & text**")' not in control_source
         assert 'figure_grp.caption("**Axes & labels**")' not in control_source

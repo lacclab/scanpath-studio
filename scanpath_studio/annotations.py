@@ -17,7 +17,7 @@ import json
 
 import streamlit as st
 
-from .fields import panel_field
+from .fields import PANEL_LABEL_W, panel_field, row_label
 
 ANNOTATIONS_STATE_KEY = "trial_annotations"
 SCHEMA_VERSION = 2
@@ -206,6 +206,30 @@ def _add_tag_callback(tags_key: str, newtag_key: str) -> None:
     st.session_state[newtag_key] = ""
 
 
+def _save_star_callback(
+    participant_id: str,
+    trial_id: str,
+    screen_id: str | None,
+    star_key: str,
+) -> None:
+    """Persist a favorite before the rerun rebuilds the trial picker.
+
+    Widget callbacks run before the app body. Without this callback the picker
+    reads the previous annotation store, then ``render_trial_annotations`` saves
+    the new value later in the run — making the star marker appear one click
+    behind the checkbox.
+    """
+    entry = get_entry(participant_id, trial_id, screen_id)
+    set_entry(
+        participant_id,
+        trial_id,
+        star=bool(st.session_state.get(star_key)),
+        tags=list(entry["tags"]),
+        note=str(entry["note"]),
+        screen_id=screen_id,
+    )
+
+
 def render_trial_annotations(
     participant_id: str,
     trial_id: str,
@@ -260,8 +284,9 @@ def render_trial_annotations(
             "⭐ Favorite (star this trial)",
             display="⭐ Favorite",
             key=star_key,
-            help="Star this trial, so the **More** filters' ⭐ Favorites only "
-            "can narrow the pool to it.",
+            help="Mark this trial as a favorite.",
+            on_change=_save_star_callback,
+            args=(participant_id, trial_id, annotation_screen, star_key),
         )
         # Options must include every currently-selected tag (incl. ones added
         # via the input) or st.multiselect raises.
@@ -270,22 +295,27 @@ def render_trial_annotations(
             | set(entry["tags"])
             | set(st.session_state.get(tags_key, []))
         )
-        tags = panel_field(
-            st,
-            "multiselect",
+        tags_help = "Select tags or add one."
+        label_col, tags_col, add_col = st.columns(
+            [PANEL_LABEL_W, 0.52, 0.28],
+            gap="xsmall",
+            vertical_alignment="center",
+        )
+        row_label(label_col, "Tags", tags_help)
+        tags = tags_col.multiselect(
             "Tags",
             options=options,
             key=tags_key,
-            help="Pick presets (e.g. 'To exclude') or add your own below.",
+            help=tags_help,
+            label_visibility="collapsed",
         )
-        panel_field(
-            st,
-            "text_input",
+        add_col.text_input(
             "Add a tag",
             key=newtag_key,
-            placeholder="type a tag, press Enter",
+            placeholder="Add tag, then press Enter",
             on_change=_add_tag_callback,
             args=(tags_key, newtag_key),
+            label_visibility="collapsed",
         )
         # Top-aligned: the box is ~100px tall, and a centred title would float
         # opposite the middle of an empty note rather than beside its first line.
@@ -306,17 +336,14 @@ def render_trial_annotations(
             note=note,
             screen_id=annotation_screen,
         )
-        scope_caption = (
-            f"screen `{annotation_screen}`" if annotation_screen else "the parent trial"
-        )
         # UX-76: no 💾 Open Session button under this. It was a shortcut to a nav
         # entry that is one click away in the header (#UX-63), and it sat at the
         # foot of a panel about *this trial* pointing at a session-wide one. The
         # caption names where the annotations go instead — and no longer says
         # "the sidebar", which has not existed since #UX-38.
         st.caption(
-            f"Saved for {scope_caption} in this session. **💾 Session** in the "
-            "top menu downloads them all as JSON, or restores them."
+            "Annotations can be downloaded or restored from **💾 Session** in "
+            "the top menu."
         )
 
 

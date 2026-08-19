@@ -73,8 +73,9 @@ computation.
 - **Animate** replays the selected trial. **⚙ Playback** controls speed,
   autoplay, and frame quality.
 - **Compare** adds a second reading beside the selected one.
-- **Comparisons** ranks other same-text scanpaths using the selected grouping
-  and similarity settings.
+- **Comparisons** shows trials whose chosen field matches the selected trial.
+  Choosing text id finds other readings of the text; choosing participant id
+  finds that reader's other trials.
 
 ### Comparing across datasets
 
@@ -139,7 +140,7 @@ Pick one side to read the overlay as a comparison of the *fixation traces*
 against a single stimulus. It defaults to *Both*, which leaves same-dataset
 overlays exactly as they were.
 
-**⚖️ Download this comparison as a bundle** (Export → *This trial*) writes the
+**⚖️ Download this comparison as a bundle** (Export → *Current figure*) writes the
 figure plus both scanpaths' tables and a manifest naming each side's dataset,
 trial and recording setup. The image alone can't be reproduced; the bundle can.
 

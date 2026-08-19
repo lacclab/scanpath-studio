@@ -34,7 +34,7 @@ in-app export buttons pre-flight for Chrome and point you here when it's missing
 
 ## Complete tabular export
 
-In **Export → Multiple trials**, select **Full measure family** to add saccades,
+In **Export → Export bundle**, select **Full measure family** to add saccades,
 sentence measures, trial and reader summaries, character grids, cleaning QA,
 and `run_config.json` alongside the existing fixation and word-measure files.
 The zip contains both per-trial files and concatenated `aggregate/all_*` files.

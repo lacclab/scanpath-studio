@@ -184,7 +184,7 @@ class TestTheUiSurfacesAreAbsent:
         at.run(timeout=120)
         assert not at.exception, at.exception
         headings = " ".join(str(m.value) for m in at.markdown)
-        assert "Other scanpaths" in headings, "the generations grid must stay"
+        assert "Matching trials" in headings, "the comparison grid must stay"
         assert "Similarity to the selected scanpath" not in headings
         assert "Metric convergence" not in headings
 
@@ -193,7 +193,7 @@ class TestTheUiSurfacesAreAbsent:
         at.session_state[SUBTAB_KEY] = tabs.SUBTAB_COMPARISONS
         at.run(timeout=120)
         captions = " ".join(str(c.value) for c in at.caption)
-        assert "alphabetical order" in captions
+        assert "sorted by trial" in captions
         assert "NLD" not in captions
 
 

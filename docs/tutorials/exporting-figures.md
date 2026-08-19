@@ -27,7 +27,7 @@ manual major
 interval when several exported figures must use identical grid marks. The grid
 is included in static images, animations, comparisons, and batch figures.
 
-Open **Export → This trial** and choose:
+Open **Export → Current figure** and choose:
 
 | Need | Format |
 | --- | --- |
@@ -45,9 +45,9 @@ already-rendered bytes.
 
 ## 3. Export a batch when needed
 
-In **Export → Multiple trials**:
+In **Export → Export bundle**:
 
-1. choose the active filtered pool or the whole dataset;
+1. choose this trial, the active filtered pool, or the whole dataset;
 2. select figure and table formats;
 3. preview the filename pattern;
 4. start the export and inspect one file before using the batch.

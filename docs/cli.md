@@ -151,7 +151,7 @@ This creates word, sentence, saccade, trial, reader, character, cleaning-QA,
 and run-configuration files. `scanpath-studio corpus` produces a tidy
 corpus-analysis table for scripting. The `render` command still renders one
 trial per invocation; use the [Python batch pattern](automation.md#batch-pattern)
-or **Export → Multiple trials** for many figures.
+or **Export → Export bundle** for many figures.
 
 `--all-screens` is the multipart exception: it writes one deterministic
 `__screen-001-<id>` file per screen of the selected parent trial. The recorded

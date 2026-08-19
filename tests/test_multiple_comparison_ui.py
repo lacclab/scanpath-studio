@@ -14,6 +14,8 @@ from scanpath_studio.similarity import METRICS
 from scanpath_studio.tabs import (
     _best_model_indices,
     _collect_generations,
+    _comparison_panel_settings,
+    _comparison_trial_words,
     _generation_column_options,
     _slice_fix_range,
     _style_similarity_table,
@@ -122,46 +124,62 @@ def test_generation_column_options_empty_frame():
     assert _generation_column_options(pd.DataFrame()) == []
 
 
-def test_collect_generations_scopes_to_text_and_excludes_selected():
+def test_collect_generations_matches_selected_field_value_across_texts():
     fix = _gen_fixations()
     gens, n_total = _collect_generations(
         fix, fix[fix["trial_id"] == "t1"], "model", "p1", "t1"
     )
-    # Same text (pA) only — the pB row's "human" generation must not appear; the
-    # selected trial (p1/t1, human) is excluded, leaving gpt + claude.
-    assert set(gens) == {"gpt", "claude"}
-    assert n_total == 2
-    assert set(gens["gpt"]["participant_id"]) == {"p2"}
+    # The comparison field is a selector. The other human trial survives even
+    # though it is text B; the selected p1/t1 trial is excluded.
+    assert set(gens) == {"pX · tX"}
+    assert n_total == 1
+    assert set(gens["pX · tX"]["text_id"]) == {"B"}
 
 
 def test_collect_generations_by_participant_id():
     fix = _gen_fixations()
+    fix = pd.concat(
+        [
+            fix,
+            pd.DataFrame(
+                {
+                    "participant_id": ["p1"],
+                    "trial_id": ["t4"],
+                    "text_id": ["B"],
+                    "model": ["human"],
+                    "x": [7.0],
+                    "y": [1.0],
+                    "duration_ms": [80],
+                    "order_in_trial": [1],
+                }
+            ),
+        ],
+        ignore_index=True,
+    )
     gens, _ = _collect_generations(
         fix, fix[fix["trial_id"] == "t1"], "participant_id", "p1", "t1"
     )
-    # Grouping the same text by reader: the two OTHER readers of pA.
-    assert set(gens) == {"p2", "p3"}
+    # Participant matching crosses texts and returns one panel per trial.
+    assert set(gens) == {"p1 · t4"}
 
 
 def test_collect_generations_none_when_only_selected_matches():
     fix = _gen_fixations()
-    # text B is read only by pX, so pX/tX has no OTHER generations of its text.
+    # Claude occurs only on p3/t3, so no other trial matches that value.
     gens, n_total = _collect_generations(
-        fix, fix[fix["trial_id"] == "tX"], "model", "pX", "tX"
+        fix, fix[fix["trial_id"] == "t3"], "model", "p3", "t3"
     )
     assert gens == {} and n_total == 0
 
 
-def test_collect_generations_scopes_by_paragraph_id_fallback():
-    # When the fixations carry paragraph_id (not text_id), scoping still works —
-    # the text column is picked from the canonical priority list.
+def test_collect_generations_can_match_on_paragraph_id():
     fix = _gen_fixations(text_col="paragraph_id")
     assert "text_id" not in fix.columns
     gens, _ = _collect_generations(
-        fix, fix[fix["trial_id"] == "t1"], "model", "p1", "t1"
+        fix, fix[fix["trial_id"] == "t1"], "paragraph_id", "p1", "t1"
     )
-    # Still scoped to text A (text B's "human" row must not appear).
-    assert set(gens) == {"gpt", "claude"}
+    # Matching on the text field yields the other readings of A, one per trial.
+    assert set(gens) == {"p2 · t2", "p3 · t3"}
 
 
 def test_generation_column_options_excludes_within_trial_ids():
@@ -184,15 +202,13 @@ def test_generation_column_options_skips_unhashable_columns():
     assert "model" in opts
 
 
-def test_collect_generations_disambiguates_stringified_collisions():
-    # Distinct values that stringify identically (int 1 vs str "1" in a mixed
-    # object column) must not collapse into one generation or under-count.
+def test_collect_generations_preserves_distinct_matching_trials():
     fix = pd.DataFrame(
         {
             "participant_id": ["p1", "p2", "p3", "p4"],
             "trial_id": ["t1", "t2", "t3", "t4"],
             "text_id": ["A", "A", "A", "A"],
-            "gen": [0, 1, "1", 2],  # int 1 and str "1" both stringify to "1"
+            "gen": [0, 0, "0", 0],
             "x": [1.0, 2.0, 3.0, 4.0],
             "y": [1.0, 1.0, 1.0, 1.0],
             "duration_ms": [1, 1, 1, 1],
@@ -202,6 +218,24 @@ def test_collect_generations_disambiguates_stringified_collisions():
     gens, n_total = _collect_generations(
         fix, fix[fix["trial_id"] == "t1"], "gen", "p1", "t1"
     )
-    # Selected p1/t1 (gen=0) excluded → three distinct others (1, "1", 2) survive.
-    assert n_total == 3
-    assert len(gens) == 3
+    # Each matching trial gets its own panel; the string "0" is not int 0.
+    assert n_total == 2
+    assert set(gens) == {"p2 · t2", "p4 · t4"}
+
+
+def test_comparison_panels_use_the_candidate_words_and_keep_text_visible():
+    words = pd.DataFrame(
+        {
+            "participant_id": ["p1", "pX"],
+            "trial_id": ["t1", "tX"],
+            "text_id": ["A", "B"],
+            "text": ["alpha", "beta"],
+        }
+    )
+    candidate = _gen_fixations().query("trial_id == 'tX'")
+
+    selected_words = _comparison_trial_words(words, candidate)
+    assert selected_words["text"].tolist() == ["beta"]
+
+    settings = _comparison_panel_settings({"show_word_labels": True})
+    assert settings["show_word_labels"] is True

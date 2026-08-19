@@ -1381,6 +1381,78 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "UX-94",
+   "prefix": "UX",
+   "num": 94,
+   "sub": "",
+   "title": "Tighten Data, Annotations, Comparisons and Export",
+   "status": "Review",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "owner": "Maya",
+   "request": [
+    "Rename and simplify the Data page, place Stimulus images beside Participant",
+    "metadata, fix favorite markers and compact the annotation editor, make the",
+    "Comparisons field select trials by matching the selected trial's value while",
+    "preserving stimulus text, and simplify the Export scope and format wording.",
+    "",
+    "All displayed and hover copy in Annotations, Comparisons and Export should be",
+    "shorter, and Export should offer an explicit This trial scope.",
+    "",
+    "The follow-up asked to remove the single-trial parenthetical and make Naming",
+    "& labels substantially more compact."
+   ],
+   "whatWasDone": [
+    "**Data.** The page title is **Data Management**. Its two summary captions are",
+    "gone. Local stimulus-image fields moved out of the source/location block into",
+    "a full-width **🖼️ Stimulus images** section immediately before participant",
+    "metadata.",
+    "",
+    "**Annotations.** Favorite changes persist in the widget callback, before the",
+    "trial picker rebuilds, so its ★ marker is no longer one click behind. Favorite",
+    "help is one sentence; Tags and its add field share one row; the placeholder says",
+    "exactly how to submit; the footer points briefly to **💾 Session**.",
+    "",
+    "**Comparisons.** The chosen column now filters to other trials carrying the",
+    "selected trial's value. Each result is one trial, the selected plot is not drawn",
+    "again, different texts are allowed, and every panel uses that candidate trial's",
+    "own word boxes while preserving the main plot's text-visibility setting. Copy and",
+    "tooltips were shortened throughout; experimental NLD runs only when the selected",
+    "set actually shares a text.",
+    "",
+    "**Export.** **Trials to Include** includes **This trial** and no longer repeats",
+    "its title in the radio row. **Figure Formats** replaces Figures. Tooltips are",
+    "shorter. The old batch parenthetical is gone. **File naming** is one pattern row,",
+    "one example, and a compact **Fields** popover instead of the large disclosure.",
+    "",
+    "Regression tests cover same-rerun favorite markers, comparison matching across",
+    "texts, candidate-specific stimulus words/text visibility, export scope/copy, and",
+    "the compact annotation and naming layouts. User docs and the changelog match."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "decisions": [
+    "Review UX-94 in the Data, Annotations, Comparisons and Export panels. In particular, confirm the uncollapsed Stimulus images section is the intended meaning of making it look like Participant metadata, and that **Current figure** plus **Export bundle → This trial** is the right distinction."
+   ],
+   "background": [
+    "The comparison column is a selection constraint: candidates must have the same",
+    "value in that field as the selected trial, even when they belong to another text.",
+    "The selected trial is the reference and must not be repeated in the comparison grid.",
+    "",
+    "No visualization wire key was added or renamed. Trial-scoped bundles already existed",
+    "in `ExportOptions` and the headless exporter; this pass exposes that existing scope",
+    "in the app. Local stimulus paths remain deliberately outside links and saved configs."
+   ],
+   "statusNote": [
+    "**Ready for review — 2026-08-20.**"
+   ]
+  },
+  {
    "id": "UX-77",
    "prefix": "UX",
    "num": 77,

@@ -93,6 +93,10 @@ class TestConvertedFields:
         assert note.label == "Notes"
         assert note.proto.label_visibility.value == COLLAPSED
 
+        add_tag = at.text_input(key="annotrial_newtag_p1__t1__parent")
+        assert add_tag.placeholder == "Add tag, then press Enter"
+        assert add_tag.proto.label_visibility.value == COLLAPSED
+
         rendered = _labels(at)
         assert any(">Tags</span>" in label for label in rendered)
         assert any(">Notes</span>" in label for label in rendered)
@@ -120,6 +124,31 @@ class TestConvertedFields:
         assert ">⭐ Favorite</span>" in drawn
         assert "data-tip" in drawn, "the shortened title must carry its help"
 
+    def test_favorite_marker_updates_in_the_same_rerun(self):
+        """The picker is built before the annotation panel in the real app."""
+
+        def app():
+            import streamlit as st
+
+            from scanpath_studio.annotations import render_trial_annotations
+            from scanpath_studio.utils import annotation_markers
+
+            st.selectbox(
+                "Trial",
+                ["t1"],
+                key="picker",
+                format_func=lambda trial: (
+                    f"{annotation_markers('p1', trial)} {trial}".strip()
+                ),
+            )
+            render_trial_annotations("p1", "t1", bare=True)
+
+        at = AppTest.from_function(app).run(timeout=30)
+        at.checkbox(key="annotrial_star_p1__t1__parent").check()
+        at.run(timeout=30)
+
+        assert at.selectbox(key="picker").options == ["★ t1"]
+
     def test_the_export_options_render_as_rows(self):
         """`render_export_options` is handed `st`; the rows go through it."""
 
@@ -140,9 +169,20 @@ class TestConvertedFields:
         assert scope.label == "Trials to include"
         assert scope.proto.label_visibility.value == COLLAPSED
 
+        assert "This trial" in scope.options
+
         rendered = _labels(at)
-        for title in ("Trials to include", "Formats", "Separable layers"):
+        for title in ("Formats", "Separable layers"):
             assert any(f">{title}</span>" in label for label in rendered), title
+        assert not any(">Trials to include</span>" in label for label in rendered), (
+            "the section heading is the only visible scope label"
+        )
+        headings = " ".join(m.value for m in at.markdown)
+        assert "### Trials to Include" in headings
+        assert "### Figure Formats" in headings
+        assert "### File naming" in headings
+        assert [p for p in at.get("popover") if p.proto.popover.label == "Fields"]
+        assert not [e for e in at.expander if e.label == "Available fields"]
 
     def test_every_converted_widget_hides_its_own_label(self):
         """A row that forgot `label_visibility` prints its title twice."""

@@ -95,10 +95,9 @@ bulk-output details.
 minutes; requires two readings sharing a text.*
 
 1. Select the reference reading and, for multipart data, the reference screen.
-2. Open **🔬 Comparisons** and choose the grouping field. Candidates must share
-   the text and screen, so different coordinate spaces are not overlaid.
-   Similarity (NLD) scoring ranks them for you when the build has experimental
-   features enabled (`SCANPATH_EXPERIMENTAL=1`).
+2. Open **🔬 Comparisons** and choose **text id** as the comparison field. The
+   grid shows other filtered trials with the same text value. Other fields can
+   intentionally select trials from different texts.
 3. Record the comparison settings with the figure or configuration export.
 
 ## Explore the corpus

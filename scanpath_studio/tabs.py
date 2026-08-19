@@ -790,7 +790,7 @@ def _slice_fix_range(fix: pd.DataFrame, fix_range) -> pd.DataFrame:
     ``fix_range`` is the single-trial fixation-index window (VIZ-7) — a
     ``(start, end)`` tuple, or ``None`` for the full trial. Applied only to the
     frame feeding the figure / animation / comparison builders (and thus the
-    "This trial" export, which round-trips the on-screen figure), so the chips,
+    Current-figure export, which round-trips the on-screen figure), so the chips,
     panels and bulk multi-trial export keep the complete trial. A ``None`` window
     or a frame without ``order_in_trial`` is returned unchanged (the default path
     stays byte-identical)."""
@@ -3232,17 +3232,19 @@ def _render_export_panel(
     viz_settings: dict,
     line_spacing: float,
     scale_text_to_boxes: bool,
+    selected_participant: str,
+    selected_trial: str,
     compare_export: tuple | None = None,
 ) -> None:
     """Consolidated Export subtab: the currently-viewed figure on top, then a
     bulk multi-trial export below.
 
     Replaces both the old single-trial Export toggle and the standalone Bulk
-    Export tab. "This trial" exports the live figure (static PNG/SVG/PDF/HTML, or
+    Export tab. "Current figure" exports the live figure (static PNG/SVG/PDF/HTML, or
     the HTML/GIF/MP4 animation when animating) so the on-screen view — including
     a comparison or animation — round-trips exactly; the bulk section rebuilds
     static figures across many trials."""
-    st.markdown("## This trial")
+    st.markdown("## Current figure")
     if displayed_fig is None:
         st.caption("Select a trial to export its figure.")
     elif animate:
@@ -3271,7 +3273,7 @@ def _render_export_panel(
             )
 
     st.divider()
-    st.markdown("## Multiple trials")
+    st.markdown("## Export bundle")
     bulk_settings = _build_figure_settings(viz_settings, False)
     bulk_settings["line_spacing"] = line_spacing
     bulk_settings["scale_text_to_boxes"] = scale_text_to_boxes
@@ -3334,6 +3336,8 @@ def _render_export_panel(
         x_field=viz_settings["x_field"],
         y_field=viz_settings["y_field"],
         figure_settings=bulk_settings,
+        selected_participant=selected_participant,
+        selected_trial=selected_trial,
     )
 
 
@@ -4747,11 +4751,9 @@ def render_single_trial_tab(
         # PERF-3: only the selected tab's body runs (see the st.tabs call).
         # Nothing to render when closed — a hidden panel is not on screen.
         if tab_compare.open:
-            # ENG-8: Comparisons overlays the selected scanpath against other readings
-            # of the SAME text, grouped by a chosen column (repeated readings, model
-            # generations, …), scored by similarity. It uses the main scanpath
-            # selection and renders no picker of its own. Line assignment is now its
-            # own top-level subtab (tab_align), not nested here.
+            # UX-94: the chosen column selects other trials with the same value
+            # as the main trial. A text field yields other readings of that text;
+            # another field can intentionally cross texts.
             with st.container(key="tutorial_comparisons"):
                 render_multiple_comparison_tab(
                     trial_words,
@@ -4815,6 +4817,8 @@ def render_single_trial_tab(
                     viz_settings=viz_settings,
                     line_spacing=line_spacing,
                     scale_text_to_boxes=scale_text_to_boxes,
+                    selected_participant=selected_participant,
+                    selected_trial=selected_trial,
                     compare_export=compare_export_sides,
                 )
 
@@ -4848,6 +4852,8 @@ def _render_bulk_export(
     x_field: str,
     y_field: str,
     figure_settings: dict,
+    selected_participant: str,
+    selected_trial: str,
 ) -> None:
     """Render configurable bulk-export UI (artifact picker + run + download)."""
     options = render_export_options(
@@ -4857,6 +4863,8 @@ def _render_bulk_export(
         combos_all=combos_all,
         title_pattern=figure_settings.get("title_pattern", ""),
         caption_pattern=figure_settings.get("caption_pattern", ""),
+        selected_participant=selected_participant,
+        selected_trial=selected_trial,
     )
     # Tick "Export the whole dataset" → export the unfiltered frames.
     if options.export_unfiltered:
@@ -7194,8 +7202,7 @@ def render_alignment_comparison_tab(
                 )
 
 
-# Per-fixation continuous quantities can't group scanpaths into generations, so
-# they're never offered as a generation identifier.
+# Per-fixation continuous quantities cannot select whole comparison trials.
 _GEN_COL_EXCLUDE = {
     "x",
     "y",
@@ -7220,7 +7227,7 @@ _GEN_MAX_PANELS = 24
 # rendering cost. Raised, but still finite and still stated in the caption, so
 # the grid never silently truncates.
 _GEN_MAX_PANELS_UNRANKED = 60
-# Score at most this many generations (bounds the NLD cost for a high-cardinality
+# Score at most this many candidates (bounds the NLD cost for a high-cardinality
 # column like participant_id on a big corpus). A safety budget above the grid cap
 # so the "most similar" ranking still sees more candidates than it displays.
 # Dead while similarity is gated off — nothing is scored — which is why
@@ -7229,12 +7236,7 @@ _GEN_MAX_SCORE = 60
 
 
 def _generation_column_options(fixations: pd.DataFrame) -> list:
-    """Columns that can identify the different generations of a scanpath.
-
-    A generation column splits a text's scanpaths into comparable variants (a
-    model / condition / reading id), so we offer the non-coordinate columns that
-    actually vary and rank the most generation-like first (a name hit, then the
-    reader / trial ids, then everything else)."""
+    """Trial-level columns that can select a comparison set."""
     if fixations is None or fixations.empty:
         return []
     hints = (
@@ -7254,8 +7256,18 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
         if c in _GEN_COL_EXCLUDE:
             continue
         try:
-            if fixations[c].nunique(dropna=True) >= 2:
-                cols.append(c)
+            if fixations[c].nunique(dropna=True) < 2:
+                continue
+            # A comparison field selects whole trials. Per-fixation fields such
+            # as saccade type are invalid even when they escaped the explicit
+            # coordinate/id exclusions above.
+            if {"participant_id", "trial_id"} <= set(fixations.columns):
+                within_trial = fixations.groupby(
+                    ["participant_id", "trial_id"], dropna=False
+                )[c].nunique(dropna=True)
+                if not within_trial.empty and within_trial.max() > 1:
+                    continue
+            cols.append(c)
         except TypeError:
             # A column holding unhashable values (e.g. a list / JSON column like
             # MultiplEYE's `comprehension_questions`) can't group scanpaths.
@@ -7272,35 +7284,6 @@ def _generation_column_options(fixations: pd.DataFrame) -> list:
     return sorted(cols, key=_rank)
 
 
-def _n_readings(fix: pd.DataFrame) -> int:
-    """How many distinct (participant, trial) readings a generation group holds.
-
-    CMP-5: a high-level grouping column (a condition, a regime) can lump several
-    readings into one "generation"; the panels say so instead of drawing the
-    concatenation as if it were one scanpath."""
-    if {"participant_id", "trial_id"} <= set(fix.columns):
-        return len(fix[["participant_id", "trial_id"]].drop_duplicates())
-    return 1
-
-
-def _panel_identity(fix: pd.DataFrame, gen_col: str, k: int) -> str:
-    """CMP-5 panel suffix naming the trial(s) behind a generation panel.
-
-    ``k`` is the group's reading count (from ``_n_readings``, computed once per
-    rerun by the tab). A single-reading group is labelled with its
-    ``participant · trial`` identity (unless the grouping column IS one of
-    those, where the group label already says it); a multi-reading group is
-    flagged with its reading count."""
-    if k > 1:
-        return f" · ⚠️ {k} readings"
-    if gen_col in ("participant_id", "trial_id"):
-        return ""
-    if {"participant_id", "trial_id"} <= set(fix.columns) and not fix.empty:
-        row = fix.iloc[0]
-        return f" · {row['participant_id']} · {row['trial_id']}"
-    return ""
-
-
 def _collect_generations(
     fixations_pool: pd.DataFrame,
     trial_fixations: pd.DataFrame,
@@ -7308,16 +7291,19 @@ def _collect_generations(
     selected_participant,
     selected_trial,
 ) -> tuple:
-    """Same-text scanpaths grouped by ``gen_col``, minus the selected trial.
+    """Trials matching the selected trial's ``gen_col`` value.
 
-    Scopes the pool to the selected trial's **text** so only variants of the SAME
-    text are compared (using the best-available text identifier — normalized
-    fixations use ``text_id`` / ``unique_text_id``, not always ``paragraph_id``),
-    drops the selected (participant, trial) so it isn't scored against itself,
-    groups the rest by ``gen_col`` → ``{label: fixations}``, and caps the panel
-    count. Returns ``(generations, n_total)`` where ``n_total`` is the count
-    before the cap."""
-    if gen_col not in fixations_pool.columns or fixations_pool.empty:
+    The comparison column is a selector, not a grouping dimension: choosing
+    ``participant_id`` shows that reader's other trials, while choosing
+    ``text_id`` shows other readings of the same text. Each returned item is one
+    trial and the selected trial itself is always excluded.
+    """
+    if (
+        gen_col not in fixations_pool.columns
+        or gen_col not in trial_fixations.columns
+        or fixations_pool.empty
+        or trial_fixations.empty
+    ):
         return {}, 0
     pool = fixations_pool
     if SCREEN_ID in trial_fixations.columns and not trial_fixations.empty:
@@ -7325,25 +7311,10 @@ def _collect_generations(
             return {}, 0
         active_screen = str(trial_fixations[SCREEN_ID].iloc[0])
         pool = pool[pool[SCREEN_ID].astype(str) == active_screen]
-    # Match the canonical text-column priority used elsewhere (utils / pickers):
-    # the first present on the fixations frame identifies the text.
-    text_col = next(
-        (
-            c
-            for c in (
-                "unique_text_id",
-                "text_id",
-                "unique_paragraph_id",
-                "paragraph_id",
-            )
-            if c in pool.columns
-        ),
-        None,
-    )
-    if text_col is not None and not trial_fixations.empty:
-        text_val = trial_fixations[text_col].iloc[0]
-        if pd.notna(text_val):
-            pool = pool[pool[text_col] == text_val]
+    selected_values = trial_fixations[gen_col].dropna().unique()
+    if len(selected_values) != 1:
+        return {}, 0
+    pool = pool[pool[gen_col] == selected_values[0]]
     if {"participant_id", "trial_id"} <= set(pool.columns):
         pool = pool[
             ~(
@@ -7351,25 +7322,55 @@ def _collect_generations(
                 & (pool["trial_id"] == selected_trial)
             )
         ]
-    generations: dict = {}
-    for value, group in pool.groupby(gen_col, dropna=True):
+    candidates: dict = {}
+    for (participant, trial), group in pool.groupby(
+        ["participant_id", "trial_id"], dropna=False, sort=True
+    ):
         if group.empty:
             continue
-        label = str(value)
-        # Two distinct values that stringify the same (e.g. int 1 and str "1" in
-        # a mixed object column) must not collapse — disambiguate so neither group
-        # is silently lost and n_total stays accurate.
-        if label in generations:
-            label = f"{label} ({value!r})"
-        generations[label] = group
-    n_total = len(generations)
+        label = f"{participant} · {trial}"
+        candidates[label] = group
+    n_total = len(candidates)
     # Cap the SCORING budget only (the grid/ranking cut to _GEN_MAX_PANELS by
     # similarity happens in the tab, after scoring). Sorted for determinism.
     # PRE-21: it is a *scoring* budget, so with similarity gated off it would
     # only drop panels for no reason — the grid's own cap is what applies then.
     budget = _GEN_MAX_SCORE if similarity_enabled() else _GEN_MAX_PANELS_UNRANKED
-    ordered = dict(sorted(generations.items())[:budget])
+    ordered = dict(sorted(candidates.items())[:budget])
     return ordered, n_total
+
+
+def _comparison_trial_words(
+    words_pool: pd.DataFrame, trial_fixations: pd.DataFrame
+) -> pd.DataFrame:
+    """Word boxes for one comparison candidate, including its active screen."""
+    if words_pool.empty or trial_fixations.empty:
+        return words_pool.iloc[0:0]
+    row = trial_fixations.iloc[0]
+    screen = (
+        str(row[SCREEN_ID])
+        if SCREEN_ID in trial_fixations.columns and SCREEN_ID in words_pool.columns
+        else None
+    )
+    return extract_part(
+        words_pool,
+        row["participant_id"],
+        row["trial_id"],
+        screen,
+    )
+
+
+def _comparison_panel_settings(base_settings: dict) -> dict:
+    """Comparable grid settings without hiding the main plot's stimulus text."""
+    return {
+        **base_settings,
+        "show_heatmap": False,
+        "show_raw_gaze": False,
+        "color_by": "duration_ms",
+        "color_by_line": False,
+        "fixation_flags": None,
+        "show_order": False,
+    }
 
 
 def render_multiple_comparison_tab(
@@ -7390,33 +7391,18 @@ def render_multiple_comparison_tab(
 ) -> None:
     """Render the **Comparisons** subtab.
 
-    Compares the scanpath for the *selected* trial (from the main trial picker)
-    against other scanpaths of the same text — grouped by a user-chosen column (a
-    reading regime, repeated-reading id, model generation, …) — and scores each
-    against the selected reading (NLD plus placeholder metrics). The selection
-    comes from the main scanpath picker; there's no separate picker here (ENG-8).
+    Shows other trials whose selected comparison-field value matches the main
+    trial. The field decides the set: text id yields other readings of the text,
+    participant id yields that reader's other texts, and so on.
     """
-    st.caption(
-        "Compare the **selected** scanpath (from the main trial picker above) with "
-        "other scanpaths of the same text — grouped by a column you choose (a "
-        "reading regime, repeated-reading id, model generation, …) — and score how "
-        "close each is to the selected reading."
-    )
+    st.caption("Show trials that match the selected trial on a field you choose.")
     if trial_words.empty or trial_fixations.empty:
-        st.info(
-            "Comparisons needs a **words + fixations** table for the selected "
-            "trial — pick a trial with fixations in the main picker above."
-        )
+        st.info("Choose a trial with words and fixations.")
         return
 
     gen_cols = _generation_column_options(fixations_filtered)
     if not gen_cols:
-        st.info(
-            "No column in the fixations table can distinguish several scanpaths of "
-            "the same text. Load data whose fixations carry a regime / condition / "
-            "reading-id column (or use `participant_id` / `trial_id`) to compare "
-            "several scanpaths over the same text here."
-        )
+        st.info("No trial-level field is available for matching.")
         return
 
     col_side, col_main = st.columns([3, 7], gap="medium")
@@ -7428,9 +7414,7 @@ def render_multiple_comparison_tab(
             "Comparison column",
             options=gen_cols,
             key="multi_gen_col",
-            help="Which column identifies the scanpaths to compare. Each distinct "
-            "value — over the SAME text as the selected trial — becomes one "
-            "comparison scanpath, scored against the selected reading.",
+            help="Show trials with the same value as the selected trial.",
         )
         n_cols = labeled(
             st,
@@ -7440,48 +7424,29 @@ def render_multiple_comparison_tab(
             max_value=4,
             value=3,
             key="multi_n_cols",
-            help="Columns in the comparison grid (rows fill automatically).",
+            help="Number of panels per row.",
         )
 
-    generations, n_total = _collect_generations(
+    candidates, n_total = _collect_generations(
         fixations_filtered,
         trial_fixations,
         gen_col,
         selected_participant,
         selected_trial,
     )
-    if not generations:
+    if not candidates:
         with col_main:
             st.info(
-                f"No other scanpaths of this text found for **{gen_col}** in the "
-                "current filter — only the selected scanpath matches. Widen the "
-                "trial filters or pick a different comparison column."
+                f"No other filtered trial matches the selected **{gen_col}** value."
             )
         return
     # More scanpaths of this text exist than we score (very high-cardinality
     # column); the ones we do score are ranked by similarity below.
-    scored_capped = n_total > len(generations)
+    scored_capped = n_total > len(candidates)
 
     with col_side:
-        # ENG-8: no local fixation-index slider (it duplicated the main rail's
-        # Fixations → index-range control) and no stimulus-text panel (the
-        # top-level "Stimulus & questions" subtab already shows it). The grid and
-        # table score the full readings; the rail control still windows the main
-        # plot above.
-        _render_trial_header(
-            selected_participant,
-            selected_trial,
-            trial_words,
-            prefix="Selected scanpath:",
-        )
         if scored_capped:
-            # CMP-5: say exactly what was dropped and how the kept ones were
-            # chosen — the cap keeps the first _GEN_MAX_SCORE in label order.
-            st.caption(
-                f"{n_total} scanpaths of this text — more than the scoring "
-                f"budget. Scoring the first {len(generations)} by "
-                f"**{gen_col}** label order; the rest are not shown."
-            )
+            st.caption(f"Showing {len(candidates)} of {n_total} matching trials.")
 
     # Reuse the user's viz toggles but force a clean, comparable spatial view: the
     # grid is inherently spatial, and a generation frame may lack the selected
@@ -7492,19 +7457,11 @@ def render_multiple_comparison_tab(
     base_settings["raw_gaze"] = None
     base_settings["line_spacing"] = line_spacing
     base_settings["scale_text_to_boxes"] = scale_text_to_boxes
-    real_settings = {
-        **base_settings,
-        "show_heatmap": False,
-        "show_raw_gaze": False,
-        "color_by": "duration_ms",
-        "color_by_line": False,
-        "fixation_flags": None,
-    }
-    panel_settings = {**real_settings, "show_word_labels": False, "show_order": False}
+    panel_settings = _comparison_panel_settings(base_settings)
 
-    def _make_fig(fix: pd.DataFrame, settings: dict):
+    def _make_fig(words: pd.DataFrame, fix: pd.DataFrame, settings: dict):
         return make_scanpath_figure(
-            trial_words,
+            words,
             fix,
             canvas_width=int(canvas_width),
             canvas_height=int(canvas_height),
@@ -7518,18 +7475,9 @@ def render_multiple_comparison_tab(
     # The full readings feed the spatial figures, the snapshot table, and the
     # convergence plots (ENG-8 removed the local fixation-index window).
     sliced_real = trial_fixations
-    sliced_gens = generations
+    sliced_gens = candidates
 
     with col_main:
-        # CMP-5: name the reference prominently — it comes from the main trial
-        # picker on a different part of the page, so the tab must say which
-        # reading everything below is scored against.
-        st.markdown(
-            f"#### Selected scanpath — `{selected_participant}` · `{selected_trial}`"
-        )
-        real_fig = _make_fig(sliced_real, real_settings)
-        _render_true_scale_chart(real_fig, key="multi_real")
-
         # Score every collected generation against the selected scanpath. The
         # per-generation NLD annotates each grid panel and orders both the grid and
         # the table; the full table is shown beneath the grid.
@@ -7538,7 +7486,27 @@ def render_multiple_comparison_tab(
         # alphabetically by the comparison-column value and shows more panels —
         # the 24 cap existed to keep the *ranked* grid readable, and there is no
         # ranking left to keep.
-        scoring = similarity_enabled()
+        text_col = next(
+            (
+                column
+                for column in ("unique_text_id", "text_id", "paragraph_id")
+                if column in trial_fixations.columns
+            ),
+            None,
+        )
+        selected_text_values = (
+            trial_fixations[text_col].dropna().astype(str).unique()
+            if text_col is not None
+            else []
+        )
+        same_text = len(selected_text_values) == 1 and all(
+            text_col in fix.columns
+            and fix[text_col].dropna().astype(str).nunique() == 1
+            and str(fix[text_col].dropna().astype(str).iloc[0])
+            == str(selected_text_values[0])
+            for fix in sliced_gens.values()
+        )
+        scoring = similarity_enabled() and same_text
         table = (
             compute_similarity_table(sliced_real, sliced_gens, trial_words)
             if scoring
@@ -7564,47 +7532,19 @@ def render_multiple_comparison_tab(
         grid_names = ranked[:panel_cap]
         grid_capped = len(sliced_gens) > panel_cap
 
-        st.markdown("#### Other scanpaths")
-        # CMP-5: state the grouping and the ranking rule in the tab itself —
-        # one panel per value of the chosen column, ranked by similarity.
+        st.markdown("#### Matching trials")
         if scoring:
-            rank_note = (
-                f"One panel per **{gen_col}** value over the same text, ranked by "
-                "NLD similarity to the selected scanpath above (most similar first)."
-            )
+            rank_note = f"Same **{gen_col}** value · ranked by NLD."
             if grid_capped:
-                rank_note += (
-                    f" Showing the **{_GEN_MAX_PANELS} most similar** of "
-                    f"{len(sliced_gens)} scored."
-                )
+                rank_note += f" Showing {_GEN_MAX_PANELS} of {len(sliced_gens)}."
         else:
-            rank_note = (
-                f"One panel per **{gen_col}** value over the same text, in "
-                "alphabetical order."
-            )
+            rank_note = f"Same **{gen_col}** value · sorted by trial."
             if grid_capped:
-                # Whatever cap survives has to be stated, or the grid silently
-                # truncates and reads as "that's all of them".
-                rank_note += (
-                    f" Showing the **first {panel_cap}** of {len(sliced_gens)}."
-                )
+                rank_note += f" Showing {panel_cap} of {len(sliced_gens)}."
         st.caption(rank_note)
-        # CMP-5: a value that groups several readings draws them concatenated in
-        # one panel — flag it rather than letting it pass as one scanpath. The
-        # counts are computed once per rerun and reused by the panel captions.
-        reading_counts = {name: _n_readings(g) for name, g in sliced_gens.items()}
-        if any(k > 1 for k in reading_counts.values()):
-            st.caption(
-                "⚠️ A value grouping **several readings** (marked on its panel) "
-                "shows them concatenated and scores them as one sequence — pick "
-                "a finer comparison column (e.g. `participant_id`) to see them "
-                "separately."
-            )
         # Estimate a uniform cell height from the figure aspect + column count so
         # panels line up and don't leave a tall whitespace band below each.
-        fig_w = float(real_fig.layout.width or 900)
-        fig_h = float(real_fig.layout.height or 600)
-        aspect = fig_h / fig_w if fig_w else 0.5
+        aspect = float(canvas_height) / float(canvas_width or 1)
         assumed_col_px = max(360, int(1200 / max(1, n_cols)))
         cell_h = max(280, int(assumed_col_px * aspect) + 24)
 
@@ -7616,21 +7556,15 @@ def render_multiple_comparison_tab(
                 with cell:
                     fix = sliced_gens[name]
                     nld = nld_by_gen.get(name)
-                    # CMP-5: every panel names its group value AND the trial it
-                    # is (or its reading count when the value lumps several).
-                    identity = _panel_identity(
-                        fix, gen_col, reading_counts.get(name, 1)
-                    )
                     if nld is not None and pd.notna(nld):
-                        st.caption(
-                            f"**{name}** · NLD {nld:.2f} · {len(fix)} fix{identity}"
-                        )
+                        st.caption(f"**{name}** · NLD {nld:.2f} · {len(fix)} fixations")
                     else:
-                        st.caption(f"**{name}** · {len(fix)} fix{identity}")
+                        st.caption(f"**{name}** · {len(fix)} fixations")
+                    words = _comparison_trial_words(words_filtered, fix)
                     # Key on the absolute panel index (dict order is stable), so two
                     # labels differing only by spaces can't collide on the iframe key.
                     _render_true_scale_chart(
-                        _make_fig(fix, panel_settings),
+                        _make_fig(words, fix, panel_settings),
                         key=f"multi_gen_{start + offset}",
                         max_height=cell_h,
                     )
@@ -7638,14 +7572,14 @@ def render_multiple_comparison_tab(
         # PRE-21: the scoring half of this panel — the similarity table (where
         # three of the four metrics still read "Not yet computed", the clearest
         # instance of the not-fully-integrated smell driving the gate) and the
-        # convergence plots. The generations grid above stays; only the scoring
+        # convergence plots. The comparison grid above stays; only the scoring
         # comes off it.
         if not scoring:
             return
 
-        st.markdown("#### Similarity to the selected scanpath")
+        st.markdown("#### Similarity")
         st.dataframe(
-            _style_similarity_table(table.rename(columns={"Model": "Generation"})),
+            _style_similarity_table(table.rename(columns={"Model": "Trial"})),
             hide_index=True,
             width="stretch",
         )
@@ -7653,13 +7587,8 @@ def render_multiple_comparison_tab(
         # Cumulative NLD convergence over the full scanpaths. Memoized on the
         # selection + comparison column + set + a content fingerprint so unrelated
         # reruns don't recompute the curves.
-        st.markdown("#### Metric convergence")
-        st.caption(
-            "NLD between the selected scanpath and each comparison scanpath, "
-            "computed cumulatively over the first *k* fixations (left) and the "
-            "first *t* seconds of reading (right). Lower = more similar; computed "
-            "on the full reading."
-        )
+        st.markdown("#### Convergence")
+        st.caption("Cumulative NLD by fixation and time. Lower is more similar.")
         if trial_fixations.empty:
             fix_fingerprint: tuple = (0,)
         else:
@@ -7670,9 +7599,9 @@ def render_multiple_comparison_tab(
                 round(float(pd.to_numeric(trial_fixations["y"]).sum()), 3),
                 round(float(pd.to_numeric(trial_fixations["duration_ms"]).sum()), 3),
             )
-        # Convergence covers the grid subset (the shown, most-similar generations),
+        # Convergence covers the grid subset (the shown, most-similar trials),
         # so it matches the grid and stays bounded on a high-cardinality column.
-        conv_gens = {name: generations[name] for name in grid_names}
+        conv_gens = {name: candidates[name] for name in grid_names}
         conv_key = (
             str(selected_participant),
             str(selected_trial),

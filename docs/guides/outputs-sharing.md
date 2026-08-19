@@ -6,9 +6,9 @@ Scanpath Studio separates exported results from ways to reproduce a view.
 
 Open the **Export** subtab in the Scanpath view.
 
-- **This trial** exports the current static or animated figure.
-- **Multiple trials** applies one configuration to the filtered pool or whole
-  dataset and can include figures, tables, and configuration metadata.
+- **Current figure** exports the visible static or animated figure.
+- **Export bundle** packages figures, tables, and configuration metadata for
+  this trial, a filtered subset, or the whole dataset.
 - **Separable layers** writes aligned text, boxes, fixations, saccades, heatmap,
   and image layers for editing.
 

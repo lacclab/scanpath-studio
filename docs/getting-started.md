@@ -34,7 +34,7 @@ bundled sample, so no data preparation is required.
 3. Use the layer controls beside the plot to show or hide text, fixations,
    saccades, word boxes, and the heatmap.
 4. Turn on **Animate** to replay the trial.
-5. Open **Export**, choose **This trial**, and download HTML. HTML works without
+5. Open **Export → Current figure** and download HTML. HTML works without
    extra software; PNG, SVG, PDF, GIF, and MP4 require Chrome/Chromium.
 
 That is the default workflow. You can now follow a tutorial for

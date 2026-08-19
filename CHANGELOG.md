@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Data, annotation, comparison and export UI pass** (UX-94) — the Data page is now **Data Management**, its redundant summaries are gone, and local stimulus images sit beside participant metadata. Favorites update the trial picker's star in the same rerun; tags share one compact row; annotation guidance points briefly to **💾 Session**. Comparisons now use the chosen field as a trial selector (same value as the selected trial), may cross texts, render each trial with its own stimulus words when text is enabled, and no longer repeat the selected plot. Export adds **This trial** to **Trials to Include**, shortens its copy and tooltips, renames **Figure Formats**, and reduces file naming to one example plus a compact placeholder popover.
+
 ### Added
 - **Rebuilt data-upload wizard with an honest experimental setup** (DATA-22)
 - **Compare scanpaths across datasets** (CMP-8)

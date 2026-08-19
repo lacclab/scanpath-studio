@@ -387,18 +387,19 @@ class TestAppLaunches:
         assert "single_playback_speed" in [s.key for s in at.select_slider]
 
     def test_bulk_export_whole_dataset_option(self):
-        # The "Trials to include" scope radio always offers both "All" (every
-        # trial, ignoring the sidebar filter) first and "All filtered trials"
-        # (the current sidebar selection) second.
+        # The bundle scope includes the current trial, the whole dataset, and
+        # the active filtered subset.
         at = _make_apptest()  # bundled 3-pid demo
         at.session_state[SUBTAB_KEY] = SUBTAB_EXPORT  # PERF-3: open it to load it
         at.run(timeout=30)
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
         scope_radios = [r for r in at.radio if r.key == "bulk_export_scope"]
         assert scope_radios, "bulk-export scope radio missing"
-        assert scope_radios[0].options[:2] == ["All", "All filtered trials"], (
-            f"unexpected scope options: {scope_radios[0].options}"
-        )
+        assert scope_radios[0].options[:3] == [
+            "This trial",
+            "All",
+            "All filtered trials",
+        ], f"unexpected scope options: {scope_radios[0].options}"
 
         # Narrow to a single participant, pick "All" (whole dataset), build clean.
         sel = [m for m in at.multiselect if m.key == "filter_participants"]
@@ -3505,7 +3506,7 @@ class TestLazySubtabBodiesStillRender:
         cited = " ".join(m.value for m in at.markdown).lower()
         assert not [a for a in ALGORITHMS if a not in cited]
 
-    def test_comparisons_scores_other_readings_of_the_same_text(self):
+    def test_comparisons_shows_trials_matching_the_selected_field(self):
         at = _make_apptest()
         at.run(timeout=120)
         at.session_state[SUBTAB_KEY] = SUBTAB_COMPARISONS
@@ -3513,11 +3514,10 @@ class TestLazySubtabBodiesStillRender:
         assert not at.exception, f"Streamlit exceptions: {at.exception}"
 
         picker = [s for s in at.selectbox if s.key == "multi_gen_col"]
-        assert picker, "the grouping-column picker should render"
+        assert picker, "the comparison-column picker should render"
         text = " ".join(m.value for m in at.markdown)
-        # The similarity table is the point of the panel.
-        assert "Similarity to the selected scanpath" in text
-        assert "Metric convergence" in text
+        assert "Matching trials" in text
+        assert "Selected scanpath" not in text
 
     def test_export_and_data_inspection_bodies_run(self):
         at = _make_apptest()

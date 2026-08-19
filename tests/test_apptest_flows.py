@@ -320,19 +320,24 @@ class TestTrialFilterFlow:
         (_pid, starred_trial), entry = next(iter(store.items()))
         assert entry["star"] is True
         assert len(_trial_ids(at)) == DEMO_ADV_TRIALS_IN_PICKER
+        picker = next(s for s in at.selectbox if s.key == "single_trial_id")
+        assert any(str(option).startswith("★ ") for option in picker.options)
 
         # (3) Favorites-only narrows to exactly the starred trial.
+        # AppTest cannot replay a selectbox whose format_func reads Streamlit
+        # session state outside a script run. Now that the marker correctly
+        # appears immediately, start a fresh tree for the next interaction and
+        # seed the persisted annotation store into it.
+        saved_store = dict(store)
+        at = _boot()
+        at.session_state["trial_annotations"] = saved_store
         at.checkbox(key="filter_favorites").check()
         at.run(timeout=60)
         _clean(at, "after the favorites filter:")
         assert at.session_state["_trial_filters"]["favorites_only"] is True
         assert _trial_ids(at) == [starred_trial]
-        # NOTE: this run is the last one possible on `at`. The picker's options are
-        # now formatted with the ★ marker, and AppTest replays the widget's
-        # `format_func` *outside* a script run — where the annotation store isn't
-        # readable, so it returns the unmarked label and `Selectbox.index` raises
-        # `ValueError: '<id>' is not in list` on the next `at.run()`. Assert here;
-        # start a new AppTest for anything further.
+        # NOTE: this run is the last one possible on `at`; see the AppTest
+        # format_func limitation above.
 
     def test_emptying_the_pool_renders_the_guidance_state(self):
         # Favorites-only with nothing starred leaves no trials. The synthetic

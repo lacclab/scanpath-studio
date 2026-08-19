@@ -3520,12 +3520,6 @@ def render_dataset_table(
         },
     )
     _render_delete_confirmation(box, tokens)
-    if any(row["Readers"] is None for row in rows):
-        box.caption(
-            "Readers · Trials · Fixations · Words are counted the first time a "
-            "dataset is opened, then remembered. A corpus you have never opened "
-            "is not read just to fill a row."
-        )
 
 
 def resolve_source_monitor(
@@ -4768,7 +4762,7 @@ def main() -> None:
         _view_bridge = None
     st.session_state["_last_rendered_view"] = active_view
 
-    # DATA-26 — the **Data** page ("Set up your dataset"). One place for
+    # DATA-26 — the **Data** page ("Data Management"). One place for
     # everything about the dataset itself, instead of a ⚙️ Configure menu group
     # at the top and a 🔎 Data Inspection subtab on the far side of the Scanpath
     # view asking the same questions at two points in the pipeline.
@@ -4802,10 +4796,7 @@ def main() -> None:
     # second and third title above it.
     wizard_owns_page = bool(st.session_state.get("_show_upload_wizard"))
     if data_view and not wizard_owns_page:
-        setup_page.header("Set up your dataset")
-        # UX-53: one line, not five. The four stage headings below already say
-        # what the page contains.
-        setup_page.caption("Source · what's in it · column mapping · preprocessing.")
+        setup_page.header("Data Management")
         # UX-52 — four peer sections, one heading level, one divider between
         # each. The source block used to open with no heading at all, which
         # made the three headings below it read as the whole page rather than
@@ -4859,6 +4850,9 @@ def main() -> None:
     # Keyed → the `.st-key-…` selector the "Load and verify a dataset" tutorial
     # spotlights, alongside its siblings above and below.
     setup_identity_slot = setup_page.container(key="tutorial_trial_identity")
+    # VIZ-14: local stimulus-image paths sit beside the other optional attached
+    # metadata, immediately before the participant table.
+    setup_stimulus_slot = setup_page.container(key="tutorial_stimulus_images")
     # DATA-20 §1 — the participant-level metadata table. After the mapping (it
     # joins on the reader id the mapping just settled).
     setup_metadata_slot = setup_page.container(key="tutorial_participant_metadata")
@@ -5084,7 +5078,9 @@ def main() -> None:
     # filesystem information; the same resolver is available through the API
     # and CLI for reproducible headless renders.
     if local_filesystem_enabled():
-        with data_location_slot.expander("Stimulus images", expanded=False):
+        with setup_stimulus_slot:
+            st.divider()
+            st.subheader("🖼️ Stimulus images")
             image_root = st.text_input(
                 "Image folder",
                 key="stimulus_image_root",
@@ -5463,6 +5459,9 @@ def main() -> None:
                 "checked on the whole dataset, before any filtering."
             )
             render_trial_identity_section()
+        # ``setup_stimulus_slot`` is filled earlier because its values resolve
+        # image paths before filtering and plotting. Its reserved position puts
+        # it immediately before participant metadata on the Data page.
         with setup_metadata_slot:
             st.divider()
             st.subheader("👤 Participant metadata")

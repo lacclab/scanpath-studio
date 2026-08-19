@@ -760,6 +760,8 @@ def _render_scope_picker(
     combos: pd.DataFrame,
     key_prefix: str,
     combos_all: pd.DataFrame | None = None,
+    selected_participant: str | None = None,
+    selected_trial: str | None = None,
 ) -> tuple[str, str | None, str | None, str | None, bool]:
     """Render the scope radio + dependent selectors.
 
@@ -771,9 +773,8 @@ def _render_scope_picker(
     # (the whole dataset, ignoring the sidebar filter) and "All filtered trials"
     # (the current sidebar selection) are always offered — they coincide only
     # when no filter is active.
-    # A single trial is exported from the "This trial" section above (the
-    # currently-viewed trial), so the bulk picker only offers multi-trial scopes.
     options_map: dict[str, tuple[str, bool]] = {
+        "This trial": ("trial", False),
         "All": ("all", True),
         "All filtered trials": ("all", False),
     }
@@ -781,20 +782,15 @@ def _render_scope_picker(
     options_map["All trials of one text"] = ("text", False)
 
     # Default to the filtered subset (respect what the user narrowed to).
-    default_index = 1
-    scope_label = panel_field(
-        st,
-        "radio",
+    default_index = 2
+    scope_label = st.radio(
         "Trials to include",
-        # Four options wrap to a second line on a narrow window, and a centred
-        # title would then float between the two rows of choices.
-        align="top",
         options=list(options_map),
         index=default_index,
         key=f"{key_prefix}_scope",
         horizontal=True,
-        help="Limit the export to a subset of trials. **All** exports every "
-        "trial in the dataset, ignoring the **Filter trials** sidebar panel.",
+        help="Choose a subset. All ignores active filters.",
+        label_visibility="collapsed",
     )
     scope, export_unfiltered = options_map[scope_label]
     active = combos_all if (export_unfiltered and combos_all is not None) else combos
@@ -809,29 +805,35 @@ def _render_scope_picker(
     )
 
     if scope == "trial" and not active.empty:
-        participants = sorted(active["participant_id"].dropna().astype(str).unique())
-        scope_participant = panel_field(
-            st,
-            "selectbox",
-            "Participant",
-            options=participants,
-            key=f"{key_prefix}_scope_pid",
-        )
-        trials_for_pid = (
-            active.loc[
-                active["participant_id"].astype(str) == str(scope_participant),
-                "trial_id",
-            ]
-            .astype(str)
-            .unique()
-        )
-        scope_trial = panel_field(
-            st,
-            "selectbox",
-            "Trial",
-            options=sorted(trials_for_pid),
-            key=f"{key_prefix}_scope_trial",
-        )
+        if selected_participant is not None and selected_trial is not None:
+            scope_participant = str(selected_participant)
+            scope_trial = str(selected_trial)
+        else:
+            participants = sorted(
+                active["participant_id"].dropna().astype(str).unique()
+            )
+            scope_participant = panel_field(
+                st,
+                "selectbox",
+                "Participant",
+                options=participants,
+                key=f"{key_prefix}_scope_pid",
+            )
+            trials_for_pid = (
+                active.loc[
+                    active["participant_id"].astype(str) == str(scope_participant),
+                    "trial_id",
+                ]
+                .astype(str)
+                .unique()
+            )
+            scope_trial = panel_field(
+                st,
+                "selectbox",
+                "Trial",
+                options=sorted(trials_for_pid),
+                key=f"{key_prefix}_scope_trial",
+            )
     elif scope == "participant" and not active.empty:
         participants = sorted(active["participant_id"].dropna().astype(str).unique())
         scope_participant = panel_field(
@@ -929,16 +931,14 @@ def _render_metadata_field_picker(key_prefix: str):
         format_func=lambda name: labels.get(name, name),
         key=state_key,
         persist_state="session",
-        help="Columns of the attached participant table to write into "
-        "`metadata/participants.*`. The reader id is always included; clear "
-        "them all to leave the table out of the bundle entirely.",
+        help="Participant fields to include. Reader ID is always kept.",
     )
     ordered = tuple(name for name in names if name in set(chosen))
     return None if len(ordered) == len(names) else ordered
 
 
 def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
-    """The **Naming & labels** block: EXP-1's path pattern.
+    """The compact **File naming** block: EXP-1's path pattern.
 
     Every pattern is validated and previewed against the first trial in scope as
     it's typed — finding a typo after a 200-trial render is the worst possible
@@ -950,7 +950,6 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
     live figure and not just at export time; `render_export_options` reads it
     back from there instead of keeping a second, possibly-diverging copy.
     """
-    st.markdown("### Naming & labels")
     fields = _preview_fields(combos)
     available = ", ".join(
         f"`{{{k}}}`" for k in sorted(set(fields) | set(_PATTERN_EXTRA_FIELDS))
@@ -966,23 +965,25 @@ def _render_naming_options(st, combos: pd.DataFrame, key_prefix: str):
             return default
         return value
 
+    heading, fields_slot = st.columns([5, 1], vertical_alignment="bottom")
+    heading.markdown("### File naming")
+    with fields_slot.popover(
+        "Fields", help="Placeholders available in the path pattern."
+    ):
+        st.markdown(available)
     path_pattern = _pattern_input(
         "File path pattern",
         DEFAULT_PATH_PATTERN,
         f"{key_prefix}_path_pattern",
-        "Where each file lands inside the zip. `{artifact}` is the file "
-        "(figure / fixations / measures / plot_config) and `{ext}` its format; "
-        "`/` makes a folder.",
+        "Path inside the ZIP. Use `/` for folders and `{…}` placeholders.",
     )
     st.caption(
-        "Preview — "
-        + " · ".join(
-            f"`{resolve_export_path(path_pattern, fields, artifact=a, ext=e, used=set())}`"
-            for a, e in (("figure", "png"), ("fixations", "csv"))
+        "Example: `"
+        + resolve_export_path(
+            path_pattern, fields, artifact="figure", ext="png", used=set()
         )
+        + "`"
     )
-    with st.expander("Available fields", expanded=False):
-        st.markdown(available)
     return path_pattern
 
 
@@ -993,6 +994,8 @@ def render_export_options(
     combos_all: pd.DataFrame | None = None,
     title_pattern: str = "",
     caption_pattern: str = "",
+    selected_participant: str | None = None,
+    selected_trial: str | None = None,
 ) -> ExportOptions:
     """Render the bulk-export options UI and return a populated ExportOptions.
 
@@ -1006,13 +1009,7 @@ def render_export_options(
     st = st_module
     # No expander — the options are always displayed.
     with st.container():
-        st.caption(
-            "Export many trials at once. Everything is packaged into a single "
-            "zip you can download. (To export just the trial on screen, use "
-            "**This trial** above.)"
-        )
-
-        st.markdown("### Scope")
+        st.markdown("### Trials to Include")
         # The whole-dataset choice lives inside the scope radio.
         (
             scope,
@@ -1020,11 +1017,18 @@ def render_export_options(
             scope_trial,
             scope_text,
             export_unfiltered,
-        ) = _render_scope_picker(st, combos, key_prefix, combos_all=combos_all)
+        ) = _render_scope_picker(
+            st,
+            combos,
+            key_prefix,
+            combos_all=combos_all,
+            selected_participant=selected_participant,
+            selected_trial=selected_trial,
+        )
 
         # Figures are the headline artifact, so they lead with a single
         # multi-select of formats (pills) rather than a column of checkboxes.
-        st.markdown("### Figures")
+        st.markdown("### Figure Formats")
         fig_formats = (
             panel_field(
                 st,
@@ -1034,9 +1038,7 @@ def render_export_options(
                 selection_mode="multi",
                 default=["PDF"],
                 key=f"{key_prefix}_figfmts",
-                help="PDF / SVG are vector; PNG is raster (set the scale below). "
-                "PDF / SVG / PNG render via Kaleido (needs Chrome). HTML is "
-                "interactive and needs no browser.",
+                help="PDF/SVG are vector, PNG is raster, and HTML is interactive.",
             )
             or []
         )
@@ -1058,7 +1060,7 @@ def render_export_options(
                 value=2,
                 width=140,
                 key=f"{key_prefix}_scale",
-                help="Higher → better quality and larger files. 1 = 1×, 2 = retina, 4 = poster.",
+                help="Higher values increase quality and file size.",
             )
         else:
             png_scale = int(st.session_state.get(f"{key_prefix}_scale", 2))
@@ -1071,12 +1073,7 @@ def render_export_options(
             "Separable layers",
             value=False,
             key=f"{key_prefix}_layers",
-            help="Also export the figure split into one file per layer (word boxes "
-            "/ fixations / saccades / heatmap / labels / stimulus image) under "
-            "`layers/`, so you can restyle each independently in Illustrator / "
-            "Inkscape. Uses the vector/raster figure formats above (SVG if only "
-            "HTML or nothing is picked); the layers register perfectly when "
-            "stacked.",
+            help="Export each visual layer as a separate file.",
         )
         # Layers are static vectors/rasters — HTML can't be split. When no
         # vector/raster format is picked, they fall back to SVG (which needs
@@ -1093,9 +1090,7 @@ def render_export_options(
             "Plot config (JSON)",
             value=True,
             key=f"{key_prefix}_cfg",
-            help="A JSON snapshot of every plot setting (layers, colors, sizing, "
-            "text scaling) — bundle it to reproduce or restore these exact "
-            "figures later.",
+            help="Include plot settings as JSON.",
         )
         tabular = (
             panel_field(
@@ -1111,10 +1106,7 @@ def render_export_options(
                 selection_mode="multi",
                 default=[],
                 key=f"{key_prefix}_tabular",
-                help="Fixations: per-trial fixation rows. Word measures: per-word "
-                "FFD / FPRT / RPD / TFD … Mega-table: one aggregated table across "
-                "every selected trial. Full measure family adds saccades, sentences, "
-                "trial/reader summaries, character grids, cleaning QA, and run settings.",
+                help="Choose the data tables to include.",
             )
             or []
         )

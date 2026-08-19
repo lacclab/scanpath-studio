@@ -42,7 +42,7 @@ fixation, and word counts are plausible.
 
 ## 5. Export the record
 
-Use **Export → Multiple trials** for the active filtered pool. Include the tidy
+Use **Export → Export bundle** for the active filtered pool. Include the tidy
 tables and `plot_config.json`; export figures only if they are part of the
 analysis record. Download **💾 Save & restore** JSON as the human review record.
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from unittest import mock
 
+import pandas as pd
 import pytest
 
 from scanpath_studio import controls
@@ -881,8 +882,6 @@ class TestDatasetTable:
         assert row["Remove"].iloc[0]
         demo = frame[frame["Dataset"].str.contains("demo", case=False)]
         if not demo.empty:
-            import pandas as pd
-
             edit = demo["Edit"].iloc[0]
             assert pd.isna(edit) or not edit
             assert demo["Rename"].iloc[0]

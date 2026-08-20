@@ -61,11 +61,23 @@ ruff check --exclude other_vis .  # lint
 ruff format --exclude other_vis . # auto-format
 ```
 
-Prefer `uv run pytest` over a hand-managed virtualenv's `pytest`: it resolves
-the versions in `uv.lock`, which is what CI installs. A `.venv` that has drifted
-to an older pandas passes tests that CI then fails — pandas 3.0's string
-inference in particular changes real behaviour (a `None` sentinel in an
-all-string object array becomes `NaN` unless you pass `dtype=object`).
+Prefer `uv run pytest` over a bare `pytest` or `python -m pytest`: it resolves
+the versions in `uv.lock`, which is what CI installs. There are two ways to get
+a false green. A `.venv` that has drifted to an older pandas is the obvious one;
+the easier one is a bare `python` that is not this project's at all — with conda
+or Homebrew earlier in `PATH`, `python -m pytest` silently runs a different
+interpreter against a different pandas. pandas 3.0's string inference in
+particular changes real behaviour (a `None` sentinel in an all-string object
+array becomes `NaN` unless you pass `dtype=object`), so a suite that is green
+under pandas 2 is red in CI.
+
+**A "the suite is green" claim should name the interpreter it came from** — one
+line settles it, and it costs less than the round trip when two people disagree
+about the state of `main`:
+
+```bash
+uv run python -c "import sys, pandas; print(sys.version.split()[0], pandas.__version__)"
+```
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push and PR
 across Python 3.11/3.12/3.13/3.14. See [AGENTS.md](AGENTS.md) and the package

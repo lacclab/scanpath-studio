@@ -605,9 +605,7 @@ class TestSpotlightSelectorsResolve:
         canvas_source = inspect.getsource(app.render_sidebar_canvas_controls)
 
         assert '"📐 **Figure & canvas**"' in control_source
-        assert (
-            "render_text=show_labels" in control_source
-        )
+        assert "render_text=show_labels" in control_source
         assert "display = host if bare else host.expander" in canvas_source
         assert 'viz.expander("🖥️ Canvas & text"' not in control_source
         assert 'viz.expander("📐 Figure & axes"' not in control_source
@@ -619,7 +617,7 @@ class TestSpotlightSelectorsResolve:
         from scanpath_studio import controls
 
         source = inspect.getsource(controls.corpus_style_controls)
-        assert 'as style_panel' in source
+        assert "as style_panel" in source
         assert "canvas_renderer(style_panel)" in source
         assert "canvas_renderer(target)" not in source
 

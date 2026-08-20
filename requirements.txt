@@ -19,3 +19,6 @@ streamlit-sortables~=0.3.1
 # ffmpeg binary, so MP4 needs no system package; Pillow encodes the GIF.
 pillow~=12.1.0
 imageio[ffmpeg]~=2.37.3
+# pandas' .xlsx engine: spreadsheet uploads and MultiplEYE's comprehension
+# questions workbook both go through pd.read_excel.
+openpyxl~=3.1.5

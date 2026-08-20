@@ -1389,9 +1389,7 @@ def _wizard_setup_step(
     )
     est_w, est_h = compute_canvas_size(words_raw, fix_raw)
     canvas_w = (
-        initial.canvas_width
-        if initial is not None
-        else _recalled("canvas_width", 2560)
+        initial.canvas_width if initial is not None else _recalled("canvas_width", 2560)
     )
     canvas_h = (
         initial.canvas_height

@@ -3273,7 +3273,7 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
     thing this widget tracks: whether it is open. That is what a click "not
     working" looked like — the popover opened, a rerun landed before the user
     saw it, and the fresh auto-key came back closed. Every OTHER popover in the
-    app has a distinct, stable label (the filter funnel, ⇅, Details, …), which
+    app has a distinct, stable label (the filter funnel, ⇅, Summary stats, …), which
     is why only
     this shared-blank-label family of eight was affected.
     """

@@ -940,7 +940,7 @@ def _select_trial_none_mode(
         options=trial_options,
         key=trial_id_key,
         format_func=_option_label,
-        help="💡 Click, then start typing to narrow down the trial list. "
+        help="Click this dropdown, then type to narrow the list. "
         "★ favorite · 🏷️ tagged · 📝 has notes. When a sort key is active, each "
         "option ends with that trial's value for it.",
     )

@@ -1640,8 +1640,8 @@ def _render_compare_selector(
             if compare_step_linked() and sort_choice == _CMP_SORT_DEFAULT:
                 order_choice = TRIAL_SORT_DEFAULT
                 st.caption(
-                    "Sorted by **Trial ID** while *Step both trials together* is "
-                    "on, so B keeps its place in the list when A changes text."
+                    "Sorted by **Trial ID** while *Step A + B* is on, so B keeps "
+                    "its place in the list when A changes text."
                 )
             else:
                 order_choice = sort_choice
@@ -3703,14 +3703,14 @@ def _render_trial_condition_chips(
     strip is a wrapping flex row, so nothing is ever cut at any width or sidebar
     state, and the duplicate list has no reason to exist. What's left is split by
     *kind* rather than by what happened to fit — conditions inline here, the
-    computed summary stats in the **Details** popover the caller renders from the
+    computed summary stats in the **Summary stats** popover the caller renders from the
     returned list.
 
     ``fields`` is the configurable list of fields to surface (the ✏️ Edit chips
     popover). A data column that varies within the trial is shown (first value)
     but flagged with ⚠️.
 
-    Returns the ``(label, value)`` summary stats for the Details popover; empty
+    Returns the ``(label, value)`` summary stats for that popover; empty
     when the user has no summary chips selected."""
     primary: list[tuple[str, str]] = []  # identity + conditions (inline)
     summary: list[tuple[str, str]] = []  # computed stats (inside "More")
@@ -3766,7 +3766,7 @@ def _render_trial_condition_chips(
 
 
 def _render_trial_details_popover(summary: list[tuple[str, str]], host) -> None:
-    """The **Details** popover beside the chip strip: the computed summary stats.
+    """The **Summary stats** popover beside the chip strip: the computed numbers.
 
     UX-11 split the strip by *kind*: conditions are chips (short, colour-coded,
     scannable), while reading time / word count / fixation counts are derived
@@ -3776,7 +3776,9 @@ def _render_trial_details_popover(summary: list[tuple[str, str]], host) -> None:
     """
     if not summary:
         return
-    with host.popover("Details", width="content", help="Summary stats for this trial."):
+    with host.popover(
+        "Summary stats", width="content", help="Summary stats for this trial."
+    ):
         st.markdown(
             "".join(
                 '<div class="sps-stat">'
@@ -4264,15 +4266,18 @@ def render_single_trial_tab(
                         "by side."
                     ),
                 ):
-                    # CMP-13. Deliberately "Step both trials together" and not
-                    # "keep them in sync": the two pools have different sizes
-                    # (B excludes A, and a cross-dataset B is another corpus), so
-                    # their positions carry no shared meaning — the control
-                    # advances each by the same ±1, nothing more.
+                    # CMP-13. Deliberately "step" and not "keep them in sync":
+                    # the two pools have different sizes (B excludes A, and a
+                    # cross-dataset B is another corpus), so their positions
+                    # carry no shared meaning — the control advances each by the
+                    # same ±1, nothing more. UX-99 cut the label to "Step A + B":
+                    # the rail's fixed label column truncated the old sentence to
+                    # "Step both trials toge…", and the help line under it says
+                    # the rest anyway.
                     _labeled(
                         st,
                         "checkbox",
-                        "Step both trials together",
+                        "Step A + B",
                         key=COMPARE_STEP_LINK_KEY,
                         persist_state="session",
                         disabled=cmp_disabled,
@@ -4687,7 +4692,7 @@ def render_single_trial_tab(
     # the rest, and the row's controls in the trailing track. The line takes
     # `SELECTOR_ROW_TRIO` — the control-line grid with the trial and scrub
     # tracks merged — so the title sits under the dataset picker, the chips
-    # under the trial picker and scrubber, and **Details** / ✏️ under ◀ ▶ ⇅.
+    # under the trial picker and scrubber, and **Summary stats** / ✏️ under ◀ ▶ ⇅.
     color_a = color_b = None
     if comparing and compare_meta:
         # Each title takes the colour of the scanpath it names (A = primary,
@@ -4703,7 +4708,7 @@ def render_single_trial_tab(
         # Top-aligned, not centre-aligned: the strip wraps to several lines
         # (UX-11), and a centred control would drift to the middle of a tall
         # strip instead of sitting on the first chip's line.
-        # UX-27: **Details** and ✏️ share ONE trailing column, as a `railbtn_*`
+        # UX-27: **Summary stats** and ✏️ share ONE trailing column, as a `railbtn_*`
         # cluster — styles.py lays every such container out as a right-packed
         # flex row, so this row's pair ends flush with the ◀ ▶ ⇅ cluster above.
         # The Participant chip already identifies the reading. Do not repeat
@@ -4713,7 +4718,7 @@ def render_single_trial_tab(
             SELECTOR_ROW_WIDE_GRID, vertical_alignment="top"
         )
         trail = trail_col.container(key="railbtn_chip_trail")
-        # Created in display order (Details, then ✏️) but filled out of order:
+        # Created in display order (Summary stats, then ✏️) but filled out of order:
         # the popover body needs `summary`, which the strip below computes.
         details_box = trail.container(key="railbtn_chip_details")
         edit_box = trail.container(key="railbtn_chip_edit")
@@ -4739,7 +4744,7 @@ def render_single_trial_tab(
         _render_trial_details_popover(summary, details_box)
     if comparing and compare_meta:
         with compare_chips_slot:
-            # B's own line, directly under B's control row. No ✏️ or **Details**
+            # B's own line, directly under B's control row. No ✏️ or **Summary stats**
             # of its own: the chip fields are one setting for both readings, and
             # the summary popover describes the trial the panels are anchored on.
             b_strip, _b_trail = st.columns(

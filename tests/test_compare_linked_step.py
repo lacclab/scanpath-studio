@@ -128,7 +128,7 @@ class TestTheLinkedStepEndToEnd:
     def test_the_checkbox_is_offered_in_compare_options(self):
         at = self._boot_compare()
         boxes = [c for c in at.checkbox if c.key == utils.COMPARE_STEP_LINK_KEY]
-        assert boxes, "the 'Step both trials together' checkbox is missing"
+        assert boxes, "the 'Step A + B' checkbox is missing"
         assert boxes[0].value is False, "the link must default off"
 
     @staticmethod

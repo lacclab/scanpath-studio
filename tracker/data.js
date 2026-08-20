@@ -3421,6 +3421,76 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "UX-99",
+   "prefix": "UX",
+   "num": 99,
+   "sub": "",
+   "title": "Wording and spacing pass: picker help, Summary stats, gutters, recovery panel",
+   "status": "In progress",
+   "owner": "Maya",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "Five small asks, all display-only:",
+    "",
+    "1. *Select trial* → **?**: drop the 💡 and say what to click.",
+    "2. Chips: rename **Details** to **Summary stats**.",
+    "3. Reduce the white space in the left and right page margins.",
+    "4. Compare settings: *Step both trials together* does not fit — much shorter.",
+    "5. The **Automatic recovery** help text is not understandable."
+   ],
+   "whatWasDone": [
+    "**Trial picker help.** `utils.py`'s selectbox help lost the 💡 and now names its",
+    "own target: \"Click this dropdown, then type to narrow the list.\" The ★ / 🏷️ / 📝",
+    "legend and the sort-key sentence are unchanged.",
+    "",
+    "**Summary stats.** The chip strip's popover trigger reads **Summary stats**",
+    "instead of *Details* (`tabs._render_trial_details_popover`). Label only — the",
+    "function, its key and the strip's layout are untouched; the comments in",
+    "`styles.py` and `controls.py` that quoted the old label were updated with it.",
+    "",
+    "**Gutters.** `styles.get_app_css` now sets the main block container's",
+    "`padding-left` / `padding-right` to 1.5 rem (0.75 rem under 640 px) instead of",
+    "letting Streamlit's wide layout reserve ~5 rem a side. That is ~7 rem of width",
+    "back for the scanpath canvas and the Corpus / dataset tables, which are the",
+    "widest things the app draws.",
+    "",
+    "**Step A + B.** The compare checkbox is now labelled **Step A + B** — the rail's",
+    "fixed label column truncated the old sentence to \"Step both trials toge…\". The",
+    "help under it (\"◀ ▶ moves both trial pickers by one.\") already said the rest, and",
+    "the *Sorted by Trial ID while …* caption was updated to quote the new label.",
+    "",
+    "**Automatic recovery.** The panel now opens with a plain-language line — what is",
+    "saved, that it is saved on *this computer*, and that nothing is uploaded — before",
+    "the \"Saved: N datasets · …\" status. The toggle's help spells out on / off and",
+    "says turning it off does not delete the saved copy; the folder caption reads",
+    "\"Saved in this folder on your computer: …\"; and the environment-variable escape",
+    "hatches moved out of that tooltip into their own sentence underneath."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "All five are display-only — no widget key, session key, share-link parameter or",
+    "figure setting moved — so the four-surface rule does not apply.",
+    "",
+    "\"Summary stats\" rather than the requested \"Summary Stats\": every other control",
+    "label in the app is sentence case (*Available datasets*, *Recording setup*).",
+    "",
+    "`tests/test_compare_linked_step.py` asserted on the old checkbox label and was",
+    "updated in the same commit."
+   ],
+   "decisions": [
+    "Review: are the new gutters (1.5 rem a side) the right amount, or should the page keep a wider margin on very large screens?",
+    "Does **Step A + B** read clearly in the compare popover, beside the A / B stimulus control?",
+    "Is the rewritten Automatic recovery panel understandable now — read it top to bottom on 💾 Session?"
+   ]
+  },
+  {
    "id": "UX-71",
    "prefix": "UX",
    "num": 71,

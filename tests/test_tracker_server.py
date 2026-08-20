@@ -285,10 +285,12 @@ def test_validate_state_rejects_invalid_changes(change: dict, message: str) -> N
 
 
 #: A task as the page's "New task" form builds it.
+# Numbers far above anything `data.js` will reach: these stand for a task the
+# user just created, so they must not collide with a real item (UX-99 did).
 CREATED_TASK = {
-    "id": "CMP-99",
+    "id": "CMP-9099",
     "prefix": "CMP",
-    "num": 99,
+    "num": 9099,
     "sub": "",
     "title": "A new comparison task",
     "status": "Backlog",
@@ -307,7 +309,7 @@ def test_validate_state_accepts_created_task() -> None:
         {"version": 2, "revision": 0, "items": {}, "createdItems": [dict(CREATED_TASK)]}
     )
 
-    assert state["createdItems"][0]["id"] == "CMP-99"
+    assert state["createdItems"][0]["id"] == "CMP-9099"
 
 
 def test_a_created_task_can_be_claimed() -> None:
@@ -336,9 +338,9 @@ def test_a_created_task_rejects_an_owner_who_does_not_exist() -> None:
 
 def test_validate_state_rejects_group_prefix_mismatch() -> None:
     item = {
-        "id": "UX-99",
+        "id": "UX-9099",
         "prefix": "UX",
-        "num": 99,
+        "num": 9099,
         "sub": "",
         "title": "Wrong group prefix",
         "status": "Backlog",

@@ -7,8 +7,26 @@ def get_app_css() -> str:
     """Return custom CSS to reduce whitespace and disable animations."""
     return """
     <style>
+    /* UX-99: the page's side gutters. Streamlit's wide layout reserves ~5rem
+       either side, which on this app is ~10rem of nothing beside the widest
+       things it draws — the scanpath canvas plus its rail, the Corpus tables,
+       the dataset table. Trimmed to a gutter that still keeps text off the
+       window edge. `!important` because Streamlit's own padding rule carries
+       higher specificity than a bare class selector. */
     .stMainBlockContainer,
-    section.main > div.block-container {padding-top: 3rem; padding-bottom: 0 !important;}
+    section.main > div.block-container {
+        padding-top: 3rem;
+        padding-bottom: 0 !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+    @media (max-width: 640px) {
+        .stMainBlockContainer,
+        section.main > div.block-container {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+    }
     .stMainBlockContainer > [data-testid="stVerticalBlock"] > :last-child,
     section.main > div.block-container > [data-testid="stVerticalBlock"] > :last-child {
         margin-bottom: 0 !important;
@@ -303,7 +321,7 @@ def get_app_css() -> str:
        chips fit is a live-width question Python can't answer. Wrapping means
        nothing is ever cut at any window width, so the duplicate list
        (and the whole floating-dropdown mechanism) is gone; the derived summary
-       stats live in a real "Details" popover beside the strip instead. This is
+       stats live in a real "Summary stats" popover beside the strip instead. This is
        also the first half of UX-19 — the strip was what broke first on a narrow
        laptop. */
     .sps-trial-chips {
@@ -502,7 +520,7 @@ def get_app_css() -> str:
        vertical block is a flex COLUMN of full-width children, so a content-width
        button sat at the LEFT of its slot: the three rows' ends were ragged by up
        to 43px, and once the right-most three were flushed the *second* control
-       in each row (◀ ▶, "Details") was still adrift — one full column gutter in
+       in each row (◀ ▶, "Summary stats") was still adrift — one full column gutter in
        from its neighbour, at a different offset per row.
 
        So a row's trailing controls now share ONE `railbtn_*` container and this
@@ -530,8 +548,8 @@ def get_app_css() -> str:
         width: auto !important;
     }
     [class*="st-key-railbtn_"] > div + div { margin-left: 3px !important; }
-    /* The two chip-strip controls — "Details" (summary stats) and ✏️ (edit
-       chips) — are additionally nudged down onto the first chip row's baseline:
+    /* The two chip-strip controls — "Summary stats" and ✏️ (edit chips) — are
+       additionally nudged down onto the first chip row's baseline:
        the strip wraps, so the columns are TOP-aligned (a centred control would
        drift to the middle of a tall strip), and this offset is the strip's own
        top margin. (UX-11 also fixed the ✏️ sitting visibly high, when it was

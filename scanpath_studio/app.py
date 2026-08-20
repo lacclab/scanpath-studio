@@ -572,15 +572,26 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
     with container:
         if not status["enabled"]:
             st.caption(
-                "**Unavailable here.** This deployment keeps no recovery copy.",
-                help="This deployment keeps your session in memory only, so a "
-                "refresh or a restart loses uploaded datasets, mappings and "
-                "annotations. Download a JSON backup below for settings and "
-                "annotations; it does not include dataset files.",
+                "**Not available here.** This deployment keeps your work in "
+                "memory only — closing or refreshing the tab loses the datasets "
+                "you uploaded, their column mappings and your annotations. Use "
+                "the JSON backup below to keep your settings and annotations; "
+                "it does not include the dataset files themselves."
             )
             if status["override"] == "off":
-                st.caption(f"Disabled by `{PERSIST_ENV_VAR}=0`.")
+                st.caption(f"Turned off by `{PERSIST_ENV_VAR}=0`.")
             return
+
+        # UX-99: say what this panel *is* before showing its status line. The
+        # numbers and the folder path underneath only make sense once the reader
+        # knows a copy is being kept and that it never leaves the machine — the
+        # old panel opened straight into "Saved: 0 datasets · 5.9 KB" and left
+        # both questions to a tooltip full of environment variables.
+        st.caption(
+            "Your uploaded datasets, their column mappings, your settings and "
+            "your annotations are saved on **this computer** as you work, and "
+            "reopened for you next time. Nothing is uploaded anywhere."
+        )
 
         if restored_from_cache(st.session_state):
             st.success("Recovered when the app opened.", icon="↩️")
@@ -615,24 +626,33 @@ def _render_recovery_cache_panel(app_url: str, *, slot=None) -> None:
             "Save changes automatically",
             key="persist_local_saving",
             on_change=_toggle_recovery_saving,
-            help="Keep this session recoverable after a refresh or restart.",
+            help="On: your work is written to the folder below as you go, so a "
+            "refresh, a crash or a restart picks up where you left off. Off: "
+            "this session stays in memory only and closing the tab loses it. "
+            "Turning it off does not delete what is already saved — use "
+            "**Clear recovery cache** for that.",
         )
         if st.button(
             "🗑 Clear recovery cache",
             key="forget_recovery_cache_btn",
             width="stretch",
             disabled=not status["exists"],
-            help="Delete the stored copy. Your open session and automatic-saving "
-            "setting stay unchanged.",
+            help="Delete the saved copy from this computer. What you have open "
+            "right now is untouched, and saving stays on unless you turn the "
+            "toggle above off.",
         ):
             st.session_state[_FORGET_CACHE_PENDING_KEY] = True
         if st.session_state.get(_FORGET_CACHE_PENDING_KEY):
             _forget_cache_confirmation_dialog()
+        st.caption(f"Saved in this folder on your computer: `{status['directory']}`")
+        # The environment-variable escape hatches, spelled out rather than
+        # listed. They used to be the panel's only explanation of itself, packed
+        # into one tooltip on the folder path (UX-99).
         st.caption(
-            f"Stored at `{status['directory']}`",
-            help=f"Always off: `{PERSIST_ENV_VAR}=0` · move the folder: "
-            f"`{STATE_DIR_ENV_VAR}=…` · same info from a terminal: "
-            "`scanpath-studio cache`.",
+            "Prefer to set this outside the app? Start it with "
+            f"`{PERSIST_ENV_VAR}=0` to never save, or "
+            f"`{STATE_DIR_ENV_VAR}=/your/folder` to save somewhere else. "
+            "`scanpath-studio cache` reports the same details from a terminal."
         )
 
 

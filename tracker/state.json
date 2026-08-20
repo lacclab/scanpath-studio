@@ -466,6 +466,14 @@
       "archived": true,
       "updated": "2026-08-20"
     },
+    "DATA-35": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
     "ENG-19": {
       "status": "Closed",
       "priority": "Normal",
@@ -827,6 +835,14 @@
       "implementationBrief": "",
       "archived": true,
       "updated": "2026-08-04"
+    },
+    "UX-100": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
     },
     "UX-21": {
       "status": "Closed",
@@ -1372,6 +1388,14 @@
       "updated": "2026-08-20"
     },
     "UX-98": {
+      "status": "Closed",
+      "priority": "Normal",
+      "owner": "Maya",
+      "implementationBrief": "",
+      "archived": true,
+      "updated": "2026-08-20"
+    },
+    "UX-99": {
       "status": "Closed",
       "priority": "Normal",
       "owner": "Maya",

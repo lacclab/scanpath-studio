@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import math
 from collections.abc import Callable
+from contextlib import contextmanager
 from copy import deepcopy
 
 import numpy as np
@@ -153,6 +154,10 @@ def _labeled(host, kind: str, label: str, **kwargs):
     overrides it.
     """
     kwargs.setdefault("label_width", _LABEL_W)
+    # UX-97: a layer's controls grey out while its layer toggle is off.
+    kwargs["disabled"], kwargs["help"] = _layer_gate(
+        bool(kwargs.get("disabled", False)), kwargs.get("help")
+    )
     return labeled(host, kind, label, **kwargs)
 
 
@@ -254,6 +259,7 @@ def _numeric_slider(
     ⚙️ Playback popover are laid out two-up in half-width columns, where a third
     column would leave the slider unusable.
     """
+    disabled, help = _layer_gate(disabled, help)  # UX-97
     num_key = f"{key}__num"
     if key in st.session_state:
         st.session_state[num_key] = st.session_state[key]
@@ -331,6 +337,7 @@ def _range_slider(
 
     ``label_left`` / ``display`` behave as in :func:`_numeric_slider` (UX-51).
     """
+    disabled, help = _layer_gate(disabled, help)  # UX-97
     lo_key, hi_key = f"{key}__num_lo", f"{key}__num_hi"
     current = st.session_state.get(key)
     if isinstance(current, (tuple, list)) and len(current) == 2:
@@ -460,6 +467,45 @@ def _gated_help(base: str | None, reason: str) -> str | None:
     if not reason:
         return base
     return f"{reason}\n\n{base}" if base else reason
+
+
+# --- UX-97: a layer's settings stay readable while the layer is off ----------
+# Before this, each layer block was gated `if show_<layer>:`, so switching the
+# layer off left its ▾ clickable but empty — the affordance said "there is
+# something here" and the popover said otherwise. The controls now always
+# render; while the layer is off they are greyed, because they change something
+# nothing is drawing. Same rule as `_mode_gate`: disabling never rewrites the
+# stored value, since a disabled Streamlit widget keeps its key.
+_LAYER_OFF_REASON: list[str] = []
+
+
+@contextmanager
+def _layer_off(label: str, *, off: bool):
+    """Grey every rail control rendered inside, while ``off``.
+
+    ``label`` names the layer's toggle, so the reason reads as an instruction
+    ("Turn **👁️ Fixations** on…") rather than a bare refusal. Nested use pushes
+    onto a stack, so an inner block that greys for its own reason wins.
+    """
+    if not off:
+        yield
+        return
+    _LAYER_OFF_REASON.append(
+        f"⚠️ **{label}** is off — turn the layer on to change this. "
+        "Your settings are kept either way."
+    )
+    try:
+        st.caption(_LAYER_OFF_REASON[-1])
+        yield
+    finally:
+        _LAYER_OFF_REASON.pop()
+
+
+def _layer_gate(disabled: bool, help: str | None) -> tuple[bool, str | None]:
+    """Fold the active :func:`_layer_off` reason into one control's args."""
+    if not _LAYER_OFF_REASON:
+        return disabled, help
+    return True, _gated_help(help, _LAYER_OFF_REASON[-1])
 
 
 # Static defaults for the keyed visualization widgets that the plot-config
@@ -3697,268 +3743,265 @@ def sidebar_controls(
     # The toggle is on the section's row (UX-80); the styling below is still
     # (partly) live in Animate / Compare, so the popover stays reachable even
     # when the (inert) layer toggle reads off.
-    if show_fix or fix_off_disabled:
-        with fix_grp:
-            # The metric that maps to fixation HUE — applies to the static
-            # figure, the single animated replay AND the comparison overlay (in
-            # compare it colours both scanpaths by the metric; the per-scanpath
-            # flat colour below becomes the A/B marker outline). The one path
-            # that ignores it is the DUAL animation (Animate + Compare), where
-            # the flat A/B colours are all that tells the readings apart.
-            metric_disabled, metric_reason = _mode_gate(
-                animating, comparing, in_animation=not comparing
+    with fix_grp, _layer_off("👁️ Fixations", off=not (show_fix or fix_off_disabled)):
+        # The metric that maps to fixation HUE — applies to the static
+        # figure, the single animated replay AND the comparison overlay (in
+        # compare it colours both scanpaths by the metric; the per-scanpath
+        # flat colour below becomes the A/B marker outline). The one path
+        # that ignores it is the DUAL animation (Animate + Compare), where
+        # the flat A/B colours are all that tells the readings apart.
+        metric_disabled, metric_reason = _mode_gate(
+            animating, comparing, in_animation=not comparing
+        )
+        color_by = _labeled(
+            st,
+            "selectbox",
+            "Color fixations by",
+            options=color_fields,
+            key="global_color_by",
+            persist_state="session",
+            disabled=metric_disabled,
+            help=_gated_help(
+                f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
+                "(the default) maps nothing — marker *size* already shows fixation "
+                "duration, so colour is free for a second variable. Pick a column, "
+                "or 'line' to tint each fixation by the text line it lands on "
+                "(static plot + single animation only). In compare mode it "
+                "colours both scanpaths by this metric.",
+                metric_reason,
+            ),
+        )
+        # VIZ-17: the flat colour, shown only when nothing is mapped to hue.
+        # The comparison overlay draws each scanpath in its own colour
+        # instead (see "Per-scanpath (comparison)" below), so grey it there.
+        if color_by == UNIFORM_COLOR_FIELD:
+            _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+            _labeled(
+                st,
+                "color_picker",
+                "Fixation color",
+                key="global_fixation_color",
+                persist_state="session",
+                disabled=_dis,
+                help=_gated_help(
+                    "The single colour every fixation marker wears.", _reason
+                ),
             )
-            color_by = _labeled(
+        # VIZ-15: marker shape — a channel that survives greyscale printing,
+        # so a figure stays readable where hue doesn't (see the Palette
+        # picker's **Print / greyscale** option). VIZ-23 gave the comparison
+        # builder `fixation_symbol` too, so shape is now a true global: it is
+        # the one marker property Compare does NOT override per scanpath
+        # (colour / size / opacity / hollow still come from `cmp{idx}_*`).
+        _labeled(
+            st,
+            "selectbox",
+            "Marker shape",
+            options=list(FIXATION_SYMBOLS),
+            format_func=lambda s: FIXATION_SYMBOLS[s],
+            key="global_fixation_symbol",
+            persist_state="session",
+            help="Shape of the fixation markers. Unlike colour, shape "
+            "still reads in black & white. Applies on all three render "
+            "paths, including both compared scanpaths.",
+        )
+        # PRE-3: vertical drift correction. Snap each fixation to its assigned
+        # text line using one of the Carr et al. (2021) algorithms; "Off"
+        # leaves the raw coordinates. VIZ-23 hoisted the correction above the
+        # render-mode split in `tabs.py`, so the *algorithm* now applies on all
+        # three paths. The CONNECTORS don't: only `make_scanpath_figure` has a
+        # connector layer, and drawing a full-length "original position" layer
+        # from frame zero would misread as part of the replay's trail.
+        static_disabled, static_reason = _mode_gate(
+            animating, comparing, **_static_only
+        )
+        # PRE-21: not fully integrated, so hidden unless SCANPATH_EXPERIMENTAL
+        # is set. The keys keep their defaults ("Off"), so nothing downstream
+        # needs a second gate to render correctly.
+        if drift_correction_enabled():
+            align_algo = _labeled(
                 st,
                 "selectbox",
-                "Color fixations by",
-                options=color_fields,
-                key="global_color_by",
+                "Drift correction",
+                options=_ALIGN_OPTIONS,
+                key="global_align_algorithm",
                 persist_state="session",
+                help="Snap fixations to their assigned text line using a "
+                "vertical drift-correction algorithm (Carr et al., 2021). "
+                "'Off' shows the raw fixations. See also the 📐 Line "
+                "assignment subtab to compare all algorithms side by side.",
+            )
+            if align_algo != "Off":
+                _labeled(
+                    st,
+                    "checkbox",
+                    "Show drift connectors",
+                    key="global_align_connectors",
+                    persist_state="session",
+                    disabled=static_disabled,
+                    help=_gated_help(
+                        "Draw a faint line from each fixation's original "
+                        "position to its corrected (snapped) position.",
+                        static_reason,
+                    ),
+                )
+        # "Snap fixations above words" is the fixation half of VIZ-9 (its
+        # partner is Saccades → Style → Line shape → Arc). Keep the control
+        # for saved-view compatibility, but do not give it a separate
+        # "Linear-reading schematic" heading in this already compact panel.
+        # Still `make_scanpath_figure`-only (VIZ-9's `fixation_snap_to_word`),
+        # unlike the drift correction above it — hence its own gate.
+        _labeled(
+            st,
+            "checkbox",
+            "Snap fixations above words",
+            key="global_fixation_snap_to_word",
+            persist_state="session",
+            disabled=static_disabled,
+            help=_gated_help(
+                "Schematic layout, **not** drift correction: every "
+                "fixation is redrawn at the top-centre of the word it landed "
+                "on, so the scanpath reads as a diagram rather than as "
+                "recorded gaze. Drift correction (above) instead nudges the "
+                "raw coordinates onto their true text line. Pairs with "
+                "Saccades → ⚙️ Style → Line shape → **Arc**.",
+                static_reason,
+            ),
+        )
+        # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
+        # / `cmp*_opacity` always override the global values there).
+        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+        _range_slider(
+            st,
+            "Size",
+            label_left=True,
+            key="global_marker_size_range",
+            persist_state="session",
+            min_value=4,
+            max_value=40,
+            disabled=_dis,
+            help=_gated_help("Fixation marker size (px).", _reason),
+        )
+        _numeric_slider(
+            st,
+            "Opacity",
+            label_left=True,
+            key="global_fixation_opacity",
+            persist_state="session",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.05,
+            slider_format="%.2f",
+            disabled=_dis,
+            help=_gated_help(
+                "Fixation marker opacity. Lower it so overlapping "
+                "fixations show through (1.0 = fully opaque).",
+                _reason,
+            ),
+        )
+        # Only meaningful once a variable is mapped to hue (VIZ-17): with
+        # "(uniform)" there is nothing for a colorscale to scale. Follows the
+        # same gate as "Color fixations by" (dead in a dual animation).
+        if color_by != UNIFORM_COLOR_FIELD:
+            _popover_selectbox(
+                "Colorscale",
+                COLORSCALES,
+                "global_fixation_colorscale",
                 disabled=metric_disabled,
                 help=_gated_help(
-                    f"The metric mapped to fixation marker hue. **{UNIFORM_COLOR_FIELD}** "
-                    "(the default) maps nothing — marker *size* already shows fixation "
-                    "duration, so colour is free for a second variable. Pick a column, "
-                    "or 'line' to tint each fixation by the text line it lands on "
-                    "(static plot + single animation only). In compare mode it "
-                    "colours both scanpaths by this metric.",
+                    "Colour palette for fixation markers when colouring by "
+                    "numeric values.",
                     metric_reason,
                 ),
             )
-            # VIZ-17: the flat colour, shown only when nothing is mapped to hue.
-            # The comparison overlay draws each scanpath in its own colour
-            # instead (see "Per-scanpath (comparison)" below), so grey it there.
-            if color_by == UNIFORM_COLOR_FIELD:
-                _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-                _labeled(
-                    st,
-                    "color_picker",
-                    "Fixation color",
-                    key="global_fixation_color",
-                    persist_state="session",
-                    disabled=_dis,
-                    help=_gated_help(
-                        "The single colour every fixation marker wears.", _reason
-                    ),
-                )
-            # VIZ-15: marker shape — a channel that survives greyscale printing,
-            # so a figure stays readable where hue doesn't (see the Palette
-            # picker's **Print / greyscale** option). VIZ-23 gave the comparison
-            # builder `fixation_symbol` too, so shape is now a true global: it is
-            # the one marker property Compare does NOT override per scanpath
-            # (colour / size / opacity / hollow still come from `cmp{idx}_*`).
-            _labeled(
-                st,
-                "selectbox",
-                "Marker shape",
-                options=list(FIXATION_SYMBOLS),
-                format_func=lambda s: FIXATION_SYMBOLS[s],
-                key="global_fixation_symbol",
-                persist_state="session",
-                help="Shape of the fixation markers. Unlike colour, shape "
-                "still reads in black & white. Applies on all three render "
-                "paths, including both compared scanpaths.",
-            )
-            # PRE-3: vertical drift correction. Snap each fixation to its assigned
-            # text line using one of the Carr et al. (2021) algorithms; "Off"
-            # leaves the raw coordinates. VIZ-23 hoisted the correction above the
-            # render-mode split in `tabs.py`, so the *algorithm* now applies on all
-            # three paths. The CONNECTORS don't: only `make_scanpath_figure` has a
-            # connector layer, and drawing a full-length "original position" layer
-            # from frame zero would misread as part of the replay's trail.
-            static_disabled, static_reason = _mode_gate(
-                animating, comparing, **_static_only
-            )
-            # PRE-21: not fully integrated, so hidden unless SCANPATH_EXPERIMENTAL
-            # is set. The keys keep their defaults ("Off"), so nothing downstream
-            # needs a second gate to render correctly.
-            if drift_correction_enabled():
-                align_algo = _labeled(
-                    st,
-                    "selectbox",
-                    "Drift correction",
-                    options=_ALIGN_OPTIONS,
-                    key="global_align_algorithm",
-                    persist_state="session",
-                    help="Snap fixations to their assigned text line using a "
-                    "vertical drift-correction algorithm (Carr et al., 2021). "
-                    "'Off' shows the raw fixations. See also the 📐 Line "
-                    "assignment subtab to compare all algorithms side by side.",
-                )
-                if align_algo != "Off":
-                    _labeled(
-                        st,
-                        "checkbox",
-                        "Show drift connectors",
-                        key="global_align_connectors",
-                        persist_state="session",
-                        disabled=static_disabled,
-                        help=_gated_help(
-                            "Draw a faint line from each fixation's original "
-                            "position to its corrected (snapped) position.",
-                            static_reason,
-                        ),
-                    )
-            # "Snap fixations above words" is the fixation half of VIZ-9 (its
-            # partner is Saccades → Style → Line shape → Arc). Keep the control
-            # for saved-view compatibility, but do not give it a separate
-            # "Linear-reading schematic" heading in this already compact panel.
-            # Still `make_scanpath_figure`-only (VIZ-9's `fixation_snap_to_word`),
-            # unlike the drift correction above it — hence its own gate.
-            _labeled(
-                st,
-                "checkbox",
-                "Snap fixations above words",
-                key="global_fixation_snap_to_word",
-                persist_state="session",
-                disabled=static_disabled,
-                help=_gated_help(
-                    "Schematic layout, **not** drift correction: every "
-                    "fixation is redrawn at the top-centre of the word it landed "
-                    "on, so the scanpath reads as a diagram rather than as "
-                    "recorded gaze. Drift correction (above) instead nudges the "
-                    "raw coordinates onto their true text line. Pairs with "
-                    "Saccades → ⚙️ Style → Line shape → **Arc**.",
-                    static_reason,
-                ),
-            )
-            # Size / opacity are per-scanpath in Compare (`cmp*_marker_size_range`
-            # / `cmp*_opacity` always override the global values there).
-            _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+        raw_cmin = (
+            trial_fixations[color_by].min()
+            if color_by in trial_fixations.columns
+            and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
+            else None
+        )
+        raw_cmax = trial_fixations[color_by].max() if raw_cmin is not None else None
+        if pd.notna(raw_cmin) and pd.notna(raw_cmax):
+            # Integer bounds + step so the range reads as whole numbers
+            # (durations, surprisal, … all read cleaner as ints); values
+            # stay floats so a restored config on different data clamps in.
+            cmin = float(math.floor(raw_cmin))
+            cmax = float(math.ceil(raw_cmax))
+            cmax_eff = cmax if cmax > cmin else cmin + 1.0
+            _clamp_range("global_fixation_color_range", cmin, cmax_eff)
+            st.session_state.setdefault("global_fixation_color_range", (cmin, cmax_eff))
             _range_slider(
                 st,
-                "Size",
+                "Fixation color range",
                 label_left=True,
-                key="global_marker_size_range",
+                key="global_fixation_color_range",
                 persist_state="session",
-                min_value=4,
-                max_value=40,
+                min_value=cmin,
+                max_value=cmax_eff,
+                step=1.0,
+                slider_format="%d",
+                disabled=metric_disabled,
+                help=_gated_help(None, metric_reason),
+            )
+        show_order = _labeled(
+            st,
+            "checkbox",
+            "Fixation index",
+            key="global_show_order",
+            persist_state="session",
+        )
+        if show_order:
+            # In Compare (and in a dual animation) the index labels are tinted
+            # to each scanpath's own colour, so the global colour is inert.
+            _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+            _labeled(
+                st,
+                "color_picker",
+                "Index label color",
+                key="global_order_font_color",
+                persist_state="session",
                 disabled=_dis,
-                help=_gated_help("Fixation marker size (px).", _reason),
+                help=_gated_help("Fixation-index label colour.", _reason),
             )
             _numeric_slider(
                 st,
-                "Opacity",
+                "Index label size",
                 label_left=True,
-                key="global_fixation_opacity",
+                key="global_order_font_size",
                 persist_state="session",
-                min_value=0.1,
-                max_value=1.0,
-                step=0.05,
-                slider_format="%.2f",
-                disabled=_dis,
-                help=_gated_help(
-                    "Fixation marker opacity. Lower it so overlapping "
-                    "fixations show through (1.0 = fully opaque).",
-                    _reason,
-                ),
+                min_value=6,
+                max_value=72,
+                help="Fixation-index label size (figure pixels; the plot is "
+                "then scaled to fit the column, so on-screen it is a touch "
+                "smaller). Default 10.",
             )
-            # Only meaningful once a variable is mapped to hue (VIZ-17): with
-            # "(uniform)" there is nothing for a colorscale to scale. Follows the
-            # same gate as "Color fixations by" (dead in a dual animation).
-            if color_by != UNIFORM_COLOR_FIELD:
-                _popover_selectbox(
-                    "Colorscale",
-                    COLORSCALES,
-                    "global_fixation_colorscale",
-                    disabled=metric_disabled,
-                    help=_gated_help(
-                        "Colour palette for fixation markers when colouring by "
-                        "numeric values.",
-                        metric_reason,
-                    ),
-                )
-            raw_cmin = (
-                trial_fixations[color_by].min()
-                if color_by in trial_fixations.columns
-                and pd.api.types.is_numeric_dtype(trial_fixations[color_by])
-                else None
-            )
-            raw_cmax = trial_fixations[color_by].max() if raw_cmin is not None else None
-            if pd.notna(raw_cmin) and pd.notna(raw_cmax):
-                # Integer bounds + step so the range reads as whole numbers
-                # (durations, surprisal, … all read cleaner as ints); values
-                # stay floats so a restored config on different data clamps in.
-                cmin = float(math.floor(raw_cmin))
-                cmax = float(math.ceil(raw_cmax))
-                cmax_eff = cmax if cmax > cmin else cmin + 1.0
-                _clamp_range("global_fixation_color_range", cmin, cmax_eff)
-                st.session_state.setdefault(
-                    "global_fixation_color_range", (cmin, cmax_eff)
-                )
-                _range_slider(
-                    st,
-                    "Fixation color range",
-                    label_left=True,
-                    key="global_fixation_color_range",
-                    persist_state="session",
-                    min_value=cmin,
-                    max_value=cmax_eff,
-                    step=1.0,
-                    slider_format="%d",
-                    disabled=metric_disabled,
-                    help=_gated_help(None, metric_reason),
-                )
-            show_order = _labeled(
-                st,
-                "checkbox",
-                "Fixation index",
-                key="global_show_order",
-                persist_state="session",
-            )
-            if show_order:
-                # In Compare (and in a dual animation) the index labels are tinted
-                # to each scanpath's own colour, so the global colour is inert.
-                _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-                _labeled(
-                    st,
-                    "color_picker",
-                    "Index label color",
-                    key="global_order_font_color",
-                    persist_state="session",
-                    disabled=_dis,
-                    help=_gated_help("Fixation-index label colour.", _reason),
-                )
-                _numeric_slider(
-                    st,
-                    "Index label size",
-                    label_left=True,
-                    key="global_order_font_size",
-                    persist_state="session",
-                    min_value=6,
-                    max_value=72,
-                    help="Fixation-index label size (figure pixels; the plot is "
-                    "then scaled to fit the column, so on-screen it is a touch "
-                    "smaller). Default 10.",
-                )
-            _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
-            _labeled(
-                st,
-                "multiselect",
-                "Hover fields",
-                options=hover_field_options(trial_fixations),
-                key="global_fixation_hover_fields",
-                persist_state="session",
-                disabled=_hover_dis,
-                help=_gated_help(
-                    "Fields shown when hovering a fixation. Choose any retained "
-                    "fixation column; order here is tooltip order.",
-                    _hover_reason,
-                ),
-            )
-            # When comparing two trials, the per-scanpath fixation styling lives
-            # here (under the Fixation settings), not in a separate panel.
-            if comparing:
-                _render_compare_fix_styles()
+        _hover_dis, _hover_reason = _mode_gate(animating, comparing, **_no_compare)
+        _labeled(
+            st,
+            "multiselect",
+            "Hover fields",
+            options=hover_field_options(trial_fixations),
+            key="global_fixation_hover_fields",
+            persist_state="session",
+            disabled=_hover_dis,
+            help=_gated_help(
+                "Fields shown when hovering a fixation. Choose any retained "
+                "fixation column; order here is tooltip order.",
+                _hover_reason,
+            ),
+        )
+        # When comparing two trials, the per-scanpath fixation styling lives
+        # here (under the Fixation settings), not in a separate panel.
+        if comparing:
+            _render_compare_fix_styles()
 
     # VIZ-27: filtering decides which fixations are visible; it is not marker
     # appearance. Keep it beside the fixation layer as a first-class popover and
     # show a local badge so an active Discard cannot be forgotten. A chip in the
     # trial-fact strip was rejected because this is a view setting, not trial data.
     _flag_dis, _flag_reason = _mode_gate(animating, comparing, **_no_compare)
-    if show_fix or fix_off_disabled:
-        with _rail_subsection(
+    with (
+        _rail_subsection(
             filter_fix_slot,
             f"👁️ Fixations{_fixation_filter_badge()}",
             # The sentence the popover trigger carried as its tooltip, plus the
@@ -3967,149 +4010,148 @@ def sidebar_controls(
                 "Highlight or hide short, long, and out-of-bounds fixations.",
                 _flag_reason,
             ),
-        ):
-            # VIZ-27 follow-up: the index window removes fixations just like the
-            # short/long/OOB rules, so it belongs here rather than under marker style.
-            # The max follows the selected trial (BUG-16).
-            _render_fix_range_slider(fix_range_fixations)
-            _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
+        ),
+        _layer_off("👁️ Fixations", off=not (show_fix or fix_off_disabled)),
+    ):
+        # VIZ-27 follow-up: the index window removes fixations just like the
+        # short/long/OOB rules, so it belongs here rather than under marker style.
+        # The max follows the selected trial (BUG-16).
+        _render_fix_range_slider(fix_range_fixations)
+        _render_fixation_cleaning(disabled=_flag_dis, reason=_flag_reason)
 
     # --- Saccades ---------------------------------------------------------
-    if show_saccades:
-        with sac_grp:
-            # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
-            # (each arrowhead un-masks with the saccade it belongs to), so
-            # direction arrows now reach all three builders.
+    with sac_grp, _layer_off("↗️ Saccades", off=not show_saccades):
+        # VIZ-23 gave `make_scanpath_animation` an arrow layer of its own
+        # (each arrowhead un-masks with the saccade it belongs to), so
+        # direction arrows now reach all three builders.
+        _labeled(
+            st,
+            "checkbox",
+            "Direction arrows",
+            key="global_show_saccade_arrows",
+            persist_state="session",
+            help="Draw an arrowhead on each saccade pointing in the gaze "
+            "direction. In **Animate** each arrow appears with its own "
+            "saccade rather than all at once.",
+        )
+        # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-regression
+        # split, or the full reading-class breakdown. Reading-class colouring
+        # is a `make_scanpath_figure` feature — the animation draws one
+        # uniform saccade colour and the comparison overlay one colour per
+        # scanpath — so the mode picker greys out in both.
+        class_disabled, class_reason = _mode_gate(animating, comparing, **_static_only)
+        color_mode = _labeled(
+            st,
+            "radio",
+            "Saccade color",
+            options=SACCADE_COLOR_MODES,
+            key="global_saccade_color_mode",
+            persist_state="session",
+            disabled=class_disabled,
+            help=_gated_help(
+                "**Uniform** — one colour for every saccade. **Forward / "
+                "regression** — the two-way split most reading figures want. "
+                "**By type** — the full reading-class breakdown (forward, "
+                "skip, refixation, return sweep, regression).",
+                class_reason,
+            ),
+        )
+        # In Animate / Compare the class breakdown never draws, so fall back
+        # to the uniform Line-colour control below rather than showing five
+        # dead class swatches.
+        if color_mode != "Uniform" and not class_disabled:
+            # VIZ-19: the two-way mode reuses the same class colours, so
+            # only show the pickers it actually draws with.
+            classes = (
+                ["forward", "regression"]
+                if color_mode == "Forward / regression"
+                else SACCADE_CLASS_EDITABLE
+            )
+            st.caption(
+                "Each saccade is classed by where it lands relative to "
+                "the departing fixation."
+                if color_mode == "By type"
+                else "Every non-backward saccade counts as forward."
+            )
+            swatches = st.columns(len(classes))
+            for col, cls_name in zip(swatches, classes):
+                state_key = f"global_saccade_class_color_{cls_name}"
+                col.color_picker(
+                    SACCADE_CLASS_LABELS[cls_name],
+                    key=state_key,
+                )
             _labeled(
                 st,
                 "checkbox",
-                "Direction arrows",
-                key="global_show_saccade_arrows",
+                "Show legend",
+                key="global_saccade_type_legend",
                 persist_state="session",
-                help="Draw an arrowhead on each saccade pointing in the gaze "
-                "direction. In **Animate** each arrow appears with its own "
-                "saccade rather than all at once.",
+                help="Show the saccade-type colour key on the plot. Turn "
+                "it off for a cleaner figure once the colours are learned.",
             )
-            # VIZ-8 / VIZ-19: uniform colour, the two-way forward-vs-regression
-            # split, or the full reading-class breakdown. Reading-class colouring
-            # is a `make_scanpath_figure` feature — the animation draws one
-            # uniform saccade colour and the comparison overlay one colour per
-            # scanpath — so the mode picker greys out in both.
-            class_disabled, class_reason = _mode_gate(
-                animating, comparing, **_static_only
-            )
-            color_mode = _labeled(
-                st,
-                "radio",
-                "Saccade color",
-                options=SACCADE_COLOR_MODES,
-                key="global_saccade_color_mode",
-                persist_state="session",
-                disabled=class_disabled,
-                help=_gated_help(
-                    "**Uniform** — one colour for every saccade. **Forward / "
-                    "regression** — the two-way split most reading figures want. "
-                    "**By type** — the full reading-class breakdown (forward, "
-                    "skip, refixation, return sweep, regression).",
-                    class_reason,
-                ),
-            )
-            # In Animate / Compare the class breakdown never draws, so fall back
-            # to the uniform Line-colour control below rather than showing five
-            # dead class swatches.
-            if color_mode != "Uniform" and not class_disabled:
-                # VIZ-19: the two-way mode reuses the same class colours, so
-                # only show the pickers it actually draws with.
-                classes = (
-                    ["forward", "regression"]
-                    if color_mode == "Forward / regression"
-                    else SACCADE_CLASS_EDITABLE
-                )
-                st.caption(
-                    "Each saccade is classed by where it lands relative to "
-                    "the departing fixation."
-                    if color_mode == "By type"
-                    else "Every non-backward saccade counts as forward."
-                )
-                swatches = st.columns(len(classes))
-                for col, cls_name in zip(swatches, classes):
-                    state_key = f"global_saccade_class_color_{cls_name}"
-                    col.color_picker(
-                        SACCADE_CLASS_LABELS[cls_name],
-                        key=state_key,
-                    )
-                _labeled(
-                    st,
-                    "checkbox",
-                    "Show legend",
-                    key="global_saccade_type_legend",
-                    persist_state="session",
-                    help="Show the saccade-type colour key on the plot. Turn "
-                    "it off for a cleaner figure once the colours are learned.",
-                )
-            else:
-                # The single uniform saccade colour: honoured by the static
-                # figure and the animation; Compare paints each scanpath in its
-                # own colour instead (see "Per-scanpath (comparison)" below).
-                _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
-                _labeled(
-                    st,
-                    "color_picker",
-                    "Line color",
-                    key="global_saccade_color",
-                    persist_state="session",
-                    disabled=_dis,
-                    help=_gated_help(
-                        "Colour of the saccade lines and direction arrows.", _reason
-                    ),
-                )
+        else:
+            # The single uniform saccade colour: honoured by the static
+            # figure and the animation; Compare paints each scanpath in its
+            # own colour instead (see "Per-scanpath (comparison)" below).
             _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
             _labeled(
                 st,
-                "segmented_control",
-                "Saccade line style",
-                options=list(SACCADE_DASH_OPTIONS.keys()),
-                key="global_saccade_style",
+                "color_picker",
+                "Line color",
+                key="global_saccade_color",
                 persist_state="session",
                 disabled=_dis,
-                help=_gated_help("Line style for the saccade traces.", _reason),
-            )
-            _numeric_slider(
-                st,
-                "Saccade line width",
-                label_left=True,
-                key="global_saccade_width",
-                persist_state="session",
-                min_value=SACCADE_WIDTH_BOUNDS[0],
-                max_value=SACCADE_WIDTH_BOUNDS[1],
-                step=0.5,
-                slider_format="%.1f px",
-                number_format="%.1f",
-                disabled=_dis,
-                help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
-            )
-            # VIZ-9: "linear reading" schematic — arched saccades. Its paired
-            # control, "Snap fixations above words", remains under Fixations
-            # because it moves fixations. Arcs are a `make_scanpath_figure`
-            # feature.
-            _labeled(
-                st,
-                "segmented_control",
-                "Line shape",
-                options=["Straight", "Arc"],
-                key="global_saccade_render_mode",
-                persist_state="session",
-                disabled=class_disabled,
                 help=_gated_help(
-                    "Straight connectors, or upward **arcs** over the text "
-                    "(the classic linear-reading diagram). Pairs with Fixations → "
-                    "Fixations → ⚙️ Style → **Snap fixations above words**.",
-                    class_reason,
+                    "Colour of the saccade lines and direction arrows.", _reason
                 ),
             )
-            # Per-scanpath saccade styling for the two-trial comparison.
-            if comparing:
-                _render_compare_saccade_styles()
+        _dis, _reason = _mode_gate(animating, comparing, **_no_compare)
+        _labeled(
+            st,
+            "segmented_control",
+            "Saccade line style",
+            options=list(SACCADE_DASH_OPTIONS.keys()),
+            key="global_saccade_style",
+            persist_state="session",
+            disabled=_dis,
+            help=_gated_help("Line style for the saccade traces.", _reason),
+        )
+        _numeric_slider(
+            st,
+            "Saccade line width",
+            label_left=True,
+            key="global_saccade_width",
+            persist_state="session",
+            min_value=SACCADE_WIDTH_BOUNDS[0],
+            max_value=SACCADE_WIDTH_BOUNDS[1],
+            step=0.5,
+            slider_format="%.1f px",
+            number_format="%.1f",
+            disabled=_dis,
+            help=_gated_help("Thickness of the saccade lines. Default 2.", _reason),
+        )
+        # VIZ-9: "linear reading" schematic — arched saccades. Its paired
+        # control, "Snap fixations above words", remains under Fixations
+        # because it moves fixations. Arcs are a `make_scanpath_figure`
+        # feature.
+        _labeled(
+            st,
+            "segmented_control",
+            "Line shape",
+            options=["Straight", "Arc"],
+            key="global_saccade_render_mode",
+            persist_state="session",
+            disabled=class_disabled,
+            help=_gated_help(
+                "Straight connectors, or upward **arcs** over the text "
+                "(the classic linear-reading diagram). Pairs with Fixations → "
+                "Fixations → ⚙️ Style → **Snap fixations above words**.",
+                class_reason,
+            ),
+        )
+        # Per-scanpath saccade styling for the two-trial comparison.
+        if comparing:
+            _render_compare_saccade_styles()
 
     # VIZ-31: the Saccades section's *filter* sub-section, the counterpart to the
     # fixation one above — which reading classes are drawn at all, as opposed to
@@ -4119,9 +4161,9 @@ def sidebar_controls(
     # same reason the class *colouring* is: the classification never reaches the
     # animation or comparison builders (see CLAUDE.md's render-path table), so the
     # picker greys out there rather than silently dropping the filter.
-    if show_saccades:
-        _cls_dis, _cls_reason = _mode_gate(animating, comparing, **_static_only)
-        with _rail_subsection(
+    _cls_dis, _cls_reason = _mode_gate(animating, comparing, **_static_only)
+    with (
+        _rail_subsection(
             filter_sac_slot,
             f"↗️ Saccades{_saccade_filter_badge()}",
             note=_gated_help(
@@ -4129,28 +4171,30 @@ def sidebar_controls(
                 "return sweep, regression.",
                 _cls_reason,
             ),
-        ):
-            _labeled(
-                st,
-                "multiselect",
-                "Show saccade types",
-                options=SACCADE_CLASS_ORDER,
-                format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
-                key="global_saccade_classes",
-                persist_state="session",
-                disabled=_cls_dis,
-                help=_gated_help(
-                    "Hidden classes are dropped from the figure entirely — line "
-                    "**and** direction arrow. Clearing the list means *no "
-                    "filter*, not an empty plot; to hide the whole layer use the "
-                    "↗️ Saccades **Visible** toggle above.",
-                    _cls_reason,
-                ),
-            )
-            st.caption(
-                "Classes come from the same reading-class split as ⚙️ Saccade "
-                "style → **By type**, so the two agree on what a regression is."
-            )
+        ),
+        _layer_off("↗️ Saccades", off=not show_saccades),
+    ):
+        _labeled(
+            st,
+            "multiselect",
+            "Show saccade types",
+            options=SACCADE_CLASS_ORDER,
+            format_func=lambda cls: SACCADE_CLASS_LABELS[cls],
+            key="global_saccade_classes",
+            persist_state="session",
+            disabled=_cls_dis,
+            help=_gated_help(
+                "Hidden classes are dropped from the figure entirely — line "
+                "**and** direction arrow. Clearing the list means *no "
+                "filter*, not an empty plot; to hide the whole layer use the "
+                "↗️ Saccades **Visible** toggle above.",
+                _cls_reason,
+            ),
+        )
+        st.caption(
+            "Classes come from the same reading-class split as ⚙️ Saccade "
+            "style → **By type**, so the two agree on what a regression is."
+        )
 
     # --- Text -------------------------------------------------------------
     show_labels = stim_grp.toggle(
@@ -4299,121 +4343,118 @@ def sidebar_controls(
     # Animation remains disabled because a time-varying density layer would
     # need a distinct frame contract. The toggle itself is on the section's
     # row now (UX-86); this block only owns the style popover's contents.
-    if show_heatmap:
-        with heatmap_grp:
-            # A radio (not segmented_control) so the active style is always shown
-            # selected from the seeded default — segmented_control could render
-            # with nothing selected on first open.
+    with heatmap_grp, _layer_off("🔥 Heatmap", off=not show_heatmap):
+        # A radio (not segmented_control) so the active style is always shown
+        # selected from the seeded default — segmented_control could render
+        # with nothing selected on first open.
+        _labeled(
+            st,
+            "radio",
+            "Style",
+            options=["Word boxes", "Interpolated", "Duration mass"],
+            horizontal=True,
+            key="global_heatmap_style",
+            persist_state="session",
+            disabled=heat_disabled or comparing,
+            help=_gated_help(
+                "Comparison always uses word boxes with one shared scale. "
+                "In overlay mode each box is split into A/B halves. "
+                "Word boxes: tint each word box by fixation count / duration. "
+                "Interpolated: a smooth Gaussian density over the fixations "
+                "themselves. Duration mass spreads dwell time across nearby "
+                "characters with a Gaussian.",
+                "Comparison heatmaps use split word boxes."
+                if comparing
+                else heat_reason,
+            ),
+        )
+        if st.session_state.get("global_heatmap_style") == "Duration mass":
             _labeled(
                 st,
-                "radio",
-                "Style",
-                options=["Word boxes", "Interpolated", "Duration mass"],
-                horizontal=True,
-                key="global_heatmap_style",
+                "number_input",
+                "Spread (characters)",
+                min_value=0.25,
+                max_value=10.0,
+                step=0.25,
+                key="global_duration_mass_sigma_chars",
                 persist_state="session",
-                disabled=heat_disabled or comparing,
-                help=_gated_help(
-                    "Comparison always uses word boxes with one shared scale. "
-                    "In overlay mode each box is split into A/B halves. "
-                    "Word boxes: tint each word box by fixation count / duration. "
-                    "Interpolated: a smooth Gaussian density over the fixations "
-                    "themselves. Duration mass spreads dwell time across nearby "
-                    "characters with a Gaussian.",
-                    "Comparison heatmaps use split word boxes."
-                    if comparing
-                    else heat_reason,
-                ),
-            )
-            if st.session_state.get("global_heatmap_style") == "Duration mass":
-                _labeled(
-                    st,
-                    "number_input",
-                    "Spread (characters)",
-                    min_value=0.25,
-                    max_value=10.0,
-                    step=0.25,
-                    key="global_duration_mass_sigma_chars",
-                    persist_state="session",
-                    disabled=heat_disabled,
-                    help="Gaussian standard deviation measured in character widths.",
-                )
-            _popover_selectbox(
-                "Colors",
-                COLORSCALES,
-                "global_heatmap_colorscale",
                 disabled=heat_disabled,
-                help=_gated_help(
-                    "Colour palette for the density heatmap overlay.", heat_reason
-                ),
+                help="Gaussian standard deviation measured in character widths.",
             )
-            _labeled(
+        _popover_selectbox(
+            "Colors",
+            COLORSCALES,
+            "global_heatmap_colorscale",
+            disabled=heat_disabled,
+            help=_gated_help(
+                "Colour palette for the density heatmap overlay.", heat_reason
+            ),
+        )
+        _labeled(
+            st,
+            "radio",
+            "Scaling",
+            options=["Linear", "Log"],
+            horizontal=True,
+            key="global_heatmap_norm",
+            persist_state="session",
+            disabled=heat_disabled,
+            help=_gated_help(
+                "Linear maps colour straight to the value. Log maps to "
+                "log(1+value) — compresses heavy-tailed dwell times so a few very "
+                "hot words don't wash out the rest (VIZ-3).",
+                heat_reason,
+            ),
+        )
+        heatmap_metric = _labeled(
+            st,
+            "selectbox",
+            "Metric",
+            options=["duration_ms", "counts"],
+            disabled=heat_disabled,
+            help=_gated_help(
+                "Heatmap can be raw counts or weighted by fixation duration.",
+                heat_reason,
+            ),
+            key="global_heatmap_metric",
+            persist_state="session",
+        )
+        heat_data = (
+            trial_fixations["duration_ms"]
+            if heatmap_metric == "duration_ms"
+            and "duration_ms" in trial_fixations.columns
+            else None
+        )
+        if (
+            heat_data is not None
+            and len(heat_data) > 0
+            and pd.notna(heat_data.min())
+            and pd.notna(heat_data.max())
+        ):
+            hmin = float(math.floor(heat_data.min()))
+            hmax = float(math.ceil(heat_data.max()))
+            hmax_eff = hmax if hmax > hmin else hmin + 1.0
+            _clamp_range("global_heatmap_color_range", hmin, hmax_eff)
+            st.session_state.setdefault("global_heatmap_color_range", (hmin, hmax_eff))
+            _range_slider(
                 st,
-                "radio",
-                "Scaling",
-                options=["Linear", "Log"],
-                horizontal=True,
-                key="global_heatmap_norm",
+                "Color range",
+                label_left=True,
+                key="global_heatmap_color_range",
                 persist_state="session",
+                min_value=hmin,
+                max_value=hmax_eff,
+                step=1.0,
+                slider_format="%d",
                 disabled=heat_disabled,
                 help=_gated_help(
-                    "Linear maps colour straight to the value. Log maps to "
-                    "log(1+value) — compresses heavy-tailed dwell times so a few very "
-                    "hot words don't wash out the rest (VIZ-3).",
+                    "Min/max heatmap value mapped to the two ends of the "
+                    "colorscale (the metric above — fixation duration or count; "
+                    "for Interpolated, the smoothed density of those values). "
+                    "Lower the max for more contrast; raise it to compress.",
                     heat_reason,
                 ),
             )
-            heatmap_metric = _labeled(
-                st,
-                "selectbox",
-                "Metric",
-                options=["duration_ms", "counts"],
-                disabled=heat_disabled,
-                help=_gated_help(
-                    "Heatmap can be raw counts or weighted by fixation duration.",
-                    heat_reason,
-                ),
-                key="global_heatmap_metric",
-                persist_state="session",
-            )
-            heat_data = (
-                trial_fixations["duration_ms"]
-                if heatmap_metric == "duration_ms"
-                and "duration_ms" in trial_fixations.columns
-                else None
-            )
-            if (
-                heat_data is not None
-                and len(heat_data) > 0
-                and pd.notna(heat_data.min())
-                and pd.notna(heat_data.max())
-            ):
-                hmin = float(math.floor(heat_data.min()))
-                hmax = float(math.ceil(heat_data.max()))
-                hmax_eff = hmax if hmax > hmin else hmin + 1.0
-                _clamp_range("global_heatmap_color_range", hmin, hmax_eff)
-                st.session_state.setdefault(
-                    "global_heatmap_color_range", (hmin, hmax_eff)
-                )
-                _range_slider(
-                    st,
-                    "Color range",
-                    label_left=True,
-                    key="global_heatmap_color_range",
-                    persist_state="session",
-                    min_value=hmin,
-                    max_value=hmax_eff,
-                    step=1.0,
-                    slider_format="%d",
-                    disabled=heat_disabled,
-                    help=_gated_help(
-                        "Min/max heatmap value mapped to the two ends of the "
-                        "colorscale (the metric above — fixation duration or count; "
-                        "for Interpolated, the smoothed density of those values). "
-                        "Lower the max for more contrast; raise it to compress.",
-                        heat_reason,
-                    ),
-                )
 
     # --- Bounding boxes / Stimulus image / Raw gaze -----------------------
     stim_grp.toggle(
@@ -4518,47 +4559,46 @@ def sidebar_controls(
     # Raw gaze is a `make_scanpath_figure`-only overlay. The toggle is on the
     # section's row (UX-86); this owns the style popover — previously nothing,
     # since raw gaze had no styling of its own before it got a section.
-    if show_raw_gaze:
-        with raw_gaze_grp:
-            _labeled(
-                st,
-                "color_picker",
-                "Color",
-                key="global_raw_gaze_color",
-                persist_state="session",
-                disabled=raw_disabled,
-                help=_gated_help(
-                    "Flat marker colour. Ignored when the data carries "
-                    "timestamps, which are colour-mapped by time instead.",
-                    raw_reason,
-                ),
-            )
-            _numeric_slider(
-                st,
-                "Marker size",
-                label_left=True,
-                key="global_raw_gaze_marker_size",
-                persist_state="session",
-                min_value=1.0,
-                max_value=12.0,
-                step=0.5,
-                disabled=raw_disabled,
-                help="Diameter of each raw-gaze sample dot.",
-            )
-            _numeric_slider(
-                st,
-                "Opacity",
-                label_left=True,
-                key="global_raw_gaze_opacity",
-                persist_state="session",
-                min_value=0.1,
-                max_value=1.0,
-                step=0.05,
-                number_format="%.2f",
-                disabled=raw_disabled,
-                help="Sample dots overlap heavily at typical sampling rates; "
-                "lower opacity keeps dense clusters legible.",
-            )
+    with raw_gaze_grp, _layer_off("🔵 Raw gaze", off=not show_raw_gaze):
+        _labeled(
+            st,
+            "color_picker",
+            "Color",
+            key="global_raw_gaze_color",
+            persist_state="session",
+            disabled=raw_disabled,
+            help=_gated_help(
+                "Flat marker colour. Ignored when the data carries "
+                "timestamps, which are colour-mapped by time instead.",
+                raw_reason,
+            ),
+        )
+        _numeric_slider(
+            st,
+            "Marker size",
+            label_left=True,
+            key="global_raw_gaze_marker_size",
+            persist_state="session",
+            min_value=1.0,
+            max_value=12.0,
+            step=0.5,
+            disabled=raw_disabled,
+            help="Diameter of each raw-gaze sample dot.",
+        )
+        _numeric_slider(
+            st,
+            "Opacity",
+            label_left=True,
+            key="global_raw_gaze_opacity",
+            persist_state="session",
+            min_value=0.1,
+            max_value=1.0,
+            step=0.05,
+            number_format="%.2f",
+            disabled=raw_disabled,
+            help="Sample dots overlap heavily at typical sampling rates; "
+            "lower opacity keeps dense clusters legible.",
+        )
     # --- Figure & canvas --------------------------------------------------
     # UX-80/81: one popover, three named groups inside it and nothing nested —
     #

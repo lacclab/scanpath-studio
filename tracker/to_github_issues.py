@@ -79,7 +79,9 @@ SECTIONS = (
     ("whatsLeft", "What's left"),
     ("background", "Background"),
 )
-ID_RE = re.compile(r"#?\b([A-Z]{2,4}-\d+[a-z]?)\b")
+# `(?! \(#)` keeps the rewrite idempotent: a write-up that already spells a
+# reference as `BUG-32 (#111)` must not pick up a second `(#111)`.
+ID_RE = re.compile(r"#?\b([A-Z]{2,4}-\d+[a-z]?)\b(?! \(#)")
 #: The tracker links code as `[plots.py](scanpath_studio/plots.py:339)` — a
 #: repo-relative path plus an optional `:line`. Both halves are conventions of
 #: the local page and render as a dead link in an issue, so they are rewritten

@@ -14313,7 +14313,7 @@ window.TRACKER = {
     "**The time came.** Both triggers this item named have fired — the repo is public",
     "with Issues enabled, and there is a second regular contributor — so the migration",
     "ran on 2026-08-20. **This is the last item written here:** the tracker is now a",
-    "read-only archive, and ENG-32 itself continues as GitHub issue #108."
+    "read-only archive, and this item continues as GitHub issue #108."
    ],
    "request": [
     "Should the tracker move to GitHub Issues? Reviewed and",

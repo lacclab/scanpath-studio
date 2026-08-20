@@ -609,7 +609,7 @@ class TestRecoveryCachePanelFlow:
 
         # Resume, then clear while saving is ON — the reported bug was that this
         # action silently changed the preference to off.
-        toggle = [t for t in at.toggle if t.key == "persist_local_saving"][0]
+        toggle = next(t for t in at.toggle if t.key == "persist_local_saving")
         at = toggle.set_value(True).run(timeout=60)
         _clean(at, "after resuming:")
         assert at.session_state["_local_persistence_paused"] is False

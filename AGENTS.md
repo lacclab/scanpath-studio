@@ -147,35 +147,24 @@ and JSON download/restore in the 💾 Save & restore menu panel. `controls.rende
 (Hunting/Gathering via `question_preview`, difficulty, repeated reading,
 correctness) and by annotation state (favorites / tags) before `build_combo_options`.
 
-### Improvements tracker handoff
+### Where the work is tracked
 
-`tracker/data.js` is the original task catalogue. User-authored status changes and
-implementation instructions live in `tracker/state.json` and override the matching
-items by stable ID. When the user asks to work from the tracker, apply those
-overrides first and treat each `implementationBrief` as the task-specific work
-instructions; this lets the user scope work in the tracker without repeating it in
-chat. Run the editable site with `python3 tracker/server.py` (or
-`tracker/start.command`). The live workflow has six statuses: `Backlog`, `Planned`,
-`In progress`, `On hold`, `Review`, and `Closed`, moved along the path the UI's
-directed transition buttons offer (Backlog → *Plan it*, Review → *Approve &
-close* / *Send back*, …); `priority` orders work within a status. An item also
-carries an `owner` — one of `TRACKER.people` in `data.js` — set by the **Claim**
-button from any status, so `In progress` says by whom (ENG-39). Tasks
-created in the UI live under `createdItems` in the same state file, and their prefix
-is derived from their group. The save counter and "who is at this keyboard" live
-in a gitignored `tracker/.local.json`, which is why `state.json` no longer
-conflicts on every parallel pull.
+Open work is on **[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues)**
+(`gh issue list`, `gh issue view <n>`). Issues are titled `[VIZ-37] <title>`: the
+stable tracker IDs are cited throughout these docs, the `plans/` notes and the git
+history, so they outlive GitHub's own numbering. Six `status:*` labels carry the
+workflow, `area:*` mirrors the old groups and fixes the ID prefix, and **closing an
+issue is the user's sign-off** — implementation finishes at `status:review`, open.
+Everything waiting on the user is a `### ⚖ Waiting on you` checklist plus the
+`waiting-on-you` label. Full conventions, including the four-section body shape,
+in `CLAUDE.md` → *Tracking work*.
 
-An open item's write-up is **structured fields**, not prose with bold leads:
-`request` (required) · `whatWasDone` · `whatsLeft` · `background`, each an array of
-markdown lines, plus an optional `statusNote` lede and the `decisions` array.
-`whatsLeft` is the **developer's** remaining work only; everything waiting on the
-user — open calls *and* the ask to review — goes in `decisions`, which renders as
-the amber *Waiting on you* box and feeds the *Waiting on me* filter.
-Omit a field rather than emptying it, never repeat the section label inside the
-field, and keep the status current *as you work* — see `CLAUDE.md` → *Tracking
-work*. `tests/test_tracker_server.py` pins the shape; archived items keep the
-legacy single `body` array and both render.
+The in-repo tracker was migrated on 2026-08-20 (ENG-32) and is now a **read-only
+archive**: `tracker/data.js` + `index.html` hold the 320 items closed before the
+move with their write-ups, `python3 tracker/server.py` serves them (static, no
+write API), and `tracker/migrated.json` maps each migrated ID to its issue.
+Don't edit it — `tests/test_tracker_server.py` fails if an open item there has no
+issue, and if the server or page regrows a way to write.
 
 ## Build / Lint / Test
 

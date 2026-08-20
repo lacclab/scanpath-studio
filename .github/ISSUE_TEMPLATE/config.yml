@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Archived work items (before 2026-08-20)
+    url: https://github.com/lacclab/scanpath-studio/blob/main/tracker/data.js
+    about: The frozen improvements tracker — every item closed before the move to Issues, with its full write-up. Run `python3 tracker/server.py` to browse it.
+  - name: Documentation
+    url: https://lacclab.github.io/scanpath-studio/
+    about: User guide, dataset notes, and the Python API reference.

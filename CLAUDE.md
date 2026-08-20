@@ -23,7 +23,7 @@ you work under `scanpath_studio/`); contributor setup is in
   Fixed grouping, one short paragraph per item under a matching `#### <Group>`
   heading, anchored by the same bold lead + ID so the two halves line up. Not a
   per-tweak log and not a design doc — if a detail needs more than a short
-  paragraph, the rest belongs in the item's write-up in `tracker/data.js`.
+  paragraph, the rest belongs in the write-up on the item's GitHub issue.
 - **Never add a `Co-Authored-By: Claude …` trailer** (or any AI co-author line)
   to commit messages.
 
@@ -55,73 +55,74 @@ you work under `scanpath_studio/`); contributor setup is in
 
 ## Tracking work
 
-- All work — open **and** archived — lives in [`tracker/data.js`](tracker/data.js),
-  one object per item with a stable ID (e.g. `CMP-3`), a `Status`, a group, and a
-  `body` array of markdown lines. Edit that file; open
-  [`tracker/index.html`](tracker/index.html) in a browser to read it (search,
-  status/group filters, cross-referenced IDs, `#ID` deep links). It replaces the
-  old `IMPROVEMENTS.md` / `IMPROVEMENTS_ARCHIVE.md` pair.
-- **New items get `"added": "<today's date>"`**, set once at creation and never
-  edited afterwards — even when `note`/`date` (which track a later status
-  milestone, e.g. implemented/signed-off) stay empty.
-- **Write-up shape — structured fields, not bold leads.** Each section is its own
-  key on the item, an array of markdown lines: `request` (what was asked, in the
-  asker's terms — **required**) · `whatWasDone` · `whatsLeft` (**the developer's**
-  remaining work only — think team lead / developer; link the follow-up when the
-  remainder was split out) · `background`
-  (anchors, design calls, gotchas, related IDs). Optional `statusNote` is the
-  lede above them (the status / "update as of ⟨date⟩" line that used to be a
-  leading `>` quote). **Never repeat the label inside the field** — the tracker
-  prints it. **Omit a field rather than writing an empty array.** A Backlog item
-  has only `request` (+ `background`); `whatWasDone` / `whatsLeft` are required
-  once the item is `In progress` or `Review`.
-  `tests/test_tracker_server.py` enforces this, so a dropped section fails a
-  test instead of quietly rotting. Archived items keep the older single `body`
-  array — both shapes render; don't convert them.
-- **Everything waiting on the user goes in `decisions` — including the review.**
-  It's a structured field on the item: an array of one-line calls only the user
-  can make, both the design questions that block the work *and*, once it's built,
-  the ask to review it (name the judgement calls, the surfaces to click). The
-  tracker renders it as the amber *Waiting on you* callout at the top of the
-  item, badges the card (**⚖ N for you**), and collects them under the *Waiting
-  on me* filter — so one click shows every item holding on the user. Free text
-  inside *Background*, or an ask addressed to the user from inside *What's left*,
-  gets none of that and generally doesn't get read. The user answers in the
-  item's *Instructions for implementation*; whoever implements then clears
-  `decisions` and records the call in *Background*. Omit the field entirely when
-  nothing is open (ENG-35); an item in `Review` always has at least the review
-  ask, and `tests/test_tracker_server.py` enforces both halves.
-- **`whatsLeft` on a finished item honestly says "Nothing."** It tracks the
-  developer's remainder, so an implemented item awaiting sign-off has nothing
-  left in it — the review lives in `decisions`, above.
-- **Statuses.** The live workflow has six: `Backlog`, `Planned`, `In progress`,
-  `On hold`, `Review`, `Closed` (see `@AGENTS.md` → *Improvements tracker
-  handoff*). Older items in `tracker/data.js` still carry the retired wording
-  (`Pending approval`, `Done`, `Parked`, `Dropped`) — don't copy it into new or
-  edited items, and don't mass-rewrite the historical ones either.
-- **Approval gate.** Finished implementing → `Status: Review`; **never** jump
-  straight to `Closed`. On the user's sign-off, set `"status": "Closed"` **and**
-  `"archived": true` (same for an item closed without being implemented — record
-  the reason in `note`). Archived items are hidden until *Show archived*.
-- **IDs are stable** — never renumber. New items take the next free number in
-  their prefix (the app's *How this works* panel prints it).
-- **Notice an unrelated issue?** Fix it on the spot if it's small; otherwise add
-  an item to `tracker/data.js` so it doesn't get lost.
-- **Keep it current *while* you work — be on it.** The tracker is a shared,
-  multi-person, multi-agent view of the project; a stale one is worse than none.
-  1. **Claim it and flip to `In progress` when you pick the item up**, not when
-     you finish, so nobody else starts the same thing. Claiming sets `owner` to
-     one of the names in `TRACKER.people` (`data.js`) — the **Claim** button in
-     the UI, `"owner": "<name>"` if you're editing `state.json` by hand. It works
-     from any status, so you can take something that's still Planned (ENG-39).
-  2. The moment a decision is answered — even before any code is written — clear
-     it out of `decisions` and record the call in `background`, in the same edit.
-     A settled question left in the amber box costs the user a review round.
-  3. **Commit early and often**: one commit per feature or fix, not one per
-     session, with the tracker edit in the same commit as the code it describes.
-     Long-lived uncommitted work blocks the other sessions sharing this checkout.
-  4. Finish into `Review`, and put the ask to review in `decisions` — `whatsLeft`
-     is your own remainder, not a message to the user.
+- **Work lives in [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues).**
+  `gh issue list --label status:in-progress`, `gh issue view <n>`,
+  `gh issue create`. The in-repo tracker was migrated on 2026-08-20 (ENG-32) and
+  is now a **read-only archive** — see *The archive* at the end of this section.
+- **Stable IDs are still the currency.** Every issue is titled
+  `[VIZ-37] <title>`, because the docs, the `plans/` notes and the git history
+  cite items by that ID and always will. A **new** issue takes the next free
+  number in its area's prefix — `gh issue list --state all --search "[DATA-" `
+  and add one, counting the archive too (`tracker/data.js` holds everything
+  closed before the move). Never reuse or renumber an ID. GitHub's own `#N` is
+  an implementation detail; cite the tracker ID in commits and prose, and the
+  `#N` alongside it when a link helps.
+- **Labels carry the workflow.**
+  - `status:backlog | planned | in-progress | on-hold | review` — one per issue,
+    replaced (not added to) on a move: `gh issue edit <n> --add-label
+    status:in-progress --remove-label status:planned`.
+  - `area:*` mirrors the old groups (`ux`, `compare`, `viz`, `data`, `perf`,
+    `analysis`, `preprocessing`, `export`, `validation`, `bug`, `engineering`)
+    and decides the ID prefix.
+  - `priority:high` / `priority:low`; Normal is the unlabelled default.
+  - `waiting-on-you` — see *Waiting on you* below.
+- **Approval gate.** Finishing implementation means `status:review` with the
+  issue **open** — never close it yourself. Closing *is* the sign-off, and it is
+  the user's to make. An issue closed without being implemented says why in a
+  closing comment and uses `--reason "not planned"`.
+- **Claim it and move it to `status:in-progress` when you pick it up**, not when
+  you finish: `gh issue edit <n> --add-assignee @me --add-label
+  status:in-progress --remove-label status:planned`. Several sessions and two
+  people share this repo; an unassigned issue reads as unclaimed work.
+
+**Write-up shape.** The issue body is the same four sections the tracker used,
+as markdown headings, in this order:
+
+1. `## Request` — what was asked for, in the asker's terms. **Required.**
+2. `## What was done` — what actually shipped.
+3. `## What's left` — **the developer's** remaining work only; link the
+   follow-up issue when the remainder was split out. On a finished item this
+   honestly says "Nothing." — the review is not developer work.
+4. `## Background` — anchors, design calls, gotchas, related IDs.
+
+An optional `> blockquote` lede above them is the status / "update as of ⟨date⟩"
+line. A backlog issue has only *Request* (+ *Background*); the middle two are
+required once it reaches `status:in-progress` or `status:review`. Link code with
+full blob URLs (`https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/plots.py#L339`)
+— a relative path renders dead in an issue.
+
+**Waiting on you.** Everything only the *user* can decide goes in one place: a
+`### ⚖ Waiting on you` checklist at the top of the body, plus the
+`waiting-on-you` label, so `label:waiting-on-you` is one query for everything
+holding on them. That covers the design calls that block the work *and*, once it
+is built, the ask to review — name the judgement calls you made and the surfaces
+to click. An issue in `status:review` always has at least that entry. Clear an
+item the moment it is answered — tick the box, and record the call under
+*Background* in the same edit — including when you settled it yourself.
+
+**Keep it current *while* you work.** One commit per feature or fix, not one per
+session, and put `(VIZ-37)` in the commit subject so the issue and the code stay
+findable from each other. Notice an unrelated problem? Fix it on the spot if it
+is small, otherwise `gh issue create` so it does not get lost.
+
+**The archive.** [`tracker/data.js`](tracker/data.js) + `index.html` still hold
+the 320 items closed before the migration, with their full write-ups, and
+`python3 tracker/server.py` serves them read-only at
+<http://127.0.0.1:8765/tracker/>. `tracker/migrated.json` maps each ID that moved
+to its issue number. **Do not add to it or edit it** — it is a frozen record, and
+`tests/test_tracker_server.py` fails if an open item there has no issue.
+[`tracker/to_github_issues.py`](tracker/to_github_issues.py) is the migration
+script, kept as the record of how the move was made.
 
 ## On release
 

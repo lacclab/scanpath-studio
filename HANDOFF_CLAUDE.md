@@ -8,7 +8,7 @@
   - `7be236d Merge branch 'data-33-zip-caps'`
   - `34524cb Merge branch 'perf/val-8-computation-profile'`
 - This handoff and all current working-tree changes are committed together in the next commit.
-- `tracker/open-tasks-2026-08-20.md` was generated earlier. Treat `tracker/data.js` plus `tracker/state.json` as authoritative because the inventory can be stale after later status overrides.
+- `tracker/open-tasks-2026-08-20.md` was generated earlier and is a stale snapshot. **Superseded later the same day by ENG-32:** open work moved to [GitHub Issues](https://github.com/lacclab/scanpath-studio/issues) (`gh issue list`), and `tracker/` is now a read-only archive of everything closed before the move.
 
 ## Implemented in the pending commit
 

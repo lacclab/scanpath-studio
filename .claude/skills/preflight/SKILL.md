@@ -23,9 +23,11 @@ output). Fix trivial failures (formatting) directly; report anything else.
    is user-visible or a bug fix, `CHANGELOG.md` must have a matching
    one-scannable-line entry under `[Unreleased]` (grouped Added / Changed /
    Fixed). If missing, draft the line and add it.
-5. **Tracker** — if the pending work corresponds to a tracker item in
-   `tracker/data.js`, check its status/write-up is current (finished work →
-   `Review`, never straight to `Closed`).
+5. **Issue** — if the pending work corresponds to a GitHub issue
+   (`gh issue list`), check its `status:*` label and body write-up are current.
+   Finished work goes to `status:review` with the review ask in its
+   *⚖ Waiting on you* checklist — **never** close the issue yourself; that is
+   the user's sign-off. Conventions in `CLAUDE.md` → *Tracking work*.
 
 ## Reminders for the commit itself
 

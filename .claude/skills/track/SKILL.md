@@ -1,128 +1,138 @@
 ---
 name: track
-description: Add or update an item in the improvements tracker (tracker/data.js) following the house conventions — stable IDs, structured write-up fields, approval gate. Use whenever work is started, finished (→ Review), or signed off (→ Closed + archived).
+description: Add or update a work item in GitHub Issues following the house conventions — stable [PREFIX-N] IDs, status labels, the four-section body, and the approval gate. Use whenever work is started, finished (→ status:review), or signed off (→ closed).
 ---
 
-# Tracker item workflow
+# Tracking work
 
-All work — open and archived — lives in `tracker/data.js` (view via
-`tracker/index.html`). This skill edits that file correctly.
+Work lives in **GitHub Issues** on `lacclab/scanpath-studio`, driven with `gh`.
+The in-repo tracker (`tracker/`) was migrated on 2026-08-20 (ENG-32) and is a
+read-only archive of everything closed before then — read it, never edit it.
 
-Arguments: free-form — e.g. `CMP "chips reset on rerun"` (new item),
-`update ENG-15`, `approve CMP-3` (sign-off), `close VIZ-2 <reason>`
-(close without implementing).
+Arguments: free-form — e.g. `CMP "chips reset on rerun"` (new issue),
+`update VIZ-37`, `approve 117` (sign-off), `close 117 <reason>` (close without
+implementing).
 
 ## Conventions (non-negotiable)
 
-- **IDs are stable, never renumbered.** A new item takes the *next free
-  number* in its prefix. Existing prefixes: `AN` (analysis), `BUG`, `CMP`
-  (compare mode), `DATA`, `ENG`, `EXP` (export), `PERF`, `PRE`
-  (preprocessing), `UX`, `VAL`, `VIZ`. Scan `data.js` for the highest used
-  number in the prefix — including archived items — before assigning.
-- **Statuses (six):** `Backlog | Planned | In progress | On hold | Review |
-  Closed`, moved along the path the UI's transition buttons offer — Backlog →
-  *Plan it* / *Put on hold*; Planned → *Start work*; In progress → *Ready for
-  review*; Review → *Approve & close* / *Send back*; On hold → *Resume*; Closed →
-  *Reopen*. `archived: true` once signed off or closed. The retired wording
-  (`Pending approval`, `Done`, `Parked`, `Dropped`) still appears on older
-  items — never write it into a new or edited item, and don't mass-rewrite the
-  historical ones.
-- **Approval gate:** when implementation finishes, set `Status: Review` —
-  **never** jump straight to `Closed`. Only on the user's explicit sign-off set
-  `"status": "Closed"` **and** `"archived": true`, and add the sign-off line as
-  the item's `statusNote`, e.g. `["**Closed — approved 2026-08-02.**"]` (use
-  today's date). An item closed without implementation also gets
-  `archived: true` plus the reason in `note`.
-- **Every write-up field is an array of markdown lines** (one array entry per
-  source line). Link code as
-  `[controls.py](scanpath_studio/controls.py:622)` and other items as `#ID`.
+- **IDs are stable, never renumbered.** Every issue is titled
+  `[PREFIX-N] <title>`. The IDs are cited across `AGENTS.md`, `CLAUDE.md`, the
+  `plans/` notes and the git history, so they outlive GitHub's numbering — cite
+  the tracker ID in prose and commits, with `#N` alongside when a link helps.
+  Prefixes: `AN` (analysis), `BUG`, `CMP` (compare mode), `DATA`, `ENG`, `EXP`
+  (export), `PERF`, `PRE` (preprocessing), `UX`, `VAL`, `VIZ`. A new item takes
+  the next free number in its prefix — check **both** the issues and the
+  archive, which holds every number used before the migration:
 
-## Write-up shape
+  ```bash
+  gh issue list --state all --limit 200 --search "[DATA-" --json title
+  grep -o '"id": "DATA-[0-9]*"' tracker/data.js | sort -uV | tail -3
+  ```
 
-The four sections are **structured fields on the item**, not bold leads inside
-one blob — agents kept dropping, reordering, or rewording the prose version, so
-the shape is now enforced by `tests/test_tracker_server.py`:
+- **Status is a label**, exactly one per issue, replaced rather than added:
+  `status:backlog | status:planned | status:in-progress | status:on-hold |
+  status:review`. Closing the issue is the sixth state.
 
-```js
-"statusNote": ["**In progress.** The visualization half shipped 2026-06-23."],
-"request": [
- "The 🗂️ Data page reads as one long divider-separated scroll — give it",
- "the same hierarchy pass #UX-51 gave the plot rail."
-],
-"whatWasDone": ["..."],
-"whatsLeft": ["..."],
-"background": ["..."],
+  ```bash
+  gh issue edit 117 --add-label status:in-progress --remove-label status:planned
+  ```
+
+- **`area:*` labels** mirror the old groups and decide the prefix: `area:ux`,
+  `area:compare`, `area:viz`, `area:data`, `area:perf`, `area:analysis`,
+  `area:preprocessing`, `area:export`, `area:validation`, `area:bug`,
+  `area:engineering`. `priority:high` / `priority:low`; Normal is unlabelled.
+- **Approval gate.** When implementation finishes, set `status:review` and leave
+  the issue **open** — never close it yourself. Closing is the user's sign-off.
+  An item closed without being implemented gets the reason in a closing comment
+  and `--reason "not planned"`.
+- **Link code with full blob URLs** —
+  `https://github.com/lacclab/scanpath-studio/blob/main/scanpath_studio/controls.py#L622`.
+  A repo-relative path renders as a dead link in an issue body.
+
+## Body shape
+
+Four markdown sections, in this order, optionally under a `>` blockquote lede
+carrying the status / "update as of ⟨date⟩" line:
+
+```markdown
+> **In progress.** The visualization half shipped 2026-06-23.
+
+### ⚖ Waiting on you
+
+- [ ] Should the overlay share one scale, or keep each screen's own?
+
+## Request
+
+The 🗂️ Data page reads as one long divider-separated scroll — give it the same
+hierarchy pass VIZ-31 (#88) gave the plot rail.
+
+## What was done
+…
+## What's left
+…
+## Background
+…
 ```
 
-1. `request` — what was asked for, in the asker's terms. **Required.**
-2. `whatWasDone` — what actually shipped.
-3. `whatsLeft` — **the developer's** remaining work, and nothing else; link the
-   follow-up item if the remainder was split out. Think team lead / developer:
-   you are the developer, so this field is your own to-do, not a message to the
-   user. When the code is finished it says "Nothing." — including on an item you
-   are moving to `Review`, because the review is not developer work. The ask to
-   review goes in `decisions`.
-4. `background` — anchors, design calls, gotchas, related IDs.
+1. `## Request` — what was asked for, in the asker's terms. **Required.**
+2. `## What was done` — what actually shipped.
+3. `## What's left` — **the developer's** remaining work, and nothing else. You
+   are the developer, so this is your own to-do, not a message to the user. When
+   the code is finished it says "Nothing." — including on an issue you are moving
+   to `status:review`, because the review is not developer work.
+4. `## Background` — anchors, design calls, gotchas, related IDs.
 
-`statusNote` is the optional lede rendered above all four — the status or
-"update as of ⟨date⟩" line that used to be a leading `>` quote.
+A backlog issue has only *Request* (+ *Background*). *What was done* / *What's
+left* are **required** once it reaches `status:in-progress` or `status:review`.
 
-Rules: **never repeat the section label inside its field** (`"request": ["**Request.** …"]`
-double-prints it — the tracker draws the heading). **Omit a field** rather than
-writing an empty array. A Backlog item has only `request` (+ `background`);
-`whatWasDone` / `whatsLeft` appear once there is work behind it and are
-**required** once the item is `In progress` or `Review`. Archived items still
-carry the legacy single `body` array — leave them alone; both shapes render.
+## `⚖ Waiting on you` — everything that needs the user
 
-## Keep the tracker current as you work
+Anything only the **user** can do goes in one checklist at the top of the body,
+plus the `waiting-on-you` label — both the design calls that block the work
+*and*, once it is built, the review to run. `gh issue list
+--label waiting-on-you` is then one query for everything holding on them.
 
-Not a bookkeeping step at the end — the tracker is what the user and any other
-session read to know the state of the project:
-
-- **Claim it and flip to `In progress` when you pick the item up**, before
-  writing code, so a parallel session doesn't start the same work. Claiming sets
-  `owner` (a name from `TRACKER.people` in `data.js`) — in the UI that is the
-  **Claim** button; editing `state.json` by hand, it is `"owner": "<name>"`.
-- **Clear a `decisions` entry the moment it is answered** — including when you
-  answered it yourself by making the call, before implementing — and record the
-  call in `background` in the same edit.
-- **Commit early and often.** One commit per feature or fix rather than one per
-  session, tracker edit in the same commit as the code it describes.
-- **Land in `Review`**, and put the ask to review in `decisions`, not
-  `whatsLeft`.
-
-## `decisions` — everything that is waiting on the user
-
-Anything only the **user** can do goes in a `decisions` field on the item, a
-sibling of `request` — both the design calls that block the work *and*, once it
-is built, the review to run:
-
-```js
-"decisions": [
- "Rewrite the already-released sections too, or start at `[Unreleased]`?",
- "Is *Details* one flat list per release, or repeated per group?"
-],
-```
-
-One self-contained line each (markdown inline is rendered; `#ID` refs link). The
-tracker shows them as the amber **Waiting on you** box pinned above the write-up,
-badges the collapsed card **⚖ N for you**, and collects them under the *Waiting
-on me* filter — which is the point: one click shows every item holding on the
-user. Rules:
-
-- **Omit the field** when nothing is open. Never write an empty array.
+- **Omit the section** when nothing is open, and remove the label with it.
 - **Ask, don't hedge.** A decision is a question with options, not "TBD".
-- **A `Review` item always has at least one entry** — the review ask itself.
-  Name what to look at: the judgement calls you made, the surfaces to click, the
-  things worth disagreeing with. A test enforces this.
-- **Clear it when settled**, in the same edit that acts on the answer, and
-  record the call you made in `background` so the reasoning survives. This holds
-  even when you settle it yourself before implementing.
-- An open decision **does not** imply a status. `On hold` means the work is
-  blocked; a decision can be open on an item nobody has started.
+- **One self-contained line per entry** — markdown inline renders; `[VIZ-37](…)`
+  and `#117` link.
+- **A `status:review` issue always has at least one entry** — the review ask
+  itself. Name what to look at: the judgement calls you made, the surfaces to
+  click, the things worth disagreeing with.
+- **Clear it when settled**, in the same edit that acts on the answer, and record
+  the call under *Background* so the reasoning survives. This holds even when you
+  settled it yourself before implementing.
+- An open call **does not** imply a status. `status:on-hold` means the work is
+  blocked; a question can be open on something nobody has started.
 
-## Placement
+## Keep it current as you work
 
-Put the item in the matching group (`window.TRACKER.groups`); create a new
-group only if genuinely nothing fits. Read a couple of neighboring items
-first and match their tone and level of detail.
+- **Claim it and move it to `status:in-progress` when you pick it up**, before
+  writing code, so a parallel session doesn't start the same work:
+  `gh issue edit <n> --add-assignee @me --add-label status:in-progress
+  --remove-label status:planned`.
+- **Commit early and often** — one commit per feature or fix, with the tracker ID
+  in the subject: `fix(viz): keep the fullscreen control in sync (VIZ-37)`.
+- **Land in `status:review`**, and put the ask to review in the *Waiting on you*
+  checklist — *What's left* is your own remainder, not a message to the user.
+
+## Recipes
+
+```bash
+# New issue. Read a couple of neighbours in the same area first and match their
+# tone and level of detail.
+gh issue create --title "[VIZ-38] <title>" --label status:backlog --label area:viz --body-file body.md
+
+# Finish implementing → review (never close it yourself)
+gh issue edit 117 --add-label status:review --add-label waiting-on-you --remove-label status:in-progress
+gh issue edit 117 --body-file body.md
+
+# Sign-off, on the user's explicit approval only
+gh issue close 117 --comment "Approved 2026-08-20."
+
+# Closed without implementing
+gh issue close 117 --reason "not planned" --comment "<why>"
+```
+
+Write the body to a file and pass `--body-file`: it keeps the markdown readable
+and avoids shell-quoting the emoji, backticks and headings.

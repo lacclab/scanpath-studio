@@ -100,11 +100,16 @@ If you add a user-facing feature, expose it on **every** surface — not just
 visually, but also the deep link / Share, the CLI, and the headless API. See
 *Exposing a feature on every surface* in [AGENTS.md](AGENTS.md).
 
-Work items are tracked in [`tracker/data.js`](tracker/data.js) (open
-[`tracker/index.html`](tracker/index.html) in a browser to read it) — if your
-PR corresponds to a tracker item, update its status and write-up; the
-conventions are in the tracker's *How this works* panel and `CLAUDE.md` →
-*Tracking work*.
+Work items are tracked in
+[GitHub Issues](https://github.com/lacclab/scanpath-studio/issues). If your PR
+corresponds to an issue, move its `status:*` label and keep the write-up in the
+body current; the conventions — the `[VIZ-37]` title format, the four-section
+body, and the rule that **closing an issue is the maintainer's sign-off**, not
+yours — are in `CLAUDE.md` → *Tracking work*.
+
+The in-repo tracker that preceded this (`tracker/`) is a read-only archive of
+everything closed before 2026-08-20. Open `python3 tracker/server.py` to read it;
+don't edit it.
 
 ## Working together
 
@@ -122,45 +127,34 @@ selectively and reading what you staged.
 
 Common to both:
 
-- **Claim the item before you start it.** Press **Claim** on the tracker item and
-  set it to `In progress` — and push that change — *before* writing code, not
-  when you finish. Your name on the card is the only signal the other person has
-  that the item is taken. Claiming works from any status, so you can also take
-  something that is still Planned. Same for a new item: create it, push it, then
-  work on it.
+- **Claim the issue before you start it.** `gh issue edit <n> --add-assignee @me
+  --add-label status:in-progress --remove-label status:planned` *before* writing
+  code, not when you finish. The assignee is the only signal the other person has
+  that it is taken, and it is visible without pulling anything. Same for new
+  work: `gh issue create` first, then work on it.
 - **Commit small, push often.** One commit per feature or fix, with the tracker
-  edit in the same commit as the code it describes. A large uncommitted working
+  ID in the subject (`fix(viz): … (VIZ-37)`). A large uncommitted working
   tree is the thing that actually hurts — it can't be pulled, reviewed, or built
   on, and merging it later is a marathon. Between clones, always `git pull`
   before you push.
-- **If `tracker/state.json` conflicts, merge it — never pick a side.** The file
-  holds every status override and implementation brief, and the tracker server
-  rewrites it whole on each save. It is sorted one block per item, so two people
-  editing *different* items now merge cleanly; a conflict means you both edited
-  the same item. Resolve by keeping **both** sides' entries under `items` /
-  `createdItems` — taking one side wholesale silently discards the other
-  person's status changes and briefs. Reload the tracker page afterwards.
-  (The save counter that used to conflict on every single pull lives in a
-  gitignored `tracker/.local.json` now. **Restart `python3 tracker/server.py`**
-  the first time you pull that change — an older server process cannot read the
-  new file.)
-- **`tracker/data.js` merges cleanly** as long as you add new items in the right
-  group and never renumber an existing ID. Two people adding an item to the same
-  group at the same moment will both reach for the same next free number — check
-  the *How this works* panel again after pulling, and renumber **your own** new
-  item if it collides.
+- **The work queue no longer merges, because it is no longer a file.** Statuses,
+  assignees and write-ups live on GitHub now, so two people moving two issues
+  cannot conflict at all — which was most of what this section used to be about.
+  What still needs care is the **ID**: a new issue takes the next free number in
+  its `area:*` prefix, and two people opening one at the same moment will reach
+  for the same number. Check
+  `gh issue list --state all --search "[DATA-"` again after creating, and
+  renumber **your own** issue if it collides.
 Only when several sessions share one checkout:
 
 - **Agree on file ownership before editing.** Two sessions writing one file
   clobber each other even in different regions, because an edit is a
   read-modify-write of the whole file. Have them enumerate their peers, say which
-  files they hold, and honour it. Keep `tracker/state.json` owned by **one**
-  session — it is user-authored, and its status override masks whatever
-  `tracker/data.js` says.
+  files they hold, and honour it.
 - **`git add <file>` takes the whole file**, including whatever the other session
   wrote into it since you last looked — and `git pull` will not save you, because
   their edits are not on a remote, they are already in your working tree.
-  `CHANGELOG.md` and `tracker/data.js` are the two everyone touches. Stage
+  `CHANGELOG.md` is the one everyone touches. Stage
   selectively and **read `git diff --cached` before committing**: it is the only
   view that shows what your commit will actually contain. To take one hunk of a
   shared file non-interactively, `git diff -- <file>`, keep the hunk you want

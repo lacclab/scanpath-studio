@@ -102,7 +102,6 @@ from scanpath_studio.controls import (
     clear_trial_filter,
     clear_trial_filters,
     column_mapping_ui,
-    data_dictionary_help_text,
     has_active_trial_filters,
     read_trial_filters,
     viz_settings_from_state,
@@ -3127,7 +3126,10 @@ def render_data_source_picker(host=None) -> None:
         "**Select Dataset**",
         entries,
         format_func=_entry_label,
-        help=data_dictionary_help_text(),
+        help=(
+            "Which dataset the app is showing. Add, rename or remove one on "
+            "the 🗂️ Data page."
+        ),
         key="data_source_picker",
         on_change=_on_data_source_pick,
     )

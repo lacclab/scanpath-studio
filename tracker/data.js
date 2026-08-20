@@ -3348,6 +3348,72 @@ window.TRACKER = {
    ]
   },
   {
+   "id": "UX-98",
+   "prefix": "UX",
+   "num": 98,
+   "sub": "",
+   "title": "Control-line polish: dataset tooltip, sort row, filter funnel",
+   "status": "Review",
+   "owner": "Maya",
+   "note": "",
+   "date": "",
+   "added": "2026-08-20",
+   "group": "UX & Interaction",
+   "subgroup": "",
+   "archived": false,
+   "request": [
+    "Three asks on the Scanpath view's control line:",
+    "",
+    "1. The **?** beside *Select Dataset* is irrelevant — fix it.",
+    "2. *Sort trials by*: use the new underline format, with the checkbox / fields",
+    "   to the right of the text, and make the **?** text clearer and more concise",
+    "   without the example.",
+    "3. Use a funnel for the trial filter."
+   ],
+   "whatWasDone": [
+    "**Dataset tooltip.** The `?` carried `controls.data_dictionary_help_text()` —",
+    "a ~40-line data dictionary about uploading CSVs, auto-detected column names and",
+    "the *Column mapping* panel \"in the sidebar\", which #UX-38 removed. None of it is",
+    "about picking between datasets that are already loaded. It now reads \"Which",
+    "dataset the app is showing. Add, rename or remove one on the 🗂️ Data page.\" The",
+    "helper had no other caller and is deleted; `docs/data-format.md` is the current,",
+    "maintained version of the same content.",
+    "",
+    "**Sort row.** `utils._render_trial_sort_popover` now builds both controls with",
+    "[`fields.labeled`](scanpath_studio/fields.py:92) — title on the left, control on",
+    "the right, the description on the title's dotted-underline hover instead of a `?`",
+    "icon. The help lost its example: \"Reorder the trial list by a computed statistic",
+    "or by a reader, text or condition property.\" The comparison picker's sort menu",
+    "([`tabs.py`](scanpath_studio/tabs.py:1613)) moved to the same row — its",
+    "*Descending* box already had, so it was half-converted.",
+    "",
+    "**Funnel.** Both filter popovers (A's and B's) now use `_FILTER_ICON =",
+    "\":material/filter_alt:\"`. Unicode has no funnel emoji, so this is Streamlit's",
+    "Material icon — the same mechanism as the dataset table's `:material/edit:`",
+    "buttons. The \"no trials match its 🔎 filters\" messages and the comments naming",
+    "the button were updated with it, so nothing still points at a magnifier."
+   ],
+   "whatsLeft": [
+    "Nothing."
+   ],
+   "background": [
+    "All three are display-only — no widget key, session key, share-link parameter or",
+    "figure setting changed — so the four-surface rule does not apply and no deep",
+    "link, saved config, CLI flag or API argument moves.",
+    "",
+    "The popover triggers deliberately keep distinct labels (#BUG-37: a shared blank",
+    "label makes Streamlit fall back to a positional auto-key, which loses the",
+    "open/closed state). ⇅ and the funnel are still distinct from each other.",
+    "",
+    "144 AppTest cases pass, so the row still renders on every path that draws it."
+   ],
+   "decisions": [
+    "Does the funnel read right at the end of the control line, next to ⇅? Material `filter_alt` is a filled funnel, slightly heavier than the emoji it replaced.",
+    "Is the new dataset tooltip the right one, or should the `?` come off the picker entirely?",
+    "Should the *Narrow by* / *More* controls inside the filter popover get the same underline-title treatment, or is that a bigger pass?"
+   ]
+  },
+  {
    "id": "UX-71",
    "prefix": "UX",
    "num": 71,

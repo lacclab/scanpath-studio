@@ -2227,43 +2227,6 @@ def _emit_field_tints(tint_cells: dict[str, list[str]]) -> None:
         st.markdown(f"<style>{''.join(rules)}</style>", unsafe_allow_html=True)
 
 
-def data_dictionary_help_text() -> str:
-    return (
-        "Data dictionary / expected columns:\n"
-        "The app auto-detects column names from csv tables using common conventions.\n"
-        "- Words/IA: tries `participant_id`/`subject_id`, `unique_trial_id`/`trial_id`/`unique_paragraph_id`, "
-        "`IA_ID`/`word_id`, optional `IA_LABEL`/`text`, paragraph ids, and bounding boxes via either "
-        "edges `(IA_LEFT, IA_RIGHT, IA_TOP, IA_BOTTOM)` or origin+size `(x, y, width, height)` — "
-        "pick which in the *Word box* selector.\n"
-        "- Fixations: tries `participant_id`/`subject_id`, `unique_trial_id`/`trial_id`/`unique_paragraph_id`, "
-        "`CURRENT_FIX_DURATION`, `CURRENT_FIX_X`/`CURRENT_FIX_Y`, and optionally `CURRENT_FIX_START`, "
-        "`IA_ID`, and a fixation id. X/Y are optional when `IA_ID` is mapped "
-        "(AOI-only fixations are placed at word-box centers). Extra fixation "
-        "columns (`pass_index`/`reread`, `saccade_type`, `saccade_amplitude`, "
-        "`eye`, …) are auto-detected and offered under *fields to keep*.\n"
-        "- Raw gaze (optional): millisecond-level data with `participant_id`, `trial_id`, `x`, `y`. "
-        "Each row represents one timepoint.\n"
-        "If your columns are named differently, after uploading expand the "
-        "*Column mapping* sections in the sidebar to map each field to your column.\n"
-        "No single column uniquely identifies a trial? Map *Trial ID* to several "
-        "columns (e.g. participant + paragraph + repeated reading) and the app "
-        "builds a combined unique trial ID on the fly.\n"
-        "Multi-file datasets: upload several files at once (e.g. one per "
-        "participant or text) and they're concatenated, each row tagged by its "
-        "`source_file`.\n"
-        "Single-report datasets: upload only a words/IA table OR only a "
-        "fixations table — the missing layer is skipped. A words-only table "
-        "still draws a heatmap from its pre-aggregated reading measures.\n"
-        "Stimulus-level word boxes (no participant column) are shared across "
-        "every participant who read that trial; fixations with a word/AoI id "
-        "but no x/y are placed at the matching word-box centers.\n"
-        "Only fields present in your data are used for filters, coloring, and tooltips.\n"
-        "Areas of interest (word boxes) are taken from your data, not computed; "
-        "fixations are tied to words by bounding-box containment with a small "
-        "nearest-word fallback, and fixations outside every box are flagged out-of-text."
-    )
-
-
 # Field-option helpers — shared by the sidebar selectors and the plot-config
 # restore path (`app._restore_plot_config`) so both agree on what's valid for
 # the current data.
@@ -3310,7 +3273,8 @@ def _rail_section(host, label: str, *, slug: str, help: str = "", **toggle):
     thing this widget tracks: whether it is open. That is what a click "not
     working" looked like — the popover opened, a rerun landed before the user
     saw it, and the fresh auto-key came back closed. Every OTHER popover in the
-    app has a distinct, stable label (🔎, ⇅, Details, …), which is why only
+    app has a distinct, stable label (the filter funnel, ⇅, Details, …), which
+    is why only
     this shared-blank-label family of eight was affected.
     """
     row = host.container(
@@ -3705,7 +3669,8 @@ def sidebar_controls(
     # was two controls, in two places, each two clicks deep; it is one place
     # now, and it sits after the layers because it thins what they draw.
     #
-    # Not to be confused with the 🔎 on the control line (#UX-64), which narrows
+    # Not to be confused with the filter funnel on the control line (#UX-64),
+    # which narrows
     # the *trial pool* — which readings you can pick. This one thins one
     # reading. The badge still says an active filter is on, or a thinned figure
     # reads as missing data; with two filters folded together it now reports

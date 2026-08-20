@@ -1198,6 +1198,11 @@ _COMPARE_IDENTITY_KEY = "_compare_selected_identity"
 #: Key prefix for scanpath B's own filter set (CMP-8 §5.2). Must be one of
 #: ``controls.FILTER_PREFIXES`` — that registry is what stops A's "Clear filters"
 #: sweeping B's keys along with its own.
+#: The trial-filter popover's trigger, on A's row and on B's. A funnel,
+#: because the control filters the list rather than searching it; Unicode has
+#: no funnel emoji, so this is Streamlit's Material icon.
+_FILTER_ICON = ":material/filter_alt:"
+
 _COMPARE_FILTER_PREFIX = "cmp"
 
 
@@ -1254,7 +1259,7 @@ def _resolve_compare_source(
     look like the picker was ignored.
 
     §5.2's filters are **read from session state** rather than taken from the
-    widgets, which now render inside this row's 🔎 popover (UX-64) instead of
+    widgets, which now render inside this row's filter popover (UX-64) instead of
     above it. That is the same contract A has — ``render_trial_filters`` stashes
     its result, and every widget's ``on_change`` recomputes the stash before the
     rerun, so a filter change still applies on the run it happens.
@@ -1314,14 +1319,16 @@ def _render_compare_dataset_cell(
 
 
 def _render_compare_filters(host, source: SecondaryDataset) -> None:
-    """Every way to narrow **B's** pool, behind one 🔎 — A's popover, for B.
+    """Every way to narrow **B's** pool, behind one funnel — A's popover, for B.
 
     §5.2's *Filter B by* row and its **More** popover were two controls on a row
     of their own; UX-64 folded them into the one icon that closes B's line, so
     both lines end in the same cluster. The widgets and their ``cmp`` prefix are
     unchanged — only where they render is.
     """
-    pop = host.popover("🔎", width="content", help=f"Filter {source.name}'s trials")
+    pop = host.popover(
+        _FILTER_ICON, width="content", help=f"Filter {source.name}'s trials"
+    )
     box = pop.container(key="cmp_narrow_by")
     box.caption(f"Narrow **{source.name}** — scanpath B only.")
     render_narrow_by(
@@ -1416,7 +1423,7 @@ def _render_compare_selector(
     B frames from which the selected trial must be extracted.
 
     **UX-64** made that one line rather than three: B's row is now A's row —
-    ``[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ 🔎]`` on the same
+    ``[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ filter]`` on the same
     ``SELECTOR_ROW_GRID`` — instead of a dataset row, a *Filter B by* row and a
     picker row stacked above the chips. The dataset is therefore resolved from
     session state *before* the row is drawn (``_resolve_compare_source``), since
@@ -1529,7 +1536,7 @@ def _render_compare_selector(
                     fixations_filtered[SCREEN_ID].astype(str) == active_screen
                 ]
     # UX-64 — ONE row for scanpath B, the mirror of A's above it:
-    # `[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ 🔎]` on the same
+    # `[Compare with] [Compare To] [scrub slider] [◀ ▶ ⇅ filter]` on the same
     # `SELECTOR_ROW_GRID`, replacing the dataset row + *Filter B by* row + picker
     # row this used to stack above the chips. The dataset keeps a track of its
     # own and does not shrink — the label is what tells two compared corpora
@@ -1554,7 +1561,8 @@ def _render_compare_selector(
     # buttons. It still executes before the selectbox/slider below, so a change
     # applies to their list on the same run. CMP-10 mirrors the main trial
     # picker: ◀ / ▶ / ⇅ share one right-packed `railbtn_*` pill cluster instead
-    # of occupying three independent columns — UX-64 adds 🔎 to the same cluster.
+    # of occupying three independent columns — UX-64 adds the filter to the
+    # same cluster.
     # The sort is UI-only: it never travels in a deep link or saved config (same
     # call as `share_identity_mode`, DATA-16/S3).
     step_col = sort_col = None
@@ -1576,12 +1584,12 @@ def _render_compare_selector(
         if source_notice:
             pass
         elif source is not None:
-            st.info(f"No trials in **{source.name}** match its 🔎 filters.")
+            st.info(f"No trials in **{source.name}** match its filters.")
         else:
             st.info(
-                "No other trials match B's 🔎 filters on this screen."
+                "No other trials match B's filters on this screen."
                 if active_screen
-                else "No other trials match B's 🔎 filters."
+                else "No other trials match B's filters."
             )
         return None, None, None, None
 
@@ -1602,7 +1610,9 @@ def _render_compare_selector(
         if st.session_state.get("single_compare_order") not in sort_options:
             st.session_state["single_compare_order"] = _CMP_SORT_DEFAULT
         with sort_col.popover("⇅", width="content", help="Sort the comparison trials"):
-            sort_choice = st.selectbox(
+            sort_choice = _labeled(
+                st,
+                "selectbox",
                 "Sort trials by",
                 options=sort_options,
                 key="single_compare_order",
@@ -3842,7 +3852,7 @@ def render_single_trial_tab(
 
     with plot_col:
         # UX-64 — everything is on the picker row below now: the dataset, the
-        # trial, the scrubber, ◀ ▶ ⇅ and a 🔎 filter popover. The Narrow-by row
+        # trial, the scrubber, ◀ ▶ ⇅ and a filter popover. The Narrow-by row
         # that used to sit here — [data source] [Filter by: Text, Participant]
         # [More] — is gone, and its two multiselects moved *inside* that filter
         # popover beside the condition/annotation filters, so there is one place
@@ -3858,8 +3868,10 @@ def render_single_trial_tab(
                 data_source_renderer(host)
 
         def _render_filters(host) -> None:
-            """Every way to narrow the pool, behind one 🔎 (UX-64)."""
-            pop = host.popover("🔎", width="content", help="Filter the trial list")
+            """Every way to narrow the pool, behind one funnel (UX-64)."""
+            pop = host.popover(
+                _FILTER_ICON, width="content", help="Filter the trial list"
+            )
             box = pop.container(key="tour_grp_narrow_by")
             render_narrow_by(words_all, fixations_all, text_host=box, part_host=box)
             render_trial_filters(words_all, fixations_all, host=box)
